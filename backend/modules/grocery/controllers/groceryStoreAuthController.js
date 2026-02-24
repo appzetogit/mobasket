@@ -1,0 +1,377 @@
+import Restaurant from '../../restaurant/models/Restaurant.js';
+import otpService from '../../auth/services/otpService.js';
+import jwtService from '../../auth/services/jwtService.js';
+import firebaseAuthService from '../../auth/services/firebaseAuthService.js';
+import { successResponse, errorResponse } from '../../../shared/utils/response.js';
+import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
+import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
+import winston from 'winston';
+
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.json(),
+  transports: [
+    new winston.transports.Console({
+      format: winston.format.simple()
+    })
+  ]
+});
+
+const buildPhoneQuery = (normalizedPhone) => {
+  if (!normalizedPhone) return null;
+  
+  if (normalizedPhone.startsWith('91') && normalizedPhone.length === 12) {
+    const phoneWithoutCountryCode = normalizedPhone.substring(2);
+    return {
+      $or: [
+        { phone: normalizedPhone },
+        { phone: phoneWithoutCountryCode },
+        { phone: `+${normalizedPhone}` },
+        { phone: `+91${phoneWithoutCountryCode}` }
+      ]
+    };
+  } else {
+    return {
+      $or: [
+        { phone: normalizedPhone },
+        { phone: `91${normalizedPhone}` },
+        { phone: `+91${normalizedPhone}` },
+        { phone: `+${normalizedPhone}` }
+      ]
+    };
+  }
+};
+
+export const sendOTP = asyncHandler(async (req, res) => {
+  const { phone, email, purpose = 'login' } = req.body;
+
+  if (!phone && !email) {
+    return errorResponse(res, 400, 'Either phone number or email is required');
+  }
+
+  try {
+    const result = await otpService.generateAndSendOTP(phone || null, purpose, email || null);
+    return successResponse(res, 200, result.message, {
+      expiresIn: result.expiresIn,
+      identifierType: result.identifierType
+    });
+  } catch (error) {
+    logger.error(`Error sending OTP: ${error.message}`);
+    return errorResponse(res, 500, 'Failed to send OTP. Please try again.');
+  }
+});
+
+export const verifyOTP = asyncHandler(async (req, res) => {
+  const { phone, email, otp, purpose = 'login', name, password } = req.body;
+
+  if ((!phone && !email) || !otp) {
+    return errorResponse(res, 400, 'Either phone number or email, and OTP are required');
+  }
+
+  try {
+    let store;
+    const normalizedPhone = phone ? normalizePhoneNumber(phone) : null;
+    if (phone && !normalizedPhone) {
+      return errorResponse(res, 400, 'Invalid phone number format');
+    }
+    
+    const identifier = normalizedPhone || email;
+    const identifierType = normalizedPhone ? 'phone' : 'email';
+
+    if (purpose === 'register') {
+      const findQuery = normalizedPhone 
+        ? { ...buildPhoneQuery(normalizedPhone), platform: 'mogrocery' }
+        : { email: email?.toLowerCase().trim(), platform: 'mogrocery' };
+      store = await Restaurant.findOne(findQuery);
+
+      if (store) {
+        return errorResponse(res, 400, `Grocery store already exists with this ${identifierType}. Please login.`);
+      }
+
+      if (!name) {
+        return errorResponse(res, 400, 'Store name is required for registration');
+      }
+
+      await otpService.verifyOTP(phone || null, otp, purpose, email || null);
+
+      const storeData = {
+        name,
+        signupMethod: normalizedPhone ? 'phone' : 'email',
+        platform: 'mogrocery',
+        role: 'restaurant',
+        isActive: false,
+      };
+
+      if (normalizedPhone) {
+        storeData.phone = normalizedPhone;
+      }
+      if (email) {
+        storeData.email = email.toLowerCase().trim();
+      }
+      if (password) {
+        storeData.password = password;
+      }
+
+      store = await Restaurant.create(storeData);
+    } else {
+      const findQuery = normalizedPhone 
+        ? { ...buildPhoneQuery(normalizedPhone), platform: 'mogrocery' }
+        : { email: email?.toLowerCase().trim(), platform: 'mogrocery' };
+      store = await Restaurant.findOne(findQuery);
+
+      if (!store) {
+        return errorResponse(res, 404, `No grocery store found with this ${identifierType}. Please sign up first.`);
+      }
+
+      await otpService.verifyOTP(phone || null, otp, purpose, email || null);
+    }
+
+    const tokens = jwtService.generateTokens({
+      userId: store._id.toString(),
+      role: 'restaurant', // JWT role so upload/media and other shared routes accept store token
+      email: store.email
+    });
+
+    res.cookie('refreshToken', tokens.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    const storeResponse = store.toObject();
+    delete storeResponse.password;
+
+    return successResponse(res, 200, purpose === 'register' ? 'Store registered successfully' : 'Login successful', {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      store: storeResponse
+    });
+  } catch (error) {
+    logger.error(`Error verifying OTP: ${error.message}`);
+    return errorResponse(res, 400, error.message || 'Invalid OTP or verification failed');
+  }
+});
+
+export const register = asyncHandler(async (req, res) => {
+  const { name, email, password, phone, ownerName, ownerEmail, ownerPhone } = req.body;
+
+  if (!name || !email || !password) {
+    return errorResponse(res, 400, 'Name, email, and password are required');
+  }
+
+  try {
+    const normalizedPhone = phone ? normalizePhoneNumber(phone) : null;
+    const findQuery = normalizedPhone 
+      ? { ...buildPhoneQuery(normalizedPhone), platform: 'mogrocery' }
+      : { email: email.toLowerCase().trim(), platform: 'mogrocery' };
+    
+    const existingStore = await Restaurant.findOne(findQuery);
+    if (existingStore) {
+      return errorResponse(res, 400, 'Grocery store already exists with this email or phone. Please login.');
+    }
+
+    const storeData = {
+      name,
+      email: email.toLowerCase().trim(),
+      password,
+      platform: 'mogrocery',
+      role: 'restaurant',
+      isActive: false,
+      signupMethod: 'email'
+    };
+
+    if (normalizedPhone) {
+      storeData.phone = normalizedPhone;
+    }
+    if (ownerName) storeData.ownerName = ownerName;
+    if (ownerEmail) storeData.ownerEmail = ownerEmail;
+    if (ownerPhone) storeData.ownerPhone = normalizePhoneNumber(ownerPhone);
+
+    const store = await Restaurant.create(storeData);
+    const tokens = jwtService.generateTokens({
+      userId: store._id.toString(),
+      role: 'restaurant', // JWT role so upload/media and other shared routes accept store token
+      email: store.email
+    });
+
+    res.cookie('refreshToken', tokens.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    const storeResponse = store.toObject();
+    delete storeResponse.password;
+
+    return successResponse(res, 201, 'Store registered successfully', {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      store: storeResponse
+    });
+  } catch (error) {
+    logger.error(`Error registering store: ${error.message}`);
+    return errorResponse(res, 500, 'Failed to register store');
+  }
+});
+
+export const login = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return errorResponse(res, 400, 'Email and password are required');
+  }
+
+  try {
+    const store = await Restaurant.findOne({ 
+      email: email.toLowerCase().trim(), 
+      platform: 'mogrocery' 
+    }).select('+password');
+
+    if (!store) {
+      return errorResponse(res, 401, 'Invalid email or password');
+    }
+
+    if (!store.password) {
+      return errorResponse(res, 400, 'Account was created with phone. Please use OTP login.');
+    }
+
+    const isPasswordValid = await store.comparePassword(password);
+    if (!isPasswordValid) {
+      return errorResponse(res, 401, 'Invalid email or password');
+    }
+
+    const tokens = jwtService.generateTokens({
+      userId: store._id.toString(),
+      role: 'restaurant', // JWT role so upload/media and other shared routes accept store token
+      email: store.email
+    });
+
+    res.cookie('refreshToken', tokens.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    const storeResponse = store.toObject();
+    delete storeResponse.password;
+
+    return successResponse(res, 200, 'Login successful', {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      store: storeResponse
+    });
+  } catch (error) {
+    logger.error(`Error logging in: ${error.message}`);
+    return errorResponse(res, 500, 'Failed to login');
+  }
+});
+
+export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
+  const { idToken } = req.body;
+
+  if (!idToken) {
+    return errorResponse(res, 400, 'ID token is required');
+  }
+
+  try {
+    const firebaseUser = await firebaseAuthService.verifyIdToken(idToken);
+    if (!firebaseUser.email) {
+      return errorResponse(res, 400, 'Email is required from Google account');
+    }
+
+    let store = await Restaurant.findOne({ 
+      email: firebaseUser.email.toLowerCase().trim(), 
+      platform: 'mogrocery' 
+    });
+
+    if (!store) {
+      store = await Restaurant.create({
+        name: firebaseUser.name || 'Grocery Store',
+        email: firebaseUser.email.toLowerCase().trim(),
+        platform: 'mogrocery',
+        role: 'restaurant',
+        isActive: false,
+        signupMethod: 'google'
+      });
+    }
+
+    const tokens = jwtService.generateTokens({
+      userId: store._id.toString(),
+      role: 'restaurant', // JWT role so upload/media and other shared routes accept store token
+      email: store.email
+    });
+
+    res.cookie('refreshToken', tokens.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    const storeResponse = store.toObject();
+    delete storeResponse.password;
+
+    return successResponse(res, 200, 'Login successful', {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      store: storeResponse
+    });
+  } catch (error) {
+    logger.error(`Error with Google login: ${error.message}`);
+    return errorResponse(res, 400, error.message || 'Google login failed');
+  }
+});
+
+export const refreshToken = asyncHandler(async (req, res) => {
+  const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+
+  if (!refreshToken) {
+    return errorResponse(res, 401, 'Refresh token is required');
+  }
+
+  try {
+    const decoded = jwtService.verifyRefreshToken(refreshToken);
+    const store = await Restaurant.findById(decoded.userId);
+
+    if (!store || store.platform !== 'mogrocery') {
+      return errorResponse(res, 401, 'Invalid refresh token');
+    }
+
+    const tokens = jwtService.generateTokens({
+      userId: store._id.toString(),
+      role: 'restaurant', // JWT role so upload/media and other shared routes accept store token
+      email: store.email
+    });
+
+    res.cookie('refreshToken', tokens.refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000
+    });
+
+    return successResponse(res, 200, 'Token refreshed successfully', {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken
+    });
+  } catch (error) {
+    return errorResponse(res, 401, 'Invalid or expired refresh token');
+  }
+});
+
+export const logout = asyncHandler(async (req, res) => {
+  res.clearCookie('refreshToken');
+  return successResponse(res, 200, 'Logged out successfully');
+});
+
+export const getCurrentStore = asyncHandler(async (req, res) => {
+  const store = req.store;
+  const storeResponse = store.toObject();
+  delete storeResponse.password;
+  return successResponse(res, 200, 'Store retrieved successfully', {
+    store: storeResponse
+  });
+});

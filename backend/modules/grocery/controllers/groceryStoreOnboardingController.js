@@ -1,0 +1,90 @@
+import Restaurant from '../../restaurant/models/Restaurant.js';
+import { successResponse, errorResponse } from '../../../shared/utils/response.js';
+import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
+import winston from 'winston';
+
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.json(),
+  transports: [
+    new winston.transports.Console({
+      format: winston.format.simple()
+    })
+  ]
+});
+
+/**
+ * Get Grocery Store Onboarding Data
+ * GET /api/grocery/store/onboarding
+ */
+export const getOnboarding = asyncHandler(async (req, res) => {
+  try {
+    const storeId = req.store._id;
+    const store = await Restaurant.findById(storeId).lean();
+
+    if (!store) {
+      return errorResponse(res, 404, 'Grocery store not found');
+    }
+
+    const onboarding = store.onboarding || {};
+
+    return successResponse(res, 200, 'Onboarding data retrieved successfully', {
+      onboarding,
+      store: {
+        _id: store._id,
+        name: store.name,
+        isActive: store.isActive,
+      }
+    });
+  } catch (error) {
+    logger.error(`Error fetching onboarding: ${error.message}`);
+    return errorResponse(res, 500, 'Failed to fetch onboarding data');
+  }
+});
+
+/**
+ * Update Grocery Store Onboarding Data
+ * PUT /api/grocery/store/onboarding
+ */
+export const updateOnboarding = asyncHandler(async (req, res) => {
+  try {
+    const storeId = req.store._id;
+    const { storeImage, additionalImages, completedSteps } = req.body;
+
+    const update = {};
+
+    if (storeImage !== undefined) {
+      update['onboarding.storeImage'] = storeImage;
+    }
+
+    if (additionalImages !== undefined) {
+      update['onboarding.additionalImages'] = additionalImages;
+    }
+
+    if (typeof completedSteps === 'number') {
+      update['onboarding.completedSteps'] = completedSteps;
+    }
+
+    const store = await Restaurant.findByIdAndUpdate(
+      storeId,
+      { $set: update },
+      { new: true }
+    ).lean();
+
+    if (!store) {
+      return errorResponse(res, 404, 'Grocery store not found');
+    }
+
+    return successResponse(res, 200, 'Onboarding data updated successfully', {
+      onboarding: store.onboarding || {},
+      store: {
+        _id: store._id,
+        name: store.name,
+        isActive: store.isActive,
+      }
+    });
+  } catch (error) {
+    logger.error(`Error updating onboarding: ${error.message}`);
+    return errorResponse(res, 500, 'Failed to update onboarding data');
+  }
+});
