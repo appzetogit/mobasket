@@ -116,10 +116,9 @@ const configuredOrigins = [
     process.env.CORS_ORIGIN,
     process.env.FRONTEND_URL
   ),
-  'https://foods.appzeto.com',
-  'http://foods.appzeto.com',
-  'https://foozeto.appzeto.com',
-  'http://foozeto.appzeto.com',
+  
+  'https://mobasket.in',
+  'https://www.mobasket.in',
   'http://localhost:3000',
   'http://localhost:5173',
   'http://localhost:5174',
