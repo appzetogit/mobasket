@@ -1174,8 +1174,9 @@ export default function Home() {
     );
   }, [location?.latitude, location?.longitude]);
 
-  // When Veg Mode is ON, keep only pure-veg restaurants on home.
-  // A restaurant is considered pure-veg only if every available approved menu item is Veg.
+  // When Veg Mode is ON, keep restaurants based on selected option:
+  // - "all": show restaurants that have at least one veg item
+  // - "pure-veg": show only restaurants where every item is veg
   useEffect(() => {
     const resolveVegEligibility = async () => {
       if (!vegMode || !Array.isArray(restaurantsData) || restaurantsData.length === 0) {
@@ -1217,10 +1218,19 @@ export default function Home() {
                 return [String(restaurantId), false];
               }
 
-              const isPureVeg = eligibleItems.every(
-                (item) => String(item?.foodType || "").toLowerCase() === "veg",
-              );
-              return [String(restaurantId), isPureVeg];
+              if (vegModeOption === "pure-veg") {
+                // Strict: every item must be veg
+                const isPureVeg = eligibleItems.every(
+                  (item) => String(item?.foodType || "").toLowerCase() === "veg",
+                );
+                return [String(restaurantId), isPureVeg];
+              } else {
+                // "all": restaurant just needs at least one veg item
+                const hasAnyVeg = eligibleItems.some(
+                  (item) => String(item?.foodType || "").toLowerCase() === "veg",
+                );
+                return [String(restaurantId), hasAnyVeg];
+              }
             } catch {
               return [String(restaurantId), false];
             }
@@ -1234,7 +1244,7 @@ export default function Home() {
     };
 
     resolveVegEligibility();
-  }, [vegMode, restaurantsData]);
+  }, [vegMode, vegModeOption, restaurantsData]);
 
   // Filter restaurants and foods based on active filters
   const filteredRestaurants = useMemo(() => {
@@ -1614,8 +1624,8 @@ export default function Home() {
       </div>
 
       {/* 2. Search Bar Section (White Background) */}
-      <div className="bg-white px-3 py-2 pb-4 sm:px-6 lg:px-8 md:pt-20">
-        <div className="max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto flex items-center gap-3 sm:gap-4 lg:gap-6">
+      <div className="bg-white px-3 py-2 pb-4 sm:px-6 lg:px-8 xl:px-0 md:pt-20">
+        <div className="w-full lg:max-w-[1100px] mx-auto flex items-center gap-3 sm:gap-4 lg:gap-6">
           {/* Enhanced Search Bar */}
           <motion.div
             className="flex-1 relative"
@@ -1712,79 +1722,81 @@ export default function Home() {
       </div>
 
       {/* 3. Hero Banner Carousel Section */}
-      <div className="relative w-full overflow-hidden aspect-[2.5/1]">
-        {loadingBanners ? (
-          <div className="absolute inset-0 bg-gray-100 animate-pulse flex items-center justify-center">
-            <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
-          </div>
-        ) : heroBannerImages.length > 0 ? (
-          <div
-            className="relative w-full h-full cursor-grab active:cursor-grabbing overflow-hidden"
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-          >
-            <AnimatePresence initial={false} mode="popLayout">
-              {(() => {
-                const index = currentBannerIndex;
-                const image = heroBannerImages[index];
-                const bannerData = heroBannersData[index];
-                const linkedRestaurants = bannerData?.linkedRestaurants || [];
-                const hasLinkedRestaurants = linkedRestaurants.length > 0;
+      <div className="md:px-6 lg:px-8 xl:px-0 w-full lg:max-w-[1100px] mx-auto">
+        <div className="relative w-full overflow-hidden aspect-[2.5/1] md:aspect-[2.5/1] lg:aspect-[3/1] xl:aspect-[3.5/1]">
+          {loadingBanners ? (
+            <div className="absolute inset-0 bg-gray-100 animate-pulse flex items-center justify-center">
+              <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
+            </div>
+          ) : heroBannerImages.length > 0 ? (
+            <div
+              className="relative w-full h-full cursor-grab active:cursor-grabbing overflow-hidden"
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onMouseDown={handleMouseDown}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+            >
+              <AnimatePresence initial={false} mode="popLayout">
+                {(() => {
+                  const index = currentBannerIndex;
+                  const image = heroBannerImages[index];
+                  const bannerData = heroBannersData[index];
+                  const linkedRestaurants = bannerData?.linkedRestaurants || [];
+                  const hasLinkedRestaurants = linkedRestaurants.length > 0;
 
-                return (
-                  <motion.div
-                    key={index}
-                    initial={{ x: "100%" }}
-                    animate={{ x: 0 }}
-                    exit={{ x: "-100%" }}
-                    transition={{ duration: 0.5, ease: "easeInOut" }}
-                    className="absolute inset-0 w-full h-full"
-                  >
-                    <div
-                      className="w-full h-full relative"
-                      onClick={() => {
-                        if (hasLinkedRestaurants) {
-                          const firstRestaurant = linkedRestaurants[0];
-                          const restaurantSlug =
-                            firstRestaurant.slug ||
-                            firstRestaurant.restaurantId ||
-                            firstRestaurant._id;
-                          navigate(`/restaurants/${restaurantSlug}`);
-                        }
-                      }}
-                      style={{
-                        cursor: hasLinkedRestaurants ? "pointer" : "default",
-                      }}
+                  return (
+                    <motion.div
+                      key={index}
+                      initial={{ x: "100%" }}
+                      animate={{ x: 0 }}
+                      exit={{ x: "-100%" }}
+                      transition={{ duration: 0.5, ease: "easeInOut" }}
+                      className="absolute inset-0 w-full h-full"
                     >
-                      <div className="mx-4 my-2 rounded-2xl overflow-hidden shadow-md h-[calc(100%-16px)]">
-                        <OptimizedImage
-                          src={image}
-                          alt={`Hero Banner ${index + 1}`}
-                          className="w-full h-full object-cover"
-                          priority={true}
-                          sizes="(max-width: 768px) 100vw, 1200px"
-                          placeholder="blur"
-                        />
+                      <div
+                        className="w-full h-full relative"
+                        onClick={() => {
+                          if (hasLinkedRestaurants) {
+                            const firstRestaurant = linkedRestaurants[0];
+                            const restaurantSlug =
+                              firstRestaurant.slug ||
+                              firstRestaurant.restaurantId ||
+                              firstRestaurant._id;
+                            navigate(`/restaurants/${restaurantSlug}`);
+                          }
+                        }}
+                        style={{
+                          cursor: hasLinkedRestaurants ? "pointer" : "default",
+                        }}
+                      >
+                        <div className="mx-4 md:mx-0 my-2 rounded-2xl overflow-hidden shadow-md h-[calc(100%-16px)]">
+                          <OptimizedImage
+                            src={image}
+                            alt={`Hero Banner ${index + 1}`}
+                            className="w-full h-full object-cover"
+                            priority={true}
+                            sizes="(max-width: 768px) 100vw, 1200px"
+                            placeholder="blur"
+                          />
+                        </div>
                       </div>
-                    </div>
-                  </motion.div>
-                );
-              })()}
-            </AnimatePresence>
-          </div>
-        ) : (
-          <div className="w-full h-full bg-gray-200" />
-        )}
+                    </motion.div>
+                  );
+                })()}
+              </AnimatePresence>
+            </div>
+          ) : (
+            <div className="w-full h-full bg-gray-200" />
+          )}
+        </div>
       </div>
 
       {/* Rest of Content */}
       <motion.div
-        className="relative max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 xl:px-12 space-y-0 pt-2 sm:pt-3 lg:pt-6"
+        className="relative w-full lg:max-w-[1100px] mx-auto px-3 sm:px-4 md:px-6 lg:px-8 xl:px-0 space-y-0 pt-2 sm:pt-3 lg:pt-6"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.6, delay: 0.4 }}
@@ -1859,7 +1871,7 @@ export default function Home() {
                         to={`/user/category/${category.slug || category.name.toLowerCase().replace(/\s+/g, "-")}`}
                       >
                         <div className="flex flex-col items-center gap-2 w-[62px] sm:w-24 md:w-28">
-                        <div className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full overflow-hidden shadow-md transition-all">
+                          <div className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full overflow-hidden shadow-md transition-all">
                             <img
                               src={sanitizeImageSrc(category.image, category.slug || category.name)}
                               alt={category.name}
