@@ -11,6 +11,43 @@ const logger = winston.createLogger({
   ]
 });
 
+const reverseGeocodeCache = new Map(); // key -> { payload, expiresAt }
+const nearbyLocationsCache = new Map(); // key -> { payload, expiresAt }
+const REVERSE_GEOCODE_CACHE_TTL_MS = 15 * 60 * 1000;
+const NEARBY_LOCATIONS_CACHE_TTL_MS = 2 * 60 * 1000;
+const CACHE_COORD_PRECISION = 4; // ~11m precision
+const MAX_LOCATION_CACHE_ENTRIES = 2000;
+
+function buildLocationCacheKey(lat, lng, radius = null, query = '') {
+  const round = (value) => Number.parseFloat(value).toFixed(CACHE_COORD_PRECISION);
+  if (radius === null) {
+    return `${round(lat)},${round(lng)}`;
+  }
+  return `${round(lat)},${round(lng)}|r:${Math.round(Number.parseFloat(radius) || 0)}|q:${String(query || '').trim().toLowerCase()}`;
+}
+
+function getCachedResponse(cacheStore, key) {
+  const entry = cacheStore.get(key);
+  if (!entry) return null;
+  if (Date.now() > entry.expiresAt) {
+    cacheStore.delete(key);
+    return null;
+  }
+  return entry.payload;
+}
+
+function setCachedResponse(cacheStore, key, payload, ttlMs) {
+  cacheStore.set(key, {
+    payload,
+    expiresAt: Date.now() + ttlMs
+  });
+
+  while (cacheStore.size > MAX_LOCATION_CACHE_ENTRIES) {
+    const oldestKey = cacheStore.keys().next().value;
+    cacheStore.delete(oldestKey);
+  }
+}
+
 /**
  * Reverse geocode coordinates to address using OLA Maps API
  */
@@ -34,6 +71,20 @@ export const reverseGeocode = async (req, res) => {
         message: 'Invalid latitude or longitude'
       });
     }
+
+    const cacheKey = buildLocationCacheKey(latNum, lngNum);
+    const cachedPayload = getCachedResponse(reverseGeocodeCache, cacheKey);
+    if (cachedPayload) {
+      return res.json(cachedPayload);
+    }
+
+    const originalJson = res.json.bind(res);
+    res.json = (payload) => {
+      if (payload && payload.success === true) {
+        setCachedResponse(reverseGeocodeCache, cacheKey, payload, REVERSE_GEOCODE_CACHE_TTL_MS);
+      }
+      return originalJson(payload);
+    };
 
     const apiKey = process.env.OLA_MAPS_API_KEY;
     const projectId = process.env.OLA_MAPS_PROJECT_ID;
@@ -251,7 +302,7 @@ export const reverseGeocode = async (req, res) => {
                     }
                     
                     // If still no area, try Google Places Nearby Search for more specific location
-                    if (!area && googleApiKey) {
+                    if (!area && googleApiKey && process.env.ENABLE_GOOGLE_PLACES_AREA_ENRICHMENT === 'true') {
                       try {
                         const placesResponse = await axios.get(
                           `https://maps.googleapis.com/maps/api/place/nearbysearch/json`,
@@ -683,6 +734,20 @@ export const getNearbyLocations = async (req, res) => {
       });
     }
 
+    const cacheKey = buildLocationCacheKey(latNum, lngNum, radiusNum, query);
+    const cachedPayload = getCachedResponse(nearbyLocationsCache, cacheKey);
+    if (cachedPayload) {
+      return res.json(cachedPayload);
+    }
+
+    const originalJson = res.json.bind(res);
+    res.json = (payload) => {
+      if (payload && payload.success === true) {
+        setCachedResponse(nearbyLocationsCache, cacheKey, payload, NEARBY_LOCATIONS_CACHE_TTL_MS);
+      }
+      return originalJson(payload);
+    };
+
     const apiKey = process.env.OLA_MAPS_API_KEY;
     // Get Google Maps API key from database (NO FALLBACK)
     const { getGoogleMapsApiKey } = await import('../../../shared/utils/envService.js');
@@ -690,8 +755,8 @@ export const getNearbyLocations = async (req, res) => {
 
     let nearbyPlaces = [];
 
-    // Try Google Places API first (better results)
-    if (googleApiKey) {
+    // Google Places is optional because this endpoint can be high-frequency and expensive.
+    if (googleApiKey && process.env.ENABLE_GOOGLE_PLACES_NEARBY === 'true') {
       try {
         const response = await axios.get(
           'https://maps.googleapis.com/maps/api/place/nearbysearch/json',

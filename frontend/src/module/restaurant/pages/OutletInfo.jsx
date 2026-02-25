@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import Lenis from "lenis"
 import {
@@ -25,13 +25,15 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { restaurantAPI } from "@/lib/api"
+import { groceryStoreAPI, restaurantAPI } from "@/lib/api"
 import { toast } from "sonner"
 
 const CUISINES_STORAGE_KEY = "restaurant_cuisines"
 
 export default function OutletInfo() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const isGroceryStoreRoute = location.pathname.startsWith("/store")
   
   // State management
   const [restaurantData, setRestaurantData] = useState(null)
@@ -51,6 +53,13 @@ export default function OutletInfo() {
   const [uploadingCount, setUploadingCount] = useState(0) // Track how many images are being uploaded
   const profileImageInputRef = useRef(null)
   const menuImageInputRef = useRef(null)
+
+  const fetchCurrentEntity = async () => {
+    const response = isGroceryStoreRoute
+      ? await groceryStoreAPI.getCurrentStore()
+      : await restaurantAPI.getCurrentRestaurant()
+    return response?.data?.data?.store || response?.data?.data?.restaurant || response?.data?.restaurant || null
+  }
 
   // Format address from location object
   const formatAddress = (location) => {
@@ -77,8 +86,7 @@ export default function OutletInfo() {
     const fetchRestaurantData = async () => {
       try {
         setLoading(true)
-        const response = await restaurantAPI.getCurrentRestaurant()
-        const data = response?.data?.data?.restaurant || response?.data?.restaurant
+        const data = await fetchCurrentEntity()
         if (data) {
           setRestaurantData(data)
           
@@ -168,7 +176,7 @@ export default function OutletInfo() {
       window.removeEventListener("cuisinesUpdated", handleCuisinesUpdate)
       window.removeEventListener("addressUpdated", handleAddressUpdate)
     }
-  }, [])
+  }, [isGroceryStoreRoute])
 
   // Lenis smooth scrolling
   useEffect(() => {
@@ -218,6 +226,11 @@ export default function OutletInfo() {
 
   // Handle profile image replacement
   const handleProfileImageReplace = async (event) => {
+    if (isGroceryStoreRoute) {
+      toast.info("Store image editing is not available here yet.")
+      return
+    }
+
     const file = event.target.files?.[0]
     if (!file) return
 
@@ -236,8 +249,7 @@ export default function OutletInfo() {
         }
         
         // Refresh restaurant data to get latest from backend
-        const response = await restaurantAPI.getCurrentRestaurant()
-        const data = response?.data?.data?.restaurant || response?.data?.restaurant
+        const data = await fetchCurrentEntity()
         if (data) {
           setRestaurantData(data)
           if (data.profileImage?.url) {
@@ -266,6 +278,11 @@ export default function OutletInfo() {
 
   // Handle multiple cover images addition (separate from menu images)
   const handleCoverImageAdd = async (event) => {
+    if (isGroceryStoreRoute) {
+      toast.info("Store cover image editing is not available here yet.")
+      return
+    }
+
     const files = Array.from(event.target.files || [])
     if (files.length === 0) return
 
@@ -275,8 +292,7 @@ export default function OutletInfo() {
       setUploadingCount(files.length)
 
       // Get current images first to preserve them
-      const currentResponse = await restaurantAPI.getCurrentRestaurant()
-      const currentData = currentResponse?.data?.data?.restaurant || currentResponse?.data?.restaurant
+      const currentData = await fetchCurrentEntity()
       const existingImages = currentData?.menuImages && Array.isArray(currentData.menuImages)
         ? currentData.menuImages.map(img => ({
             url: img.url,
@@ -367,8 +383,7 @@ export default function OutletInfo() {
         }
 
         // Refresh restaurant data to confirm
-        const response = await restaurantAPI.getCurrentRestaurant()
-        const data = response?.data?.data?.restaurant || response?.data?.restaurant
+        const data = await fetchCurrentEntity()
         if (data) {
           setRestaurantData(data)
           // Update from refreshed data
@@ -402,6 +417,11 @@ export default function OutletInfo() {
 
   // Handle cover image deletion
   const handleCoverImageDelete = async (indexToDelete) => {
+    if (isGroceryStoreRoute) {
+      toast.info("Store cover image editing is not available here yet.")
+      return
+    }
+
     if (!window.confirm("Are you sure you want to delete this cover image?")) {
       return
     }
@@ -442,8 +462,7 @@ export default function OutletInfo() {
         }
 
         // Refresh restaurant data to confirm
-        const response = await restaurantAPI.getCurrentRestaurant()
-        const data = response?.data?.data?.restaurant || response?.data?.restaurant
+        const data = await fetchCurrentEntity()
         if (data) {
           setRestaurantData(data)
           // Update cover images from refreshed data
@@ -505,8 +524,7 @@ export default function OutletInfo() {
       } else {
         // Try to refresh from server
         try {
-          const response = await restaurantAPI.getCurrentRestaurant()
-          const data = response?.data?.data?.restaurant || response?.data?.restaurant
+          const data = await fetchCurrentEntity()
           if (data) {
             if (data.coverImages && Array.isArray(data.coverImages) && data.coverImages.length > 0) {
               setCoverImages(data.coverImages.map(img => ({
@@ -539,6 +557,11 @@ export default function OutletInfo() {
   }
 
   const handleSaveName = async () => {
+    if (isGroceryStoreRoute) {
+      toast.info("Store name editing is not available here yet.")
+      return
+    }
+
     const newName = editNameValue.trim()
     if (!newName) {
       alert("Restaurant name cannot be empty")
@@ -562,8 +585,7 @@ export default function OutletInfo() {
         setShowEditNameDialog(false)
         
         // Refresh restaurant data to get latest from backend
-        const refreshResponse = await restaurantAPI.getCurrentRestaurant()
-        const data = refreshResponse?.data?.data?.restaurant || refreshResponse?.data?.restaurant
+        const data = await fetchCurrentEntity()
         if (data) {
           setRestaurantData(data)
           setRestaurantName(data.name || newName)
@@ -607,7 +629,7 @@ export default function OutletInfo() {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-sm text-gray-900 font-normal">
-              Restaurant id: {loading ? "Loading..." : (restaurantMongoId && restaurantMongoId.length >= 5 ? restaurantMongoId.slice(-5) : (restaurantId || "N/A"))}
+              {isGroceryStoreRoute ? "Store id" : "Restaurant id"}: {loading ? "Loading..." : (restaurantMongoId && restaurantMongoId.length >= 5 ? restaurantMongoId.slice(-5) : (restaurantId || "N/A"))}
             </span>
           </div>
         </div>
@@ -742,7 +764,7 @@ export default function OutletInfo() {
 
       {/* Restaurant Information Heading */}
       <div className="px-4 py-4">
-        <h2 className="text-base font-bold text-gray-900 text-center">Restaurant Information</h2>
+        <h2 className="text-base font-bold text-gray-900 text-center">{isGroceryStoreRoute ? "Store Information" : "Restaurant Information"}</h2>
       </div>
 
       {/* Information Cards */}
@@ -763,6 +785,7 @@ export default function OutletInfo() {
             </div>
             <button
               onClick={handleOpenEditDialog}
+              disabled={isGroceryStoreRoute}
               className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0"
             >
               Edit
@@ -786,6 +809,7 @@ export default function OutletInfo() {
             </div>
             <button
               onClick={() => navigate("/restaurant/edit-cuisines")}
+              disabled={isGroceryStoreRoute}
               className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0 self-start"
             >
               Edit
@@ -812,6 +836,7 @@ export default function OutletInfo() {
             </div>
             <button
               onClick={() => navigate("/restaurant/edit-address")}
+              disabled={isGroceryStoreRoute}
               className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0 self-start"
             >
               Edit
@@ -828,7 +853,7 @@ export default function OutletInfo() {
         >
           {/* Outlet Timings Card */}
           <button
-            onClick={() => navigate("/restaurant/outlet-timings")}
+            onClick={() => navigate(isGroceryStoreRoute ? "/store/outlet-timings" : "/restaurant/outlet-timings")}
             className="w-full bg-blue-100/50 rounded-lg p-4 border border-blue-300 flex items-center justify-between hover:bg-gray-50 transition-colors"
           >
             <div className="flex items-center gap-3">
@@ -841,6 +866,7 @@ export default function OutletInfo() {
           {/* Contact Details Card */}
           <button
             onClick={() => navigate("/restaurant/contact-details")}
+            disabled={isGroceryStoreRoute}
             className="w-full bg-blue-100/50 rounded-lg p-4 border border-blue-300 flex items-center justify-between hover:bg-gray-50 transition-colors"
           >
             <div className="flex items-center gap-3">
