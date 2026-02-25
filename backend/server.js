@@ -9,6 +9,11 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import cron from 'node-cron';
 import mongoose from 'mongoose';
+import {
+  initializeFirebaseRealtime,
+  isFirebaseRealtimeEnabled,
+  updateActiveOrderLocation
+} from './shared/services/firebaseRealtimeService.js';
 
 // Load environment variables
 dotenv.config();
@@ -91,6 +96,16 @@ if (missingEnvVars.length > 0) {
   console.error('\nPlease update your .env file with valid values.');
   console.error('You can copy .env.example to .env and update the values.\n');
   process.exit(1);
+}
+
+const firebaseRealtimeInit = await initializeFirebaseRealtime({ allowDbLookup: false });
+if (firebaseRealtimeInit.initialized) {
+  console.log('Firebase Realtime Database initialized');
+} else {
+  console.warn(
+    `Firebase Realtime Database not initialized (${firebaseRealtimeInit.reason || 'unknown_reason'}). ` +
+    'Realtime tracking will fall back to Socket.IO/Mongo until FIREBASE_DATABASE_URL and admin credentials are configured.'
+  );
 }
 
 // Initialize Express app
@@ -614,6 +629,20 @@ io.on('connection', (socket) => {
         });
       });
 
+      try {
+        const primaryOrderAlias = aliases?.[0] || String(data.orderId || '').trim();
+        if (primaryOrderAlias) {
+          await updateActiveOrderLocation(primaryOrderAlias, {
+            lat: data.lat,
+            lng: data.lng,
+            bearing: data.heading || 0,
+            speed: typeof data.speed === 'number' ? data.speed : undefined
+          });
+        }
+      } catch (firebaseErr) {
+        console.warn('Firebase socket location sync failed:', firebaseErr.message);
+      }
+
       console.log(`📍 Location broadcasted to order room ${data.orderId}:`, {
         lat: locationData.lat,
         lng: locationData.lng,
@@ -713,6 +742,7 @@ const PORT = process.env.PORT || 5000;
 
 httpServer.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+  console.log(`Firebase Realtime status: ${isFirebaseRealtimeEnabled() ? 'enabled' : 'disabled'}`);
 
   // Initialize scheduled tasks after DB connection is established
   // Wait a bit for DB to connect, then start cron jobs

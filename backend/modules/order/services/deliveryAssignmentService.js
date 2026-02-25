@@ -3,6 +3,7 @@ import Order from '../models/Order.js';
 import Zone from '../../admin/models/Zone.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import mongoose from 'mongoose';
+import { findNearestOnlineDeliveryPartnersFromFirebase } from '../../../shared/services/firebaseRealtimeService.js';
 
 function getPlatformZoneFilter(platform = 'mofood') {
   return platform === 'mogrocery'
@@ -258,6 +259,83 @@ export async function findNearestDeliveryBoy(restaurantLat, restaurantLng, resta
       if (excludeObjectIds.length > 0) {
         deliveryQuery._id = { $nin: excludeObjectIds };
         console.log(`🚫 Excluding ${excludeObjectIds.length} already notified delivery partners`);
+      }
+    }
+
+    // Optional fast path: use Firebase Realtime online riders table first.
+    // This avoids scanning all riders in Mongo for nearest lookup.
+    if (process.env.USE_FIREBASE_NEAREST_DELIVERY === 'true') {
+      try {
+        const firebaseCandidates = await findNearestOnlineDeliveryPartnersFromFirebase({
+          restaurantLat,
+          restaurantLng,
+          maxDistanceKm: maxDistance,
+          limit: 50
+        });
+
+        if (firebaseCandidates.length > 0) {
+          const firebaseIdSet = new Set(
+            firebaseCandidates
+              .map((candidate) => candidate.deliveryPartnerId)
+              .filter((id) => mongoose.Types.ObjectId.isValid(id))
+          );
+
+          if (firebaseIdSet.size > 0) {
+            const firebaseIds = Array.from(firebaseIdSet).map((id) => new mongoose.Types.ObjectId(id));
+            const deliveryPartners = await Delivery.find({
+              ...deliveryQuery,
+              _id: { $in: firebaseIds }
+            })
+              .select('_id name phone availability.currentLocation availability.lastLocationUpdate availability.zones status isActive')
+              .lean();
+
+            const deliveryById = new Map(
+              deliveryPartners.map((partner) => [String(partner._id), partner])
+            );
+
+            for (const candidate of firebaseCandidates) {
+              const partner = deliveryById.get(String(candidate.deliveryPartnerId));
+              if (!partner) continue;
+
+              const lat = Number(candidate.lat);
+              const lng = Number(candidate.lng);
+              if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+              if (zone) {
+                const partnerZoneIds = Array.isArray(partner.availability?.zones)
+                  ? partner.availability.zones.map((z) => String(z))
+                  : [];
+                if (partnerZoneIds.length > 0 && !partnerZoneIds.includes(String(zone._id))) {
+                  continue;
+                }
+                if (partnerZoneIds.length === 0 && zone.coordinates && zone.coordinates.length >= 3) {
+                  if (!isPointInZoneBoundary(lat, lng, zone.coordinates)) continue;
+                }
+              } else if (activeZones.length > 0) {
+                const insideAnyActiveZone = activeZones.some((activeZone) =>
+                  isPointInZoneBoundary(lat, lng, activeZone.coordinates)
+                );
+                if (!insideAnyActiveZone) continue;
+              }
+
+              const distance = calculateDistance(restaurantLat, restaurantLng, lat, lng);
+              if (distance > maxDistance) continue;
+
+              return {
+                deliveryPartnerId: String(partner._id),
+                name: partner.name,
+                phone: partner.phone,
+                distance,
+                location: {
+                  latitude: lat,
+                  longitude: lng
+                }
+              };
+            }
+          }
+        }
+      } catch (firebaseError) {
+        console.warn(`Firebase nearest-rider lookup failed, falling back to Mongo: ${firebaseError.message}`);
       }
     }
 

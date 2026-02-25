@@ -3,7 +3,9 @@ import io from 'socket.io-client';
 import { SOCKET_BASE_URL } from '@/lib/api/config';
 import bikeLogo from '@/assets/bikelogo.png';
 import { RouteBasedAnimationController } from '@/module/user/utils/routeBasedAnimation';
-import { extractPolylineFromDirections, findNearestPointOnPolyline } from '@/module/delivery/utils/liveTrackingPolyline';
+import { decodePolyline, extractPolylineFromDirections, findNearestPointOnPolyline } from '@/module/delivery/utils/liveTrackingPolyline';
+import { ref as rtdbRef, onValue } from 'firebase/database';
+import { realtimeDb } from '@/lib/firebase';
 import './DeliveryTrackingMap.css';
 
 // Helper function to calculate Haversine distance
@@ -59,6 +61,8 @@ const DeliveryTrackingMap = ({
   const routePolylinePointsRef = useRef(null); // Store decoded polyline points for route-based animation
   const animationControllerRef = useRef(null); // Route-based animation controller
   const lastRouteUpdateRef = useRef(null);
+  const hasFirebaseRouteRef = useRef(false);
+  const activeFirebaseAliasRef = useRef(null);
   const userHasInteractedRef = useRef(false);
   const isProgrammaticChangeRef = useRef(false);
   const mapInitializedRef = useRef(false);
@@ -67,6 +71,63 @@ const DeliveryTrackingMap = ({
 
   const backendUrl = SOCKET_BASE_URL;
   const [GOOGLE_MAPS_API_KEY, setGOOGLE_MAPS_API_KEY] = useState("");
+  const [hasFirebaseRoute, setHasFirebaseRoute] = useState(false);
+
+  const renderPolylinePath = useCallback((points, isCustomerLeg = false) => {
+    if (!mapInstance.current || !window.google?.maps || !Array.isArray(points) || points.length === 0) {
+      return;
+    }
+
+    const normalizedPath = points
+      .map((point) => ({
+        lat: Number(point?.lat),
+        lng: Number(point?.lng)
+      }))
+      .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
+
+    if (normalizedPath.length === 0) return;
+
+    routePolylinePointsRef.current = normalizedPath;
+
+    if (directionsRendererRef.current) {
+      directionsRendererRef.current.setDirections({ routes: [] });
+    }
+
+    if (routePolylineRef.current) {
+      routePolylineRef.current.setMap(null);
+    }
+
+    const activeColor = isCustomerLeg ? '#2563eb' : '#10b981';
+    routePolylineRef.current = new window.google.maps.Polyline({
+      path: normalizedPath,
+      geodesic: true,
+      strokeColor: activeColor,
+      strokeOpacity: 0.8,
+      strokeWeight: 4,
+      icons: [{
+        icon: {
+          path: 'M 0,-1 0,1',
+          strokeOpacity: 1,
+          strokeWeight: 2,
+          strokeColor: activeColor,
+          scale: 4
+        },
+        offset: '0%',
+        repeat: '15px'
+      }],
+      map: mapInstance.current,
+      zIndex: 1
+    });
+
+    if (bikeMarkerRef.current && !animationControllerRef.current) {
+      animationControllerRef.current = new RouteBasedAnimationController(
+        bikeMarkerRef.current,
+        normalizedPath
+      );
+    } else if (animationControllerRef.current) {
+      animationControllerRef.current.updatePolyline(normalizedPath);
+    }
+  }, []);
   
   // Load Google Maps API key from backend
   useEffect(() => {
@@ -908,6 +969,89 @@ const DeliveryTrackingMap = ({
     };
   }, [orderId, order?.orderId, order?._id, order?.id, backendUrl, moveBikeSmoothly, hasDeliveryPartner, parseSocketLocation]);
 
+  // Prefer Firebase Realtime Database for route + live location updates.
+  useEffect(() => {
+    if (!orderId || !realtimeDb) return;
+
+    const orderAliases = Array.from(
+      new Set(
+        [
+          String(orderId || '').trim(),
+          String(order?.orderId || '').trim(),
+          String(order?._id || '').trim(),
+          String(order?.id || '').trim()
+        ].filter(Boolean)
+      )
+    );
+
+    const unsubscribers = [];
+    orderAliases.forEach((alias) => {
+      const orderNodeRef = rtdbRef(realtimeDb, `active_orders/${alias}`);
+      const unsubscribe = onValue(orderNodeRef, (snapshot) => {
+        const value = snapshot.val();
+        if (!value || typeof value !== 'object') return;
+
+        activeFirebaseAliasRef.current = alias;
+
+        const isCustomerLeg =
+          value?.status === 'en_route_to_delivery' ||
+          value?.status === 'out_for_delivery' ||
+          order?.status === 'out_for_delivery' ||
+          order?.deliveryState?.currentPhase === 'en_route_to_delivery';
+        isCustomerLegRef.current = isCustomerLeg;
+
+        let points = [];
+        if (Array.isArray(value.points) && value.points.length > 0) {
+          points = value.points;
+        } else if (typeof value.polyline === 'string' && value.polyline.trim()) {
+          points = decodePolyline(value.polyline);
+        }
+
+        if (points.length > 0) {
+          hasFirebaseRouteRef.current = true;
+          setHasFirebaseRoute(true);
+          if (isMapLoaded) {
+            renderPolylinePath(points, isCustomerLeg);
+          }
+        }
+
+        const lat = Number(value.boy_lat);
+        const lng = Number(value.boy_lng);
+        const heading = Number(value.bearing || 0);
+        if (Number.isFinite(lat) && Number.isFinite(lng)) {
+          const location = { lat, lng, heading: Number.isFinite(heading) ? heading : 0 };
+          setHasLiveSocketLocation(true);
+          setCurrentLocation(location);
+          setDeliveryBoyLocation(location);
+
+          if (isMapLoaded) {
+            moveBikeSmoothly(location.lat, location.lng, location.heading);
+          }
+        }
+      });
+      unsubscribers.push(unsubscribe);
+    });
+
+    return () => {
+      unsubscribers.forEach((unsubscribe) => {
+        if (typeof unsubscribe === 'function') unsubscribe();
+      });
+      hasFirebaseRouteRef.current = false;
+      setHasFirebaseRoute(false);
+      activeFirebaseAliasRef.current = null;
+    };
+  }, [
+    orderId,
+    order?.orderId,
+    order?._id,
+    order?.id,
+    order?.status,
+    order?.deliveryState?.currentPhase,
+    isMapLoaded,
+    moveBikeSmoothly,
+    renderPolylinePath
+  ]);
+
   // Initialize Google Map (only once - prevent re-initialization)
   useEffect(() => {
     if (!mapRef.current || !customerCoords || mapInitializedRef.current) return;
@@ -1301,6 +1445,11 @@ const DeliveryTrackingMap = ({
     }
     
     // Draw route when route endpoints are valid for the current phase.
+    // Skip Google Directions if Firebase already has route polyline for this order.
+    if (hasFirebaseRouteRef.current || hasFirebaseRoute) {
+      return;
+    }
+
     const routePhase = order?.deliveryState?.currentPhase;
     const routeStatus = order?.deliveryState?.status;
     
@@ -1369,7 +1518,7 @@ const DeliveryTrackingMap = ({
         }
       }
     }
-  }, [isMapLoaded, deliveryBoyLat, deliveryBoyLng, currentLat, currentLng, order?.deliveryState?.currentPhase, order?.deliveryState?.status, restaurantLat, restaurantLng, customerCoords?.lat, customerCoords?.lng, moveBikeSmoothly, getRouteToShow, drawRoute, hasDeliveryPartner]);
+  }, [isMapLoaded, deliveryBoyLat, deliveryBoyLng, currentLat, currentLng, order?.deliveryState?.currentPhase, order?.deliveryState?.status, restaurantLat, restaurantLng, customerCoords?.lat, customerCoords?.lng, moveBikeSmoothly, getRouteToShow, drawRoute, hasDeliveryPartner, hasFirebaseRoute]);
 
   // Update bike when REAL location changes (from socket)
   useEffect(() => {
