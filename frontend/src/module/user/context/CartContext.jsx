@@ -58,6 +58,22 @@ const CartContext = createContext(defaultCartContext);
 
 const normalizeName = (name) => (name ? String(name).trim().toLowerCase() : "");
 
+const getRestaurantIdentity = (item) => {
+  const restaurantId = String(item?.restaurantId || item?.storeId || "").trim();
+  const restaurantName = normalizeName(item?.restaurant || item?.storeName || "");
+  const identityKey = restaurantId
+    ? `id:${restaurantId}`
+    : restaurantName
+      ? `name:${restaurantName}`
+      : "";
+
+  return {
+    restaurantId,
+    restaurantName,
+    identityKey,
+  };
+};
+
 const detectItemPlatform = (item) => {
   const normalizedPlatform = String(
     item?.platform || item?.restaurantPlatform || "",
@@ -91,30 +107,11 @@ const parseStoredCart = (raw) => {
 const keepSingleRestaurant = (items) => {
   if (!Array.isArray(items) || items.length <= 1) return Array.isArray(items) ? items : [];
 
-  const restaurantIds = items.map((i) => i?.restaurantId).filter(Boolean);
-  const restaurantNames = items.map((i) => i?.restaurant).filter(Boolean);
-  const firstRestaurantId = restaurantIds[0] || null;
-  const firstRestaurantName = restaurantNames[0] || null;
-  const firstRestaurantNameNormalized = normalizeName(firstRestaurantName);
-
-  if (!firstRestaurantId && !firstRestaurantNameNormalized) return items;
-
+  const firstIdentity = getRestaurantIdentity(items[0]);
+  if (!firstIdentity.identityKey) return items;
   return items.filter((item) => {
-    const itemRestaurantId = item?.restaurantId;
-    const itemRestaurantNameNormalized = normalizeName(item?.restaurant);
-
-    if (firstRestaurantNameNormalized && itemRestaurantNameNormalized) {
-      return itemRestaurantNameNormalized === firstRestaurantNameNormalized;
-    }
-
-    if (firstRestaurantId && itemRestaurantId) {
-      return (
-        itemRestaurantId === firstRestaurantId ||
-        String(itemRestaurantId) === String(firstRestaurantId)
-      );
-    }
-
-    return false;
+    const itemIdentity = getRestaurantIdentity(item);
+    return itemIdentity.identityKey === firstIdentity.identityKey;
   });
 };
 
@@ -197,28 +194,20 @@ export function CartProvider({ children }) {
 
     // Restaurant consistency only within the same platform cart.
     if (targetCart.length > 0) {
-      const firstItemRestaurantId = targetCart[0]?.restaurantId;
-      const firstItemRestaurantName = targetCart[0]?.restaurant;
-      const newItemRestaurantId = item?.restaurantId;
-      const newItemRestaurantName = item?.restaurant;
+      const firstItemIdentity = getRestaurantIdentity(targetCart[0]);
+      const newItemIdentity = getRestaurantIdentity(item);
+      const firstItemRestaurantName =
+        targetCart[0]?.restaurant || targetCart[0]?.storeName || "another restaurant";
 
-      const firstRestaurantNameNormalized = normalizeName(firstItemRestaurantName);
-      const newRestaurantNameNormalized = normalizeName(newItemRestaurantName);
-
-      if (firstRestaurantNameNormalized && newRestaurantNameNormalized) {
-        if (firstRestaurantNameNormalized !== newRestaurantNameNormalized) {
-          toast.error(
-            `Cart already contains items from "${firstItemRestaurantName}". Please clear cart or complete order first.`,
-          );
-          return false;
-        }
-      } else if (firstItemRestaurantId && newItemRestaurantId) {
-        if (String(firstItemRestaurantId) !== String(newItemRestaurantId)) {
-          toast.error(
-            `Cart already contains items from "${firstItemRestaurantName || "another restaurant"}". Please clear cart or complete order first.`,
-          );
-          return false;
-        }
+      if (
+        firstItemIdentity.identityKey &&
+        newItemIdentity.identityKey &&
+        firstItemIdentity.identityKey !== newItemIdentity.identityKey
+      ) {
+        toast.error(
+          `Cart already contains items from "${firstItemRestaurantName}". Please clear cart or complete order first.`,
+        );
+        return false;
       }
     }
 
@@ -500,21 +489,17 @@ export function CartProvider({ children }) {
     setFoodCart((prev) => {
       if (prev.length === 0) return prev;
 
-      const targetRestaurantNameNormalized = normalizeName(restaurantName);
+      const targetIdentity = getRestaurantIdentity({
+        restaurantId,
+        restaurant: restaurantName,
+      });
 
       const cleanedCart = prev.filter((item) => {
-        const itemRestaurantId = item?.restaurantId;
-        const itemRestaurantNameNormalized = normalizeName(item?.restaurant);
-
-        if (targetRestaurantNameNormalized && itemRestaurantNameNormalized) {
-          return itemRestaurantNameNormalized === targetRestaurantNameNormalized;
-        }
-
-        if (restaurantId && itemRestaurantId) {
-          return String(itemRestaurantId) === String(restaurantId);
-        }
-
-        return false;
+        const itemIdentity = getRestaurantIdentity(item);
+        return (
+          Boolean(targetIdentity.identityKey) &&
+          itemIdentity.identityKey === targetIdentity.identityKey
+        );
       });
 
       if (cleanedCart.length !== prev.length) {

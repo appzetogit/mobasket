@@ -272,6 +272,36 @@ const PlansPage = () => {
     return selectedMealType === "nonVeg" ? nonVegProducts : vegProducts;
   })();
 
+  const selectedOfferProducts = useMemo(() => {
+    const activeOfferIds = new Set((selectedOfferIds || []).map((id) => String(id)));
+    const productMap = new Map();
+
+    (Array.isArray(planOffers) ? planOffers : []).forEach((offer) => {
+      const offerId = offer?._id || offer?.id;
+      if (!offerId || !activeOfferIds.has(String(offerId))) return;
+
+      const products = Array.isArray(offer?.productIds) ? offer.productIds : [];
+      products.forEach((product, index) => {
+        const productId = String(product?._id || product?.id || `${offerId}-${index}`);
+        const image =
+          (Array.isArray(product?.images) ? product.images[0] : "") ||
+          product?.image ||
+          "";
+        const qty = String(product?.unit || "").trim();
+        productMap.set(productId, {
+          id: productId,
+          name: product?.name || "Product",
+          qty: qty || "From selected offer",
+          image,
+        });
+      });
+    });
+
+    return Array.from(productMap.values());
+  }, [planOffers, selectedOfferIds]);
+
+  const displayedProducts = selectedOfferProducts.length > 0 ? selectedOfferProducts : selectedPlanProducts;
+
   const getNamedItems = (items) => {
     if (!Array.isArray(items)) return [];
     return items
@@ -769,11 +799,28 @@ const PlansPage = () => {
                     </button>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    {selectedPlanProducts.length > 0 ? (
-                      selectedPlanProducts.map((prod, idx) => (
+                    {displayedProducts.length > 0 ? (
+                      displayedProducts.map((prod, idx) => (
                         <div key={idx} className="bg-slate-50 p-3 rounded-xl flex items-center gap-3 border border-slate-100">
                           <div className="bg-white p-2 rounded-lg shadow-sm border border-slate-100">
-                            <Package size={16} className="text-slate-400" />
+                            {prod?.image ? (
+                              <img
+                                src={prod.image}
+                                alt={prod?.name || "Product"}
+                                className="w-6 h-6 object-cover rounded"
+                                loading="lazy"
+                                onError={(e) => {
+                                  e.currentTarget.style.display = "none";
+                                  const fallback = e.currentTarget.nextElementSibling;
+                                  if (fallback) fallback.style.display = "block";
+                                }}
+                              />
+                            ) : null}
+                            <Package
+                              size={16}
+                              className="text-slate-400"
+                              style={{ display: prod?.image ? "none" : "block" }}
+                            />
                           </div>
                           <div>
                             <p className="font-bold text-slate-900 text-sm leading-tight">{prod.name}</p>

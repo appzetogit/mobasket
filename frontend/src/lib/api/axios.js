@@ -13,6 +13,22 @@ const networkErrorState = {
   TOAST_COOLDOWN_PERIOD: 60000, // 60 seconds cooldown for toast notifications
 };
 
+const errorToastState = {
+  lastShownByKey: new Map(),
+  COOLDOWN_PERIOD: 12000, // Avoid repeating identical error toasts for 12s
+};
+
+const canShowErrorToast = (key) => {
+  if (!key) return true;
+  const now = Date.now();
+  const lastShown = errorToastState.lastShownByKey.get(key) || 0;
+  if (now - lastShown < errorToastState.COOLDOWN_PERIOD) {
+    return false;
+  }
+  errorToastState.lastShownByKey.set(key, now);
+  return true;
+};
+
 // Validate API base URL on import
 if (import.meta.env.DEV) {
   const backendUrl = API_BASE_URL.replace("/api", "");
@@ -477,6 +493,19 @@ apiClient.interceptors.response.use(
           currentPath.includes("/landing-page");
         const isDeliveryPath = currentPath.startsWith("/delivery");
         const isStorePath = currentPath.startsWith("/store");
+        const isRestaurantAuthPath =
+          currentPath.startsWith("/restaurant/login") ||
+          currentPath.startsWith("/restaurant/signup") ||
+          currentPath.startsWith("/restaurant/otp") ||
+          currentPath.startsWith("/restaurant/forgot-password") ||
+          currentPath.startsWith("/restaurant/welcome") ||
+          currentPath.startsWith("/restaurant/auth/");
+        const isAdminAuthPath =
+          currentPath.startsWith("/admin/login") ||
+          currentPath.startsWith("/admin/signup") ||
+          currentPath.startsWith("/admin/forgot-password");
+        const isUserAuthPath =
+          currentPath.startsWith("/user/auth/");
 
         // Don't auto-logout for store, delivery, onboarding, or landing page - let component show error
         if (!isOnboardingPage && !isLandingPageManagement && !isDeliveryPath && !isStorePath) {
@@ -484,7 +513,9 @@ apiClient.interceptors.response.use(
             localStorage.removeItem("admin_accessToken");
             localStorage.removeItem("admin_authenticated");
             localStorage.removeItem("admin_user");
-            window.location.href = "/admin/login";
+            if (!isAdminAuthPath) {
+              window.location.href = "/admin/login";
+            }
           } else if (
             currentPath.startsWith("/restaurant") &&
             !currentPath.startsWith("/restaurants")
@@ -493,13 +524,17 @@ apiClient.interceptors.response.use(
             localStorage.removeItem("restaurant_accessToken");
             localStorage.removeItem("restaurant_authenticated");
             localStorage.removeItem("restaurant_user");
-            window.location.href = "/restaurant/login";
+            if (!isRestaurantAuthPath) {
+              window.location.href = "/restaurant/login";
+            }
           } else {
             // User module includes /restaurants/* paths
             localStorage.removeItem("user_accessToken");
             localStorage.removeItem("user_authenticated");
             localStorage.removeItem("user");
-            window.location.href = "/user/auth/sign-in";
+            if (!isUserAuthPath) {
+              window.location.href = "/user/auth/sign-in";
+            }
           }
         }
 
@@ -734,10 +769,17 @@ apiClient.interceptors.response.use(
 
       // Show beautiful error toast for each error message
       errorMessages.forEach((errorMessage, index) => {
+        const requestUrl = error.config?.url || "unknown";
+        const requestMethod = String(error.config?.method || "get").toUpperCase();
+        const statusCode = error.response?.status || "NA";
+        const toastKey = `${requestMethod}|${requestUrl}|${statusCode}|${errorMessage}`;
+        if (!canShowErrorToast(toastKey)) return;
+
         // Add slight delay for multiple toasts to appear sequentially
         setTimeout(() => {
           toast.error(errorMessage, {
             duration: 5000,
+            id: toastKey,
             style: {
               background: "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)",
               color: "#ffffff",

@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import loginBg from "@/assets/loginbanner.png"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
+import { redirectRestaurantAfterAuth } from "../../utils/onboardingUtils"
 
 export default function RestaurantSignIn() {
   const navigate = useNavigate()
@@ -24,7 +25,7 @@ export default function RestaurantSignIn() {
   useEffect(() => {
     const isAuthenticated = localStorage.getItem("restaurant_authenticated") === "true"
     if (isAuthenticated) {
-      navigate("/restaurant", { replace: true })
+      redirectRestaurantAfterAuth(navigate, { replace: true })
     }
   }, [navigate])
 
@@ -44,8 +45,8 @@ export default function RestaurantSignIn() {
         
         // Dispatch custom event for same-tab updates
         window.dispatchEvent(new Event('restaurantAuthChanged'))
-        
-        navigate("/restaurant", { replace: true })
+
+        await redirectRestaurantAfterAuth(navigate, { replace: true })
       } else {
         throw new Error("Login failed. Please try again.")
       }

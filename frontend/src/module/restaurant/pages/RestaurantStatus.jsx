@@ -31,6 +31,32 @@ export default function RestaurantStatus() {
   const [isDayClosed, setIsDayClosed] = useState(false)
   const [outletTimings, setOutletTimings] = useState(null)
 
+  const parseTimeToMinutes = (timeValue) => {
+    if (!timeValue || typeof timeValue !== "string") return null
+
+    const normalized = timeValue.trim().toUpperCase()
+    // Supports: "09:00", "9:00", "9:00 AM", "09:00 PM"
+    const match = normalized.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/)
+    if (!match) return null
+
+    let hours = Number(match[1])
+    const minutes = Number(match[2])
+    const period = match[3] || null
+
+    if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null
+    if (minutes < 0 || minutes > 59) return null
+
+    if (period) {
+      if (hours < 1 || hours > 12) return null
+      if (period === "PM" && hours !== 12) hours += 12
+      if (period === "AM" && hours === 12) hours = 0
+    } else if (hours < 0 || hours > 23) {
+      return null
+    }
+
+    return hours * 60 + minutes
+  }
+
   // Update current date/time every minute
   useEffect(() => {
     const interval = setInterval(() => {
@@ -130,12 +156,14 @@ export default function RestaurantStatus() {
         
         // Check time range if day is open and has timings
         if (dayData.isOpen && dayData.openingTime && dayData.closingTime) {
-          // Parse opening and closing times (format: "HH:mm")
-          const [openHour, openMinute] = dayData.openingTime.split(':').map(Number)
-          const [closeHour, closeMinute] = dayData.closingTime.split(':').map(Number)
-          
-          const openingTimeInMinutes = openHour * 60 + openMinute
-          const closingTimeInMinutes = closeHour * 60 + closeMinute
+          const openingTimeInMinutes = parseTimeToMinutes(dayData.openingTime)
+          const closingTimeInMinutes = parseTimeToMinutes(dayData.closingTime)
+          if (!Number.isFinite(openingTimeInMinutes) || !Number.isFinite(closingTimeInMinutes)) {
+            // Avoid false "outside timings" if saved timing format is unexpected.
+            setIsWithinTimings(true)
+            setIsDayClosed(false)
+            return
+          }
 
           // Handle case where closing time is next day (e.g., 22:00 to 02:00)
           let isWithin = false
@@ -157,12 +185,15 @@ export default function RestaurantStatus() {
 
       // Check if current day is in openDays (from backend)
       const openDays = restaurantData.openDays || []
-      const isDayOpen = openDays.some(day => {
-        const dayAbbr = day.substring(0, 3) // "Mon", "Tue", etc.
-        return dayAbbr === currentDay
-      })
+      const hasConfiguredOpenDays = Array.isArray(openDays) && openDays.length > 0
+      const isDayOpen = hasConfiguredOpenDays
+        ? openDays.some(day => {
+            const dayAbbr = String(day || "").substring(0, 3).toLowerCase() // "Mon", "Tue", etc.
+            return dayAbbr === currentDay.toLowerCase()
+          })
+        : true
 
-      if (!isDayOpen) {
+      if (hasConfiguredOpenDays && !isDayOpen) {
         setIsWithinTimings(false)
         return
       }
@@ -174,12 +205,12 @@ export default function RestaurantStatus() {
         return
       }
 
-      // Parse opening and closing times (format: "HH:mm")
-      const [openHour, openMinute] = deliveryTimings.openingTime.split(':').map(Number)
-      const [closeHour, closeMinute] = deliveryTimings.closingTime.split(':').map(Number)
-      
-      const openingTimeInMinutes = openHour * 60 + openMinute
-      const closingTimeInMinutes = closeHour * 60 + closeMinute
+      const openingTimeInMinutes = parseTimeToMinutes(deliveryTimings.openingTime)
+      const closingTimeInMinutes = parseTimeToMinutes(deliveryTimings.closingTime)
+      if (!Number.isFinite(openingTimeInMinutes) || !Number.isFinite(closingTimeInMinutes)) {
+        setIsWithinTimings(true)
+        return
+      }
 
       // Handle case where closing time is next day (e.g., 22:00 to 02:00)
       let isWithin = false

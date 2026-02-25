@@ -77,6 +77,16 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
       } catch (e) { /* ignore */ }
     }
 
+    const inferredPlatform = String(
+      restaurant?.platform ||
+      order?.restaurantPlatform ||
+      order?.platform ||
+      ''
+    ).toLowerCase();
+    const isGroceryStore = inferredPlatform === 'mogrocery';
+    const targetNamespacePath = isGroceryStore ? '/grocery-store' : '/restaurant';
+    const roomPrefix = isGroceryStore ? 'grocery-store' : 'restaurant';
+
     // Prepare order notification data
     const orderNotification = {
       orderId: order.orderId,
@@ -104,18 +114,18 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
     };
     console.log('📢 Restaurant notification payload paymentMethod:', orderNotification.paymentMethod, { override: paymentMethodOverride, orderPaymentMethod: order.payment?.method });
 
-    // Get restaurant namespace
-    const restaurantNamespace = io.of('/restaurant');
+    // Route notifications to the correct dashboard namespace (restaurant/store).
+    const restaurantNamespace = io.of(targetNamespacePath);
 
     // Normalize restaurantId to string (handle both ObjectId and string)
     const normalizedRestaurantId = restaurantId?.toString() || restaurantId;
 
     // Try multiple room formats to ensure we find the restaurant
     const roomVariations = [
-      `restaurant:${normalizedRestaurantId}`,
-      `restaurant:${restaurantId}`,
+      `${roomPrefix}:${normalizedRestaurantId}`,
+      `${roomPrefix}:${restaurantId}`,
       ...(mongoose.Types.ObjectId.isValid(normalizedRestaurantId)
-        ? [`restaurant:${new mongoose.Types.ObjectId(normalizedRestaurantId).toString()}`]
+        ? [`${roomPrefix}:${new mongoose.Types.ObjectId(normalizedRestaurantId).toString()}`]
         : [])
     ];
 
@@ -157,8 +167,8 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
       console.log(`✅ Notified restaurant ${normalizedRestaurantId} about new order ${order.orderId} (${socketsInRoom.length} socket(s) connected)`);
     } else {
       // No sockets found in restaurant room - log error but DO NOT broadcast to all restaurants
-      console.error(`❌ CRITICAL: No sockets found for restaurant ${normalizedRestaurantId} in any room!`);
-      console.error(`❌ Order ${order.orderId} will NOT be delivered to restaurant ${normalizedRestaurantId}`);
+      console.error(`❌ CRITICAL: No sockets found for ${isGroceryStore ? 'store' : 'restaurant'} ${normalizedRestaurantId} in any room!`);
+      console.error(`❌ Order ${order.orderId} will NOT be delivered to ${isGroceryStore ? 'store' : 'restaurant'} ${normalizedRestaurantId}`);
       console.error(`❌ Room variations tried:`, roomVariations);
       console.error(`❌ Restaurant name: ${order.restaurantName}`);
       console.error(`❌ Restaurant ID from order: ${order.restaurantId}`);
@@ -166,7 +176,7 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
       
       // Log all connected restaurant sockets for debugging (but don't send to them)
       const allSockets = await restaurantNamespace.fetchSockets();
-      console.log(`📊 Total restaurant sockets connected: ${allSockets.length}`);
+      console.log(`📊 Total ${isGroceryStore ? 'grocery-store' : 'restaurant'} sockets connected: ${allSockets.length}`);
       if (allSockets.length > 0) {
         // Get room information for each socket
         const socketRooms = [];
@@ -174,10 +184,10 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
           const rooms = Array.from(socket.rooms);
           socketRooms.push({
             socketId: socket.id,
-            rooms: rooms.filter(r => r.startsWith('restaurant:'))
+            rooms: rooms.filter(r => r.startsWith(`${roomPrefix}:`))
           });
         }
-        console.log(`📊 Connected restaurant sockets and their rooms:`, socketRooms);
+        console.log(`📊 Connected ${isGroceryStore ? 'store' : 'restaurant'} sockets and their rooms:`, socketRooms);
       }
       
       // Still try to emit to room variations (in case socket connects later)
@@ -198,7 +208,7 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
         restaurantId,
         orderId: order.orderId,
         error: 'Restaurant not connected to Socket.IO',
-        message: `Restaurant ${normalizedRestaurantId} (${order.restaurantName}) is not connected. Order notification not sent.`
+        message: `${isGroceryStore ? 'Store' : 'Restaurant'} ${normalizedRestaurantId} (${order.restaurantName}) is not connected. Order notification not sent.`
       };
     }
 
@@ -231,10 +241,15 @@ export async function notifyRestaurantOrderUpdate(orderId, status) {
       throw new Error('Order not found');
     }
 
-    // Get restaurant namespace
-    const restaurantNamespace = io.of('/restaurant');
+    const restaurant = await Restaurant.findById(order.restaurantId).select('platform').lean();
+    const isGroceryStore = String(restaurant?.platform || '').toLowerCase() === 'mogrocery';
+    const targetNamespacePath = isGroceryStore ? '/grocery-store' : '/restaurant';
+    const roomPrefix = isGroceryStore ? 'grocery-store' : 'restaurant';
 
-    restaurantNamespace.to(`restaurant:${order.restaurantId}`).emit('order_status_update', {
+    // Emit status updates to platform-specific namespace/room.
+    const restaurantNamespace = io.of(targetNamespacePath);
+
+    restaurantNamespace.to(`${roomPrefix}:${order.restaurantId}`).emit('order_status_update', {
       orderId: order.orderId,
       status,
       updatedAt: new Date()

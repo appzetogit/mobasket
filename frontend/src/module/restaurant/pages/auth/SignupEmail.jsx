@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle, CardContent, CardDescription } from "@/com
 import loginBg from "@/assets/loginbanner.png"
 import { restaurantAPI } from "@/lib/api"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
+import { redirectRestaurantAfterAuth } from "../../utils/onboardingUtils"
 
 export default function RestaurantSignupEmail() {
   const companyName = useCompanyName()
@@ -146,8 +147,8 @@ export default function RestaurantSignupEmail() {
         setAuthData("restaurant", data.accessToken, data.restaurant)
         
         window.dispatchEvent(new Event("restaurantAuthChanged"))
-        
-        navigate("/restaurant", { replace: true })
+
+        await redirectRestaurantAfterAuth(navigate, { replace: true })
       } else {
         throw new Error("Registration failed. Please try again.")
       }

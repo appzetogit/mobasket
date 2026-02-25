@@ -17,6 +17,7 @@ import { firebaseAuth, googleProvider } from "@/lib/firebase"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 import { loadBusinessSettings } from "@/lib/utils/businessSettings"
 import PolicyModal from "@/components/legal/PolicyModal"
+import { redirectRestaurantAfterAuth } from "../../utils/onboardingUtils"
 
 // Common country codes
 const countryCodes = [
@@ -326,8 +327,7 @@ export default function RestaurantLogin() {
       // Notify any listeners that auth state has changed
       window.dispatchEvent(new Event("restaurantAuthChanged"))
 
-      // Navigate to restaurant home
-      navigate("/restaurant")
+      await redirectRestaurantAfterAuth(navigate, { replace: true })
     } catch (error) {
       console.error("Firebase Google login error:", error)
       const message =

@@ -28,6 +28,7 @@ import {
   deletePlanOffer,
   getPlanSubscriptions,
 } from '../controllers/groceryController.js';
+import { verifyOTP as verifyGroceryStoreOTP } from '../controllers/groceryStoreAuthController.js';
 import groceryStoreAuthRoutes from './groceryStoreAuthRoutes.js';
 import groceryStoreOrderRoutes from './groceryStoreOrderRoutes.js';
 import groceryStoreProductRoutes from './groceryStoreProductRoutes.js';
@@ -77,6 +78,8 @@ router.get('/plan-subscriptions', authenticateAdmin, getPlanSubscriptions);
 
 // Grocery Store Auth Routes
 router.use('/store/auth', groceryStoreAuthRoutes);
+// Fallback direct binding for OTP verify in case nested auth router registration is stale.
+router.post('/store/auth/verify-otp', verifyGroceryStoreOTP);
 
 // Grocery Store Order Routes (authenticated)
 router.use('/store', groceryStoreOrderRoutes);

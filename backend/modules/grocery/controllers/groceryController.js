@@ -923,7 +923,7 @@ export const getPlanOffers = async (req, res) => {
 
     const offers = await GroceryPlanOffer.find(filter)
       .populate('planIds', 'name')
-      .populate('productIds', 'name')
+      .populate('productIds', 'name images unit')
       .populate('categoryIds', 'name')
       .populate('subcategoryIds', 'name')
       .sort({ order: 1, createdAt: -1 })
@@ -952,7 +952,7 @@ export const getPlanOfferById = async (req, res) => {
 
     const offer = await GroceryPlanOffer.findById(id)
       .populate('planIds', 'name')
-      .populate('productIds', 'name')
+      .populate('productIds', 'name images unit')
       .populate('categoryIds', 'name')
       .populate('subcategoryIds', 'name')
       .lean();
