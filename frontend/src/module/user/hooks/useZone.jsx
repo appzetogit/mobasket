@@ -1,6 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { zoneAPI } from '@/lib/api'
 
+function normalizePlatform(platform) {
+  return platform === 'mogrocery' ? 'mogrocery' : 'mofood'
+}
+
+function getCacheKeys(platform) {
+  const normalized = normalizePlatform(platform)
+  return {
+    zoneId: `userZoneId:${normalized}`,
+    zone: `userZone:${normalized}`
+  }
+}
+
 /**
  * Hook to detect and manage user's zone based on location
  * Automatically detects zone when location is available
@@ -12,6 +24,8 @@ export function useZone(location, platform = 'mofood') {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
   const prevCoordsRef = useRef({ latitude: null, longitude: null })
+  const cacheKeysRef = useRef(getCacheKeys(platform))
+  cacheKeysRef.current = getCacheKeys(platform)
 
   // Detect zone when location is available
   const detectZone = useCallback(async (lat, lng) => {
@@ -37,15 +51,15 @@ export function useZone(location, platform = 'mofood') {
           setZoneStatus('IN_SERVICE')
           
           // Store in localStorage for persistence
-          localStorage.setItem('userZoneId', data.zoneId)
-          localStorage.setItem('userZone', JSON.stringify(data.zone))
+          localStorage.setItem(cacheKeysRef.current.zoneId, data.zoneId)
+          localStorage.setItem(cacheKeysRef.current.zone, JSON.stringify(data.zone))
         } else {
           // OUT_OF_SERVICE
           setZoneId(null)
           setZone(null)
           setZoneStatus('OUT_OF_SERVICE')
-          localStorage.removeItem('userZoneId')
-          localStorage.removeItem('userZone')
+          localStorage.removeItem(cacheKeysRef.current.zoneId)
+          localStorage.removeItem(cacheKeysRef.current.zone)
         }
       } else {
         throw new Error(response.data?.message || 'Failed to detect zone')
@@ -58,9 +72,9 @@ export function useZone(location, platform = 'mofood') {
       setZone(null)
       
       // Try to use cached zone if available
-      const cachedZoneId = localStorage.getItem('userZoneId')
+      const cachedZoneId = localStorage.getItem(cacheKeysRef.current.zoneId)
       if (cachedZoneId) {
-        const cachedZone = localStorage.getItem('userZone')
+        const cachedZone = localStorage.getItem(cacheKeysRef.current.zone)
         setZoneId(cachedZoneId)
         setZone(cachedZone ? JSON.parse(cachedZone) : null)
         setZoneStatus('IN_SERVICE')
@@ -91,9 +105,9 @@ export function useZone(location, platform = 'mofood') {
       }
     } else {
       // Try to use cached zone if location not available
-      const cachedZoneId = localStorage.getItem('userZoneId')
+      const cachedZoneId = localStorage.getItem(cacheKeysRef.current.zoneId)
       if (cachedZoneId) {
-        const cachedZone = localStorage.getItem('userZone')
+        const cachedZone = localStorage.getItem(cacheKeysRef.current.zone)
         setZoneId(cachedZoneId)
         setZone(cachedZone ? JSON.parse(cachedZone) : null)
         setZoneStatus('IN_SERVICE')

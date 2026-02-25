@@ -16,6 +16,7 @@ import {
   Truck,
   CalendarDays,
   Sparkles,
+  Smartphone,
 } from "lucide-react";
 import { useCart } from "../../user/context/CartContext";
 import { motion, AnimatePresence } from "framer-motion";
@@ -149,6 +150,23 @@ export default function GroceryCheckoutPage() {
       coords[1] || "",
     ].join("|");
   }, [selectedAddress]);
+  const cartStoreIdentities = useMemo(() => {
+    const identities = [];
+    const seen = new Set();
+
+    groceryItems.forEach((item) => {
+      const id = String(item?.restaurantId || item?.storeId || "").trim();
+      const name = String(item?.restaurant || item?.storeName || "Unknown Store").trim();
+      const key = id ? `id:${id}` : `name:${name.toLowerCase()}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        identities.push({ key, id, name });
+      }
+    });
+
+    return identities;
+  }, [groceryItems]);
+  const hasMixedStoreItems = cartStoreIdentities.length > 1;
 
   const itemsTotal = groceryItems.reduce(
     (sum, item) => sum + (item.mrp || item.price) * item.quantity,
@@ -169,6 +187,10 @@ export default function GroceryCheckoutPage() {
     groceryItems[0]?.restaurantLocation ||
     groceryItems[0]?.storeLocation ||
     null;
+  const selectedStoreLabel =
+    cartStoreIdentities[0]?.name ||
+    String(resolvedRestaurant?.restaurantName || cartRestaurantName || "").trim() ||
+    "Unknown Store";
 
   useEffect(() => {
     const fetchFeeSettings = async () => {
@@ -194,6 +216,10 @@ export default function GroceryCheckoutPage() {
   }, []);
 
   const resolveGroceryRestaurant = useCallback(async () => {
+    if (hasMixedStoreItems) {
+      throw new Error("Your cart has items from multiple stores. Keep items from one store only.");
+    }
+
     if (resolvedRestaurant?.restaurantId) {
       return resolvedRestaurant;
     }
@@ -221,6 +247,7 @@ export default function GroceryCheckoutPage() {
     cartRestaurantId,
     cartRestaurantLocation,
     cartRestaurantName,
+    hasMixedStoreItems,
     resolvedRestaurant,
   ]);
 
@@ -594,6 +621,10 @@ export default function GroceryCheckoutPage() {
       toast.error("Your grocery cart is empty.");
       return;
     }
+    if (hasMixedStoreItems) {
+      toast.error("Cart has items from multiple stores. Please keep one store only.");
+      return;
+    }
     const sanitizedPhone = String(userProfile?.phone || "").replace(/\D/g, "");
     if (!sanitizedPhone || sanitizedPhone.length < 10) {
       toast.error("Please add your phone number in profile before ordering.");
@@ -740,7 +771,20 @@ export default function GroceryCheckoutPage() {
           },
           notes: {
             orderId: order?.orderId || order?.id || "",
+            preferredPaymentMode: paymentMethod === "upi" ? "upi" : "razorpay",
           },
+          ...(paymentMethod === "upi"
+            ? {
+                method: {
+                  upi: true,
+                  card: false,
+                  netbanking: false,
+                  wallet: false,
+                  emi: false,
+                  paylater: false,
+                },
+              }
+            : {}),
           handler: async (response) => {
             try {
               await orderAPI.verifyPayment({
@@ -862,6 +906,15 @@ export default function GroceryCheckoutPage() {
                 </p>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+      {hasMixedStoreItems && (
+        <div className="px-4 pb-4">
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+            <p className="text-xs font-semibold text-red-700">
+              Cart contains products from multiple stores. Remove extra-store items to continue.
+            </p>
           </div>
         </div>
       )}
@@ -1295,6 +1348,34 @@ export default function GroceryCheckoutPage() {
               </div>
             </button>
             <button
+              onClick={() => setPaymentMethod("upi")}
+              className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all ${paymentMethod === "upi"
+                ? "border-[#facd01] bg-yellow-50/50"
+                : "border-gray-100 bg-white"
+                }`}
+            >
+              <div className="flex items-center gap-3">
+                <div
+                  className={`p-2 rounded-lg ${paymentMethod === "upi" ? "bg-[#facd01] text-gray-900" : "bg-gray-100 text-gray-400"}`}
+                >
+                  <Smartphone className="w-5 h-5" />
+                </div>
+                <div className="text-left">
+                  <span
+                    className={`block text-sm font-bold ${paymentMethod === "upi" ? "text-gray-900" : "text-gray-500"}`}
+                  >
+                    Direct UPI
+                  </span>
+                  <span className="block text-xs text-gray-500">
+                    Pay using any UPI app
+                  </span>
+                </div>
+              </div>
+              {paymentMethod === "upi" && (
+                <div className="w-4 h-4 rounded-full bg-[#facd01] border-4 border-white shadow-sm ring-1 ring-[#facd01]"></div>
+              )}
+            </button>
+            <button
               onClick={() => setPaymentMethod("cash")}
               className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all ${paymentMethod === "cash"
                 ? "border-[#facd01] bg-yellow-50/50"
@@ -1330,12 +1411,18 @@ export default function GroceryCheckoutPage() {
             </p>
           </div>
         )}
+        <div className="mb-2 px-1">
+          <p className="text-[11px] font-semibold text-gray-600">
+            Store: <span className="text-gray-900">{selectedStoreLabel}</span>
+          </p>
+        </div>
         <button
           className="w-full bg-[#facd01] hover:bg-[#e6bc01] text-gray-900 font-black py-4 rounded-2xl text-base shadow-lg active:scale-[0.98] transition-all flex items-center justify-center gap-2 group"
           onClick={handlePlaceOrder}
           disabled={
             isPlacingOrder ||
             groceryItems.length === 0 ||
+            hasMixedStoreItems ||
             !storeAvailability.isAvailable ||
             (paymentMethod === "wallet" && !walletLoading && !hasSufficientWalletBalance)
           }
@@ -1346,7 +1433,9 @@ export default function GroceryCheckoutPage() {
               ? "Place Order"
               : paymentMethod === "wallet"
                 ? "Pay via Wallet"
-              : "Proceed to Payment"}
+                : paymentMethod === "upi"
+                  ? "Pay via UPI"
+                  : "Proceed to Payment"}
           <ChevronRight
             size={20}
             className="group-hover:translate-x-1 transition-transform"

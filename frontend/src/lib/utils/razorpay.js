@@ -75,6 +75,8 @@ export const initRazorpayPayment = async (options) => {
         contact: options.prefill?.contact || ''
       },
       notes: options.notes || {},
+      ...(options.method ? { method: options.method } : {}),
+      ...(options.config ? { config: options.config } : {}),
       theme: {
         color: '#E23744'
       },

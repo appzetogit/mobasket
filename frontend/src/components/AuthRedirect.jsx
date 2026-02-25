@@ -1,5 +1,6 @@
 import { Navigate } from "react-router-dom"
 import { isModuleAuthenticated } from "@/lib/utils/auth"
+import { getPostAuthRestaurantPathFromCachedData } from "@/module/restaurant/utils/onboardingUtils"
 
 /**
  * AuthRedirect Component
@@ -26,7 +27,11 @@ export default function AuthRedirect({ children, module, redirectTo = null }) {
 
   // If authenticated, redirect to module home page
   if (isAuthenticated) {
-    const homePath = redirectTo || moduleHomePages[module] || "/"
+    const resolvedHomePath =
+      module === "restaurant"
+        ? getPostAuthRestaurantPathFromCachedData()
+        : moduleHomePages[module] || "/"
+    const homePath = redirectTo || resolvedHomePath
     return <Navigate to={homePath} replace />
   }
 

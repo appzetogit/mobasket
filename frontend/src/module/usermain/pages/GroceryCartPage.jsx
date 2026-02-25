@@ -13,10 +13,11 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useCart } from "../../user/context/CartContext";
-import { adminAPI, orderAPI } from "@/lib/api";
+import { adminAPI, orderAPI, restaurantAPI } from "@/lib/api";
 import { useProfile } from "../../user/context/ProfileContext";
 import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
+import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
 
 const GroceryCartPage = () => {
   const navigate = useNavigate();
@@ -34,6 +35,8 @@ const GroceryCartPage = () => {
   const [calculatedPricing, setCalculatedPricing] = useState(null);
   const [loadingPricing, setLoadingPricing] = useState(false);
   const [hasActivePlanSubscription, setHasActivePlanSubscription] = useState(false);
+  const [storeAvailability, setStoreAvailability] = useState({ isAvailable: true, reason: "" });
+  const [checkingStoreAvailability, setCheckingStoreAvailability] = useState(false);
 
   // Filter grocery items (though CartContext usually keeps only one restaurant type)
   const groceryItems = cart.filter((item) => isGroceryItem(item));
@@ -124,6 +127,52 @@ const GroceryCartPage = () => {
 
     return null;
   }, [getDefaultAddress, liveLocation]);
+  const selectedAddressKey = useMemo(() => {
+    if (!selectedAddress) return "no-address";
+    const coords = selectedAddress?.location?.coordinates;
+    return JSON.stringify({
+      label: selectedAddress?.label || "",
+      street: selectedAddress?.street || selectedAddress?.addressLine1 || "",
+      city: selectedAddress?.city || "",
+      state: selectedAddress?.state || "",
+      zip: selectedAddress?.zipCode || selectedAddress?.postalCode || selectedAddress?.pincode || "",
+      lat: Array.isArray(coords) ? coords[1] : selectedAddress?.latitude || "",
+      lng: Array.isArray(coords) ? coords[0] : selectedAddress?.longitude || "",
+    });
+  }, [selectedAddress]);
+  const groceryItemsKey = useMemo(
+    () =>
+      JSON.stringify(
+        groceryItems.map((item) => ({
+          id: String(item?.id || item?._id || ""),
+          qty: Number(item?.quantity || 0),
+          price: Number(item?.price || 0),
+        })),
+      ),
+    [groceryItems],
+  );
+  const resolvedRestaurantId = String(resolvedRestaurant?.restaurantId || "");
+  const cartStoreIdentities = useMemo(() => {
+    const identities = [];
+    const seen = new Set();
+
+    groceryItems.forEach((item) => {
+      const id = String(item?.restaurantId || item?.storeId || "").trim();
+      const name = String(item?.restaurant || item?.storeName || "Unknown Store").trim();
+      const key = id ? `id:${id}` : `name:${name.toLowerCase()}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        identities.push({ key, id, name });
+      }
+    });
+
+    return identities;
+  }, [groceryItems]);
+  const hasMixedStoreItems = cartStoreIdentities.length > 1;
+  const selectedStoreLabel =
+    cartStoreIdentities[0]?.name ||
+    String(resolvedRestaurant?.restaurantName || "").trim() ||
+    "Unknown Store";
 
   // Calculate savings
   const itemsTotal = groceryItems.reduce(
@@ -137,6 +186,10 @@ const GroceryCartPage = () => {
   const totalSavings = itemsTotal - subtotal;
 
   const resolveGroceryRestaurant = async () => {
+    if (hasMixedStoreItems) {
+      throw new Error("Your cart has items from multiple stores. Keep items from one store only.");
+    }
+
     if (resolvedRestaurant?.restaurantId) {
       return resolvedRestaurant;
     }
@@ -221,7 +274,55 @@ const GroceryCartPage = () => {
     };
 
     calculatePricingPreview();
-  }, [groceryItems, selectedAddress, resolvedRestaurant, zoneId]);
+  }, [groceryItemsKey, selectedAddressKey, resolvedRestaurantId, zoneId]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const checkStoreAvailability = async () => {
+      if (!resolvedRestaurant?.restaurantId) {
+        if (isMounted) {
+          setStoreAvailability({ isAvailable: true, reason: "" });
+          setCheckingStoreAvailability(false);
+        }
+        return;
+      }
+
+      try {
+        if (isMounted) setCheckingStoreAvailability(true);
+        const response = await restaurantAPI.getRestaurantById(resolvedRestaurant.restaurantId);
+        const restaurant =
+          response?.data?.data?.restaurant ||
+          response?.data?.restaurant ||
+          response?.data?.data ||
+          null;
+
+        const availability = evaluateStoreAvailability({
+          store: restaurant,
+          label: "Store",
+        });
+
+        if (isMounted) {
+          setStoreAvailability(availability);
+        }
+      } catch {
+        // If availability can't be confirmed, keep checkout enabled to avoid blocking valid orders.
+        if (isMounted) {
+          setStoreAvailability({ isAvailable: true, reason: "" });
+        }
+      } finally {
+        if (isMounted) {
+          setCheckingStoreAvailability(false);
+        }
+      }
+    };
+
+    checkStoreAvailability();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [resolvedRestaurant?.restaurantId]);
 
   const deliveryCharge = useMemo(() => {
     if (subtotal <= 0) return 0;
@@ -262,6 +363,12 @@ const GroceryCartPage = () => {
     calculatedPricing?.total ??
       subtotal + summaryDeliveryFee + summaryPlatformFee + summaryTax - summaryDiscount,
   );
+  const isStoreOffline = !storeAvailability.isAvailable;
+  const shouldDisableOrderNow =
+    checkingStoreAvailability ||
+    isStoreOffline ||
+    loadingPricing ||
+    hasMixedStoreItems;
 
   const handleClearCart = () => {
     clearCart("mogrocery");
@@ -329,6 +436,19 @@ const GroceryCartPage = () => {
             <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 leading-tight">Delivery in 8 minutes</h3>
             <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Shipment of {groceryItems.length} items</p>
           </div>
+        </div>
+        <div className="bg-white dark:bg-[#1a1a1a] mx-4 mt-4 rounded-xl p-4 shadow-sm border border-yellow-50 dark:border-gray-800">
+          <p className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 font-semibold">
+            Selected Store
+          </p>
+          <p className="text-sm font-bold text-gray-900 dark:text-gray-100 mt-1">
+            {selectedStoreLabel}
+          </p>
+          {hasMixedStoreItems && (
+            <p className="text-[11px] text-rose-700 font-semibold mt-2">
+              Cart contains products from multiple stores. Keep only one store to continue.
+            </p>
+          )}
         </div>
 
         {/* Item List */}
@@ -500,7 +620,23 @@ const GroceryCartPage = () => {
 
       {/* Sticky Bottom Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-[#111111] border-t border-gray-100 dark:border-gray-800 p-4 pb-6 z-[100] md:max-w-md md:mx-auto">
-        <div className="bg-[#facd01] rounded-xl flex items-center justify-between px-4 py-3 shadow-lg active:scale-[0.98] transition-all cursor-pointer overflow-hidden group border border-yellow-400">
+        {isStoreOffline && !checkingStoreAvailability && (
+          <div className="mb-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700">
+            {storeAvailability.reason || "Store is currently offline. Please try again later."}
+          </div>
+        )}
+        {hasMixedStoreItems && (
+          <div className="mb-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700">
+            Multiple stores detected in cart. Remove items until all products are from one store.
+          </div>
+        )}
+        <div
+          className={`rounded-xl flex items-center justify-between px-4 py-3 shadow-lg transition-all overflow-hidden border ${
+            shouldDisableOrderNow
+              ? "bg-gray-200 border-gray-300 cursor-not-allowed"
+              : "bg-[#facd01] border-yellow-400 active:scale-[0.98] cursor-pointer group"
+          }`}
+        >
           <div className="flex flex-col">
             <span className="text-gray-900 font-bold text-sm">Rs {grandTotal}</span>
             <span className="text-gray-700 text-[10px] uppercase font-bold tracking-wider">
@@ -508,14 +644,20 @@ const GroceryCartPage = () => {
             </span>
           </div>
           <button
-            className="flex items-center gap-1 text-gray-900 font-bold text-base"
+            type="button"
+            disabled={shouldDisableOrderNow}
+            className={`flex items-center gap-1 font-bold text-base ${
+              shouldDisableOrderNow ? "text-gray-500 cursor-not-allowed" : "text-gray-900"
+            }`}
             onClick={() => navigate("/grocery/checkout")}
           >
-            Order Now <ChevronRight size={20} />
+            {checkingStoreAvailability ? "Checking..." : "Order Now"} <ChevronRight size={20} />
           </button>
 
           {/* Subtle shine effect */}
-          <div className="absolute top-0 -left-[100%] w-[50%] h-full bg-white/30 skew-x-[-25deg] group-hover:left-[150%] transition-all duration-700"></div>
+          {!shouldDisableOrderNow && (
+            <div className="absolute top-0 -left-[100%] w-[50%] h-full bg-white/30 skew-x-[-25deg] group-hover:left-[150%] transition-all duration-700"></div>
+          )}
         </div>
       </div>
     </div>

@@ -203,13 +203,43 @@ const GroceryPage = () => {
     }
 
     const note = String(order?.note || "").toLowerCase();
-    if (note.includes("plan")) return true;
+    if (note.includes("[mogold plan]") || note.includes("plan subscription")) return true;
+
+    const approvalReason = String(order?.adminApproval?.reason || "").toLowerCase();
+    if (approvalReason.includes("plan subscription") || approvalReason.includes("mogold")) return true;
+
+    const metadataBlob = [
+      order?.metadata?.planId,
+      order?.metadata?.planName,
+      order?.payment?.notes?.planId,
+      order?.payment?.notes?.planName,
+      order?.source,
+      order?.orderType,
+    ]
+      .map((value) => String(value || "").toLowerCase())
+      .join(" ");
+    if (
+      metadataBlob.includes("mogold") ||
+      metadataBlob.includes("plan subscription") ||
+      metadataBlob.includes("membership plan")
+    ) {
+      return true;
+    }
 
     const items = Array.isArray(order?.items) ? order.items : [];
     return items.some((item) => {
       const type = String(item?.itemType || "").toLowerCase();
+      const itemId = String(item?.itemId || item?._id || "").toLowerCase();
       const name = String(item?.name || "").toLowerCase();
-      return type === "plan" || name.includes("plan");
+      const description = String(item?.description || "").toLowerCase();
+      return (
+        type === "plan" ||
+        itemId.startsWith("plan-") ||
+        name.includes("mogold") ||
+        name.includes("plan") ||
+        description.includes("mogold") ||
+        description.includes("plan subscription")
+      );
     });
   };
 
@@ -1929,7 +1959,7 @@ const GroceryPage = () => {
       ))}
 
       {/* --- 8. BOTTOM FLOATING OFFER --- */}
-      {activeGroceryOrder && activeOrderMeta && (
+      {activeGroceryOrder && activeOrderMeta && !isMoGroceryPlanOrder(activeGroceryOrder) && (
         <motion.div
           initial={{ opacity: 0, y: 30, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -1952,9 +1982,6 @@ const GroceryPage = () => {
             <div className="px-4 pb-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-base font-black text-[#222] leading-tight">
-                    Order #{activeGroceryOrder?.orderId || activeGroceryOrder?._id}
-                  </p>
                   <p className="text-[12px] font-semibold text-[#6b4d46] mt-0.5">{activeOrderMeta.subtitle}</p>
                 </div>
                 <div className="flex items-center gap-1.5 text-[#a0464f] bg-white/70 border border-[#f3d4d8] rounded-full px-2 py-1">

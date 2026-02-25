@@ -4,6 +4,7 @@ import { CheckCircle2, XCircle, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { setAuthData } from "@/lib/utils/auth"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
+import { redirectRestaurantAfterAuth } from "../../utils/onboardingUtils"
 
 export default function RestaurantGoogleCallback() {
   const navigate = useNavigate()
@@ -64,9 +65,9 @@ export default function RestaurantGoogleCallback() {
 
         setStatus("success")
 
-        // Redirect to restaurant home after short delay
+        // Redirect after short delay using onboarding-aware flow
         setTimeout(() => {
-          navigate("/restaurant")
+          redirectRestaurantAfterAuth(navigate, { replace: true })
         }, 1200)
       } catch (err) {
         console.error("Restaurant Google auth error:", err)
@@ -85,7 +86,7 @@ export default function RestaurantGoogleCallback() {
   }
 
   const handleGoHome = () => {
-    navigate("/restaurant")
+    redirectRestaurantAfterAuth(navigate, { replace: true })
   }
 
   return (

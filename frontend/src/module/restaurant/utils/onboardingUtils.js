@@ -113,3 +113,31 @@ export const checkOnboardingStatus = async () => {
   }
 }
 
+export const getOnboardingStepFromRestaurantPayload = (restaurant) => {
+  const onboarding = restaurant?.onboarding
+  if (!onboarding) return 1
+  return determineStepToShow(onboarding)
+}
+
+export const getPostAuthRestaurantPathFromCachedData = () => {
+  try {
+    const raw = localStorage.getItem("restaurant_user")
+    if (!raw) return "/restaurant"
+    const restaurant = JSON.parse(raw)
+    const step = getOnboardingStepFromRestaurantPayload(restaurant)
+    return step ? `/restaurant/onboarding?step=${step}` : "/restaurant"
+  } catch {
+    return "/restaurant"
+  }
+}
+
+export const redirectRestaurantAfterAuth = async (navigate, { replace = true } = {}) => {
+  try {
+    const step = await checkOnboardingStatus()
+    const targetPath = step ? `/restaurant/onboarding?step=${step}` : "/restaurant"
+    navigate(targetPath, { replace })
+  } catch {
+    navigate("/restaurant", { replace })
+  }
+}
+

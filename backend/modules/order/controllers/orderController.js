@@ -764,7 +764,8 @@ export const createOrder = async (req, res) => {
     }
 
     const restaurantPlatform = restaurant.platform === 'mogrocery' ? 'mogrocery' : 'mofood';
-    requiresAdminApproval = restaurantPlatform === 'mogrocery' && !isPlanSubscriptionOrder;
+    // Align MoGrocery with restaurant flow: send orders directly to store without admin queue.
+    requiresAdminApproval = false;
 
     if (isFutureScheduledOrder && scheduledForDate) {
       const scheduledAvailability = await evaluateRestaurantAvailabilityAt(restaurant, scheduledForDate);
@@ -1481,7 +1482,8 @@ export const switchOrderToCash = async (req, res) => {
 
     const isPlanSubscriptionOrder = Boolean(order?.planSubscription?.planId);
     const orderPlatform = await resolveOrderPlatform(order.restaurantId);
-    const requiresAdminApproval = orderPlatform === 'mogrocery' && !isPlanSubscriptionOrder;
+    // Align MoGrocery with restaurant flow: no admin approval gate on COD switch.
+    const requiresAdminApproval = false;
 
     if (!isFutureScheduledOrder && order.status === 'pending' && !requiresAdminApproval) {
       order.status = 'confirmed';
@@ -1688,7 +1690,8 @@ export const verifyOrderPayment = async (req, res) => {
     order.payment.transactionId = razorpayPaymentId;
     const isPlanSubscriptionOrder = Boolean(order?.planSubscription?.planId);
     const orderPlatform = await resolveOrderPlatform(order.restaurantId);
-    const requiresAdminApproval = orderPlatform === 'mogrocery' && !isPlanSubscriptionOrder;
+    // Align MoGrocery with restaurant flow: verify payment should confirm and notify store directly.
+    const requiresAdminApproval = false;
 
     if (isFutureScheduledOrder) {
       order.status = 'scheduled';
@@ -2202,8 +2205,8 @@ export const editOrderCart = async (req, res) => {
     const sanitizedItems = sanitizeEditedItems(nextItems);
     const totals = calculateUpdatedTotals(order, sanitizedItems);
     const orderPlatform = await resolveOrderPlatform(order.restaurantId);
-    const requiresAdminReapproval =
-      orderPlatform === 'mogrocery' && !isMoGroceryPlanSubscriptionOrder(order);
+    // Keep edited orders in direct store flow as well (no admin re-approval queue for MoGrocery).
+    const requiresAdminReapproval = false;
 
     const previousTotal = Number(order.pricing?.total || 0);
     const additionalAmount = Number(Math.max(0, totals.total - previousTotal).toFixed(2));

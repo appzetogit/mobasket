@@ -277,6 +277,65 @@ restaurantNamespace.on('connection', (socket) => {
   });
 });
 
+// Grocery-store namespace for store order notifications
+const groceryStoreNamespace = io.of('/grocery-store');
+
+groceryStoreNamespace.use((socket, next) => {
+  try {
+    console.log('🛒 Grocery-store connection attempt:', {
+      socketId: socket.id,
+      auth: socket.handshake.auth,
+      query: socket.handshake.query,
+      origin: socket.handshake.headers.origin,
+      userAgent: socket.handshake.headers['user-agent']
+    });
+    next();
+  } catch (error) {
+    console.error('❌ Error in grocery-store namespace middleware:', error);
+    next(error);
+  }
+});
+
+groceryStoreNamespace.on('connection', (socket) => {
+  console.log('🛒 Grocery-store client connected:', socket.id);
+
+  socket.on('join-grocery-store', (storeId) => {
+    if (!storeId) {
+      console.warn('⚠️ Grocery-store tried to join without storeId');
+      return;
+    }
+
+    const normalizedStoreId = storeId?.toString() || storeId;
+    const room = `grocery-store:${normalizedStoreId}`;
+
+    socket.join(room);
+    const roomSize = groceryStoreNamespace.adapter.rooms.get(room)?.size || 0;
+    console.log(`✅ Grocery-store ${normalizedStoreId} joined room: ${room}`);
+    console.log(`📊 Total sockets in room ${room}: ${roomSize}`);
+
+    if (mongoose.Types.ObjectId.isValid(normalizedStoreId)) {
+      const objectIdRoom = `grocery-store:${new mongoose.Types.ObjectId(normalizedStoreId).toString()}`;
+      if (objectIdRoom !== room) {
+        socket.join(objectIdRoom);
+      }
+    }
+
+    socket.emit('grocery-store-room-joined', {
+      storeId: normalizedStoreId,
+      room,
+      socketId: socket.id
+    });
+  });
+
+  socket.on('disconnect', () => {
+    console.log('🛒 Grocery-store client disconnected:', socket.id);
+  });
+
+  socket.on('error', (error) => {
+    console.error('🛒 Grocery-store socket error:', error);
+  });
+});
+
 // Delivery namespace for order assignments
 const deliveryNamespace = io.of('/delivery');
 
