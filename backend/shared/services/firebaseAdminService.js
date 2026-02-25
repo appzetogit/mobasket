@@ -119,6 +119,25 @@ export async function initializeFirebaseAdmin({ allowDbLookup = true } = {}) {
   }
 }
 
+export async function resetFirebaseAdmin({ deleteApps = true } = {}) {
+  cachedConfig = null;
+
+  if (!deleteApps || admin.apps.length === 0) {
+    return;
+  }
+
+  // Delete initialized apps so new credentials from ENV Setup can take effect immediately.
+  await Promise.all(
+    admin.apps.map(async (appInstance) => {
+      try {
+        await appInstance.delete();
+      } catch {
+        // Ignore cleanup failures to avoid breaking env save flow.
+      }
+    })
+  );
+}
+
 export function getFirebaseAdminApp() {
   if (admin.apps.length === 0) return null;
   return admin.app();

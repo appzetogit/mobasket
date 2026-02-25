@@ -310,7 +310,7 @@ export const sidebarMenuData = [
       {
         type: "link",
         label: "ENV Setup",
-        path: "/admin/system-addons",
+        path: "/admin/env-setup",
         icon: "Plus",
       },
     ],
@@ -647,7 +647,7 @@ export const mogroceryMenuData = [
       {
         type: "link",
         label: "ENV Setup",
-        path: "/admin/system-addons",
+        path: "/admin/env-setup",
         icon: "Plus",
       },
     ],

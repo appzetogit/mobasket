@@ -2,6 +2,8 @@ import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import EnvironmentVariable from '../models/EnvironmentVariable.js';
 import { clearEnvCache } from '../../../shared/utils/envService.js';
+import { resetFirebaseAdmin } from '../../../shared/services/firebaseAdminService.js';
+import { initializeFirebaseRealtime, resetFirebaseRealtimeState } from '../../../shared/services/firebaseRealtimeService.js';
 import winston from 'winston';
 
 const logger = winston.createLogger({
@@ -46,10 +48,18 @@ export const getPublicEnvVariables = asyncHandler(async (req, res) => {
     // Get decrypted Google Maps API key (toEnvObject already decrypts)
     const envData = envVars.toEnvObject();
     
-    // Return only public variables that frontend needs
-    // NO FALLBACK - Only use database value
+    // Return only public variables that frontend may need at runtime.
+    // NO FALLBACK - Only use database value.
     const publicEnvData = {
-      VITE_GOOGLE_MAPS_API_KEY: envData.VITE_GOOGLE_MAPS_API_KEY || ''
+      VITE_GOOGLE_MAPS_API_KEY: envData.VITE_GOOGLE_MAPS_API_KEY || '',
+      VITE_FIREBASE_API_KEY: envData.FIREBASE_API_KEY || '',
+      VITE_FIREBASE_AUTH_DOMAIN: envData.FIREBASE_AUTH_DOMAIN || '',
+      VITE_FIREBASE_STORAGE_BUCKET: envData.FIREBASE_STORAGE_BUCKET || '',
+      VITE_FIREBASE_MESSAGING_SENDER_ID: envData.FIREBASE_MESSAGING_SENDER_ID || '',
+      VITE_FIREBASE_APP_ID: envData.FIREBASE_APP_ID || '',
+      VITE_FIREBASE_MEASUREMENT_ID: envData.MEASUREMENT_ID || '',
+      VITE_FIREBASE_PROJECT_ID: envData.FIREBASE_PROJECT_ID || '',
+      VITE_FIREBASE_DATABASE_URL: envData.FIREBASE_DATABASE_URL || ''
     };
     
     return successResponse(res, 200, 'Public environment variables retrieved successfully', publicEnvData);
@@ -57,7 +67,15 @@ export const getPublicEnvVariables = asyncHandler(async (req, res) => {
     logger.error(`Error fetching public environment variables: ${error.message}`, { stack: error.stack });
     // No fallback - return empty if database fails
     return successResponse(res, 200, 'Public environment variables retrieved successfully', {
-      VITE_GOOGLE_MAPS_API_KEY: ''
+      VITE_GOOGLE_MAPS_API_KEY: '',
+      VITE_FIREBASE_API_KEY: '',
+      VITE_FIREBASE_AUTH_DOMAIN: '',
+      VITE_FIREBASE_STORAGE_BUCKET: '',
+      VITE_FIREBASE_MESSAGING_SENDER_ID: '',
+      VITE_FIREBASE_APP_ID: '',
+      VITE_FIREBASE_MEASUREMENT_ID: '',
+      VITE_FIREBASE_PROJECT_ID: '',
+      VITE_FIREBASE_DATABASE_URL: ''
     });
   }
 });
@@ -160,6 +178,17 @@ export const saveEnvVariables = asyncHandler(async (req, res) => {
     } catch (cacheError) {
       logger.warn('Error clearing cache:', cacheError.message);
       // Don't fail the request if cache clear fails
+    }
+
+    // Apply updated Firebase admin/realtime credentials at runtime after ENV save.
+    try {
+      await resetFirebaseAdmin({ deleteApps: true });
+      resetFirebaseRealtimeState();
+      const firebaseInit = await initializeFirebaseRealtime({ allowDbLookup: true });
+      logger.info('Firebase runtime config refreshed after env save', firebaseInit);
+    } catch (firebaseError) {
+      logger.warn(`Failed to refresh Firebase runtime config: ${firebaseError.message}`);
+      // ENV save succeeds even if Firebase refresh fails.
     }
     
     logger.info(`Environment variables updated by admin: ${admin._id}`);

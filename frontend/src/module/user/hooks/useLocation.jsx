@@ -10,6 +10,8 @@ export function useLocation() {
   const watchIdRef = useRef(null)
   const updateTimerRef = useRef(null)
   const prevLocationCoordsRef = useRef({ latitude: null, longitude: null })
+  const ENABLE_GOOGLE_MAPS_REVERSE_GEOCODE = false
+  const ENABLE_GOOGLE_PLACES_DETAILS = false
 
   /* ===================== DB UPDATE (LIVE LOCATION TRACKING) ===================== */
   const updateLocationInDB = async (locationData) => {
@@ -450,6 +452,10 @@ export function useLocation() {
       let placePhotos = [];
       
       try {
+        if (!ENABLE_GOOGLE_PLACES_DETAILS) {
+          throw new Error("Google Places API disabled for cost optimization")
+        }
+
         // Get API key dynamically from backend
         const { getGoogleMapsApiKey } = await import('@/lib/utils/googleMapsApiKey.js');
         const apiKey = await getGoogleMapsApiKey();
@@ -571,7 +577,9 @@ export function useLocation() {
           }
         }
       } catch (placesError) {
-        console.warn("⚠️ Google Places API error (non-critical):", placesError.message);
+        if (ENABLE_GOOGLE_PLACES_DETAILS && !String(placesError?.message || "").includes("disabled")) {
+          console.warn("⚠️ Google Places API error (non-critical):", placesError.message);
+        }
         // Continue with geocoding results even if Places API fails
       }
       
@@ -1314,10 +1322,17 @@ export function useLocation() {
       // If no valid data, throw to trigger fallback
       throw new Error("No valid address data from OLA Maps")
     } catch (err) {
-      console.warn("⚠️ Google Maps failed, trying direct geocoding:", err.message)
-      // Fallback to direct reverse geocoding (no Google Maps dependency)
+      console.warn("⚠️ OLA reverse geocode failed, using fallback:", err.message)
+      if (ENABLE_GOOGLE_MAPS_REVERSE_GEOCODE) {
+        try {
+          return await reverseGeocodeWithGoogleMaps(latitude, longitude)
+        } catch (googleFallbackErr) {
+          console.warn("⚠️ Google fallback failed, trying direct geocode:", googleFallbackErr.message)
+        }
+      }
+
       try {
-        return await reverseGeocodeWithGoogleMaps(latitude, longitude)
+        return await reverseGeocodeDirect(latitude, longitude)
       } catch (fallbackErr) {
         // If all fail, return minimal location data
         console.error("❌ All reverse geocoding failed:", fallbackErr)
@@ -1362,7 +1377,7 @@ export function useLocation() {
         }
         
         try {
-          const addr = await reverseGeocodeWithGoogleMaps(
+          const addr = await reverseGeocodeWithOLAMaps(
             loc.latitude,
             loc.longitude
           )
@@ -1454,11 +1469,11 @@ export function useLocation() {
               } else {
                 console.log("🔍 Calling reverse geocode with coordinates:", { latitude, longitude })
                 try {
-                  // Try Google Maps first
-                  addr = await reverseGeocodeWithGoogleMaps(latitude, longitude)
-                  console.log("✅ Google Maps geocoding successful:", addr)
+                  // Prefer non-Google geocoding on user route to reduce Maps cost
+                  addr = await reverseGeocodeWithOLAMaps(latitude, longitude)
+                  console.log("✅ Reverse geocoding successful:", addr)
                 } catch (geocodeErr) {
-                  console.warn("⚠️ Google Maps geocoding failed, trying fallback:", geocodeErr.message)
+                  console.warn("⚠️ Reverse geocoding failed, trying fallback:", geocodeErr.message)
                   try {
                     // Fallback to direct reverse geocode (BigDataCloud)
                     addr = await reverseGeocodeDirect(latitude, longitude)
@@ -1748,14 +1763,14 @@ export function useLocation() {
               }
             } else {
               try {
-                addr = await reverseGeocodeWithGoogleMaps(latitude, longitude)
+                addr = await reverseGeocodeWithOLAMaps(latitude, longitude)
                 console.log("✅ Reverse geocoding successful:", { 
                   city: addr.city, 
                   area: addr.area, 
                   formattedAddress: addr.formattedAddress 
                 })
               } catch (geocodeErr) {
-                console.error("❌ Google Maps reverse geocoding failed:", geocodeErr.message)
+                console.error("❌ Reverse geocoding failed:", geocodeErr.message)
                 // Try fallback geocoding
                 try {
                   console.log("🔄 Trying fallback geocoding...")

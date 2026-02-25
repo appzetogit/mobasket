@@ -28,6 +28,7 @@ export default function SystemAddons() {
     FIREBASE_PROJECT_ID: "",
     FIREBASE_CLIENT_EMAIL: "",
     FIREBASE_PRIVATE_KEY: "",
+    FIREBASE_DATABASE_URL: "",
     
     // SMTP
     SMTP_HOST: "",
@@ -217,6 +218,7 @@ export default function SystemAddons() {
               <InputField label="Measurement ID" fieldKey="MEASUREMENT_ID" />
               <InputField label="Firebase Project ID" fieldKey="FIREBASE_PROJECT_ID" />
               <InputField label="Firebase Client Email" fieldKey="FIREBASE_CLIENT_EMAIL" type="email" />
+              <InputField label="Firebase Database URL" fieldKey="FIREBASE_DATABASE_URL" placeholder="https://<project>-default-rtdb.<region>.firebasedatabase.app/" />
               <div className="md:col-span-2">
                 <InputField 
                   label="Firebase Private Key" 
