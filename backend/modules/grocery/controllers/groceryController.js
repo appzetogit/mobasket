@@ -6,6 +6,7 @@ import GroceryPlan from '../models/GroceryPlan.js';
 import GroceryPlanOffer from '../models/GroceryPlanOffer.js';
 import Order from '../../order/models/Order.js';
 import Zone from '../../admin/models/Zone.js';
+import Restaurant from '../../restaurant/models/Restaurant.js';
 
 const slugify = (value = '') =>
   value
@@ -190,7 +191,7 @@ export const getSubcategories = async (req, res) => {
 
 export const getProducts = async (req, res) => {
   try {
-    const { categoryId, subcategoryId, limit, activeOnly = 'true', zoneId } = req.query;
+    const { categoryId, subcategoryId, limit, activeOnly = 'true', zoneId, storeId } = req.query;
     const filter = {
       approvalStatus: 'approved', // Only show approved products on public /grocery page
     };
@@ -238,6 +239,16 @@ export const getProducts = async (req, res) => {
         });
       }
       filter.$or = [{ subcategories: subcategoryId }, { subcategory: subcategoryId }];
+    }
+
+    if (storeId) {
+      if (!isValidObjectId(storeId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid storeId',
+        });
+      }
+      filter.storeId = storeId;
     }
 
     const parsedLimit = Number.parseInt(limit, 10);
@@ -564,6 +575,8 @@ export const createProduct = async (req, res) => {
     const {
       category,
       subcategories = [],
+      storeIds = [],
+      storeId,
       name,
       slug,
       images = [],
@@ -607,13 +620,36 @@ export const createProduct = async (req, res) => {
       }
     }
 
-    const normalizedSlug = slugify(slug || name);
-    const existing = await GroceryProduct.findOne({ slug: normalizedSlug }).lean();
-    if (existing) {
-      return res.status(409).json({ success: false, message: 'Product slug already exists' });
+    const normalizedStoreIds = normalizeObjectIdArray([
+      ...(Array.isArray(storeIds) ? storeIds : []),
+      storeId,
+    ]);
+    if (normalizedStoreIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'At least one grocery store is required' });
     }
 
-    const product = await GroceryProduct.create({
+    const stores = await Restaurant.find({
+      _id: { $in: normalizedStoreIds },
+      platform: 'mogrocery',
+    })
+      .select('_id')
+      .lean();
+    if (stores.length !== normalizedStoreIds.length) {
+      return res.status(400).json({ success: false, message: 'One or more grocery stores are invalid' });
+    }
+
+    const normalizedSlug = slugify(slug || name);
+    const duplicateProducts = await GroceryProduct.find({
+      slug: normalizedSlug,
+      storeId: { $in: normalizedStoreIds },
+    })
+      .select('storeId')
+      .lean();
+    if (duplicateProducts.length > 0) {
+      return res.status(409).json({ success: false, message: 'Product with this name already exists for one or more selected stores' });
+    }
+
+    const docs = normalizedStoreIds.map((targetStoreId) => ({
       category,
       subcategories: normalizedSubcategories,
       // keep first value in legacy field for old consumers
@@ -629,9 +665,14 @@ export const createProduct = async (req, res) => {
       inStock: Boolean(inStock),
       stockQuantity: Number(stockQuantity) || 0,
       order: Number(order) || 0,
-    });
+      storeId: targetStoreId,
+      approvalStatus: 'approved',
+      rejectionReason: '',
+    }));
 
-    return res.status(201).json({ success: true, data: product });
+    const products = await GroceryProduct.insertMany(docs, { ordered: true });
+    const responseData = products.length === 1 ? products[0] : products;
+    return res.status(201).json({ success: true, count: products.length, data: responseData });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to create product', error: error.message });
   }
@@ -655,11 +696,26 @@ export const updateProduct = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid category id' });
     }
 
+    const targetStoreId = update.storeId || existingProduct.storeId?.toString();
+    if (!targetStoreId || !isValidObjectId(targetStoreId)) {
+      return res.status(400).json({ success: false, message: 'Valid grocery store is required' });
+    }
+    if (update.storeId) {
+      const storeExists = await Restaurant.exists({ _id: targetStoreId, platform: 'mogrocery' });
+      if (!storeExists) {
+        return res.status(400).json({ success: false, message: 'Invalid grocery store' });
+      }
+    }
+
     if (update.slug || update.name) {
       update.slug = slugify(update.slug || update.name || existingProduct.name);
-      const duplicate = await GroceryProduct.findOne({ slug: update.slug, _id: { $ne: id } }).lean();
+      const duplicate = await GroceryProduct.findOne({
+        slug: update.slug,
+        storeId: targetStoreId,
+        _id: { $ne: id },
+      }).lean();
       if (duplicate) {
-        return res.status(409).json({ success: false, message: 'Product slug already exists' });
+        return res.status(409).json({ success: false, message: 'Product with this name already exists for this store' });
       }
     }
 

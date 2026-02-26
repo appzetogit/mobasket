@@ -13,6 +13,14 @@ import {
   clearRouteCache
 } from '../services/locationProcessingService.js';
 import Order from '../../order/models/Order.js';
+import {
+  updateActiveOrderLocation,
+  upsertActiveOrderTracking,
+  removeActiveOrderTracking,
+  upsertDeliveryPartnerPresence,
+  buildRouteCacheKey,
+  upsertRouteCache
+} from '../../../shared/services/firebaseRealtimeService.js';
 
 /**
  * Receive GPS update from delivery app
@@ -79,6 +87,33 @@ export const receiveLocationUpdate = asyncHandler(async (req, res) => {
         }
       }
     );
+
+    try {
+      await upsertDeliveryPartnerPresence({
+        deliveryPartnerId: String(deliveryBoyId || ''),
+        isOnline: true,
+        lat: processedLocation.lat,
+        lng: processedLocation.lng
+      });
+      await upsertActiveOrderTracking(orderId, {
+        boy_id: String(deliveryBoyId || ''),
+        restaurant_lat: restaurantCoords?.lat,
+        restaurant_lng: restaurantCoords?.lng,
+        customer_lat: customerCoords?.lat,
+        customer_lng: customerCoords?.lng,
+        status: 'assigned'
+      });
+      await updateActiveOrderLocation(orderId, {
+        lat: processedLocation.lat,
+        lng: processedLocation.lng,
+        bearing: processedLocation.bearing,
+        speed: processedLocation.speed,
+        progress: processedLocation.progress,
+        boy_id: String(deliveryBoyId || '')
+      });
+    } catch (firebaseErr) {
+      console.warn('Firebase realtime location sync failed:', firebaseErr.message);
+    }
     
     // Broadcast via WebSocket (handled by socket.io in server.js)
     const io = req.app.get('io');
@@ -167,6 +202,35 @@ export const initializeRoute = asyncHandler(async (req, res) => {
     
     // Cache route
     cacheRoutePolyline(orderId, route);
+
+    try {
+      await upsertActiveOrderTracking(orderId, {
+        polyline: route.polyline,
+        distance: Number(route.totalDistance || 0) / 1000,
+        duration: Number(route.duration || 0) / 60,
+        status: 'assigned',
+        boy_id: req.deliveryBoy?.id || req.user?.id || null,
+        boy_lat: riderCoords.lat,
+        boy_lng: riderCoords.lng,
+        restaurant_lat: restaurantCoords.lat,
+        restaurant_lng: restaurantCoords.lng,
+        customer_lat: customerCoords.lat,
+        customer_lng: customerCoords.lng,
+        created_at: Date.now()
+      });
+
+      const routeKey = buildRouteCacheKey(
+        { lat: restaurantCoords.lat, lng: restaurantCoords.lng },
+        { lat: customerCoords.lat, lng: customerCoords.lng }
+      );
+      await upsertRouteCache(routeKey, {
+        distance: Number(route.totalDistance || 0) / 1000,
+        duration: Number(route.duration || 0) / 60,
+        polyline: route.polyline
+      });
+    } catch (firebaseErr) {
+      console.warn('Firebase route sync failed:', firebaseErr.message);
+    }
     
     // Broadcast route to connected clients
     const io = req.app.get('io');
@@ -207,6 +271,11 @@ export const clearLocationData = asyncHandler(async (req, res) => {
     
     if (orderId) {
       clearRouteCache(orderId);
+      try {
+        await removeActiveOrderTracking(orderId);
+      } catch (firebaseErr) {
+        console.warn('Firebase route cleanup failed:', firebaseErr.message);
+      }
     }
     
     return successResponse(res, 200, 'Location data cleared successfully');

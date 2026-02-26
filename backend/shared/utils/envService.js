@@ -127,7 +127,8 @@ export async function getFirebaseCredentials() {
     measurementId: await getEnvVar('MEASUREMENT_ID'),
     projectId: await getEnvVar('FIREBASE_PROJECT_ID'),
     clientEmail: await getEnvVar('FIREBASE_CLIENT_EMAIL'),
-    privateKey: await getEnvVar('FIREBASE_PRIVATE_KEY')
+    privateKey: await getEnvVar('FIREBASE_PRIVATE_KEY'),
+    databaseURL: await getEnvVar('FIREBASE_DATABASE_URL')
   };
 }
 

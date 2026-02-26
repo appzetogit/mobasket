@@ -27,6 +27,7 @@ const getInitialFormData = () => ({
   parentCategory: "",
   productCategory: "",
   productSubcategories: [],
+  productStoreIds: [],
   mrp: "",
   sellingPrice: "",
   unit: "",
@@ -55,6 +56,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
   const [groceryTypeOptions, setGroceryTypeOptions] = useState(DEFAULT_GROCERY_SECTIONS)
   const [groceryCategoryOptions, setGroceryCategoryOptions] = useState([])
   const [grocerySubcategoryOptions, setGrocerySubcategoryOptions] = useState([])
+  const [groceryStoreOptions, setGroceryStoreOptions] = useState([])
 
   useEffect(() => {
     if (isGroceryScope) {
@@ -117,6 +119,19 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     })
   }
 
+  const handleToggleProductStore = (storeId) => {
+    setFormData((prev) => {
+      const current = Array.isArray(prev.productStoreIds) ? prev.productStoreIds : []
+      const exists = current.includes(storeId)
+      return {
+        ...prev,
+        productStoreIds: exists
+          ? current.filter((id) => id !== storeId)
+          : [...current, storeId],
+      }
+    })
+  }
+
   // Simple filter toggle function
   const toggleFilter = (filterId) => {
     setActiveFilters(prev => {
@@ -149,6 +164,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     if (isGroceryScope) {
       fetchGroceryTypeOptions()
       fetchGrocerySubcategoryOptions()
+      fetchGroceryStoreOptions()
     }
   }, [isGroceryScope, activeGroceryEntity])
 
@@ -224,6 +240,8 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
             if (activeGroceryEntity === "products") {
               const categoryName = item?.category?.name || "Unassigned"
               const firstImage = Array.isArray(item?.images) && item.images.length > 0 ? item.images[0] : ""
+              const storeId = item?.storeId?._id || item?.storeId || ""
+              const storeName = item?.storeId?.name || ""
               return {
                 id: item._id,
                 sl: index + 1,
@@ -231,11 +249,13 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                 description: item.description || "",
                 image: firstImage || DEFAULT_CATEGORY_IMAGE,
                 status: item.isActive !== false,
-                type: `${categoryName}${item?.unit ? ` (${item.unit})` : ""}`,
+                type: `${categoryName}${item?.unit ? ` (${item.unit})` : ""}${storeName ? ` - ${storeName}` : ""}`,
                 productCategoryId: item?.category?._id || "",
                 productSubcategoryIds: Array.isArray(item?.subcategories)
                   ? item.subcategories.map((sub) => sub?._id || sub).filter(Boolean)
                   : [],
+                productStoreId: storeId ? String(storeId) : "",
+                productStoreName: storeName,
                 mrp: item?.mrp ?? "",
                 sellingPrice: item?.sellingPrice ?? "",
                 unit: item?.unit || "",
@@ -369,6 +389,27 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     }
   }
 
+  const fetchGroceryStoreOptions = async () => {
+    if (!isGroceryScope) return
+    try {
+      const response = await adminAPI.getGroceryStores({ page: 1, limit: 500 })
+      if (!response?.data?.success) return
+
+      const stores = Array.isArray(response?.data?.data?.stores) ? response.data.data.stores : []
+      const normalized = stores
+        .filter((store) => store?._id && store?.name)
+        .map((store) => ({
+          id: store._id,
+          name: store.name,
+          isActive: store.isActive !== false,
+        }))
+      setGroceryStoreOptions(normalized)
+    } catch (error) {
+      console.error('Error fetching grocery store options:', error)
+      setGroceryStoreOptions([])
+    }
+  }
+
   const filteredCategories = useMemo(() => {
     let result = [...categories]
     
@@ -460,10 +501,12 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
       setFormData({
         ...getInitialFormData(),
         name: category.name || "",
+        description: category.description || "",
         image: category.image || DEFAULT_CATEGORY_IMAGE,
         status: category.status !== undefined ? category.status : true,
         productCategory: category.productCategoryId || "",
         productSubcategories: Array.isArray(category.productSubcategoryIds) ? category.productSubcategoryIds : [],
+        productStoreIds: category.productStoreId ? [category.productStoreId] : [],
         mrp: category.mrp ?? "",
         sellingPrice: category.sellingPrice ?? "",
         unit: category.unit || "",
@@ -677,6 +720,15 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
           if (response.data.success) toast.success('Subcategory created successfully')
         }
       } else if (activeGroceryEntity === "products") {
+        const normalizedStoreIds = Array.isArray(formData.productStoreIds)
+          ? [...new Set(formData.productStoreIds.filter(Boolean).map((id) => String(id).trim()))]
+          : []
+
+        if (normalizedStoreIds.length === 0) {
+          toast.error("Please select at least one grocery store for this product.")
+          return
+        }
+
         const payload = {
           category: formData.productCategory,
           subcategories: formData.productSubcategories,
@@ -691,11 +743,18 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
           images: resolvedImageValue && resolvedImageValue !== DEFAULT_CATEGORY_IMAGE ? [resolvedImageValue] : [],
         }
         if (editingCategory) {
+          if (normalizedStoreIds.length > 0) {
+            payload.storeId = normalizedStoreIds[0]
+          }
           const response = await adminAPI.updateGroceryProduct(editingCategory.id, payload)
           if (response.data.success) toast.success('Product updated successfully')
         } else {
+          payload.storeIds = normalizedStoreIds
           const response = await adminAPI.createGroceryProduct(payload)
-          if (response.data.success) toast.success('Product created successfully')
+          if (response.data.success) {
+            const createdCount = Number(response?.data?.count || normalizedStoreIds.length || 1)
+            toast.success(createdCount > 1 ? `Product created for ${createdCount} stores` : 'Product created successfully')
+          }
         }
       } else {
         const normalizedCategoryName = (formData.name || "").trim()
@@ -1400,6 +1459,42 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
 
                     {isGroceryScope && activeGroceryEntity === "products" && (
                       <>
+                        <div>
+                          <label className="block text-sm font-medium text-slate-700 mb-2">
+                            Grocery Stores *
+                          </label>
+                          <div className="border border-slate-300 rounded-lg p-2 max-h-48 overflow-y-auto bg-white">
+                            {groceryStoreOptions.length === 0 && (
+                              <p className="text-xs text-slate-500 px-1 py-1">
+                                No grocery stores available.
+                              </p>
+                            )}
+                            <div className="flex flex-wrap gap-2">
+                              {groceryStoreOptions.map((storeOption) => {
+                                const isSelected = formData.productStoreIds.includes(storeOption.id)
+                                return (
+                                  <button
+                                    key={storeOption.id}
+                                    type="button"
+                                    onClick={() => handleToggleProductStore(storeOption.id)}
+                                    className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
+                                      isSelected
+                                        ? "bg-blue-600 text-white border-blue-600"
+                                        : "bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100"
+                                    }`}
+                                  >
+                                    {storeOption.name}{storeOption.isActive ? "" : " (Inactive)"}
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                          <p className="text-xs text-slate-500 mt-1">
+                            {editingCategory
+                              ? "Select one store for this existing product."
+                              : "Tap/click to select one or multiple stores for this product."}
+                          </p>
+                        </div>
                         <div>
                           <label className="block text-sm font-medium text-slate-700 mb-2">
                             Category *

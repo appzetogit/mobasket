@@ -6,6 +6,11 @@ import Zone from '../../admin/models/Zone.js';
 import { validate } from '../../../shared/middleware/validate.js';
 import Joi from 'joi';
 import winston from 'winston';
+import {
+  upsertDeliveryPartnerPresence,
+  upsertActiveOrderTracking,
+  updateActiveOrderLocation
+} from '../../../shared/services/firebaseRealtimeService.js';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -96,6 +101,18 @@ export const updateLocation = asyncHandler(async (req, res) => {
 
     const currentLocation = updatedDelivery.availability?.currentLocation;
 
+    try {
+      await upsertDeliveryPartnerPresence({
+        deliveryPartnerId: updatedDelivery._id?.toString(),
+        isOnline: !!updatedDelivery.availability?.isOnline,
+        lat: typeof latitude === 'number' ? latitude : undefined,
+        lng: typeof longitude === 'number' ? longitude : undefined,
+        zones: updatedDelivery.availability?.zones || []
+      });
+    } catch (firebaseErr) {
+      logger.warn(`Firebase presence sync failed: ${firebaseErr.message}`);
+    }
+
     // Broadcast location to customer order-tracking room when location is updated (same as socket 'update-location')
     if (typeof latitude === 'number' && typeof longitude === 'number' && req.app) {
       const io = req.app.get('io');
@@ -126,6 +143,25 @@ export const updateLocation = asyncHandler(async (req, res) => {
               });
             });
             logger.info(`Location broadcast to order rooms for ${activeOrder.orderId}`);
+
+            try {
+              const firebaseOrderId = String(activeOrder.orderId || activeOrder._id || '').trim();
+              if (firebaseOrderId) {
+                await upsertActiveOrderTracking(firebaseOrderId, {
+                  boy_id: updatedDelivery._id?.toString(),
+                  status: 'in_transit'
+                });
+                await updateActiveOrderLocation(firebaseOrderId, {
+                  lat: latitude,
+                  lng: longitude,
+                  speed: 0,
+                  bearing: 0,
+                  boy_id: updatedDelivery._id?.toString()
+                });
+              }
+            } catch (firebaseErr) {
+              logger.warn(`Firebase active order location sync failed: ${firebaseErr.message}`);
+            }
           }
         } catch (broadcastErr) {
           logger.warn('Delivery location broadcast failed:', broadcastErr.message);

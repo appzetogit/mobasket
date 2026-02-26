@@ -45,9 +45,7 @@ import { getAllDeliveryOrders } from "../utils/deliveryOrderStatus"
 import { getUnreadDeliveryNotificationCount } from "../utils/deliveryNotifications"
 import { deliveryAPI, restaurantAPI, uploadAPI } from "@/lib/api"
 import { useDeliveryNotifications } from "../hooks/useDeliveryNotifications"
-import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
-import { Loader } from "@googlemaps/js-api-loader"
 import {
   decodePolyline,
   extractPolylineFromDirections,
@@ -529,6 +527,8 @@ export default function DeliveryHome() {
   const lastRiderPositionRef = useRef(null) // Last rider position for smooth animation
   const markerAnimationCancelRef = useRef(null) // Cancel function for marker animation
   const directionsResponseRef = useRef(null) // Store directions response for use in callbacks
+  const directionsRouteCacheRef = useRef(new Map()) // Cache directions responses by rounded origin/destination
+  const directionsInFlightRef = useRef(new Map()) // Deduplicate concurrent route requests for same path
   const fetchedOrderDetailsForDropRef = useRef(null) // Prevent re-fetching order details for Reached Drop customer coords
   const [zones, setZones] = useState([]) // Store nearby zones
   const [isOutOfZone, setIsOutOfZone] = useState(false)
@@ -5229,112 +5229,36 @@ export default function DeliveryHome() {
 
     console.log('📍 Starting map initialization...');
 
-    // Load Google Maps if not already loaded
+    // Load Google Maps if not already loaded.
+    // Cost optimization: avoid any secondary loader path and rely on single app-level script.
     const loadGoogleMapsIfNeeded = async () => {
-      // Check if already loaded
       if (window.google && window.google.maps) {
-        console.log('✅ Google Maps already loaded');
-        // Wait a bit to ensure ref is available
         await new Promise(resolve => setTimeout(resolve, 100));
         initializeGoogleMap();
         return;
       }
-      
-      // Check if script tag is already present (from main.jsx)
+
       const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
-      if (existingScript || window.__googleMapsLoading) {
-        console.log('📍 Google Maps is already being loaded, waiting...');
-        let attempts = 0;
-        const maxAttempts = 50; // 5 seconds max wait
-        
-        while ((!window.google || !window.google.maps) && attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          attempts++;
-        }
-        
-        if (window.google && window.google.maps) {
-          console.log('✅ Google Maps loaded via script tag');
-          await initializeGoogleMap();
-          return;
-        }
-      }
-      
-      // Only use Loader if no script tag exists and not already loading
       if (!existingScript && !window.__googleMapsLoading) {
-        console.log('📍 Google Maps not loaded, using Loader as fallback...');
-        window.__googleMapsLoading = true;
-        try {
-          const apiKey = await getGoogleMapsApiKey();
-          if (apiKey) {
-            const loader = new Loader({
-              apiKey: apiKey,
-              version: "weekly",
-              libraries: ["places", "geometry", "drawing"]
-            });
-            await loader.load();
-            console.log('✅ Google Maps loaded via Loader');
-            window.__googleMapsLoaded = true;
-            window.__googleMapsLoading = false;
-            await initializeGoogleMap();
-          } else {
-            console.error('❌ No Google Maps API key found');
-            window.__googleMapsLoading = false;
-            setMapLoading(false);
-            return;
-          }
-        } catch (error) {
-          console.error('❌ Error loading Google Maps:', error);
-          window.__googleMapsLoading = false;
-          setMapLoading(false);
-          return;
-        }
-      } else {
-        // Wait a bit more if script is loading
-        let attempts = 0;
-        const maxAttempts = 30; // 3 seconds
-        while ((!window.google || !window.google.maps) && attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          attempts++;
-        }
-        
-        if (window.google && window.google.maps) {
-          console.log('✅ Google Maps loaded via script tag');
-          await initializeGoogleMap();
-        } else {
-          console.error('❌ Google Maps failed to load');
-          setMapLoading(false);
-        }
-      }
-
-      // Wait for MapTypeId to be available (sometimes it loads slightly after maps)
-      if (window.google && window.google.maps && !window.google.maps.MapTypeId) {
-        console.log('📍 Waiting for MapTypeId to be available...');
-        let attempts = 0;
-        const maxAttempts = 20; // 2 seconds max wait
-        
-        while (!window.google.maps.MapTypeId && attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          attempts++;
-        }
-      }
-
-      // Initialize map once Google Maps is fully loaded
-      // Check for both maps and MapTypeId to ensure API is fully initialized
-      if (window.google && window.google.maps) {
-        // MapTypeId might still not be available, but we have a fallback
-        if (!window.google.maps.MapTypeId) {
-          console.warn('⚠️ MapTypeId not available, will use string fallback');
-        }
-        await initializeGoogleMap();
-      } else {
-        console.error('❌ Google Maps API still not available or not fully loaded');
-        console.error('❌ API status:', {
-          google: !!window.google,
-          maps: !!window.google?.maps,
-          MapTypeId: !!window.google?.maps?.MapTypeId
-        });
+        console.error('❌ Google Maps script is not available yet');
         setMapLoading(false);
+        return;
       }
+
+      const maxAttempts = 120; // 12 seconds max wait for app-level script load
+      let attempts = 0;
+      while ((!window.google || !window.google.maps) && attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        attempts++;
+      }
+
+      if (!window.google || !window.google.maps) {
+        console.error('❌ Google Maps failed to load from shared script');
+        setMapLoading(false);
+        return;
+      }
+
+      await initializeGoogleMap();
     };
 
     loadGoogleMapsIfNeeded();
@@ -6024,77 +5948,96 @@ export default function DeliveryHome() {
       return null;
     }
 
-    try {
-      // Initialize Directions Service if not already created
-      if (!directionsServiceRef.current) {
-        directionsServiceRef.current = new window.google.maps.DirectionsService();
-      }
+    const round = (value) => Math.round(Number(value) * 10000) / 10000;
+    const cacheKey = `${round(origin?.[0])},${round(origin?.[1])}|${round(destination?.lat)},${round(destination?.lng)}`;
+    const now = Date.now();
+    const cacheTtlMs = 120000; // 2 minutes
+    const cached = directionsRouteCacheRef.current.get(cacheKey);
+    if (cached && (now - cached.timestamp) < cacheTtlMs) {
+      setDirectionsResponse(cached.result);
+      directionsResponseRef.current = cached.result;
+      return cached.result;
+    }
 
-      // Try TWO_WHEELER first (optimized for bike/delivery), fallback to DRIVING
-      const tryRoute = (travelMode, modeName) => {
-        return new Promise((resolve, reject) => {
-          directionsServiceRef.current.route(
-            {
-              origin: { lat: origin[0], lng: origin[1] },
-              destination: { lat: destination.lat, lng: destination.lng },
-              travelMode: travelMode,
-              provideRouteAlternatives: false, // Save API cost - don't get alternatives
-              avoidHighways: false,
-              avoidTolls: false,
-              optimizeWaypoints: false
-            },
-            (result, status) => {
-              if (status === window.google.maps.DirectionsStatus.OK) {
-                console.log(`✅ Directions API route calculated successfully (${modeName})`);
-                console.log('📍 Route details:', {
-                  distance: result.routes[0].legs[0].distance?.text,
-                  duration: result.routes[0].legs[0].duration?.text,
-                  steps: result.routes[0].legs[0].steps?.length,
-                  travelMode: modeName
-                });
-                setDirectionsResponse(result);
-                directionsResponseRef.current = result; // Store in ref for callbacks
-                resolve(result);
-              } else {
-                // Handle specific error cases - suppress console errors for REQUEST_DENIED
-                if (status === 'REQUEST_DENIED') {
-                  // Don't log as error - this is expected when billing is not enabled
-                  // Just reject silently to trigger fallback
+    const inFlight = directionsInFlightRef.current.get(cacheKey);
+    if (inFlight) {
+      return inFlight;
+    }
+
+    const requestPromise = (async () => {
+      try {
+        // Initialize Directions Service if not already created
+        if (!directionsServiceRef.current) {
+          directionsServiceRef.current = new window.google.maps.DirectionsService();
+        }
+
+        // Try TWO_WHEELER first (optimized for bike/delivery), fallback to DRIVING
+        const tryRoute = (travelMode) => {
+          return new Promise((resolve, reject) => {
+            directionsServiceRef.current.route(
+              {
+                origin: { lat: origin[0], lng: origin[1] },
+                destination: { lat: destination.lat, lng: destination.lng },
+                travelMode: travelMode,
+                provideRouteAlternatives: false, // Save API cost - don't get alternatives
+                avoidHighways: false,
+                avoidTolls: false,
+                optimizeWaypoints: false
+              },
+              (result, status) => {
+                if (status === window.google.maps.DirectionsStatus.OK) {
+                  setDirectionsResponse(result);
+                  directionsResponseRef.current = result; // Store in ref for callbacks
+                  resolve(result);
+                } else if (status === 'REQUEST_DENIED') {
                   reject(new Error(`Directions API not available: ${status}`));
-                } else if (status === 'OVER_QUERY_LIMIT') {
-                  console.warn(`⚠️ Directions API quota exceeded (${modeName})`);
-                  reject(new Error(`Directions request failed: ${status}`));
                 } else {
-                  console.warn(`⚠️ Directions API failed with ${modeName}: ${status}`);
                   reject(new Error(`Directions request failed: ${status}`));
                 }
               }
-            }
-          );
-        });
-      };
+            );
+          });
+        };
 
-      // Try TWO_WHEELER first (if available in region)
-      try {
-        if (window.google.maps.TravelMode.TWO_WHEELER) {
-          return await tryRoute(window.google.maps.TravelMode.TWO_WHEELER, 'TWO_WHEELER');
+        // Try TWO_WHEELER first (if available in region)
+        try {
+          if (window.google.maps.TravelMode.TWO_WHEELER) {
+            return await tryRoute(window.google.maps.TravelMode.TWO_WHEELER);
+          }
+        } catch {
+          // Fallback handled below.
         }
-      } catch (twoWheelerError) {
-        console.log('⚠️ TWO_WHEELER mode not available, trying DRIVING...');
-      }
 
-      // Fallback to DRIVING mode
-      return await tryRoute(window.google.maps.TravelMode.DRIVING, 'DRIVING');
-    } catch (error) {
-      // Handle REQUEST_DENIED and other errors gracefully
-      if (error.message?.includes('REQUEST_DENIED') || error.message?.includes('not available')) {
-        console.warn('⚠️ Google Maps Directions API not available (billing/API key issue). Will use fallback route.');
-      } else {
-        console.error('❌ Error calculating route with Directions API:', error);
+        // Fallback to DRIVING mode
+        return await tryRoute(window.google.maps.TravelMode.DRIVING);
+      } catch (error) {
+        if (error.message?.includes('REQUEST_DENIED') || error.message?.includes('not available')) {
+          console.warn('⚠️ Google Maps Directions API not available (billing/API key issue). Will use fallback route.');
+        } else {
+          console.error('❌ Error calculating route with Directions API:', error);
+        }
+        return null; // Return null to trigger fallback
       }
-      return null; // Return null to trigger fallback
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    })();
+
+    directionsInFlightRef.current.set(cacheKey, requestPromise);
+
+    try {
+      const result = await requestPromise;
+      if (result) {
+        directionsRouteCacheRef.current.set(cacheKey, { result, timestamp: Date.now() });
+        const expireBefore = Date.now() - (cacheTtlMs * 5);
+        for (const [key, value] of directionsRouteCacheRef.current.entries()) {
+          if (!value?.timestamp || value.timestamp < expireBefore) {
+            directionsRouteCacheRef.current.delete(key);
+          }
+        }
+      }
+      return result;
+    } finally {
+      directionsInFlightRef.current.delete(cacheKey);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /**
