@@ -43,7 +43,7 @@ export default function Payments() {
 
   return (
     <AnimatedPage className="min-h-screen bg-gradient-to-b from-yellow-50/30 via-white to-orange-50/20 p-4 sm:p-6 md:p-8 lg:p-10">
-      <div className="max-w-4xl md:max-w-5xl lg:max-w-6xl xl:max-w-7xl mx-auto space-y-4 sm:space-y-6 md:space-y-8 lg:space-y-10">
+      <div className="max-w-[1100px] mx-auto space-y-4 md:pt-20 lg:pt-24 md:pb-6 lg:pb-8 sm:space-y-6 md:space-y-8 lg:space-y-10">
         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4">
           <div>
             <h1 className="text-lg sm:text-xl md:text-2xl font-bold">Payment Methods</h1>
@@ -79,9 +79,8 @@ export default function Payments() {
             {paymentMethods.map((payment) => (
               <Card
                 key={payment.id}
-                className={`shadow-lg ${
-                  payment.isDefault ? "border-yellow-500 border-2 bg-yellow-50/50" : ""
-                }`}
+                className={`shadow-lg ${payment.isDefault ? "border-yellow-500 border-2 bg-yellow-50/50" : ""
+                  }`}
               >
                 <CardHeader>
                   <div className="flex items-center justify-between">

@@ -1624,8 +1624,8 @@ export default function Home() {
       </div>
 
       {/* 2. Search Bar Section (White Background) */}
-      <div className="bg-white px-3 py-2 pb-4 sm:px-6 lg:px-8 xl:px-0 md:pt-20">
-        <div className="w-full lg:max-w-[1100px] mx-auto flex items-center gap-3 sm:gap-4 lg:gap-6">
+      <div className="bg-white py-2 pb-4 px-3 sm:px-6 md:pt-20">
+        <div className="w-full lg:max-w-[1100px] mx-auto lg:px-8 xl:px-0 flex items-center gap-3 sm:gap-4 lg:gap-6">
           {/* Enhanced Search Bar */}
           <motion.div
             className="flex-1 relative"

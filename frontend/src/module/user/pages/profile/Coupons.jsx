@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 export default function Coupons() {
   return (
     <AnimatedPage className="min-h-screen bg-[#f5f5f5] dark:bg-[#0a0a0a]">
-      <div className="max-w-md mx-auto px-4 py-4">
+      <div className="max-w-[1100px] mx-auto px-4 md:px-6 lg:px-8 py-4 md:pt-20 lg:pt-24 md:pb-6 lg:pb-8">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
           <Link to="/user/profile">
@@ -125,7 +125,7 @@ export default function Coupons() {
                   <div className="w-24 h-20 bg-gradient-to-b from-amber-800 to-amber-900 rounded-lg shadow-xl relative">
                     {/* Chest Top/Lid */}
                     <div className="absolute -top-3 left-0 right-0 h-5 bg-gradient-to-b from-amber-900 to-amber-950 rounded-t-lg shadow-md"></div>
-                    
+
                     {/* Chest Lock */}
                     <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10">
                       <div className="w-10 h-10 bg-gradient-to-br from-yellow-400 to-yellow-600 rounded-full border-2 border-yellow-700 shadow-lg flex items-center justify-center">
@@ -136,7 +136,7 @@ export default function Coupons() {
                     {/* Chest Straps */}
                     <div className="absolute top-3 left-3 w-16 h-1.5 bg-amber-950 rounded-full shadow-sm"></div>
                     <div className="absolute bottom-3 left-3 w-16 h-1.5 bg-amber-950 rounded-full shadow-sm"></div>
-                    
+
                     {/* Chest Details */}
                     <div className="absolute top-1 left-1/2 -translate-x-1/2 w-16 h-0.5 bg-amber-700"></div>
                   </div>

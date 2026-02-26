@@ -1388,7 +1388,7 @@ const GroceryPage = () => {
                       : {}
             }
           >
-            <div className="px-4 pt-6 flex justify-between items-start mb-0">
+            <div className="px-4 pt-6 flex justify-between items-start mb-0 md:max-w-6xl md:mx-auto w-full">
               <div className="flex flex-col">
                 <h1 className="text-[10px] uppercase font-black tracking-[0.15em] text-[#3e3212] leading-none mb-0.5">
                   MoBasket in
@@ -1426,38 +1426,7 @@ const GroceryPage = () => {
                 />
               </div>
 
-              {/* Desktop Nav Icons */}
-              {!hasActiveSearch && (
-                <div className="hidden md:flex items-center gap-4 mx-4 max-w-[48vw] overflow-x-auto no-scrollbar">
-                  {topNavCategories.map((cat) => (
-                    <div
-                      key={cat.id}
-                      className={`flex flex-col items-center gap-1 cursor-pointer group px-2 py-1 rounded-xl transition-colors ${cat.name === activeTab ? "bg-white/55" : "hover:bg-white/35"
-                        }`}
-                      onClick={() => {
-                        setActiveTab(cat.name);
-                        setActiveCategoryId(cat.id);
-                      }}
-                    >
-                      <div className="relative transition-transform group-hover:scale-110">
-                        {cat.name === activeTab && (
-                          <div className="absolute -top-1 -right-1 w-2 h-2 bg-[#EF4F5F] rounded-full border border-[#fc9b03] z-10"></div>
-                        )}
-                        <img
-                          src={cat.img}
-                          alt={cat.name}
-                          className="w-8 h-8 object-contain drop-shadow-sm rounded-full"
-                        />
-                      </div>
-                      <span
-                        className={`text-[11px] font-bold max-w-[68px] text-center line-clamp-1 ${activeTab === cat.name ? "text-[#3e3212]" : "text-[#3e3212]/70"}`}
-                      >
-                        {cat.name}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
+
 
               {/* Profile & Cart Icons */}
               <div className="flex gap-2 mt-1">
@@ -1560,6 +1529,37 @@ const GroceryPage = () => {
         </div>
       </div>
 
+      {/* Desktop Nav Categories (Moved from Header to above Banner) */}
+      {!hasActiveSearch && (
+        <div className="hidden md:flex items-center gap-6 py-4 px-4 bg-transparent overflow-x-auto no-scrollbar md:max-w-6xl mx-auto mb-2">
+          {topNavCategories.map((cat) => (
+            <div
+              key={cat.id}
+              className={`flex flex-col items-center gap-1.5 cursor-pointer group px-3 py-2 rounded-2xl transition-all ${cat.name === activeTab ? "bg-gray-100 dark:bg-gray-800 shadow-sm" : "hover:bg-gray-50 dark:hover:bg-gray-800/50"
+                }`}
+              onClick={() => {
+                setActiveTab(cat.name);
+                setActiveCategoryId(cat.id);
+              }}
+            >
+              <div className="relative transition-transform group-hover:scale-110">
+                <img
+                  src={cat.img}
+                  alt={cat.name}
+                  className="w-12 h-12 object-contain drop-shadow-sm rounded-full"
+                />
+              </div>
+              <span
+                className={`text-[13px] font-bold text-center line-clamp-1 ${activeTab === cat.name ? "text-[#1a1a1a] dark:text-white" : "text-[#1a1a1a]/70 dark:text-white/70"
+                  }`}
+              >
+                {cat.name}
+              </span>
+              {activeTab === cat.name && <div className="w-8 h-0.5 bg-[#EF4F5F] rounded-full mt-0.5"></div>}
+            </div>
+          ))}
+        </div>
+      )}
       {shouldShowShimmer && (
         <div className="px-4 pt-3 pb-24 relative z-10 md:max-w-6xl md:mx-auto animate-fade-in-up">
           <div className="h-[140px] md:h-[185px] rounded-2xl bg-slate-200 shimmer-bg mb-4" />
@@ -1630,7 +1630,7 @@ const GroceryPage = () => {
         <div className="px-4 pt-4 pb-2 relative z-10 md:max-w-6xl md:mx-auto">
           <h3 className="text-lg font-[800] text-[#3e2723] mb-4">Bestsellers</h3>
 
-          <div className="grid grid-cols-2 gap-2.5">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-6">
             {visibleBestSellers.map((item, idx) => {
               const cardImages = Array.from({ length: 4 }).map(
                 (_, imageIndex) => item.previewImages?.[imageIndex] || item.image
@@ -1640,25 +1640,25 @@ const GroceryPage = () => {
                 <button
                   type="button"
                   key={`${item.id}-${idx}`}
-                  className="px-3 py-2.5 bg-[#e9edf2] rounded-[22px] border border-[#d9dee5] shadow-[0_4px_12px_rgba(15,23,42,0.08)] text-left active:scale-95 transition-transform"
+                  className="px-3 py-2.5 md:px-4 md:py-5 bg-[#e9edf2] md:bg-sky-50 md:border-sky-100 rounded-[22px] border border-[#d9dee5] shadow-[0_4px_12px_rgba(15,23,42,0.08)] md:shadow-sm text-left active:scale-95 transition-all duration-300 md:hover:shadow-lg md:hover:-translate-y-1 md:hover:border-sky-200 group"
                   onClick={() => handleBestSellerClick(item)}
                 >
-                  <div className="relative grid grid-cols-2 gap-1 mb-2">
+                  <div className="relative grid grid-cols-2 gap-1 mb-2 md:gap-2 md:w-[85%] md:mx-auto md:mb-5">
                     {cardImages.map((imageSrc, imageIdx) => (
                       <div
                         key={`${item.id}-${imageIdx}`}
-                        className="aspect-square rounded-xl bg-white border border-[#eceff3] overflow-hidden flex items-center justify-center p-0.5"
+                        className="aspect-square rounded-xl bg-white border border-[#eceff3] md:border-slate-100 overflow-hidden flex items-center justify-center p-0.5 transition-all duration-300 md:group-hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] md:group-hover:border-slate-200"
                       >
-                        <img src={imageSrc} alt={item.name} className="w-full h-full object-contain scale-115" />
+                        <img src={imageSrc} alt={item.name} className="w-full h-full object-contain scale-115 md:scale-[0.85] md:group-hover:scale-100 transition-transform duration-500" />
                       </div>
                     ))}
                     {item.countLabel ? (
-                      <div className="absolute left-1/2 -translate-x-1/2 bottom-1 h-8 min-w-8 px-1.5 rounded-full bg-white border border-[#d7dce4] shadow-sm text-[11px] font-[700] text-[#5b6472] flex items-center justify-center">
+                      <div className="absolute left-1/2 -translate-x-1/2 bottom-1 md:-bottom-2.5 h-8 min-w-8 px-2 md:px-2.5 rounded-full bg-white border border-[#d7dce4] md:border-white shadow-sm md:shadow-md text-[11px] font-[800] text-[#5b6472] md:text-slate-800 flex items-center justify-center z-10 md:group-hover:text-[#EF4F5F] transition-colors">
                         {item.countLabel}
                       </div>
                     ) : null}
                   </div>
-                  <p className="text-[15px] font-[800] text-[#262a33] leading-[1.08] text-center line-clamp-2 min-h-[24px]">
+                  <p className="text-[15px] md:text-[16px] font-[800] text-[#262a33] md:text-slate-800 leading-[1.08] md:leading-[1.2] text-center line-clamp-2 min-h-[24px] md:min-h-[36px] flex items-center justify-center">
                     {item.name}
                   </p>
                 </button>
@@ -1899,11 +1899,11 @@ const GroceryPage = () => {
           {(!category.homepageCards || category.homepageCards.length === 0) && (
             <p className="text-sm text-slate-500 mb-2">No subcategories available.</p>
           )}
-          <div className="grid grid-cols-4 gap-x-2 gap-y-0.5">
+          <div className="grid grid-cols-4 md:grid-cols-5 gap-x-2 md:gap-x-4 gap-y-2 md:gap-y-4">
             {(category.homepageCards || []).map((card, cardIndex) => (
               <div
                 key={card._id}
-                className={`flex flex-col items-center gap-1.5 cursor-pointer active:scale-95 transition-transform ${cardIndex === 0 ? "col-span-2" : "col-span-1"
+                className={`flex flex-col items-center gap-1.5 cursor-pointer active:scale-95 transition-transform md:hover:-translate-y-1 duration-300 ${cardIndex === 0 ? "col-span-2 md:col-span-1" : "col-span-1"
                   }`}
                 onClick={() => {
                   if (card.__kind === "product") {
@@ -1940,7 +1940,7 @@ const GroceryPage = () => {
                   <img
                     src={card.image || FALLBACK_IMAGE}
                     alt={card.name}
-                    className={`w-full h-full object-contain transition-transform duration-300 drop-shadow-[0_12px_10px_rgba(0,0,0,0.22)] ${cardIndex === 0 ? "scale-110" : ""
+                    className={`w-full h-full object-contain transition-transform duration-300 drop-shadow-[0_12px_10px_rgba(0,0,0,0.22)] md:hover:scale-110 ${cardIndex === 0 ? "scale-110 md:scale-100" : ""
                       }`}
                   />
                 </div>
@@ -2023,41 +2023,43 @@ const GroceryPage = () => {
       )}
 
       {/* --- 6. BOTTOM NAVIGATION (Fixed) --- */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/85 dark:bg-[#111111]/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-800 py-2 px-6 flex justify-between md:justify-center md:gap-28 items-end z-50 w-full pb-4">
-        <div
-          className={`flex flex-col items-center gap-1 cursor-pointer ${isGroceryCategoriesRoute ? "text-slate-400 hover:text-slate-600" : ""}`}
-          onClick={handleHomeNavClick}
-        >
-          <Home size={24} className={isGroceryCategoriesRoute ? "text-slate-400" : "text-slate-900 fill-current"} />
-          <span className={`text-[10px] ${isGroceryCategoriesRoute ? "font-medium text-slate-400" : "font-bold text-slate-900"}`}>Home</span>
-          {!isGroceryCategoriesRoute && <div className="w-8 h-1 bg-slate-900 rounded-full mt-0.5"></div>}
-        </div>
+      <div className="fixed bottom-0 left-0 right-0 bg-white/85 dark:bg-[#111111]/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-800 z-50 w-full pb-4">
+        <div className="md:max-w-6xl md:mx-auto w-full flex justify-between items-end py-2 px-6">
+          <div
+            className={`flex flex-col items-center gap-1 cursor-pointer ${isGroceryCategoriesRoute ? "text-slate-400 hover:text-slate-600" : ""}`}
+            onClick={handleHomeNavClick}
+          >
+            <Home size={24} className={isGroceryCategoriesRoute ? "text-slate-400" : "text-slate-900 fill-current"} />
+            <span className={`text-[10px] ${isGroceryCategoriesRoute ? "font-medium text-slate-400" : "font-bold text-slate-900"}`}>Home</span>
+            {!isGroceryCategoriesRoute && <div className="w-8 h-1 bg-slate-900 rounded-full mt-0.5"></div>}
+          </div>
 
-        <div
-          className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 hover:text-slate-600"
-          onClick={() => navigate("/plans")}
-        >
-          <ShoppingBag size={24} />
-          <span className="text-[10px] font-medium">Plan</span>
-        </div>
+          <div
+            className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 hover:text-slate-600"
+            onClick={() => navigate("/plans")}
+          >
+            <ShoppingBag size={24} />
+            <span className="text-[10px] font-medium">Plan</span>
+          </div>
 
-        <div
-          className={`flex flex-col items-center gap-1 cursor-pointer ${isGroceryCategoriesRoute ? "text-slate-900" : "text-slate-400 hover:text-slate-600"}`}
-          onClick={handleCategoriesNavClick}
-        >
-          <LayoutGrid size={24} />
-          <span className={`text-[10px] ${isGroceryCategoriesRoute ? "font-bold text-slate-900" : "font-medium"}`}>Categories</span>
-          {isGroceryCategoriesRoute && <div className="w-8 h-1 bg-slate-900 rounded-full mt-0.5"></div>}
-        </div>
+          <div
+            className={`flex flex-col items-center gap-1 cursor-pointer ${isGroceryCategoriesRoute ? "text-slate-900" : "text-slate-400 hover:text-slate-600"}`}
+            onClick={handleCategoriesNavClick}
+          >
+            <LayoutGrid size={24} />
+            <span className={`text-[10px] ${isGroceryCategoriesRoute ? "font-bold text-slate-900" : "font-medium"}`}>Categories</span>
+            {isGroceryCategoriesRoute && <div className="w-8 h-1 bg-slate-900 rounded-full mt-0.5"></div>}
+          </div>
 
-        <button
-          className="mb-1 bg-[#EF4F5F] hover:bg-red-700 text-white px-6 py-2 rounded-full shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"
-          onClick={() => navigate("/home")}
-        >
-          <span className="font-black italic text-lg tracking-tighter">
-            Mofood
-          </span>
-        </button>
+          <button
+            className="mb-1 bg-[#EF4F5F] hover:bg-red-700 text-white px-6 py-2 rounded-full shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"
+            onClick={() => navigate("/home")}
+          >
+            <span className="font-black italic text-lg tracking-tighter">
+              Mofood
+            </span>
+          </button>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -2098,7 +2100,7 @@ const GroceryPage = () => {
                 </div>
 
                 <div className="px-3 pb-2 bg-white border-b border-slate-200">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 md:max-w-6xl md:mx-auto">
                     <button
                       type="button"
                       onClick={() => setShowCollectionSheet(false)}
@@ -2116,7 +2118,7 @@ const GroceryPage = () => {
                 </div>
 
                 <div className="bg-white border-b border-slate-200 px-2 py-2 overflow-x-auto no-scrollbar">
-                  <div className="flex gap-2 min-w-max">
+                  <div className="flex gap-2 min-w-max md:max-w-6xl md:mx-auto md:px-2">
                     {collectionCategoryTabs.map((tab) => (
                       <button
                         key={`collection-tab-${tab._id}`}
@@ -2152,9 +2154,9 @@ const GroceryPage = () => {
 
                 <div className="flex-1 overflow-y-auto p-3">
                   {collectionVisibleProducts.length === 0 ? (
-                    <p className="text-sm text-slate-500 p-3">No products available.</p>
+                    <p className="text-sm text-slate-500 p-3 md:max-w-6xl md:mx-auto">No products available.</p>
                   ) : (
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 md:max-w-6xl md:mx-auto pb-4">
                       {collectionVisibleProducts.map((product) => {
                         const productId = product?._id || product?.id;
                         const alreadyInCart = isInCart(productId);
@@ -2167,7 +2169,7 @@ const GroceryPage = () => {
                         return (
                           <div
                             key={`collection-product-${productId}`}
-                            className="rounded-[16px] border border-slate-200 bg-white shadow-sm p-2 relative cursor-pointer"
+                            className="rounded-[16px] border border-slate-200 bg-white shadow-sm p-2 relative cursor-pointer md:hover:-translate-y-1 md:hover:shadow-md md:hover:border-slate-300 transition-all duration-300 group"
                             onClick={() => handleProductCardClick(product)}
                           >
                             {discountPercent > 0 && (
@@ -2190,8 +2192,8 @@ const GroceryPage = () => {
                               />
                             </button>
 
-                            <div className="w-full h-[110px] rounded-xl bg-slate-50 overflow-hidden flex items-center justify-center mb-2">
-                              <img src={getProductImage(product)} alt={product?.name || "Product"} className="w-full h-full object-contain scale-110" />
+                            <div className="w-full h-[110px] rounded-xl bg-slate-50 overflow-hidden flex items-center justify-center mb-2 md:group-hover:bg-slate-100/50 transition-colors duration-300">
+                              <img src={getProductImage(product)} alt={product?.name || "Product"} className="w-full h-full object-contain scale-110 md:group-hover:scale-115 transition-transform duration-500" />
                             </div>
 
                             <p className="text-[13px] font-bold text-slate-900 leading-tight line-clamp-2 min-h-[34px]">
@@ -2258,7 +2260,7 @@ const GroceryPage = () => {
                 </div>
 
                 <div className="px-3 pb-2 bg-white border-b border-slate-200">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 md:max-w-6xl md:mx-auto">
                     <button
                       type="button"
                       onClick={() => setShowWishlistSheet(false)}
@@ -2275,9 +2277,9 @@ const GroceryPage = () => {
 
                 <div className="flex-1 overflow-y-auto p-3">
                   {groceryWishlistedProducts.length === 0 ? (
-                    <p className="text-sm text-slate-500 p-3">No wishlisted products yet.</p>
+                    <p className="text-sm text-slate-500 p-3 md:max-w-6xl md:mx-auto">No wishlisted products yet.</p>
                   ) : (
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 md:max-w-6xl md:mx-auto pb-4">
                       {groceryWishlistedProducts.map((product) => {
                         const productId = product?._id || product?.id;
                         const alreadyInCart = isInCart(productId);
@@ -2287,7 +2289,7 @@ const GroceryPage = () => {
                         return (
                           <div
                             key={`wishlist-product-${productId}`}
-                            className="rounded-[16px] border border-slate-200 bg-white shadow-sm p-2 relative cursor-pointer"
+                            className="rounded-[16px] border border-slate-200 bg-white shadow-sm p-2 relative cursor-pointer md:hover:-translate-y-1 md:hover:shadow-md md:hover:border-slate-300 transition-all duration-300 group"
                             onClick={() => handleProductCardClick(product)}
                           >
                             <button
@@ -2298,8 +2300,8 @@ const GroceryPage = () => {
                               <Heart size={14} className="fill-current" strokeWidth={2.5} />
                             </button>
 
-                            <div className="w-full h-[110px] rounded-xl bg-slate-50 overflow-hidden flex items-center justify-center mb-2">
-                              <img src={getProductImage(product)} alt={product?.name || "Product"} className="w-full h-full object-contain scale-110" />
+                            <div className="w-full h-[110px] rounded-xl bg-slate-50 overflow-hidden flex items-center justify-center mb-2 md:group-hover:bg-slate-100/50 transition-colors duration-300">
+                              <img src={getProductImage(product)} alt={product?.name || "Product"} className="w-full h-full object-contain scale-110 md:group-hover:scale-115 transition-transform duration-500" />
                             </div>
 
                             <p className="text-[13px] font-bold text-slate-900 leading-tight line-clamp-2 min-h-[34px]">

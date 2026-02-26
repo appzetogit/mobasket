@@ -54,28 +54,28 @@ const saveProfileToStorage = (data) => {
 export default function EditProfile() {
   const navigate = useNavigate()
   const { userProfile, updateUserProfile } = useProfile()
-  
+
   // Load from localStorage or use context
   const storedProfile = loadProfileFromStorage()
   const initialProfile = userProfile || storedProfile || {}
-  
+
   const initialFormData = {
     name: initialProfile.name ?? "",
     mobile: initialProfile.mobile ?? initialProfile.phone ?? "",
     email: initialProfile.email ?? "",
-    dateOfBirth: initialProfile.dateOfBirth 
-      ? (typeof initialProfile.dateOfBirth === 'string' 
-        ? dayjs(initialProfile.dateOfBirth) 
+    dateOfBirth: initialProfile.dateOfBirth
+      ? (typeof initialProfile.dateOfBirth === 'string'
+        ? dayjs(initialProfile.dateOfBirth)
         : dayjs(initialProfile.dateOfBirth))
       : null,
-    anniversary: initialProfile.anniversary 
-      ? (typeof initialProfile.anniversary === 'string' 
-        ? dayjs(initialProfile.anniversary) 
+    anniversary: initialProfile.anniversary
+      ? (typeof initialProfile.anniversary === 'string'
+        ? dayjs(initialProfile.anniversary)
         : dayjs(initialProfile.anniversary))
       : null,
     gender: initialProfile.gender ?? "",
   }
-  
+
   const [formData, setFormData] = useState(initialFormData)
   const [initialData] = useState(initialFormData)
   const [hasChanges, setHasChanges] = useState(false)
@@ -93,20 +93,20 @@ export default function EditProfile() {
       name: profile.name ?? "",
       mobile: profile.mobile ?? profile.phone ?? "",
       email: profile.email ?? "",
-      dateOfBirth: profile.dateOfBirth 
-        ? (typeof profile.dateOfBirth === 'string' 
-          ? dayjs(profile.dateOfBirth) 
+      dateOfBirth: profile.dateOfBirth
+        ? (typeof profile.dateOfBirth === 'string'
+          ? dayjs(profile.dateOfBirth)
           : dayjs(profile.dateOfBirth))
         : null,
-      anniversary: profile.anniversary 
-        ? (typeof profile.anniversary === 'string' 
-          ? dayjs(profile.anniversary) 
+      anniversary: profile.anniversary
+        ? (typeof profile.anniversary === 'string'
+          ? dayjs(profile.anniversary)
           : dayjs(profile.anniversary))
         : null,
       gender: profile.gender ?? "",
     }
     setFormData(newFormData)
-    
+
     // Update profile image
     if (profile.profileImage) {
       setProfileImage(profile.profileImage)
@@ -166,15 +166,15 @@ export default function EditProfile() {
       setIsUploadingImage(true)
       const response = await userAPI.uploadProfileImage(file)
       const imageUrl = response?.data?.data?.profileImage || response?.data?.profileImage
-      
+
       if (imageUrl) {
         setProfileImage(imageUrl)
         setImagePreview(imageUrl)
         toast.success('Profile image uploaded successfully')
-        
+
         // Update context
         updateUserProfile({ profileImage: imageUrl })
-        
+
         // Dispatch event to refresh profile
         window.dispatchEvent(new Event("userAuthChanged"))
       }
@@ -232,7 +232,7 @@ export default function EditProfile() {
         window.dispatchEvent(new Event("userAuthChanged"))
 
         toast.success('Profile updated successfully')
-        
+
         // Navigate back
         navigate("/user/profile")
       }
@@ -259,7 +259,7 @@ export default function EditProfile() {
       {/* Header */}
       <div className="bg-white dark:bg-[#1a1a1a] sticky top-0 z-10 border-b border-gray-100 dark:border-gray-800">
         <div className="max-w-7xl mx-auto flex items-center gap-3 px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4 md:py-5 lg:py-6">
-          <button 
+          <button
             onClick={() => navigate(-1)}
             className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors flex-shrink-0"
           >
@@ -270,14 +270,14 @@ export default function EditProfile() {
       </div>
 
       {/* Content */}
-      <div className="max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-6 sm:py-8 md:py-10 lg:py-12 space-y-6 md:space-y-8 lg:space-y-10">
+      <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-6 md:pt-20 lg:pt-24 md:pb-6 lg:pb-8">
         {/* Avatar Section */}
         <div className="flex justify-center">
           <div className="relative">
             <Avatar className="h-24 w-24 bg-blue-400 border-0">
               {imagePreview && (
-                <AvatarImage 
-                  src={imagePreview} 
+                <AvatarImage
+                  src={imagePreview}
                   alt={formData.name || 'User'}
                 />
               )}
@@ -286,7 +286,7 @@ export default function EditProfile() {
               </AvatarFallback>
             </Avatar>
             {/* Edit Icon */}
-            <button 
+            <button
               onClick={() => fileInputRef.current?.click()}
               disabled={isUploadingImage}
               className="absolute bottom-0 right-0 w-8 h-8 bg-green-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -474,11 +474,10 @@ export default function EditProfile() {
         <Button
           onClick={handleUpdate}
           disabled={!hasChanges || isSaving || isUploadingImage}
-          className={`w-full h-14 rounded-xl font-semibold text-base transition-all ${
-            hasChanges && !isSaving && !isUploadingImage
-              ? 'bg-green-600 hover:bg-green-700 text-white'
-              : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-          }`}
+          className={`w-full h-14 rounded-xl font-semibold text-base transition-all ${hasChanges && !isSaving && !isUploadingImage
+            ? 'bg-green-600 hover:bg-green-700 text-white'
+            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+            }`}
         >
           {isSaving ? (
             <>

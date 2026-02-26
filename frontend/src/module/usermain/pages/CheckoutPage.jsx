@@ -364,21 +364,21 @@ export default function CheckoutPage() {
 
     const fromArray = Array.isArray(components)
       ? {
-          city:
-            components.find((c) => c.types?.includes("locality"))?.long_name ||
-            components.find((c) => c.types?.includes("administrative_area_level_2"))?.long_name ||
-            "",
-          state:
-            components.find((c) => c.types?.includes("administrative_area_level_1"))?.long_name ||
-            "",
-          zipCode:
-            components.find((c) => c.types?.includes("postal_code"))?.long_name || "",
-        }
+        city:
+          components.find((c) => c.types?.includes("locality"))?.long_name ||
+          components.find((c) => c.types?.includes("administrative_area_level_2"))?.long_name ||
+          "",
+        state:
+          components.find((c) => c.types?.includes("administrative_area_level_1"))?.long_name ||
+          "",
+        zipCode:
+          components.find((c) => c.types?.includes("postal_code"))?.long_name || "",
+      }
       : {
-          city: components.city || "",
-          state: components.state || "",
-          zipCode: components.zipCode || components.postal_code || "",
-        };
+        city: components.city || "",
+        state: components.state || "",
+        zipCode: components.zipCode || components.postal_code || "",
+      };
 
     const formattedAddress = firstResult?.formatted_address || "";
     const pincodeFromText =
@@ -1037,7 +1037,7 @@ export default function CheckoutPage() {
             ? "wallet"
             : paymentMethod === "upi"
               ? "razorpay"
-            : "razorpay";
+              : "razorpay";
 
       const orderPayload = {
         items,
@@ -1142,8 +1142,8 @@ export default function CheckoutPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fff7ed]">
-      <div className="bg-white/90 backdrop-blur sticky top-0 z-50 border-b border-orange-100">
+    <div className="min-h-screen bg-[#fff7ed] md:pt-20">
+      <div className="bg-white/90 backdrop-blur sticky top-0 z-50 border-b border-orange-100 md:hidden">
         <div className="px-4 py-3 flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
@@ -1155,8 +1155,21 @@ export default function CheckoutPage() {
         </div>
       </div>
 
+      {/* Desktop Header/Headline */}
+      <div className="hidden md:block max-w-[1100px] mx-auto w-full px-4 mt-4 mb-4">
+        <div className="bg-white shadow-sm rounded-2xl py-4 px-4 flex items-center gap-4 border border-orange-100">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-1 hover:bg-orange-50 rounded-full transition-colors"
+          >
+            <ArrowLeft className="w-6 h-6 text-gray-800" />
+          </button>
+          <h1 className="text-xl font-bold text-gray-900 font-Inter">Checkout</h1>
+        </div>
+      </div>
+
       {isOrderEditMode && (
-        <div className="px-4 pt-4">
+        <div className="max-w-[1100px] mx-auto w-full px-4 pt-4">
           <div className="bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide">
@@ -1174,7 +1187,7 @@ export default function CheckoutPage() {
         </div>
       )}
 
-      <div className="px-4 py-4">
+      <div className="max-w-[1100px] mx-auto w-full px-4 py-4">
         {!restaurantAvailability.isAvailable && (
           <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
             <p className="text-sm font-semibold text-red-700">
@@ -1202,11 +1215,10 @@ export default function CheckoutPage() {
                         key={String(addressId)}
                         type="button"
                         onClick={() => setSelectedAddress(address)}
-                        className={`w-full text-left rounded-xl border px-3 py-2 transition-colors ${
-                          isSelected
+                        className={`w-full text-left rounded-xl border px-3 py-2 transition-colors ${isSelected
                             ? "border-[#ff8100] bg-orange-50"
                             : "border-gray-200 bg-white"
-                        }`}
+                          }`}
                       >
                         <p className="text-xs font-semibold text-gray-900">
                           {address.label || "Address"} {address.isDefault ? "(Default)" : ""}
@@ -1233,11 +1245,10 @@ export default function CheckoutPage() {
                           key={label}
                           type="button"
                           onClick={() => setNewAddress((prev) => ({ ...prev, label }))}
-                          className={`h-8 rounded-lg text-xs font-semibold border ${
-                            newAddress.label === label
+                          className={`h-8 rounded-lg text-xs font-semibold border ${newAddress.label === label
                               ? "border-[#ff8100] bg-orange-100 text-[#ff8100]"
                               : "border-gray-200 bg-white text-gray-700"
-                          }`}
+                            }`}
                         >
                           {label}
                         </button>
@@ -1357,7 +1368,7 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      <div className="px-4 mb-4">
+      <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-orange-100">
           <h3 className="text-sm font-bold text-gray-900 mb-3">Order Items</h3>
           <div className="space-y-3">
@@ -1379,7 +1390,7 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      <div className="px-4 mb-4">
+      <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-orange-100">
           <h3 className="text-sm font-bold text-gray-900 mb-3">Apply Coupon</h3>
           <div className="flex items-center gap-2">
@@ -1457,7 +1468,7 @@ export default function CheckoutPage() {
       </div>
 
       {addons.length > 0 && (
-        <div className="px-4 mb-4">
+        <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-orange-100">
             <div className="flex items-center gap-2 mb-3">
               <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
@@ -1562,7 +1573,7 @@ export default function CheckoutPage() {
         </div>
       )}
 
-      <div className="px-4 mb-4">
+      <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-orange-100">
           <h3 className="text-sm font-bold text-gray-900 mb-3">Order Summary</h3>
           <div className="space-y-2">
@@ -1604,7 +1615,7 @@ export default function CheckoutPage() {
         </div>
       </div>
 
-      <div className="px-4 mb-4">
+      <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-orange-100">
           <div className="flex items-center gap-3">
             <div className="bg-[#ff8100] rounded-xl p-2">
@@ -1619,17 +1630,16 @@ export default function CheckoutPage() {
       </div>
 
       {!isOrderEditMode && (
-        <div className="px-4 mb-4">
+        <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-orange-100">
             <h3 className="text-sm font-bold text-gray-900 mb-3">Payment Method</h3>
             <div className="space-y-2">
               <button
                 onClick={() => setPaymentMethod("card")}
-                className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${
-                  paymentMethod === "card"
+                className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${paymentMethod === "card"
                     ? "border-[#ff8100] bg-[#ff8100]/10"
                     : "border-gray-200 bg-white"
-                }`}
+                  }`}
               >
                 <CreditCard
                   className={`w-5 h-5 ${paymentMethod === "card" ? "text-[#ff8100]" : "text-gray-400"}`}
@@ -1642,11 +1652,10 @@ export default function CheckoutPage() {
               </button>
               <button
                 onClick={() => setPaymentMethod("wallet")}
-                className={`w-full flex items-center justify-between gap-3 p-3 rounded-lg border-2 transition-colors ${
-                  paymentMethod === "wallet"
+                className={`w-full flex items-center justify-between gap-3 p-3 rounded-lg border-2 transition-colors ${paymentMethod === "wallet"
                     ? "border-[#ff8100] bg-[#ff8100]/10"
                     : "border-gray-200 bg-white"
-                }`}
+                  }`}
               >
                 <div className="flex items-center gap-3">
                   <Wallet
@@ -1671,11 +1680,10 @@ export default function CheckoutPage() {
               </button>
               <button
                 onClick={() => setPaymentMethod("upi")}
-                className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${
-                  paymentMethod === "upi"
+                className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${paymentMethod === "upi"
                     ? "border-[#ff8100] bg-[#ff8100]/10"
                     : "border-gray-200 bg-white"
-                }`}
+                  }`}
               >
                 <Smartphone
                   className={`w-5 h-5 ${paymentMethod === "upi" ? "text-[#ff8100]" : "text-gray-400"}`}
@@ -1688,11 +1696,10 @@ export default function CheckoutPage() {
               </button>
               <button
                 onClick={() => setPaymentMethod("cash")}
-                className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${
-                  paymentMethod === "cash"
+                className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${paymentMethod === "cash"
                     ? "border-[#ff8100] bg-[#ff8100]/10"
                     : "border-gray-200 bg-white"
-                }`}
+                  }`}
               >
                 <ShoppingBag
                   className={`w-5 h-5 ${paymentMethod === "cash" ? "text-[#ff8100]" : "text-gray-400"}`}
@@ -1708,7 +1715,7 @@ export default function CheckoutPage() {
         </div>
       )}
 
-      <div className="px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-6">
+      <div className="max-w-[1100px] mx-auto w-full px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-6">
         <Button
           className="w-full bg-[#ff8100] hover:bg-[#e67300] text-white font-bold py-4 rounded-2xl text-base shadow-lg shadow-orange-200/70"
           onClick={handleProceedToPayment}
@@ -1722,13 +1729,13 @@ export default function CheckoutPage() {
             ? "Processing..."
             : isOrderEditMode
               ? "Save Changes"
-            : paymentMethod === "cash"
-              ? "Place Order"
-              : paymentMethod === "wallet"
-                ? "Pay via Wallet"
-                : paymentMethod === "upi"
-                  ? "Pay via UPI"
-              : "Proceed to Payment"}
+              : paymentMethod === "cash"
+                ? "Place Order"
+                : paymentMethod === "wallet"
+                  ? "Pay via Wallet"
+                  : paymentMethod === "upi"
+                    ? "Pay via UPI"
+                    : "Proceed to Payment"}
         </Button>
       </div>
 
