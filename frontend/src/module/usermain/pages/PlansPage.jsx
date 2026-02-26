@@ -257,20 +257,26 @@ const PlansPage = () => {
     fetchPlanOffers();
   }, [selectedPlan?.id, selectedPlanLinkedOffers, selectedPlanOfferIdsKey]);
 
-  const selectedPlanProducts = (() => {
+  const selectedPlanHasTypedProducts = useMemo(() => {
+    if (!selectedPlan) return false;
+    const vegProducts = Array.isArray(selectedPlan.vegProducts) ? selectedPlan.vegProducts : [];
+    const nonVegProducts = Array.isArray(selectedPlan.nonVegProducts) ? selectedPlan.nonVegProducts : [];
+    return vegProducts.length > 0 || nonVegProducts.length > 0;
+  }, [selectedPlan]);
+
+  const selectedPlanProducts = useMemo(() => {
     if (!selectedPlan) return [];
 
     const vegProducts = Array.isArray(selectedPlan.vegProducts) ? selectedPlan.vegProducts : [];
     const nonVegProducts = Array.isArray(selectedPlan.nonVegProducts) ? selectedPlan.nonVegProducts : [];
     const legacyProducts = Array.isArray(selectedPlan.products) ? selectedPlan.products : [];
 
-    const hasTypedProducts = vegProducts.length > 0 || nonVegProducts.length > 0;
-    if (!hasTypedProducts) {
+    if (!selectedPlanHasTypedProducts) {
       return legacyProducts;
     }
 
     return selectedMealType === "nonVeg" ? nonVegProducts : vegProducts;
-  })();
+  }, [selectedPlan, selectedPlanHasTypedProducts, selectedMealType]);
 
   const selectedOfferProducts = useMemo(() => {
     const activeOfferIds = new Set((selectedOfferIds || []).map((id) => String(id)));
@@ -300,7 +306,13 @@ const PlansPage = () => {
     return Array.from(productMap.values());
   }, [planOffers, selectedOfferIds]);
 
-  const displayedProducts = selectedOfferProducts.length > 0 ? selectedOfferProducts : selectedPlanProducts;
+  const displayedProducts = useMemo(() => {
+    // For plans with explicit veg/non-veg product sets, keep the toggle authoritative.
+    if (selectedPlanHasTypedProducts) {
+      return selectedPlanProducts;
+    }
+    return selectedOfferProducts.length > 0 ? selectedOfferProducts : selectedPlanProducts;
+  }, [selectedPlanHasTypedProducts, selectedOfferProducts, selectedPlanProducts]);
 
   const getNamedItems = (items) => {
     if (!Array.isArray(items)) return [];
