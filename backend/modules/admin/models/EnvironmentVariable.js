@@ -144,7 +144,9 @@ const environmentVariableSchema = new mongoose.Schema(
 
 // Create a single document instance (singleton pattern)
 environmentVariableSchema.statics.getOrCreate = async function() {
-  let envVars = await this.findOne();
+  // Prefer the latest updated document if multiple records exist.
+  // This avoids reading stale/empty env docs created in older deployments.
+  let envVars = await this.findOne().sort({ lastUpdatedAt: -1, updatedAt: -1, createdAt: -1 });
   if (!envVars) {
     envVars = await this.create({});
   }
