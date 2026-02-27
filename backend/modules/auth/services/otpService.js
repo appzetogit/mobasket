@@ -13,43 +13,25 @@ const logger = winston.createLogger({
   ]
 });
 
-// Test phone numbers that should use default OTP
-const TEST_PHONE_NUMBERS = [
-  '7610416911',
-  '7691810506',
-  '9009925021',
-  '6375095971',
-];
-
-// Default OTP for test phone numbers
-const DEFAULT_TEST_OTP = '110211';
-
 /**
- * Extract phone number digits (without country code)
- * @param {string} phone - Phone number in format like "+91 9098569620" or "+91-9098569620"
- * @returns {string} - Phone number digits only (e.g., "9098569620")
+ * Normalize phone number for OTP persistence and lookup.
+ * Stores as +<country><number> without spaces so send/verify match across clients.
+ * @param {string|null} phone
+ * @returns {string|null}
  */
-const extractPhoneDigits = (phone) => {
-  if (!phone) return '';
-  // Remove all non-digit characters
-  const digits = phone.replace(/\D/g, '');
-  // If starts with country code (like 91), remove it to get last 10 digits
-  // For Indian numbers, country code is 91, so we take last 10 digits
-  if (digits.length > 10 && digits.startsWith('91')) {
-    return digits.slice(-10);
-  }
-  // If exactly 10 digits or less, return as is
-  return digits.length <= 10 ? digits : digits.slice(-10);
-};
+const normalizePhoneForOtp = (phone) => {
+  if (!phone || typeof phone !== 'string') return null;
+  const trimmed = phone.trim();
+  if (!trimmed) return null;
+  const digitsOnly = trimmed.replace(/\D/g, '');
+  if (!digitsOnly) return null;
 
-/**
- * Check if a phone number is a test number
- * @param {string} phone - Phone number in any format
- * @returns {boolean} - True if phone number is a test number
- */
-const isTestPhoneNumber = (phone) => {
-  const phoneDigits = extractPhoneDigits(phone);
-  return TEST_PHONE_NUMBERS.includes(phoneDigits);
+  // Default to Indian country code if not explicitly provided.
+  if (digitsOnly.length === 10) return `+91${digitsOnly}`;
+  if (digitsOnly.length === 11 && digitsOnly.startsWith('0')) return `+91${digitsOnly.slice(1)}`;
+  if (digitsOnly.length > 10 && digitsOnly.startsWith('91')) return `+${digitsOnly}`;
+  if (trimmed.startsWith('+')) return `+${digitsOnly}`;
+  return `+${digitsOnly}`;
 };
 
 /**
@@ -79,8 +61,9 @@ class OTPService {
         throw new Error('Either phone or email must be provided');
       }
 
-      const identifier = phone || email;
-      const identifierType = phone ? 'phone' : 'email';
+      const normalizedPhone = phone ? normalizePhoneForOtp(phone) : null;
+      const identifier = normalizedPhone || email;
+      const identifierType = normalizedPhone ? 'phone' : 'email';
 
       // Check rate limiting (configurable) - using MongoDB
       if (process.env.NODE_ENV === 'production') {
@@ -101,13 +84,13 @@ class OTPService {
         }
       }
 
-      // Generate OTP (use default for test phone numbers)
-      const otp = (phone && isTestPhoneNumber(phone)) ? DEFAULT_TEST_OTP : generateOTP();
+      // Generate OTP
+      const otp = generateOTP();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
       // Build query for invalidating previous OTPs
       const invalidateQuery = { purpose, verified: false };
-      if (phone) invalidateQuery.phone = phone;
+      if (normalizedPhone) invalidateQuery.phone = normalizedPhone;
       if (email) invalidateQuery.email = email;
 
       // Invalidate previous OTPs for this identifier and purpose
@@ -122,24 +105,15 @@ class OTPService {
         purpose,
         expiresAt
       };
-      if (phone) otpData.phone = phone;
+      if (normalizedPhone) otpData.phone = normalizedPhone;
       if (email) otpData.email = email;
 
       const otpRecord = await Otp.create(otpData);
 
       // Send OTP via SMS or Email
-      if (phone) {
-        // Skip actual SMS sending for test phone numbers
-        if (!isTestPhoneNumber(phone)) {
-          // Use SMSIndia Hub for phone OTP
-          await smsIndiaHubService.sendOTP(phone, otp, purpose);
-        } else {
-          logger.info(`Skipping SMS for test phone number: ${phone}`, {
-            phone,
-            purpose,
-            otp
-          });
-        }
+      if (normalizedPhone) {
+        // Use SMSIndia Hub for phone OTP
+        await smsIndiaHubService.sendOTP(normalizedPhone, otp, purpose);
       } else if (email) {
         // Keep email service as is
         await emailService.sendOTP(email, otp, purpose);
@@ -159,7 +133,7 @@ class OTPService {
       };
     } catch (error) {
       logger.error(`Error generating OTP: ${error.message}`, {
-        phone,
+        phone: phone ? normalizePhoneForOtp(phone) : null,
         email,
         purpose,
         error: error.message
@@ -183,20 +157,9 @@ class OTPService {
         throw new Error('Either phone or email must be provided');
       }
 
-      const identifier = phone || email;
-      const identifierType = phone ? 'phone' : 'email';
-
-      // Check if this is a test phone number and OTP matches default test OTP
-      if (phone && isTestPhoneNumber(phone) && otp === DEFAULT_TEST_OTP) {
-        logger.info(`Test OTP verified for ${phone}`, {
-          phone,
-          purpose
-        });
-        return {
-          success: true,
-          message: 'OTP verified successfully'
-        };
-      }
+      const normalizedPhone = phone ? normalizePhoneForOtp(phone) : null;
+      const identifier = normalizedPhone || email;
+      const identifierType = normalizedPhone ? 'phone' : 'email';
 
       // Verify OTP from database
       // For reset-password purpose, allow already-verified OTPs within 10 minutes
@@ -210,7 +173,7 @@ class OTPService {
           verified: false,
           expiresAt: { $gt: new Date() }
         };
-        if (phone) unverifiedQuery.phone = phone;
+        if (normalizedPhone) unverifiedQuery.phone = normalizedPhone;
         if (email) unverifiedQuery.email = email;
         
         otpRecord = await Otp.findOne(unverifiedQuery);
@@ -225,7 +188,7 @@ class OTPService {
             expiresAt: { $gt: new Date() },
             updatedAt: { $gt: tenMinutesAgo }
           };
-          if (phone) verifiedQuery.phone = phone;
+          if (normalizedPhone) verifiedQuery.phone = normalizedPhone;
           if (email) verifiedQuery.email = email;
           
           otpRecord = await Otp.findOne(verifiedQuery);
@@ -246,7 +209,7 @@ class OTPService {
           verified: false,
           expiresAt: { $gt: new Date() }
         };
-        if (phone) query.phone = phone;
+        if (normalizedPhone) query.phone = normalizedPhone;
         if (email) query.email = email;
         
         otpRecord = await Otp.findOne(query);
@@ -255,7 +218,7 @@ class OTPService {
       if (!otpRecord) {
         // Increment attempts for security (only for unverified OTPs)
         const incrementQuery = { purpose, verified: false };
-        if (phone) incrementQuery.phone = phone;
+        if (normalizedPhone) incrementQuery.phone = normalizedPhone;
         if (email) incrementQuery.email = email;
 
         await Otp.updateMany(
@@ -286,7 +249,7 @@ class OTPService {
       };
     } catch (error) {
       logger.error(`Error verifying OTP: ${error.message}`, {
-        phone,
+        phone: phone ? normalizePhoneForOtp(phone) : null,
         email,
         purpose,
         error: error.message

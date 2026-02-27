@@ -31,8 +31,8 @@ export default function OTP() {
       return
     }
 
-    // Get auth data from sessionStorage
-    const stored = sessionStorage.getItem("userAuthData")
+    // Prefer sessionStorage; fallback to localStorage for Android WebView reliability.
+    const stored = sessionStorage.getItem("userAuthData") || localStorage.getItem("userAuthData")
     if (!stored) {
       // No auth data, redirect to sign in
       navigate("/user/auth/sign-in", { replace: true })
@@ -200,8 +200,9 @@ export default function OTP() {
         throw new Error("Invalid response from server")
       }
 
-      // Clear auth data from sessionStorage
+      // Clear auth data from transient storage
       sessionStorage.removeItem("userAuthData")
+      localStorage.removeItem("userAuthData")
 
       // Replace old token with new one (handles cross-module login)
       setUserAuthData("user", accessToken, user)
@@ -264,8 +265,9 @@ export default function OTP() {
         throw new Error("Invalid response from server")
       }
 
-      // Clear auth data from sessionStorage
+      // Clear auth data from transient storage
       sessionStorage.removeItem("userAuthData")
+      localStorage.removeItem("userAuthData")
 
       // Replace old token with new one (handles cross-module login)
       setUserAuthData("user", accessToken, user)

@@ -16,7 +16,7 @@ const buildPhoneQuery = (normalizedPhone) => {
   
   // Check if normalized phone has country code (starts with 91 and is 12 digits)
   if (normalizedPhone.startsWith('91') && normalizedPhone.length === 12) {
-    // Search for both: with country code (917610416911) and without (7610416911)
+    // Search for both: with country code and without country code
     const phoneWithoutCountryCode = normalizedPhone.substring(2);
     return {
       $or: [
@@ -318,7 +318,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       if (normalizedPhone) {
         // Check if normalized phone has country code (starts with 91 and is 12 digits)
         if (normalizedPhone.startsWith('91') && normalizedPhone.length === 12) {
-          // Search for both: with country code (917610416911) and without (7610416911)
+          // Search for both: with country code and without country code
           const phoneWithoutCountryCode = normalizedPhone.substring(2);
           findQuery = {
             $or: [

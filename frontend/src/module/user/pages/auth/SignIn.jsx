@@ -467,7 +467,7 @@ export default function SignIn() {
 
   useEffect(() => {
     try {
-      const raw = sessionStorage.getItem("userAuthData")
+      const raw = sessionStorage.getItem("userAuthData") || localStorage.getItem("userAuthData")
       if (!raw) return
 
       const saved = JSON.parse(raw)
@@ -639,7 +639,10 @@ export default function SignIn() {
         isSignUp,
         module: "user",
       }
-      sessionStorage.setItem("userAuthData", JSON.stringify(authData))
+      const serializedAuthData = JSON.stringify(authData)
+      sessionStorage.setItem("userAuthData", serializedAuthData)
+      // WebView fallback: some Android WebViews can lose sessionStorage between routes.
+      localStorage.setItem("userAuthData", serializedAuthData)
 
       // Navigate to OTP page
       navigate("/user/auth/otp")
