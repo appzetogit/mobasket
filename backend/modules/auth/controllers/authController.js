@@ -65,6 +65,9 @@ export const sendOTP = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     logger.error(`Error sending OTP: ${error.message}`);
+    if (/too many otp requests/i.test(String(error.message || ''))) {
+      return errorResponse(res, 429, error.message);
+    }
     return errorResponse(res, 500, getSafeOtpErrorMessage(error));
   }
 });
