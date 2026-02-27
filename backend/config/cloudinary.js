@@ -24,9 +24,9 @@ async function initializeCloudinary() {
 
   try {
     const credentials = await getCloudinaryCredentials();
-    const cloudName = cleanEnv(credentials.cloudName || process.env.CLOUDINARY_CLOUD_NAME);
-    const apiKey = cleanEnv(credentials.apiKey || process.env.CLOUDINARY_API_KEY);
-    const apiSecret = cleanEnv(credentials.apiSecret || process.env.CLOUDINARY_API_SECRET);
+    const cloudName = cleanEnv(credentials.cloudName);
+    const apiKey = cleanEnv(credentials.apiKey);
+    const apiSecret = cleanEnv(credentials.apiSecret);
 
     console.log('🔧 Cloudinary initialization check:', {
       hasCloudName: !!cloudName,
@@ -44,7 +44,7 @@ async function initializeCloudinary() {
       if (!apiSecret) missing.push('CLOUDINARY_API_SECRET');
       
       console.error(
-        `❌ Cloudinary is not fully configured. Missing: ${missing.join(', ')}. Set these in ENV Setup or backend .env`
+        `❌ Cloudinary is not fully configured. Missing: ${missing.join(', ')}. Set these in Admin > ENV Setup`
       );
       throw new Error(`Cloudinary configuration incomplete. Missing: ${missing.join(', ')}`);
     }
@@ -69,19 +69,6 @@ async function initializeCloudinary() {
   return cloudinary;
 }
 
-// Initialize on module load (fallback to process.env)
-const CLOUDINARY_CLOUD_NAME = cleanEnv(process.env.CLOUDINARY_CLOUD_NAME);
-const CLOUDINARY_API_KEY = cleanEnv(process.env.CLOUDINARY_API_KEY);
-const CLOUDINARY_API_SECRET = cleanEnv(process.env.CLOUDINARY_API_SECRET);
-
-if (CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET) {
-  cloudinary.config({
-    cloud_name: CLOUDINARY_CLOUD_NAME,
-    api_key: CLOUDINARY_API_KEY,
-    api_secret: CLOUDINARY_API_SECRET
-  });
-  cloudinaryInitialized = true;
-}
 
 // Reinitialize function (call after updating env variables)
 export async function reinitializeCloudinary() {
@@ -90,5 +77,6 @@ export async function reinitializeCloudinary() {
 }
 
 export { cloudinary, initializeCloudinary };
+
 
 

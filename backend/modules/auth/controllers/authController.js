@@ -601,7 +601,7 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     return errorResponse(
       res,
       500,
-      'Firebase Auth is not configured. Please set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in backend .env'
+      'Firebase Auth is not configured. Please set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in Admin > ENV Setup'
     );
   }
 
@@ -953,4 +953,5 @@ export const googleCallback = asyncHandler(async (req, res) => {
     return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/restaurant/login?error=auth_failed`);
   }
 });
+
 

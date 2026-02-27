@@ -19,7 +19,7 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Get environment variable value from database
- * Falls back to process.env if not found in database
+ * No process.env fallback for managed keys
  * Automatically decrypts encrypted values
  * @param {string} key - Environment variable key
  * @param {string} defaultValue - Default value if not found
@@ -28,7 +28,7 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 export async function getEnvVar(key, defaultValue = '') {
   try {
     const envVars = await getAllEnvVars();
-    let value = envVars[key] || process.env[key] || defaultValue;
+    let value = envVars[key] || defaultValue;
     
     // Decrypt if encrypted (for direct access, toEnvObject already decrypts, but this is a safety check)
     if (value && isEncrypted(value)) {
@@ -42,8 +42,8 @@ export async function getEnvVar(key, defaultValue = '') {
     
     return value;
   } catch (error) {
-    logger.warn(`Error fetching env var ${key} from database, using process.env: ${error.message}`);
-    return process.env[key] || defaultValue;
+    logger.warn(`Error fetching env var ${key} from database: ${error.message}`);
+    return defaultValue;
   }
 }
 
@@ -71,7 +71,7 @@ export async function getAllEnvVars() {
     return envData;
   } catch (error) {
     logger.error(`Error fetching environment variables from database: ${error.message}`);
-    // Return empty object on error, will fallback to process.env in getEnvVar
+    // Return empty object on error. getEnvVar will return default value.
     return {};
   }
 }
@@ -93,11 +93,10 @@ export function clearEnvCache() {
 export async function getRazorpayCredentials() {
   const apiKey = await getEnvVar('RAZORPAY_API_KEY');
   const secretKey = await getEnvVar('RAZORPAY_SECRET_KEY');
-  
-  // Fallback to old env var names
+
   return {
-    keyId: apiKey || process.env.RAZORPAY_KEY_ID || '',
-    keySecret: secretKey || process.env.RAZORPAY_KEY_SECRET || ''
+    keyId: apiKey || '',
+    keySecret: secretKey || ''
   };
 }
 

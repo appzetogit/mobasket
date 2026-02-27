@@ -1329,10 +1329,10 @@ export const createOrder = async (req, res) => {
     if (razorpayOrder) {
       try {
         const credentials = await getRazorpayCredentials();
-        razorpayKeyId = credentials.keyId || process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_API_KEY;
+        razorpayKeyId = credentials.keyId || '';
       } catch (error) {
         logger.warn(`Failed to get Razorpay key ID from env service: ${error.message}`);
-        razorpayKeyId = process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_API_KEY;
+        razorpayKeyId = '';
       }
     }
 
@@ -2338,9 +2338,9 @@ export const editOrderCart = async (req, res) => {
       let razorpayKeyId = null;
       try {
         const credentials = await getRazorpayCredentials();
-        razorpayKeyId = credentials?.keyId || process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_API_KEY;
+        razorpayKeyId = credentials?.keyId || '';
       } catch {
-        razorpayKeyId = process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_API_KEY;
+        razorpayKeyId = '';
       }
 
       order.postOrderActions = {

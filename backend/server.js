@@ -409,6 +409,17 @@ import { initializeCloudinary } from './config/cloudinary.js';
 connectDB().then(() => {
   // Initialize Cloudinary after DB connection
   initializeCloudinary().catch(err => console.error('Failed to initialize Cloudinary:', err));
+  initializeFirebaseRealtime({ allowDbLookup: true })
+    .then((init) => {
+      if (init.initialized) {
+        console.log('Firebase Realtime Database initialized from ENV Setup');
+      } else {
+        console.warn(
+          `Firebase Realtime Database not initialized from ENV Setup (${init.reason || 'unknown_reason'}).`
+        );
+      }
+    })
+    .catch((err) => console.error('Failed to initialize Firebase Realtime from ENV Setup:', err));
 });
 
 // Redis connection is optional - only connects if REDIS_ENABLED=true

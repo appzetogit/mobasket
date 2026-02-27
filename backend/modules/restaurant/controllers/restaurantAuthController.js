@@ -932,7 +932,7 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     return errorResponse(
       res,
       500,
-      'Firebase Auth is not configured. Please set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in backend .env'
+      'Firebase Auth is not configured. Please set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in Admin > ENV Setup'
     );
   }
 
@@ -1079,4 +1079,5 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     return errorResponse(res, 400, error.message || 'Firebase Google authentication failed');
   }
 });
+
 

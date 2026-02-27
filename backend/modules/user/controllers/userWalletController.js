@@ -303,11 +303,11 @@ export const createTopupOrder = asyncHandler(async (req, res) => {
     let razorpayKeyId = null;
     try {
       const credentials = await getRazorpayCredentials();
-      razorpayKeyId = credentials.keyId || process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_API_KEY;
+      razorpayKeyId = credentials.keyId || '';
       logger.info(`Razorpay key ID retrieved: ${razorpayKeyId ? 'Yes' : 'No'}`);
     } catch (error) {
       logger.warn(`Failed to get Razorpay key ID: ${error.message}`);
-      razorpayKeyId = process.env.RAZORPAY_KEY_ID || process.env.RAZORPAY_API_KEY;
+      razorpayKeyId = '';
     }
 
     if (!razorpayKeyId) {

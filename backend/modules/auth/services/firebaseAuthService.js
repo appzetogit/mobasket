@@ -50,7 +50,7 @@ class FirebaseAuthService {
    */
   async verifyIdToken(idToken) {
     if (!this.initialized) {
-      throw new Error('Firebase Admin is not configured. Please set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in .env');
+      throw new Error('Firebase Admin is not configured. Please set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in Admin > ENV Setup');
     }
 
     if (!idToken) {
