@@ -1,6 +1,19 @@
 import { useState, useEffect, useRef } from "react"
 import { locationAPI, userAPI } from "@/lib/api"
 
+function calculateDistanceMeters(lat1, lng1, lat2, lng2) {
+  const toRad = (deg) => (deg * Math.PI) / 180
+  const R = 6371000
+  const dLat = toRad(lat2 - lat1)
+  const dLng = toRad(lng2 - lng1)
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
 export function useLocation() {
   const [location, setLocation] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -10,8 +23,14 @@ export function useLocation() {
   const watchIdRef = useRef(null)
   const updateTimerRef = useRef(null)
   const prevLocationCoordsRef = useRef({ latitude: null, longitude: null })
+  const lastGeocodeRef = useRef({ ts: 0, latitude: null, longitude: null, addr: null })
+  const lastDbWriteRef = useRef({ ts: 0, latitude: null, longitude: null, signature: "" })
   const ENABLE_GOOGLE_MAPS_REVERSE_GEOCODE = false
   const ENABLE_GOOGLE_PLACES_DETAILS = false
+  const MIN_GEOCODE_INTERVAL_MS = 30000
+  const MIN_GEOCODE_DISTANCE_M = 30
+  const MIN_DB_WRITE_INTERVAL_MS = 30000
+  const MIN_DB_WRITE_DISTANCE_M = 25
 
   /* ===================== DB UPDATE (LIVE LOCATION TRACKING) ===================== */
   const updateLocationInDB = async (locationData) => {
@@ -65,6 +84,35 @@ export function useLocation() {
         locationPayload.streetNumber = locationData.streetNumber
       }
 
+      const payloadSignature = JSON.stringify({
+        city: locationPayload.city || "",
+        state: locationPayload.state || "",
+        area: locationPayload.area || "",
+        address: locationPayload.address || "",
+        formattedAddress: locationPayload.formattedAddress || "",
+      })
+      const prevWrite = lastDbWriteRef.current
+      const now = Date.now()
+      let movedMeters = Number.POSITIVE_INFINITY
+      if (
+        typeof prevWrite.latitude === "number" &&
+        typeof prevWrite.longitude === "number" &&
+        typeof locationPayload.latitude === "number" &&
+        typeof locationPayload.longitude === "number"
+      ) {
+        movedMeters = calculateDistanceMeters(
+          prevWrite.latitude,
+          prevWrite.longitude,
+          locationPayload.latitude,
+          locationPayload.longitude
+        )
+      }
+      const withinWriteInterval = now - (prevWrite.ts || 0) < MIN_DB_WRITE_INTERVAL_MS
+      const sameAddressSignature = prevWrite.signature === payloadSignature
+      if (withinWriteInterval && movedMeters < MIN_DB_WRITE_DISTANCE_M && sameAddressSignature) {
+        return
+      }
+
       console.log("💾 Updating live location in database:", {
         coordinates: `${locationPayload.latitude}, ${locationPayload.longitude}`,
         formattedAddress: locationPayload.formattedAddress,
@@ -74,6 +122,12 @@ export function useLocation() {
       })
 
       await userAPI.updateLocation(locationPayload)
+      lastDbWriteRef.current = {
+        ts: now,
+        latitude: locationPayload.latitude,
+        longitude: locationPayload.longitude,
+        signature: payloadSignature
+      }
       
       console.log("✅ Live location successfully stored in database")
     } catch (err) {
@@ -1358,6 +1412,21 @@ export function useLocation() {
       const res = await userAPI.getLocation()
       const loc = res?.data?.data?.location
       if (loc?.latitude && loc?.longitude) {
+        const looksLikeCoordinates = typeof loc?.formattedAddress === "string" &&
+          /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(loc.formattedAddress.trim())
+        const hasUsableStoredAddress =
+          typeof loc?.formattedAddress === "string" &&
+          loc.formattedAddress.trim() !== "" &&
+          loc.formattedAddress !== "Select location" &&
+          !looksLikeCoordinates
+        if (hasUsableStoredAddress) {
+          return {
+            ...loc,
+            latitude: Number(loc.latitude),
+            longitude: Number(loc.longitude)
+          }
+        }
+
         // Validate coordinates are in India range BEFORE attempting geocoding
         const isInIndiaRange = loc.latitude >= 6.5 && loc.latitude <= 37.1 && loc.longitude >= 68.7 && loc.longitude <= 97.4 && loc.longitude > 0
         
@@ -1762,8 +1831,39 @@ export function useLocation() {
                 formattedAddress: "Select location",
               }
             } else {
+              const previousGeocode = lastGeocodeRef.current
+              const hasRecentGeocode =
+                previousGeocode?.addr &&
+                typeof previousGeocode.latitude === "number" &&
+                typeof previousGeocode.longitude === "number"
+              const movedSinceGeocode = hasRecentGeocode
+                ? calculateDistanceMeters(
+                    previousGeocode.latitude,
+                    previousGeocode.longitude,
+                    latitude,
+                    longitude
+                  )
+                : Number.POSITIVE_INFINITY
+              const geocodeAgeMs = Date.now() - (previousGeocode?.ts || 0)
+              const shouldReuseRecentGeocode =
+                hasRecentGeocode &&
+                movedSinceGeocode < MIN_GEOCODE_DISTANCE_M &&
+                geocodeAgeMs < MIN_GEOCODE_INTERVAL_MS
+
               try {
-                addr = await reverseGeocodeWithOLAMaps(latitude, longitude)
+                if (shouldReuseRecentGeocode) {
+                  addr = previousGeocode.addr
+                } else {
+                  addr = await reverseGeocodeWithOLAMaps(latitude, longitude)
+                  if (addr && addr.formattedAddress && addr.formattedAddress !== "Select location") {
+                    lastGeocodeRef.current = {
+                      ts: Date.now(),
+                      latitude,
+                      longitude,
+                      addr
+                    }
+                  }
+                }
                 console.log("✅ Reverse geocoding successful:", { 
                   city: addr.city, 
                   area: addr.area, 
@@ -1918,13 +2018,13 @@ export function useLocation() {
               localStorage.setItem("userLocation", JSON.stringify(loc))
             }
 
-            // Debounce DB updates - only update every 5 seconds
+            // Debounce DB updates - timer + internal write guard both apply
             clearTimeout(updateTimerRef.current)
             updateTimerRef.current = setTimeout(() => {
               updateLocationInDB(loc).catch(err => {
                 console.warn("Failed to update location in DB:", err)
               })
-            }, 5000)
+            }, 20000)
           } catch (err) {
             console.error("❌ Error processing live location update:", err)
             // If reverse geocoding fails, DON'T use coordinates - use placeholder

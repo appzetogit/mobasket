@@ -63,6 +63,7 @@ const DeliveryTrackingMap = ({
   const lastRouteUpdateRef = useRef(null);
   const hasFirebaseRouteRef = useRef(false);
   const activeFirebaseAliasRef = useRef(null);
+  const lastLiveLocationUpdateAtRef = useRef(0);
   const userHasInteractedRef = useRef(false);
   const isProgrammaticChangeRef = useRef(false);
   const mapInitializedRef = useRef(false);
@@ -831,14 +832,17 @@ const DeliveryTrackingMap = ({
         socketRef.current.emit('request-current-location', alias);
       });
 
-      // Always request current location; backend will no-op if no rider is assigned.
+      // Fallback sync: only when live updates are stale and Firebase stream is not active.
       const locationRequestInterval = setInterval(() => {
-        if (socketRef.current && socketRef.current.connected) {
+        const now = Date.now();
+        const isLiveUpdateStale = (now - (lastLiveLocationUpdateAtRef.current || 0)) > 20000;
+        const hasFirebaseStream = Boolean(activeFirebaseAliasRef.current);
+        if (socketRef.current && socketRef.current.connected && isLiveUpdateStale && !hasFirebaseStream) {
           orderAliases.forEach((alias) => {
             socketRef.current.emit('request-current-location', alias);
           });
         }
-      }, 5000);
+      }, 20000);
 
       socketRef.current._locationRequestInterval = locationRequestInterval;
     });
@@ -851,6 +855,7 @@ const DeliveryTrackingMap = ({
       console.log('📍📍📍 Received REAL-TIME location update via socket:', data);
       const location = parseSocketLocation(data);
       if (location) {
+        lastLiveLocationUpdateAtRef.current = Date.now();
         console.log('✅✅✅ Updating bike to REAL delivery boy location:', location);
         setHasLiveSocketLocation(true);
         setCurrentLocation(location);
@@ -881,6 +886,7 @@ const DeliveryTrackingMap = ({
       console.log('📍📍📍 Received CURRENT location via socket:', data);
       const location = parseSocketLocation(data);
       if (location) {
+        lastLiveLocationUpdateAtRef.current = Date.now();
         console.log('✅✅✅ Updating bike to REAL current delivery boy location:', location);
         setHasLiveSocketLocation(true);
         setCurrentLocation(location);
@@ -1020,6 +1026,7 @@ const DeliveryTrackingMap = ({
         const heading = Number(value.bearing || 0);
         if (Number.isFinite(lat) && Number.isFinite(lng)) {
           const location = { lat, lng, heading: Number.isFinite(heading) ? heading : 0 };
+          lastLiveLocationUpdateAtRef.current = Date.now();
           setHasLiveSocketLocation(true);
           setCurrentLocation(location);
           setDeliveryBoyLocation(location);
@@ -1797,4 +1804,5 @@ const DeliveryTrackingMap = ({
 };
 
 export default DeliveryTrackingMap;
+
 
