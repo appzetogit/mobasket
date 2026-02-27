@@ -545,8 +545,19 @@ export default function SignIn() {
     const text = String(message || "")
     const looksLikeInfraError =
       /ssl|tls|alert number|routines|socket hang up|econnreset|ehostunreach|etimedout|enotfound/i.test(text)
+    const looksLikeProviderConfigLeak =
+      /smsindiahub|smshub|environment variables|admin > env setup|\.env file/i.test(text)
+    const isRateLimited = /too many otp requests|too many requests/i.test(text)
 
     if (looksLikeInfraError) {
+      return "OTP service is temporarily unavailable. Please try again in a few minutes."
+    }
+
+    if (isRateLimited) {
+      return "Too many OTP attempts. Please wait and try again."
+    }
+
+    if (looksLikeProviderConfigLeak) {
       return "OTP service is temporarily unavailable. Please try again in a few minutes."
     }
 

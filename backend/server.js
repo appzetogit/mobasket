@@ -462,7 +462,9 @@ if (process.env.NODE_ENV === 'production') {
   const limiter = rateLimit({
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
     max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-    message: 'Too many requests from this IP, please try again later.'
+    message: 'Too many requests from this IP, please try again later.',
+    // Avoid proxy validation exceptions in reverse-proxy deployments.
+    validate: false
   });
 
   app.use('/api/', limiter);
@@ -481,6 +483,13 @@ app.get('/health', (req, res) => {
 });
 
 // API routes
+app.use('/api/auth', (req, res, next) => {
+  // Prevent stale auth responses in WebView/browser caches.
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  next();
+});
 app.use('/api', authRoutes);
 app.use('/api/user', userRoutes);
 app.use('/api/restaurant', restaurantRoutes);
