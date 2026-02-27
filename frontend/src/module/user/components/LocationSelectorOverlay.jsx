@@ -2248,7 +2248,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                   <div className="text-center p-4">
                     <MapPin className="h-12 w-12 text-gray-400 mx-auto mb-2" />
                 <p className="text-sm text-gray-600 dark:text-gray-400">Google Maps API key not found</p>
-                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">Please set VITE_GOOGLE_MAPS_API_KEY in .env file</p>
+                <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">Please set VITE_GOOGLE_MAPS_API_KEY in Admin ENV Setup</p>
                   </div>
                 </div>
           )}

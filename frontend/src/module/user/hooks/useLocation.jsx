@@ -965,7 +965,7 @@ export function useLocation() {
       if (error.message.includes("REQUEST_DENIED") || error.message.includes("OVER_QUERY_LIMIT")) {
         console.error("❌❌❌ CRITICAL: Google Maps API configuration issue!");
         console.error("❌ Please check:");
-        console.error("   1. API key is correct in .env file");
+        console.error("   1. API key is correct in Admin ENV Setup");
         console.error("   2. Geocoding API is enabled in Google Cloud Console");
         console.error("   3. Billing is enabled and linked");
         console.error("   4. API key restrictions allow this request");

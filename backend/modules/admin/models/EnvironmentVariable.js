@@ -149,7 +149,16 @@ environmentVariableSchema.statics.getOrCreate = async function() {
   let envVars = await this.findOne().sort({ lastUpdatedAt: -1, updatedAt: -1, createdAt: -1 });
   if (!envVars) {
     envVars = await this.create({});
+    return envVars;
   }
+
+  // Best-effort cleanup to enforce singleton behavior going forward.
+  try {
+    await this.deleteMany({ _id: { $ne: envVars._id } });
+  } catch (error) {
+    console.warn('Failed to clean duplicate environment variable documents:', error.message);
+  }
+
   return envVars;
 };
 

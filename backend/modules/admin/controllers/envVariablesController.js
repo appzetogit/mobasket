@@ -153,6 +153,7 @@ export const saveEnvVariables = asyncHandler(async (req, res) => {
     try {
       logger.info('Attempting to save environment variables...');
       await envVars.save();
+      await EnvironmentVariable.deleteMany({ _id: { $ne: envVars._id } });
       logger.info('Environment variables saved successfully');
     } catch (saveError) {
       logger.error('Error during save operation:', {
