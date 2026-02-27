@@ -4,6 +4,7 @@ import EnvironmentVariable from '../models/EnvironmentVariable.js';
 import { clearEnvCache } from '../../../shared/utils/envService.js';
 import { resetFirebaseAdmin } from '../../../shared/services/firebaseAdminService.js';
 import { initializeFirebaseRealtime, resetFirebaseRealtimeState } from '../../../shared/services/firebaseRealtimeService.js';
+import { reinitializeCloudinary } from '../../../config/cloudinary.js';
 import winston from 'winston';
 
 const logger = winston.createLogger({
@@ -178,6 +179,15 @@ export const saveEnvVariables = asyncHandler(async (req, res) => {
     } catch (cacheError) {
       logger.warn('Error clearing cache:', cacheError.message);
       // Don't fail the request if cache clear fails
+    }
+
+    // Apply updated Cloudinary credentials at runtime after ENV save.
+    try {
+      await reinitializeCloudinary();
+      logger.info('Cloudinary runtime config refreshed after env save');
+    } catch (cloudinaryError) {
+      logger.warn(`Failed to refresh Cloudinary runtime config: ${cloudinaryError.message}`);
+      // ENV save succeeds even if Cloudinary refresh fails.
     }
 
     // Apply updated Firebase admin/realtime credentials at runtime after ENV save.

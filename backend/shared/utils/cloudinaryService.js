@@ -1,6 +1,6 @@
 import multer from 'multer';
 import { Readable } from 'stream';
-import { cloudinary } from '../../config/cloudinary.js';
+import { cloudinary, initializeCloudinary } from '../../config/cloudinary.js';
 
 // Use in‑memory storage; we stream to Cloudinary
 const storage = multer.memoryStorage();
@@ -42,7 +42,10 @@ export const uploadMiddleware = multer({
  * @param {Object} options - Cloudinary upload options (folder, resource_type, etc.)
  * @returns {Promise<Object>} Cloudinary upload result
  */
-export function uploadToCloudinary(buffer, options = {}) {
+export async function uploadToCloudinary(buffer, options = {}) {
+  // Ensure Cloudinary is initialized with latest ENV Setup credentials.
+  await initializeCloudinary();
+
   return new Promise((resolve, reject) => {
     try {
       // Validate buffer
