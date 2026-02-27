@@ -373,11 +373,10 @@ export default function DiningRestaurants() {
                       key={filter.id}
                       variant="outline"
                       onClick={() => toggleFilter(filter.id)}
-                      className={`h-7 sm:h-8 px-2 sm:px-3 rounded-md flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 transition-all font-medium ${
-                        isActive
+                      className={`h-7 sm:h-8 px-2 sm:px-3 rounded-md flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 transition-all font-medium ${isActive
                           ? "bg-green-600 text-white border border-green-600 hover:bg-green-600/90"
                           : "bg-white border border-gray-200 hover:bg-gray-50 text-gray-600"
-                      }`}
+                        }`}
                     >
                       {Icon && (
                         <Icon
@@ -558,11 +557,10 @@ export default function DiningRestaurants() {
                     <button
                       key={tab.id}
                       onClick={() => setActiveFilterTab(tab.id)}
-                      className={`flex flex-col items-center gap-1 py-4 px-2 text-center relative transition-colors ${
-                        isActive
+                      className={`flex flex-col items-center gap-1 py-4 px-2 text-center relative transition-colors ${isActive
                           ? "bg-white text-green-600"
                           : "text-gray-500 hover:bg-gray-100"
-                      }`}
+                        }`}
                     >
                       {isActive && (
                         <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-600 rounded-r" />
@@ -593,11 +591,10 @@ export default function DiningRestaurants() {
                         <button
                           key={option.id || "relevance"}
                           onClick={() => setSortBy(option.id)}
-                          className={`px-4 py-3 rounded-xl border text-left transition-colors ${
-                            sortBy === option.id
+                          className={`px-4 py-3 rounded-xl border text-left transition-colors ${sortBy === option.id
                               ? "border-green-500 bg-green-50"
                               : "border-gray-200 hover:border-green-500"
-                          }`}
+                            }`}
                         >
                           <span
                             className={`text-sm font-medium ${sortBy === option.id ? "text-green-600" : "text-gray-700"}`}
@@ -619,11 +616,10 @@ export default function DiningRestaurants() {
                     <div className="grid grid-cols-2 gap-3">
                       <button
                         onClick={() => toggleFilter("delivery-under-30")}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${
-                          activeFilters.has("delivery-under-30")
+                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has("delivery-under-30")
                             ? "border-green-500 bg-green-50"
                             : "border-gray-200 hover:border-green-500"
-                        }`}
+                          }`}
                       >
                         <Timer
                           className={`h-6 w-6 ${activeFilters.has("delivery-under-30") ? "text-green-600" : "text-gray-600"}`}
@@ -637,11 +633,10 @@ export default function DiningRestaurants() {
                       </button>
                       <button
                         onClick={() => toggleFilter("delivery-under-45")}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${
-                          activeFilters.has("delivery-under-45")
+                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has("delivery-under-45")
                             ? "border-green-500 bg-green-50"
                             : "border-gray-200 hover:border-green-500"
-                        }`}
+                          }`}
                       >
                         <Timer
                           className={`h-6 w-6 ${activeFilters.has("delivery-under-45") ? "text-green-600" : "text-gray-600"}`}
@@ -666,11 +661,10 @@ export default function DiningRestaurants() {
                     <div className="grid grid-cols-2 gap-3">
                       <button
                         onClick={() => toggleFilter("rating-35-plus")}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${
-                          activeFilters.has("rating-35-plus")
+                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has("rating-35-plus")
                             ? "border-green-500 bg-green-50"
                             : "border-gray-200 hover:border-green-500"
-                        }`}
+                          }`}
                       >
                         <Star
                           className={`h-6 w-6 ${activeFilters.has("rating-35-plus") ? "text-green-600 fill-green-600" : "text-gray-400"}`}
@@ -683,11 +677,10 @@ export default function DiningRestaurants() {
                       </button>
                       <button
                         onClick={() => toggleFilter("rating-4-plus")}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${
-                          activeFilters.has("rating-4-plus")
+                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has("rating-4-plus")
                             ? "border-green-500 bg-green-50"
                             : "border-gray-200 hover:border-green-500"
-                        }`}
+                          }`}
                       >
                         <Star
                           className={`h-6 w-6 ${activeFilters.has("rating-4-plus") ? "text-green-600 fill-green-600" : "text-gray-400"}`}
@@ -700,11 +693,10 @@ export default function DiningRestaurants() {
                       </button>
                       <button
                         onClick={() => toggleFilter("rating-45-plus")}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${
-                          activeFilters.has("rating-45-plus")
+                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has("rating-45-plus")
                             ? "border-green-500 bg-green-50"
                             : "border-gray-200 hover:border-green-500"
-                        }`}
+                          }`}
                       >
                         <Star
                           className={`h-6 w-6 ${activeFilters.has("rating-45-plus") ? "text-green-600 fill-green-600" : "text-gray-400"}`}
@@ -728,11 +720,10 @@ export default function DiningRestaurants() {
                     <div className="grid grid-cols-2 gap-3">
                       <button
                         onClick={() => toggleFilter("distance-under-1km")}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${
-                          activeFilters.has("distance-under-1km")
+                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has("distance-under-1km")
                             ? "border-green-500 bg-green-50"
                             : "border-gray-200 hover:border-green-500"
-                        }`}
+                          }`}
                       >
                         <MapPin
                           className={`h-6 w-6 ${activeFilters.has("distance-under-1km") ? "text-green-600" : "text-gray-600"}`}
@@ -746,11 +737,10 @@ export default function DiningRestaurants() {
                       </button>
                       <button
                         onClick={() => toggleFilter("distance-under-2km")}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${
-                          activeFilters.has("distance-under-2km")
+                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has("distance-under-2km")
                             ? "border-green-500 bg-green-50"
                             : "border-gray-200 hover:border-green-500"
-                        }`}
+                          }`}
                       >
                         <MapPin
                           className={`h-6 w-6 ${activeFilters.has("distance-under-2km") ? "text-green-600" : "text-gray-600"}`}
@@ -775,11 +765,10 @@ export default function DiningRestaurants() {
                     <div className="flex flex-col gap-3">
                       <button
                         onClick={() => toggleFilter("price-under-200")}
-                        className={`px-4 py-3 rounded-xl border text-left transition-colors ${
-                          activeFilters.has("price-under-200")
+                        className={`px-4 py-3 rounded-xl border text-left transition-colors ${activeFilters.has("price-under-200")
                             ? "border-green-500 bg-green-50"
                             : "border-gray-200 hover:border-green-500"
-                        }`}
+                          }`}
                       >
                         <span
                           className={`text-sm font-medium ${activeFilters.has("price-under-200") ? "text-green-600" : "text-gray-700"}`}
@@ -789,11 +778,10 @@ export default function DiningRestaurants() {
                       </button>
                       <button
                         onClick={() => toggleFilter("price-under-500")}
-                        className={`px-4 py-3 rounded-xl border text-left transition-colors ${
-                          activeFilters.has("price-under-500")
+                        className={`px-4 py-3 rounded-xl border text-left transition-colors ${activeFilters.has("price-under-500")
                             ? "border-green-500 bg-green-50"
                             : "border-gray-200 hover:border-green-500"
-                        }`}
+                          }`}
                       >
                         <span
                           className={`text-sm font-medium ${activeFilters.has("price-under-500") ? "text-green-600" : "text-gray-700"}`}
@@ -829,11 +817,10 @@ export default function DiningRestaurants() {
                               selectedCuisine === cuisine ? null : cuisine,
                             )
                           }
-                          className={`px-4 py-3 rounded-xl border text-center transition-colors ${
-                            selectedCuisine === cuisine
+                          className={`px-4 py-3 rounded-xl border text-center transition-colors ${selectedCuisine === cuisine
                               ? "border-green-500 bg-green-50"
                               : "border-gray-200 hover:border-green-500"
-                          }`}
+                            }`}
                         >
                           <span
                             className={`text-sm font-medium ${selectedCuisine === cuisine ? "text-green-600" : "text-gray-700"}`}
@@ -858,11 +845,10 @@ export default function DiningRestaurants() {
               </button>
               <button
                 onClick={() => setIsFilterOpen(false)}
-                className={`flex-1 py-3 font-semibold rounded-xl transition-colors ${
-                  activeFilters.size > 0 || sortBy || selectedCuisine
+                className={`flex-1 py-3 font-semibold rounded-xl transition-colors ${activeFilters.size > 0 || sortBy || selectedCuisine
                     ? "bg-green-600 text-white hover:bg-green-700"
                     : "bg-gray-200 text-gray-500"
-                }`}
+                  }`}
               >
                 {activeFilters.size > 0 || sortBy || selectedCuisine
                   ? `Show ${filteredRestaurants.length} results`

@@ -245,21 +245,21 @@ export default function Profile() {
 
     const fromArray = Array.isArray(components)
       ? {
-          city:
-            components.find((c) => c.types?.includes("locality"))?.long_name ||
-            components.find((c) => c.types?.includes("administrative_area_level_2"))?.long_name ||
-            "",
-          state:
-            components.find((c) => c.types?.includes("administrative_area_level_1"))?.long_name ||
-            "",
-          zipCode:
-            components.find((c) => c.types?.includes("postal_code"))?.long_name || "",
-        }
+        city:
+          components.find((c) => c.types?.includes("locality"))?.long_name ||
+          components.find((c) => c.types?.includes("administrative_area_level_2"))?.long_name ||
+          "",
+        state:
+          components.find((c) => c.types?.includes("administrative_area_level_1"))?.long_name ||
+          "",
+        zipCode:
+          components.find((c) => c.types?.includes("postal_code"))?.long_name || "",
+      }
       : {
-          city: components.city || "",
-          state: components.state || "",
-          zipCode: components.zipCode || components.postal_code || "",
-        };
+        city: components.city || "",
+        state: components.state || "",
+        zipCode: components.zipCode || components.postal_code || "",
+      };
 
     const formattedAddress = firstResult?.formatted_address || "";
     const parts = formattedAddress.split(",").map((item) => item.trim()).filter(Boolean);
@@ -477,7 +477,7 @@ export default function Profile() {
 
   return (
     <AnimatedPage className="min-h-screen bg-[#f5f5f5] dark:bg-[#0a0a0a]">
-      <div className="max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 pt-4 pb-36 sm:pt-6 sm:pb-36 md:py-8 lg:py-10">
+      <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 pt-4 pb-36 sm:pt-6 sm:pb-36 md:pt-20 lg:pt-24 md:pb-6 lg:pb-8">
         {/* Back Arrow */}
         <div className="mb-4">
           <Button
@@ -1134,11 +1134,10 @@ export default function Profile() {
                 <button
                   key={label}
                   type="button"
-                  className={`h-9 rounded-lg text-sm font-medium border ${
-                    addressForm.label === label
-                      ? "border-[#EF4F5F] bg-[#EF4F5F]/10 text-[#EF4F5F]"
-                      : "border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300"
-                  }`}
+                  className={`h-9 rounded-lg text-sm font-medium border ${addressForm.label === label
+                    ? "border-[#EF4F5F] bg-[#EF4F5F]/10 text-[#EF4F5F]"
+                    : "border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300"
+                    }`}
                   onClick={() => setAddressForm((prev) => ({ ...prev, label }))}
                 >
                   {label}

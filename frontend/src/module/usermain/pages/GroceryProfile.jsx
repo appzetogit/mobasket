@@ -147,192 +147,196 @@ const GroceryProfile = () => {
   return (
     <div className="min-h-screen bg-[#F7F9FB] dark:bg-[#0a0a0a] text-slate-900 dark:text-slate-100 font-sans pb-10">
       {/* --- HEADER --- */}
-      <div className="bg-gradient-to-b from-[#FFF9C4] to-[#F7F9FB] dark:from-[#1b1b1b] dark:to-[#0a0a0a] pt-4 pb-8 px-4 relative">
-        <div className="flex items-center gap-4 mb-6">
-          <button
-            onClick={() => navigate(-1)}
-            className="w-10 h-10 bg-white dark:bg-[#1a1a1a] rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-transform"
-          >
-            <ArrowLeft size={20} className="text-slate-800 dark:text-slate-100" />
-          </button>
-          <h1 className="text-[18px] font-bold text-slate-800 dark:text-slate-100">Profile</h1>
-        </div>
-
-        {/* User Card */}
-        <div className="flex flex-col items-center mb-6">
-          <div className="w-24 h-24 bg-white dark:bg-[#1a1a1a] rounded-full flex items-center justify-center shadow-md mb-3 border-4 border-white dark:border-[#1a1a1a] overflow-hidden">
-            <div className="w-full h-full bg-slate-100 dark:bg-[#2a2a2a] flex items-center justify-center">
-              {userProfile?.profileImage ? (
-                <img
-                  src={userProfile.profileImage}
-                  alt={displayName}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <span className="text-3xl font-black text-slate-300 dark:text-slate-600">
-                  {avatarInitial}
-                </span>
-              )}
-            </div>
+      <div className="bg-gradient-to-b from-[#FFF9C4] to-[#F7F9FB] dark:from-[#1b1b1b] dark:to-[#0a0a0a] relative">
+        <div className="pt-4 pb-8 px-4 md:max-w-6xl md:mx-auto w-full">
+          <div className="flex items-center gap-4 mb-6">
+            <button
+              onClick={() => navigate(-1)}
+              className="w-10 h-10 bg-white dark:bg-[#1a1a1a] rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+            >
+              <ArrowLeft size={20} className="text-slate-800 dark:text-slate-100" />
+            </button>
+            <h1 className="text-[18px] font-bold text-slate-800 dark:text-slate-100">Profile</h1>
           </div>
-          <h2 className="text-[24px] font-black text-slate-900 dark:text-slate-100 tracking-tight">
-            {displayName}
-          </h2>
-          <p className="text-slate-500 dark:text-slate-400 font-bold tracking-wide">
-            {displayPhone}
-          </p>
-        </div>
 
-        {/* Birthday Banner */}
-        {!hasBirthday && (
-          <motion.div
-            whileHover={{ scale: 1.01 }}
-            onClick={() => navigate("/profile/edit")}
-            className="bg-gradient-to-r from-[#FFFDE7] to-[#FFF9C4] rounded-2xl p-4 flex items-center justify-between shadow-sm border border-yellow-100 mx-1 cursor-pointer"
-          >
-            <div className="flex-1">
-              <h4 className="font-bold text-slate-800 dark:text-slate-100 tracking-tight">
-                Add your birthday
-              </h4>
-              <div className="flex items-center gap-1 mt-1">
-                <span className="text-green-600 font-bold text-xs uppercase tracking-wider">
-                  Enter details
-                </span>
-                <ChevronRight size={12} className="text-green-600 stroke-[3]" />
+          {/* User Card */}
+          <div className="flex flex-col items-center mb-6">
+            <div className="w-24 h-24 bg-white dark:bg-[#1a1a1a] rounded-full flex items-center justify-center shadow-md mb-3 border-4 border-white dark:border-[#1a1a1a] overflow-hidden">
+              <div className="w-full h-full bg-slate-100 dark:bg-[#2a2a2a] flex items-center justify-center">
+                {userProfile?.profileImage ? (
+                  <img
+                    src={userProfile.profileImage}
+                    alt={displayName}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-3xl font-black text-slate-300 dark:text-slate-600">
+                    {avatarInitial}
+                  </span>
+                )}
               </div>
             </div>
-            <div className="w-16 h-16 flex items-center justify-center bg-white/50 dark:bg-white/10 rounded-xl overflow-hidden">
-              <span className="text-4xl animate-bounce">🎂</span>
-            </div>
-          </motion.div>
-        )}
+            <h2 className="text-[24px] font-black text-slate-900 dark:text-slate-100 tracking-tight">
+              {displayName}
+            </h2>
+            <p className="text-slate-500 dark:text-slate-400 font-bold tracking-wide">
+              {displayPhone}
+            </p>
+          </div>
+
+          {/* Birthday Banner */}
+          {!hasBirthday && (
+            <motion.div
+              whileHover={{ scale: 1.01 }}
+              onClick={() => navigate("/profile/edit")}
+              className="bg-gradient-to-r from-[#FFFDE7] to-[#FFF9C4] rounded-2xl p-4 flex items-center justify-between shadow-sm border border-yellow-100 mx-1 cursor-pointer"
+            >
+              <div className="flex-1">
+                <h4 className="font-bold text-slate-800 dark:text-slate-100 tracking-tight">
+                  Add your birthday
+                </h4>
+                <div className="flex items-center gap-1 mt-1">
+                  <span className="text-green-600 font-bold text-xs uppercase tracking-wider">
+                    Enter details
+                  </span>
+                  <ChevronRight size={12} className="text-green-600 stroke-[3]" />
+                </div>
+              </div>
+              <div className="w-16 h-16 flex items-center justify-center bg-white/50 dark:bg-white/10 rounded-xl overflow-hidden">
+                <span className="text-4xl animate-bounce">🎂</span>
+              </div>
+            </motion.div>
+          )}
+        </div>
       </div>
 
-      {/* --- QUICK ACTIONS --- */}
-      <div className="px-4 -mt-4 grid grid-cols-3 gap-3 mb-6">
-        {[
-          {
-            icon: ShoppingBag,
-            label: "Your orders",
-            bg: "bg-white dark:bg-[#1a1a1a]",
-            color: "text-blue-500",
-            onClick: () => navigate("/orders"),
-          },
-          {
-            icon: Wallet,
-            label: "MoBasket Money",
-            bg: "bg-white dark:bg-[#1a1a1a]",
-            color: "text-orange-500",
-            onClick: () => navigate("/wallet"),
-          },
-          {
-            icon: Headphones,
-            label: "Need help?",
-            bg: "bg-white dark:bg-[#1a1a1a]",
-            color: "text-slate-700",
-            onClick: () => navigate("/help"),
-          },
-        ].map((item, idx) => (
-          <motion.div
-            key={idx}
-            whileTap={{ scale: 0.95 }}
-            onClick={item.onClick}
-            className={`${item.bg} rounded-2xl p-4 flex flex-col items-center justify-center shadow-sm border border-slate-100 cursor-pointer`}
-          >
-            <div className={`${item.color} mb-2`}>
-              <item.icon size={24} />
-            </div>
-            <span className="text-[12px] font-bold text-slate-800 dark:text-slate-100 text-center leading-tight">
-              {item.label}
-            </span>
-          </motion.div>
-        ))}
-      </div>
+      <div className="md:max-w-6xl md:mx-auto w-full">
+        {/* --- QUICK ACTIONS --- */}
+        <div className="px-4 -mt-4 grid grid-cols-3 gap-3 mb-6">
+          {[
+            {
+              icon: ShoppingBag,
+              label: "Your orders",
+              bg: "bg-white dark:bg-[#1a1a1a]",
+              color: "text-blue-500",
+              onClick: () => navigate("/orders"),
+            },
+            {
+              icon: Wallet,
+              label: "MoBasket Money",
+              bg: "bg-white dark:bg-[#1a1a1a]",
+              color: "text-orange-500",
+              onClick: () => navigate("/wallet"),
+            },
+            {
+              icon: Headphones,
+              label: "Need help?",
+              bg: "bg-white dark:bg-[#1a1a1a]",
+              color: "text-slate-700",
+              onClick: () => navigate("/help"),
+            },
+          ].map((item, idx) => (
+            <motion.div
+              key={idx}
+              whileTap={{ scale: 0.95 }}
+              onClick={item.onClick}
+              className={`${item.bg} rounded-2xl p-4 flex flex-col items-center justify-center shadow-sm border border-slate-100 cursor-pointer`}
+            >
+              <div className={`${item.color} mb-2`}>
+                <item.icon size={24} />
+              </div>
+              <span className="text-[12px] font-bold text-slate-800 dark:text-slate-100 text-center leading-tight">
+                {item.label}
+              </span>
+            </motion.div>
+          ))}
+        </div>
 
-      {/* --- MENU SECTIONS --- */}
+        {/* --- MENU SECTIONS --- */}
 
-      <div className="bg-white dark:bg-[#1a1a1a] mx-4 rounded-3xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-800 mb-6 font-sans">
-        <MenuItem
-          icon={Moon}
-          title="Appearance"
-          onClick={() =>
-            setAppearance(appearance === "light" ? "dark" : "light")
-          }
-          rightElement={
-            <span className="text-blue-600 text-[10px] font-black uppercase tracking-wider">
-              {appearance}
-            </span>
-          }
-        />
-      </div>
+        <div className="bg-white dark:bg-[#1a1a1a] mx-4 rounded-3xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-800 mb-6 font-sans">
+          <MenuItem
+            icon={Moon}
+            title="Appearance"
+            onClick={() =>
+              setAppearance(appearance === "light" ? "dark" : "light")
+            }
+            rightElement={
+              <span className="text-blue-600 text-[10px] font-black uppercase tracking-wider">
+                {appearance}
+              </span>
+            }
+          />
+        </div>
 
-      <div className="bg-white dark:bg-[#1a1a1a] mx-4 rounded-3xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-800 mb-6">
-        <SectionTitle title="Your information" />
-        <MenuItem
-          icon={MapPin}
-          title="Address book"
-          onClick={() => navigate("/profile")}
-        />
-        <MenuItem
-          icon={Bookmark}
-          title="Bookmarked recipes"
-          onClick={() => navigate("/profile/favorites")}
-        />
-        <MenuItem
-          icon={Heart}
-          title="Your wishlist"
-          onClick={() => navigate("/wishlist")}
-        />
-        <MenuItem
-          icon={FileText}
-          title="GST details"
-          onClick={() => navigate("/profile/edit")}
-        />
-        <MenuItem
-          icon={Gift}
-          title="E-gift cards"
-          onClick={() => navigate("/gift-card")}
-        />
-      </div>
+        <div className="bg-white dark:bg-[#1a1a1a] mx-4 rounded-3xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-800 mb-6">
+          <SectionTitle title="Your information" />
+          <MenuItem
+            icon={MapPin}
+            title="Address book"
+            onClick={() => navigate("/profile")}
+          />
+          <MenuItem
+            icon={Bookmark}
+            title="Bookmarked recipes"
+            onClick={() => navigate("/profile/favorites")}
+          />
+          <MenuItem
+            icon={Heart}
+            title="Your wishlist"
+            onClick={() => navigate("/wishlist")}
+          />
+          <MenuItem
+            icon={FileText}
+            title="GST details"
+            onClick={() => navigate("/profile/edit")}
+          />
+          <MenuItem
+            icon={Gift}
+            title="E-gift cards"
+            onClick={() => navigate("/gift-card")}
+          />
+        </div>
 
-      <div className="bg-white dark:bg-[#1a1a1a] mx-4 rounded-3xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-800 mb-6">
-        <SectionTitle title="Payment and coupons" />
-        <MenuItem
-          icon={Wallet}
-          title="Wallet"
-          onClick={() => navigate("/wallet")}
-        />
-        <MenuItem
-          icon={Wallet}
-          title="MoBasket Money"
-          subtitle={`Balance: ₹${walletBalance}`}
-          onClick={() => navigate("/wallet")}
-        />
-        <MenuItem
-          icon={CreditCard}
-          title="Payment settings"
-          onClick={() => navigate("/profile/payments")}
-        />
-        <MenuItem
-          icon={Ticket}
-          title="Claim Gift card"
-          onClick={() => navigate("/gift-card")}
-        />
-        <MenuItem icon={Trophy} title="Your collected rewards" />
-      </div>
+        <div className="bg-white dark:bg-[#1a1a1a] mx-4 rounded-3xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-800 mb-6">
+          <SectionTitle title="Payment and coupons" />
+          <MenuItem
+            icon={Wallet}
+            title="Wallet"
+            onClick={() => navigate("/wallet")}
+          />
+          <MenuItem
+            icon={Wallet}
+            title="MoBasket Money"
+            subtitle={`Balance: ₹${walletBalance}`}
+            onClick={() => navigate("/wallet")}
+          />
+          <MenuItem
+            icon={CreditCard}
+            title="Payment settings"
+            onClick={() => navigate("/profile/payments")}
+          />
+          <MenuItem
+            icon={Ticket}
+            title="Claim Gift card"
+            onClick={() => navigate("/gift-card")}
+          />
+          <MenuItem icon={Trophy} title="Your collected rewards" />
+        </div>
 
-      <div className="bg-white dark:bg-[#1a1a1a] mx-4 rounded-3xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-800 mb-8">
-        <SectionTitle title="Other Information" />
-        <MenuItem icon={Share2} title="Share the app" onClick={handleShareApp} />
-        <MenuItem icon={Info} title="About us" onClick={() => navigate("/profile/about")} />
-        <MenuItem icon={Lock} title="Account privacy" onClick={() => navigate("/profile/privacy")} />
-        <MenuItem icon={Bell} title="Notification preferences" onClick={() => navigate("/profile/settings")} />
-        <MenuItem
-          icon={LogOut}
-          title="Log out"
-          color="text-red-500"
-          onClick={handleLogout}
-        />
+        <div className="bg-white dark:bg-[#1a1a1a] mx-4 rounded-3xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-800 mb-8">
+          <SectionTitle title="Other Information" />
+          <MenuItem icon={Share2} title="Share the app" onClick={handleShareApp} />
+          <MenuItem icon={Info} title="About us" onClick={() => navigate("/profile/about")} />
+          <MenuItem icon={Lock} title="Account privacy" onClick={() => navigate("/profile/privacy")} />
+          <MenuItem icon={Bell} title="Notification preferences" onClick={() => navigate("/profile/settings")} />
+          <MenuItem
+            icon={LogOut}
+            title="Log out"
+            color="text-red-500"
+            onClick={handleLogout}
+          />
+        </div>
       </div>
     </div>
   );

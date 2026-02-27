@@ -430,15 +430,15 @@ export default function CategoryPage() {
               const coverImages =
                 restaurant.coverImages && restaurant.coverImages.length > 0
                   ? restaurant.coverImages
-                      .map((img) => img.url || img)
-                      .filter(Boolean)
+                    .map((img) => img.url || img)
+                    .filter(Boolean)
                   : [];
 
               const fallbackImages =
                 restaurant.menuImages && restaurant.menuImages.length > 0
                   ? restaurant.menuImages
-                      .map((img) => img.url || img)
-                      .filter(Boolean)
+                    .map((img) => img.url || img)
+                    .filter(Boolean)
                   : [];
 
               const allImages =
@@ -515,8 +515,8 @@ export default function CategoryPage() {
                         featuredPrice =
                           discountPercent > 0
                             ? Math.round(
-                                originalPrice * (1 - discountPercent / 100),
-                              )
+                              originalPrice * (1 - discountPercent / 100),
+                            )
                             : originalPrice;
                       }
                       break;
@@ -834,9 +834,9 @@ export default function CategoryPage() {
     >
       {/* Sticky Header */}
       <div className="sticky top-0 z-20 bg-white dark:bg-[#1a1a1a] shadow-sm">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-[1100px] mx-auto">
           {/* Search Bar with Back Button */}
-          <div className="flex items-center gap-2 px-3 md:px-6 py-3 border-b border-gray-100 dark:border-gray-800">
+          <div className="flex items-center gap-2 px-3 md:px-6 lg:px-8 xl:px-0 py-3 border-b border-gray-100 dark:border-gray-800">
             <button
               onClick={() => navigate("/user")}
               className="w-9 h-9 flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors flex-shrink-0"
@@ -861,7 +861,7 @@ export default function CategoryPage() {
           {/* Browse Category Section */}
           <div
             ref={categoryScrollRef}
-            className="flex gap-4 md:gap-6 overflow-x-auto scrollbar-hide px-4 md:px-6 py-3 bg-white dark:bg-[#1a1a1a] border-b border-gray-100 dark:border-gray-800"
+            className="flex gap-4 md:gap-6 overflow-x-auto scrollbar-hide px-4 md:px-6 lg:px-8 xl:px-0 py-3 bg-white dark:bg-[#1a1a1a] border-b border-gray-100 dark:border-gray-800"
             style={{
               scrollbarWidth: "none",
               msOverflowStyle: "none",
@@ -884,17 +884,15 @@ export default function CategoryPage() {
                   <button
                     key={cat.id || cat.slug || `category-${index}`}
                     onClick={() => handleCategorySelect(cat)}
-                    className={`flex flex-col items-center gap-1.5 flex-shrink-0 pb-2 transition-all ${
-                      isSelected ? "border-b-2 border-green-600" : ""
-                    }`}
+                    className={`flex flex-col items-center gap-1.5 flex-shrink-0 pb-2 transition-all ${isSelected ? "border-b-2 border-green-600" : ""
+                      }`}
                   >
                     {cat.image ? (
                       <div
-                        className={`w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 transition-all ${
-                          isSelected
-                            ? "border-green-600 shadow-lg"
-                            : "border-transparent"
-                        }`}
+                        className={`w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 transition-all ${isSelected
+                          ? "border-green-600 shadow-lg"
+                          : "border-transparent"
+                          }`}
                       >
                         <img
                           src={cat.image}
@@ -910,21 +908,19 @@ export default function CategoryPage() {
                       </div>
                     ) : (
                       <div
-                        className={`w-16 h-16 md:w-20 md:h-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center border-2 transition-all ${
-                          isSelected
-                            ? "border-green-600 shadow-lg bg-green-50 dark:bg-green-900/20"
-                            : "border-transparent"
-                        }`}
+                        className={`w-16 h-16 md:w-20 md:h-20 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center border-2 transition-all ${isSelected
+                          ? "border-green-600 shadow-lg bg-green-50 dark:bg-green-900/20"
+                          : "border-transparent"
+                          }`}
                       >
                         <span className="text-xl md:text-2xl">🍽️</span>
                       </div>
                     )}
                     <span
-                      className={`text-xs md:text-sm font-medium whitespace-nowrap ${
-                        isSelected
-                          ? "text-green-700 dark:text-green-400"
-                          : "text-gray-600 dark:text-gray-400"
-                      }`}
+                      className={`text-xs md:text-sm font-medium whitespace-nowrap ${isSelected
+                        ? "text-green-700 dark:text-green-400"
+                        : "text-gray-600 dark:text-gray-400"
+                        }`}
                     >
                       {cat.name}
                     </span>
@@ -944,8 +940,8 @@ export default function CategoryPage() {
 
       {/* Filters */}
       <div className="bg-white dark:bg-[#1a1a1a] border-b border-gray-100 dark:border-gray-800">
-        <div className="max-w-7xl mx-auto">
-          <div className="flex flex-col md:flex-row md:flex-wrap gap-2 px-4 md:px-6 py-3">
+        <div className="max-w-[1100px] mx-auto">
+          <div className="flex flex-col md:flex-row md:flex-wrap gap-2 px-4 md:px-6 lg:px-8 xl:px-0 py-3">
             {/* Row 1 */}
             <div
               className="flex items-center gap-2 overflow-x-auto md:overflow-x-visible scrollbar-hide pb-1 md:pb-0"
@@ -976,11 +972,10 @@ export default function CategoryPage() {
                     key={filter.id}
                     variant="outline"
                     onClick={() => toggleFilter(filter.id)}
-                    className={`h-7 md:h-8 px-2.5 md:px-3 rounded-md flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all ${
-                      isActive
-                        ? "bg-green-600 text-white border border-green-600 hover:bg-green-600/90"
-                        : "bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800"
-                    }`}
+                    className={`h-7 md:h-8 px-2.5 md:px-3 rounded-md flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all ${isActive
+                      ? "bg-green-600 text-white border border-green-600 hover:bg-green-600/90"
+                      : "bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      }`}
                   >
                     <span
                       className={`text-xs md:text-sm text-black dark:text-white font-bold ${isActive ? "text-white" : "text-black dark:text-white"}`}
@@ -1013,11 +1008,10 @@ export default function CategoryPage() {
                     key={filter.id}
                     variant="outline"
                     onClick={() => toggleFilter(filter.id)}
-                    className={`h-7 md:h-8 px-2.5 md:px-3 rounded-md flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all ${
-                      isActive
-                        ? "bg-green-600 text-white border border-green-600 hover:bg-green-600/90"
-                        : "bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800"
-                    }`}
+                    className={`h-7 md:h-8 px-2.5 md:px-3 rounded-md flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-all ${isActive
+                      ? "bg-green-600 text-white border border-green-600 hover:bg-green-600/90"
+                      : "bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800"
+                      }`}
                   >
                     {Icon && (
                       <Icon
@@ -1038,8 +1032,8 @@ export default function CategoryPage() {
       </div>
 
       {/* Content */}
-      <div className="px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4 sm:py-6 md:py-8 lg:py-10 space-y-6 md:space-y-8 lg:space-y-10">
-        <div className="max-w-7xl mx-auto">
+      <div className="px-4 sm:px-6 md:px-6 lg:px-8 xl:px-0 py-4 sm:py-6 md:py-8 lg:py-10 space-y-6 md:space-y-8 lg:space-y-10">
+        <div className="max-w-[1100px] mx-auto">
           {/* RECOMMENDED FOR YOU Section - Show only on "All" category */}
           {filteredRecommended.length > 0 && selectedCategory === "all" && (
             <section>
@@ -1182,9 +1176,8 @@ export default function CategoryPage() {
                     className="h-full flex"
                   >
                     <Card
-                      className={`overflow-hidden cursor-pointer gap-0 border border-gray-100 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] shadow-sm hover:shadow-md transition-all duration-300 py-0 rounded-[20px] h-full flex flex-col w-full ${
-                        shouldShowGrayscale ? "grayscale opacity-75" : ""
-                      }`}
+                      className={`overflow-hidden cursor-pointer gap-0 border border-gray-100 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] shadow-sm hover:shadow-md transition-all duration-300 py-0 rounded-[20px] h-full flex flex-col w-full ${shouldShowGrayscale ? "grayscale opacity-75" : ""
+                        }`}
                     >
                       {/* Image Section */}
                       <div className="relative aspect-[16/9] w-full overflow-hidden rounded-t-[20px] flex-shrink-0">
@@ -1234,16 +1227,16 @@ export default function CategoryPage() {
                         {/* Category Dish Badge - Top Left */}
                         {(restaurant.categoryDishName ||
                           restaurant.featuredDish) && (
-                          <div className="absolute top-3 left-3 z-10">
-                            <div className="bg-black/60 backdrop-blur-sm text-white px-2 py-1 rounded-md text-[10px] sm:text-xs font-medium border border-white/20">
-                              {restaurant.categoryDishName ||
-                                restaurant.featuredDish}{" "}
-                              · ₹
-                              {restaurant.categoryDishPrice ||
-                                restaurant.featuredPrice}
+                            <div className="absolute top-3 left-3 z-10">
+                              <div className="bg-black/60 backdrop-blur-sm text-white px-2 py-1 rounded-md text-[10px] sm:text-xs font-medium border border-white/20">
+                                {restaurant.categoryDishName ||
+                                  restaurant.featuredDish}{" "}
+                                · ₹
+                                {restaurant.categoryDishPrice ||
+                                  restaurant.featuredPrice}
+                              </div>
                             </div>
-                          </div>
-                        )}
+                          )}
 
                         {/* Ad Badge */}
                         {restaurant.isAd && (
@@ -1405,11 +1398,10 @@ export default function CategoryPage() {
                                 });
                               }
                             }}
-                            className={`flex flex-col items-center gap-1 py-4 px-2 text-center relative transition-colors ${
-                              isActive
-                                ? "bg-white dark:bg-[#1a1a1a] text-green-600 dark:text-green-400"
-                                : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
-                            }`}
+                            className={`flex flex-col items-center gap-1 py-4 px-2 text-center relative transition-colors ${isActive
+                              ? "bg-white dark:bg-[#1a1a1a] text-green-600 dark:text-green-400"
+                              : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                              }`}
                           >
                             {isActive && (
                               <div className="absolute left-0 top-0 bottom-0 w-1 bg-green-600 rounded-r" />
@@ -1451,11 +1443,10 @@ export default function CategoryPage() {
                             <button
                               key={option.id || "relevance"}
                               onClick={() => setSortBy(option.id)}
-                              className={`px-4 md:px-5 py-3 md:py-4 rounded-xl border text-left transition-colors ${
-                                sortBy === option.id
-                                  ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                                  : "border-gray-200 dark:border-gray-700 hover:border-green-600"
-                              }`}
+                              className={`px-4 md:px-5 py-3 md:py-4 rounded-xl border text-left transition-colors ${sortBy === option.id
+                                ? "border-green-600 bg-green-50 dark:bg-green-900/20"
+                                : "border-gray-200 dark:border-gray-700 hover:border-green-600"
+                                }`}
                             >
                               <span
                                 className={`text-sm md:text-base font-medium ${sortBy === option.id ? "text-green-600 dark:text-green-400" : "text-gray-700 dark:text-gray-300"}`}
@@ -1479,11 +1470,10 @@ export default function CategoryPage() {
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                           <button
                             onClick={() => toggleFilter("under-30-mins")}
-                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${
-                              activeFilters.has("under-30-mins")
-                                ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                                : "border-gray-200 dark:border-gray-700 hover:border-green-600"
-                            }`}
+                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${activeFilters.has("under-30-mins")
+                              ? "border-green-600 bg-green-50 dark:bg-green-900/20"
+                              : "border-gray-200 dark:border-gray-700 hover:border-green-600"
+                              }`}
                           >
                             <Timer
                               className={`h-6 w-6 md:h-7 md:w-7 ${activeFilters.has("under-30-mins") ? "text-green-600 dark:text-green-400" : "text-gray-600 dark:text-gray-400"}`}
@@ -1497,11 +1487,10 @@ export default function CategoryPage() {
                           </button>
                           <button
                             onClick={() => toggleFilter("delivery-under-45")}
-                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${
-                              activeFilters.has("delivery-under-45")
-                                ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                                : "border-gray-200 dark:border-gray-700 hover:border-green-600"
-                            }`}
+                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${activeFilters.has("delivery-under-45")
+                              ? "border-green-600 bg-green-50 dark:bg-green-900/20"
+                              : "border-gray-200 dark:border-gray-700 hover:border-green-600"
+                              }`}
                           >
                             <Timer
                               className={`h-6 w-6 md:h-7 md:w-7 ${activeFilters.has("delivery-under-45") ? "text-green-600 dark:text-green-400" : "text-gray-600 dark:text-gray-400"}`}
@@ -1528,11 +1517,10 @@ export default function CategoryPage() {
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                           <button
                             onClick={() => toggleFilter("rating-35-plus")}
-                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${
-                              activeFilters.has("rating-35-plus")
-                                ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                                : "border-gray-200 dark:border-gray-700 hover:border-green-600"
-                            }`}
+                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${activeFilters.has("rating-35-plus")
+                              ? "border-green-600 bg-green-50 dark:bg-green-900/20"
+                              : "border-gray-200 dark:border-gray-700 hover:border-green-600"
+                              }`}
                           >
                             <Star
                               className={`h-6 w-6 md:h-7 md:w-7 ${activeFilters.has("rating-35-plus") ? "text-green-600 fill-green-600 dark:text-green-400 dark:fill-green-400" : "text-gray-400 dark:text-gray-500"}`}
@@ -1545,11 +1533,10 @@ export default function CategoryPage() {
                           </button>
                           <button
                             onClick={() => toggleFilter("rating-4-plus")}
-                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${
-                              activeFilters.has("rating-4-plus")
-                                ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                                : "border-gray-200 dark:border-gray-700 hover:border-green-600"
-                            }`}
+                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${activeFilters.has("rating-4-plus")
+                              ? "border-green-600 bg-green-50 dark:bg-green-900/20"
+                              : "border-gray-200 dark:border-gray-700 hover:border-green-600"
+                              }`}
                           >
                             <Star
                               className={`h-6 w-6 md:h-7 md:w-7 ${activeFilters.has("rating-4-plus") ? "text-green-600 fill-green-600 dark:text-green-400 dark:fill-green-400" : "text-gray-400 dark:text-gray-500"}`}
@@ -1562,11 +1549,10 @@ export default function CategoryPage() {
                           </button>
                           <button
                             onClick={() => toggleFilter("rating-45-plus")}
-                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${
-                              activeFilters.has("rating-45-plus")
-                                ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                                : "border-gray-200 dark:border-gray-700 hover:border-green-600"
-                            }`}
+                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${activeFilters.has("rating-45-plus")
+                              ? "border-green-600 bg-green-50 dark:bg-green-900/20"
+                              : "border-gray-200 dark:border-gray-700 hover:border-green-600"
+                              }`}
                           >
                             <Star
                               className={`h-6 w-6 md:h-7 md:w-7 ${activeFilters.has("rating-45-plus") ? "text-green-600 fill-green-600 dark:text-green-400 dark:fill-green-400" : "text-gray-400 dark:text-gray-500"}`}
@@ -1594,11 +1580,10 @@ export default function CategoryPage() {
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                           <button
                             onClick={() => toggleFilter("distance-under-1km")}
-                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${
-                              activeFilters.has("distance-under-1km")
-                                ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                                : "border-gray-200 dark:border-gray-700 hover:border-green-600"
-                            }`}
+                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${activeFilters.has("distance-under-1km")
+                              ? "border-green-600 bg-green-50 dark:bg-green-900/20"
+                              : "border-gray-200 dark:border-gray-700 hover:border-green-600"
+                              }`}
                           >
                             <MapPin
                               className={`h-6 w-6 md:h-7 md:w-7 ${activeFilters.has("distance-under-1km") ? "text-green-600 dark:text-green-400" : "text-gray-600 dark:text-gray-400"}`}
@@ -1612,11 +1597,10 @@ export default function CategoryPage() {
                           </button>
                           <button
                             onClick={() => toggleFilter("distance-under-2km")}
-                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${
-                              activeFilters.has("distance-under-2km")
-                                ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                                : "border-gray-200 dark:border-gray-700 hover:border-green-600"
-                            }`}
+                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${activeFilters.has("distance-under-2km")
+                              ? "border-green-600 bg-green-50 dark:bg-green-900/20"
+                              : "border-gray-200 dark:border-gray-700 hover:border-green-600"
+                              }`}
                           >
                             <MapPin
                               className={`h-6 w-6 md:h-7 md:w-7 ${activeFilters.has("distance-under-2km") ? "text-green-600 dark:text-green-400" : "text-gray-600 dark:text-gray-400"}`}
@@ -1643,11 +1627,10 @@ export default function CategoryPage() {
                         <div className="flex flex-col gap-3 md:gap-4">
                           <button
                             onClick={() => toggleFilter("price-under-200")}
-                            className={`px-4 md:px-5 py-3 md:py-4 rounded-xl border text-left transition-colors ${
-                              activeFilters.has("price-under-200")
-                                ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                                : "border-gray-200 dark:border-gray-700 hover:border-green-600"
-                            }`}
+                            className={`px-4 md:px-5 py-3 md:py-4 rounded-xl border text-left transition-colors ${activeFilters.has("price-under-200")
+                              ? "border-green-600 bg-green-50 dark:bg-green-900/20"
+                              : "border-gray-200 dark:border-gray-700 hover:border-green-600"
+                              }`}
                           >
                             <span
                               className={`text-sm md:text-base font-medium ${activeFilters.has("price-under-200") ? "text-green-600 dark:text-green-400" : "text-gray-700 dark:text-gray-300"}`}
@@ -1657,11 +1640,10 @@ export default function CategoryPage() {
                           </button>
                           <button
                             onClick={() => toggleFilter("under-250")}
-                            className={`px-4 md:px-5 py-3 md:py-4 rounded-xl border text-left transition-colors ${
-                              activeFilters.has("under-250")
-                                ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                                : "border-gray-200 dark:border-gray-700 hover:border-green-600"
-                            }`}
+                            className={`px-4 md:px-5 py-3 md:py-4 rounded-xl border text-left transition-colors ${activeFilters.has("under-250")
+                              ? "border-green-600 bg-green-50 dark:bg-green-900/20"
+                              : "border-gray-200 dark:border-gray-700 hover:border-green-600"
+                              }`}
                           >
                             <span
                               className={`text-sm md:text-base font-medium ${activeFilters.has("under-250") ? "text-green-600 dark:text-green-400" : "text-gray-700 dark:text-gray-300"}`}
@@ -1671,11 +1653,10 @@ export default function CategoryPage() {
                           </button>
                           <button
                             onClick={() => toggleFilter("price-under-500")}
-                            className={`px-4 md:px-5 py-3 md:py-4 rounded-xl border text-left transition-colors ${
-                              activeFilters.has("price-under-500")
-                                ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                                : "border-gray-200 dark:border-gray-700 hover:border-green-600"
-                            }`}
+                            className={`px-4 md:px-5 py-3 md:py-4 rounded-xl border text-left transition-colors ${activeFilters.has("price-under-500")
+                              ? "border-green-600 bg-green-50 dark:bg-green-900/20"
+                              : "border-gray-200 dark:border-gray-700 hover:border-green-600"
+                              }`}
                           >
                             <span
                               className={`text-sm md:text-base font-medium ${activeFilters.has("price-under-500") ? "text-green-600 dark:text-green-400" : "text-gray-700 dark:text-gray-300"}`}
@@ -1718,11 +1699,10 @@ export default function CategoryPage() {
                                   selectedCuisine === cuisine ? null : cuisine,
                                 )
                               }
-                              className={`px-4 md:px-5 py-3 md:py-4 rounded-xl border text-center transition-colors ${
-                                selectedCuisine === cuisine
-                                  ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                                  : "border-gray-200 dark:border-gray-700 hover:border-green-600"
-                              }`}
+                              className={`px-4 md:px-5 py-3 md:py-4 rounded-xl border text-center transition-colors ${selectedCuisine === cuisine
+                                ? "border-green-600 bg-green-50 dark:bg-green-900/20"
+                                : "border-gray-200 dark:border-gray-700 hover:border-green-600"
+                                }`}
                             >
                               <span
                                 className={`text-sm md:text-base font-medium ${selectedCuisine === cuisine ? "text-green-600 dark:text-green-400" : "text-gray-700 dark:text-gray-300"}`}
@@ -1746,11 +1726,10 @@ export default function CategoryPage() {
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
                           <button
                             onClick={() => toggleFilter("flat-50-off")}
-                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${
-                              activeFilters.has("flat-50-off")
-                                ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                                : "border-gray-200 dark:border-gray-700 hover:border-green-600"
-                            }`}
+                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${activeFilters.has("flat-50-off")
+                              ? "border-green-600 bg-green-50 dark:bg-green-900/20"
+                              : "border-gray-200 dark:border-gray-700 hover:border-green-600"
+                              }`}
                           >
                             <BadgePercent
                               className={`h-6 w-6 md:h-7 md:w-7 ${activeFilters.has("flat-50-off") ? "text-green-600 dark:text-green-400" : "text-gray-600 dark:text-gray-400"}`}
@@ -1764,11 +1743,10 @@ export default function CategoryPage() {
                           </button>
                           <button
                             onClick={() => toggleFilter("price-match")}
-                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${
-                              activeFilters.has("price-match")
-                                ? "border-green-600 bg-green-50 dark:bg-green-900/20"
-                                : "border-gray-200 dark:border-gray-700 hover:border-green-600"
-                            }`}
+                            className={`flex flex-col items-center gap-2 p-4 md:p-5 rounded-xl border transition-colors ${activeFilters.has("price-match")
+                              ? "border-green-600 bg-green-50 dark:bg-green-900/20"
+                              : "border-gray-200 dark:border-gray-700 hover:border-green-600"
+                              }`}
                           >
                             <BadgePercent
                               className={`h-6 w-6 md:h-7 md:w-7 ${activeFilters.has("price-match") ? "text-green-600 dark:text-green-400" : "text-gray-600 dark:text-gray-400"}`}
@@ -1823,11 +1801,10 @@ export default function CategoryPage() {
                           setIsLoadingFilterResults(false);
                         }, 500);
                       }}
-                      className={`flex-1 py-3 md:py-4 font-semibold rounded-xl transition-colors text-sm md:text-base ${
-                        activeFilters.size > 0 || sortBy || selectedCuisine
-                          ? "bg-green-600 text-white hover:bg-green-700"
-                          : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
-                      }`}
+                      className={`flex-1 py-3 md:py-4 font-semibold rounded-xl transition-colors text-sm md:text-base ${activeFilters.size > 0 || sortBy || selectedCuisine
+                        ? "bg-green-600 text-white hover:bg-green-700"
+                        : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+                        }`}
                     >
                       {activeFilters.size > 0 || sortBy || selectedCuisine
                         ? "Show results"

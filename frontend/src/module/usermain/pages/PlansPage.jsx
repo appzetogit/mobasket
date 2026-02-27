@@ -203,8 +203,8 @@ const PlansPage = () => {
   const selectedPlanOfferIdsKey = useMemo(() => {
     const ids = Array.isArray(selectedPlan?.offerIds)
       ? selectedPlan.offerIds
-          .map((offer) => offer?._id || offer?.id || offer)
-          .filter(Boolean)
+        .map((offer) => offer?._id || offer?.id || offer)
+        .filter(Boolean)
       : [];
     return ids.join(",");
   }, [selectedPlan?.offerIds]);
@@ -600,11 +600,10 @@ const PlansPage = () => {
                       <p className="text-xs text-slate-500 mt-1">Order #{plan.orderId}</p>
                     </div>
                     <span
-                      className={`text-[11px] font-bold px-2 py-1 rounded-full ${
-                        plan.isActive
+                      className={`text-[11px] font-bold px-2 py-1 rounded-full ${plan.isActive
                           ? "bg-green-100 text-green-700 border border-green-200"
                           : "bg-slate-100 text-slate-600 border border-slate-200"
-                      }`}
+                        }`}
                     >
                       {plan.isActive ? "Active" : "Expired"}
                     </span>
@@ -697,29 +696,31 @@ const PlansPage = () => {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 py-2 px-6 flex justify-between items-end z-50 md:max-w-md md:mx-auto pb-4">
-        <div className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 hover:text-slate-600" onClick={() => navigate("/grocery")}>
-          <Home size={24} />
-          <span className="text-[10px] font-medium">Home</span>
-        </div>
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 z-50 w-full pb-4">
+        <div className="md:max-w-7xl md:mx-auto w-full flex justify-between items-end py-2 px-6">
+          <div className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 hover:text-slate-600" onClick={() => navigate("/grocery")}>
+            <Home size={24} />
+            <span className="text-[10px] font-medium">Home</span>
+          </div>
 
-        <div className="flex flex-col items-center gap-1 cursor-pointer">
-          <ShoppingBag size={24} className="text-slate-900 fill-current" />
-          <span className="text-[10px] font-bold text-slate-900">Plan</span>
-          <div className="w-8 h-1 bg-slate-900 rounded-full mt-0.5"></div>
-        </div>
+          <div className="flex flex-col items-center gap-1 cursor-pointer">
+            <ShoppingBag size={24} className="text-slate-900 fill-current" />
+            <span className="text-[10px] font-bold text-slate-900">Plan</span>
+            <div className="w-8 h-1 bg-slate-900 rounded-full mt-0.5"></div>
+          </div>
 
-        <div className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 hover:text-slate-600" onClick={() => navigate("/categories")}>
-          <LayoutGrid size={24} />
-          <span className="text-[10px] font-medium">Categories</span>
-        </div>
+          <div className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 hover:text-slate-600" onClick={() => navigate("/categories")}>
+            <LayoutGrid size={24} />
+            <span className="text-[10px] font-medium">Categories</span>
+          </div>
 
-        <button
-          className="mb-1 bg-[#EF4F5F] hover:bg-red-700 text-white px-6 py-2 rounded-full shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"
-          onClick={() => navigate("/home")}
-        >
-          <span className="font-black italic text-lg tracking-tighter">Mofood</span>
-        </button>
+          <button
+            className="mb-1 bg-[#EF4F5F] hover:bg-red-700 text-white px-6 py-2 rounded-full shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"
+            onClick={() => navigate("/home")}
+          >
+            <span className="font-black italic text-lg tracking-tighter">Mofood</span>
+          </button>
+        </div>
       </div>
 
       {selectedPlan && (
@@ -793,18 +794,16 @@ const PlansPage = () => {
                   <div className="mb-4 inline-flex rounded-xl border border-slate-200 p-1 bg-slate-50">
                     <button
                       type="button"
-                      className={`px-4 py-1.5 text-sm font-semibold rounded-lg transition ${
-                        selectedMealType === "veg" ? "bg-green-600 text-white" : "text-slate-600"
-                      }`}
+                      className={`px-4 py-1.5 text-sm font-semibold rounded-lg transition ${selectedMealType === "veg" ? "bg-green-600 text-white" : "text-slate-600"
+                        }`}
                       onClick={() => setSelectedMealType("veg")}
                     >
                       Veg
                     </button>
                     <button
                       type="button"
-                      className={`px-4 py-1.5 text-sm font-semibold rounded-lg transition ${
-                        selectedMealType === "nonVeg" ? "bg-rose-600 text-white" : "text-slate-600"
-                      }`}
+                      className={`px-4 py-1.5 text-sm font-semibold rounded-lg transition ${selectedMealType === "nonVeg" ? "bg-rose-600 text-white" : "text-slate-600"
+                        }`}
                       onClick={() => setSelectedMealType("nonVeg")}
                     >
                       Non-veg
@@ -876,112 +875,112 @@ const PlansPage = () => {
                         const normalizedOfferId = offerId ? String(offerId) : "";
                         const isSelected = !!normalizedOfferId && selectedOfferIds.includes(normalizedOfferId);
                         return (
-                        <button
-                          key={normalizedOfferId || `offer-${idx}`}
-                          type="button"
-                          onClick={() => toggleOfferSelection(normalizedOfferId)}
-                          className={`w-full text-left rounded-xl border p-3 transition ${
-                            isSelected
-                              ? "border-amber-300 bg-amber-50"
-                              : "border-slate-200 bg-white hover:border-amber-200"
-                          }`}
-                        >
-                          <p className="font-semibold text-slate-900">{offer.name}</p>
-                          <p className="text-xs text-slate-600 mt-0.5">{offer.description || "Exclusive offer for this plan"}</p>
-                          <p className={`text-[11px] font-semibold mt-2 ${isSelected ? "text-amber-700" : "text-slate-500"}`}>
-                            {isSelected ? "Selected" : "Tap to select"}
-                          </p>
+                          <button
+                            key={normalizedOfferId || `offer-${idx}`}
+                            type="button"
+                            onClick={() => toggleOfferSelection(normalizedOfferId)}
+                            className={`w-full text-left rounded-xl border p-3 transition ${isSelected
+                                ? "border-amber-300 bg-amber-50"
+                                : "border-slate-200 bg-white hover:border-amber-200"
+                              }`}
+                          >
+                            <p className="font-semibold text-slate-900">{offer.name}</p>
+                            <p className="text-xs text-slate-600 mt-0.5">{offer.description || "Exclusive offer for this plan"}</p>
+                            <p className={`text-[11px] font-semibold mt-2 ${isSelected ? "text-amber-700" : "text-slate-500"}`}>
+                              {isSelected ? "Selected" : "Tap to select"}
+                            </p>
 
-                          <div className="flex gap-2 mt-2 flex-wrap">
-                            {offer.discountType !== "none" && Number(offer.discountValue || 0) > 0 && (
-                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-white border border-amber-200 text-amber-700">
-                                {offer.discountType === "percentage" ? `${offer.discountValue}% off` : `Rs ${offer.discountValue} off`}
-                              </span>
-                            )}
-                            {offer.freeDelivery && (
-                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-white border border-amber-200 text-amber-700">
-                                Free delivery
-                              </span>
-                            )}
-                            {offer.validFrom && (
-                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-white border border-amber-200 text-amber-700">
-                                Starts: {new Date(offer.validFrom).toLocaleDateString("en-IN")}
-                              </span>
-                            )}
-                            {offer.validTill && (
-                              <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-white border border-amber-200 text-amber-700">
-                                Ends: {new Date(offer.validTill).toLocaleDateString("en-IN")}
-                              </span>
-                            )}
-                          </div>
+                            <div className="flex gap-2 mt-2 flex-wrap">
+                              {offer.discountType !== "none" && Number(offer.discountValue || 0) > 0 && (
+                                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-white border border-amber-200 text-amber-700">
+                                  {offer.discountType === "percentage" ? `${offer.discountValue}% off` : `Rs ${offer.discountValue} off`}
+                                </span>
+                              )}
+                              {offer.freeDelivery && (
+                                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-white border border-amber-200 text-amber-700">
+                                  Free delivery
+                                </span>
+                              )}
+                              {offer.validFrom && (
+                                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-white border border-amber-200 text-amber-700">
+                                  Starts: {new Date(offer.validFrom).toLocaleDateString("en-IN")}
+                                </span>
+                              )}
+                              {offer.validTill && (
+                                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-white border border-amber-200 text-amber-700">
+                                  Ends: {new Date(offer.validTill).toLocaleDateString("en-IN")}
+                                </span>
+                              )}
+                            </div>
 
-                          {(() => {
-                            const linkedProducts = getNamedItems(offer.productIds);
-                            const linkedCategories = getNamedItems(offer.categoryIds);
-                            const linkedSubcategories = getNamedItems(offer.subcategoryIds);
-                            const linkedPlans = getNamedItems(offer.planIds);
-                            const hasDetails =
-                              linkedProducts.length > 0 ||
-                              linkedCategories.length > 0 ||
-                              linkedSubcategories.length > 0 ||
-                              linkedPlans.length > 0;
-                            if (!hasDetails) return null;
+                            {(() => {
+                              const linkedProducts = getNamedItems(offer.productIds);
+                              const linkedCategories = getNamedItems(offer.categoryIds);
+                              const linkedSubcategories = getNamedItems(offer.subcategoryIds);
+                              const linkedPlans = getNamedItems(offer.planIds);
+                              const hasDetails =
+                                linkedProducts.length > 0 ||
+                                linkedCategories.length > 0 ||
+                                linkedSubcategories.length > 0 ||
+                                linkedPlans.length > 0;
+                              if (!hasDetails) return null;
 
-                            return (
-                              <div className="mt-3 space-y-2">
-                                {linkedProducts.length > 0 && (
-                                  <div>
-                                    <p className="text-[11px] font-semibold text-slate-700 mb-1">Products</p>
-                                    <div className="flex flex-wrap gap-1">
-                                      {linkedProducts.map((name, idx) => (
-                                        <span key={`p-${idx}`} className="text-[10px] px-2 py-0.5 rounded-full bg-white border border-amber-200 text-slate-700">
-                                          {name}
-                                        </span>
-                                      ))}
+                              return (
+                                <div className="mt-3 space-y-2">
+                                  {linkedProducts.length > 0 && (
+                                    <div>
+                                      <p className="text-[11px] font-semibold text-slate-700 mb-1">Products</p>
+                                      <div className="flex flex-wrap gap-1">
+                                        {linkedProducts.map((name, idx) => (
+                                          <span key={`p-${idx}`} className="text-[10px] px-2 py-0.5 rounded-full bg-white border border-amber-200 text-slate-700">
+                                            {name}
+                                          </span>
+                                        ))}
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
-                                {linkedCategories.length > 0 && (
-                                  <div>
-                                    <p className="text-[11px] font-semibold text-slate-700 mb-1">Categories</p>
-                                    <div className="flex flex-wrap gap-1">
-                                      {linkedCategories.map((name, idx) => (
-                                        <span key={`c-${idx}`} className="text-[10px] px-2 py-0.5 rounded-full bg-white border border-amber-200 text-slate-700">
-                                          {name}
-                                        </span>
-                                      ))}
+                                  )}
+                                  {linkedCategories.length > 0 && (
+                                    <div>
+                                      <p className="text-[11px] font-semibold text-slate-700 mb-1">Categories</p>
+                                      <div className="flex flex-wrap gap-1">
+                                        {linkedCategories.map((name, idx) => (
+                                          <span key={`c-${idx}`} className="text-[10px] px-2 py-0.5 rounded-full bg-white border border-amber-200 text-slate-700">
+                                            {name}
+                                          </span>
+                                        ))}
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
-                                {linkedSubcategories.length > 0 && (
-                                  <div>
-                                    <p className="text-[11px] font-semibold text-slate-700 mb-1">Subcategories</p>
-                                    <div className="flex flex-wrap gap-1">
-                                      {linkedSubcategories.map((name, idx) => (
-                                        <span key={`s-${idx}`} className="text-[10px] px-2 py-0.5 rounded-full bg-white border border-amber-200 text-slate-700">
-                                          {name}
-                                        </span>
-                                      ))}
+                                  )}
+                                  {linkedSubcategories.length > 0 && (
+                                    <div>
+                                      <p className="text-[11px] font-semibold text-slate-700 mb-1">Subcategories</p>
+                                      <div className="flex flex-wrap gap-1">
+                                        {linkedSubcategories.map((name, idx) => (
+                                          <span key={`s-${idx}`} className="text-[10px] px-2 py-0.5 rounded-full bg-white border border-amber-200 text-slate-700">
+                                            {name}
+                                          </span>
+                                        ))}
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
-                                {linkedPlans.length > 0 && (
-                                  <div>
-                                    <p className="text-[11px] font-semibold text-slate-700 mb-1">Applicable Plans</p>
-                                    <div className="flex flex-wrap gap-1">
-                                      {linkedPlans.map((name, idx) => (
-                                        <span key={`l-${idx}`} className="text-[10px] px-2 py-0.5 rounded-full bg-white border border-amber-200 text-slate-700">
-                                          {name}
-                                        </span>
-                                      ))}
+                                  )}
+                                  {linkedPlans.length > 0 && (
+                                    <div>
+                                      <p className="text-[11px] font-semibold text-slate-700 mb-1">Applicable Plans</p>
+                                      <div className="flex flex-wrap gap-1">
+                                        {linkedPlans.map((name, idx) => (
+                                          <span key={`l-${idx}`} className="text-[10px] px-2 py-0.5 rounded-full bg-white border border-amber-200 text-slate-700">
+                                            {name}
+                                          </span>
+                                        ))}
+                                      </div>
                                     </div>
-                                  </div>
-                                )}
-                              </div>
-                            );
-                          })()}
-                        </button>
-                      )})}
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </button>
+                        )
+                      })}
                     </div>
                   )}
                 </div>

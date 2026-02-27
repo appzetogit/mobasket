@@ -307,317 +307,319 @@ export default function UserOrderDetails() {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 font-sans relative">
-      {/* Header */}
-      <div className="bg-white p-4 flex items-center sticky top-0 z-20 shadow-sm">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="p-1 rounded-full hover:bg-gray-100"
-          >
-            <ArrowLeft className="w-6 h-6 text-gray-700 cursor-pointer" />
-          </button>
-          <h1 className="text-lg font-semibold text-gray-800">Order Details</h1>
-        </div>
-      </div>
-
-      {/* Scrollable Content */}
-      <div className="p-4 space-y-4">
-        {/* Status Card */}
-        <div className="bg-white p-4 rounded-xl flex items-center gap-3 shadow-sm">
-          <div className="bg-gray-100 p-2 rounded-lg">
-            <ShoppingBag className="w-6 h-6 text-gray-600" />
-          </div>
-          <div>
-            <h2 className="font-semibold text-gray-800">
-              {order.status === "delivered"
-                ? "Order was delivered"
-                : "Order status: " + (order.status || "Processing")}
-            </h2>
-          </div>
-        </div>
-
-        {/* Store / Restaurant Info Card */}
-        <div className="bg-white p-4 rounded-xl shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <img
-                src={
-                  // Prefer the food image from the first ordered item
-                  (Array.isArray(items) && items[0]?.image) ||
-                  restaurantObj.profileImage?.url ||
-                  restaurantObj.profileImage ||
-                  order.restaurantImage ||
-                  "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=100&q=80"
-                }
-                alt={restaurantName}
-                className="w-10 h-10 rounded-lg object-cover"
-              />
-              <div>
-                <p className="text-[10px] uppercase tracking-wide text-gray-400 font-medium">
-                  {isGroceryOrder ? "Store" : "Restaurant"}
-                </p>
-                <h3 className="font-semibold text-gray-800">{restaurantName}</h3>
-                <p className="text-xs text-gray-500">{restaurantLocation}</p>
-              </div>
-            </div>
-
+      <div className="max-w-[1100px] mx-auto md:pt-20 lg:pt-24 md:pb-6 lg:pb-8">
+        {/* Header */}
+        <div className="bg-white p-4 flex items-center sticky top-0 z-20 shadow-sm">
+          <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={handleCallRestaurant}
-              className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-[#E23744] hover:bg-red-50"
+              onClick={() => navigate(-1)}
+              className="p-1 rounded-full hover:bg-gray-100"
             >
-              <Phone className="w-4 h-4" />
+              <ArrowLeft className="w-6 h-6 text-gray-700 cursor-pointer" />
             </button>
+            <h1 className="text-lg font-semibold text-gray-800">Order Details</h1>
+          </div>
+        </div>
+
+        {/* Scrollable Content */}
+        <div className="p-4 space-y-4">
+          {/* Status Card */}
+          <div className="bg-white p-4 rounded-xl flex items-center gap-3 shadow-sm">
+            <div className="bg-gray-100 p-2 rounded-lg">
+              <ShoppingBag className="w-6 h-6 text-gray-600" />
+            </div>
+            <div>
+              <h2 className="font-semibold text-gray-800">
+                {order.status === "delivered"
+                  ? "Order was delivered"
+                  : "Order status: " + (order.status || "Processing")}
+              </h2>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
-              Order ID: #{orderIdDisplay}
-            </span>
-            <button type="button" onClick={handleCopyOrderId}>
-              <Copy className="w-3 h-3 text-gray-400 cursor-pointer" />
-            </button>
-          </div>
-
-          <div className="border-t border-dashed border-gray-200 my-3" />
-
-          {/* Items */}
-          {items.map((item, idx) => (
-            <div key={idx} className="flex justify-between items-start mt-2">
-              <div className="flex items-center gap-2">
-                <div
-                  className={`w-3 h-3 border ${item.isVeg ? "border-green-600" : "border-red-600"
-                    } flex items-center justify-center p-[1px]`}
-                >
-                  <div
-                    className={`w-full h-full rounded-full ${item.isVeg ? "bg-green-600" : "bg-red-600"
-                      }`}
-                  />
+          {/* Store / Restaurant Info Card */}
+          <div className="bg-white p-4 rounded-xl shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <img
+                  src={
+                    // Prefer the food image from the first ordered item
+                    (Array.isArray(items) && items[0]?.image) ||
+                    restaurantObj.profileImage?.url ||
+                    restaurantObj.profileImage ||
+                    order.restaurantImage ||
+                    "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=100&q=80"
+                  }
+                  alt={restaurantName}
+                  className="w-10 h-10 rounded-lg object-cover"
+                />
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-gray-400 font-medium">
+                    {isGroceryOrder ? "Store" : "Restaurant"}
+                  </p>
+                  <h3 className="font-semibold text-gray-800">{restaurantName}</h3>
+                  <p className="text-xs text-gray-500">{restaurantLocation}</p>
                 </div>
-                <span className="text-sm text-gray-700 font-medium">
-                  {item.quantity || item.qty || 1} x {item.name}
+              </div>
+
+              <button
+                type="button"
+                onClick={handleCallRestaurant}
+                className="w-8 h-8 rounded-full border border-gray-200 flex items-center justify-center text-[#E23744] hover:bg-red-50"
+              >
+                <Phone className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
+                Order ID: #{orderIdDisplay}
+              </span>
+              <button type="button" onClick={handleCopyOrderId}>
+                <Copy className="w-3 h-3 text-gray-400 cursor-pointer" />
+              </button>
+            </div>
+
+            <div className="border-t border-dashed border-gray-200 my-3" />
+
+            {/* Items */}
+            {items.map((item, idx) => (
+              <div key={idx} className="flex justify-between items-start mt-2">
+                <div className="flex items-center gap-2">
+                  <div
+                    className={`w-3 h-3 border ${item.isVeg ? "border-green-600" : "border-red-600"
+                      } flex items-center justify-center p-[1px]`}
+                  >
+                    <div
+                      className={`w-full h-full rounded-full ${item.isVeg ? "bg-green-600" : "bg-red-600"
+                        }`}
+                    />
+                  </div>
+                  <span className="text-sm text-gray-700 font-medium">
+                    {item.quantity || item.qty || 1} x {item.name}
+                  </span>
+                </div>
+                <span className="text-sm text-gray-800 font-medium">
+                  ₹{(item.price || 0).toFixed(2)}
                 </span>
               </div>
-              <span className="text-sm text-gray-800 font-medium">
-                ₹{(item.price || 0).toFixed(2)}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* Bill Summary Card */}
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          <div className="p-4 flex justify-between items-center border-b border-gray-100">
-            <div className="flex items-center gap-2">
-              <FileText className="w-5 h-5 text-gray-600" />
-              <h3 className="font-semibold text-gray-800">Bill Summary</h3>
-            </div>
-            <button
-              type="button"
-              onClick={handleDownloadSummary}
-              className="w-7 h-7 rounded-full bg-red-50 flex items-center justify-center text-[#E23744] hover:bg-red-100"
-            >
-              <Download className="w-4 h-4" />
-            </button>
+            ))}
           </div>
 
-          <div className="p-4 space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-gray-500">Item total</span>
-              <div>
-                {pricing.originalItemTotal && (
-                  <span className="text-gray-400 line-through mr-1">
-                    ₹{Number(pricing.originalItemTotal).toFixed(2)}
+          {/* Bill Summary Card */}
+          <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            <div className="p-4 flex justify-between items-center border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <FileText className="w-5 h-5 text-gray-600" />
+                <h3 className="font-semibold text-gray-800">Bill Summary</h3>
+              </div>
+              <button
+                type="button"
+                onClick={handleDownloadSummary}
+                className="w-7 h-7 rounded-full bg-red-50 flex items-center justify-center text-[#E23744] hover:bg-red-100"
+              >
+                <Download className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Item total</span>
+                <div>
+                  {pricing.originalItemTotal && (
+                    <span className="text-gray-400 line-through mr-1">
+                      ₹{Number(pricing.originalItemTotal).toFixed(2)}
+                    </span>
+                  )}
+                  <span className="text-gray-800">
+                    ₹{Number(pricing.subtotal || pricing.total || 0).toFixed(2)}
                   </span>
-                )}
+                </div>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">GST (govt. taxes)</span>
                 <span className="text-gray-800">
-                  ₹{Number(pricing.subtotal || pricing.total || 0).toFixed(2)}
+                  ₹{Number(pricing.tax || 0).toFixed(2)}
                 </span>
               </div>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">GST (govt. taxes)</span>
-              <span className="text-gray-800">
-                ₹{Number(pricing.tax || 0).toFixed(2)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Delivery partner fee</span>
-              <div>
-                {pricing.originalDeliveryFee && (
-                  <span className="text-gray-400 line-through mr-1">
-                    ₹{Number(pricing.originalDeliveryFee).toFixed(2)}
+              <div className="flex justify-between">
+                <span className="text-gray-500">Delivery partner fee</span>
+                <div>
+                  {pricing.originalDeliveryFee && (
+                    <span className="text-gray-400 line-through mr-1">
+                      ₹{Number(pricing.originalDeliveryFee).toFixed(2)}
+                    </span>
+                  )}
+                  <span className="text-blue-500 font-medium uppercase">
+                    {pricing.deliveryFee ? `₹${Number(pricing.deliveryFee).toFixed(2)}` : "Free"}
                   </span>
-                )}
-                <span className="text-blue-500 font-medium uppercase">
-                  {pricing.deliveryFee ? `₹${Number(pricing.deliveryFee).toFixed(2)}` : "Free"}
+                </div>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Platform fee</span>
+                <span className="text-gray-800">
+                  ₹{Number(pricing.platformFee || 0).toFixed(2)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Subscription / other fees</span>
+                <span className="text-gray-800">
+                  ₹{Number(pricing.subscriptionFee || 0).toFixed(2)}
+                </span>
+              </div>
+
+              <div className="border-t border-gray-100 my-2 pt-2 flex justify-between items-center">
+                <span className="font-bold text-gray-800">Paid</span>
+                <span className="font-bold text-gray-800">
+                  ₹{Number(pricing.total || 0).toFixed(2)}
                 </span>
               </div>
             </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Platform fee</span>
-              <span className="text-gray-800">
-                ₹{Number(pricing.platformFee || 0).toFixed(2)}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-500">Subscription / other fees</span>
-              <span className="text-gray-800">
-                ₹{Number(pricing.subscriptionFee || 0).toFixed(2)}
-              </span>
-            </div>
 
-            <div className="border-t border-gray-100 my-2 pt-2 flex justify-between items-center">
-              <span className="font-bold text-gray-800">Paid</span>
-              <span className="font-bold text-gray-800">
-                ₹{Number(pricing.total || 0).toFixed(2)}
-              </span>
-            </div>
+            {/* Savings Banner */}
+            {savings > 0 && (
+              <div className="relative bg-blue-50 p-3 pb-4 mt-2">
+                <div className="absolute -top-1.5 left-0 w-full overflow-hidden leading-none">
+                  <svg
+                    className="relative block w-[calc(100%+1.3px)] h-[8px]"
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 1200 120"
+                    preserveAspectRatio="none"
+                  >
+                    <path
+                      d="M0,0V46.29c47,0,47,69.5,94,69.5s47-69.5,94-69.5,47,69.5,94,69.5,47-69.5,94-69.5,47,69.5,94,69.5,47-69.5,94-69.5,47,69.5,94,69.5,47-69.5,94-69.5,47,69.5,94,69.5,47-69.5,94-69.5,47,69.5,94,69.5V0Z"
+                      fill="#ffffff"
+                      className="fill-white"
+                    />
+                  </svg>
+                </div>
+
+                <div className="flex items-center justify-center gap-2 pt-1 text-blue-600 font-bold text-sm">
+                  <span>🎉</span>
+                  <span>
+                    You saved ₹{Number(savings).toFixed(2)} on this order!
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Savings Banner */}
-          {savings > 0 && (
-            <div className="relative bg-blue-50 p-3 pb-4 mt-2">
-              <div className="absolute -top-1.5 left-0 w-full overflow-hidden leading-none">
-                <svg
-                  className="relative block w-[calc(100%+1.3px)] h-[8px]"
-                  xmlns="http://www.w3.org/2000/svg"
-                  viewBox="0 0 1200 120"
-                  preserveAspectRatio="none"
-                >
-                  <path
-                    d="M0,0V46.29c47,0,47,69.5,94,69.5s47-69.5,94-69.5,47,69.5,94,69.5,47-69.5,94-69.5,47,69.5,94,69.5,47-69.5,94-69.5,47,69.5,94,69.5,47-69.5,94-69.5,47,69.5,94,69.5,47-69.5,94-69.5,47,69.5,94,69.5V0Z"
-                    fill="#ffffff"
-                    className="fill-white"
-                  />
-                </svg>
+          {/* User & Delivery Details */}
+          <div className="bg-white p-4 rounded-xl shadow-sm space-y-5">
+            {/* User */}
+            <div className="flex gap-3">
+              <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                <User className="w-5 h-5 text-gray-500" />
               </div>
-
-              <div className="flex items-center justify-center gap-2 pt-1 text-blue-600 font-bold text-sm">
-                <span>🎉</span>
-                <span>
-                  You saved ₹{Number(savings).toFixed(2)} on this order!
-                </span>
+              <div>
+                <h4 className="font-semibold text-gray-800 text-sm">
+                  {userName || "Customer"}
+                </h4>
+                <p className="text-gray-500 text-xs">{userPhone}</p>
               </div>
             </div>
-          )}
-        </div>
 
-        {/* User & Delivery Details */}
-        <div className="bg-white p-4 rounded-xl shadow-sm space-y-5">
-          {/* User */}
-          <div className="flex gap-3">
-            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
-              <User className="w-5 h-5 text-gray-500" />
+            {/* Payment */}
+            <div className="flex gap-3">
+              <div className="mt-0.5">
+                <CreditCard className="w-5 h-5 text-gray-500" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-800 text-sm">
+                  Payment method
+                </h4>
+                <p className="text-gray-500 text-xs mt-0.5">
+                  Paid via: {paymentMethod.toUpperCase()}
+                </p>
+              </div>
             </div>
-            <div>
-              <h4 className="font-semibold text-gray-800 text-sm">
-                {userName || "Customer"}
-              </h4>
-              <p className="text-gray-500 text-xs">{userPhone}</p>
-            </div>
-          </div>
 
-          {/* Payment */}
-          <div className="flex gap-3">
-            <div className="mt-0.5">
-              <CreditCard className="w-5 h-5 text-gray-500" />
+            {/* Date */}
+            <div className="flex gap-3">
+              <div className="mt-0.5">
+                <Calendar className="w-5 h-5 text-gray-500" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-800 text-sm">
+                  Payment date
+                </h4>
+                <p className="text-gray-500 text-xs mt-0.5">{paymentDate}</p>
+              </div>
             </div>
-            <div>
-              <h4 className="font-semibold text-gray-800 text-sm">
-                Payment method
-              </h4>
-              <p className="text-gray-500 text-xs mt-0.5">
-                Paid via: {paymentMethod.toUpperCase()}
-              </p>
-            </div>
-          </div>
 
-          {/* Date */}
-          <div className="flex gap-3">
-            <div className="mt-0.5">
-              <Calendar className="w-5 h-5 text-gray-500" />
-            </div>
-            <div>
-              <h4 className="font-semibold text-gray-800 text-sm">
-                Payment date
-              </h4>
-              <p className="text-gray-500 text-xs mt-0.5">{paymentDate}</p>
-            </div>
-          </div>
-
-          {/* Address */}
-          <div className="flex gap-3">
-            <div className="mt-0.5">
-              <MapPin className="w-5 h-5 text-gray-500" />
-            </div>
-            <div>
-              <h4 className="font-semibold text-gray-800 text-sm">
-                Delivery address
-              </h4>
-              <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">
-                {addressText || "Address not available"}
-              </p>
+            {/* Address */}
+            <div className="flex gap-3">
+              <div className="mt-0.5">
+                <MapPin className="w-5 h-5 text-gray-500" />
+              </div>
+              <div>
+                <h4 className="font-semibold text-gray-800 text-sm">
+                  Delivery address
+                </h4>
+                <p className="text-gray-500 text-xs mt-0.5 leading-relaxed">
+                  {addressText || "Address not available"}
+                </p>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* Fixed Bottom Buttons */}
-      <div className="fixed bottom-0 w-full bg-white border-t border-gray-200 p-4 flex gap-3 z-20">
-        <button
-          type="button"
-          onClick={() => navigate(`/user/restaurants/${order.restaurantId || ""}`)}
-          className="flex-1 bg-[#E23744] text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-red-600 transition-colors"
-        >
-          <RotateCcw className="w-4 h-4" />
-          Reorder
-        </button>
-        <button
-          type="button"
-          onClick={handleDownloadSummary}
-          className="flex-1 bg-white border border-[#E23744] text-[#E23744] py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-red-50 transition-colors"
-        >
-          <Download className="w-4 h-4" />
-          Invoice
-        </button>
-      </div>
-
-      {/* Restaurant Complaint Button - Below Order Details */}
-      {order && (
-        <div className="p-4 pb-24">
+        {/* Fixed Bottom Buttons */}
+        <div className="fixed bottom-0 w-full bg-white border-t border-gray-200 p-4 flex gap-3 z-20">
           <button
             type="button"
-            onClick={() => {
-              // Use MongoDB _id (ObjectId) for the API call - backend complaint controller expects ObjectId
-              // Priority: order._id (MongoDB ObjectId) > orderId from route params
-              const orderMongoId = order._id || orderId
-
-              if (!orderMongoId) {
-                console.error("Order ID not available:", {
-                  order: order ? { _id: order._id, orderId: order.orderId } : null,
-                  routeOrderId: orderId
-                })
-                toast.error("Order ID not available. Please refresh the page.")
-                return
-              }
-
-              // Convert to string if it's an ObjectId object
-              const orderIdString = typeof orderMongoId === 'object' && orderMongoId.toString
-                ? orderMongoId.toString()
-                : String(orderMongoId)
-
-              console.log("Navigating to complaint page with orderId:", orderIdString)
-              navigate(`/user/complaints/submit/${encodeURIComponent(orderIdString)}`)
-            }}
-            className="w-full bg-orange-50 border border-orange-200 text-orange-700 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-orange-100 transition-colors"
+            onClick={() => navigate(`/user/restaurants/${order.restaurantId || ""}`)}
+            className="flex-1 bg-[#E23744] text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-red-600 transition-colors"
           >
-            <FileText className="w-4 h-4" />
-            Restaurant Complaint
+            <RotateCcw className="w-4 h-4" />
+            Reorder
+          </button>
+          <button
+            type="button"
+            onClick={handleDownloadSummary}
+            className="flex-1 bg-white border border-[#E23744] text-[#E23744] py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-red-50 transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            Invoice
           </button>
         </div>
-      )}
+
+        {/* Restaurant Complaint Button - Below Order Details */}
+        {order && (
+          <div className="p-4 pb-24">
+            <button
+              type="button"
+              onClick={() => {
+                // Use MongoDB _id (ObjectId) for the API call - backend complaint controller expects ObjectId
+                // Priority: order._id (MongoDB ObjectId) > orderId from route params
+                const orderMongoId = order._id || orderId
+
+                if (!orderMongoId) {
+                  console.error("Order ID not available:", {
+                    order: order ? { _id: order._id, orderId: order.orderId } : null,
+                    routeOrderId: orderId
+                  })
+                  toast.error("Order ID not available. Please refresh the page.")
+                  return
+                }
+
+                // Convert to string if it's an ObjectId object
+                const orderIdString = typeof orderMongoId === 'object' && orderMongoId.toString
+                  ? orderMongoId.toString()
+                  : String(orderMongoId)
+
+                console.log("Navigating to complaint page with orderId:", orderIdString)
+                navigate(`/user/complaints/submit/${encodeURIComponent(orderIdString)}`)
+              }}
+              className="w-full bg-orange-50 border border-orange-200 text-orange-700 py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-orange-100 transition-colors"
+            >
+              <FileText className="w-4 h-4" />
+              Restaurant Complaint
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

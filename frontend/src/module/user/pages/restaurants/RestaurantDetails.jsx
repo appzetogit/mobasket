@@ -135,10 +135,10 @@ export default function RestaurantDetails() {
   const isOrderEditSessionActive = editSecondsLeft > 0 && Boolean(orderEditSession?.orderRouteId);
   const isOrderEditSessionForCurrentRestaurant = Boolean(
     isOrderEditSessionActive &&
-      ((normalizedSessionSlug && normalizedSessionSlug === normalizedSlug) ||
-        (normalizedSessionRestaurantId &&
-          normalizedRestaurantId &&
-          normalizedSessionRestaurantId === normalizedRestaurantId)),
+    ((normalizedSessionSlug && normalizedSessionSlug === normalizedSlug) ||
+      (normalizedSessionRestaurantId &&
+        normalizedRestaurantId &&
+        normalizedSessionRestaurantId === normalizedRestaurantId)),
   );
 
   const refreshRestaurantMenu = useCallback(async () => {
@@ -317,7 +317,7 @@ export default function RestaurantDetails() {
                     (r) =>
                       r.slug === slug ||
                       r.name?.toLowerCase().replace(/\s+/g, "-") ===
-                        slug.toLowerCase() ||
+                      slug.toLowerCase() ||
                       r.name?.toLowerCase() === restaurantName.toLowerCase(),
                   );
 
@@ -511,9 +511,9 @@ export default function RestaurantDetails() {
             const a =
               Math.sin(dLat / 2) * Math.sin(dLat / 2) +
               Math.cos((lat1 * Math.PI) / 180) *
-                Math.cos((lat2 * Math.PI) / 180) *
-                Math.sin(dLng / 2) *
-                Math.sin(dLng / 2);
+              Math.cos((lat2 * Math.PI) / 180) *
+              Math.sin(dLng / 2) *
+              Math.sin(dLng / 2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
             return R * c; // Distance in kilometers
           };
@@ -605,18 +605,18 @@ export default function RestaurantDetails() {
               "Unknown Restaurant",
             cuisine:
               actualRestaurant?.cuisines &&
-              Array.isArray(actualRestaurant.cuisines) &&
-              actualRestaurant.cuisines.length > 0
+                Array.isArray(actualRestaurant.cuisines) &&
+                actualRestaurant.cuisines.length > 0
                 ? actualRestaurant.cuisines[0]
                 : apiRestaurant?.cuisines &&
-                    Array.isArray(apiRestaurant.cuisines) &&
-                    apiRestaurant.cuisines.length > 0
+                  Array.isArray(apiRestaurant.cuisines) &&
+                  apiRestaurant.cuisines.length > 0
                   ? apiRestaurant.cuisines[0]
                   : actualRestaurant?.cuisine ||
-                    apiRestaurant?.cuisine ||
-                    actualRestaurant?.category ||
-                    apiRestaurant?.category ||
-                    "Multi-cuisine",
+                  apiRestaurant?.cuisine ||
+                  actualRestaurant?.category ||
+                  apiRestaurant?.category ||
+                  "Multi-cuisine",
             rating:
               actualRestaurant?.rating ??
               apiRestaurant?.rating ??
@@ -654,14 +654,14 @@ export default function RestaurantDetails() {
               actualRestaurant?.profileImage ||
               apiRestaurant?.profileImage ||
               (Array.isArray(actualRestaurant?.menuImages) &&
-              actualRestaurant.menuImages.length > 0
+                actualRestaurant.menuImages.length > 0
                 ? actualRestaurant.menuImages[0]?.url ||
-                  actualRestaurant.menuImages[0]
+                actualRestaurant.menuImages[0]
                 : null) ||
               (Array.isArray(apiRestaurant?.menuImages) &&
-              apiRestaurant.menuImages.length > 0
+                apiRestaurant.menuImages.length > 0
                 ? apiRestaurant.menuImages[0]?.url ||
-                  apiRestaurant.menuImages[0]
+                apiRestaurant.menuImages[0]
                 : null) ||
               actualRestaurant?.image ||
               apiRestaurant?.image ||
@@ -946,14 +946,14 @@ export default function RestaurantDetails() {
                 const finalMenuSections =
                   personalizedRecommendedItems.length > 0
                     ? [
-                        {
-                          name: "Recommended for you",
-                          isPersonalizedRecommended: true,
-                          items: personalizedRecommendedItems,
-                          subsections: [],
-                        },
-                        ...menuSections,
-                      ]
+                      {
+                        name: "Recommended for you",
+                        isPersonalizedRecommended: true,
+                        items: personalizedRecommendedItems,
+                        subsections: [],
+                      },
+                      ...menuSections,
+                    ]
                     : menuSections;
 
                 setRestaurant((prev) => ({
@@ -1010,16 +1010,16 @@ export default function RestaurantDetails() {
                       category.inStock !== undefined ? category.inStock : true,
                     items: Array.isArray(category.items)
                       ? category.items.map((item) => ({
-                          id: String(item.id || Date.now() + Math.random()),
-                          name: item.name || "Unnamed Item",
-                          inStock:
-                            item.inStock !== undefined ? item.inStock : true,
-                          isVeg: item.isVeg !== undefined ? item.isVeg : true,
-                          stockQuantity: item.stockQuantity || "Unlimited",
-                          unit: item.unit || "piece",
-                          expiryDate: item.expiryDate || null,
-                          lastRestocked: item.lastRestocked || null,
-                        }))
+                        id: String(item.id || Date.now() + Math.random()),
+                        name: item.name || "Unnamed Item",
+                        inStock:
+                          item.inStock !== undefined ? item.inStock : true,
+                        isVeg: item.isVeg !== undefined ? item.isVeg : true,
+                        stockQuantity: item.stockQuantity || "Unlimited",
+                        unit: item.unit || "piece",
+                        expiryDate: item.expiryDate || null,
+                        lastRestocked: item.lastRestocked || null,
+                      }))
                       : [],
                     order:
                       category.order !== undefined ? category.order : index,
@@ -1167,13 +1167,13 @@ export default function RestaurantDetails() {
   const restaurantLat =
     restaurant?.locationObject?.latitude ||
     (restaurant?.locationObject?.coordinates &&
-    Array.isArray(restaurant.locationObject.coordinates)
+      Array.isArray(restaurant.locationObject.coordinates)
       ? restaurant.locationObject.coordinates[1]
       : null);
   const restaurantLng =
     restaurant?.locationObject?.longitude ||
     (restaurant?.locationObject?.coordinates &&
-    Array.isArray(restaurant.locationObject.coordinates)
+      Array.isArray(restaurant.locationObject.coordinates)
       ? restaurant.locationObject.coordinates[0]
       : null);
 
@@ -1219,9 +1219,9 @@ export default function RestaurantDetails() {
         const a =
           Math.sin(dLat / 2) * Math.sin(dLat / 2) +
           Math.cos((lat1 * Math.PI) / 180) *
-            Math.cos((lat2 * Math.PI) / 180) *
-            Math.sin(dLng / 2) *
-            Math.sin(dLng / 2);
+          Math.cos((lat2 * Math.PI) / 180) *
+          Math.sin(dLng / 2) *
+          Math.sin(dLng / 2);
         const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         return R * c; // Distance in kilometers
       };
@@ -1512,38 +1512,38 @@ export default function RestaurantDetails() {
   const menuCategories =
     restaurant?.menuSections && Array.isArray(restaurant.menuSections)
       ? restaurant.menuSections.map((section, index) => {
-          // Handle section name - check for valid non-empty string
-          let sectionTitle = "Unnamed Section";
-          if (section?.isPersonalizedRecommended) {
-            sectionTitle = "Recommended for you";
-          } else if (
-            section?.name &&
-            typeof section.name === "string" &&
-            section.name.trim()
-          ) {
-            sectionTitle = section.name.trim();
-          } else if (
-            section?.title &&
-            typeof section.title === "string" &&
-            section.title.trim()
-          ) {
-            sectionTitle = section.title.trim();
-          }
+        // Handle section name - check for valid non-empty string
+        let sectionTitle = "Unnamed Section";
+        if (section?.isPersonalizedRecommended) {
+          sectionTitle = "Recommended for you";
+        } else if (
+          section?.name &&
+          typeof section.name === "string" &&
+          section.name.trim()
+        ) {
+          sectionTitle = section.name.trim();
+        } else if (
+          section?.title &&
+          typeof section.title === "string" &&
+          section.title.trim()
+        ) {
+          sectionTitle = section.title.trim();
+        }
 
-          const itemCount = section?.items?.length || 0;
-          const subsectionCount =
-            section?.subsections?.reduce(
-              (sum, sub) => sum + (sub?.items?.length || 0),
-              0,
-            ) || 0;
-          const totalCount = itemCount + subsectionCount;
+        const itemCount = section?.items?.length || 0;
+        const subsectionCount =
+          section?.subsections?.reduce(
+            (sum, sub) => sum + (sub?.items?.length || 0),
+            0,
+          ) || 0;
+        const totalCount = itemCount + subsectionCount;
 
-          return {
-            name: sectionTitle,
-            count: totalCount,
-            sectionIndex: index,
-          };
-        })
+        return {
+          name: sectionTitle,
+          count: totalCount,
+          sectionIndex: index,
+        };
+      })
       : [];
 
   // Count active filters
@@ -2022,9 +2022,8 @@ export default function RestaurantDetails() {
   return (
     <AnimatedPage
       id="scrollingelement"
-      className={`min-h-screen bg-white dark:bg-[#0a0a0a] flex flex-col transition-all duration-300 ${
-        shouldShowGrayscale ? "grayscale opacity-75" : ""
-      }`}
+      className={`min-h-screen bg-white dark:bg-[#0a0a0a] flex flex-col transition-all duration-300 ${shouldShowGrayscale ? "grayscale opacity-75" : ""
+        }`}
     >
       {!restaurantAvailability.isAvailable && (
         <div className="sticky top-0 z-[55] px-4 pt-2">
@@ -2095,7 +2094,7 @@ export default function RestaurantDetails() {
       </div>
 
       {/* Floating Info Card */}
-      <div className="px-4 -mt-10 relative z-20 max-w-2xl mx-auto w-full">
+      <div className="px-4 -mt-10 relative z-20 max-w-[1100px] mx-auto w-full">
         <div className="bg-white dark:bg-[#1a1a1a] rounded-[24px] shadow-xl p-5 border border-gray-100 dark:border-gray-800">
           <div className="flex justify-between items-start mb-4">
             <div className="flex-1 min-w-0">
@@ -2135,7 +2134,7 @@ export default function RestaurantDetails() {
         </div>
       </div>
       {isOrderEditSessionForCurrentRestaurant && (
-        <div className="px-4 mt-3 max-w-2xl mx-auto w-full">
+        <div className="px-4 mt-3 max-w-[1100px] mx-auto w-full">
           <div className="bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3 flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide">
@@ -2155,7 +2154,7 @@ export default function RestaurantDetails() {
         </div>
       )}
       {/* Menu Content Section */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4 space-y-4">
+      <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4 space-y-4">
         {/* Filter/Category Buttons */}
         <div className="border-y border-gray-200 py-3 -mx-4 px-4 overflow-x-auto scrollbar-hide">
           <div className="flex items-center gap-2 w-max">
@@ -2177,11 +2176,10 @@ export default function RestaurantDetails() {
             <Button
               variant="outline"
               size="sm"
-              className={`flex items-center gap-1.5 whitespace-nowrap border-gray-300 bg-white rounded-full ${
-                filters.vegNonVeg === "veg"
-                  ? "border-green-500 bg-green-50"
-                  : ""
-              }`}
+              className={`flex items-center gap-1.5 whitespace-nowrap border-gray-300 bg-white rounded-full ${filters.vegNonVeg === "veg"
+                ? "border-green-500 bg-green-50"
+                : ""
+                }`}
               onClick={() =>
                 setFilters((prev) => ({
                   ...prev,
@@ -2198,11 +2196,10 @@ export default function RestaurantDetails() {
             <Button
               variant="outline"
               size="sm"
-              className={`flex items-center gap-1.5 whitespace-nowrap border-gray-300 bg-white rounded-full ${
-                filters.vegNonVeg === "non-veg"
-                  ? "border-amber-700 bg-amber-50"
-                  : ""
-              }`}
+              className={`flex items-center gap-1.5 whitespace-nowrap border-gray-300 bg-white rounded-full ${filters.vegNonVeg === "non-veg"
+                ? "border-amber-700 bg-amber-50"
+                : ""
+                }`}
               onClick={() =>
                 setFilters((prev) => ({
                   ...prev,
@@ -2224,7 +2221,7 @@ export default function RestaurantDetails() {
       {restaurant?.menuSections &&
         Array.isArray(restaurant.menuSections) &&
         restaurant.menuSections.length > 0 && (
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-6 sm:py-8 md:py-10 lg:py-12 space-y-6 md:space-y-8 lg:space-y-10">
+          <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-6 sm:py-8 md:py-10 lg:py-12 space-y-6 md:space-y-8 lg:space-y-10">
             {getFilteredSections().map(
               ({ section, originalIndex }, sectionIndex) => {
                 const isRecommendedSection =
@@ -2278,9 +2275,8 @@ export default function RestaurantDetails() {
                           className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
                         >
                           <ChevronDown
-                            className={`h-5 w-5 text-gray-600 dark:text-gray-400 transition-transform duration-200 ${
-                              isExpanded ? "" : "-rotate-90"
-                            }`}
+                            className={`h-5 w-5 text-gray-600 dark:text-gray-400 transition-transform duration-200 ${isExpanded ? "" : "-rotate-90"
+                              }`}
                           />
                         </button>
                       </div>
@@ -2290,12 +2286,12 @@ export default function RestaurantDetails() {
                         <div className="space-y-1">
                           <h2 className="text-lg font-bold text-gray-900 dark:text-white">
                             {section?.name &&
-                            typeof section.name === "string" &&
-                            section.name.trim()
+                              typeof section.name === "string" &&
+                              section.name.trim()
                               ? section.name.trim()
                               : section?.title &&
-                                  typeof section.title === "string" &&
-                                  section.title.trim()
+                                typeof section.title === "string" &&
+                                section.title.trim()
                                 ? section.title.trim()
                                 : "Unnamed Section"}
                           </h2>
@@ -2321,9 +2317,8 @@ export default function RestaurantDetails() {
                           className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
                         >
                           <ChevronDown
-                            className={`h-5 w-5 text-gray-600 dark:text-gray-400 transition-transform duration-200 ${
-                              isExpanded ? "" : "-rotate-90"
-                            }`}
+                            className={`h-5 w-5 text-gray-600 dark:text-gray-400 transition-transform duration-200 ${isExpanded ? "" : "-rotate-90"
+                              }`}
                           />
                         </button>
                       </div>
@@ -2343,7 +2338,7 @@ export default function RestaurantDetails() {
                     {isExpanded &&
                       section.items &&
                       section.items.length > 0 && (
-                        <div className="space-y-0">
+                        <div className="grid grid-cols-1 md:grid-cols-3 md:gap-6 md:py-2">
                           {sortMenuItems(filterMenuItems(section.items)).map(
                             (item) => {
                               const quantity = quantities[item.id || item._id] || 0;
@@ -2363,7 +2358,7 @@ export default function RestaurantDetails() {
                               return (
                                 <div
                                   key={item.id}
-                                  className="flex gap-4 p-4 border-b border-gray-100 last:border-none relative cursor-pointer"
+                                  className={`flex gap-4 p-4 relative cursor-pointer border-b border-gray-100 last:border-none md:last:border md:border md:border-gray-200 dark:md:border-gray-800 md:rounded-2xl`}
                                   onClick={() => handleItemClick(item)}
                                 >
                                   {/* Left Side - Details */}
@@ -2437,16 +2432,15 @@ export default function RestaurantDetails() {
                                           e.stopPropagation();
                                           handleBookmarkClick(item);
                                         }}
-                                        className={`p-1.5 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
-                                          isDishFavorite(
-                                            item.id,
-                                            restaurant?.restaurantId ||
-                                              restaurant?._id ||
-                                              restaurant?.id,
-                                          )
-                                            ? "border-red-500 text-red-500 bg-red-50 dark:bg-red-900/20"
-                                            : "border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400"
-                                        }`}
+                                        className={`p-1.5 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${isDishFavorite(
+                                          item.id,
+                                          restaurant?.restaurantId ||
+                                          restaurant?._id ||
+                                          restaurant?.id,
+                                        )
+                                          ? "border-red-500 text-red-500 bg-red-50 dark:bg-red-900/20"
+                                          : "border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400"
+                                          }`}
                                       >
                                         <Bookmark
                                           size={18}
@@ -2454,8 +2448,8 @@ export default function RestaurantDetails() {
                                             isDishFavorite(
                                               item.id,
                                               restaurant?.restaurantId ||
-                                                restaurant?._id ||
-                                                restaurant?.id,
+                                              restaurant?._id ||
+                                              restaurant?.id,
                                             )
                                               ? "fill-red-500"
                                               : ""
@@ -2516,11 +2510,10 @@ export default function RestaurantDetails() {
                                       <motion.div
                                         initial={{ opacity: 0, scale: 0.8 }}
                                         animate={{ opacity: 1, scale: 1 }}
-                                        className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-4 py-1.5 rounded-lg shadow-md flex items-center gap-1 ${
-                                          shouldShowGrayscale
-                                            ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
-                                            : "border-green-600 text-green-600 hover:bg-green-50"
-                                        }`}
+                                        className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-4 py-1.5 rounded-lg shadow-md flex items-center gap-1 ${shouldShowGrayscale
+                                          ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
+                                          : "border-green-600 text-green-600 hover:bg-green-50"
+                                          }`}
                                       >
                                         <button
                                           onClick={(e) => {
@@ -2589,11 +2582,10 @@ export default function RestaurantDetails() {
                                           }
                                         }}
                                         disabled={shouldShowGrayscale}
-                                        className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-6 py-1.5 rounded-lg shadow-md flex items-center gap-1 transition-colors ${
-                                          shouldShowGrayscale
-                                            ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
-                                            : "border-green-600 text-green-600 hover:bg-green-50"
-                                        }`}
+                                        className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-6 py-1.5 rounded-lg shadow-md flex items-center gap-1 transition-colors ${shouldShowGrayscale
+                                          ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
+                                          : "border-green-600 text-green-600 hover:bg-green-50"
+                                          }`}
                                       >
                                         ADD{" "}
                                         <Plus
@@ -2660,11 +2652,10 @@ export default function RestaurantDetails() {
                                       className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
                                     >
                                       <ChevronDown
-                                        className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${
-                                          isSubsectionExpanded
-                                            ? ""
-                                            : "-rotate-90"
-                                        }`}
+                                        className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${isSubsectionExpanded
+                                          ? ""
+                                          : "-rotate-90"
+                                          }`}
                                       />
                                     </button>
                                   </div>
@@ -2774,16 +2765,15 @@ export default function RestaurantDetails() {
                                                       e.stopPropagation();
                                                       handleBookmarkClick(item);
                                                     }}
-                                                    className={`p-1.5 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
-                                                      isDishFavorite(
-                                                        item.id,
-                                                        restaurant?.restaurantId ||
-                                                          restaurant?._id ||
-                                                          restaurant?.id,
-                                                      )
-                                                        ? "border-red-500 text-red-500 bg-red-50 dark:bg-red-900/20"
-                                                        : "border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400"
-                                                    }`}
+                                                    className={`p-1.5 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${isDishFavorite(
+                                                      item.id,
+                                                      restaurant?.restaurantId ||
+                                                      restaurant?._id ||
+                                                      restaurant?.id,
+                                                    )
+                                                      ? "border-red-500 text-red-500 bg-red-50 dark:bg-red-900/20"
+                                                      : "border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400"
+                                                      }`}
                                                   >
                                                     <Bookmark
                                                       size={18}
@@ -2791,8 +2781,8 @@ export default function RestaurantDetails() {
                                                         isDishFavorite(
                                                           item.id,
                                                           restaurant?.restaurantId ||
-                                                            restaurant?._id ||
-                                                            restaurant?.id,
+                                                          restaurant?._id ||
+                                                          restaurant?.id,
                                                         )
                                                           ? "fill-red-500"
                                                           : ""
@@ -2859,11 +2849,10 @@ export default function RestaurantDetails() {
                                                       opacity: 1,
                                                       scale: 1,
                                                     }}
-                                                    className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-4 py-1.5 rounded-lg shadow-md flex items-center gap-1 ${
-                                                      shouldShowGrayscale
-                                                        ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
-                                                        : "border-green-600 text-green-600 hover:bg-green-50"
-                                                    }`}
+                                                    className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-4 py-1.5 rounded-lg shadow-md flex items-center gap-1 ${shouldShowGrayscale
+                                                      ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
+                                                      : "border-green-600 text-green-600 hover:bg-green-50"
+                                                      }`}
                                                   >
                                                     <button
                                                       onClick={(e) => {
@@ -2957,11 +2946,10 @@ export default function RestaurantDetails() {
                                                     disabled={
                                                       shouldShowGrayscale
                                                     }
-                                                    className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-6 py-1.5 rounded-lg shadow-md flex items-center gap-1 transition-colors ${
-                                                      shouldShowGrayscale
-                                                        ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
-                                                        : "border-green-600 text-green-600 hover:bg-green-50"
-                                                    }`}
+                                                    className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-6 py-1.5 rounded-lg shadow-md flex items-center gap-1 transition-colors ${shouldShowGrayscale
+                                                      ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
+                                                      : "border-green-600 text-green-600 hover:bg-green-50"
+                                                      }`}
                                                   >
                                                     ADD{" "}
                                                     <Plus
@@ -3079,9 +3067,8 @@ export default function RestaurantDetails() {
                           LARGE ORDER MENU
                         </span>
                         <ChevronDown
-                          className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform ${
-                            showLargeOrderMenu ? "rotate-180" : ""
-                          }`}
+                          className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform ${showLargeOrderMenu ? "rotate-180" : ""
+                            }`}
                         />
                       </button>
                       {showLargeOrderMenu && (
@@ -3174,11 +3161,10 @@ export default function RestaurantDetails() {
                                   : "low-to-high",
                             }))
                           }
-                          className={`text-left px-4 py-2.5 rounded-lg border-2 transition-all ${
-                            filters.sortBy === "low-to-high"
-                              ? "border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                              : "border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2a2a2a] text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
-                          }`}
+                          className={`text-left px-4 py-2.5 rounded-lg border-2 transition-all ${filters.sortBy === "low-to-high"
+                            ? "border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                            : "border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2a2a2a] text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
+                            }`}
                         >
                           Price - low to high
                         </button>
@@ -3192,11 +3178,10 @@ export default function RestaurantDetails() {
                                   : "high-to-low",
                             }))
                           }
-                          className={`text-left px-4 py-2.5 rounded-lg border-2 transition-all ${
-                            filters.sortBy === "high-to-low"
-                              ? "border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
-                              : "border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2a2a2a] text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
-                          }`}
+                          className={`text-left px-4 py-2.5 rounded-lg border-2 transition-all ${filters.sortBy === "high-to-low"
+                            ? "border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                            : "border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2a2a2a] text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
+                            }`}
                         >
                           Price - high to low
                         </button>
@@ -3217,11 +3202,10 @@ export default function RestaurantDetails() {
                                 prev.vegNonVeg === "veg" ? null : "veg",
                             }))
                           }
-                          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-all flex-1 ${
-                            filters.vegNonVeg === "veg"
-                              ? "border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                              : "border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2a2a2a] text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
-                          }`}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-all flex-1 ${filters.vegNonVeg === "veg"
+                            ? "border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                            : "border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2a2a2a] text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
+                            }`}
                         >
                           <div className="h-4 w-4 rounded-full bg-green-500 dark:bg-green-400" />
                           <span className="font-medium">Veg</span>
@@ -3234,11 +3218,10 @@ export default function RestaurantDetails() {
                                 prev.vegNonVeg === "non-veg" ? null : "non-veg",
                             }))
                           }
-                          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-all flex-1 ${
-                            filters.vegNonVeg === "non-veg"
-                              ? "border-amber-700 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
-                              : "border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2a2a2a] text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
-                          }`}
+                          className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-all flex-1 ${filters.vegNonVeg === "non-veg"
+                            ? "border-amber-700 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400"
+                            : "border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2a2a2a] text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
+                            }`}
                         >
                           <div className="h-4 w-4 rounded-full bg-amber-700 dark:bg-amber-600" />
                           <span className="font-medium">Non-veg</span>
@@ -3258,11 +3241,10 @@ export default function RestaurantDetails() {
                             highlyReordered: !prev.highlyReordered,
                           }))
                         }
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-all w-full ${
-                          filters.highlyReordered
-                            ? "border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400"
-                            : "border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2a2a2a] text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
-                        }`}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-all w-full ${filters.highlyReordered
+                          ? "border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                          : "border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2a2a2a] text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
+                          }`}
                       >
                         <RotateCcw className="h-4 w-4" />
                         <span className="font-medium">Highly reordered</span>
@@ -3281,11 +3263,10 @@ export default function RestaurantDetails() {
                             spicy: !prev.spicy,
                           }))
                         }
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-all w-full ${
-                          filters.spicy
-                            ? "border-red-500 dark:border-red-400 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400"
-                            : "border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2a2a2a] text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
-                        }`}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-all w-full ${filters.spicy
+                          ? "border-red-500 dark:border-red-400 bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400"
+                          : "border-gray-200 dark:border-gray-700 bg-white dark:bg-[#2a2a2a] text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600"
+                          }`}
                       >
                         <Flame className="h-4 w-4" />
                         <span className="font-medium">Spicy</span>
@@ -3372,8 +3353,8 @@ export default function RestaurantDetails() {
                   {/* Outlets List */}
                   <div className="flex-1 overflow-y-auto px-4 py-3">
                     {restaurant?.outlets &&
-                    Array.isArray(restaurant.outlets) &&
-                    restaurant.outlets.length > 0 ? (
+                      Array.isArray(restaurant.outlets) &&
+                      restaurant.outlets.length > 0 ? (
                       <div className="space-y-2">
                         {restaurant.outlets.map((outlet) => (
                           <div
@@ -3514,8 +3495,8 @@ export default function RestaurantDetails() {
                               checked={isDishFavorite(
                                 selectedItem.id,
                                 restaurant?.restaurantId ||
-                                  restaurant?._id ||
-                                  restaurant?.id,
+                                restaurant?._id ||
+                                restaurant?.id,
                               )}
                               onCheckedChange={(checked) => {
                                 if (!checked && selectedItem) {
@@ -3669,28 +3650,26 @@ export default function RestaurantDetails() {
                           e.stopPropagation();
                           handleBookmarkClick(selectedItem);
                         }}
-                        className={`h-10 w-10 rounded-full border flex items-center justify-center transition-all duration-300 ${
-                          isDishFavorite(
-                            selectedItem.id,
-                            restaurant?.restaurantId ||
-                              restaurant?._id ||
-                              restaurant?.id,
-                          )
-                            ? "border-red-500 dark:border-red-400 bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400"
-                            : "border-white dark:border-gray-800 bg-white/90 dark:bg-[#1a1a1a]/90 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-[#2a2a2a]"
-                        }`}
+                        className={`h-10 w-10 rounded-full border flex items-center justify-center transition-all duration-300 ${isDishFavorite(
+                          selectedItem.id,
+                          restaurant?.restaurantId ||
+                          restaurant?._id ||
+                          restaurant?.id,
+                        )
+                          ? "border-red-500 dark:border-red-400 bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400"
+                          : "border-white dark:border-gray-800 bg-white/90 dark:bg-[#1a1a1a]/90 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-[#2a2a2a]"
+                          }`}
                       >
                         <Bookmark
-                          className={`h-5 w-5 transition-all duration-300 ${
-                            isDishFavorite(
-                              selectedItem.id,
-                              restaurant?.restaurantId ||
-                                restaurant?._id ||
-                                restaurant?.id,
-                            )
-                              ? "fill-red-500 dark:fill-red-400"
-                              : ""
-                          }`}
+                          className={`h-5 w-5 transition-all duration-300 ${isDishFavorite(
+                            selectedItem.id,
+                            restaurant?.restaurantId ||
+                            restaurant?._id ||
+                            restaurant?.id,
+                          )
+                            ? "fill-red-500 dark:fill-red-400"
+                            : ""
+                            }`}
                         />
                       </button>
                       <button className="h-10 w-10 rounded-full border border-white dark:border-gray-800 bg-white/90 dark:bg-[#1a1a1a]/90 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-[#2a2a2a] flex items-center justify-center transition-colors">
@@ -3718,28 +3697,26 @@ export default function RestaurantDetails() {
                             e.stopPropagation();
                             handleBookmarkClick(selectedItem);
                           }}
-                          className={`h-8 w-8 rounded-full border flex items-center justify-center transition-all duration-300 ${
-                            isDishFavorite(
-                              selectedItem.id,
-                              restaurant?.restaurantId ||
-                                restaurant?._id ||
-                                restaurant?.id,
-                            )
-                              ? "border-red-500 dark:border-red-400 bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400"
-                              : "border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-                          }`}
+                          className={`h-8 w-8 rounded-full border flex items-center justify-center transition-all duration-300 ${isDishFavorite(
+                            selectedItem.id,
+                            restaurant?.restaurantId ||
+                            restaurant?._id ||
+                            restaurant?.id,
+                          )
+                            ? "border-red-500 dark:border-red-400 bg-red-50 dark:bg-red-900/30 text-red-500 dark:text-red-400"
+                            : "border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                            }`}
                         >
                           <Bookmark
-                            className={`h-4 w-4 transition-all duration-300 ${
-                              isDishFavorite(
-                                selectedItem.id,
-                                restaurant?.restaurantId ||
-                                  restaurant?._id ||
-                                  restaurant?.id,
-                              )
-                                ? "fill-red-500 dark:fill-red-400"
-                                : ""
-                            }`}
+                            className={`h-4 w-4 transition-all duration-300 ${isDishFavorite(
+                              selectedItem.id,
+                              restaurant?.restaurantId ||
+                              restaurant?._id ||
+                              restaurant?.id,
+                            )
+                              ? "fill-red-500 dark:fill-red-400"
+                              : ""
+                              }`}
                           />
                         </button>
                         <button className="h-8 w-8 rounded-full border border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 flex items-center justify-center transition-colors">
@@ -3781,11 +3758,10 @@ export default function RestaurantDetails() {
                     <div className="flex items-center gap-4">
                       {/* Quantity Selector */}
                       <div
-                        className={`flex items-center gap-3 border-2 rounded-lg px-3 h-[44px] bg-white dark:bg-[#2a2a2a] ${
-                          shouldShowGrayscale
-                            ? "border-gray-300 dark:border-gray-700 opacity-50"
-                            : "border-gray-300 dark:border-gray-700"
-                        }`}
+                        className={`flex items-center gap-3 border-2 rounded-lg px-3 h-[44px] bg-white dark:bg-[#2a2a2a] ${shouldShowGrayscale
+                          ? "border-gray-300 dark:border-gray-700 opacity-50"
+                          : "border-gray-300 dark:border-gray-700"
+                          }`}
                       >
                         <button
                           onClick={(e) => {
@@ -3804,20 +3780,18 @@ export default function RestaurantDetails() {
                             (quantities[selectedItem.id || selectedItem._id] || 0) === 0 ||
                             shouldShowGrayscale
                           }
-                          className={`${
-                            shouldShowGrayscale
-                              ? "text-gray-300 dark:text-gray-600 cursor-not-allowed"
-                              : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:text-gray-300 dark:disabled:text-gray-600 disabled:cursor-not-allowed"
-                          }`}
+                          className={`${shouldShowGrayscale
+                            ? "text-gray-300 dark:text-gray-600 cursor-not-allowed"
+                            : "text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white disabled:text-gray-300 dark:disabled:text-gray-600 disabled:cursor-not-allowed"
+                            }`}
                         >
                           <Minus className="h-5 w-5" />
                         </button>
                         <span
-                          className={`text-lg font-semibold min-w-[2rem] text-center ${
-                            shouldShowGrayscale
-                              ? "text-gray-400 dark:text-gray-600"
-                              : "text-gray-900 dark:text-white"
-                          }`}
+                          className={`text-lg font-semibold min-w-[2rem] text-center ${shouldShowGrayscale
+                            ? "text-gray-400 dark:text-gray-600"
+                            : "text-gray-900 dark:text-white"
+                            }`}
                         >
                           {quantities[selectedItem.id || selectedItem._id] || 0}
                         </span>
@@ -3844,11 +3818,10 @@ export default function RestaurantDetails() {
 
                       {/* Add Item Button */}
                       <Button
-                        className={`flex-1 h-[44px] rounded-lg font-semibold flex items-center justify-center gap-2 ${
-                          shouldShowGrayscale
-                            ? "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-600 cursor-not-allowed opacity-50"
-                            : "bg-red-500 hover:bg-red-600 text-white"
-                        }`}
+                        className={`flex-1 h-[44px] rounded-lg font-semibold flex items-center justify-center gap-2 ${shouldShowGrayscale
+                          ? "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-600 cursor-not-allowed opacity-50"
+                          : "bg-red-500 hover:bg-red-600 text-white"
+                          }`}
                         onClick={(e) => {
                           if (!shouldShowGrayscale) {
                             updateItemQuantity(
@@ -3994,11 +3967,10 @@ export default function RestaurantDetails() {
                           <button
                             key={index}
                             onClick={() => setSelectedTimeSlot(slot)}
-                            className={`w-full text-left px-4 py-2.5 rounded-lg transition-all ${
-                              isSelected
-                                ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600"
-                                : "bg-white dark:bg-[#2a2a2a] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 border border-transparent"
-                            }`}
+                            className={`w-full text-left px-4 py-2.5 rounded-lg transition-all ${isSelected
+                              ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600"
+                              : "bg-white dark:bg-[#2a2a2a] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 border border-transparent"
+                              }`}
                           >
                             <span className="text-sm font-medium">{slot}</span>
                           </button>
@@ -4155,9 +4127,8 @@ export default function RestaurantDetails() {
                                           {coupon.code}
                                         </button>
                                         <ChevronDown
-                                          className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform ${
-                                            isExpanded ? "rotate-180" : ""
-                                          }`}
+                                          className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform ${isExpanded ? "rotate-180" : ""
+                                            }`}
                                         />
                                       </div>
                                     </button>

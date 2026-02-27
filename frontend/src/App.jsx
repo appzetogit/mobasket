@@ -1,6 +1,5 @@
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useEffect } from "react";
-import { Toaster } from "sonner";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AuthRedirect from "@/components/AuthRedirect";
 
@@ -138,8 +137,8 @@ export default function App() {
 
     const requestLocationPermission = () => {
       navigator.geolocation.getCurrentPosition(
-        () => {},
-        () => {},
+        () => { },
+        () => { },
         {
           enableHighAccuracy: false,
           timeout: 10000,
@@ -158,7 +157,6 @@ export default function App() {
 
   return (
     <>
-      <Toaster position="top-center" richColors />
       <RestaurantOrderSoundListener />
       <Routes>
         <Route path="/user" element={<Navigate to="/" replace />} />

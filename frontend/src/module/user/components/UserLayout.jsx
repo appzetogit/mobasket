@@ -20,7 +20,7 @@ const SearchOverlayContext = createContext({
   openSearch: () => {
     console.warn("SearchOverlayProvider not available");
   },
-  closeSearch: () => {},
+  closeSearch: () => { },
 });
 
 export function useSearchOverlay() {
@@ -69,7 +69,7 @@ const LocationSelectorContext = createContext({
   openLocationSelector: () => {
     console.warn("LocationSelectorProvider not available");
   },
-  closeLocationSelector: () => {},
+  closeLocationSelector: () => { },
 });
 
 export function useLocationSelector() {

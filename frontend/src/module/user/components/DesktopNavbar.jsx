@@ -123,7 +123,7 @@ export default function DesktopNavbar() {
 
       {/* Content */}
       <div className="relative">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="w-full lg:max-w-[1100px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-0">
           <div className="flex items-center justify-between h-16">
             {/* Left: Location */}
             <div className="flex items-center gap-3 lg:gap-4 min-w-0">
@@ -184,13 +184,13 @@ export default function DesktopNavbar() {
               <Link
                 to="/"
                 className={`px-6 py-2.5 text-sm font-medium transition-all duration-200 relative ${isDelivery
-                  ? "text-green-600 dark:text-green-500"
-                  : "text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-500"
+                  ? "text-[#EF4F5F]"
+                  : "text-gray-600 dark:text-gray-400 hover:text-[#EF4F5F]"
                   }`}
               >
                 <span className="relative z-10">Delivery</span>
                 {isDelivery && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-green-600 dark:bg-green-500 rounded-t-full" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#EF4F5F] rounded-t-full" />
                 )}
               </Link>
 
@@ -201,13 +201,13 @@ export default function DesktopNavbar() {
               <Link
                 to="/under-250"
                 className={`px-6 py-2.5 text-sm font-medium transition-all duration-200 relative ${isUnder250
-                  ? "text-green-600 dark:text-green-500"
-                  : "text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-500"
+                  ? "text-[#EF4F5F]"
+                  : "text-gray-600 dark:text-gray-400 hover:text-[#EF4F5F]"
                   }`}
               >
                 <span className="relative z-10">Under 250</span>
                 {isUnder250 && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-green-600 dark:bg-green-500 rounded-t-full" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#EF4F5F] rounded-t-full" />
                 )}
               </Link>
 
@@ -218,13 +218,13 @@ export default function DesktopNavbar() {
               <Link
                 to="/profile"
                 className={`px-6 py-2.5 text-sm font-medium transition-all duration-200 relative ${isProfile
-                  ? "text-green-600 dark:text-green-500"
-                  : "text-gray-600 dark:text-gray-400 hover:text-green-600 dark:hover:text-green-500"
+                  ? "text-[#EF4F5F]"
+                  : "text-gray-600 dark:text-gray-400 hover:text-[#EF4F5F]"
                   }`}
               >
                 <span className="relative z-10">Profile</span>
                 {isProfile && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-green-600 dark:bg-green-500 rounded-t-full" />
+                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#EF4F5F] rounded-t-full" />
                 )}
               </Link>
             </div>
@@ -266,6 +266,15 @@ export default function DesktopNavbar() {
                     </span>
                   )}
                 </Button>
+              </Link>
+
+              {/* MoGrocery Button */}
+              <Link to="/grocery">
+                <div className="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-full shadow-md active:scale-95 transition-all flex items-center justify-center">
+                  <span className="font-black italic text-base tracking-tighter">
+                    MoGrocery
+                  </span>
+                </div>
               </Link>
             </div>
           </div>

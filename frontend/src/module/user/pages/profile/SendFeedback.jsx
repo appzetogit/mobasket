@@ -25,7 +25,7 @@ export default function SendFeedback() {
       const response = await api.post(API_ENDPOINTS.ADMIN.FEEDBACK_CREATE, {
         message: feedback.trim()
       })
-      
+
       if (response.data.success) {
         setIsSubmitted(true)
         setFeedback("")
@@ -44,7 +44,7 @@ export default function SendFeedback() {
 
   return (
     <AnimatedPage className="min-h-screen bg-[#f5f5f5] dark:bg-[#0a0a0a]">
-      <div className="max-w-5xl mx-auto px-4 md:px-6 lg:px-8 py-4 md:py-6 lg:py-8">
+      <div className="max-w-[1100px] mx-auto px-4 md:px-6 lg:px-8 py-4 md:pt-20 lg:pt-24 md:pb-6 lg:pb-8">
         {/* Header */}
         <div className="flex items-center gap-3 md:gap-4 mb-4 md:mb-6 lg:mb-8">
           <Link to="/user/profile">

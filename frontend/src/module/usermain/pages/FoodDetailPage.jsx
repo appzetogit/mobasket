@@ -317,204 +317,255 @@ export default function FoodDetailPage() {
         <div className="scale-90 origin-right">{quickActions}</div>
       </div>
 
-      <div className="relative w-full h-[44vh] bg-gradient-to-br from-[#ffd9b1] via-[#ffd1a8] to-[#ffc68f]">
-        <img src={product.image} alt={product.name} className="w-full h-full object-contain p-7" />
+      <div className="relative md:max-w-6xl md:mx-auto md:flex md:items-start md:gap-14 md:pt-24 md:px-8 md:pb-8">
+        {/* Desktop Back Button */}
+        <button
+          onClick={() => navigate(-1)}
+          className="hidden md:flex absolute top-8 left-8 items-center justify-center w-10 h-10 bg-white rounded-full border border-slate-200 shadow-sm text-slate-700 hover:bg-slate-50 transition-colors z-20"
+          aria-label="Go back"
+        >
+          <ArrowLeft size={20} />
+        </button>
 
-        <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between z-20">
-          <button
-            onClick={() => navigate(-1)}
-            className="w-10 h-10 bg-white/55 backdrop-blur-md rounded-full flex items-center justify-center shadow-sm"
-            aria-label="Back"
-          >
-            <ArrowLeft className="w-6 h-6 text-slate-900" />
-          </button>
-          {quickActions}
+        {/* Left Side: Product Image Layout */}
+        <div className="relative w-full h-[44vh] md:w-[45%] md:h-[500px] md:shrink-0 md:rounded-[36px] bg-gradient-to-br from-[#ffd9b1] via-[#ffd1a8] to-[#ffc68f] md:shadow-[0_8px_30px_rgba(0,0,0,0.04)] md:overflow-hidden md:border md:border-slate-100 p-2 md:p-8">
+          <img src={product.image} alt={product.name} className="w-full h-full object-contain p-5 md:p-2 md:scale-110 md:hover:scale-[1.15] transition-transform duration-500" />
+
+          <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between md:justify-end z-20">
+            <button
+              onClick={() => navigate(-1)}
+              className="w-10 h-10 bg-white/55 backdrop-blur-md rounded-full flex items-center justify-center shadow-sm md:hidden"
+              aria-label="Back"
+            >
+              <ArrowLeft className="w-6 h-6 text-slate-900" />
+            </button>
+            <div>{quickActions}</div>
+          </div>
+
+          <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-white/70 to-transparent z-10 md:hidden" />
+          <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white via-white/90 to-transparent z-10 md:hidden" />
+
+          {isAddedToCart ? (
+            <div className="absolute bottom-4 right-4 z-20 h-10 px-2 rounded-xl bg-white border border-emerald-300 shadow-sm flex items-center gap-2 md:hidden">
+              <button
+                type="button"
+                onClick={handleDecreaseQuantity}
+                className="w-7 h-7 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center"
+              >
+                <Minus size={14} />
+              </button>
+              <span className="min-w-[20px] text-center text-sm font-black text-emerald-800">{currentQuantity}</span>
+              <button
+                type="button"
+                onClick={handleIncreaseQuantity}
+                className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center"
+              >
+                <Plus size={14} />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={(e) => handleAddToCart(null, e)}
+              className="absolute bottom-4 right-4 text-xs font-black px-6 py-2 rounded-md shadow-sm transition-colors z-20 border bg-white border-[#facd01] text-slate-900 hover:bg-[#facd01] md:hidden"
+            >
+              ADD
+            </button>
+          )}
         </div>
 
-        <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-white/70 to-transparent z-10" />
-        <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white via-white/90 to-transparent z-10" />
+        {/* Right Side: Details Layout */}
+        <div className="relative -mt-10 z-10 md:w-[55%] md:mt-0 md:z-auto">
+          <div className="bg-white rounded-t-[26px] shadow-[0_-6px_26px_rgba(15,23,42,0.08)] px-5 pt-5 pb-4 border-t border-slate-100 md:rounded-none md:shadow-none md:border-none md:p-0 md:bg-transparent md:flex md:flex-col md:justify-center">
 
-        {isAddedToCart ? (
-          <div className="absolute bottom-4 right-4 z-20 h-10 px-2 rounded-xl bg-white border border-emerald-300 shadow-sm flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleDecreaseQuantity}
-              className="w-7 h-7 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center"
-            >
-              <Minus size={14} />
-            </button>
-            <span className="min-w-[20px] text-center text-sm font-black text-emerald-800">{currentQuantity}</span>
-            <button
-              type="button"
-              onClick={handleIncreaseQuantity}
-              className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center"
-            >
-              <Plus size={14} />
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={(e) => handleAddToCart(null, e)}
-            className="absolute bottom-4 right-4 text-xs font-black px-6 py-2 rounded-md shadow-sm transition-colors z-20 border bg-white border-[#facd01] text-slate-900 hover:bg-[#facd01]"
-          >
-            ADD
-          </button>
-        )}
-      </div>
-
-      <div className="relative -mt-10 z-10">
-        <div className="bg-white rounded-t-[26px] shadow-[0_-6px_26px_rgba(15,23,42,0.08)] px-5 pt-5 pb-4 border-t border-slate-100">
-          <div className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full text-[10px] font-bold mb-2">
-            <Clock size={12} />
-            {product.time}
-          </div>
-
-          <h1 className="text-[20px] font-[900] text-slate-900 leading-snug">{product.name}</h1>
-          {product.storeName && (
-            <p className="text-[12px] text-slate-600 mt-1.5 font-medium">
-              Sold by <span className="font-semibold text-slate-800">{product.storeName}</span>
+            {/* Breadcrumb style text on desktop */}
+            <p className="hidden md:block text-xs font-semibold text-slate-400 mb-3">
+              Home / {product.restaurant || "MoGrocery"} / {product.name}
             </p>
-          )}
-          <p className="text-[13px] font-semibold text-slate-500 mt-1">{product.weight}</p>
 
-          <div className="flex items-center gap-2 mt-2.5">
-            <span className="text-xl font-[900] text-slate-900">Rs {product.price}</span>
-            {product.mrp > product.price && (
-              <span className="text-[11px] font-bold text-slate-400 line-through">MRP Rs {product.mrp}</span>
+            <div className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full text-[10px] md:text-xs font-bold mb-2 md:mb-4 w-max">
+              <Clock size={12} />
+              {product.time}
+            </div>
+
+            <h1 className="text-[20px] md:text-3xl font-[900] text-slate-900 leading-snug">{product.name}</h1>
+
+            {product.storeName && (
+              <p className="text-[12px] md:text-sm text-slate-600 mt-1.5 font-medium">
+                Sold by <span className="font-semibold text-slate-800">{product.storeName}</span>
+              </p>
             )}
-            {product.discount && (
-              <span className="bg-[#e8f0fe] text-[#2c73eb] text-[10px] font-[800] px-1.5 py-0.5 rounded-md">
-                {product.discount}
-              </span>
-            )}
-          </div>
 
-          <div className="mt-4 border-t border-slate-100 pt-3">
-            <button
-              type="button"
-              className="flex items-center gap-1 text-[13px] font-[700] text-[#11a652]"
-              onClick={() => setIsDetailsOpen((prev) => !prev)}
-            >
-              View product details
-              <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isDetailsOpen ? "rotate-180" : ""}`} />
-            </button>
+            <p className="text-[13px] md:text-base font-semibold text-slate-500 mt-1 md:mt-3">{product.weight}</p>
 
-            <div className={`overflow-hidden transition-all duration-300 ${isDetailsOpen ? "max-h-64 mt-3" : "max-h-0"}`}>
-              <div className="bg-[#f8f9ff] rounded-xl p-3 text-[12px] text-slate-600 leading-relaxed">
-                {product.description || "Fresh quality grocery item delivered quickly. Store in a cool place and consume before expiry for best taste."}
+            <div className="flex items-center gap-2 mt-2.5 md:mt-6">
+              <span className="text-xl md:text-3xl font-[900] text-slate-900">Rs {product.price}</span>
+              {product.mrp > product.price && (
+                <span className="text-[11px] md:text-sm font-bold text-slate-400 line-through">MRP Rs {product.mrp}</span>
+              )}
+              {product.discount && (
+                <span className="bg-[#e8f0fe] md:bg-blue-100 text-[#2c73eb] md:text-blue-700 text-[10px] md:text-xs font-[800] px-1.5 py-0.5 md:px-2 md:py-1 rounded-md">
+                  {product.discount}
+                </span>
+              )}
+            </div>
+
+            {/* DESKTOP ADD BUTTON */}
+            <div className="hidden md:flex mt-8 mb-4">
+              {isAddedToCart ? (
+                <div className="h-12 w-40 rounded-xl bg-emerald-600 text-white flex items-center justify-between px-3 shadow-md hover:shadow-lg transition-transform">
+                  <button
+                    type="button"
+                    onClick={handleDecreaseQuantity}
+                    className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 text-white flex items-center justify-center transition-colors"
+                  >
+                    <Minus size={16} strokeWidth={2.5} />
+                  </button>
+                  <span className="text-base font-black text-white">{currentQuantity}</span>
+                  <button
+                    type="button"
+                    onClick={handleIncreaseQuantity}
+                    className="w-8 h-8 rounded-full bg-white text-emerald-700 flex items-center justify-center hover:scale-105 transition-transform"
+                  >
+                    <Plus size={16} strokeWidth={3} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={(e) => handleAddToCart(null, e)}
+                  className="h-12 w-40 rounded-xl bg-slate-800 text-white font-[800] text-base shadow-md hover:bg-slate-700 transition-colors"
+                >
+                  ADD TO CART
+                </button>
+              )}
+            </div>
+
+            <div className="mt-4 md:mt-6 border-t border-slate-100 md:border-slate-200 pt-3 md:pt-6">
+              <button
+                type="button"
+                className="flex items-center gap-1 text-[13px] font-[700] text-[#11a652] md:text-slate-800 md:text-sm"
+                onClick={() => setIsDetailsOpen((prev) => !prev)}
+              >
+                View product details
+                <ChevronDown className={`w-4 h-4 transition-transform duration-300 ${isDetailsOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              <div className={`overflow-hidden transition-all duration-300 ${isDetailsOpen ? "max-h-64 mt-3 md:mt-4" : "max-h-0"}`}>
+                <div className="bg-[#f8f9ff] md:bg-white md:border md:border-slate-100 rounded-xl p-3 md:p-4 text-[12px] md:text-sm text-slate-600 md:text-slate-500 leading-relaxed shadow-sm">
+                  {product.description || "Fresh quality grocery item delivered quickly. Store in a cool place and consume before expiry for best taste."}
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="px-5 pt-6 pb-8">
-        <h2 className="text-lg font-[900] text-slate-900 mb-4">Similar products</h2>
+      <div className="px-5 pt-6 pb-8 md:max-w-6xl md:mx-auto md:px-8 md:pt-12">
+        <h2 className="text-lg md:text-xl font-[900] text-slate-900 mb-4 md:mb-6">Similar products</h2>
         {similarProducts.length === 0 ? (
           <div className="text-sm text-slate-500">No similar products found in this category.</div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-x-3 md:gap-x-5 gap-y-6 md:gap-y-8">
             {similarProducts.map((item) => {
-            const itemCartRef = groceryCart.find((c) => String(c.id) === String(item.id));
-            const itemInCart = Boolean(itemCartRef);
-            const itemQty = itemCartRef?.quantity || 0;
-            const discountVal = item.mrp > item.price ? Math.round(((item.mrp - item.price) / item.mrp) * 100) : 0;
+              const itemCartRef = groceryCart.find((c) => String(c.id) === String(item.id));
+              const itemInCart = Boolean(itemCartRef);
+              const itemQty = itemCartRef?.quantity || 0;
+              const discountVal = item.mrp > item.price ? Math.round(((item.mrp - item.price) / item.mrp) * 100) : 0;
 
-            return (
-              <div
-                key={item.id}
-                className="flex flex-col h-full bg-white relative cursor-pointer group"
-                onClick={() => {
-                  navigate(`/food/${item.id}`, { state: { item } });
-                  window.scrollTo(0, 0);
-                }}
-              >
-                {/* Image Section */}
-                <div className="w-full aspect-square bg-[#f8f9fb] rounded-[24px] overflow-hidden relative mb-3 flex items-center justify-center p-4">
-                  <img src={item.image} className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110" alt={item.name} />
+              return (
+                <div
+                  key={item.id}
+                  className="flex flex-col h-full bg-white relative cursor-pointer group"
+                  onClick={() => {
+                    navigate(`/food/${item.id}`, { state: { item } });
+                    window.scrollTo(0, 0);
+                  }}
+                >
+                  {/* Image Section */}
+                  <div className="w-full aspect-square bg-[#f8f9fb] rounded-[24px] overflow-hidden relative mb-3 flex items-center justify-center p-4">
+                    <img src={item.image} className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110" alt={item.name} />
 
-                  {/* Heart Icon Overlay */}
-                  <div className="absolute top-2.5 right-2.5 z-10">
-                    <WishlistButton
-                      item={item}
-                      className="w-7 h-7 bg-white shadow-md border-none flex items-center justify-center p-0"
-                    />
-                  </div>
+                    {/* Heart Icon Overlay */}
+                    <div className="absolute top-2.5 right-2.5 z-10">
+                      <WishlistButton
+                        item={item}
+                        className="w-7 h-7 bg-white shadow-md border-none flex items-center justify-center p-0"
+                      />
+                    </div>
 
-                  {/* ADD / Quantity Control Overlay */}
-                  <div className="absolute bottom-2.5 right-2.5 z-10">
-                    {itemInCart ? (
-                      <div className="flex items-center gap-3 bg-white rounded-full border border-emerald-500/30 px-1.5 py-1 shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+                    {/* ADD / Quantity Control Overlay */}
+                    <div className="absolute bottom-2.5 right-2.5 z-10">
+                      {itemInCart ? (
+                        <div className="flex items-center gap-3 bg-white rounded-full border border-emerald-500/30 px-1.5 py-1 shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateQuantityByPlatform(item.id, itemQty - 1, "mogrocery");
+                            }}
+                            className="w-6 h-6 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center active:scale-90 transition-transform"
+                          >
+                            <Minus size={12} strokeWidth={3} />
+                          </button>
+                          <span className="text-[11px] font-[900] text-emerald-900 min-w-[14px] text-center">{itemQty}</span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              updateQuantityByPlatform(item.id, itemQty + 1, "mogrocery");
+                            }}
+                            className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center active:scale-90 transition-transform"
+                          >
+                            <Plus size={12} strokeWidth={3} />
+                          </button>
+                        </div>
+                      ) : (
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            updateQuantityByPlatform(item.id, itemQty - 1, "mogrocery");
-                          }}
-                          className="w-6 h-6 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center active:scale-90 transition-transform"
+                          onClick={(e) => handleAddToCart(item, e)}
+                          className="bg-white border border-[#facd01] text-slate-900 text-[10px] font-black px-5 py-1.5 rounded-full shadow-sm hover:bg-[#facd01] transition-all active:scale-95"
                         >
-                          <Minus size={12} strokeWidth={3} />
+                          ADD
                         </button>
-                        <span className="text-[11px] font-[900] text-emerald-900 min-w-[14px] text-center">{itemQty}</span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            updateQuantityByPlatform(item.id, itemQty + 1, "mogrocery");
-                          }}
-                          className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center active:scale-90 transition-transform"
-                        >
-                          <Plus size={12} strokeWidth={3} />
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={(e) => handleAddToCart(item, e)}
-                        className="bg-white border border-[#facd01] text-slate-900 text-[10px] font-black px-5 py-1.5 rounded-full shadow-sm hover:bg-[#facd01] transition-all active:scale-95"
-                      >
-                        ADD
-                      </button>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                {/* Info Section */}
-                <div className="flex items-center gap-1.5 mb-1">
-                  <div className="w-3 h-3 border border-green-600 flex items-center justify-center p-[1px]">
-                    <div className="w-full h-full bg-green-600 rounded-full" />
+                  {/* Info Section */}
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <div className="w-3 h-3 border border-green-600 flex items-center justify-center p-[1px]">
+                      <div className="w-full h-full bg-green-600 rounded-full" />
+                    </div>
+                    <span className="text-[10px] font-bold text-slate-500">{item.weight}</span>
                   </div>
-                  <span className="text-[10px] font-bold text-slate-500">{item.weight}</span>
-                </div>
 
-                <p className="text-[12px] font-bold text-slate-900 leading-tight line-clamp-2 min-h-[32px] mb-1">
-                  {item.name}
-                </p>
-
-                {/* Time with Icon */}
-                <div className="flex items-center gap-1 mb-1.5">
-                  <Clock size={10} className="text-slate-400" />
-                  <span className="text-[9px] font-extrabold text-slate-500 uppercase">{item.time || "11 MINS"}</span>
-                </div>
-
-                {/* Price Info */}
-                <div className="mt-auto">
-                  {discountVal > 0 && <p className="text-[11px] font-black text-blue-600 leading-none mb-1.5">{discountVal}% OFF</p>}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[15px] font-[900] text-slate-900 leading-none">₹{item.price}</span>
-                    {item.mrp > item.price && (
-                      <span className="text-[12px] text-slate-400 line-through leading-none font-medium">₹{item.mrp}</span>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-slate-400 mt-1.5 font-medium tracking-tight">
-                    {calculateUnitPrice(item.price, item.weight) || `₹${item.price}/unit`}
+                  <p className="text-[12px] font-bold text-slate-900 leading-tight line-clamp-2 min-h-[32px] mb-1">
+                    {item.name}
                   </p>
+
+                  {/* Time with Icon */}
+                  <div className="flex items-center gap-1 mb-1.5">
+                    <Clock size={10} className="text-slate-400" />
+                    <span className="text-[9px] font-extrabold text-slate-500 uppercase">{item.time || "11 MINS"}</span>
+                  </div>
+
+                  {/* Price Info */}
+                  <div className="mt-auto">
+                    {discountVal > 0 && <p className="text-[11px] font-black text-blue-600 leading-none mb-1.5">{discountVal}% OFF</p>}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[15px] font-[900] text-slate-900 leading-none">₹{item.price}</span>
+                      {item.mrp > item.price && (
+                        <span className="text-[12px] text-slate-400 line-through leading-none font-medium">₹{item.mrp}</span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1.5 font-medium tracking-tight">
+                      {calculateUnitPrice(item.price, item.weight) || `₹${item.price}/unit`}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            );
+              );
             })}
           </div>
         )}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-3">
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-3 md:hidden">
         <button
           onClick={(e) => {
             if (isAddedToCart) {

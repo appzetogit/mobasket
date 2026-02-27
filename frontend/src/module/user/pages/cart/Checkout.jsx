@@ -131,11 +131,10 @@ export default function Checkout() {
                         return (
                           <div
                             key={address.id}
-                            className={`border-2 rounded-lg p-4 cursor-pointer transition-colors ${
-                              isSelected
+                            className={`border-2 rounded-lg p-4 cursor-pointer transition-colors ${isSelected
                                 ? "border-yellow-500 bg-yellow-50"
                                 : "border-gray-200 hover:border-yellow-300"
-                            }`}
+                              }`}
                             onClick={() => setSelectedAddress(address.id)}
                           >
                             <div className="flex items-start justify-between">
@@ -184,11 +183,10 @@ export default function Checkout() {
                         return (
                           <div
                             key={payment.id}
-                            className={`border-2 rounded-lg p-4 cursor-pointer transition-colors ${
-                              isSelected
+                            className={`border-2 rounded-lg p-4 cursor-pointer transition-colors ${isSelected
                                 ? "border-yellow-500 bg-yellow-50"
                                 : "border-gray-200 hover:border-yellow-300"
-                            }`}
+                              }`}
                             onClick={() => setSelectedPayment(payment.id)}
                           >
                             <div className="flex items-start justify-between">

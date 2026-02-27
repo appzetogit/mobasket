@@ -309,15 +309,15 @@ export default function SearchResults() {
               const coverImages =
                 restaurant.coverImages && restaurant.coverImages.length > 0
                   ? restaurant.coverImages
-                      .map((img) => img.url || img)
-                      .filter(Boolean)
+                    .map((img) => img.url || img)
+                    .filter(Boolean)
                   : [];
 
               const fallbackImages =
                 restaurant.menuImages && restaurant.menuImages.length > 0
                   ? restaurant.menuImages
-                      .map((img) => img.url || img)
-                      .filter(Boolean)
+                    .map((img) => img.url || img)
+                    .filter(Boolean)
                   : [];
 
               // Use backend images only - no fallback placeholder
@@ -401,8 +401,8 @@ export default function SearchResults() {
                         featuredPrice =
                           discountPercent > 0
                             ? Math.round(
-                                originalPrice * (1 - discountPercent / 100),
-                              )
+                              originalPrice * (1 - discountPercent / 100),
+                            )
                             : originalPrice;
                       }
                       break;
@@ -812,17 +812,15 @@ export default function SearchResults() {
                 <button
                   key={cat.id || `category-${index}`}
                   onClick={() => handleCategorySelect(cat.id)}
-                  className={`flex flex-col items-center gap-1.5 flex-shrink-0 pb-2 transition-all ${
-                    isSelected ? "border-b-2 border-green-600" : ""
-                  }`}
+                  className={`flex flex-col items-center gap-1.5 flex-shrink-0 pb-2 transition-all ${isSelected ? "border-b-2 border-green-600" : ""
+                    }`}
                 >
                   {cat.image ? (
                     <div
-                      className={`w-16 h-16 rounded-full overflow-hidden border-2 transition-all ${
-                        isSelected
+                      className={`w-16 h-16 rounded-full overflow-hidden border-2 transition-all ${isSelected
                           ? "border-green-600 dark:border-green-500 shadow-lg"
                           : "border-transparent"
-                      }`}
+                        }`}
                     >
                       <img
                         src={cat.image}
@@ -832,21 +830,19 @@ export default function SearchResults() {
                     </div>
                   ) : (
                     <div
-                      className={`w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center border-2 transition-all ${
-                        isSelected
+                      className={`w-16 h-16 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center border-2 transition-all ${isSelected
                           ? "border-green-600 dark:border-green-500 shadow-lg bg-green-50 dark:bg-green-900/20"
                           : "border-transparent"
-                      }`}
+                        }`}
                     >
                       <span className="text-xl">🍽️</span>
                     </div>
                   )}
                   <span
-                    className={`text-xs font-medium whitespace-nowrap ${
-                      isSelected
+                    className={`text-xs font-medium whitespace-nowrap ${isSelected
                         ? "text-green-700 dark:text-green-400"
                         : "text-gray-600 dark:text-gray-400"
-                    }`}
+                      }`}
                   >
                     {cat.name}
                   </span>
@@ -883,11 +879,10 @@ export default function SearchResults() {
                   key={filter.id}
                   variant="outline"
                   onClick={() => toggleFilter(filter.id)}
-                  className={`h-9 px-3 rounded-lg flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 transition-all font-medium ${
-                    isActive
+                  className={`h-9 px-3 rounded-lg flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 transition-all font-medium ${isActive
                       ? "bg-green-600 text-white border-green-600 hover:bg-green-700 dark:bg-green-600 dark:hover:bg-green-700"
                       : "bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
-                  }`}
+                    }`}
                 >
                   {filter.hasIcon && filter.id === "price-match" && (
                     <span
@@ -1017,9 +1012,8 @@ export default function SearchResults() {
                   className="h-full flex"
                 >
                   <Card
-                    className={`overflow-hidden cursor-pointer border border-gray-100 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] transition-all duration-300 py-0 rounded-[24px] flex flex-col h-full w-full relative shadow-sm hover:shadow-md ${
-                      shouldShowGrayscale ? "grayscale opacity-75" : ""
-                    }`}
+                    className={`overflow-hidden cursor-pointer border border-gray-100 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] transition-all duration-300 py-0 rounded-[24px] flex flex-col h-full w-full relative shadow-sm hover:shadow-md ${shouldShowGrayscale ? "grayscale opacity-75" : ""
+                      }`}
                   >
                     {/* Image Section */}
                     <div className="relative aspect-[16/9] w-full overflow-hidden rounded-t-[24px] flex-shrink-0 bg-gray-200 dark:bg-gray-800">

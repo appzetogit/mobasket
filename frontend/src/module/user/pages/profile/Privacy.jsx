@@ -51,7 +51,7 @@ export default function Privacy() {
 
   return (
     <AnimatedPage className="min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-[#0a0a0a] dark:to-[#1a1a1a]">
-      <div className="max-w-4xl mx-auto px-4 md:px-6 lg:px-8 py-6 md:py-8">
+      <div className="max-w-[1100px] mx-auto px-4 md:px-6 lg:px-8 py-6 md:pt-20 lg:pt-24 md:pb-6 lg:pb-8">
         {/* Header */}
         <div className="flex items-center gap-3 md:gap-4 mb-6 md:mb-8">
           <Link to="/user/profile/about">

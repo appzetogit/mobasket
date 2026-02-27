@@ -101,7 +101,7 @@ export default function EditPayment() {
 
   return (
     <AnimatedPage className="min-h-screen bg-[#f5f5f5] dark:bg-[#0a0a0a] p-4 sm:p-6 md:p-8 lg:p-10">
-      <div className="max-w-2xl md:max-w-3xl lg:max-w-4xl xl:max-w-5xl mx-auto space-y-6 md:space-y-8 lg:space-y-10">
+      <div className="max-w-[1100px] mx-auto space-y-6 md:pt-20 lg:pt-24 md:pb-6 lg:pb-8">
         <Card>
           <CardHeader>
             <CardTitle className="text-xl sm:text-2xl md:text-3xl">Edit Payment Method</CardTitle>

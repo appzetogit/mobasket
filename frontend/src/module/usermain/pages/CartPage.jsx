@@ -186,9 +186,9 @@ export default function CartPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f6e9dc]">
+    <div className="min-h-screen bg-[#f6e9dc] md:pt-20">
       {/* Header */}
-      <div className="bg-white sticky top-0 z-50 rounded-b-3xl">
+      <div className="bg-white sticky top-0 z-50 rounded-b-3xl md:hidden">
         <div className="px-4 py-3 flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
@@ -197,6 +197,19 @@ export default function CartPage() {
             <X className="w-5 h-5 text-gray-800" />
           </button>
           <h1 className="text-lg font-bold text-gray-900">Cart</h1>
+        </div>
+      </div>
+
+      {/* Desktop Header/Headline */}
+      <div className="hidden md:block max-w-[1100px] mx-auto w-full px-4 mt-4 mb-4">
+        <div className="bg-white shadow-sm rounded-2xl py-4 px-4 flex items-center gap-4">
+          <button
+            onClick={() => navigate(-1)}
+            className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+          >
+            <X className="w-6 h-6 text-gray-800" />
+          </button>
+          <h1 className="text-xl font-bold text-gray-900 font-Inter">Cart</h1>
         </div>
       </div>
 
@@ -220,7 +233,7 @@ export default function CartPage() {
         </div>
       )}
       {cartItems.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 px-4">
+        <div className="max-w-[1100px] mx-auto w-full flex flex-col items-center justify-center py-20 px-4">
           <ShoppingBag className="w-16 h-16 text-gray-300 mb-4" />
           <h2 className="text-lg font-bold text-gray-700 mb-1">
             Your cart is empty
@@ -238,7 +251,7 @@ export default function CartPage() {
       ) : (
         <>
           {/* Cart Items */}
-          <div className="px-4 py-4 space-y-4">
+          <div className="max-w-[1100px] mx-auto w-full px-4 py-4 space-y-4">
             {cartItems.map((item) => (
               <div
                 key={item.id}
@@ -302,7 +315,7 @@ export default function CartPage() {
 
           {/* Complete your meal with add-ons */}
           {addons.length > 0 && (
-            <div className="px-4 mb-4">
+            <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
               <div className="bg-white rounded-xl p-4 shadow-sm">
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center">
@@ -405,7 +418,7 @@ export default function CartPage() {
           )}
 
           {/* Delivery Scheduler */}
-          <div className="px-4 mb-4">
+          <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
             <DeliveryScheduler
               type="food"
               onScheduleChange={setDeliveryOptions}
@@ -414,7 +427,7 @@ export default function CartPage() {
           </div>
 
           {/* Total Section */}
-          <div className="px-4 mb-4">
+          <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
             <div className="bg-white rounded-xl p-4">
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-900">Total</span>
@@ -436,7 +449,7 @@ export default function CartPage() {
           )}
 
           {/* Checkout Button */}
-          <div className="px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-6">
+          <div className="max-w-[1100px] mx-auto w-full px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-6">
             <Button
               className="w-full bg-[#ff8100] hover:bg-[#e67300] text-white font-bold py-4 rounded-xl text-base"
               onClick={handleCheckout}

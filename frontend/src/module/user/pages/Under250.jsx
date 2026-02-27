@@ -262,7 +262,7 @@ export default function Under250() {
             const catSlug = cat.slug || cat.name?.toLowerCase().replace(/\s+/g, '-')
             return catId !== 'all' && catSlug !== 'all'
           })
-          
+
           const adminCategories = filteredCategories.map(cat => ({
             id: cat.id,
             name: cat.name,
@@ -370,12 +370,12 @@ export default function Under250() {
       if (!buttonElement && event.target) {
         buttonElement = event.target.closest('button') || event.target
       }
-      
+
       if (buttonElement) {
         const rect = buttonElement.getBoundingClientRect()
         const scrollX = window.pageXOffset || window.scrollX || 0
         const scrollY = window.pageYOffset || window.scrollY || 0
-        
+
         sourcePosition = {
           viewportX: rect.left + rect.width / 2,
           viewportY: rect.top + rect.height / 2,
@@ -402,7 +402,7 @@ export default function Under250() {
           name: item.name,
           imageUrl: item.image,
         }
-        
+
         if (newQuantity > existingCartItem.quantity && sourcePosition) {
           addToCart(cartItem, sourcePosition)
           if (newQuantity > existingCartItem.quantity + 1) {
@@ -453,13 +453,13 @@ export default function Under250() {
   return (
 
     <div className={`relative min-h-screen bg-white dark:bg-[#0a0a0a] ${shouldShowGrayscale ? 'grayscale opacity-75' : ''}`}>
-      {/* Navbar */}
-      <div className="relative z-20 pt-2 sm:pt-3 lg:pt-4">
+      {/* Navbar - Mobile Only */}
+      <div className="relative z-20 pt-2 sm:pt-3 lg:pt-4 md:hidden">
         <PageNavbar textColor="black" zIndex={20} showProfile={true} />
       </div>
 
       {/* Content Section */}
-      <div className="relative max-w-7xl mx-auto px-3 sm:px-4 md:px-6 lg:px-8 xl:px-12 space-y-0 pt-2 sm:pt-3 md:pt-4 lg:pt-6 pb-6 md:pb-8 lg:pb-10">
+      <div className="relative w-full lg:max-w-[1100px] mx-auto px-3 sm:px-4 lg:px-8 xl:px-0 space-y-0 pt-2 sm:pt-3 md:pt-20 lg:pt-24 pb-6 md:pb-8 lg:pb-10">
 
         <section className="space-y-1 sm:space-y-1.5">
           <div
@@ -473,7 +473,7 @@ export default function Under250() {
           >
             {/* All Button */}
             <div className="flex-shrink-0">
-              <motion.div 
+              <motion.div
                 className="flex flex-col items-center gap-2 w-[62px] sm:w-24 md:w-28"
                 onClick={() => setActiveCategory(null)}
                 whileHover={{ scale: 1.1, y: -4 }}
@@ -544,11 +544,10 @@ export default function Under250() {
             <Button
               variant="outline"
               onClick={() => setUnder30MinsFilter(!under30MinsFilter)}
-              className={`h-8 sm:h-9 md:h-10 px-3 sm:px-4 md:px-5 rounded-md flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 font-medium transition-all text-sm md:text-base ${
-                under30MinsFilter
-                  ? 'bg-green-600 text-white border border-green-600 hover:bg-green-600/90'
-                  : 'bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'
-              }`}
+              className={`h-8 sm:h-9 md:h-10 px-3 sm:px-4 md:px-5 rounded-md flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 font-medium transition-all text-sm md:text-base ${under30MinsFilter
+                ? 'bg-green-600 text-white border border-green-600 hover:bg-green-600/90'
+                : 'bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'
+                }`}
             >
               <Timer className="h-3 w-3 sm:h-4 sm:w-4 md:h-5 md:w-5" />
               <span className="text-xs sm:text-sm md:text-base font-medium">Under 30 mins</span>
@@ -602,174 +601,173 @@ export default function Under250() {
         ) : sortedAndFilteredRestaurants.length === 0 ? (
           <div className="flex justify-center items-center py-12">
             <div className="text-gray-500 dark:text-gray-400">
-              {under250Restaurants.length === 0 
+              {under250Restaurants.length === 0
                 ? "No restaurants with dishes under ₹250 found."
                 : "No restaurants match the selected filters."}
             </div>
           </div>
         ) : (
           sortedAndFilteredRestaurants.map((restaurant) => {
-          const restaurantSlug = restaurant.slug || restaurant.name.toLowerCase().replace(/\s+/g, "-")
-          return (
-            <section key={restaurant.id} className="pt-4 sm:pt-6 md:pt-8 lg:pt-10">
-              {/* Restaurant Header */}
-              <div className="flex items-start justify-between mb-3 md:mb-4 lg:mb-6">
-                <div className="flex-1">
-                  <h3 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-900 dark:text-white mb-1 md:mb-2">
-                    {restaurant.name}
-                  </h3>
-                  <div className="flex items-center gap-2 text-sm md:text-base lg:text-lg text-gray-500 dark:text-gray-400">
-                    <Clock className="h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6" strokeWidth={1.5} />
-                    <span className="font-medium">{restaurant.deliveryTime}</span>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end">
-                  <div className="flex items-center gap-1 bg-green-800 text-white px-1 py-1 md:px-2 md:py-1.5 lg:px-3 lg:py-2 rounded-full">
-                    <div className="bg-white text-green-700 px-1 py-1 md:px-1.5 md:py-1.5 lg:px-2 lg:py-2 rounded-full">
-                    <Star className="h-3.5 w-3.5 md:h-4 md:w-4 lg:h-5 lg:w-5 fill-green-800 text-green-800" />
+            const restaurantSlug = restaurant.slug || restaurant.name.toLowerCase().replace(/\s+/g, "-")
+            return (
+              <section key={restaurant.id} className="pt-4 sm:pt-6 md:pt-8 lg:pt-10">
+                {/* Restaurant Header */}
+                <div className="flex items-start justify-between mb-3 md:mb-4 lg:mb-6">
+                  <div className="flex-1">
+                    <h3 className="text-lg sm:text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-900 dark:text-white mb-1 md:mb-2">
+                      {restaurant.name}
+                    </h3>
+                    <div className="flex items-center gap-2 text-sm md:text-base lg:text-lg text-gray-500 dark:text-gray-400">
+                      <Clock className="h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6" strokeWidth={1.5} />
+                      <span className="font-medium">{restaurant.deliveryTime}</span>
                     </div>
-                    <span className="text-xs md:text-sm lg:text-base font-bold">{restaurant.rating}</span>
                   </div>
-                  <span className="text-xs md:text-sm lg:text-base text-gray-400 dark:text-gray-500 mt-0.5">
-                    {restaurant.totalRatings > 0 ? `By ${restaurant.totalRatings >= 1000 ? `${(restaurant.totalRatings / 1000).toFixed(1)}K+` : `${restaurant.totalRatings}+`}` : ''}
-                  </span>
+                  <div className="flex flex-col items-end">
+                    <div className="flex items-center gap-1 bg-green-800 text-white px-1 py-1 md:px-2 md:py-1.5 lg:px-3 lg:py-2 rounded-full">
+                      <div className="bg-white text-green-700 px-1 py-1 md:px-1.5 md:py-1.5 lg:px-2 lg:py-2 rounded-full">
+                        <Star className="h-3.5 w-3.5 md:h-4 md:w-4 lg:h-5 lg:w-5 fill-green-800 text-green-800" />
+                      </div>
+                      <span className="text-xs md:text-sm lg:text-base font-bold">{restaurant.rating}</span>
+                    </div>
+                    <span className="text-xs md:text-sm lg:text-base text-gray-400 dark:text-gray-500 mt-0.5">
+                      {restaurant.totalRatings > 0 ? `By ${restaurant.totalRatings >= 1000 ? `${(restaurant.totalRatings / 1000).toFixed(1)}K+` : `${restaurant.totalRatings}+`}` : ''}
+                    </span>
+                  </div>
                 </div>
-              </div>
 
-              {/* Menu Items Horizontal Scroll */}
-              {restaurant.menuItems && restaurant.menuItems.length > 0 && (
-                <div className="space-y-2 md:space-y-3 lg:space-y-4">
-                  <div
-                    className="flex md:grid gap-3 sm:gap-4 md:gap-5 lg:gap-6 overflow-x-auto md:overflow-x-visible overflow-y-visible scrollbar-hide scroll-smooth pb-2 md:pb-0 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-                    style={{
-                      scrollbarWidth: "none",
-                      msOverflowStyle: "none",
-                      touchAction: "pan-x pan-y pinch-zoom",
-                      overflowY: "hidden",
-                    }}
-                  >
-                    {restaurant.menuItems.map((item, itemIndex) => {
-                      const quantity = quantities[item.id] || 0
-                      return (
-                      <motion.div
-                        key={item.id}
-                        className="flex-shrink-0 w-[200px] sm:w-[220px] md:w-full bg-white dark:bg-[#1a1a1a] rounded-lg md:rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden cursor-pointer"
-                        onClick={() => handleItemClick(item, restaurant)}
-                        initial={{ opacity: 0, y: 20 }}
-                        whileInView={{ opacity: 1, y: 0 }}
-                        viewport={{ once: true, margin: "-50px" }}
-                        transition={{ duration: 0.4, delay: itemIndex * 0.05 }}
-                        whileHover={{ y: -8, scale: 1.02 }}
-                        style={{ boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)" }}
-                      >
-                        {/* Item Image */}
-                        <div className="relative w-full h-32 sm:h-36 md:h-40 lg:h-48 xl:h-52 overflow-hidden">
+                {/* Menu Items Horizontal Scroll */}
+                {restaurant.menuItems && restaurant.menuItems.length > 0 && (
+                  <div className="space-y-2 md:space-y-3 lg:space-y-4">
+                    <div
+                      className="flex md:grid gap-3 sm:gap-4 md:gap-5 lg:gap-6 overflow-x-auto md:overflow-x-visible overflow-y-visible scrollbar-hide scroll-smooth pb-2 md:pb-0 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                      style={{
+                        scrollbarWidth: "none",
+                        msOverflowStyle: "none",
+                        touchAction: "pan-x pan-y pinch-zoom",
+                        overflowY: "hidden",
+                      }}
+                    >
+                      {restaurant.menuItems.map((item, itemIndex) => {
+                        const quantity = quantities[item.id] || 0
+                        return (
                           <motion.div
-                            className="absolute inset-0"
-                            whileHover={{ scale: 1.1 }}
-                            transition={{ duration: 0.5, ease: "easeOut" }}
+                            key={item.id}
+                            className="flex-shrink-0 w-[200px] sm:w-[220px] md:w-full bg-white dark:bg-[#1a1a1a] rounded-lg md:rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden cursor-pointer"
+                            onClick={() => handleItemClick(item, restaurant)}
+                            initial={{ opacity: 0, y: 20 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true, margin: "-50px" }}
+                            transition={{ duration: 0.4, delay: itemIndex * 0.05 }}
+                            whileHover={{ y: -8, scale: 1.02 }}
+                            style={{ boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)" }}
                           >
-                            <OptimizedImage
-                              src={item.image}
-                              alt={item.name}
-                              className="w-full h-full"
-                              objectFit="cover"
-                              sizes="(max-width: 640px) 200px, (max-width: 768px) 220px, 100vw"
-                              placeholder="blur"
-                              priority={itemIndex < 4}
-                            />
-                          </motion.div>
-                          {/* Gradient Overlay on Hover */}
-                          <motion.div
-                            className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"
-                            initial={{ opacity: 0 }}
-                            whileHover={{ opacity: 1 }}
-                            transition={{ duration: 0.3 }}
-                          />
-                          {/* Veg Indicator */}
-                          {item.isVeg && (
-                            <motion.div 
-                              className="absolute top-2 left-2 md:top-3 md:left-3 h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6 rounded border-2 border-green-600 bg-white flex items-center justify-center z-10"
-                              whileHover={{ scale: 1.2, rotate: 5 }}
-                              transition={{ duration: 0.2 }}
-                            >
-                              <div className="h-2 w-2 md:h-2.5 md:w-2.5 lg:h-3 lg:w-3 rounded-full bg-green-600" />
-                            </motion.div>
-                          )}
-                        </div>
-
-                        {/* Item Details */}
-                        <div className="p-3 md:p-4 lg:p-5">
-                          <div className="flex items-center gap-1 md:gap-2 mb-1 md:mb-2 lg:mb-3">
-                            {item.isVeg && (
-                              <div className="h-3 w-3 md:h-4 md:w-4 lg:h-5 lg:w-5 rounded border border-green-600 bg-green-50 dark:bg-green-900/20 flex items-center justify-center">
-                                <div className="h-1.5 w-1.5 md:h-2 md:w-2 lg:h-2.5 lg:w-2.5 rounded-full bg-green-600" />
-                              </div>
-                            )}
-                            <span className="text-sm md:text-base lg:text-lg font-semibold text-gray-900 dark:text-white">
-                              1 x {item.name}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="text-base md:text-lg lg:text-xl xl:text-2xl font-bold text-gray-900 dark:text-white">
-                                ₹{Math.round(item.price)}
-                              </p>
-                              {item.bestPrice && (
-                                <p className="text-xs md:text-sm lg:text-base text-gray-500 dark:text-gray-400">Best price</p>
+                            {/* Item Image */}
+                            <div className="relative w-full h-32 sm:h-36 md:h-40 lg:h-48 xl:h-52 overflow-hidden">
+                              <motion.div
+                                className="absolute inset-0"
+                                whileHover={{ scale: 1.1 }}
+                                transition={{ duration: 0.5, ease: "easeOut" }}
+                              >
+                                <OptimizedImage
+                                  src={item.image}
+                                  alt={item.name}
+                                  className="w-full h-full"
+                                  objectFit="cover"
+                                  sizes="(max-width: 640px) 200px, (max-width: 768px) 220px, 100vw"
+                                  placeholder="blur"
+                                  priority={itemIndex < 4}
+                                />
+                              </motion.div>
+                              {/* Gradient Overlay on Hover */}
+                              <motion.div
+                                className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"
+                                initial={{ opacity: 0 }}
+                                whileHover={{ opacity: 1 }}
+                                transition={{ duration: 0.3 }}
+                              />
+                              {/* Veg Indicator */}
+                              {item.isVeg && (
+                                <motion.div
+                                  className="absolute top-2 left-2 md:top-3 md:left-3 h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6 rounded border-2 border-green-600 bg-white flex items-center justify-center z-10"
+                                  whileHover={{ scale: 1.2, rotate: 5 }}
+                                  transition={{ duration: 0.2 }}
+                                >
+                                  <div className="h-2 w-2 md:h-2.5 md:w-2.5 lg:h-3 lg:w-3 rounded-full bg-green-600" />
+                                </motion.div>
                               )}
                             </div>
-                            {quantity > 0 ? (
-                              <Link to="/user/cart" onClick={(e) => e.stopPropagation()}>
-                                <Button
-                                  variant={"outline"}
-                                  size="sm"
-                                  className="bg-green-600/10 text-green-500 border-green-500 hover:bg-green-700 hover:text-white h-7 md:h-8 lg:h-9 px-3 md:px-4 lg:px-5 text-xs md:text-sm lg:text-base"
-                                >
-                                  View cart
-                                </Button>
-                              </Link>
-                            ) : (
-                              <Button
-                                variant={"outline"}
-                                size="sm"
-                                disabled={shouldShowGrayscale}
-                                className={`h-7 md:h-8 lg:h-9 px-3 md:px-4 lg:px-5 text-xs md:text-sm lg:text-base ${
-                                  shouldShowGrayscale 
-                                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-300 dark:border-gray-700 cursor-not-allowed opacity-50' 
-                                    : 'bg-green-600/10 text-green-500 border-green-500 hover:bg-green-700 hover:text-white'
-                                }`}
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  if (!shouldShowGrayscale) {
-                                    handleItemClick(item, restaurant)
-                                  }
-                                }}
-                              >
-                                Add
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      </motion.div>
-                      )
-                    })}
-                  </div>
 
-                  {/* View Full Menu Button */}
-                  <Link className="flex justify-center mt-2 md:mt-3 lg:mt-4" to={`/user/restaurants/${restaurantSlug}?under250=true`}>
-                    <Button
-                      variant="outline"
-                      className="w-min align-center text-center rounded-lg md:rounded-xl mx-auto bg-gray-50 dark:bg-[#1a1a1a] hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-white text-gray-700 border-gray-200 dark:border-gray-800 h-9 md:h-10 lg:h-11 px-4 md:px-6 lg:px-8 text-sm md:text-base lg:text-lg"
-                    >
-                      View full menu <ArrowRight className="h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6 ml-2 text-gray-700 dark:text-gray-300" />
-                    </Button>
-                  </Link>
-                </div>
-              )}
-            </section>
-          )
-        }))}
+                            {/* Item Details */}
+                            <div className="p-3 md:p-4 lg:p-5">
+                              <div className="flex items-center gap-1 md:gap-2 mb-1 md:mb-2 lg:mb-3">
+                                {item.isVeg && (
+                                  <div className="h-3 w-3 md:h-4 md:w-4 lg:h-5 lg:w-5 rounded border border-green-600 bg-green-50 dark:bg-green-900/20 flex items-center justify-center">
+                                    <div className="h-1.5 w-1.5 md:h-2 md:w-2 lg:h-2.5 lg:w-2.5 rounded-full bg-green-600" />
+                                  </div>
+                                )}
+                                <span className="text-sm md:text-base lg:text-lg font-semibold text-gray-900 dark:text-white">
+                                  1 x {item.name}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <p className="text-base md:text-lg lg:text-xl xl:text-2xl font-bold text-gray-900 dark:text-white">
+                                    ₹{Math.round(item.price)}
+                                  </p>
+                                  {item.bestPrice && (
+                                    <p className="text-xs md:text-sm lg:text-base text-gray-500 dark:text-gray-400">Best price</p>
+                                  )}
+                                </div>
+                                {quantity > 0 ? (
+                                  <Link to="/user/cart" onClick={(e) => e.stopPropagation()}>
+                                    <Button
+                                      variant={"outline"}
+                                      size="sm"
+                                      className="bg-green-600/10 text-green-500 border-green-500 hover:bg-green-700 hover:text-white h-7 md:h-8 lg:h-9 px-3 md:px-4 lg:px-5 text-xs md:text-sm lg:text-base"
+                                    >
+                                      View cart
+                                    </Button>
+                                  </Link>
+                                ) : (
+                                  <Button
+                                    variant={"outline"}
+                                    size="sm"
+                                    disabled={shouldShowGrayscale}
+                                    className={`h-7 md:h-8 lg:h-9 px-3 md:px-4 lg:px-5 text-xs md:text-sm lg:text-base ${shouldShowGrayscale
+                                      ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-300 dark:border-gray-700 cursor-not-allowed opacity-50'
+                                      : 'bg-green-600/10 text-green-500 border-green-500 hover:bg-green-700 hover:text-white'
+                                      }`}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      if (!shouldShowGrayscale) {
+                                        handleItemClick(item, restaurant)
+                                      }
+                                    }}
+                                  >
+                                    Add
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </motion.div>
+                        )
+                      })}
+                    </div>
+
+                    {/* View Full Menu Button */}
+                    <Link className="flex justify-center mt-2 md:mt-3 lg:mt-4" to={`/user/restaurants/${restaurantSlug}?under250=true`}>
+                      <Button
+                        variant="outline"
+                        className="w-min align-center text-center rounded-lg md:rounded-xl mx-auto bg-gray-50 dark:bg-[#1a1a1a] hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-white text-gray-700 border-gray-200 dark:border-gray-800 h-9 md:h-10 lg:h-11 px-4 md:px-6 lg:px-8 text-sm md:text-base lg:text-lg"
+                      >
+                        View full menu <ArrowRight className="h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6 ml-2 text-gray-700 dark:text-gray-300" />
+                      </Button>
+                    </Link>
+                  </div>
+                )}
+              </section>
+            )
+          }))}
       </div>
 
       {/* Sort Popup - Bottom Sheet */}
@@ -822,8 +820,8 @@ export default function Under250() {
                       key={option.id || 'relevance'}
                       onClick={() => setSelectedSort(option.id)}
                       className={`px-4 md:px-5 lg:px-6 py-3 md:py-4 rounded-xl border text-left transition-colors ${selectedSort === option.id
-                          ? 'border-green-600 bg-green-50 dark:bg-green-900/20'
-                          : 'border-gray-200 dark:border-gray-800 hover:border-green-600'
+                        ? 'border-green-600 bg-green-50 dark:bg-green-900/20'
+                        : 'border-gray-200 dark:border-gray-800 hover:border-green-600'
                         }`}
                     >
                       <span className={`text-sm md:text-base lg:text-lg font-medium ${selectedSort === option.id ? 'text-green-600 dark:text-green-400' : 'text-gray-700 dark:text-gray-300'}`}>
@@ -845,8 +843,8 @@ export default function Under250() {
                 <button
                   onClick={handleApply}
                   className={`flex-1 py-3 md:py-4 font-semibold rounded-xl transition-colors text-sm md:text-base ${selectedSort
-                      ? 'bg-green-600 text-white hover:bg-green-700'
-                      : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                    ? 'bg-green-600 text-white hover:bg-green-700'
+                    : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
                     }`}
                 >
                   Apply
@@ -912,16 +910,14 @@ export default function Under250() {
                       e.stopPropagation()
                       handleBookmarkClick(selectedItem.id)
                     }}
-                    className={`h-10 w-10 rounded-full border flex items-center justify-center transition-all duration-300 ${
-                      bookmarkedItems.has(selectedItem.id)
-                        ? "border-red-500 bg-red-50 text-red-500"
-                        : "border-white bg-white/90 text-gray-600 hover:bg-white"
-                    }`}
+                    className={`h-10 w-10 rounded-full border flex items-center justify-center transition-all duration-300 ${bookmarkedItems.has(selectedItem.id)
+                      ? "border-red-500 bg-red-50 text-red-500"
+                      : "border-white bg-white/90 text-gray-600 hover:bg-white"
+                      }`}
                   >
                     <Bookmark
-                      className={`h-5 w-5 transition-all duration-300 ${
-                        bookmarkedItems.has(selectedItem.id) ? "fill-red-500" : ""
-                      }`}
+                      className={`h-5 w-5 transition-all duration-300 ${bookmarkedItems.has(selectedItem.id) ? "fill-red-500" : ""
+                        }`}
                     />
                   </button>
                   <button className="h-10 w-10 rounded-full border border-white bg-white/90 text-gray-600 hover:bg-white flex items-center justify-center transition-colors">
@@ -951,16 +947,14 @@ export default function Under250() {
                         e.stopPropagation()
                         handleBookmarkClick(selectedItem.id)
                       }}
-                      className={`h-8 w-8 lg:h-10 lg:w-10 rounded-full border flex items-center justify-center transition-all duration-300 ${
-                        bookmarkedItems.has(selectedItem.id)
-                          ? "border-red-500 bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400"
-                          : "border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-                      }`}
+                      className={`h-8 w-8 lg:h-10 lg:w-10 rounded-full border flex items-center justify-center transition-all duration-300 ${bookmarkedItems.has(selectedItem.id)
+                        ? "border-red-500 bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400"
+                        : "border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                        }`}
                     >
                       <Bookmark
-                        className={`h-4 w-4 lg:h-5 lg:w-5 transition-all duration-300 ${
-                          bookmarkedItems.has(selectedItem.id) ? "fill-red-500 dark:fill-red-400" : ""
-                        }`}
+                        className={`h-4 w-4 lg:h-5 lg:w-5 transition-all duration-300 ${bookmarkedItems.has(selectedItem.id) ? "fill-red-500 dark:fill-red-400" : ""
+                          }`}
                       />
                     </button>
                     <button className="h-8 w-8 lg:h-10 lg:w-10 rounded-full border border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 flex items-center justify-center transition-colors">
@@ -997,57 +991,53 @@ export default function Under250() {
               {/* Bottom Action Bar */}
               <div className="border-t dark:border-gray-800 border-gray-200 px-4 md:px-6 lg:px-8 xl:px-10 py-4 md:py-5 lg:py-6 bg-white dark:bg-[#1a1a1a]">
                 <div className="flex items-center gap-4 md:gap-5 lg:gap-6">
-                      {/* Quantity Selector */}
-                      <div className={`flex items-center gap-3 md:gap-4 lg:gap-5 border-2 rounded-lg md:rounded-xl px-3 md:px-4 lg:px-5 h-[44px] md:h-[50px] lg:h-[56px] ${
-                        shouldShowGrayscale 
-                          ? 'border-gray-300 dark:border-gray-700 opacity-50' 
-                          : 'border-gray-300 dark:border-gray-700'
+                  {/* Quantity Selector */}
+                  <div className={`flex items-center gap-3 md:gap-4 lg:gap-5 border-2 rounded-lg md:rounded-xl px-3 md:px-4 lg:px-5 h-[44px] md:h-[50px] lg:h-[56px] ${shouldShowGrayscale
+                    ? 'border-gray-300 dark:border-gray-700 opacity-50'
+                    : 'border-gray-300 dark:border-gray-700'
+                    }`}>
+                    <button
+                      onClick={(e) => {
+                        if (!shouldShowGrayscale) {
+                          updateItemQuantity(selectedItem, Math.max(0, (quantities[selectedItem.id] || 0) - 1), e)
+                        }
+                      }}
+                      disabled={(quantities[selectedItem.id] || 0) === 0 || shouldShowGrayscale}
+                      className={`${shouldShowGrayscale
+                        ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 disabled:text-gray-300 dark:disabled:text-gray-600 disabled:cursor-not-allowed'
+                        }`}
+                    >
+                      <Minus className="h-5 w-5 md:h-6 md:w-6 lg:h-7 lg:w-7" />
+                    </button>
+                    <span className={`text-lg md:text-xl lg:text-2xl font-semibold min-w-[2rem] md:min-w-[2.5rem] lg:min-w-[3rem] text-center ${shouldShowGrayscale
+                      ? 'text-gray-400 dark:text-gray-600'
+                      : 'text-gray-900 dark:text-white'
                       }`}>
-                        <button
-                          onClick={(e) => {
-                            if (!shouldShowGrayscale) {
-                              updateItemQuantity(selectedItem, Math.max(0, (quantities[selectedItem.id] || 0) - 1), e)
-                            }
-                          }}
-                          disabled={(quantities[selectedItem.id] || 0) === 0 || shouldShowGrayscale}
-                          className={`${
-                            shouldShowGrayscale 
-                              ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' 
-                              : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 disabled:text-gray-300 dark:disabled:text-gray-600 disabled:cursor-not-allowed'
-                          }`}
-                        >
-                          <Minus className="h-5 w-5 md:h-6 md:w-6 lg:h-7 lg:w-7" />
-                        </button>
-                        <span className={`text-lg md:text-xl lg:text-2xl font-semibold min-w-[2rem] md:min-w-[2.5rem] lg:min-w-[3rem] text-center ${
-                          shouldShowGrayscale 
-                            ? 'text-gray-400 dark:text-gray-600' 
-                            : 'text-gray-900 dark:text-white'
-                        }`}>
-                          {quantities[selectedItem.id] || 0}
-                        </span>
-                        <button
-                          onClick={(e) => {
-                            if (!shouldShowGrayscale) {
-                              updateItemQuantity(selectedItem, (quantities[selectedItem.id] || 0) + 1, e)
-                            }
-                          }}
-                          disabled={shouldShowGrayscale}
-                          className={shouldShowGrayscale 
-                            ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' 
-                            : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                          }
-                        >
-                          <Plus className="h-5 w-5 md:h-6 md:w-6 lg:h-7 lg:w-7" />
-                        </button>
-                      </div>
+                      {quantities[selectedItem.id] || 0}
+                    </span>
+                    <button
+                      onClick={(e) => {
+                        if (!shouldShowGrayscale) {
+                          updateItemQuantity(selectedItem, (quantities[selectedItem.id] || 0) + 1, e)
+                        }
+                      }}
+                      disabled={shouldShowGrayscale}
+                      className={shouldShowGrayscale
+                        ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed'
+                        : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                      }
+                    >
+                      <Plus className="h-5 w-5 md:h-6 md:w-6 lg:h-7 lg:w-7" />
+                    </button>
+                  </div>
 
                   {/* Add Item Button */}
                   <Button
-                    className={`flex-1 h-[44px] md:h-[50px] lg:h-[56px] rounded-lg md:rounded-xl font-semibold flex items-center justify-center gap-2 text-sm md:text-base lg:text-lg ${
-                      shouldShowGrayscale 
-                        ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-600 cursor-not-allowed opacity-50' 
-                        : 'bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white'
-                    }`}
+                    className={`flex-1 h-[44px] md:h-[50px] lg:h-[56px] rounded-lg md:rounded-xl font-semibold flex items-center justify-center gap-2 text-sm md:text-base lg:text-lg ${shouldShowGrayscale
+                      ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-600 cursor-not-allowed opacity-50'
+                      : 'bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white'
+                      }`}
                     onClick={(e) => {
                       if (!shouldShowGrayscale) {
                         updateItemQuantity(selectedItem, (quantities[selectedItem.id] || 0) + 1, e)
