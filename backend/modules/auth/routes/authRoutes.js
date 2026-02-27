@@ -8,6 +8,7 @@ import {
   refreshToken,
   logout,
   getCurrentUser,
+  updateFcmToken,
   googleAuth,
   googleCallback,
   firebaseGoogleLogin
@@ -69,6 +70,11 @@ const resetPasswordSchema = Joi.object({
   role: Joi.string().valid('user', 'restaurant', 'delivery', 'admin').optional()
 });
 
+const updateFcmTokenSchema = Joi.object({
+  token: Joi.string().trim().required(),
+  platform: Joi.string().valid('web', 'mobile').required()
+});
+
 // Public routes
 // OTP-based authentication
 router.post('/send-otp', validate(sendOTPSchema), sendOTP);
@@ -92,6 +98,7 @@ router.get('/google/:role/callback', googleCallback);
 
 // Protected routes
 router.get('/me', authenticate, getCurrentUser);
+router.post('/fcm-token', authenticate, validate(updateFcmTokenSchema), updateFcmToken);
 
 export default router;
 

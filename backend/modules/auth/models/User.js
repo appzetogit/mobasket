@@ -35,6 +35,16 @@ const userSchema = new mongoose.Schema({
     type: String,
     sparse: true
   },
+  fcmTokenWeb: {
+    type: String,
+    trim: true,
+    default: ''
+  },
+  fcmTokenMobile: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   role: {
     type: String,
     enum: ['user', 'restaurant', 'delivery', 'admin'],

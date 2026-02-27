@@ -878,6 +878,32 @@ export const getCurrentRestaurant = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Update FCM token for restaurant app notifications
+ * POST /api/restaurant/auth/fcm-token
+ */
+export const updateFcmToken = asyncHandler(async (req, res) => {
+  const { token, platform } = req.body;
+
+  if (!token || typeof token !== 'string' || !token.trim()) {
+    return errorResponse(res, 400, 'FCM token is required');
+  }
+
+  const normalizedPlatform = String(platform || '').toLowerCase();
+  if (!['web', 'mobile'].includes(normalizedPlatform)) {
+    return errorResponse(res, 400, "Platform must be 'web' or 'mobile'");
+  }
+
+  const field = normalizedPlatform === 'web' ? 'fcmTokenWeb' : 'fcmTokenMobile';
+  req.restaurant[field] = token.trim();
+  await req.restaurant.save();
+
+  return successResponse(res, 200, 'FCM token updated successfully', {
+    fcmTokenWeb: req.restaurant.fcmTokenWeb || '',
+    fcmTokenMobile: req.restaurant.fcmTokenMobile || ''
+  });
+});
+
+/**
  * Reverify Restaurant (Resubmit for approval)
  * POST /api/restaurant/auth/reverify
  */

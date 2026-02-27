@@ -175,6 +175,16 @@ const deliverySchema = new mongoose.Schema(
       type: String,
       sparse: true
     },
+    fcmTokenWeb: {
+      type: String,
+      trim: true,
+      default: ''
+    },
+    fcmTokenMobile: {
+      type: String,
+      trim: true,
+      default: ''
+    },
     signupMethod: {
       type: String,
       enum: ['google', 'phone', 'email'],

@@ -7,6 +7,7 @@ import {
   refreshToken,
   logout,
   getCurrentStore,
+  updateFcmToken,
   firebaseGoogleLogin
 } from '../controllers/groceryStoreAuthController.js';
 import { authenticate } from '../middleware/groceryStoreAuth.js';
@@ -59,6 +60,11 @@ const firebaseGoogleLoginSchema = Joi.object({
   idToken: Joi.string().required()
 });
 
+const updateFcmTokenSchema = Joi.object({
+  token: Joi.string().trim().required(),
+  platform: Joi.string().valid('web', 'mobile').required()
+});
+
 // Public routes
 router.post('/send-otp', validate(sendOTPSchema), sendOTP);
 router.post('/verify-otp', validate(verifyOTPSchema), verifyOTP);
@@ -70,5 +76,6 @@ router.post('/firebase/google-login', validate(firebaseGoogleLoginSchema), fireb
 router.post('/refresh-token', refreshToken);
 router.post('/logout', logout);
 router.get('/me', authenticate, getCurrentStore);
+router.post('/fcm-token', authenticate, validate(updateFcmTokenSchema), updateFcmToken);
 
 export default router;

@@ -375,3 +375,29 @@ export const getCurrentStore = asyncHandler(async (req, res) => {
     store: storeResponse
   });
 });
+
+/**
+ * Update FCM token for grocery store app notifications
+ * POST /api/grocery/store/auth/fcm-token
+ */
+export const updateFcmToken = asyncHandler(async (req, res) => {
+  const { token, platform } = req.body;
+
+  if (!token || typeof token !== 'string' || !token.trim()) {
+    return errorResponse(res, 400, 'FCM token is required');
+  }
+
+  const normalizedPlatform = String(platform || '').toLowerCase();
+  if (!['web', 'mobile'].includes(normalizedPlatform)) {
+    return errorResponse(res, 400, "Platform must be 'web' or 'mobile'");
+  }
+
+  const field = normalizedPlatform === 'web' ? 'fcmTokenWeb' : 'fcmTokenMobile';
+  req.store[field] = token.trim();
+  await req.store.save();
+
+  return successResponse(res, 200, 'FCM token updated successfully', {
+    fcmTokenWeb: req.store.fcmTokenWeb || '',
+    fcmTokenMobile: req.store.fcmTokenMobile || ''
+  });
+});

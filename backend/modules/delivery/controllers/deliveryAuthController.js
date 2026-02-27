@@ -389,3 +389,29 @@ export const getCurrentDelivery = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Update FCM token for delivery app notifications
+ * POST /api/delivery/auth/fcm-token
+ */
+export const updateFcmToken = asyncHandler(async (req, res) => {
+  const { token, platform } = req.body;
+
+  if (!token || typeof token !== 'string' || !token.trim()) {
+    return errorResponse(res, 400, 'FCM token is required');
+  }
+
+  const normalizedPlatform = String(platform || '').toLowerCase();
+  if (!['web', 'mobile'].includes(normalizedPlatform)) {
+    return errorResponse(res, 400, "Platform must be 'web' or 'mobile'");
+  }
+
+  const field = normalizedPlatform === 'web' ? 'fcmTokenWeb' : 'fcmTokenMobile';
+  req.delivery[field] = token.trim();
+  await req.delivery.save();
+
+  return successResponse(res, 200, 'FCM token updated successfully', {
+    fcmTokenWeb: req.delivery.fcmTokenWeb || '',
+    fcmTokenMobile: req.delivery.fcmTokenMobile || ''
+  });
+});
+

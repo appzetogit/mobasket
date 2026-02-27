@@ -582,6 +582,32 @@ export const getCurrentUser = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Update FCM token for user app notifications
+ * POST /api/auth/fcm-token
+ */
+export const updateFcmToken = asyncHandler(async (req, res) => {
+  const { token, platform } = req.body;
+
+  if (!token || typeof token !== 'string' || !token.trim()) {
+    return errorResponse(res, 400, 'FCM token is required');
+  }
+
+  const normalizedPlatform = String(platform || '').toLowerCase();
+  if (!['web', 'mobile'].includes(normalizedPlatform)) {
+    return errorResponse(res, 400, "Platform must be 'web' or 'mobile'");
+  }
+
+  const field = normalizedPlatform === 'web' ? 'fcmTokenWeb' : 'fcmTokenMobile';
+  req.user[field] = token.trim();
+  await req.user.save();
+
+  return successResponse(res, 200, 'FCM token updated successfully', {
+    fcmTokenWeb: req.user.fcmTokenWeb || '',
+    fcmTokenMobile: req.user.fcmTokenMobile || ''
+  });
+});
+
+/**
  * Login / register using Firebase Google ID token
  * POST /api/auth/firebase/google-login
  */
