@@ -14,15 +14,28 @@ async function getIOInstance() {
   return getIO ? getIO() : null;
 }
 
-const normalizeIdentifier = (value) => {
+const normalizeIdentifier = (value, visited = new WeakSet()) => {
   if (value === null || value === undefined) return '';
   if (typeof value === 'string') return value.trim();
   if (typeof value === 'number') return String(value);
+
+  // Mongoose/BSON ObjectId values need to be normalized before object-property probing
+  // because they expose getters like `_id`/`id` that can point back to themselves.
+  if (value instanceof mongoose.Types.ObjectId || value?._bsontype === 'ObjectId') {
+    return String(value).trim();
+  }
+
   if (typeof value === 'object') {
-    if (value._id) return normalizeIdentifier(value._id);
-    if (value.restaurantId) return normalizeIdentifier(value.restaurantId);
-    if (value.storeId) return normalizeIdentifier(value.storeId);
-    if (value.id) return normalizeIdentifier(value.id);
+    if (visited.has(value)) return '';
+    visited.add(value);
+
+    const nestedCandidates = [value._id, value.restaurantId, value.storeId, value.id];
+    for (const candidate of nestedCandidates) {
+      if (candidate && candidate !== value) {
+        const normalizedCandidate = normalizeIdentifier(candidate, visited);
+        if (normalizedCandidate) return normalizedCandidate;
+      }
+    }
   }
   return String(value).trim();
 };

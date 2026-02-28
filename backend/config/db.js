@@ -8,6 +8,10 @@ let reconnectTimer = null;
 let listenersBound = false;
 let connectInFlight = null;
 
+// Fail fast when DB is unavailable instead of buffering unbounded operations in memory.
+mongoose.set('bufferCommands', false);
+mongoose.set('bufferTimeoutMS', Number.parseInt(process.env.MONGODB_BUFFER_TIMEOUT_MS || '10000', 10));
+
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const getMongoUri = () => {

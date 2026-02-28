@@ -19,7 +19,7 @@ import {
 dotenv.config();
 
 // Import configurations
-import { connectDB } from './config/database.js';
+import { connectDB, requireDbConnection, isDbConnected } from './config/database.js';
 import { connectRedis } from './config/redis.js';
 
 // Import middleware
@@ -563,6 +563,8 @@ if (process.env.NODE_ENV === 'production') {
     ].includes(req.path);
   const isPublicBootstrapRoute = (req) =>
     req.method === 'GET' && publicBootstrapGetPaths.has(req.path);
+  const isReverseGeocodeRoute = (req) =>
+    req.method === 'GET' && req.path === '/location/reverse';
 
   const limiter = rateLimit({
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
@@ -579,7 +581,8 @@ if (process.env.NODE_ENV === 'production') {
       isDeliverySignupRoute(req) ||
       isOtpSendRoute(req) ||
       isOtpVerifyRoute(req) ||
-      isPublicBootstrapRoute(req),
+      isPublicBootstrapRoute(req) ||
+      isReverseGeocodeRoute(req),
     // Avoid proxy validation exceptions in reverse-proxy deployments.
     validate: false
   });
@@ -665,6 +668,18 @@ if (process.env.NODE_ENV === 'production') {
 
   app.use('/api/delivery/signup/details', deliverySignupIpLimiter);
   app.use('/api/delivery/signup/documents', deliverySignupIpLimiter);
+
+  const reverseGeocodeIpLimiter = rateLimit({
+    windowMs: parseInt(process.env.LOCATION_REVERSE_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+    max: parseInt(process.env.LOCATION_REVERSE_RATE_LIMIT_MAX_REQUESTS) || 1200,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: rateLimitKeyGenerator,
+    validate: false,
+    message: 'Too many reverse geocode requests from this network. Please try again shortly.'
+  });
+
+  app.use('/api/location/reverse', reverseGeocodeIpLimiter);
   console.log('Rate limiting enabled (production mode)');
 } else {
   console.log('Rate limiting disabled (development mode)');
@@ -678,6 +693,9 @@ app.get('/health', (req, res) => {
     uptime: process.uptime()
   });
 });
+
+// Mongo is required for API operations; fail fast during outages.
+app.use('/api', requireDbConnection);
 
 // API routes
 app.use('/api/auth', (req, res, next) => {
@@ -786,6 +804,7 @@ io.on('connection', (socket) => {
   const resolveOrderByAnyId = async (rawOrderId, includeDeliveryLocation = false) => {
     const input = String(rawOrderId || '').trim();
     if (!input) return { order: null, aliases: [] };
+    if (!isDbConnected()) return { order: null, aliases: [input] };
 
     const { default: Order } = await import('./modules/order/models/Order.js');
 
@@ -1075,6 +1094,7 @@ process.on('uncaughtException', (error) => {
 });
 
 export default app;
+
 
 
 

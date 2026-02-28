@@ -94,6 +94,7 @@ export const reverseGeocode = async (req, res) => {
     try {
       let response = null;
       let lastError = null;
+      let olaRateLimited = false;
 
       // Only try OLA Maps if API key is configured
       if (apiKey) {
@@ -129,6 +130,9 @@ export const reverseGeocode = async (req, res) => {
           }
         } catch (err1a) {
           lastError = err1a;
+          if (err1a?.response?.status === 429) {
+            olaRateLimited = true;
+          }
           logger.warn('OLA Maps Method 1a failed:', {
             error: err1a.message,
             status: err1a.response?.status,
@@ -138,6 +142,9 @@ export const reverseGeocode = async (req, res) => {
           
           // Try Method 1b: API Key as query parameter (separate lat/lng)
           try {
+            if (olaRateLimited) {
+              throw new Error('OLA reverse geocode rate limited');
+            }
             response = await axios.get(
               'https://api.olamaps.io/places/v1/reverse-geocode',
               {
@@ -164,12 +171,15 @@ export const reverseGeocode = async (req, res) => {
             });
           } catch (err1b) {
             lastError = err1b;
+            if (err1b?.response?.status === 429) {
+              olaRateLimited = true;
+            }
             response = null;
           }
         }
         
         // Try Method 2: Bearer token with project headers
-        if (!response) {
+        if (!response && !olaRateLimited) {
           try {
             const headers = {
               'Authorization': `Bearer ${apiKey}`,
@@ -198,12 +208,15 @@ export const reverseGeocode = async (req, res) => {
             });
           } catch (err2) {
             lastError = err2;
+            if (err2?.response?.status === 429) {
+              olaRateLimited = true;
+            }
             response = null;
           }
         }
         
         // Try Method 3: API Key in X-API-Key header
-        if (!response) {
+        if (!response && !olaRateLimited) {
           try {
             response = await axios.get(
               'https://api.olamaps.io/places/v1/reverse-geocode',
@@ -223,6 +236,9 @@ export const reverseGeocode = async (req, res) => {
             });
           } catch (err3) {
             lastError = err3;
+            if (err3?.response?.status === 429) {
+              olaRateLimited = true;
+            }
             response = null;
           }
         }
