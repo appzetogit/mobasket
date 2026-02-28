@@ -1,6 +1,7 @@
 import EnvironmentVariable from '../../modules/admin/models/EnvironmentVariable.js';
 import { decrypt, isEncrypted } from './encryption.js';
 import winston from 'winston';
+import mongoose from 'mongoose';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -16,6 +17,7 @@ const logger = winston.createLogger({
 let envCache = null;
 let cacheTimestamp = null;
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+let lastDbNotReadyLogAt = 0;
 
 /**
  * Get environment variable value from database
@@ -58,6 +60,16 @@ export async function getAllEnvVars() {
     const now = Date.now();
     if (envCache && cacheTimestamp && (now - cacheTimestamp) < CACHE_DURATION) {
       return envCache;
+    }
+
+    // During startup, many services request env vars before Mongo is connected.
+    // Avoid noisy errors and return cache/default-backed values until DB is ready.
+    if (mongoose.connection.readyState !== 1) {
+      if (now - lastDbNotReadyLogAt > 30000) {
+        logger.warn('Environment variables DB fetch skipped: MongoDB not connected yet');
+        lastDbNotReadyLogAt = now;
+      }
+      return envCache || {};
     }
 
     // Fetch from database
