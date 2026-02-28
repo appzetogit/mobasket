@@ -14,6 +14,35 @@ async function getIOInstance() {
   return getIO ? getIO() : null;
 }
 
+const normalizeIdentifier = (value) => {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'number') return String(value);
+  if (typeof value === 'object') {
+    if (value._id) return normalizeIdentifier(value._id);
+    if (value.restaurantId) return normalizeIdentifier(value.restaurantId);
+    if (value.storeId) return normalizeIdentifier(value.storeId);
+    if (value.id) return normalizeIdentifier(value.id);
+  }
+  return String(value).trim();
+};
+
+const buildRestaurantLookupQuery = (restaurantId) => {
+  const normalized = normalizeIdentifier(restaurantId);
+  if (!normalized) return null;
+
+  const orConditions = [
+    { restaurantId: normalized },
+    { slug: normalized }
+  ];
+
+  if (mongoose.Types.ObjectId.isValid(normalized)) {
+    orConditions.unshift({ _id: new mongoose.Types.ObjectId(normalized) });
+  }
+
+  return { $or: orConditions };
+};
+
 /**
  * Notify restaurant about new order via Socket.IO
  * @param {Object} order - Order document
@@ -30,10 +59,10 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
     }
 
     // CRITICAL: Validate restaurantId matches order's restaurantId
-    const orderRestaurantId = order.restaurantId?.toString() || order.restaurantId;
-    const providedRestaurantId = restaurantId?.toString() || restaurantId;
+    const orderRestaurantId = normalizeIdentifier(order.restaurantId);
+    const providedRestaurantId = normalizeIdentifier(restaurantId);
     
-    if (orderRestaurantId !== providedRestaurantId) {
+    if (orderRestaurantId && providedRestaurantId && orderRestaurantId !== providedRestaurantId) {
       console.error('❌ CRITICAL: RestaurantId mismatch in notification!', {
         orderRestaurantId: orderRestaurantId,
         providedRestaurantId: providedRestaurantId,
@@ -42,20 +71,15 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
       });
       // Use order's restaurantId instead of provided one
       restaurantId = orderRestaurantId;
+    } else if (!providedRestaurantId && orderRestaurantId) {
+      restaurantId = orderRestaurantId;
     }
 
     // Get restaurant details
     let restaurant = null;
-    if (mongoose.Types.ObjectId.isValid(restaurantId)) {
-      restaurant = await Restaurant.findById(restaurantId).lean();
-    }
-    if (!restaurant) {
-      restaurant = await Restaurant.findOne({
-        $or: [
-          { restaurantId: restaurantId },
-          { _id: restaurantId }
-        ]
-      }).lean();
+    const restaurantLookupQuery = buildRestaurantLookupQuery(restaurantId);
+    if (restaurantLookupQuery) {
+      restaurant = await Restaurant.findOne(restaurantLookupQuery).lean();
     }
     
     // Validate restaurant name matches order
@@ -91,7 +115,7 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
     const orderNotification = {
       orderId: order.orderId,
       orderMongoId: order._id.toString(),
-      restaurantId: restaurantId,
+      restaurantId: normalizeIdentifier(restaurantId),
       restaurantName: order.restaurantName,
       items: order.items.map(item => ({
         name: item.name,
@@ -117,30 +141,33 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
     // Route notifications to the correct dashboard namespace (restaurant/store).
     const restaurantNamespace = io.of(targetNamespacePath);
 
-    // Normalize restaurantId to string (handle both ObjectId and string)
-    const normalizedRestaurantId = restaurantId?.toString() || restaurantId;
-
-    // Try multiple room formats to ensure we find the restaurant
-    const roomVariations = [
-      `${roomPrefix}:${normalizedRestaurantId}`,
-      `${roomPrefix}:${restaurantId}`,
-      ...(mongoose.Types.ObjectId.isValid(normalizedRestaurantId)
-        ? [`${roomPrefix}:${new mongoose.Types.ObjectId(normalizedRestaurantId).toString()}`]
-        : [])
-    ];
+    const normalizedRestaurantId = normalizeIdentifier(restaurantId);
+    const roomCandidateIds = Array.from(
+      new Set(
+        [
+          normalizedRestaurantId,
+          orderRestaurantId,
+          normalizeIdentifier(restaurant?._id),
+          normalizeIdentifier(restaurant?.restaurantId)
+        ].filter(Boolean)
+      )
+    );
+    const roomVariations = roomCandidateIds.map((id) => `${roomPrefix}:${id}`);
 
     // Get all connected sockets in the restaurant room
     let socketsInRoom = [];
+    let resolvedRoom = roomVariations[0] || `${roomPrefix}:${normalizedRestaurantId}`;
     for (const room of roomVariations) {
       const sockets = await restaurantNamespace.in(room).fetchSockets();
       if (sockets.length > 0) {
         socketsInRoom = sockets;
+        resolvedRoom = room;
         console.log(`📢 Found ${sockets.length} socket(s) in room: ${room}`);
         break;
       }
     }
 
-    const primaryRoom = roomVariations[0];
+    const primaryRoom = roomVariations[0] || resolvedRoom;
 
     console.log(`📢 CRITICAL: Attempting to notify restaurant about new order:`);
     console.log(`📢 Order ID: ${order.orderId}`);
@@ -155,15 +182,13 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
     // This ensures orders only go to the correct restaurant
     if (socketsInRoom.length > 0) {
       // Found sockets in the restaurant room - send notification only to that room
-      roomVariations.forEach(room => {
-        restaurantNamespace.to(room).emit('new_order', orderNotification);
-        restaurantNamespace.to(room).emit('play_notification_sound', {
-          type: 'new_order',
-          orderId: order.orderId,
-          message: `New order received: ${order.orderId}`
-        });
-        console.log(`📤 Sent notification to room: ${room}`);
+      restaurantNamespace.to(resolvedRoom).emit('new_order', orderNotification);
+      restaurantNamespace.to(resolvedRoom).emit('play_notification_sound', {
+        type: 'new_order',
+        orderId: order.orderId,
+        message: `New order received: ${order.orderId}`
       });
+      console.log(`📤 Sent notification to room: ${resolvedRoom}`);
       console.log(`✅ Notified restaurant ${normalizedRestaurantId} about new order ${order.orderId} (${socketsInRoom.length} socket(s) connected)`);
     } else {
       // No sockets found in restaurant room - log error but DO NOT broadcast to all restaurants
@@ -241,7 +266,10 @@ export async function notifyRestaurantOrderUpdate(orderId, status) {
       throw new Error('Order not found');
     }
 
-    const restaurant = await Restaurant.findById(order.restaurantId).select('platform').lean();
+    const restaurantLookupQuery = buildRestaurantLookupQuery(order.restaurantId);
+    const restaurant = restaurantLookupQuery
+      ? await Restaurant.findOne(restaurantLookupQuery).select('platform _id restaurantId').lean()
+      : null;
     const isGroceryStore = String(restaurant?.platform || '').toLowerCase() === 'mogrocery';
     const targetNamespacePath = isGroceryStore ? '/grocery-store' : '/restaurant';
     const roomPrefix = isGroceryStore ? 'grocery-store' : 'restaurant';
@@ -249,10 +277,22 @@ export async function notifyRestaurantOrderUpdate(orderId, status) {
     // Emit status updates to platform-specific namespace/room.
     const restaurantNamespace = io.of(targetNamespacePath);
 
-    restaurantNamespace.to(`${roomPrefix}:${order.restaurantId}`).emit('order_status_update', {
-      orderId: order.orderId,
-      status,
-      updatedAt: new Date()
+    const roomIds = Array.from(
+      new Set(
+        [
+          normalizeIdentifier(order.restaurantId),
+          normalizeIdentifier(restaurant?._id),
+          normalizeIdentifier(restaurant?.restaurantId)
+        ].filter(Boolean)
+      )
+    );
+
+    roomIds.forEach((id) => {
+      restaurantNamespace.to(`${roomPrefix}:${id}`).emit('order_status_update', {
+        orderId: order.orderId,
+        status,
+        updatedAt: new Date()
+      });
     });
 
     console.log(`📢 Notified restaurant ${order.restaurantId} about order ${order.orderId} status: ${status}`);
@@ -261,4 +301,3 @@ export async function notifyRestaurantOrderUpdate(orderId, status) {
     throw error;
   }
 }
-

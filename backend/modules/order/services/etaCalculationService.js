@@ -4,6 +4,7 @@ import Restaurant from '../../restaurant/models/Restaurant.js';
 import Delivery from '../../delivery/models/Delivery.js';
 import OrderEvent from '../models/OrderEvent.js';
 import ETALog from '../models/ETALog.js';
+import mongoose from 'mongoose';
 
 /**
  * ETA Calculation Service
@@ -29,6 +30,34 @@ class ETACalculationService {
 
   static ETA_RANGE = 3; // ±3 minutes for min/max ETA
 
+  buildRestaurantLookupQuery(restaurantId) {
+    const normalized = String(restaurantId || '').trim();
+    if (!normalized) return null;
+
+    const orConditions = [
+      { restaurantId: normalized },
+      { slug: normalized }
+    ];
+
+    if (mongoose.Types.ObjectId.isValid(normalized)) {
+      orConditions.unshift({ _id: new mongoose.Types.ObjectId(normalized) });
+    }
+
+    return { $or: orConditions };
+  }
+
+  async findRestaurantByIdentifier(restaurantId) {
+    const query = this.buildRestaurantLookupQuery(restaurantId);
+    if (!query) return null;
+    return Restaurant.findOne(query);
+  }
+
+  extractRestaurantPrepTime(restaurant) {
+    const prepTimeStr = restaurant?.estimatedDeliveryTime || '25-30 mins';
+    const match = String(prepTimeStr).match(/(\d+)/);
+    return match ? parseInt(match[1], 10) : 25;
+  }
+
   /**
    * Calculate initial ETA when order is created
    * @param {Object} orderData - Order data with restaurant, user location, etc.
@@ -44,16 +73,18 @@ class ETACalculationService {
 
     try {
       // 1. Get restaurant data
-      const restaurant = await Restaurant.findOne({ restaurantId });
+      const restaurant = await this.findRestaurantByIdentifier(restaurantId);
       if (!restaurant) {
         throw new Error('Restaurant not found');
       }
 
+      const canonicalRestaurantId = restaurant._id?.toString() || String(restaurantId);
+
       // 2. Calculate restaurant preparation time
-      const restaurantPrepTime = await this.getRestaurantPrepTime(restaurantId);
+      const restaurantPrepTime = this.extractRestaurantPrepTime(restaurant);
       
       // 3. Calculate restaurant load delay (pending orders)
-      const restaurantLoadDelay = await this.getRestaurantLoadDelay(restaurantId);
+      const restaurantLoadDelay = await this.getRestaurantLoadDelay(canonicalRestaurantId);
 
       // 4. Calculate rider assignment time
       const riderAssignmentTime = riderLocation 
@@ -451,13 +482,10 @@ class ETACalculationService {
    * Get restaurant preparation time
    */
   async getRestaurantPrepTime(restaurantId) {
-    const restaurant = await Restaurant.findOne({ restaurantId });
+    const restaurant = await this.findRestaurantByIdentifier(restaurantId);
     if (!restaurant) return 15; // Default 15 minutes
 
-    // Parse estimatedDeliveryTime string like "25-30 mins" or use default
-    const prepTimeStr = restaurant.estimatedDeliveryTime || "25-30 mins";
-    const match = prepTimeStr.match(/(\d+)/);
-    return match ? parseInt(match[1]) : 25;
+    return this.extractRestaurantPrepTime(restaurant);
   }
 
   /**
@@ -493,7 +521,7 @@ class ETACalculationService {
    * Get restaurant location
    */
   async getRestaurantLocation(restaurantId) {
-    const restaurant = await Restaurant.findOne({ restaurantId });
+    const restaurant = await this.findRestaurantByIdentifier(restaurantId);
     if (!restaurant || !restaurant.location) {
       throw new Error('Restaurant location not found');
     }

@@ -249,6 +249,20 @@ export function getIO() {
   return io;
 }
 
+const extractSocketRoomId = (payload, keyHints = []) => {
+  if (!payload) return '';
+  if (typeof payload === 'string' || typeof payload === 'number') return String(payload).trim();
+  if (typeof payload !== 'object') return String(payload).trim();
+
+  for (const key of keyHints) {
+    if (payload[key]) return String(payload[key]).trim();
+  }
+
+  if (payload._id) return String(payload._id).trim();
+  if (payload.id) return String(payload.id).trim();
+  return '';
+};
+
 // Restaurant namespace for order notifications
 const restaurantNamespace = io.of('/restaurant');
 
@@ -281,7 +295,8 @@ restaurantNamespace.on('connection', (socket) => {
   console.log('🍽️ Socket headers:', socket.handshake.headers);
 
   // Restaurant joins their room
-  socket.on('join-restaurant', (restaurantId) => {
+  socket.on('join-restaurant', (payload) => {
+    const restaurantId = extractSocketRoomId(payload, ['restaurantId', 'storeId']);
     if (restaurantId) {
       // Normalize restaurantId to string (handle both ObjectId and string)
       const normalizedRestaurantId = restaurantId?.toString() || restaurantId;
@@ -293,7 +308,8 @@ restaurantNamespace.on('connection', (socket) => {
         normalizedRestaurantId: normalizedRestaurantId,
         room: room,
         socketId: socket.id,
-        socketAuth: socket.handshake.auth
+        socketAuth: socket.handshake.auth,
+        rawPayload: payload
       });
 
       socket.join(room);
@@ -325,6 +341,7 @@ restaurantNamespace.on('connection', (socket) => {
       console.warn('⚠️ Restaurant tried to join without restaurantId');
       console.warn('⚠️ Socket ID:', socket.id);
       console.warn('⚠️ Socket auth:', socket.handshake.auth);
+      console.warn('⚠️ Join payload:', payload);
     }
   });
 
@@ -360,9 +377,11 @@ groceryStoreNamespace.use((socket, next) => {
 groceryStoreNamespace.on('connection', (socket) => {
   console.log('🛒 Grocery-store client connected:', socket.id);
 
-  socket.on('join-grocery-store', (storeId) => {
+  socket.on('join-grocery-store', (payload) => {
+    const storeId = extractSocketRoomId(payload, ['storeId', 'restaurantId']);
     if (!storeId) {
       console.warn('⚠️ Grocery-store tried to join without storeId');
+      console.warn('⚠️ Join payload:', payload);
       return;
     }
 

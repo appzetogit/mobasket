@@ -668,32 +668,40 @@ export const createOrder = async (req, res) => {
       });
     }
 
+    // Normalize incoming restaurant ID to avoid format mismatches (string/object/_id/restaurantId).
+    const normalizedIncomingRestaurantId = (
+      typeof restaurantId === 'object' && restaurantId !== null
+        ? (restaurantId._id || restaurantId.restaurantId || restaurantId.id || '')
+        : restaurantId
+    )?.toString?.().trim?.() || String(restaurantId || '').trim();
+    console.log('Incoming restaurantId:', normalizedIncomingRestaurantId);
+
     // Validate and assign restaurant - order goes to the restaurant whose food was ordered
-    if (!restaurantId || restaurantId === 'unknown') {
+    if (!normalizedIncomingRestaurantId || normalizedIncomingRestaurantId === 'unknown') {
       return res.status(400).json({
         success: false,
         message: 'Restaurant ID is required. Please select a restaurant.'
       });
     }
 
-    let assignedRestaurantId = restaurantId;
+    let assignedRestaurantId = normalizedIncomingRestaurantId;
     let assignedRestaurantName = restaurantName;
 
     // Log incoming restaurant data for debugging
     logger.info('🔍 Order creation - Restaurant lookup:', {
-      incomingRestaurantId: restaurantId,
+      incomingRestaurantId: normalizedIncomingRestaurantId,
       incomingRestaurantName: restaurantName,
       restaurantIdType: typeof restaurantId,
-      restaurantIdLength: restaurantId?.length
+      restaurantIdLength: normalizedIncomingRestaurantId?.length
     });
 
     // Find and validate the restaurant
     let restaurant = null;
     // Try to find restaurant by restaurantId, _id, or slug
-    if (mongoose.Types.ObjectId.isValid(restaurantId) && restaurantId.length === 24) {
-      restaurant = await Restaurant.findById(restaurantId);
+    if (mongoose.Types.ObjectId.isValid(normalizedIncomingRestaurantId) && normalizedIncomingRestaurantId.length === 24) {
+      restaurant = await Restaurant.findById(normalizedIncomingRestaurantId);
       logger.info('🔍 Restaurant lookup by _id:', {
-        restaurantId: restaurantId,
+        restaurantId: normalizedIncomingRestaurantId,
         found: !!restaurant,
         restaurantName: restaurant?.name
       });
@@ -701,12 +709,12 @@ export const createOrder = async (req, res) => {
     if (!restaurant) {
       restaurant = await Restaurant.findOne({
         $or: [
-          { restaurantId: restaurantId },
-          { slug: restaurantId }
+          { restaurantId: normalizedIncomingRestaurantId },
+          { slug: normalizedIncomingRestaurantId }
         ]
       });
       logger.info('🔍 Restaurant lookup by restaurantId/slug:', {
-        restaurantId: restaurantId,
+        restaurantId: normalizedIncomingRestaurantId,
         found: !!restaurant,
         restaurantName: restaurant?.name,
         restaurant_restaurantId: restaurant?.restaurantId,
@@ -716,7 +724,7 @@ export const createOrder = async (req, res) => {
 
     if (!restaurant) {
       logger.error('❌ Restaurant not found:', {
-        searchedRestaurantId: restaurantId,
+        searchedRestaurantId: normalizedIncomingRestaurantId,
         searchedRestaurantName: restaurantName
       });
       return res.status(404).json({
@@ -730,7 +738,7 @@ export const createOrder = async (req, res) => {
       logger.warn('⚠️ Restaurant name mismatch:', {
         incomingName: restaurantName,
         foundRestaurantName: restaurant.name,
-        incomingRestaurantId: restaurantId,
+        incomingRestaurantId: normalizedIncomingRestaurantId,
         foundRestaurantId: restaurant._id?.toString() || restaurant.restaurantId
       });
       // Still proceed but log the mismatch
@@ -894,7 +902,7 @@ export const createOrder = async (req, res) => {
       assignedRestaurantName: assignedRestaurantName,
       restaurant_id: restaurant._id?.toString(),
       restaurant_restaurantId: restaurant.restaurantId,
-      incomingRestaurantId: restaurantId,
+      incomingRestaurantId: normalizedIncomingRestaurantId,
       incomingRestaurantName: restaurantName
     });
 
