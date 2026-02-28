@@ -32,6 +32,7 @@ const pruneRateLimitCache = (now, settings) => {
 export const locationUpdateRateLimit = (req, res, next) => {
   const settings = getRateLimitSettings();
   const now = Date.now();
+  const strictMode = String(process.env.USER_LOCATION_RATE_LIMIT_STRICT || 'false').toLowerCase() === 'true';
   if (now - lastCleanupAt >= settings.cleanupIntervalMs) {
     pruneRateLimitCache(now, settings);
     lastCleanupAt = now;
@@ -53,10 +54,24 @@ export const locationUpdateRateLimit = (req, res, next) => {
       });
 
       res.set('Retry-After', String(retryAfterSeconds));
-      return res.status(429).json({
-        success: false,
-        message: `Location updates are limited to one request every ${Math.ceil(settings.minIntervalMs / 1000)} seconds.`,
-        retryAfterMs
+
+      if (strictMode) {
+        return res.status(429).json({
+          success: false,
+          message: `Location updates are limited to one request every ${Math.ceil(settings.minIntervalMs / 1000)} seconds.`,
+          retryAfterMs
+        });
+      }
+
+      // Non-strict mode avoids noisy client errors while still enforcing write frequency.
+      return res.status(200).json({
+        success: true,
+        message: 'Location update throttled',
+        data: {
+          throttled: true,
+          retryAfterMs,
+          retryAfterSeconds
+        }
       });
     }
   }

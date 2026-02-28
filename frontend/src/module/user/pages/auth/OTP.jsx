@@ -219,9 +219,10 @@ export default function OTP() {
       const phone = authData?.method === "phone" ? authData.phone : null
       const email = authData?.method === "email" ? authData.email : null
       const purpose = authData?.isSignUp ? "register" : "login"
+      const registrationName = purpose === "register" ? authData?.name?.trim() || null : null
 
       // First attempt: verify OTP for login/register with user role
-      const response = await authAPI.verifyOTP(phone, code, purpose, null, email, "user")
+      const response = await authAPI.verifyOTP(phone, code, purpose, registrationName, email, "user")
       const data = response?.data?.data || {}
 
       // If backend tells us this is a new user, ask for name

@@ -827,8 +827,11 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           })
           console.log("✅ Location saved to backend successfully")
         } catch (backendError) {
-          // Only log non-network errors (network errors are handled by axios interceptor)
-          if (backendError.code !== 'ERR_NETWORK' && backendError.message !== 'Network Error') {
+          // 429 is expected when location writes are throttled.
+          if (backendError?.response?.status === 429) {
+            console.log("ℹ️ Location save throttled; continuing with local update")
+          } else if (backendError.code !== 'ERR_NETWORK' && backendError.message !== 'Network Error') {
+            // Only log non-network errors (network errors are handled by axios interceptor)
             console.error("Error saving location to backend:", backendError)
           }
           // Don't fail the whole operation if backend save fails
@@ -2150,8 +2153,13 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       // onClose()
       // window.location.reload()
     } catch (error) {
-      console.error("Error selecting saved address:", error)
-      toast.error("Failed to update location. Please try again.")
+      if (error?.response?.status === 429) {
+        console.log("ℹ️ Saved-address location update throttled; keeping local selection")
+        toast.success("Location selected. Server will sync shortly.", { id: "saved-address" })
+      } else {
+        console.error("Error selecting saved address:", error)
+        toast.error("Failed to update location. Please try again.")
+      }
     }
   }
 

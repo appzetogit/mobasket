@@ -131,8 +131,10 @@ export function useLocation() {
       
       console.log("✅ Live location successfully stored in database")
     } catch (err) {
-      // Only log non-network and non-auth errors
-      if (err.code !== "ERR_NETWORK" && err.response?.status !== 404 && err.response?.status !== 401) {
+      // Only log unexpected errors; 429 is an expected throttle signal.
+      if (err.response?.status === 429) {
+        console.log("ℹ️ Location update throttled; will retry on next cycle")
+      } else if (err.code !== "ERR_NETWORK" && err.response?.status !== 404 && err.response?.status !== 401) {
         console.error("❌ DB location update error:", err)
       } else if (err.response?.status === 404 || err.response?.status === 401) {
         // 404 or 401 means user not authenticated or route doesn't exist
