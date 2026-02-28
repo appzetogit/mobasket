@@ -65,8 +65,22 @@ export const sendOTP = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     logger.error(`Error sending OTP: ${error.message}`);
-    if (/too many otp requests/i.test(String(error.message || ''))) {
-      return errorResponse(res, 429, error.message);
+    const isRateLimitError =
+      error?.statusCode === 429 || /too many otp requests/i.test(String(error.message || ''));
+
+    if (isRateLimitError) {
+      const retryAfterSeconds = Number(error?.retryAfterSeconds) > 0
+        ? Number(error.retryAfterSeconds)
+        : undefined;
+      if (retryAfterSeconds) {
+        res.set('Retry-After', String(retryAfterSeconds));
+      }
+      return errorResponse(
+        res,
+        429,
+        error.message || 'Too many OTP requests. Please try again later.',
+        retryAfterSeconds ? { retryAfterSeconds } : null
+      );
     }
     return errorResponse(res, 500, getSafeOtpErrorMessage(error));
   }

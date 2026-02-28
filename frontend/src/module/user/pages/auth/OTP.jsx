@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowLeft, Loader2 } from "lucide-react"
 import AnimatedPage from "../../components/AnimatedPage"
@@ -22,6 +22,57 @@ export default function OTP() {
   const [contactInfo, setContactInfo] = useState("")
   const [contactType, setContactType] = useState("phone")
   const inputRefs = useRef([])
+  const resendIntervalRef = useRef(null)
+
+  const clearResendInterval = useCallback(() => {
+    if (resendIntervalRef.current) {
+      clearInterval(resendIntervalRef.current)
+      resendIntervalRef.current = null
+    }
+  }, [])
+
+  const startResendTimer = useCallback((seconds = 60) => {
+    const safeSeconds = Math.max(0, Number(seconds) || 0)
+    clearResendInterval()
+    setResendTimer(safeSeconds)
+
+    if (safeSeconds <= 0) return
+
+    resendIntervalRef.current = setInterval(() => {
+      setResendTimer((prev) => {
+        if (prev <= 1) {
+          clearResendInterval()
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
+  }, [clearResendInterval])
+
+  const getRetryAfterSeconds = (err) => {
+    const retryFromBody = Number(err?.response?.data?.errors?.retryAfterSeconds)
+    if (Number.isFinite(retryFromBody) && retryFromBody > 0) {
+      return Math.ceil(retryFromBody)
+    }
+
+    const retryFromHeader = Number(err?.response?.headers?.["retry-after"])
+    if (Number.isFinite(retryFromHeader) && retryFromHeader > 0) {
+      return Math.ceil(retryFromHeader)
+    }
+
+    return 0
+  }
+
+  const sanitizeOtpErrorMessage = (message, retryAfterSeconds = 0) => {
+    const text = String(message || "")
+    if (/too many otp requests|too many requests|rate limit/i.test(text)) {
+      if (retryAfterSeconds > 0) {
+        return `Too many OTP attempts. Try again in ${retryAfterSeconds} seconds.`
+      }
+      return "Too many OTP attempts. Please wait and try again."
+    }
+    return text || "Failed to resend OTP. Please try again."
+  }
 
   useEffect(() => {
     // Redirect to home if already authenticated
@@ -60,19 +111,10 @@ export default function OTP() {
     }
 
     // Start resend timer (60 seconds)
-    setResendTimer(60)
-    const timer = setInterval(() => {
-      setResendTimer((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
+    startResendTimer(60)
 
-    return () => clearInterval(timer)
-  }, [navigate])
+    return () => clearResendInterval()
+  }, [navigate, startResendTimer, clearResendInterval])
 
   useEffect(() => {
     // Focus first input on mount
@@ -298,6 +340,7 @@ export default function OTP() {
 
     setIsLoading(true)
     setError("")
+    let nextTimerSeconds = 60
 
     try {
       const phone = authData?.method === "phone" ? authData.phone : null
@@ -306,35 +349,30 @@ export default function OTP() {
 
       // Call backend to resend OTP
       await authAPI.sendOTP(phone, purpose, email)
+
+      setOtp(["", "", "", "", "", ""])
+      setShowNameInput(false)
+      setName("")
+      setNameError("")
+      setVerifiedOtp("")
+      inputRefs.current[0]?.focus()
     } catch (err) {
+      const retryAfterSeconds = getRetryAfterSeconds(err)
       const message =
         err?.response?.data?.message ||
         err?.response?.data?.error ||
         err?.message ||
         "Failed to resend OTP. Please try again."
-      setError(message)
+      setError(sanitizeOtpErrorMessage(message, retryAfterSeconds))
+      if (retryAfterSeconds > 0) {
+        nextTimerSeconds = retryAfterSeconds
+      } else {
+        nextTimerSeconds = 10
+      }
     } finally {
       setIsLoading(false)
+      startResendTimer(nextTimerSeconds)
     }
-
-    // Reset timer to 60 seconds
-    setResendTimer(60)
-    const timer = setInterval(() => {
-      setResendTimer((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer)
-          return 0
-        }
-        return prev - 1
-      })
-    }, 1000)
-
-    setOtp(["", "", "", "", "", ""])
-    setShowNameInput(false)
-    setName("")
-    setNameError("")
-    setVerifiedOtp("")
-    inputRefs.current[0]?.focus()
   }
 
   if (!authData) {

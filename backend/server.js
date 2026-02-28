@@ -465,6 +465,14 @@ if (process.env.NODE_ENV === 'production') {
     req.method === 'PUT' && req.path === '/user/location';
   const isAdminEnvSaveRoute = (req) =>
     req.method === 'POST' && req.path === '/admin/env-variables';
+  const isOtpSendRoute = (req) =>
+    req.method === 'POST' &&
+    [
+      '/auth/send-otp',
+      '/restaurant/auth/send-otp',
+      '/delivery/auth/send-otp',
+      '/grocery/store/auth/send-otp'
+    ].includes(req.path);
 
   const limiter = rateLimit({
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
@@ -473,12 +481,38 @@ if (process.env.NODE_ENV === 'production') {
     standardHeaders: true,
     legacyHeaders: false,
     // These routes have dedicated controls and should not consume the generic API bucket.
-    skip: (req) => isLocationUpdateRoute(req) || isAdminEnvSaveRoute(req),
+    skip: (req) => isLocationUpdateRoute(req) || isAdminEnvSaveRoute(req) || isOtpSendRoute(req),
     // Avoid proxy validation exceptions in reverse-proxy deployments.
     validate: false
   });
 
   app.use('/api/', limiter);
+
+  const otpIpLimiter = rateLimit({
+    windowMs: parseInt(process.env.OTP_IP_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+    max: parseInt(process.env.OTP_IP_RATE_LIMIT_MAX_REQUESTS) || 30,
+    standardHeaders: true,
+    legacyHeaders: false,
+    validate: false,
+    handler: (req, res) => {
+      const resetTime = req.rateLimit?.resetTime ? new Date(req.rateLimit.resetTime).getTime() : null;
+      const retryAfterSeconds = resetTime
+        ? Math.max(1, Math.ceil((resetTime - Date.now()) / 1000))
+        : Math.ceil((parseInt(process.env.OTP_IP_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000) / 1000);
+
+      res.set('Retry-After', String(retryAfterSeconds));
+      return res.status(429).json({
+        success: false,
+        message: 'Too many OTP attempts from this network. Please try again later.',
+        errors: { retryAfterSeconds }
+      });
+    }
+  });
+
+  app.use('/api/auth/send-otp', otpIpLimiter);
+  app.use('/api/restaurant/auth/send-otp', otpIpLimiter);
+  app.use('/api/delivery/auth/send-otp', otpIpLimiter);
+  app.use('/api/grocery/store/auth/send-otp', otpIpLimiter);
 
   const adminEnvLimiter = rateLimit({
     windowMs: parseInt(process.env.ADMIN_ENV_RATE_LIMIT_WINDOW_MS) || 5 * 60 * 1000, // 5 minutes

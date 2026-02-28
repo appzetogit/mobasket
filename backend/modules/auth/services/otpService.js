@@ -67,8 +67,8 @@ class OTPService {
 
       // Check rate limiting (configurable) - using MongoDB
       if (process.env.NODE_ENV === 'production') {
-        const rateLimitWindowMinutes = parseInt(process.env.OTP_RATE_LIMIT_WINDOW_MINUTES || '60', 10);
-        const rateLimitMaxRequests = parseInt(process.env.OTP_RATE_LIMIT_MAX_REQUESTS || '3', 10);
+        const rateLimitWindowMinutes = parseInt(process.env.OTP_RATE_LIMIT_WINDOW_MINUTES || '15', 10);
+        const rateLimitMaxRequests = parseInt(process.env.OTP_RATE_LIMIT_MAX_REQUESTS || '5', 10);
         const windowStart = new Date(Date.now() - rateLimitWindowMinutes * 60 * 1000);
         const rateLimitQuery = {
           [identifierType]: identifier,
@@ -78,9 +78,23 @@ class OTPService {
         
         const recentOtpCount = await Otp.countDocuments(rateLimitQuery);
         if (recentOtpCount >= rateLimitMaxRequests) {
-          throw new Error(
-            `Too many OTP requests. Please try again after ${rateLimitWindowMinutes} minutes.`
+          const oldestRecentOtp = await Otp.findOne(rateLimitQuery)
+            .sort({ createdAt: 1 })
+            .select('createdAt')
+            .lean();
+          const windowMs = rateLimitWindowMinutes * 60 * 1000;
+          const retryAfterMs = oldestRecentOtp?.createdAt
+            ? Math.max(0, windowMs - (Date.now() - new Date(oldestRecentOtp.createdAt).getTime()))
+            : windowMs;
+          const retryAfterSeconds = Math.max(1, Math.ceil(retryAfterMs / 1000));
+          const waitMinutes = Math.max(1, Math.ceil(retryAfterSeconds / 60));
+
+          const rateLimitError = new Error(
+            `Too many OTP requests. Please try again after ${waitMinutes} minute${waitMinutes > 1 ? 's' : ''}.`
           );
+          rateLimitError.statusCode = 429;
+          rateLimitError.retryAfterSeconds = retryAfterSeconds;
+          throw rateLimitError;
         }
       }
 

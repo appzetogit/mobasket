@@ -541,7 +541,7 @@ export default function SignIn() {
     return ""
   }
 
-  const sanitizeOtpErrorMessage = (message) => {
+  const sanitizeOtpErrorMessage = (message, retryAfterSeconds = 0) => {
     const text = String(message || "")
     const looksLikeInfraError =
       /ssl|tls|alert number|routines|socket hang up|econnreset|ehostunreach|etimedout|enotfound/i.test(text)
@@ -554,6 +554,9 @@ export default function SignIn() {
     }
 
     if (isRateLimited) {
+      if (retryAfterSeconds > 0) {
+        return `Too many OTP attempts. Please try again in ${retryAfterSeconds} seconds.`
+      }
       return "Too many OTP attempts. Please wait and try again."
     }
 
@@ -647,11 +650,15 @@ export default function SignIn() {
       // Navigate to OTP page
       navigate("/user/auth/otp")
     } catch (error) {
+      const retryAfterSeconds = Math.max(
+        Number(error?.response?.data?.errors?.retryAfterSeconds) || 0,
+        Number(error?.response?.headers?.["retry-after"]) || 0
+      )
       const rawMessage =
         error?.response?.data?.message ||
         error?.response?.data?.error ||
         "Failed to send OTP. Please try again."
-      setApiError(sanitizeOtpErrorMessage(rawMessage))
+      setApiError(sanitizeOtpErrorMessage(rawMessage, retryAfterSeconds))
     } finally {
       setIsLoading(false)
     }
