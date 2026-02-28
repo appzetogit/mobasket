@@ -4,32 +4,33 @@ module.exports = {
       name: 'mo-basket-backend',
       cwd: './backend',
       script: 'server.js',
-      // Safe default for Socket.IO room consistency.
-      // Switch to cluster only after sticky sessions + shared adapter (Redis) are configured.
+
       exec_mode: process.env.PM2_EXEC_MODE || 'fork',
       instances: process.env.WEB_CONCURRENCY || 1,
 
-      // Graceful restart behavior
+      // Restart behavior
       autorestart: true,
       watch: false,
       min_uptime: '20s',
       max_restarts: 10,
       restart_delay: 5000,
-      exp_backoff_restart_delay: 200,
+      exp_backoff_restart_delay: 1000, // ✅ fixed
       listen_timeout: 10000,
       kill_timeout: 5000,
 
-      // Prevent memory bloat from causing host instability
+      // Memory safety
       max_memory_restart: '600M',
+      node_args: '--max-old-space-size=512', // ✅ added
+      wait_ready: false, // ✅ added
 
-      // Keep one log stream per app and timestamp every line
+      // Logs
       merge_logs: true,
       log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
       error_file: './logs/pm2-error.log',
       out_file: './logs/pm2-out.log',
       time: true,
 
-      // Environment defaults (safe fallback)
+      // Default env
       env: {
         NODE_ENV: 'development',
         PORT: 5000,
@@ -41,10 +42,10 @@ module.exports = {
 
         LOG_USER_LOCATION_UPDATES: 'false',
         LOG_LOCATION_STREAM: 'false',
-        LOG_LEVEL: 'info'
+        LOG_LEVEL: process.env.LOG_LEVEL || 'info'
       },
 
-      // Production overrides
+      // Production env
       env_production: {
         NODE_ENV: 'production',
         PORT: 5000,
@@ -56,7 +57,7 @@ module.exports = {
 
         LOG_USER_LOCATION_UPDATES: 'false',
         LOG_LOCATION_STREAM: 'false',
-        LOG_LEVEL: 'warn'
+        LOG_LEVEL: process.env.LOG_LEVEL || 'warn'
       }
     }
   ]
