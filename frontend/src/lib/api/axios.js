@@ -357,11 +357,28 @@ apiClient.interceptors.response.use(
 
     // If error is 401 and we haven't tried to refresh yet
     if (error.response?.status === 401 && !originalRequest._retry) {
+      const currentPath = window.location.pathname;
+      const isStoreAuthPage = /^\/store\/(login|signup|otp)$/.test(currentPath);
+      const isRestaurantAuthPage = /^\/restaurant\/(login|signup|signup-email|otp|forgot-password|welcome)$/.test(currentPath) || /^\/restaurant\/auth\/(sign-in|google-callback)$/.test(currentPath);
+      const isDeliveryAuthPage = /^\/delivery\/(signin|signup|otp|welcome)/.test(currentPath);
+      const isAdminAuthPage = /^\/admin\/(login|signup|forgot-password)$/.test(currentPath);
+      const hasStoreToken = typeof localStorage !== "undefined" && (localStorage.getItem("grocery-store_accessToken") || localStorage.getItem("grocery-store_refreshToken"));
+      const hasRestaurantToken = typeof localStorage !== "undefined" && (localStorage.getItem("restaurant_accessToken") || localStorage.getItem("restaurant_refreshToken"));
+      const hasDeliveryToken = typeof localStorage !== "undefined" && (localStorage.getItem("delivery_accessToken") || localStorage.getItem("delivery_refreshToken"));
+      const hasAdminToken = typeof localStorage !== "undefined" && (localStorage.getItem("admin_accessToken") || localStorage.getItem("admin_refreshToken"));
+      const onAuthPageWithoutToken =
+        (currentPath.startsWith("/store") && isStoreAuthPage && !hasStoreToken) ||
+        (currentPath.startsWith("/restaurant") && isRestaurantAuthPage && !hasRestaurantToken) ||
+        (currentPath.startsWith("/delivery") && isDeliveryAuthPage && !hasDeliveryToken) ||
+        (currentPath.startsWith("/admin") && isAdminAuthPage && !hasAdminToken);
+      if (onAuthPageWithoutToken) {
+        return Promise.reject(error);
+      }
+
       originalRequest._retry = true;
 
       try {
         // Determine which module's refresh endpoint to use based on current route
-        const currentPath = window.location.pathname;
         let refreshEndpoint = "/auth/refresh-token"; // default to user auth
 
         if (currentPath.startsWith("/admin")) {

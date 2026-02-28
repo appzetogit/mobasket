@@ -674,11 +674,16 @@ export const groceryStoreAPI = {
 
   verifyOTP: (phone = null, otp, purpose = 'login', name = null, email = null, password = null, meta = {}) => {
     const payload = {
-      otp,
+      otp: String(otp),
       purpose,
     };
-    if (phone != null) payload.phone = phone;
-    if (email != null) payload.email = email;
+    const hasPhone = phone != null && String(phone).trim() !== '';
+    const hasEmail = email != null && String(email).trim() !== '';
+    if (hasPhone) payload.phone = String(phone).trim();
+    if (hasEmail) payload.email = String(email).trim();
+    if (!payload.phone && !payload.email) {
+      throw new Error('Either phone or email is required for verification');
+    }
     if (name != null) payload.name = name;
     if (password != null) payload.password = password;
     if (meta?.token != null) payload.token = meta.token;

@@ -123,11 +123,14 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         platform: 'mogrocery',
         role: 'restaurant',
         isActive: false,
+        ownerName: (name && String(name).trim()) ? String(name).trim() : 'Store Owner',
+        ownerEmail: email ? email.toLowerCase().trim() : '',
         ...fcmPatch
       };
 
       if (normalizedPhone) {
         storeData.phone = normalizedPhone;
+        storeData.ownerPhone = normalizedPhone; // Restaurant model requires ownerPhone when phone is set
       }
       if (email) {
         storeData.email = email.toLowerCase().trim();
@@ -147,9 +150,19 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       await otpService.verifyOTP(phone || null, otp, purpose, email || null);
 
       if (!store) {
+        // Only one grocery store allowed: OTP was already verified for this phone/email, so log them into that store
+        const existingStore = await Restaurant.findOne({ platform: 'mogrocery' });
+        if (existingStore) {
+          store = existingStore;
+        }
+      }
+
+      if (!store) {
+
         const derivedName = normalizedPhone
           ? `Grocery Store ${normalizedPhone.slice(-4)}`
           : ((email || '').split('@')[0] || 'Grocery Store');
+        const ownerName = (derivedName && String(derivedName).trim()) ? String(derivedName).trim() : 'Store Owner';
 
         const storeData = {
           name: derivedName,
@@ -157,11 +170,14 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           platform: 'mogrocery',
           role: 'restaurant',
           isActive: false,
+          ownerName,
+          ownerEmail: email ? email.toLowerCase().trim() : '',
           ...fcmPatch
         };
 
         if (normalizedPhone) {
           storeData.phone = normalizedPhone;
+          storeData.ownerPhone = normalizedPhone; // Restaurant model requires ownerPhone when phone is set
         }
         if (email) {
           storeData.email = email.toLowerCase().trim();

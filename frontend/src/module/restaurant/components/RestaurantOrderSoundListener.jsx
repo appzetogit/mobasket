@@ -7,14 +7,17 @@ export default function RestaurantOrderSoundListener() {
 
   const shouldEnable = useMemo(() => {
     const pathname = String(location.pathname || "");
-    const isRestaurantModuleRoute = pathname.startsWith("/restaurant") || pathname.startsWith("/store");
-    if (!isRestaurantModuleRoute) return false;
+    const isStoreRoute = pathname.startsWith("/store");
+    const isRestaurantRoute = pathname.startsWith("/restaurant") && !pathname.startsWith("/restaurants");
+    if (!isStoreRoute && !isRestaurantRoute) return false;
 
     try {
       const restaurantToken = localStorage.getItem("restaurant_accessToken");
       const groceryToken = localStorage.getItem("grocery-store_accessToken");
-      const genericToken = localStorage.getItem("accessToken");
-      return Boolean(restaurantToken || groceryToken || genericToken);
+      // Only enable when we have the token for the current module (avoid /me 401 on login pages)
+      if (isStoreRoute) return Boolean(groceryToken);
+      if (isRestaurantRoute) return Boolean(restaurantToken);
+      return false;
     } catch {
       return false;
     }
