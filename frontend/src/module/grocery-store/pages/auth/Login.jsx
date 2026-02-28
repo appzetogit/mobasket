@@ -45,45 +45,11 @@ const countryCodes = [
 export default function GroceryStoreLogin() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
-  const [loginMethod, setLoginMethod] = useState(() => {
-    try {
-      const raw = sessionStorage.getItem("groceryStoreAuthData")
-      if (!raw) return "phone"
-      const saved = JSON.parse(raw)
-      return saved?.method === "email" ? "email" : "phone"
-    } catch {
-      return "phone"
-    }
-  })
-  const [formData, setFormData] = useState(() => {
-    const fallback = {
-      phone: "",
-      countryCode: "+91",
-      email: "",
-    }
-    try {
-      const raw = sessionStorage.getItem("groceryStoreAuthData")
-      if (!raw) return fallback
-      const saved = JSON.parse(raw)
-      if (saved?.module !== "grocery-store") return fallback
-
-      if (saved?.method === "email" && saved?.email) {
-        return { ...fallback, email: String(saved.email).trim() }
-      }
-
-      if (saved?.method === "phone" && saved?.phone) {
-        const match = String(saved.phone).trim().match(/^(\+\d+)\s*(.*)$/)
-        return {
-          ...fallback,
-          countryCode: match?.[1] || "+91",
-          phone: (match?.[2] || "").replace(/\D/g, "").slice(0, 15),
-        }
-      }
-
-      return fallback
-    } catch {
-      return fallback
-    }
+  const [loginMethod, setLoginMethod] = useState("phone")
+  const [formData, setFormData] = useState({
+    phone: "",
+    countryCode: "+91",
+    email: "",
   })
   const [errors, setErrors] = useState({
     phone: "",

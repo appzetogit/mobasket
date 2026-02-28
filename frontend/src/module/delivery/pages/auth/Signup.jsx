@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select"
 import loginBg from "@/assets/deliveryloginbanner.png"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
+import { deliveryAPI } from "@/lib/api"
 
 // Common country codes
 const countryCodes = [
@@ -135,13 +136,25 @@ export default function DeliverySignup() {
       return
     }
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    const fullPhone = `${formData.countryCode} ${formData.phone}`.trim()
+
+    try {
+      await deliveryAPI.sendOTP(fullPhone, "login")
+    } catch (err) {
+      const message =
+        err?.response?.data?.message ||
+        err?.response?.data?.error ||
+        err?.message ||
+        "Failed to send OTP. Please try again."
+      setErrors((prev) => ({ ...prev, phone: message }))
+      setIsLoading(false)
+      return
+    }
 
     // Store auth data in sessionStorage for OTP page
     const authData = {
       method: "phone",
-      phone: `${formData.countryCode} ${formData.phone}`,
+      phone: fullPhone,
       name: formData.name,
       isSignUp: true,
       module: "delivery",

@@ -134,11 +134,18 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       } catch (createError) {
         // Handle duplicate key error
         if (createError.code === 11000) {
-          delivery = await Delivery.findOne({ phone });
-          if (!delivery) {
+          const existingDelivery = await Delivery.findOne({ phone });
+          if (existingDelivery) {
+            return errorResponse(res, 400, 'Delivery boy already exists with this phone number. Please login.');
+          }
+          if (String(createError?.message || '').includes('mobile_1')) {
+            delivery = await Delivery.create({
+              ...deliveryData,
+              mobile: phone
+            });
+          } else {
             throw createError;
           }
-          return errorResponse(res, 400, 'Delivery boy already exists with this phone number. Please login.');
         } else {
           throw createError;
         }
@@ -175,7 +182,14 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           if (createError.code === 11000) {
             delivery = await Delivery.findOne({ phone });
             if (!delivery) {
-              throw createError;
+              if (String(createError?.message || '').includes('mobile_1')) {
+                delivery = await Delivery.create({
+                  ...deliveryData,
+                  mobile: phone
+                });
+              } else {
+                throw createError;
+              }
             }
             logger.info(`Delivery boy found after duplicate key error: ${delivery._id}`);
           } else {
@@ -185,6 +199,10 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       } else {
         // Existing delivery boy login - update verification status if needed
         let shouldSaveDelivery = false;
+        if (!delivery.mobile && delivery.phone) {
+          delivery.mobile = delivery.phone;
+          shouldSaveDelivery = true;
+        }
         if (!delivery.phoneVerified) {
           delivery.phoneVerified = true;
           shouldSaveDelivery = true;

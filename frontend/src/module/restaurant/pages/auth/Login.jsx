@@ -46,45 +46,11 @@ const countryCodes = [
 export default function RestaurantLogin() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
-  const [loginMethod, setLoginMethod] = useState(() => {
-    try {
-      const raw = sessionStorage.getItem("restaurantAuthData")
-      if (!raw) return "phone"
-      const saved = JSON.parse(raw)
-      return saved?.method === "email" ? "email" : "phone"
-    } catch {
-      return "phone"
-    }
-  }) // "phone" or "email"
-  const [formData, setFormData] = useState(() => {
-    const fallback = {
-      phone: "",
-      countryCode: "+91",
-      email: "",
-    }
-    try {
-      const raw = sessionStorage.getItem("restaurantAuthData")
-      if (!raw) return fallback
-      const saved = JSON.parse(raw)
-      if (saved?.module !== "restaurant") return fallback
-
-      if (saved?.method === "email" && saved?.email) {
-        return { ...fallback, email: String(saved.email).trim() }
-      }
-
-      if (saved?.method === "phone" && saved?.phone) {
-        const match = String(saved.phone).trim().match(/^(\+\d+)\s*(.*)$/)
-        return {
-          ...fallback,
-          countryCode: match?.[1] || "+91",
-          phone: (match?.[2] || "").replace(/\D/g, "").slice(0, 15),
-        }
-      }
-
-      return fallback
-    } catch {
-      return fallback
-    }
+  const [loginMethod, setLoginMethod] = useState("phone") // "phone" or "email"
+  const [formData, setFormData] = useState({
+    phone: "",
+    countryCode: "+91",
+    email: "",
   })
   const [errors, setErrors] = useState({
     phone: "",
@@ -683,4 +649,3 @@ export default function RestaurantLogin() {
     </div>
   )
 }
-

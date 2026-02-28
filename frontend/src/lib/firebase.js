@@ -4,13 +4,13 @@ import { getDatabase } from 'firebase/database';
 
 // Firebase configuration - fallback to hardcoded values if env vars are not available
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyAxv29zeNlOCVUUC9PEwj5hEyhe3ye-aF4',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'mobasket-83a5e.firebaseapp.com',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'mobasket-83a5e',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:259531807132:web:33e08e177c0e47bf89d059',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '259531807132',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'mobasket-83a5e.firebasestorage.app',
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || 'G-9MN25HZEDF',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyC_TqpDR7LNHxFEPd8cGjl_ka_Rj0ebECA',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'zomato-607fa.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'zomato-607fa',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || '1:1065631021082:web:7424afd0ad2054ed6879a3',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '1065631021082',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'zomato-607fa.firebasestorage.app',
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '',
   databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || 'https://mobasket-83a5e-default-rtdb.asia-southeast1.firebasedatabase.app/'
 };
 

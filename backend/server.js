@@ -521,6 +521,8 @@ if (process.env.NODE_ENV === 'production') {
     req.method === 'PUT' && req.path === '/user/location';
   const isAdminEnvSaveRoute = (req) =>
     req.method === 'POST' && req.path === '/admin/env-variables';
+  const isUploadMediaRoute = (req) =>
+    req.method === 'POST' && req.path === '/upload/media';
   const isOtpSendRoute = (req) =>
     req.method === 'POST' &&
     [
@@ -551,6 +553,7 @@ if (process.env.NODE_ENV === 'production') {
     skip: (req) =>
       isLocationUpdateRoute(req) ||
       isAdminEnvSaveRoute(req) ||
+      isUploadMediaRoute(req) ||
       isOtpSendRoute(req) ||
       isOtpVerifyRoute(req) ||
       isPublicBootstrapRoute(req),
@@ -614,6 +617,18 @@ if (process.env.NODE_ENV === 'production') {
   });
 
   app.use('/api/admin/env-variables', adminEnvLimiter);
+
+  const uploadIpLimiter = rateLimit({
+    windowMs: parseInt(process.env.UPLOAD_IP_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+    max: parseInt(process.env.UPLOAD_IP_RATE_LIMIT_MAX_REQUESTS) || 240,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: rateLimitKeyGenerator,
+    validate: false,
+    message: 'Too many upload requests from this network. Please try again in a few minutes.'
+  });
+
+  app.use('/api/upload/media', uploadIpLimiter);
   console.log('Rate limiting enabled (production mode)');
 } else {
   console.log('Rate limiting disabled (development mode)');

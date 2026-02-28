@@ -159,6 +159,13 @@ const deliverySchema = new mongoose.Schema(
       unique: true,
       trim: true
     },
+    // Legacy compatibility: some deployments still have a unique mobile_1 index.
+    // Keep this field synced to phone to avoid duplicate-key on mobile:null.
+    mobile: {
+      type: String,
+      trim: true,
+      default: null
+    },
     phoneVerified: {
       type: Boolean,
       default: false
@@ -278,6 +285,9 @@ deliverySchema.index({ isActive: 1 });
 
 // Hash password before saving
 deliverySchema.pre('save', async function(next) {
+  if (this.isModified('phone') || this.isNew) {
+    this.mobile = this.phone || null;
+  }
   if (!this.isModified('password')) {
     return next();
   }

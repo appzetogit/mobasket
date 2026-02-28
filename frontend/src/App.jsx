@@ -130,8 +130,6 @@ function UserPathRedirect() {
 }
 
 export default function App() {
-  const location = useLocation();
-
   useEffect(() => {
     if (typeof window === "undefined" || !("geolocation" in navigator)) return;
 
@@ -147,13 +145,28 @@ export default function App() {
       );
     };
 
-    // Explicit request on app open + every route navigation.
-    requestLocationPermission();
+    const run = async () => {
+      // Do not re-prompt repeatedly after the user has dismissed/blocked it.
+      if (sessionStorage.getItem("geoPromptRequested") === "1") return;
 
-    // Some WebView wrappers delay permission bridge wiring on first paint.
-    const retryTimer = window.setTimeout(requestLocationPermission, 700);
-    return () => window.clearTimeout(retryTimer);
-  }, [location.pathname]);
+      try {
+        if (navigator.permissions?.query) {
+          const status = await navigator.permissions.query({ name: "geolocation" });
+          if (status.state === "denied") {
+            sessionStorage.setItem("geoPromptRequested", "1");
+            return;
+          }
+        }
+      } catch {
+        // Ignore permissions API failures and continue with a single prompt attempt.
+      }
+
+      requestLocationPermission();
+      sessionStorage.setItem("geoPromptRequested", "1");
+    };
+
+    run();
+  }, []);
 
   return (
     <>

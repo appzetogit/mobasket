@@ -465,39 +465,6 @@ export default function SignIn() {
     loadPolicyLinks()
   }, [])
 
-  useEffect(() => {
-    try {
-      const raw = sessionStorage.getItem("userAuthData") || localStorage.getItem("userAuthData")
-      if (!raw) return
-
-      const saved = JSON.parse(raw)
-      if (saved?.module !== "user") return
-
-      if (saved.method === "email" && saved.email) {
-        setAuthMethod("email")
-        setFormData((prev) => ({
-          ...prev,
-          email: saved.email,
-          name: saved.name || prev.name,
-        }))
-      } else if (saved.method === "phone" && saved.phone) {
-        const match = String(saved.phone).trim().match(/^(\+\d+)\s*(.*)$/)
-        const countryCode = match?.[1] || "+91"
-        const phone = match?.[2] || String(saved.phone).replace(/^\+\d+\s*/, "")
-
-        setAuthMethod("phone")
-        setFormData((prev) => ({
-          ...prev,
-          countryCode,
-          phone,
-          name: saved.name || prev.name,
-        }))
-      }
-    } catch {
-      // Ignore parse errors and keep default form state
-    }
-  }, [])
-
   // Get selected country details dynamically
   const selectedCountry = countryCodes.find(c => c.code === formData.countryCode) || countryCodes[2] // Default to India (+91)
 

@@ -64,7 +64,6 @@ class OTPService {
       const normalizedPhone = phone ? normalizePhoneForOtp(phone) : null;
       const identifier = normalizedPhone || email;
       const identifierType = normalizedPhone ? 'phone' : 'email';
-      const isProd = process.env.NODE_ENV === 'production';
 
       // Check rate limiting (configurable) - using MongoDB
       if (process.env.NODE_ENV === 'production') {
@@ -100,12 +99,10 @@ class OTPService {
       }
 
       // Generate OTP
-      // Use fixed OTP for default test number.
-      // In non-production, if SMS provider is not configured, use fixed OTP for all phone numbers.
+      // Use fixed OTP for default test number only.
       const isDefaultTestNumber = normalizedPhone === '+917610416911';
       const smsConfigured = normalizedPhone ? await smsIndiaHubService.isConfigured() : true;
-      const useDevBypassOtp = !!normalizedPhone && !isProd && !smsConfigured;
-      const otp = (isDefaultTestNumber || useDevBypassOtp) ? '110211' : generateOTP();
+      const otp = isDefaultTestNumber ? '110211' : generateOTP();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
       // Build query for invalidating previous OTPs
@@ -131,8 +128,8 @@ class OTPService {
       const otpRecord = await Otp.create(otpData);
 
       // Send OTP via SMS or Email
-      // For default test number and non-production dev bypass, skip external SMS.
-      if (normalizedPhone && !isDefaultTestNumber && !useDevBypassOtp) {
+      // For default test number, skip external SMS and rely on static OTP 110211.
+      if (normalizedPhone && !isDefaultTestNumber) {
         if (!smsConfigured) {
           throw new Error(
             'SMS service is not configured. Please set SMSINDIAHUB_API_KEY and SMSINDIAHUB_SENDER_ID in Admin > ENV Setup.'
@@ -142,14 +139,6 @@ class OTPService {
       } else if (email) {
         // Keep email service as is
         await emailService.sendOTP(email, otp, purpose);
-      }
-
-      if (useDevBypassOtp) {
-        logger.warn(`SMS provider not configured. Dev OTP bypass enabled for ${normalizedPhone}`, {
-          phone: normalizedPhone,
-          purpose,
-          otp
-        });
       }
 
       logger.info(`OTP generated and sent to ${identifier} (${identifierType})`, {

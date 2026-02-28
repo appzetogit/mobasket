@@ -38,29 +38,10 @@ const countryCodes = [
   { code: "+46", country: "SE", flag: "🇸🇪" },
 ]
 
-const getInitialFormData = () => {
-  const fallback = { phone: "", countryCode: "+91" }
-  try {
-    const raw = sessionStorage.getItem("deliveryAuthData")
-    if (!raw) return fallback
-    const saved = JSON.parse(raw)
-    if (saved?.module !== "delivery" || saved?.method !== "phone" || !saved?.phone) {
-      return fallback
-    }
-    const match = String(saved.phone).trim().match(/^(\+\d+)\s*(.*)$/)
-    return {
-      countryCode: match?.[1] || "+91",
-      phone: (match?.[2] || "").replace(/\D/g, "").slice(0, 15),
-    }
-  } catch {
-    return fallback
-  }
-}
-
 export default function DeliverySignIn() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
-  const [formData, setFormData] = useState(getInitialFormData)
+  const [formData, setFormData] = useState({ phone: "", countryCode: "+91" })
   const [error, setError] = useState("")
   const [isSending, setIsSending] = useState(false)
   const [termsUrl, setTermsUrl] = useState("")
@@ -336,4 +317,3 @@ export default function DeliverySignIn() {
     </div>
   )
 }
-
