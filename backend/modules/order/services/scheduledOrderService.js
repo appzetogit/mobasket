@@ -1,5 +1,6 @@
 import Order from '../models/Order.js';
 import { notifyRestaurantNewOrder } from './restaurantNotificationService.js';
+import { sanitizePostOrderActions } from '../utils/postOrderActionsSanitizer.js';
 
 const ORDER_MODIFICATION_WINDOW_MS = 2 * 60 * 1000;
 
@@ -50,11 +51,11 @@ export async function processScheduledOrders() {
           status: true,
           timestamp: windowStartAt
         });
-        currentOrder.postOrderActions = {
+        currentOrder.postOrderActions = sanitizePostOrderActions({
           ...(currentOrder.postOrderActions || {}),
           modificationWindowStartAt: windowStartAt,
           modificationWindowExpiresAt: windowExpiresAt
-        };
+        });
 
         await currentOrder.save();
 

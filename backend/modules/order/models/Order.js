@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { sanitizePostOrderActions } from '../utils/postOrderActionsSanitizer.js';
 
 const orderItemSchema = new mongoose.Schema({
   itemId: {
@@ -29,6 +30,60 @@ const orderItemSchema = new mongoose.Schema({
     default: true
   }
 }, { _id: true });
+
+const pendingCartEditSchema = new mongoose.Schema({
+  items: {
+    type: [orderItemSchema],
+    default: []
+  },
+  subtotal: {
+    type: Number,
+    default: 0
+  },
+  total: {
+    type: Number,
+    default: 0
+  },
+  additionalAmount: {
+    type: Number,
+    default: 0
+  },
+  requiresAdminReapproval: {
+    type: Boolean,
+    default: false
+  },
+  razorpayOrderId: {
+    type: String,
+    default: ''
+  },
+  createdAt: {
+    type: Date,
+    default: null
+  }
+}, { _id: false });
+
+const postOrderActionsSchema = new mongoose.Schema({
+  modificationWindowStartAt: {
+    type: Date,
+    default: null
+  },
+  modificationWindowExpiresAt: {
+    type: Date,
+    default: null
+  },
+  lastCartEditedAt: {
+    type: Date,
+    default: null
+  },
+  cartEditCount: {
+    type: Number,
+    default: 0
+  },
+  pendingCartEdit: {
+    type: pendingCartEditSchema,
+    default: () => ({})
+  }
+}, { _id: false });
 
 const orderSchema = new mongoose.Schema({
   orderId: {
@@ -303,48 +358,8 @@ const orderSchema = new mongoose.Schema({
     }
   },
   postOrderActions: {
-    modificationWindowStartAt: {
-      type: Date,
-      default: null
-    },
-    modificationWindowExpiresAt: {
-      type: Date,
-      default: null
-    },
-    lastCartEditedAt: {
-      type: Date,
-      default: null
-    },
-    cartEditCount: {
-      type: Number,
-      default: 0
-    },
-    pendingCartEdit: {
-      items: {
-        type: [orderItemSchema],
-        default: []
-      },
-      subtotal: {
-        type: Number,
-        default: 0
-      },
-      total: {
-        type: Number,
-        default: 0
-      },
-      additionalAmount: {
-        type: Number,
-        default: 0
-      },
-      razorpayOrderId: {
-        type: String,
-        default: ''
-      },
-      createdAt: {
-        type: Date,
-        default: null
-      }
-    }
+    type: postOrderActionsSchema,
+    default: () => ({})
   },
   stockSync: {
     grocery: {
@@ -456,6 +471,11 @@ orderSchema.pre('save', async function (next) {
   } else if (this.orderId && this.orderNumber && this.orderId !== this.orderNumber) {
     this.orderNumber = this.orderId;
   }
+  next();
+});
+
+orderSchema.pre('validate', function (next) {
+  this.postOrderActions = sanitizePostOrderActions(this.postOrderActions);
   next();
 });
 

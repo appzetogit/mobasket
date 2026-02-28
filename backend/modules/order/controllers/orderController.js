@@ -20,6 +20,11 @@ import Menu from '../../restaurant/models/Menu.js';
 import User from '../../auth/models/User.js';
 import OutletTimings from '../../restaurant/models/OutletTimings.js';
 import { reduceGroceryStockForOrder, restoreGroceryStockForOrder } from '../services/groceryStockService.js';
+import {
+  getDefaultPendingCartEdit,
+  sanitizePendingCartEdit,
+  sanitizePostOrderActions
+} from '../utils/postOrderActionsSanitizer.js';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -52,27 +57,8 @@ const resolveOrderPlatform = async (restaurantId) => {
   return normalizePlatform(restaurant?.platform);
 };
 
-const getDefaultPendingCartEdit = () => ({
-  items: [],
-  subtotal: 0,
-  total: 0,
-  additionalAmount: 0,
-  razorpayOrderId: '',
-  createdAt: null
-});
-
 const ensurePostOrderActionsShape = (order) => {
-  if (!order.postOrderActions || typeof order.postOrderActions !== 'object') {
-    order.postOrderActions = {};
-  }
-
-  if (
-    !order.postOrderActions.pendingCartEdit ||
-    typeof order.postOrderActions.pendingCartEdit !== 'object'
-  ) {
-    order.postOrderActions.pendingCartEdit = getDefaultPendingCartEdit();
-  }
-
+  order.postOrderActions = sanitizePostOrderActions(order.postOrderActions);
   return order.postOrderActions;
 };
 
@@ -2343,9 +2329,9 @@ export const editOrderCart = async (req, res) => {
         razorpayKeyId = '';
       }
 
-      order.postOrderActions = {
+      order.postOrderActions = sanitizePostOrderActions({
         ...(order.postOrderActions || {}),
-        pendingCartEdit: {
+        pendingCartEdit: sanitizePendingCartEdit({
           items: sanitizedItems,
           subtotal: totals.subtotal,
           total: totals.total,
@@ -2353,8 +2339,8 @@ export const editOrderCart = async (req, res) => {
           requiresAdminReapproval,
           razorpayOrderId: razorpayOrder?.id || '',
           createdAt: new Date()
-        }
-      };
+        })
+      });
       await order.save();
 
       return res.json({
