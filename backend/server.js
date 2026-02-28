@@ -523,6 +523,9 @@ if (process.env.NODE_ENV === 'production') {
     req.method === 'POST' && req.path === '/admin/env-variables';
   const isUploadMediaRoute = (req) =>
     req.method === 'POST' && req.path === '/upload/media';
+  const isDeliverySignupRoute = (req) =>
+    req.method === 'POST' &&
+    ['/delivery/signup/details', '/delivery/signup/documents'].includes(req.path);
   const isOtpSendRoute = (req) =>
     req.method === 'POST' &&
     [
@@ -554,6 +557,7 @@ if (process.env.NODE_ENV === 'production') {
       isLocationUpdateRoute(req) ||
       isAdminEnvSaveRoute(req) ||
       isUploadMediaRoute(req) ||
+      isDeliverySignupRoute(req) ||
       isOtpSendRoute(req) ||
       isOtpVerifyRoute(req) ||
       isPublicBootstrapRoute(req),
@@ -629,6 +633,19 @@ if (process.env.NODE_ENV === 'production') {
   });
 
   app.use('/api/upload/media', uploadIpLimiter);
+
+  const deliverySignupIpLimiter = rateLimit({
+    windowMs: parseInt(process.env.DELIVERY_SIGNUP_IP_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+    max: parseInt(process.env.DELIVERY_SIGNUP_IP_RATE_LIMIT_MAX_REQUESTS) || 180,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: rateLimitKeyGenerator,
+    validate: false,
+    message: 'Too many delivery signup attempts from this network. Please try again shortly.'
+  });
+
+  app.use('/api/delivery/signup/details', deliverySignupIpLimiter);
+  app.use('/api/delivery/signup/documents', deliverySignupIpLimiter);
   console.log('Rate limiting enabled (production mode)');
 } else {
   console.log('Rate limiting disabled (development mode)');

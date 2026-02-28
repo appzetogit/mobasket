@@ -1913,6 +1913,41 @@ export default function RestaurantDetails() {
       .filter(({ section }) => sectionHasItemsUnder250(section));
   };
 
+  const filteredSections = getFilteredSections();
+  const visibleMenuCategories = filteredSections.map(
+    ({ section, originalIndex }) => {
+      let sectionTitle = "Unnamed Section";
+      if (section?.isPersonalizedRecommended) {
+        sectionTitle = "Recommended for you";
+      } else if (
+        section?.name &&
+        typeof section.name === "string" &&
+        section.name.trim()
+      ) {
+        sectionTitle = section.name.trim();
+      } else if (
+        section?.title &&
+        typeof section.title === "string" &&
+        section.title.trim()
+      ) {
+        sectionTitle = section.title.trim();
+      }
+
+      const itemCount = section?.items?.length || 0;
+      const subsectionCount =
+        section?.subsections?.reduce(
+          (sum, sub) => sum + (sub?.items?.length || 0),
+          0,
+        ) || 0;
+
+      return {
+        name: sectionTitle,
+        count: itemCount + subsectionCount,
+        sectionIndex: originalIndex,
+      };
+    },
+  );
+
   // Highlight offers/texts for the blue offer line
   const highlightOffers = [
     "Upto 50% OFF",
@@ -2215,6 +2250,32 @@ export default function RestaurantDetails() {
             </Button>
           </div>
         </div>
+        {visibleMenuCategories.length > 0 && (
+          <div className="-mx-4 px-4 pt-3 overflow-x-auto scrollbar-hide">
+            <div className="flex items-center gap-2 w-max">
+              {visibleMenuCategories.map((category, index) => (
+                <Button
+                  key={`${category.sectionIndex}-${index}`}
+                  variant="outline"
+                  size="sm"
+                  className="whitespace-nowrap rounded-full border-gray-300 bg-white dark:bg-[#1a1a1a]"
+                  onClick={() => {
+                    const sectionId = `menu-section-${category.sectionIndex}`;
+                    const sectionElement = document.getElementById(sectionId);
+                    if (sectionElement) {
+                      sectionElement.scrollIntoView({
+                        behavior: "smooth",
+                        block: "start",
+                      });
+                    }
+                  }}
+                >
+                  {category.name}
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Menu Items Section */}
@@ -2222,7 +2283,7 @@ export default function RestaurantDetails() {
         Array.isArray(restaurant.menuSections) &&
         restaurant.menuSections.length > 0 && (
           <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-6 sm:py-8 md:py-10 lg:py-12 space-y-6 md:space-y-8 lg:space-y-10">
-            {getFilteredSections().map(
+            {filteredSections.map(
               ({ section, originalIndex }, sectionIndex) => {
                 const isRecommendedSection =
                   section?.isPersonalizedRecommended === true;
