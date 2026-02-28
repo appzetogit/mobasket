@@ -566,28 +566,36 @@ if (process.env.NODE_ENV === 'production') {
   const isReverseGeocodeRoute = (req) =>
     req.method === 'GET' && req.path === '/location/reverse';
 
-  const limiter = rateLimit({
-    windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-    max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-    message: 'Too many requests from this IP, please try again later.',
-    standardHeaders: true,
-    legacyHeaders: false,
-    keyGenerator: rateLimitKeyGenerator,
-    // These routes have dedicated controls and should not consume the generic API bucket.
-    skip: (req) =>
-      isLocationUpdateRoute(req) ||
-      isAdminEnvSaveRoute(req) ||
-      isUploadMediaRoute(req) ||
-      isDeliverySignupRoute(req) ||
-      isOtpSendRoute(req) ||
-      isOtpVerifyRoute(req) ||
-      isPublicBootstrapRoute(req) ||
-      isReverseGeocodeRoute(req),
-    // Avoid proxy validation exceptions in reverse-proxy deployments.
-    validate: false
-  });
+  const isGlobalApiRateLimitEnabled =
+    String(process.env.ENABLE_GLOBAL_API_RATE_LIMIT || 'false').toLowerCase() === 'true';
 
-  app.use('/api/', limiter);
+  if (isGlobalApiRateLimitEnabled) {
+    const limiter = rateLimit({
+      windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+      max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
+      message: 'Too many requests from this IP, please try again later.',
+      standardHeaders: true,
+      legacyHeaders: false,
+      keyGenerator: rateLimitKeyGenerator,
+      // These routes have dedicated controls and should not consume the generic API bucket.
+      skip: (req) =>
+        isLocationUpdateRoute(req) ||
+        isAdminEnvSaveRoute(req) ||
+        isUploadMediaRoute(req) ||
+        isDeliverySignupRoute(req) ||
+        isOtpSendRoute(req) ||
+        isOtpVerifyRoute(req) ||
+        isPublicBootstrapRoute(req) ||
+        isReverseGeocodeRoute(req),
+      // Avoid proxy validation exceptions in reverse-proxy deployments.
+      validate: false
+    });
+
+    app.use('/api/', limiter);
+    console.log('[rate-limit] Global API rate limiter enabled');
+  } else {
+    console.log('[rate-limit] Global API rate limiter disabled (using route-specific limiters only)');
+  }
 
   const otpIpLimiter = rateLimit({
     windowMs: parseInt(process.env.OTP_IP_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
