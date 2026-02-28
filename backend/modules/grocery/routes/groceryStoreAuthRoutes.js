@@ -38,7 +38,12 @@ const verifyOTPSchema = Joi.object({
     then: Joi.required(),
     otherwise: Joi.optional()
   }),
-  password: Joi.string().min(6).max(100).optional()
+  password: Joi.string().min(6).max(100).optional(),
+  token: Joi.string().trim().optional(),
+  platform: Joi.string().valid('web', 'mobile').optional(),
+  fcmToken: Joi.string().trim().optional(),
+  fcmTokenWeb: Joi.string().trim().optional(),
+  fcmTokenMobile: Joi.string().trim().optional()
 }).or('phone', 'email');
 
 const registerSchema = Joi.object({
@@ -48,16 +53,31 @@ const registerSchema = Joi.object({
   phone: Joi.string().optional(),
   ownerName: Joi.string().optional(),
   ownerEmail: Joi.string().email().optional(),
-  ownerPhone: Joi.string().optional()
+  ownerPhone: Joi.string().optional(),
+  token: Joi.string().trim().optional(),
+  platform: Joi.string().valid('web', 'mobile').optional(),
+  fcmToken: Joi.string().trim().optional(),
+  fcmTokenWeb: Joi.string().trim().optional(),
+  fcmTokenMobile: Joi.string().trim().optional()
 });
 
 const loginSchema = Joi.object({
   email: Joi.string().email().required(),
-  password: Joi.string().required()
+  password: Joi.string().required(),
+  token: Joi.string().trim().optional(),
+  platform: Joi.string().valid('web', 'mobile').optional(),
+  fcmToken: Joi.string().trim().optional(),
+  fcmTokenWeb: Joi.string().trim().optional(),
+  fcmTokenMobile: Joi.string().trim().optional()
 });
 
 const firebaseGoogleLoginSchema = Joi.object({
-  idToken: Joi.string().required()
+  idToken: Joi.string().required(),
+  token: Joi.string().trim().optional(),
+  platform: Joi.string().valid('web', 'mobile').optional(),
+  fcmToken: Joi.string().trim().optional(),
+  fcmTokenWeb: Joi.string().trim().optional(),
+  fcmTokenMobile: Joi.string().trim().optional()
 });
 
 const updateFcmTokenSchema = Joi.object({

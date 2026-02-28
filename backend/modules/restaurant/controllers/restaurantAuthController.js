@@ -49,6 +49,26 @@ const logger = winston.createLogger({
   ]
 });
 
+const getFcmPatchFromBody = (body = {}) => {
+  const patch = {};
+  const normalizedPlatform = String(body?.platform || '').toLowerCase();
+  const token = typeof body?.token === 'string' ? body.token.trim() : '';
+  const fcmToken = typeof body?.fcmToken === 'string' ? body.fcmToken.trim() : '';
+  const fcmTokenWeb = typeof body?.fcmTokenWeb === 'string' ? body.fcmTokenWeb.trim() : '';
+  const fcmTokenMobile = typeof body?.fcmTokenMobile === 'string' ? body.fcmTokenMobile.trim() : '';
+
+  if (fcmTokenWeb) patch.fcmTokenWeb = fcmTokenWeb;
+  if (fcmTokenMobile) patch.fcmTokenMobile = fcmTokenMobile;
+
+  const fallbackToken = token || fcmToken;
+  if (fallbackToken) {
+    if (normalizedPlatform === 'web') patch.fcmTokenWeb = fallbackToken;
+    if (normalizedPlatform === 'mobile') patch.fcmTokenMobile = fallbackToken;
+  }
+
+  return patch;
+};
+
 const getSafeOtpErrorMessage = (error) => {
   const rawMessage = String(error?.message || "");
   const isProviderOrTlsError =
@@ -107,6 +127,7 @@ export const sendOTP = asyncHandler(async (req, res) => {
  */
 export const verifyOTP = asyncHandler(async (req, res) => {
   const { phone, email, otp, purpose = 'login', name, password } = req.body;
+  const fcmPatch = getFcmPatchFromBody(req.body);
 
   // Validate that either phone or email is provided
   if ((!phone && !email) || !otp) {
@@ -147,7 +168,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
       const restaurantData = {
         name,
-        signupMethod: normalizedPhone ? 'phone' : 'email'
+        signupMethod: normalizedPhone ? 'phone' : 'email',
+        ...fcmPatch
       };
 
       if (normalizedPhone) {
@@ -373,7 +395,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         // Auto-register new restaurant after OTP verification
         const restaurantData = {
           name,
-          signupMethod: normalizedPhone ? 'phone' : 'email'
+          signupMethod: normalizedPhone ? 'phone' : 'email',
+          ...fcmPatch
         };
 
         if (normalizedPhone) {
@@ -542,8 +565,20 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         }
       } else {
         // Existing restaurant login - update verification status if needed
+        let shouldSaveRestaurant = false;
         if (phone && !restaurant.phoneVerified) {
           restaurant.phoneVerified = true;
+          shouldSaveRestaurant = true;
+        }
+        if (fcmPatch.fcmTokenWeb) {
+          restaurant.fcmTokenWeb = fcmPatch.fcmTokenWeb;
+          shouldSaveRestaurant = true;
+        }
+        if (fcmPatch.fcmTokenMobile) {
+          restaurant.fcmTokenMobile = fcmPatch.fcmTokenMobile;
+          shouldSaveRestaurant = true;
+        }
+        if (shouldSaveRestaurant) {
           await restaurant.save();
         }
       }
@@ -592,6 +627,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
  */
 export const register = asyncHandler(async (req, res) => {
   const { name, email, password, phone, ownerName, ownerEmail, ownerPhone } = req.body;
+  const fcmPatch = getFcmPatchFromBody(req.body);
 
   if (!name || !email || !password) {
     return errorResponse(res, 400, 'Restaurant name, email, and password are required');
@@ -629,7 +665,8 @@ export const register = asyncHandler(async (req, res) => {
     ownerEmail: (ownerEmail || email).toLowerCase().trim(),
     signupMethod: 'email',
     // Set isActive to false - restaurant needs admin approval before becoming active
-    isActive: false
+    isActive: false,
+    ...fcmPatch
   };
   
   // Only include phone if provided (don't set to null)
@@ -679,6 +716,7 @@ export const register = asyncHandler(async (req, res) => {
  */
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
+  const fcmPatch = getFcmPatchFromBody(req.body);
 
   if (!email || !password) {
     return errorResponse(res, 400, 'Email and password are required');
@@ -704,6 +742,16 @@ export const login = asyncHandler(async (req, res) => {
 
   if (!isPasswordValid) {
     return errorResponse(res, 401, 'Invalid email or password');
+  }
+
+  if (fcmPatch.fcmTokenWeb) {
+    restaurant.fcmTokenWeb = fcmPatch.fcmTokenWeb;
+  }
+  if (fcmPatch.fcmTokenMobile) {
+    restaurant.fcmTokenMobile = fcmPatch.fcmTokenMobile;
+  }
+  if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile) {
+    await restaurant.save();
   }
 
   // Generate tokens (email may be null for phone signups)
@@ -948,6 +996,7 @@ export const reverifyRestaurant = asyncHandler(async (req, res) => {
  */
 export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
   const { idToken } = req.body;
+  const fcmPatch = getFcmPatchFromBody(req.body);
 
   if (!idToken) {
     return errorResponse(res, 400, 'Firebase ID token is required');
@@ -1024,7 +1073,8 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
         ownerName: name.trim(),
         ownerEmail: email.toLowerCase().trim(),
         // Set isActive to false - restaurant needs admin approval before becoming active
-        isActive: false
+        isActive: false,
+        ...fcmPatch
       };
 
       try {
@@ -1068,6 +1118,16 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     if (!restaurant.isActive) {
       logger.warn('Inactive restaurant attempted login', { restaurantId: restaurant._id, email });
       return errorResponse(res, 403, 'Your restaurant account has been deactivated. Please contact support.');
+    }
+
+    if (fcmPatch.fcmTokenWeb) {
+      restaurant.fcmTokenWeb = fcmPatch.fcmTokenWeb;
+    }
+    if (fcmPatch.fcmTokenMobile) {
+      restaurant.fcmTokenMobile = fcmPatch.fcmTokenMobile;
+    }
+    if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile) {
+      await restaurant.save();
     }
 
     // Generate JWT tokens for our app (email may be null for phone signups)

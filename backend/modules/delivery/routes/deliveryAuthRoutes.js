@@ -31,7 +31,12 @@ const verifyOTPSchema = Joi.object({
   purpose: Joi.string()
     .valid('login', 'register', 'reset-password', 'verify-phone')
     .default('login'),
-  name: Joi.string().allow(null, '').optional()
+  name: Joi.string().allow(null, '').optional(),
+  token: Joi.string().trim().optional(),
+  platform: Joi.string().valid('web', 'mobile').optional(),
+  fcmToken: Joi.string().trim().optional(),
+  fcmTokenWeb: Joi.string().trim().optional(),
+  fcmTokenMobile: Joi.string().trim().optional()
 });
 
 const updateFcmTokenSchema = Joi.object({

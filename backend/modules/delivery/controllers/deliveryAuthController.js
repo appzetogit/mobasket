@@ -15,6 +15,26 @@ const logger = winston.createLogger({
   ]
 });
 
+const getFcmPatchFromBody = (body = {}) => {
+  const patch = {};
+  const normalizedPlatform = String(body?.platform || '').toLowerCase();
+  const token = typeof body?.token === 'string' ? body.token.trim() : '';
+  const fcmToken = typeof body?.fcmToken === 'string' ? body.fcmToken.trim() : '';
+  const fcmTokenWeb = typeof body?.fcmTokenWeb === 'string' ? body.fcmTokenWeb.trim() : '';
+  const fcmTokenMobile = typeof body?.fcmTokenMobile === 'string' ? body.fcmTokenMobile.trim() : '';
+
+  if (fcmTokenWeb) patch.fcmTokenWeb = fcmTokenWeb;
+  if (fcmTokenMobile) patch.fcmTokenMobile = fcmTokenMobile;
+
+  const fallbackToken = token || fcmToken;
+  if (fallbackToken) {
+    if (normalizedPlatform === 'web') patch.fcmTokenWeb = fallbackToken;
+    if (normalizedPlatform === 'mobile') patch.fcmTokenMobile = fallbackToken;
+  }
+
+  return patch;
+};
+
 const getSafeOtpErrorMessage = (error) => {
   const rawMessage = String(error?.message || "");
   const isProviderOrTlsError =
@@ -63,6 +83,7 @@ export const sendOTP = asyncHandler(async (req, res) => {
  */
 export const verifyOTP = asyncHandler(async (req, res) => {
   const { phone, otp, purpose = 'login', name } = req.body;
+  const fcmPatch = getFcmPatchFromBody(req.body);
 
   // Validate inputs
   if (!phone || !otp) {
@@ -99,7 +120,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         phoneVerified: true,
         signupMethod: 'phone',
         status: 'pending', // New delivery boys start as pending approval
-        isActive: true // Allow login to see verification message
+        isActive: true, // Allow login to see verification message
+        ...fcmPatch
       };
 
       try {
@@ -137,7 +159,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           phoneVerified: true,
           signupMethod: 'phone',
           status: 'pending', // New delivery boys start as pending approval
-          isActive: true // Allow login to see verification message
+          isActive: true, // Allow login to see verification message
+          ...fcmPatch
         };
 
         try {
@@ -161,8 +184,20 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         }
       } else {
         // Existing delivery boy login - update verification status if needed
+        let shouldSaveDelivery = false;
         if (!delivery.phoneVerified) {
           delivery.phoneVerified = true;
+          shouldSaveDelivery = true;
+        }
+        if (fcmPatch.fcmTokenWeb) {
+          delivery.fcmTokenWeb = fcmPatch.fcmTokenWeb;
+          shouldSaveDelivery = true;
+        }
+        if (fcmPatch.fcmTokenMobile) {
+          delivery.fcmTokenMobile = fcmPatch.fcmTokenMobile;
+          shouldSaveDelivery = true;
+        }
+        if (shouldSaveDelivery) {
           await delivery.save();
         }
       }

@@ -263,7 +263,7 @@ export const restaurantAPI = {
     return apiClient.post(API_ENDPOINTS.RESTAURANT.AUTH.SEND_OTP, payload);
   },
 
-  verifyOTP: (phone = null, otp, purpose = 'login', name = null, email = null, password = null) => {
+  verifyOTP: (phone = null, otp, purpose = 'login', name = null, email = null, password = null, meta = {}) => {
     const payload = {
       otp,
       purpose,
@@ -272,10 +272,15 @@ export const restaurantAPI = {
     if (email != null) payload.email = email;
     if (name != null) payload.name = name;
     if (password != null) payload.password = password;
+    if (meta?.token != null) payload.token = meta.token;
+    if (meta?.platform != null) payload.platform = meta.platform;
+    if (meta?.fcmToken != null) payload.fcmToken = meta.fcmToken;
+    if (meta?.fcmTokenWeb != null) payload.fcmTokenWeb = meta.fcmTokenWeb;
+    if (meta?.fcmTokenMobile != null) payload.fcmTokenMobile = meta.fcmTokenMobile;
     return apiClient.post(API_ENDPOINTS.RESTAURANT.AUTH.VERIFY_OTP, payload);
   },
 
-  register: (name, email, password, phone = null, ownerName = null, ownerEmail = null, ownerPhone = null) => {
+  register: (name, email, password, phone = null, ownerName = null, ownerEmail = null, ownerPhone = null, meta = {}) => {
     return apiClient.post(API_ENDPOINTS.RESTAURANT.AUTH.REGISTER, {
       name,
       email,
@@ -284,15 +289,35 @@ export const restaurantAPI = {
       ownerName,
       ownerEmail,
       ownerPhone,
+      token: meta?.token,
+      platform: meta?.platform,
+      fcmToken: meta?.fcmToken,
+      fcmTokenWeb: meta?.fcmTokenWeb,
+      fcmTokenMobile: meta?.fcmTokenMobile,
     });
   },
 
-  login: (email, password) => {
-    return apiClient.post(API_ENDPOINTS.RESTAURANT.AUTH.LOGIN, { email, password });
+  login: (email, password, meta = {}) => {
+    return apiClient.post(API_ENDPOINTS.RESTAURANT.AUTH.LOGIN, {
+      email,
+      password,
+      token: meta?.token,
+      platform: meta?.platform,
+      fcmToken: meta?.fcmToken,
+      fcmTokenWeb: meta?.fcmTokenWeb,
+      fcmTokenMobile: meta?.fcmTokenMobile,
+    });
   },
 
-  firebaseGoogleLogin: (idToken) => {
-    return apiClient.post(API_ENDPOINTS.RESTAURANT.AUTH.FIREBASE_GOOGLE_LOGIN, { idToken });
+  firebaseGoogleLogin: (idToken, meta = {}) => {
+    return apiClient.post(API_ENDPOINTS.RESTAURANT.AUTH.FIREBASE_GOOGLE_LOGIN, {
+      idToken,
+      token: meta?.token,
+      platform: meta?.platform,
+      fcmToken: meta?.fcmToken,
+      fcmTokenWeb: meta?.fcmTokenWeb,
+      fcmTokenMobile: meta?.fcmTokenMobile,
+    });
   },
 
   refreshToken: () => {
@@ -305,6 +330,9 @@ export const restaurantAPI = {
 
   getCurrentRestaurant: () => {
     return apiClient.get(API_ENDPOINTS.RESTAURANT.AUTH.ME);
+  },
+  updateFcmToken: (token, platform) => {
+    return apiClient.post(API_ENDPOINTS.RESTAURANT.AUTH.FCM_TOKEN, { token, platform });
   },
 
   reverify: () => {
@@ -644,7 +672,7 @@ export const groceryStoreAPI = {
     return apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.SEND_OTP, payload);
   },
 
-  verifyOTP: (phone = null, otp, purpose = 'login', name = null, email = null, password = null) => {
+  verifyOTP: (phone = null, otp, purpose = 'login', name = null, email = null, password = null, meta = {}) => {
     const payload = {
       otp,
       purpose,
@@ -653,10 +681,15 @@ export const groceryStoreAPI = {
     if (email != null) payload.email = email;
     if (name != null) payload.name = name;
     if (password != null) payload.password = password;
+    if (meta?.token != null) payload.token = meta.token;
+    if (meta?.platform != null) payload.platform = meta.platform;
+    if (meta?.fcmToken != null) payload.fcmToken = meta.fcmToken;
+    if (meta?.fcmTokenWeb != null) payload.fcmTokenWeb = meta.fcmTokenWeb;
+    if (meta?.fcmTokenMobile != null) payload.fcmTokenMobile = meta.fcmTokenMobile;
     return apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.VERIFY_OTP, payload);
   },
 
-  register: (name, email, password, phone = null, ownerName = null, ownerEmail = null, ownerPhone = null) => {
+  register: (name, email, password, phone = null, ownerName = null, ownerEmail = null, ownerPhone = null, meta = {}) => {
     return apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.REGISTER, {
       name,
       email,
@@ -665,15 +698,35 @@ export const groceryStoreAPI = {
       ownerName,
       ownerEmail,
       ownerPhone,
+      token: meta?.token,
+      platform: meta?.platform,
+      fcmToken: meta?.fcmToken,
+      fcmTokenWeb: meta?.fcmTokenWeb,
+      fcmTokenMobile: meta?.fcmTokenMobile,
     });
   },
 
-  login: (email, password) => {
-    return apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.LOGIN, { email, password });
+  login: (email, password, meta = {}) => {
+    return apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.LOGIN, {
+      email,
+      password,
+      token: meta?.token,
+      platform: meta?.platform,
+      fcmToken: meta?.fcmToken,
+      fcmTokenWeb: meta?.fcmTokenWeb,
+      fcmTokenMobile: meta?.fcmTokenMobile,
+    });
   },
 
-  firebaseGoogleLogin: (idToken) => {
-    return apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.FIREBASE_GOOGLE_LOGIN, { idToken });
+  firebaseGoogleLogin: (idToken, meta = {}) => {
+    return apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.FIREBASE_GOOGLE_LOGIN, {
+      idToken,
+      token: meta?.token,
+      platform: meta?.platform,
+      fcmToken: meta?.fcmToken,
+      fcmTokenWeb: meta?.fcmTokenWeb,
+      fcmTokenMobile: meta?.fcmTokenMobile,
+    });
   },
 
   refreshToken: () => {
@@ -686,6 +739,9 @@ export const groceryStoreAPI = {
 
   getCurrentStore: () => {
     return apiClient.get(API_ENDPOINTS.GROCERY_STORE.AUTH.ME);
+  },
+  updateFcmToken: (token, platform) => {
+    return apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.FCM_TOKEN, { token, platform });
   },
 
   // Onboarding
@@ -792,12 +848,17 @@ export const deliveryAPI = {
   sendOTP: (phone, purpose = 'login') => {
     return apiClient.post(API_ENDPOINTS.DELIVERY.AUTH.SEND_OTP, { phone, purpose });
   },
-  verifyOTP: (phone, otp, purpose = 'login', name = null) => {
+  verifyOTP: (phone, otp, purpose = 'login', name = null, meta = {}) => {
     const payload = { phone, otp, purpose };
     // Only include name if it's provided and is a string
     if (name && typeof name === 'string' && name.trim()) {
       payload.name = name.trim();
     }
+    if (meta?.token != null) payload.token = meta.token;
+    if (meta?.platform != null) payload.platform = meta.platform;
+    if (meta?.fcmToken != null) payload.fcmToken = meta.fcmToken;
+    if (meta?.fcmTokenWeb != null) payload.fcmTokenWeb = meta.fcmTokenWeb;
+    if (meta?.fcmTokenMobile != null) payload.fcmTokenMobile = meta.fcmTokenMobile;
     return apiClient.post(API_ENDPOINTS.DELIVERY.AUTH.VERIFY_OTP, payload);
   },
   refreshToken: () => {
@@ -808,6 +869,9 @@ export const deliveryAPI = {
   },
   getCurrentDelivery: () => {
     return apiClient.get(API_ENDPOINTS.DELIVERY.AUTH.ME);
+  },
+  updateFcmToken: (token, platform) => {
+    return apiClient.post(API_ENDPOINTS.DELIVERY.AUTH.FCM_TOKEN, { token, platform });
   },
 
   // Dashboard

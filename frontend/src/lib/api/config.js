@@ -161,6 +161,7 @@ export const API_ENDPOINTS = {
       REFRESH_TOKEN: '/restaurant/auth/refresh-token',
       LOGOUT: '/restaurant/auth/logout',
       ME: '/restaurant/auth/me',
+      FCM_TOKEN: '/restaurant/auth/fcm-token',
       REVERIFY: '/restaurant/auth/reverify',
       RESET_PASSWORD: '/restaurant/auth/reset-password',
     },
@@ -221,6 +222,7 @@ export const API_ENDPOINTS = {
       REFRESH_TOKEN: '/grocery/store/auth/refresh-token',
       LOGOUT: '/grocery/store/auth/logout',
       ME: '/grocery/store/auth/me',
+      FCM_TOKEN: '/grocery/store/auth/fcm-token',
       REVERIFY: '/grocery/store/auth/reverify',
       RESET_PASSWORD: '/grocery/store/auth/reset-password',
     },
@@ -256,6 +258,7 @@ export const API_ENDPOINTS = {
       REFRESH_TOKEN: '/delivery/auth/refresh-token',
       LOGOUT: '/delivery/auth/logout',
       ME: '/delivery/auth/me',
+      FCM_TOKEN: '/delivery/auth/fcm-token',
     },
     SIGNUP: {
       DETAILS: '/delivery/signup/details',

@@ -17,6 +17,26 @@ const logger = winston.createLogger({
   ]
 });
 
+const getFcmPatchFromBody = (body = {}) => {
+  const patch = {};
+  const normalizedPlatform = String(body?.platform || '').toLowerCase();
+  const token = typeof body?.token === 'string' ? body.token.trim() : '';
+  const fcmToken = typeof body?.fcmToken === 'string' ? body.fcmToken.trim() : '';
+  const fcmTokenWeb = typeof body?.fcmTokenWeb === 'string' ? body.fcmTokenWeb.trim() : '';
+  const fcmTokenMobile = typeof body?.fcmTokenMobile === 'string' ? body.fcmTokenMobile.trim() : '';
+
+  if (fcmTokenWeb) patch.fcmTokenWeb = fcmTokenWeb;
+  if (fcmTokenMobile) patch.fcmTokenMobile = fcmTokenMobile;
+
+  const fallbackToken = token || fcmToken;
+  if (fallbackToken) {
+    if (normalizedPlatform === 'web') patch.fcmTokenWeb = fallbackToken;
+    if (normalizedPlatform === 'mobile') patch.fcmTokenMobile = fallbackToken;
+  }
+
+  return patch;
+};
+
 const buildPhoneQuery = (normalizedPhone) => {
   if (!normalizedPhone) return null;
   
@@ -63,6 +83,7 @@ export const sendOTP = asyncHandler(async (req, res) => {
 
 export const verifyOTP = asyncHandler(async (req, res) => {
   const { phone, email, otp, purpose = 'login', name, password } = req.body;
+  const fcmPatch = getFcmPatchFromBody(req.body);
 
   if ((!phone && !email) || !otp) {
     return errorResponse(res, 400, 'Either phone number or email, and OTP are required');
@@ -100,6 +121,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         platform: 'mogrocery',
         role: 'restaurant',
         isActive: false,
+        ...fcmPatch
       };
 
       if (normalizedPhone) {
@@ -124,6 +146,11 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
 
       await otpService.verifyOTP(phone || null, otp, purpose, email || null);
+      if (fcmPatch.fcmTokenWeb) store.fcmTokenWeb = fcmPatch.fcmTokenWeb;
+      if (fcmPatch.fcmTokenMobile) store.fcmTokenMobile = fcmPatch.fcmTokenMobile;
+      if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile) {
+        await store.save();
+      }
     }
 
     const tokens = jwtService.generateTokens({
@@ -155,6 +182,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
 export const register = asyncHandler(async (req, res) => {
   const { name, email, password, phone, ownerName, ownerEmail, ownerPhone } = req.body;
+  const fcmPatch = getFcmPatchFromBody(req.body);
 
   if (!name || !email || !password) {
     return errorResponse(res, 400, 'Name, email, and password are required');
@@ -178,7 +206,8 @@ export const register = asyncHandler(async (req, res) => {
       platform: 'mogrocery',
       role: 'restaurant',
       isActive: false,
-      signupMethod: 'email'
+      signupMethod: 'email',
+      ...fcmPatch
     };
 
     if (normalizedPhone) {
@@ -218,6 +247,7 @@ export const register = asyncHandler(async (req, res) => {
 
 export const login = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
+  const fcmPatch = getFcmPatchFromBody(req.body);
 
   if (!email || !password) {
     return errorResponse(res, 400, 'Email and password are required');
@@ -240,6 +270,12 @@ export const login = asyncHandler(async (req, res) => {
     const isPasswordValid = await store.comparePassword(password);
     if (!isPasswordValid) {
       return errorResponse(res, 401, 'Invalid email or password');
+    }
+
+    if (fcmPatch.fcmTokenWeb) store.fcmTokenWeb = fcmPatch.fcmTokenWeb;
+    if (fcmPatch.fcmTokenMobile) store.fcmTokenMobile = fcmPatch.fcmTokenMobile;
+    if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile) {
+      await store.save();
     }
 
     const tokens = jwtService.generateTokens({
@@ -271,6 +307,7 @@ export const login = asyncHandler(async (req, res) => {
 
 export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
   const { idToken } = req.body;
+  const fcmPatch = getFcmPatchFromBody(req.body);
 
   if (!idToken) {
     return errorResponse(res, 400, 'ID token is required');
@@ -294,8 +331,15 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
         platform: 'mogrocery',
         role: 'restaurant',
         isActive: false,
-        signupMethod: 'google'
+        signupMethod: 'google',
+        ...fcmPatch
       });
+    }
+
+    if (fcmPatch.fcmTokenWeb) store.fcmTokenWeb = fcmPatch.fcmTokenWeb;
+    if (fcmPatch.fcmTokenMobile) store.fcmTokenMobile = fcmPatch.fcmTokenMobile;
+    if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile) {
+      await store.save();
     }
 
     const tokens = jwtService.generateTokens({
