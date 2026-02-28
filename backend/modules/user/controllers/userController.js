@@ -6,7 +6,7 @@ import axios from 'axios';
 import winston from 'winston';
 
 const logger = winston.createLogger({
-  level: 'info',
+  level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'warn' : 'info'),
   format: winston.format.json(),
   transports: [
     new winston.transports.Console({
@@ -14,6 +14,9 @@ const logger = winston.createLogger({
     })
   ]
 });
+
+const shouldLogUserLocationUpdates =
+  process.env.NODE_ENV !== 'production' || process.env.LOG_USER_LOCATION_UPDATES === 'true';
 
 /**
  * Get user profile
@@ -253,15 +256,17 @@ export const updateUserLocation = asyncHandler(async (req, res) => {
     // Save to database
     await user.save();
 
-    logger.info(`User live location updated: ${user._id}`, {
-      latitude: latNum,
-      longitude: lngNum,
-      city: user.currentLocation.city,
-      area: user.currentLocation.area,
-      formattedAddress: user.currentLocation.formattedAddress,
-      accuracy: user.currentLocation.accuracy,
-      timestamp: user.currentLocation.lastUpdated
-    });
+    if (shouldLogUserLocationUpdates) {
+      logger.info(`User live location updated: ${user._id}`, {
+        latitude: latNum,
+        longitude: lngNum,
+        city: user.currentLocation.city,
+        area: user.currentLocation.area,
+        formattedAddress: user.currentLocation.formattedAddress,
+        accuracy: user.currentLocation.accuracy,
+        timestamp: user.currentLocation.lastUpdated
+      });
+    }
 
     const userResponse = user.toObject();
     delete userResponse.password;

@@ -15,6 +15,7 @@ import { authenticate } from '../../auth/middleware/auth.js';
 import { uploadMiddleware } from '../../../shared/utils/cloudinaryService.js';
 import userWalletRoutes from './userWalletRoutes.js';
 import complaintRoutes from './complaintRoutes.js';
+import { locationUpdateRateLimit } from '../../../shared/middleware/locationUpdateRateLimit.js';
 
 const router = express.Router();
 
@@ -35,7 +36,7 @@ router.post(
 
 // Location routes
 router.get('/location', getUserLocation);
-router.put('/location', updateUserLocation);
+router.put('/location', locationUpdateRateLimit, updateUserLocation);
 
 // Address routes
 router.get('/addresses', getUserAddresses);

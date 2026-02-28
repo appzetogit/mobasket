@@ -112,6 +112,8 @@ if (firebaseRealtimeInit.initialized) {
 const app = express();
 const httpServer = createServer(app);
 app.set('trust proxy', 1);
+const isProduction = process.env.NODE_ENV === 'production';
+const verboseLocationStreamLogs = process.env.LOG_LOCATION_STREAM === 'true';
 
 const parseOriginList = (...values) => {
   const origins = [];
@@ -664,17 +666,19 @@ io.on('connection', (socket) => {
         console.warn('Firebase socket location sync failed:', firebaseErr.message);
       }
 
-      console.log(`📍 Location broadcasted to order room ${data.orderId}:`, {
-        lat: locationData.lat,
-        lng: locationData.lng,
-        heading: locationData.heading
-      });
+      if (!isProduction || verboseLocationStreamLogs) {
+        console.log(`📍 Location broadcasted to order room ${data.orderId}:`, {
+          lat: locationData.lat,
+          lng: locationData.lng,
+          heading: locationData.heading
+        });
 
-      console.log(`📍 Location update for order ${data.orderId}:`, {
-        lat: data.lat,
-        lng: data.lng,
-        heading: data.heading
-      });
+        console.log(`📍 Location update for order ${data.orderId}:`, {
+          lat: data.lat,
+          lng: data.lng,
+          heading: data.heading
+        });
+      }
     };
 
     processLocationUpdate().catch((error) => {
@@ -851,13 +855,28 @@ function initializeScheduledTasks() {
   });
 }
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (err) => {
-  console.error('Unhandled Promise Rejection:', err);
-  // Close server & exit process
-  httpServer.close(() => {
-    process.exit(1);
+const formatProcessError = (errorLike) => {
+  if (errorLike instanceof Error) {
+    return {
+      name: errorLike.name,
+      message: errorLike.message,
+      stack: errorLike.stack
+    };
+  }
+
+  return { message: String(errorLike) };
+};
+
+// Keep process alive under transient async failures; let route/socket handlers own recovery.
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[process] Unhandled Promise Rejection:', {
+    reason: formatProcessError(reason),
+    promise: promise ? '[object Promise]' : null
   });
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('[process] Uncaught Exception:', formatProcessError(error));
 });
 
 export default app;
