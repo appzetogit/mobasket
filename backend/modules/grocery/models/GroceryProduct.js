@@ -108,8 +108,6 @@ groceryProductSchema.index({ storeId: 1, isActive: 1 });
 groceryProductSchema.index({ approvalStatus: 1, isActive: 1 });
 groceryProductSchema.index({ storeId: 1, approvalStatus: 1 });
 groceryProductSchema.index({ storeId: 1, slug: 1 }, { unique: true }); // Unique slug per store
-groceryProductSchema.index({ approvalStatus: 1, isActive: 1 });
-groceryProductSchema.index({ storeId: 1, approvalStatus: 1 });
 
 const GroceryProduct = mongoose.model('GroceryProduct', groceryProductSchema);
 

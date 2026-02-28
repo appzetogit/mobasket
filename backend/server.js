@@ -111,7 +111,50 @@ if (firebaseRealtimeInit.initialized) {
 // Initialize Express app
 const app = express();
 const httpServer = createServer(app);
-app.set('trust proxy', 1);
+const trustProxyConfig = process.env.TRUST_PROXY;
+if (typeof trustProxyConfig === 'string' && trustProxyConfig.trim() !== '') {
+  const normalizedTrustProxy = trustProxyConfig.trim().toLowerCase();
+  if (normalizedTrustProxy === 'true') {
+    app.set('trust proxy', true);
+  } else if (normalizedTrustProxy === 'false') {
+    app.set('trust proxy', false);
+  } else if (!Number.isNaN(Number(normalizedTrustProxy))) {
+    app.set('trust proxy', Number(normalizedTrustProxy));
+  } else {
+    app.set('trust proxy', trustProxyConfig.trim());
+  }
+} else {
+  app.set('trust proxy', 1);
+}
+
+const parseForwardedFor = (value) => {
+  if (!value || typeof value !== 'string') return null;
+  const first = value.split(',')[0]?.trim();
+  return first || null;
+};
+
+const getClientIpForRateLimit = (req) => {
+  // Cloudflare forwards the original client IP here.
+  const cfConnectingIp = req.headers['cf-connecting-ip'];
+  if (typeof cfConnectingIp === 'string' && cfConnectingIp.trim()) {
+    return cfConnectingIp.trim();
+  }
+
+  // Fallback for Nginx/LB chains.
+  const xForwardedFor = req.headers['x-forwarded-for'];
+  if (Array.isArray(xForwardedFor) && xForwardedFor.length > 0) {
+    const parsed = parseForwardedFor(xForwardedFor[0]);
+    if (parsed) return parsed;
+  }
+  if (typeof xForwardedFor === 'string') {
+    const parsed = parseForwardedFor(xForwardedFor);
+    if (parsed) return parsed;
+  }
+
+  return req.ip || req.socket?.remoteAddress || 'unknown';
+};
+
+const rateLimitKeyGenerator = (req) => getClientIpForRateLimit(req);
 const isProduction = process.env.NODE_ENV === 'production';
 const verboseLocationStreamLogs = process.env.LOG_LOCATION_STREAM === 'true';
 
@@ -461,6 +504,19 @@ app.use(mongoSanitize());
 
 // Rate limiting (disabled in development mode)
 if (process.env.NODE_ENV === 'production') {
+  const publicBootstrapGetPaths = new Set([
+    '/env/public',
+    '/business-settings/public',
+    '/fee-settings/public',
+    '/categories/public',
+    '/about/public',
+    '/terms/public',
+    '/privacy/public',
+    '/refund/public',
+    '/shipping/public',
+    '/cancellation/public',
+    '/zones/detect'
+  ]);
   const isLocationUpdateRoute = (req) =>
     req.method === 'PUT' && req.path === '/user/location';
   const isAdminEnvSaveRoute = (req) =>
@@ -473,6 +529,16 @@ if (process.env.NODE_ENV === 'production') {
       '/delivery/auth/send-otp',
       '/grocery/store/auth/send-otp'
     ].includes(req.path);
+  const isOtpVerifyRoute = (req) =>
+    req.method === 'POST' &&
+    [
+      '/auth/verify-otp',
+      '/restaurant/auth/verify-otp',
+      '/delivery/auth/verify-otp',
+      '/grocery/store/auth/verify-otp'
+    ].includes(req.path);
+  const isPublicBootstrapRoute = (req) =>
+    req.method === 'GET' && publicBootstrapGetPaths.has(req.path);
 
   const limiter = rateLimit({
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
@@ -480,8 +546,14 @@ if (process.env.NODE_ENV === 'production') {
     message: 'Too many requests from this IP, please try again later.',
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: rateLimitKeyGenerator,
     // These routes have dedicated controls and should not consume the generic API bucket.
-    skip: (req) => isLocationUpdateRoute(req) || isAdminEnvSaveRoute(req) || isOtpSendRoute(req),
+    skip: (req) =>
+      isLocationUpdateRoute(req) ||
+      isAdminEnvSaveRoute(req) ||
+      isOtpSendRoute(req) ||
+      isOtpVerifyRoute(req) ||
+      isPublicBootstrapRoute(req),
     // Avoid proxy validation exceptions in reverse-proxy deployments.
     validate: false
   });
@@ -493,6 +565,7 @@ if (process.env.NODE_ENV === 'production') {
     max: parseInt(process.env.OTP_IP_RATE_LIMIT_MAX_REQUESTS) || 30,
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: rateLimitKeyGenerator,
     validate: false,
     handler: (req, res) => {
       const resetTime = req.rateLimit?.resetTime ? new Date(req.rateLimit.resetTime).getTime() : null;
@@ -514,12 +587,28 @@ if (process.env.NODE_ENV === 'production') {
   app.use('/api/delivery/auth/send-otp', otpIpLimiter);
   app.use('/api/grocery/store/auth/send-otp', otpIpLimiter);
 
+  const otpVerifyIpLimiter = rateLimit({
+    windowMs: parseInt(process.env.OTP_VERIFY_IP_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+    max: parseInt(process.env.OTP_VERIFY_IP_RATE_LIMIT_MAX_REQUESTS) || 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: rateLimitKeyGenerator,
+    validate: false,
+    message: 'Too many OTP verification attempts from this network. Please try again later.'
+  });
+
+  app.use('/api/auth/verify-otp', otpVerifyIpLimiter);
+  app.use('/api/restaurant/auth/verify-otp', otpVerifyIpLimiter);
+  app.use('/api/delivery/auth/verify-otp', otpVerifyIpLimiter);
+  app.use('/api/grocery/store/auth/verify-otp', otpVerifyIpLimiter);
+
   const adminEnvLimiter = rateLimit({
     windowMs: parseInt(process.env.ADMIN_ENV_RATE_LIMIT_WINDOW_MS) || 5 * 60 * 1000, // 5 minutes
     max: parseInt(process.env.ADMIN_ENV_RATE_LIMIT_MAX_REQUESTS) || 20,
     message: 'Too many environment update attempts. Please try again shortly.',
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: rateLimitKeyGenerator,
     // Avoid proxy validation exceptions in reverse-proxy deployments.
     validate: false
   });

@@ -108,9 +108,7 @@ const auditLogSchema = new mongoose.Schema({
 auditLogSchema.index({ entityType: 1, entityId: 1, createdAt: -1 });
 auditLogSchema.index({ actionType: 1, createdAt: -1 });
 auditLogSchema.index({ 'performedBy.type': 1, 'performedBy.userId': 1 });
-auditLogSchema.index({ 'transactionDetails.orderId': 1 });
 auditLogSchema.index({ createdAt: -1 });
-auditLogSchema.index({ 'commissionChange.restaurantId': 1 });
 
 // Static method to create audit log
 auditLogSchema.statics.createLog = async function(logData) {

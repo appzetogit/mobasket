@@ -95,8 +95,6 @@ const adminWalletSchema = new mongoose.Schema({
 });
 
 // Indexes
-adminWalletSchema.index({ 'transactions.orderId': 1 });
-adminWalletSchema.index({ 'transactions.restaurantId': 1 });
 adminWalletSchema.index({ 'transactions.type': 1 });
 adminWalletSchema.index({ 'transactions.createdAt': -1 });
 adminWalletSchema.index({ lastTransactionAt: -1 });

@@ -101,7 +101,6 @@ const userWalletSchema = new mongoose.Schema({
 });
 
 // Indexes
-userWalletSchema.index({ 'transactions.orderId': 1 });
 userWalletSchema.index({ 'transactions.status': 1 });
 userWalletSchema.index({ 'transactions.type': 1 });
 userWalletSchema.index({ 'transactions.createdAt': -1 });

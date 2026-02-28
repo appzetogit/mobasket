@@ -11,17 +11,17 @@ module.exports = {
       // Restart behavior
       autorestart: true,
       watch: false,
-      min_uptime: '20s',
-      max_restarts: 10,
-      restart_delay: 5000,
-      exp_backoff_restart_delay: 1000, // ✅ fixed
+      min_uptime: '10s',
+      max_restarts: 1000,
+      restart_delay: 3000,
+      exp_backoff_restart_delay: 2000,
       listen_timeout: 10000,
       kill_timeout: 5000,
 
       // Memory safety
-      max_memory_restart: '600M',
-      node_args: '--max-old-space-size=512', // ✅ added
-      wait_ready: false, // ✅ added
+      max_memory_restart: '900M',
+      node_args: '--max-old-space-size=768',
+      wait_ready: false,
 
       // Logs
       merge_logs: true,
@@ -40,6 +40,14 @@ module.exports = {
         OTP_RATE_LIMIT_MAX_REQUESTS: 10,
         OTP_IP_RATE_LIMIT_WINDOW_MS: 10 * 60 * 1000,
         OTP_IP_RATE_LIMIT_MAX_REQUESTS: 100,
+        OTP_VERIFY_IP_RATE_LIMIT_WINDOW_MS: 10 * 60 * 1000,
+        OTP_VERIFY_IP_RATE_LIMIT_MAX_REQUESTS: 250,
+        RATE_LIMIT_WINDOW_MS: 15 * 60 * 1000,
+        RATE_LIMIT_MAX_REQUESTS: 500,
+
+        TRUST_PROXY: 'true',
+        MONGODB_CONNECT_RETRY_DELAY_MS: 5000,
+        MONGODB_CONNECT_MAX_RETRIES: 0,
 
         USER_LOCATION_MIN_INTERVAL_MS: 4000,
         USER_LOCATION_RATE_LIMIT_STRICT: 'false',
@@ -62,6 +70,14 @@ module.exports = {
         OTP_RATE_LIMIT_MAX_REQUESTS: 10,
         OTP_IP_RATE_LIMIT_WINDOW_MS: 10 * 60 * 1000,
         OTP_IP_RATE_LIMIT_MAX_REQUESTS: 100,
+        OTP_VERIFY_IP_RATE_LIMIT_WINDOW_MS: 10 * 60 * 1000,
+        OTP_VERIFY_IP_RATE_LIMIT_MAX_REQUESTS: 250,
+        RATE_LIMIT_WINDOW_MS: 15 * 60 * 1000,
+        RATE_LIMIT_MAX_REQUESTS: 500,
+
+        TRUST_PROXY: 'true',
+        MONGODB_CONNECT_RETRY_DELAY_MS: 5000,
+        MONGODB_CONNECT_MAX_RETRIES: 0,
 
         USER_LOCATION_MIN_INTERVAL_MS: 4000,
         USER_LOCATION_RATE_LIMIT_STRICT: 'false',

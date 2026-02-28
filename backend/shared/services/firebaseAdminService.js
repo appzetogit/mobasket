@@ -23,12 +23,17 @@ async function loadFirebaseAdminConfig({ allowDbLookup = true } = {}) {
     }
   }
 
-  const projectId = dbCredentials.projectId || '';
-  const clientEmail = dbCredentials.clientEmail || '';
+  const envProjectId = process.env.FIREBASE_PROJECT_ID || '';
+  const envClientEmail = process.env.FIREBASE_CLIENT_EMAIL || '';
+  const envPrivateKey = process.env.FIREBASE_PRIVATE_KEY || '';
+  const envDatabaseURL = process.env.FIREBASE_DATABASE_URL || '';
+
+  const projectId = dbCredentials.projectId || envProjectId;
+  const clientEmail = dbCredentials.clientEmail || envClientEmail;
   const privateKey = normalizePrivateKey(
-    dbCredentials.privateKey || ''
+    dbCredentials.privateKey || envPrivateKey
   );
-  const databaseURL = dbCredentials.databaseURL || '';
+  const databaseURL = dbCredentials.databaseURL || envDatabaseURL;
 
   cachedConfig = {
     projectId,
