@@ -400,9 +400,9 @@ export default function GroceryStoreLogin() {
         <div className="w-full max-w-md mx-auto space-y-6 py-4">
           <div className="text-center">
             <p className="text-base text-gray-700 leading-relaxed">
-              {loginMethod === "email" 
-                ? "Login with email OTP. Enter your registered email to continue."
-                : "Login with mobile OTP. Enter your registered phone number to continue."
+              {loginMethod === "email"
+                ? "Enter your email to continue. We'll send you a one-time code."
+                : "Enter your phone number to continue. New? We'll create your store account."
               }
             </p>
           </div>

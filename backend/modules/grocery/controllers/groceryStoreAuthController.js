@@ -99,6 +99,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     const identifier = normalizedPhone || email;
     const identifierType = normalizedPhone ? 'phone' : 'email';
 
+    let isNewlyRegistered = false;
+
     if (purpose === 'register') {
       const findQuery = normalizedPhone 
         ? { ...buildPhoneQuery(normalizedPhone), platform: 'mogrocery' }
@@ -135,21 +137,44 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
 
       store = await Restaurant.create(storeData);
+      isNewlyRegistered = true;
     } else {
       const findQuery = normalizedPhone 
         ? { ...buildPhoneQuery(normalizedPhone), platform: 'mogrocery' }
         : { email: email?.toLowerCase().trim(), platform: 'mogrocery' };
       store = await Restaurant.findOne(findQuery);
 
-      if (!store) {
-        return errorResponse(res, 404, `No grocery store found with this ${identifierType}. Please sign up first.`);
-      }
-
       await otpService.verifyOTP(phone || null, otp, purpose, email || null);
-      if (fcmPatch.fcmTokenWeb) store.fcmTokenWeb = fcmPatch.fcmTokenWeb;
-      if (fcmPatch.fcmTokenMobile) store.fcmTokenMobile = fcmPatch.fcmTokenMobile;
-      if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile) {
-        await store.save();
+
+      if (!store) {
+        const derivedName = normalizedPhone
+          ? `Grocery Store ${normalizedPhone.slice(-4)}`
+          : ((email || '').split('@')[0] || 'Grocery Store');
+
+        const storeData = {
+          name: derivedName,
+          signupMethod: normalizedPhone ? 'phone' : 'email',
+          platform: 'mogrocery',
+          role: 'restaurant',
+          isActive: false,
+          ...fcmPatch
+        };
+
+        if (normalizedPhone) {
+          storeData.phone = normalizedPhone;
+        }
+        if (email) {
+          storeData.email = email.toLowerCase().trim();
+        }
+
+        store = await Restaurant.create(storeData);
+        isNewlyRegistered = true;
+      } else {
+        if (fcmPatch.fcmTokenWeb) store.fcmTokenWeb = fcmPatch.fcmTokenWeb;
+        if (fcmPatch.fcmTokenMobile) store.fcmTokenMobile = fcmPatch.fcmTokenMobile;
+        if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile) {
+          await store.save();
+        }
       }
     }
 
@@ -169,7 +194,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     const storeResponse = store.toObject();
     delete storeResponse.password;
 
-    return successResponse(res, 200, purpose === 'register' ? 'Store registered successfully' : 'Login successful', {
+    return successResponse(res, 200, isNewlyRegistered ? 'Store registered successfully' : 'Login successful', {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       store: storeResponse

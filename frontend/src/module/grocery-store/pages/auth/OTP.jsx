@@ -11,19 +11,16 @@ export default function GroceryStoreOTP() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [resendTimer, setResendTimer] = useState(0)
-  const [authData, setAuthData] = useState(null)
+  const [authData, setStoredAuthData] = useState(null)
   const [contactInfo, setContactInfo] = useState("")
   const [contactType, setContactType] = useState("phone")
-  const [name, setName] = useState("")
-  const [nameError, setNameError] = useState("")
-  const [showNameInput, setShowNameInput] = useState(false)
   const inputRefs = useRef([])
 
   useEffect(() => {
     const stored = sessionStorage.getItem("groceryStoreAuthData")
     if (stored) {
       const data = JSON.parse(stored)
-      setAuthData(data)
+      setStoredAuthData(data)
       
       if (data.method === "email" && data.email) {
         setContactType("email")
@@ -105,20 +102,6 @@ export default function GroceryStoreOTP() {
       return
     }
 
-    if (contactType === "email" && authData?.isSignUp && !showNameInput) {
-      setShowNameInput(true)
-      setError("")
-      return
-    }
-
-    if (showNameInput) {
-      if (!name.trim()) {
-        setNameError("Please enter your store name to continue")
-        return
-      }
-      setNameError("")
-    }
-
     setIsLoading(true)
     setError("")
 
@@ -129,16 +112,8 @@ export default function GroceryStoreOTP() {
 
       const phone = authData.method === "phone" ? authData.phone : null
       const email = authData.method === "email" ? authData.email : null
-      const purpose = authData.isSignUp ? "register" : "login"
 
-      let nameToSend = null
-      if (showNameInput) {
-        nameToSend = name.trim()
-      } else if (authData.isSignUp && authData.name) {
-        nameToSend = authData.name
-      }
-
-      const response = await groceryStoreAPI.verifyOTP(phone, code, purpose, nameToSend, email)
+      const response = await groceryStoreAPI.verifyOTP(phone, code, "login", null, email)
       const data = response?.data?.data || {}
 
       const accessToken = data.accessToken
@@ -184,9 +159,8 @@ export default function GroceryStoreOTP() {
 
       const phone = authData.method === "phone" ? authData.phone : null
       const email = authData.method === "email" ? authData.email : null
-      const purpose = authData.isSignUp ? "register" : "login"
 
-      await groceryStoreAPI.sendOTP(phone, purpose, email)
+      await groceryStoreAPI.sendOTP(phone, "login", email)
 
       setResendTimer(60)
       const timer = setInterval(() => {
@@ -226,29 +200,6 @@ export default function GroceryStoreOTP() {
           <p className="text-gray-600 text-center mb-8">
             We sent a 6-digit code to {contactInfo}
           </p>
-
-          {showNameInput && (
-            <div className="w-full mb-6">
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Store Name
-              </label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value)
-                  setNameError("")
-                }}
-                placeholder="Enter your grocery store name"
-                className={`w-full px-4 py-2 border rounded-lg ${
-                  nameError ? "border-red-500" : "border-gray-300"
-                }`}
-              />
-              {nameError && (
-                <p className="text-red-500 text-xs mt-1">{nameError}</p>
-              )}
-            </div>
-          )}
 
           <div className="flex gap-2 mb-6">
             {otp.map((digit, index) => (
