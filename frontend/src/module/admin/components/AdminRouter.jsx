@@ -202,7 +202,8 @@ export default function AdminRouter() {
         <Route path="restaurants/add" element={<AddRestaurant />} />
         <Route path="restaurants/joining-request" element={<JoiningRequest />} />
         <Route path="grocery-stores/joining-request" element={<GroceryStoreJoiningRequest />} />
-        <Route path="restaurants/commission" element={<RestaurantCommission />} />
+        <Route path="restaurants/commission" element={<RestaurantCommission platformOverride="mofood" entityLabel="Restaurant" />} />
+        <Route path="grocery-stores/commission" element={<RestaurantCommission platformOverride="mogrocery" entityLabel="Store" />} />
         <Route path="restaurants/complaints" element={<RestaurantComplaints />} />
         <Route path="restaurants/bulk-import" element={<RestaurantsBulkImport />} />
         <Route path="restaurants/bulk-export" element={<RestaurantsBulkExport />} />

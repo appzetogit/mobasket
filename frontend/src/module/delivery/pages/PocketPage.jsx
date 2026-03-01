@@ -545,17 +545,28 @@ export default function PocketPage() {
 
   // Auto-rotate carousel
   useEffect(() => {
-    // Reset to first slide if current slide is out of bounds
+    const slideCount = carouselSlides.length
+
+    // Keep slide index valid even after dynamic slide list changes.
     setCurrentCarouselSlide((prev) => {
-      if (prev >= carouselSlides.length) {
+      if (!Number.isFinite(prev) || prev < 0 || prev >= slideCount) {
         return 0
       }
       return prev
     })
-    
+
+    if (carouselAutoRotateRef.current) {
+      clearInterval(carouselAutoRotateRef.current)
+    }
+
+    if (slideCount <= 1) {
+      return undefined
+    }
+
     carouselAutoRotateRef.current = setInterval(() => {
-      setCurrentCarouselSlide((prev) => (prev + 1) % carouselSlides.length)
+      setCurrentCarouselSlide((prev) => (prev + 1) % slideCount)
     }, 3000)
+
     return () => {
       if (carouselAutoRotateRef.current) {
         clearInterval(carouselAutoRotateRef.current)
@@ -565,11 +576,13 @@ export default function PocketPage() {
 
   // Reset auto-rotate timer after manual swipe
   const resetCarouselAutoRotate = () => {
+    const slideCount = carouselSlides.length
     if (carouselAutoRotateRef.current) {
       clearInterval(carouselAutoRotateRef.current)
     }
+    if (slideCount <= 1) return
     carouselAutoRotateRef.current = setInterval(() => {
-      setCurrentCarouselSlide((prev) => (prev + 1) % carouselSlides.length)
+      setCurrentCarouselSlide((prev) => (prev + 1) % slideCount)
     }, 3000)
   }
 
@@ -606,7 +619,7 @@ export default function PocketPage() {
     const threshold = 50 // Minimum swipe distance
 
     // Only trigger if horizontal swipe is dominant
-    if (Math.abs(deltaX) > threshold && Math.abs(deltaX) > deltaY) {
+    if (Math.abs(deltaX) > threshold && Math.abs(deltaX) > deltaY && carouselSlides.length > 1) {
       if (deltaX > 0) {
         // Swiped left - go to next slide
         setCurrentCarouselSlide((prev) => (prev + 1) % carouselSlides.length)
@@ -614,8 +627,9 @@ export default function PocketPage() {
         // Swiped right - go to previous slide
         setCurrentCarouselSlide((prev) => (prev - 1 + carouselSlides.length) % carouselSlides.length)
       }
-      resetCarouselAutoRotate()
     }
+    // Always resume autoplay after touch end, even for partial swipes.
+    resetCarouselAutoRotate()
 
     carouselIsSwiping.current = false
     carouselStartX.current = 0
@@ -643,7 +657,7 @@ export default function PocketPage() {
       const deltaX = carouselStartX.current - endX
       const threshold = 50
 
-      if (Math.abs(deltaX) > threshold) {
+      if (Math.abs(deltaX) > threshold && carouselSlides.length > 1) {
         if (deltaX > 0) {
           // Swiped left - go to next slide
           setCurrentCarouselSlide((prev) => (prev + 1) % carouselSlides.length)
@@ -651,8 +665,9 @@ export default function PocketPage() {
           // Swiped right - go to previous slide
           setCurrentCarouselSlide((prev) => (prev - 1 + carouselSlides.length) % carouselSlides.length)
         }
-        resetCarouselAutoRotate()
       }
+      // Always resume autoplay after mouse interaction, even for partial drags.
+      resetCarouselAutoRotate()
 
       carouselIsSwiping.current = false
       carouselStartX.current = 0

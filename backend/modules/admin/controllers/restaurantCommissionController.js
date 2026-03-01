@@ -5,6 +5,14 @@ import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import AuditLog from '../models/AuditLog.js';
 import mongoose from 'mongoose';
 
+const normalizePlatformFilter = (value) => {
+  if (!value) return null;
+  const normalized = String(value).toLowerCase();
+  if (normalized === 'mogrocery') return 'mogrocery';
+  if (normalized === 'mofood') return 'mofood';
+  return null;
+};
+
 /**
  * Get all restaurant commissions
  * GET /api/admin/restaurant-commission
@@ -15,6 +23,7 @@ export const getRestaurantCommissions = asyncHandler(async (req, res) => {
     const { 
       status,
       search,
+      platform,
       page = 1,
       limit = 50
     } = req.query;
@@ -35,6 +44,12 @@ export const getRestaurantCommissions = asyncHandler(async (req, res) => {
       ];
     }
 
+    const platformFilter = normalizePlatformFilter(platform);
+    if (platformFilter) {
+      const platformRestaurants = await Restaurant.find({ platform: platformFilter }).select('_id').lean();
+      query.restaurant = { $in: platformRestaurants.map((r) => r._id) };
+    }
+
     // Pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const limitNum = parseInt(limit);
@@ -44,7 +59,7 @@ export const getRestaurantCommissions = asyncHandler(async (req, res) => {
 
     // Get commissions
     const commissions = await RestaurantCommission.find(query)
-      .populate('restaurant', 'name restaurantId isActive email phone')
+      .populate('restaurant', 'name restaurantId platform isActive email phone')
       .populate('createdBy', 'name email')
       .populate('updatedBy', 'name email')
       .sort({ createdAt: -1 })
@@ -81,6 +96,7 @@ export const getApprovedRestaurants = asyncHandler(async (req, res) => {
   try {
     const { 
       search,
+      platform,
       page = 1,
       limit = 100
     } = req.query;
@@ -89,6 +105,11 @@ export const getApprovedRestaurants = asyncHandler(async (req, res) => {
     const query = {
       isActive: true
     };
+
+    const platformFilter = normalizePlatformFilter(platform);
+    if (platformFilter) {
+      query.platform = platformFilter;
+    }
 
     // Search filter
     if (search) {
@@ -160,7 +181,7 @@ export const getRestaurantCommissionById = asyncHandler(async (req, res) => {
     }
 
     const commission = await RestaurantCommission.findById(id)
-      .populate('restaurant', 'name restaurantId isActive email phone ownerName businessModel')
+      .populate('restaurant', 'name restaurantId platform isActive email phone ownerName businessModel')
       .populate('createdBy', 'name email')
       .populate('updatedBy', 'name email')
       .lean();
@@ -191,7 +212,7 @@ export const getCommissionByRestaurantId = asyncHandler(async (req, res) => {
     }
 
     const commission = await RestaurantCommission.findOne({ restaurant: restaurantId })
-      .populate('restaurant', 'name restaurantId isActive email phone ownerName businessModel')
+      .populate('restaurant', 'name restaurantId platform isActive email phone ownerName businessModel')
       .populate('createdBy', 'name email')
       .populate('updatedBy', 'name email')
       .lean();
@@ -330,7 +351,7 @@ export const createRestaurantCommission = asyncHandler(async (req, res) => {
 
     // Populate and return
     const populatedCommission = await RestaurantCommission.findById(commission._id)
-      .populate('restaurant', 'name restaurantId isActive email phone')
+      .populate('restaurant', 'name restaurantId platform isActive email phone')
       .populate('createdBy', 'name email')
       .lean();
 
@@ -483,7 +504,7 @@ export const updateRestaurantCommission = asyncHandler(async (req, res) => {
 
     // Populate and return
     const populatedCommission = await RestaurantCommission.findById(commission._id)
-      .populate('restaurant', 'name restaurantId isActive email phone')
+      .populate('restaurant', 'name restaurantId platform isActive email phone')
       .populate('createdBy', 'name email')
       .populate('updatedBy', 'name email')
       .lean();

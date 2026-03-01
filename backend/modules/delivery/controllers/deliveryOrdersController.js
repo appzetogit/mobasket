@@ -1787,9 +1787,11 @@ export const completeDelivery = asyncHandler(async (req, res) => {
     }
 
     // Release escrow and distribute funds (this handles all wallet credits)
+    let escrowDistributed = false;
     try {
       const { releaseEscrow } = await import('../../order/services/escrowWalletService.js');
       await releaseEscrow(orderMongoId);
+      escrowDistributed = true;
       console.log(`✅ Escrow released and funds distributed for order ${orderIdForLog}`);
     } catch (escrowError) {
       console.error(`❌ Error releasing escrow for order ${orderIdForLog}:`, escrowError);
@@ -1946,6 +1948,8 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       // Don't fail the delivery completion if bonus check fails
     }
 
+    // Legacy fallback: only run manual restaurant/admin commission updates if escrow distribution failed.
+    if (!escrowDistributed) {
     // Calculate restaurant commission and update restaurant wallet
     let restaurantWalletTransaction = null;
     let adminCommissionRecord = null;
@@ -2058,6 +2062,10 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       // But log it for investigation
     }
 
+    } else {
+      console.log(`Escrow distribution succeeded for order ${orderIdForLog}; skipping legacy restaurant/admin fallback.`);
+    }
+
     // Send response first, then handle notifications asynchronously
     // This prevents timeouts if notifications take too long
     const responseData = {
@@ -2138,5 +2146,6 @@ export const completeDelivery = asyncHandler(async (req, res) => {
     return errorResponse(res, 500, `Failed to complete delivery: ${error.message}`);
   }
 });
+
 
 

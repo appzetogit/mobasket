@@ -9,7 +9,7 @@ import { adminAPI } from "@/lib/api"
 import { API_BASE_URL } from "@/lib/api/config"
 import { toast } from "sonner"
 
-export default function RestaurantCommission() {
+export default function RestaurantCommission({ platformOverride = "mofood", entityLabel = "Restaurant" }) {
   const [searchQuery, setSearchQuery] = useState("")
   const [commissions, setCommissions] = useState([])
   const [approvedRestaurants, setApprovedRestaurants] = useState([])
@@ -69,12 +69,12 @@ export default function RestaurantCommission() {
   useEffect(() => {
     fetchCommissions()
     fetchApprovedRestaurants()
-  }, [])
+  }, [platformOverride])
 
   const fetchCommissions = async () => {
     try {
       setLoading(true)
-      const response = await adminAPI.getRestaurantCommissions({})
+      const response = await adminAPI.getRestaurantCommissions({ platform: platformOverride })
       
       let commissionsData = null
       if (response?.data?.success && response?.data?.data?.commissions) {
@@ -86,7 +86,12 @@ export default function RestaurantCommission() {
       }
       
       if (commissionsData && Array.isArray(commissionsData)) {
-        setCommissions(commissionsData)
+        const platformFilteredCommissions = commissionsData.filter((commission) => {
+          const commissionPlatform = commission?.restaurant?.platform
+          if (!platformOverride) return true
+          return String(commissionPlatform || "").toLowerCase() === String(platformOverride).toLowerCase()
+        })
+        setCommissions(platformFilteredCommissions)
       } else {
         setCommissions([])
       }
@@ -111,7 +116,7 @@ export default function RestaurantCommission() {
 
   const fetchApprovedRestaurants = async () => {
     try {
-      const response = await adminAPI.getApprovedRestaurants({ limit: 1000 })
+      const response = await adminAPI.getApprovedRestaurants({ limit: 1000, platform: platformOverride })
       
       let restaurantsData = null
       if (response?.data?.success && response?.data?.data?.restaurants) {
@@ -252,7 +257,7 @@ export default function RestaurantCommission() {
     const errors = {}
     
     if (!formData.restaurantId) {
-      errors.restaurantId = "Restaurant is required"
+      errors.restaurantId = `${entityLabel} is required`
     }
 
     if (!formData.defaultCommission.value || parseFloat(formData.defaultCommission.value) < 0) {
@@ -308,8 +313,8 @@ export default function RestaurantCommission() {
 
   const columnsConfig = {
     si: "Serial Number",
-    restaurant: "Restaurant Name",
-    restaurantId: "Restaurant ID",
+    restaurant: `${entityLabel} Name`,
+    restaurantId: `${entityLabel} ID`,
     defaultCommission: "Default Commission",
     status: "Status",
     actions: "Actions",
@@ -321,7 +326,7 @@ export default function RestaurantCommission() {
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold text-slate-900">Restaurant Commission</h1>
+              <h1 className="text-2xl font-bold text-slate-900">{entityLabel} Commission</h1>
               <span className="px-3 py-1 rounded-full text-sm font-semibold bg-slate-100 text-slate-700">
                 {filteredCommissions.length}
               </span>
@@ -342,7 +347,7 @@ export default function RestaurantCommission() {
             <div className="relative flex-1 sm:flex-initial min-w-[250px]">
               <input
                 type="text"
-                placeholder="Ex: Search by restaurant name or ID"
+                placeholder={`Ex: Search by ${entityLabel.toLowerCase()} name or ID`}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 pr-4 py-2.5 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
@@ -370,12 +375,12 @@ export default function RestaurantCommission() {
                     )}
                     {visibleColumns.restaurant && (
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                        Restaurant Name
+                        {entityLabel} Name
                       </th>
                     )}
                     {visibleColumns.restaurantId && (
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                        Restaurant ID
+                        {entityLabel} ID
                       </th>
                     )}
                     {visibleColumns.defaultCommission && (
@@ -477,17 +482,17 @@ export default function RestaurantCommission() {
         </div>
       </div>
 
-      {/* Restaurant Selection Dialog */}
+      {/* Store/Restaurant Selection Dialog */}
       <Dialog open={isRestaurantSelectOpen} onOpenChange={setIsRestaurantSelectOpen}>
         <DialogContent className="max-w-xl bg-white p-0">
           <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-200">
-            <DialogTitle className="text-lg font-semibold text-slate-900">Select Restaurant</DialogTitle>
+            <DialogTitle className="text-lg font-semibold text-slate-900">Select {entityLabel}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 px-6 py-4">
             <div className="relative">
               <input
                 type="text"
-                placeholder="Search restaurants..."
+                placeholder={`Search ${entityLabel.toLowerCase()}s...`}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 pr-4 py-2 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -513,7 +518,7 @@ export default function RestaurantCommission() {
                   </button>
                 ))}
               {filteredRestaurants.filter(r => !r.hasCommissionSetup).length === 0 && (
-                <p className="text-center text-sm text-slate-500 py-4">No restaurants available</p>
+                <p className="text-center text-sm text-slate-500 py-4">No {entityLabel.toLowerCase()}s available</p>
               )}
             </div>
           </div>
@@ -525,11 +530,11 @@ export default function RestaurantCommission() {
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto bg-white p-0">
           <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-200">
             <DialogTitle className="text-lg font-semibold text-slate-900">
-              {selectedCommission ? "Edit Restaurant Commission" : "Add Restaurant Commission"}
+              {selectedCommission ? `Edit ${entityLabel} Commission` : `Add ${entityLabel} Commission`}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 px-6 py-4">
-            {/* Restaurant Info */}
+            {/* Store/Restaurant Info */}
             {selectedRestaurant && (
               <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
                 <p className="font-semibold text-sm text-slate-900">{selectedRestaurant.name}</p>
@@ -614,7 +619,7 @@ export default function RestaurantCommission() {
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
         <DialogContent className="max-w-md bg-white">
           <DialogHeader>
-            <DialogTitle>Delete Restaurant Commission</DialogTitle>
+            <DialogTitle>Delete {entityLabel} Commission</DialogTitle>
           </DialogHeader>
           <div className="py-4">
             <p className="text-sm text-slate-700">
