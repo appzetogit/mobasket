@@ -57,6 +57,8 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
   const [groceryCategoryOptions, setGroceryCategoryOptions] = useState([])
   const [grocerySubcategoryOptions, setGrocerySubcategoryOptions] = useState([])
   const [groceryStoreOptions, setGroceryStoreOptions] = useState([])
+  const [isCustomTypeMode, setIsCustomTypeMode] = useState(false)
+  const [customTypeValue, setCustomTypeValue] = useState("")
 
   useEffect(() => {
     if (isGroceryScope) {
@@ -69,7 +71,22 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
 
   const categoryTypeOptions = useMemo(() => {
     if (!isGroceryScope) {
-      return STATIC_FOOD_CATEGORY_TYPES
+      const merged = new Set(STATIC_FOOD_CATEGORY_TYPES)
+      categories.forEach((item) => {
+        const normalized = typeof item?.type === "string" ? item.type.trim() : ""
+        if (normalized && normalized.toLowerCase() !== "global") {
+          merged.add(normalized)
+        }
+      })
+      const formType = typeof formData.type === "string" ? formData.type.trim() : ""
+      if (formType && formType.toLowerCase() !== "global") {
+        merged.add(formType)
+      }
+      const customType = typeof customTypeValue === "string" ? customTypeValue.trim() : ""
+      if (customType) {
+        merged.add(customType)
+      }
+      return Array.from(merged)
     }
 
     const merged = new Set(DEFAULT_GROCERY_SECTIONS)
@@ -82,7 +99,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     if (formType) merged.add(formType)
 
     return Array.from(merged)
-  }, [formData.type, groceryTypeOptions, isGroceryScope])
+  }, [categories, customTypeValue, formData.type, groceryTypeOptions, isGroceryScope])
 
   const activeEntityLabel = useMemo(() => {
     if (!isGroceryScope) return "Category"
@@ -488,6 +505,8 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
 
   const handleEdit = (category) => {
     setEditingCategory(category)
+    setIsCustomTypeMode(false)
+    setCustomTypeValue("")
     if (isGroceryScope && activeGroceryEntity === "subcategories") {
       setFormData({
         ...getInitialFormData(),
@@ -530,6 +549,8 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
   const handleAddNew = () => {
     setEditingCategory(null)
     setFormData(getInitialFormData())
+    setIsCustomTypeMode(false)
+    setCustomTypeValue("")
     setSelectedImageFile(null)
     setImagePreview(null)
     if (fileInputRef.current) {
@@ -662,6 +683,8 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
   const handleCloseModal = () => {
     setIsModalOpen(false)
     setEditingCategory(null)
+    setIsCustomTypeMode(false)
+    setCustomTypeValue("")
     setSelectedImageFile(null)
     setImagePreview(null)
     setFormData(getInitialFormData())
@@ -684,9 +707,18 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
       }
 
       if (!isGroceryScope) {
+        const resolvedType = isCustomTypeMode
+          ? String(customTypeValue || "").trim()
+          : String(formData.type || "").trim()
+
+        if (!resolvedType) {
+          toast.error("Category type is required")
+          return
+        }
+
         const formDataToSend = new FormData()
         formDataToSend.append('name', formData.name)
-        formDataToSend.append('type', formData.type)
+        formDataToSend.append('type', resolvedType)
         formDataToSend.append('status', formData.status.toString())
         if (selectedImageFile) {
           formDataToSend.append('image', selectedImageFile)
@@ -1422,8 +1454,18 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                         </label>
                         <select
                           required
-                          value={formData.type}
-                          onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                          value={isCustomTypeMode ? "__custom__" : formData.type}
+                          onChange={(e) => {
+                            const selected = e.target.value
+                            if (selected === "__custom__") {
+                              setIsCustomTypeMode(true)
+                              setFormData({ ...formData, type: "" })
+                              return
+                            }
+                            setIsCustomTypeMode(false)
+                            setCustomTypeValue("")
+                            setFormData({ ...formData, type: selected })
+                          }}
                           className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                         >
                           <option value="">Select category type</option>
@@ -1432,7 +1474,18 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                               {typeOption}
                             </option>
                           ))}
+                          <option value="__custom__">Add new type</option>
                         </select>
+                        {isCustomTypeMode && (
+                          <input
+                            type="text"
+                            required
+                            value={customTypeValue}
+                            onChange={(e) => setCustomTypeValue(e.target.value)}
+                            placeholder="Enter new category type"
+                            className="w-full mt-2 px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        )}
                       </div>
                     )}
 
