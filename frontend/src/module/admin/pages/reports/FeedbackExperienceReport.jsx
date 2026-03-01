@@ -5,8 +5,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
 import { exportReportsToCSV, exportReportsToExcel, exportReportsToPDF, exportReportsToJSON } from "../../components/reports/reportsExportUtils"
+import { usePlatform } from "../../context/PlatformContext"
 
-export default function FeedbackExperienceReport() {
+export default function FeedbackExperienceReport({ platformOverride }) {
+  const { platform } = usePlatform()
+  const activePlatform = platformOverride || platform || "mofood"
   const [searchQuery, setSearchQuery] = useState("")
   const [feedbackExperiences, setFeedbackExperiences] = useState([])
   const [loading, setLoading] = useState(true)
@@ -25,7 +28,7 @@ export default function FeedbackExperienceReport() {
   // Fetch feedback experiences
   useEffect(() => {
     fetchFeedbackExperiences()
-  }, [filters])
+  }, [filters, activePlatform])
 
   const fetchFeedbackExperiences = async () => {
     try {
@@ -33,6 +36,7 @@ export default function FeedbackExperienceReport() {
       const params = {
         page: 1,
         limit: 1000,
+        platform: activePlatform,
         ...(filters.fromDate && { startDate: filters.fromDate }),
         ...(filters.toDate && { endDate: filters.toDate }),
         ...(filters.rating && { rating: filters.rating }),

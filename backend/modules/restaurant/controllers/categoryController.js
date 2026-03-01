@@ -1,4 +1,5 @@
 import RestaurantCategory from '../models/RestaurantCategory.js';
+import AdminCategoryManagement from '../../admin/models/AdminCategoryManagement.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import winston from 'winston';
@@ -25,12 +26,61 @@ export const getCategories = asyncHandler(async (req, res) => {
       return errorResponse(res, 401, 'Restaurant not authenticated');
     }
 
-    const categories = await RestaurantCategory.find({ 
-      restaurant: restaurantId,
-      isActive: true 
-    })
-      .sort({ order: 1, createdAt: 1 })
-      .lean();
+    // Global active categories for mofood:
+    // 1) admin categories
+    // 2) categories created by any mofood restaurant
+    const [adminCategories, restaurantCategoriesRaw] = await Promise.all([
+      AdminCategoryManagement.find({ status: true })
+        .select('_id name image type')
+        .sort({ createdAt: -1 })
+        .lean(),
+      RestaurantCategory.find({ isActive: true })
+        .select('_id name icon restaurant order createdAt')
+        .populate({
+          path: 'restaurant',
+          select: 'name platform',
+          match: { platform: 'mofood' }
+        })
+        .sort({ order: 1, createdAt: 1 })
+        .lean()
+    ]);
+
+    const restaurantCategories = restaurantCategoriesRaw
+      .filter((category) => Boolean(category.restaurant))
+      .map((category) => ({
+        _id: category._id,
+        id: category._id.toString(),
+        name: category.name,
+        image: category.icon || '',
+        isActive: true,
+        type: null,
+        source: 'restaurant',
+        restaurantName: category.restaurant?.name || ''
+      }));
+
+    const normalizedAdminCategories = adminCategories.map((category) => ({
+      _id: category._id,
+      id: category._id.toString(),
+      name: category.name,
+      image: category.image || '',
+      isActive: true,
+      type: category.type || null,
+      source: 'admin',
+      restaurantName: ''
+    }));
+
+    // De-duplicate by normalized name so categories are globally reusable.
+    const seenNames = new Set();
+    const categories = [...normalizedAdminCategories, ...restaurantCategories]
+      .filter((category) => {
+        const normalizedName = String(category?.name || '').toLowerCase().replace(/\s+/g, ' ').trim();
+        if (!normalizedName || seenNames.has(normalizedName)) {
+          return false;
+        }
+        seenNames.add(normalizedName);
+        return true;
+      })
+      .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'en', { sensitivity: 'base' }));
 
     return successResponse(res, 200, 'Categories retrieved successfully', {
       categories

@@ -798,6 +798,8 @@ export default function Cart() {
       // Note: Addons are added as separate cart items when user clicks the + button
       const orderItems = cart.map(item => ({
         itemId: item.id,
+        restaurantId: item.restaurantId || "",
+        storeId: item.storeId || item.restaurantId || "",
         name: item.name,
         price: item.price,
         quantity: item.quantity || 1,

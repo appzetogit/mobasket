@@ -2,6 +2,8 @@ import Delivery from '../../delivery/models/Delivery.js';
 import Order from '../models/Order.js';
 import Zone from '../../admin/models/Zone.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import DeliveryWallet from '../../delivery/models/DeliveryWallet.js';
+import BusinessSettings from '../../admin/models/BusinessSettings.js';
 import mongoose from 'mongoose';
 import { findNearestOnlineDeliveryPartnersFromFirebase } from '../../../shared/services/firebaseRealtimeService.js';
 
@@ -115,6 +117,62 @@ function calculateDistance(lat1, lng1, lat2, lng2) {
   return R * c; // Distance in kilometers
 }
 
+async function resolveDeliveryCashLimit() {
+  try {
+    const settings = await BusinessSettings.getSettings();
+    const configuredLimit = Number(settings?.deliveryCashLimit);
+    if (Number.isFinite(configuredLimit) && configuredLimit >= 0) {
+      return configuredLimit;
+    }
+  } catch (_) {
+    // Use fallback below.
+  }
+  return 750;
+}
+
+async function getCashLimitEligibleDeliveryPartnerIds(deliveryPartners = []) {
+  const deliveryIds = deliveryPartners
+    .map((partner) => String(partner?._id || ''))
+    .filter(Boolean);
+
+  if (deliveryIds.length === 0) {
+    return { eligibleIds: new Set(), totalCashLimit: 750 };
+  }
+
+  const totalCashLimit = await resolveDeliveryCashLimit();
+  const validObjectIds = deliveryIds
+    .filter((id) => mongoose.Types.ObjectId.isValid(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
+
+  const wallets = validObjectIds.length > 0
+    ? await DeliveryWallet.find({ deliveryId: { $in: validObjectIds } })
+        .select('deliveryId cashInHand')
+        .lean()
+    : [];
+
+  const cashInHandByDeliveryId = new Map(
+    wallets.map((wallet) => [String(wallet.deliveryId), Math.max(0, Number(wallet.cashInHand) || 0)])
+  );
+
+  const eligibleIds = new Set();
+  let blockedCount = 0;
+
+  for (const deliveryId of deliveryIds) {
+    const cashInHand = cashInHandByDeliveryId.get(deliveryId) ?? 0;
+    if (cashInHand >= totalCashLimit) {
+      blockedCount += 1;
+      continue;
+    }
+    eligibleIds.add(deliveryId);
+  }
+
+  if (blockedCount > 0) {
+    console.log(`🚫 Excluded ${blockedCount} delivery partners at/above cash-in-hand limit ₹${totalCashLimit}`);
+  }
+
+  return { eligibleIds, totalCashLimit };
+}
+
 /**
  * Find all nearest available delivery boys within priority distance (for priority notification)
  * @param {number} restaurantLat - Restaurant latitude
@@ -154,10 +212,16 @@ export async function findNearestDeliveryBoys(restaurantLat, restaurantLng, rest
     if (!deliveryPartners || deliveryPartners.length === 0) {
       return [];
     }
+    const { eligibleIds: cashLimitEligibleIds } =
+      await getCashLimitEligibleDeliveryPartnerIds(deliveryPartners);
 
     // Calculate distance and filter
     const deliveryPartnersWithDistance = deliveryPartners
       .map(partner => {
+        if (!cashLimitEligibleIds.has(String(partner._id))) {
+          return null;
+        }
+
         const location = partner.availability?.currentLocation;
         if (!location || !location.coordinates || location.coordinates.length < 2) {
           return null;
@@ -288,9 +352,13 @@ export async function findNearestDeliveryBoy(restaurantLat, restaurantLng, resta
             })
               .select('_id name phone availability.currentLocation availability.lastLocationUpdate availability.zones status isActive')
               .lean();
+            const { eligibleIds: cashLimitEligibleIds } =
+              await getCashLimitEligibleDeliveryPartnerIds(deliveryPartners);
 
             const deliveryById = new Map(
-              deliveryPartners.map((partner) => [String(partner._id), partner])
+              deliveryPartners
+                .filter((partner) => cashLimitEligibleIds.has(String(partner._id)))
+                .map((partner) => [String(partner._id), partner])
             );
 
             for (const candidate of firebaseCandidates) {
@@ -363,9 +431,15 @@ export async function findNearestDeliveryBoy(restaurantLat, restaurantLng, resta
       return null;
     }
 
+    const { eligibleIds: cashLimitEligibleIds } =
+      await getCashLimitEligibleDeliveryPartnerIds(deliveryPartners);
     // Calculate distance for each delivery partner and filter by zone if applicable
     const deliveryPartnersWithDistance = deliveryPartners
       .map(partner => {
+        if (!cashLimitEligibleIds.has(String(partner._id))) {
+          return null;
+        }
+
         const location = partner.availability?.currentLocation;
         if (!location || !location.coordinates || location.coordinates.length < 2) {
           return null;

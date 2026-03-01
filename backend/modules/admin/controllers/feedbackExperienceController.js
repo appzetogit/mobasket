@@ -99,6 +99,7 @@ export const getFeedbackExperiences = asyncHandler(async (req, res) => {
     const {
       page = 1,
       limit = 50,
+      platform,
       search,
       rating,
       experience,
@@ -112,6 +113,16 @@ export const getFeedbackExperiences = asyncHandler(async (req, res) => {
 
     // Build query
     const query = {};
+
+    // Platform filter (used by admin mofood/mogrocery switch)
+    // For mogrocery, return feedback linked only to grocery stores.
+    if (String(platform || '').toLowerCase() === 'mogrocery') {
+      const groceryStores = await Restaurant.find({ platform: 'mogrocery' })
+        .select('_id')
+        .lean();
+      const groceryStoreIds = groceryStores.map((store) => store._id);
+      query.restaurantId = { $in: groceryStoreIds };
+    }
 
     // Search filter (by user name, email, or phone)
     if (search) {
@@ -143,7 +154,13 @@ export const getFeedbackExperiences = asyncHandler(async (req, res) => {
 
     // Restaurant filter
     if (restaurantId) {
-      query.restaurantId = restaurantId;
+      if (query.restaurantId && query.restaurantId.$in) {
+        query.restaurantId = {
+          $in: query.restaurantId.$in.filter((id) => String(id) === String(restaurantId))
+        };
+      } else {
+        query.restaurantId = restaurantId;
+      }
     }
 
     // Date range filter

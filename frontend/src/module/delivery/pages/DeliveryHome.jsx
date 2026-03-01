@@ -1123,11 +1123,13 @@ export default function DeliveryHome() {
   const pocketBalanceForEligibility = Number.isFinite(Number(walletState?.pocketBalance))
     ? Number(walletState.pocketBalance)
     : (Number(walletState?.totalBalance) || 0)
+  const isCashInHandLimitReached = cashInHand >= totalCashLimit
   // Eligibility rule: pocket balance must be greater than or equal to available cash limit.
   const orderEligibilityMinBalance = availableCashLimit
   const isPocketBalanceTooLowForOrders =
     pocketBalanceForEligibility < orderEligibilityMinBalance
-  const isMapLockedForOrderEligibility = isPocketBalanceTooLowForOrders
+  const isMapLockedForOrderEligibility =
+    isPocketBalanceTooLowForOrders || isCashInHandLimitReached
 
   // State for active earning addon
   const [activeEarningAddon, setActiveEarningAddon] = useState(null)
@@ -4482,6 +4484,12 @@ export default function DeliveryHome() {
   // Show new order popup when order is received from Socket.IO
   useEffect(() => {
     if (newOrder) {
+      if (isCashInHandLimitReached) {
+        toast.error(`Cash in hand limit reached (₹${totalCashLimit.toFixed(2)}). Deposit cash in hand to continue receiving orders.`)
+        clearNewOrder()
+        return
+      }
+
       const orderId = newOrder.orderMongoId || newOrder.orderId;
       
       // Check if this order has already been accepted
@@ -4600,7 +4608,15 @@ export default function DeliveryHome() {
       setShowNewOrderPopup(true)
       setCountdownSeconds(300) // Reset countdown to 5 minutes
     }
-  }, [newOrder, calculateTimeAway, riderLocation, isOrderAlreadyAccepted, markOrderAsAccepted])
+  }, [
+    newOrder,
+    isCashInHandLimitReached,
+    totalCashLimit,
+    calculateTimeAway,
+    riderLocation,
+    isOrderAlreadyAccepted,
+    markOrderAsAccepted
+  ])
 
   // Recalculate distance when rider location becomes available
   useEffect(() => {
@@ -4865,12 +4881,16 @@ export default function DeliveryHome() {
   // Fetch assigned orders from API when delivery person goes online
   const fetchAssignedOrders = useCallback(async () => {
     if (!isOnline) {
-      console.log('⚠️ Delivery person is offline, skipping order fetch')
+      console.log('Delivery person is offline, skipping order fetch')
+      return
+    }
+    if (isCashInHandLimitReached) {
+      console.log('Cash-in-hand limit reached, skipping new order notifications')
       return
     }
 
     try {
-      console.log('📦 Fetching assigned orders from API...')
+      console.log('Fetching assigned orders from API...')
       const response = await deliveryAPI.getOrders({
         limit: 50, // Get up to 50 pending orders
         page: 1,
@@ -5014,7 +5034,7 @@ export default function DeliveryHome() {
       console.error('❌ Error fetching assigned orders:', error)
       // Don't show error to user, just log it
     }
-  }, [isOnline, calculateTimeAway, isOrderAlreadyAccepted])
+  }, [isOnline, isCashInHandLimitReached, calculateTimeAway, isOrderAlreadyAccepted])
 
   // Fetch assigned orders when delivery person goes online
   useEffect(() => {
@@ -9399,6 +9419,14 @@ export default function DeliveryHome() {
               style={{ backdropFilter: 'grayscale(1)' }}
             >
               <div className="rounded-xl bg-white/90 border border-gray-300 px-4 py-3 text-center shadow-sm max-w-xs">
+                {isCashInHandLimitReached && (
+                  <>
+                    <p className="text-sm font-semibold text-gray-900">Cash limit reached</p>
+                    <p className="text-xs text-gray-700 mt-1">
+                      Cash in hand has reached the delivery cash limit (₹{totalCashLimit.toFixed(2)}). Deposit cash in hand to continue receiving orders.
+                    </p>
+                  </>
+                )}
                 {isPocketBalanceTooLowForOrders && (
                   <>
                     <p className="text-sm font-semibold text-gray-900">Pocket balance too low</p>
@@ -9415,7 +9443,11 @@ export default function DeliveryHome() {
           <motion.button
             onClick={() => {
               if (isMapLockedForOrderEligibility) {
-                toast.error(`Pocket balance must be greater than or equal to available cash limit ₹${orderEligibilityMinBalance.toFixed(2)} to receive orders.`)
+                if (isCashInHandLimitReached) {
+                  toast.error(`Cash in hand limit reached (Rs ${totalCashLimit.toFixed(2)}). Deposit cash in hand to continue receiving orders.`)
+                } else {
+                  toast.error(`Pocket balance must be greater than or equal to available cash limit Rs ${orderEligibilityMinBalance.toFixed(2)} to receive orders.`)
+                }
                 return
               }
               if (navigator.geolocation) {
@@ -11649,6 +11681,3 @@ export default function DeliveryHome() {
     </div>
   )
 }
-
-
-

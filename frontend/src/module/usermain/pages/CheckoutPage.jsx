@@ -750,6 +750,7 @@ export default function CheckoutPage() {
   const buildOrderItems = () =>
     foodItems.map((item) => ({
       itemId: String(item.id || item._id || item.itemId || ""),
+      restaurantId: String(item.restaurantId || restaurantId || ""),
       name: item.name,
       price: Number(item.price || 0),
       quantity: Number(item.quantity || 1),

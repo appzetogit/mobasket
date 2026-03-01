@@ -259,6 +259,8 @@ export default function GroceryCheckoutPage() {
   const buildOrderItems = () =>
     groceryItems.map((item) => ({
       itemId: String(item.id || item._id || item.itemId || item.productId || ""),
+      storeId: String(item.storeId || item.restaurantId || resolvedRestaurant?.restaurantId || ""),
+      restaurantId: String(item.restaurantId || item.storeId || resolvedRestaurant?.restaurantId || ""),
       name: item.name,
       price: Number(item.price || 0),
       quantity: Number(item.quantity || 1),

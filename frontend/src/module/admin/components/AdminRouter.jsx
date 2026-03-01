@@ -292,6 +292,10 @@ export default function AdminRouter() {
         <Route path="order-report/campaign" element={<CampaignOrderReport />} />
         {/* Restaurant Report */}
         <Route path="restaurant-report" element={<RestaurantReport />} />
+        <Route
+          path="grocery-store-report"
+          element={<RestaurantReport platformOverride="mogrocery" entityLabel="Store" />}
+        />
         {/* Customer Report */}
         <Route path="customer-report/feedback-experience" element={<FeedbackExperienceReport />} />
         <Route path="tax-report" element={<TaxReport />} />

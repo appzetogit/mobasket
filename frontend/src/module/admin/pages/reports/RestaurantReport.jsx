@@ -6,7 +6,7 @@ import { exportReportsToCSV, exportReportsToExcel, exportReportsToPDF, exportRep
 import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
 
-export default function RestaurantReport() {
+export default function RestaurantReport({ platformOverride = "mofood", entityLabel = "Restaurant" }) {
   const [searchQuery, setSearchQuery] = useState("")
   const [restaurants, setRestaurants] = useState([])
   const [loading, setLoading] = useState(true)
@@ -48,7 +48,10 @@ export default function RestaurantReport() {
           search: searchQuery || undefined
         }
 
-        const response = await adminAPI.getRestaurantReport(params)
+        const response = await adminAPI.getRestaurantReport({
+          ...params,
+          platform: platformOverride,
+        })
 
         if (response?.data?.success && response.data.data) {
           setRestaurants(response.data.data.restaurants || [])
@@ -60,7 +63,7 @@ export default function RestaurantReport() {
         }
       } catch (error) {
         console.error("Error fetching restaurant report:", error)
-        toast.error("Failed to fetch restaurant report")
+        toast.error(`Failed to fetch ${entityLabel.toLowerCase()} report`)
         setRestaurants([])
       } finally {
         setLoading(false)
@@ -93,7 +96,7 @@ export default function RestaurantReport() {
     }
     const headers = [
       { key: "sl", label: "SL" },
-      { key: "restaurantName", label: "Restaurant Name" },
+      { key: "restaurantName", label: `${entityLabel} Name` },
       { key: "totalFood", label: "Total Food" },
       { key: "totalOrder", label: "Total Order" },
       { key: "totalOrderAmount", label: "Total Order Amount" },
@@ -102,11 +105,13 @@ export default function RestaurantReport() {
       { key: "totalVATTAX", label: "Total VAT/TAX" },
       { key: "averageRatings", label: "Average Ratings" },
     ]
+    const exportBaseName = platformOverride === "mogrocery" ? "grocery_store_report" : "restaurant_report"
+    const exportTitle = `${entityLabel} Report`
     switch (format) {
-      case "csv": exportReportsToCSV(filteredRestaurants, headers, "restaurant_report"); break
-      case "excel": exportReportsToExcel(filteredRestaurants, headers, "restaurant_report"); break
-      case "pdf": exportReportsToPDF(filteredRestaurants, headers, "restaurant_report", "Restaurant Report"); break
-      case "json": exportReportsToJSON(filteredRestaurants, "restaurant_report"); break
+      case "csv": exportReportsToCSV(filteredRestaurants, headers, exportBaseName); break
+      case "excel": exportReportsToExcel(filteredRestaurants, headers, exportBaseName); break
+      case "pdf": exportReportsToPDF(filteredRestaurants, headers, exportBaseName, exportTitle); break
+      case "json": exportReportsToJSON(filteredRestaurants, exportBaseName); break
     }
   }
 
@@ -130,7 +135,7 @@ export default function RestaurantReport() {
       <div className="p-4 lg:p-6 bg-slate-50 min-h-screen flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-          <p className="text-gray-600">Loading restaurant report...</p>
+          <p className="text-gray-600">Loading {entityLabel.toLowerCase()} report...</p>
         </div>
       </div>
     )
@@ -145,7 +150,7 @@ export default function RestaurantReport() {
             <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center">
               <Briefcase className="w-5 h-5 text-white" />
             </div>
-            <h1 className="text-2xl font-bold text-slate-900">Restaurant Report</h1>
+            <h1 className="text-2xl font-bold text-slate-900">{entityLabel} Report</h1>
           </div>
         </div>
 
@@ -251,7 +256,7 @@ export default function RestaurantReport() {
         {/* Restaurant Report Table Section */}
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-            <h2 className="text-xl font-bold text-slate-900">Restaurant Report Table {totalRestaurants}</h2>
+            <h2 className="text-xl font-bold text-slate-900">{entityLabel} Report Table {totalRestaurants}</h2>
 
             <div className="flex items-center gap-3">
               <div className="relative flex-1 sm:flex-initial min-w-[250px]">

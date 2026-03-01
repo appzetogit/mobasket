@@ -19,6 +19,7 @@ import UserWallet from '../../user/models/UserWallet.js';
 import Menu from '../../restaurant/models/Menu.js';
 import User from '../../auth/models/User.js';
 import OutletTimings from '../../restaurant/models/OutletTimings.js';
+import GroceryProduct from '../../grocery/models/GroceryProduct.js';
 import { reduceGroceryStockForOrder, restoreGroceryStockForOrder } from '../services/groceryStockService.js';
 import {
   getDefaultPendingCartEdit,
@@ -379,6 +380,172 @@ const resolveRestaurantObjectId = async (restaurantId) => {
   }).select('_id').lean();
 
   return restaurant?._id ? restaurant._id.toString() : null;
+};
+
+const normalizeEntityId = (value) => {
+  if (!value) return '';
+  if (typeof value === 'string' || typeof value === 'number') {
+    return String(value).trim();
+  }
+  if (typeof value === 'object') {
+    const candidate =
+      value._id ||
+      value.id ||
+      value.restaurantId ||
+      value.storeId ||
+      value.value ||
+      '';
+    return candidate ? String(candidate).trim() : '';
+  }
+  return '';
+};
+
+const extractItemSourceId = (item = {}) => {
+  return (
+    normalizeEntityId(item.restaurantId) ||
+    normalizeEntityId(item.storeId) ||
+    normalizeEntityId(item.restaurant) ||
+    normalizeEntityId(item.store) ||
+    ''
+  );
+};
+
+const validateSingleSourceOrderItems = async ({
+  items,
+  platform = 'mofood',
+  expectedRestaurant = {}
+}) => {
+  const normalizedPlatform = platform === 'mogrocery' ? 'mogrocery' : 'mofood';
+  const sourceLabel = normalizedPlatform === 'mogrocery' ? 'store' : 'restaurant';
+  const uniqueItemIds = Array.from(
+    new Set(
+      (Array.isArray(items) ? items : [])
+        .map((item) => String(item?.itemId || '').trim())
+        .filter(Boolean)
+    )
+  );
+
+  if (uniqueItemIds.length === 0) {
+    return {
+      valid: false,
+      message: `Order items are invalid. Please add items from one ${sourceLabel} and try again.`
+    };
+  }
+
+  const expectedRestaurantObjectId =
+    normalizeEntityId(expectedRestaurant?._id) ||
+    (await resolveRestaurantObjectId(
+      expectedRestaurant?.restaurantId ||
+      expectedRestaurant?.providedRestaurantId ||
+      ''
+    ));
+
+  const expectedSourceIds = new Set(
+    [
+      normalizeEntityId(expectedRestaurantObjectId),
+      normalizeEntityId(expectedRestaurant?.restaurantId),
+      normalizeEntityId(expectedRestaurant?.providedRestaurantId),
+      normalizeEntityId(expectedRestaurant?.slug)
+    ].filter(Boolean)
+  );
+
+  const explicitItemSourceIds = new Set(
+    (Array.isArray(items) ? items : [])
+      .map((item) => extractItemSourceId(item))
+      .filter(Boolean)
+  );
+
+  if (explicitItemSourceIds.size > 1) {
+    return {
+      valid: false,
+      message: `Your cart has items from multiple ${sourceLabel}s. Please keep items from one ${sourceLabel} only.`
+    };
+  }
+
+  if (explicitItemSourceIds.size === 1 && expectedSourceIds.size > 0) {
+    const [itemSourceId] = Array.from(explicitItemSourceIds);
+    if (!expectedSourceIds.has(itemSourceId)) {
+      return {
+        valid: false,
+        message: `Your cart items do not match the selected ${sourceLabel}. Please review your cart and try again.`
+      };
+    }
+  }
+
+  if (normalizedPlatform === 'mogrocery') {
+    const invalidItemIds = uniqueItemIds.filter(
+      (itemId) => !mongoose.Types.ObjectId.isValid(itemId)
+    );
+    if (invalidItemIds.length > 0) {
+      return {
+        valid: false,
+        message: 'Some cart items are invalid. Please refresh cart and try again.'
+      };
+    }
+
+    const products = await GroceryProduct.find({
+      _id: { $in: uniqueItemIds.map((id) => new mongoose.Types.ObjectId(id)) }
+    })
+      .select('_id storeId')
+      .lean();
+
+    if (products.length !== uniqueItemIds.length) {
+      return {
+        valid: false,
+        message: 'Some cart items are unavailable for the selected store. Please refresh cart and try again.'
+      };
+    }
+
+    const productStoreIds = new Set(
+      products.map((product) => normalizeEntityId(product?.storeId)).filter(Boolean)
+    );
+
+    if (productStoreIds.size !== 1) {
+      return {
+        valid: false,
+        message: 'Your cart has items from multiple stores. Please keep items from one store only.'
+      };
+    }
+
+    if (expectedRestaurantObjectId && !productStoreIds.has(expectedRestaurantObjectId)) {
+      return {
+        valid: false,
+        message: 'Your cart items do not belong to the selected store. Please review cart and try again.'
+      };
+    }
+
+    return { valid: true };
+  }
+
+  if (!expectedRestaurantObjectId) {
+    return {
+      valid: false,
+      message: 'Unable to validate restaurant for cart items. Please try again.'
+    };
+  }
+
+  const menu = await Menu.findOne({
+    restaurant: expectedRestaurantObjectId,
+    isActive: true
+  }).lean();
+
+  if (!menu) {
+    return {
+      valid: false,
+      message: 'Restaurant menu is unavailable. Please try again.'
+    };
+  }
+
+  const menuItemsMap = buildMenuItemsMap(menu);
+  const invalidMenuItems = uniqueItemIds.filter((itemId) => !menuItemsMap.has(itemId));
+  if (invalidMenuItems.length > 0) {
+    return {
+      valid: false,
+      message: 'Your cart has items from another restaurant. Please keep items from one restaurant only.'
+    };
+  }
+
+  return { valid: true };
 };
 
 const buildEditedItemsForOrder = ({ order, incomingItems, menuItemsMap }) => {
@@ -882,6 +1049,23 @@ export const createOrder = async (req, res) => {
 
     assignedRestaurantId = restaurant._id?.toString() || restaurant.restaurantId;
     assignedRestaurantName = restaurant.name;
+
+    const singleSourceValidation = await validateSingleSourceOrderItems({
+      items,
+      platform: restaurantPlatform,
+      expectedRestaurant: {
+        _id: restaurant._id,
+        restaurantId: restaurant.restaurantId,
+        providedRestaurantId: normalizedIncomingRestaurantId,
+        slug: restaurant.slug
+      }
+    });
+    if (!singleSourceValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: singleSourceValidation.message
+      });
+    }
 
     // Always trust server-side pricing so plan benefits (free delivery/discount) are guaranteed.
     const couponCode = req.body?.couponCode || incomingPricing?.couponCode || incomingPricing?.appliedCoupon?.code || null;
@@ -2603,6 +2787,24 @@ export const calculateOrder = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: availability.reason || 'Restaurant is currently unavailable'
+      });
+    }
+
+    const platformForValidation = restaurant.platform === 'mogrocery' ? 'mogrocery' : 'mofood';
+    const singleSourceValidation = await validateSingleSourceOrderItems({
+      items,
+      platform: platformForValidation,
+      expectedRestaurant: {
+        _id: restaurant._id,
+        restaurantId: restaurant.restaurantId,
+        providedRestaurantId: normalizedRestaurantId,
+        slug: restaurant.slug
+      }
+    });
+    if (!singleSourceValidation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: singleSourceValidation.message
       });
     }
 

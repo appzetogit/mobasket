@@ -524,6 +524,21 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     const deductions = Math.max(0, Number(wallet.deductions) || 0);
     const availableCashLimit = Number(totalCashLimit) - cashInHand - deductions;
 
+    if (cashInHand >= totalCashLimit) {
+      return errorResponse(
+        res,
+        400,
+        'Cash in hand limit reached. Please deposit your cash in hand to continue receiving orders.',
+        {
+          pocketBalance,
+          cashInHand,
+          deductions,
+          totalCashLimit,
+          availableCashLimit
+        }
+      );
+    }
+
     if (pocketBalance < availableCashLimit) {
       return errorResponse(
         res,

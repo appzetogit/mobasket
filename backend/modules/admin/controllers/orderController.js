@@ -1560,6 +1560,7 @@ export const getRestaurantReport = asyncHandler(async (req, res) => {
   try {
     console.log('🔍 Fetching restaurant report...');
     const { 
+      platform,
       zone,
       all,
       type,
@@ -1567,7 +1568,7 @@ export const getRestaurantReport = asyncHandler(async (req, res) => {
       search
     } = req.query;
     
-    console.log('📋 Query params:', { zone, all, type, time, search });
+    console.log('📋 Query params:', { platform, zone, all, type, time, search });
 
     const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
     const AdminCommission = (await import('../models/AdminCommission.js')).default;
@@ -1575,6 +1576,13 @@ export const getRestaurantReport = asyncHandler(async (req, res) => {
 
     // Build restaurant query
     const restaurantQuery = {};
+    const andFilters = [];
+    const normalizedPlatform = String(platform || '').toLowerCase().trim();
+    if (normalizedPlatform === 'mogrocery') {
+      restaurantQuery.platform = 'mogrocery';
+    } else if (normalizedPlatform === 'mofood') {
+      andFilters.push({ $or: [{ platform: 'mofood' }, { platform: { $exists: false } }] });
+    }
 
     // Zone filter
     if (zone && zone !== 'All Zones') {
@@ -1590,10 +1598,12 @@ export const getRestaurantReport = asyncHandler(async (req, res) => {
         }).distinct('restaurantId').lean();
 
         if (ordersInZone.length > 0) {
-          restaurantQuery.$or = [
+          andFilters.push({
+            $or: [
             { _id: { $in: ordersInZone } },
             { restaurantId: { $in: ordersInZone } }
-          ];
+            ]
+          });
         } else {
           // No restaurants found in this zone
           return successResponse(res, 200, 'Restaurant report retrieved successfully', {
@@ -1616,10 +1626,15 @@ export const getRestaurantReport = asyncHandler(async (req, res) => {
 
     // Search filter
     if (search) {
-      restaurantQuery.$or = [
+      const searchQuery = [
         { name: { $regex: search, $options: 'i' } },
         { restaurantId: { $regex: search, $options: 'i' } }
       ];
+      andFilters.push({ $or: searchQuery });
+    }
+
+    if (andFilters.length > 0) {
+      restaurantQuery.$and = andFilters;
     }
 
     // Get all restaurants matching the query

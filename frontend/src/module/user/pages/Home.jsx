@@ -1388,6 +1388,15 @@ export default function Home() {
   }, [vegMode, restaurantsData, vegEligibilityByRestaurant]);
 
   const topCategories = useMemo(() => {
+    // Always prioritize admin-managed public categories so homepage category chips
+    // stay in sync with /admin/categories names and uploaded images.
+    if (Array.isArray(fallbackCategories) && fallbackCategories.length > 0) {
+      return fallbackCategories.map((category) => ({
+        ...category,
+        image: sanitizeImageSrc(category?.image, category?.slug || category?.name),
+      }));
+    }
+
     const seen = new Set();
     const derived = [];
 
@@ -1431,10 +1440,7 @@ export default function Home() {
     });
 
     if (derived.length > 0) return derived;
-    return fallbackCategories.map((category) => ({
-      ...category,
-      image: sanitizeImageSrc(category?.image, category?.slug || category?.name),
-    }));
+    return [];
   }, [restaurantsForVegMode, fallbackCategories]);
 
   const topBrandRestaurants = useMemo(
@@ -1450,6 +1456,16 @@ export default function Home() {
         }))
         .slice(0, 10),
     [restaurantsForVegMode],
+  );
+
+  const visibleTopBrands = useMemo(
+    () =>
+      (topBrandRestaurants || []).filter(
+        (restaurant) =>
+          String(restaurant?.name || "").trim() &&
+          (restaurant?.id || restaurant?.slug),
+      ),
+    [topBrandRestaurants],
   );
 
   // Featured foods removed - will be handled by restaurants data from API
@@ -2007,7 +2023,7 @@ export default function Home() {
             </h3>
           </div>
           <div
-            className="flex gap-3 sm:gap-4 lg:gap-5 xl:gap-6 overflow-x-auto overflow-y-visible scrollbar-hide scroll-smooth px-2 sm:px-3 lg:px-4 py-2 sm:py-3 lg:py-4"
+            className="flex items-start gap-3 sm:gap-4 lg:gap-5 xl:gap-6 overflow-x-auto overflow-y-visible scrollbar-hide scroll-smooth px-2 sm:px-3 lg:px-4 py-2 sm:py-3 lg:py-4 min-h-[110px] sm:min-h-[150px] md:min-h-[170px]"
             style={{
               scrollbarWidth: "none",
               msOverflowStyle: "none",
@@ -2015,23 +2031,29 @@ export default function Home() {
               overflowY: "hidden",
             }}
           >
-            {/* Map through restaurants data - show first 10 */}
-            {topBrandRestaurants.length > 0 ? (
+            {loadingRestaurants ? (
+              [...Array(6)].map((_, i) => (
+                <div
+                  key={`brand-skeleton-${i}`}
+                  className="flex flex-col items-center gap-2 w-[62px] sm:w-24 md:w-28 animate-pulse flex-shrink-0"
+                >
+                  <div className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full bg-gray-200 dark:bg-gray-800" />
+                  <div className="h-3 w-16 bg-gray-200 dark:bg-gray-800 rounded" />
+                </div>
+              ))
+            ) : visibleTopBrands.length > 0 ? (
               <>
-                {topBrandRestaurants.map((restaurant, index) => (
+                {visibleTopBrands.map((restaurant, index) => (
                   <motion.div
                     key={`brand-${restaurant.id || index}`}
                     className="flex-shrink-0"
-                    initial={{ opacity: 0, y: 20, scale: 0.9 }}
-                    whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                    viewport={{ once: true }}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
                     transition={{
-                      duration: 0.4,
-                      delay: index * 0.05,
-                      type: "spring",
-                      stiffness: 100,
+                      duration: 0.25,
+                      delay: Math.min(index * 0.03, 0.2),
                     }}
-                    whileHover={{ scale: 1.1, y: -5 }}
+                    whileHover={{ scale: 1.05, y: -3 }}
                     whileTap={{ scale: 0.95 }}
                   >
                     <Link
@@ -2060,11 +2082,10 @@ export default function Home() {
                 {/* See All button - show if there are more than 10 restaurants */}
                 <motion.div
                   className="flex-shrink-0 cursor-pointer"
-                  initial={{ opacity: 0, scale: 0.8 }}
-                  whileInView={{ opacity: 1, scale: 1 }}
-                  viewport={{ once: true }}
-                  transition={{ duration: 0.4, delay: 0.1 }}
-                  whileHover={{ scale: 1.1 }}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, delay: 0.1 }}
+                  whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => navigate("/user/restaurants")}
                 >
@@ -2081,16 +2102,9 @@ export default function Home() {
                 </motion.div>
               </>
             ) : (
-              // Loading skeleton or empty state
-              [...Array(5)].map((_, i) => (
-                <div
-                  key={i}
-                  className="flex flex-col items-center gap-2 w-[62px] sm:w-24 md:w-28 animate-pulse"
-                >
-                  <div className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full bg-gray-200 dark:bg-gray-800"></div>
-                  <div className="h-3 w-16 bg-gray-200 dark:bg-gray-800 rounded"></div>
-                </div>
-              ))
+              <div className="w-full py-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
+                No brands available right now
+              </div>
             )}
           </div>
         </motion.section>

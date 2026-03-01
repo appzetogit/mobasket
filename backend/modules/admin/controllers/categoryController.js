@@ -1,4 +1,5 @@
 import AdminCategoryManagement from '../models/AdminCategoryManagement.js';
+import RestaurantCategory from '../../restaurant/models/RestaurantCategory.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
@@ -20,19 +21,53 @@ const logger = winston.createLogger({
  */
 export const getPublicCategories = asyncHandler(async (req, res) => {
   try {
-    // Only get active categories for public access
-    const categories = await AdminCategoryManagement.find({ status: true })
+    // Active admin-managed categories
+    const adminCategories = await AdminCategoryManagement.find({ status: true })
       .select('name image _id type')
       .sort({ createdAt: -1 })
       .lean();
 
-    const formattedCategories = categories.map((category) => ({
-      id: category._id.toString(),
-      name: category.name,
-      image: category.image,
-      type: category.type || null,
-      slug: category.name.toLowerCase().replace(/\s+/g, '-')
-    }));
+    // Active restaurant-created categories (mofood only)
+    const restaurantCategoriesRaw = await RestaurantCategory.find({ isActive: true })
+      .select('name icon _id restaurant')
+      .populate({
+        path: 'restaurant',
+        select: 'platform',
+        match: { platform: 'mofood' }
+      })
+      .lean();
+
+    const restaurantCategories = restaurantCategoriesRaw
+      .filter((category) => Boolean(category.restaurant))
+      .map((category) => ({
+        _id: category._id,
+        name: category.name,
+        image: category.icon || '',
+        type: null
+      }));
+
+    // Merge and de-duplicate by normalized category name
+    const merged = [...adminCategories, ...restaurantCategories];
+    const seenNames = new Set();
+    const formattedCategories = [];
+
+    for (const category of merged) {
+      const normalizedName = String(category?.name || '').trim();
+      if (!normalizedName) continue;
+
+      const dedupeKey = normalizedName.toLowerCase().replace(/\s+/g, ' ').trim();
+      if (seenNames.has(dedupeKey)) continue;
+      seenNames.add(dedupeKey);
+
+      const slug = normalizedName.toLowerCase().replace(/\s+/g, '-');
+      formattedCategories.push({
+        id: category._id.toString(),
+        name: normalizedName,
+        image: category.image || 'https://via.placeholder.com/40',
+        type: category.type || null,
+        slug
+      });
+    }
 
     return successResponse(res, 200, 'Categories retrieved successfully', {
       categories: formattedCategories
@@ -50,13 +85,17 @@ export const getPublicCategories = asyncHandler(async (req, res) => {
 export const getCategories = asyncHandler(async (req, res) => {
   try {
     const { limit = 100, offset = 0, search, priority, status } = req.query;
+    const parsedLimit = Math.max(parseInt(limit, 10) || 100, 0);
+    const parsedOffset = Math.max(parseInt(offset, 10) || 0, 0);
+    const hasStatusFilter = status !== undefined;
+    const normalizedStatus = status === 'true' || status === true;
 
-    // Build query
-    const query = {};
+    // Build admin category query
+    const adminQuery = {};
 
     // Search filter
     if (search) {
-      query.$or = [
+      adminQuery.$or = [
         { name: { $regex: search, $options: 'i' } },
         { description: { $regex: search, $options: 'i' } },
         { type: { $regex: search, $options: 'i' } }
@@ -65,35 +104,75 @@ export const getCategories = asyncHandler(async (req, res) => {
 
     // Priority filter
     if (priority) {
-      query.priority = priority;
+      adminQuery.priority = priority;
     }
 
     // Status filter
-    if (status !== undefined) {
-      query.status = status === 'true' || status === true;
+    if (hasStatusFilter) {
+      adminQuery.status = normalizedStatus;
     }
 
-    // Get categories
-    const categories = await AdminCategoryManagement.find(query)
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .skip(parseInt(offset))
-      .lean();
+    const adminCategories = await AdminCategoryManagement.find(adminQuery).lean();
 
-    // Add serial numbers
-    const categoriesWithSl = categories.map((category, index) => ({
+    // Include restaurant-level categories so admin can see categories created by all mofood restaurants.
+    // Keep this excluded when priority filter is active because restaurant categories do not have a priority field.
+    let restaurantCategories = [];
+    if (!priority) {
+      const restaurantQuery = {};
+      if (search) {
+        restaurantQuery.$or = [
+          { name: { $regex: search, $options: 'i' } },
+          { description: { $regex: search, $options: 'i' } }
+        ];
+      }
+      if (hasStatusFilter) {
+        restaurantQuery.isActive = normalizedStatus;
+      }
+
+      const docs = await RestaurantCategory.find(restaurantQuery)
+        .populate({
+          path: 'restaurant',
+          select: 'name platform',
+          match: { platform: 'mofood' }
+        })
+        .lean();
+
+      restaurantCategories = docs
+        .filter((category) => Boolean(category.restaurant))
+        .map((category) => ({
+          ...category,
+          id: category._id?.toString(),
+          status: category.isActive !== false,
+          image: category.icon || 'https://via.placeholder.com/40',
+          type: 'Global',
+          source: 'restaurant',
+          readOnly: false
+        }));
+    }
+
+    const normalizedAdminCategories = adminCategories.map((category) => ({
       ...category,
-      sl: parseInt(offset) + index + 1,
       id: category._id.toString(),
+      source: 'admin',
+      readOnly: false
     }));
 
-    const total = await AdminCategoryManagement.countDocuments(query);
+    const mergedCategories = [...normalizedAdminCategories, ...restaurantCategories].sort(
+      (a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+    );
+
+    const paginatedCategories = mergedCategories
+      .slice(parsedOffset, parsedOffset + parsedLimit)
+      .map((category, index) => ({
+        ...category,
+        sl: parsedOffset + index + 1
+      }));
 
     return successResponse(res, 200, 'Categories retrieved successfully', {
-      categories: categoriesWithSl,
-      total,
-      limit: parseInt(limit),
-      offset: parseInt(offset)
+      categories: paginatedCategories,
+      total: mergedCategories.length,
+      limit: parsedLimit,
+      offset: parsedOffset
     });
   } catch (error) {
     logger.error(`Error fetching categories: ${error.message}`);
@@ -110,15 +189,36 @@ export const getCategoryById = asyncHandler(async (req, res) => {
     const { id } = req.params;
 
     const category = await AdminCategoryManagement.findById(id).lean();
+    if (category) {
+      return successResponse(res, 200, 'Category retrieved successfully', {
+        category: {
+          ...category,
+          id: category._id.toString(),
+          source: 'admin'
+        }
+      });
+    }
 
-    if (!category) {
+    const restaurantCategory = await RestaurantCategory.findById(id)
+      .populate({
+        path: 'restaurant',
+        select: 'name platform',
+        match: { platform: 'mofood' }
+      })
+      .lean();
+
+    if (!restaurantCategory || !restaurantCategory.restaurant) {
       return errorResponse(res, 404, 'Category not found');
     }
 
     return successResponse(res, 200, 'Category retrieved successfully', {
       category: {
-        ...category,
-        id: category._id.toString()
+        ...restaurantCategory,
+        id: restaurantCategory._id.toString(),
+        status: restaurantCategory.isActive !== false,
+        image: restaurantCategory.icon || 'https://via.placeholder.com/40',
+        type: 'Global',
+        source: 'restaurant'
       }
     });
   } catch (error) {
@@ -221,25 +321,78 @@ export const updateCategory = asyncHandler(async (req, res) => {
 
     const category = await AdminCategoryManagement.findById(id);
 
-    if (!category) {
+    if (category) {
+      // Check if name is being changed and if it conflicts with existing category
+      if (name && name.trim() !== category.name) {
+        const existingCategory = await AdminCategoryManagement.findOne({
+          name: { $regex: new RegExp(`^${name.trim()}$`, 'i') },
+          _id: { $ne: id }
+        });
+
+        if (existingCategory) {
+          return errorResponse(res, 400, 'Category with this name already exists');
+        }
+      }
+
+      // Handle image upload if file is provided (priority: file > existing image > URL string)
+      let imageUrl = category.image; // Keep existing image by default
+      
+      if (req.file) {
+        try {
+          const folder = 'mobasket/admin/categories';
+          const result = await uploadToCloudinary(req.file.buffer, {
+            folder,
+            resource_type: 'image',
+            transformation: [
+              { width: 400, height: 400, crop: 'fill', gravity: 'auto' },
+              { quality: 'auto' }
+            ]
+          });
+          imageUrl = result.secure_url;
+          logger.info(`Image uploaded to Cloudinary: ${imageUrl}`);
+        } catch (uploadError) {
+          logger.error(`Error uploading image: ${uploadError.message}`);
+          return errorResponse(res, 500, 'Failed to upload image');
+        }
+      } else if (image && typeof image === 'string' && image.trim() !== '') {
+        // Use provided image URL if no file is uploaded
+        imageUrl = image.trim();
+      }
+
+      // Update fields
+      if (name !== undefined) category.name = name.trim();
+      if (imageUrl !== undefined) category.image = imageUrl;
+      if (type !== undefined) category.type = type && type.trim() ? type.trim() : undefined;
+      if (status !== undefined) category.status = status;
+      category.updatedBy = req.user._id;
+
+      await category.save();
+
+      logger.info(`Category updated: ${id}`, {
+        updatedBy: req.user._id
+      });
+
+      return successResponse(res, 200, 'Category updated successfully', {
+        category: {
+          ...category.toObject(),
+          id: category._id.toString(),
+          source: 'admin'
+        }
+      });
+    }
+
+    const restaurantCategory = await RestaurantCategory.findById(id).populate({
+      path: 'restaurant',
+      select: 'name platform',
+      match: { platform: 'mofood' }
+    });
+
+    if (!restaurantCategory || !restaurantCategory.restaurant) {
       return errorResponse(res, 404, 'Category not found');
     }
 
-    // Check if name is being changed and if it conflicts with existing category
-    if (name && name.trim() !== category.name) {
-      const existingCategory = await AdminCategoryManagement.findOne({
-        name: { $regex: new RegExp(`^${name.trim()}$`, 'i') },
-        _id: { $ne: id }
-      });
-
-      if (existingCategory) {
-        return errorResponse(res, 400, 'Category with this name already exists');
-      }
-    }
-
-    // Handle image upload if file is provided (priority: file > existing image > URL string)
-    let imageUrl = category.image; // Keep existing image by default
-    
+    // Keep restaurant category icon in sync with image field used by admin UI.
+    let iconUrl = restaurantCategory.icon || '';
     if (req.file) {
       try {
         const folder = 'mobasket/admin/categories';
@@ -251,34 +404,29 @@ export const updateCategory = asyncHandler(async (req, res) => {
             { quality: 'auto' }
           ]
         });
-        imageUrl = result.secure_url;
-        logger.info(`Image uploaded to Cloudinary: ${imageUrl}`);
+        iconUrl = result.secure_url;
+        logger.info(`Restaurant category image uploaded to Cloudinary: ${iconUrl}`);
       } catch (uploadError) {
         logger.error(`Error uploading image: ${uploadError.message}`);
         return errorResponse(res, 500, 'Failed to upload image');
       }
     } else if (image && typeof image === 'string' && image.trim() !== '') {
-      // Use provided image URL if no file is uploaded
-      imageUrl = image.trim();
+      iconUrl = image.trim();
     }
 
-    // Update fields
-    if (name !== undefined) category.name = name.trim();
-    if (imageUrl !== undefined) category.image = imageUrl;
-    if (type !== undefined) category.type = type && type.trim() ? type.trim() : undefined;
-    if (status !== undefined) category.status = status;
-    category.updatedBy = req.user._id;
-
-    await category.save();
-
-    logger.info(`Category updated: ${id}`, {
-      updatedBy: req.user._id
-    });
+    if (name !== undefined) restaurantCategory.name = name.trim();
+    if (status !== undefined) restaurantCategory.isActive = status === 'true' || status === true;
+    if (iconUrl !== undefined) restaurantCategory.icon = iconUrl;
+    await restaurantCategory.save();
 
     return successResponse(res, 200, 'Category updated successfully', {
       category: {
-        ...category.toObject(),
-        id: category._id.toString()
+        ...restaurantCategory.toObject(),
+        id: restaurantCategory._id.toString(),
+        status: restaurantCategory.isActive !== false,
+        image: restaurantCategory.icon || 'https://via.placeholder.com/40',
+        type: 'Global',
+        source: 'restaurant'
       }
     });
   } catch (error) {
@@ -302,11 +450,35 @@ export const deleteCategory = asyncHandler(async (req, res) => {
 
     const category = await AdminCategoryManagement.findById(id);
 
-    if (!category) {
+    if (category) {
+      await AdminCategoryManagement.deleteOne({ _id: id });
+
+      logger.info(`Category deleted: ${id}`, {
+        deletedBy: req.user._id
+      });
+
+      return successResponse(res, 200, 'Category deleted successfully');
+    }
+
+    const restaurantCategory = await RestaurantCategory.findById(id).populate({
+      path: 'restaurant',
+      select: 'platform',
+      match: { platform: 'mofood' }
+    });
+
+    if (!restaurantCategory || !restaurantCategory.restaurant) {
       return errorResponse(res, 404, 'Category not found');
     }
 
-    await AdminCategoryManagement.deleteOne({ _id: id });
+    if (restaurantCategory.itemCount > 0) {
+      return errorResponse(
+        res,
+        400,
+        'Cannot delete category with items. Please remove all items first or deactivate the category.'
+      );
+    }
+
+    await RestaurantCategory.deleteOne({ _id: id });
 
     logger.info(`Category deleted: ${id}`, {
       deletedBy: req.user._id
@@ -329,23 +501,46 @@ export const toggleCategoryStatus = asyncHandler(async (req, res) => {
 
     const category = await AdminCategoryManagement.findById(id);
 
-    if (!category) {
+    if (category) {
+      category.status = !category.status;
+      category.updatedBy = req.user._id;
+      await category.save();
+
+      logger.info(`Category status toggled: ${id}`, {
+        status: category.status,
+        updatedBy: req.user._id
+      });
+
+      return successResponse(res, 200, 'Category status updated successfully', {
+        category: {
+          ...category.toObject(),
+          id: category._id.toString(),
+          source: 'admin'
+        }
+      });
+    }
+
+    const restaurantCategory = await RestaurantCategory.findById(id).populate({
+      path: 'restaurant',
+      select: 'name platform',
+      match: { platform: 'mofood' }
+    });
+
+    if (!restaurantCategory || !restaurantCategory.restaurant) {
       return errorResponse(res, 404, 'Category not found');
     }
 
-    category.status = !category.status;
-    category.updatedBy = req.user._id;
-    await category.save();
-
-    logger.info(`Category status toggled: ${id}`, {
-      status: category.status,
-      updatedBy: req.user._id
-    });
+    restaurantCategory.isActive = !restaurantCategory.isActive;
+    await restaurantCategory.save();
 
     return successResponse(res, 200, 'Category status updated successfully', {
       category: {
-        ...category.toObject(),
-        id: category._id.toString()
+        ...restaurantCategory.toObject(),
+        id: restaurantCategory._id.toString(),
+        status: restaurantCategory.isActive !== false,
+        image: restaurantCategory.icon || 'https://via.placeholder.com/40',
+        type: 'Global',
+        source: 'restaurant'
       }
     });
   } catch (error) {
