@@ -109,10 +109,11 @@ export default function SignIn() {
       })
 
       const accessToken = data.accessToken
+      const refreshToken = data.refreshToken
       const appUser = data.user
 
       if (accessToken && appUser) {
-        setAuthData("user", accessToken, appUser)
+        setAuthData("user", accessToken, appUser, refreshToken)
         window.dispatchEvent(new Event("userAuthChanged"))
 
         // Clear any URL hash or params

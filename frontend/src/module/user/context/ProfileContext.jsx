@@ -4,6 +4,12 @@ import { authAPI, userAPI } from "@/lib/api"
 const ProfileContext = createContext(null)
 
 export function ProfileProvider({ children }) {
+  const getValidLocalToken = () => {
+    const token = localStorage.getItem("user_accessToken")
+    if (!token || token === "null" || token === "undefined") return null
+    return token
+  }
+
   const resetUserState = () => {
     localStorage.removeItem("userProfile")
     localStorage.removeItem("userAddresses")
@@ -11,11 +17,14 @@ export function ProfileProvider({ children }) {
     localStorage.removeItem("userFavorites")
     localStorage.removeItem("userDishFavorites")
     localStorage.removeItem("mobasket_user_profile")
+    localStorage.removeItem("user_accessToken")
+    localStorage.removeItem("user_refreshToken")
+    localStorage.removeItem("user_authenticated")
+    localStorage.removeItem("user_user")
   }
 
   const [userProfile, setUserProfile] = useState(() => {
-    const isAuthenticated = localStorage.getItem("user_authenticated") === "true" ||
-      localStorage.getItem("user_accessToken")
+    const isAuthenticated = !!getValidLocalToken() || !!localStorage.getItem("user_refreshToken")
     if (!isAuthenticated) {
       return null
     }
@@ -139,11 +148,31 @@ export function ProfileProvider({ children }) {
   // Fetch user profile and addresses from API on mount and when authentication changes
   useEffect(() => {
     const fetchUserProfile = async () => {
-      // Check if user is authenticated
-      const isAuthenticated = localStorage.getItem("user_authenticated") === "true" || 
-                             localStorage.getItem("user_accessToken")
-      
-      if (!isAuthenticated) {
+      let accessToken = getValidLocalToken()
+      const refreshToken = localStorage.getItem("user_refreshToken")
+
+      // If access token is missing but refresh token exists, try silent refresh first.
+      if (!accessToken && refreshToken) {
+        try {
+          const refreshResponse = await authAPI.refreshToken()
+          const nextAccessToken =
+            refreshResponse?.data?.data?.accessToken || refreshResponse?.data?.accessToken
+          const nextRefreshToken =
+            refreshResponse?.data?.data?.refreshToken || refreshResponse?.data?.refreshToken
+          if (nextAccessToken) {
+            localStorage.setItem("user_accessToken", nextAccessToken)
+            localStorage.setItem("user_authenticated", "true")
+            accessToken = nextAccessToken
+          }
+          if (nextRefreshToken) {
+            localStorage.setItem("user_refreshToken", nextRefreshToken)
+          }
+        } catch {
+          // Silent refresh failed. We'll clear stale auth state below.
+        }
+      }
+
+      if (!accessToken) {
         setUserProfile(null)
         setAddresses([])
         resetUserState()

@@ -311,6 +311,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     // Return access token and delivery boy info
     return successResponse(res, 200, 'Authentication successful', {
       accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
       user: {
         id: delivery._id,
         deliveryId: delivery.deliveryId,
@@ -342,6 +343,7 @@ export const refreshToken = asyncHandler(async (req, res) => {
   const refreshToken =
     req.cookies?.deliveryRefreshToken ||
     req.cookies?.refreshToken ||
+    req.body?.refreshToken ||
     req.headers['x-refresh-token'];
 
   if (!refreshToken) {

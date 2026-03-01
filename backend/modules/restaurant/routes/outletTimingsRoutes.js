@@ -40,19 +40,19 @@ const toggleStatusSchema = Joi.object({
 router.use(authenticate);
 
 // Get outlet timings for authenticated restaurant
-router.get('/outlet-timings', getOutletTimings);
+router.get('/', getOutletTimings);
 
 // Create or update outlet timings
-router.put('/outlet-timings', validate(upsertOutletTimingsSchema), upsertOutletTimings);
+router.put('/', validate(upsertOutletTimingsSchema), upsertOutletTimings);
 
 // Update a specific day's timing
-router.patch('/outlet-timings/day/:day', validate(updateDayTimingSchema), updateDayTiming);
+router.patch('/day/:day', validate(updateDayTimingSchema), updateDayTiming);
 
 // Toggle outlet timings status
-router.patch('/outlet-timings/status', validate(toggleStatusSchema), toggleOutletTimingsStatus);
+router.patch('/status', validate(toggleStatusSchema), toggleOutletTimingsStatus);
 
 // Delete outlet timings (soft delete)
-router.delete('/outlet-timings', deleteOutletTimings);
+router.delete('/', deleteOutletTimings);
 
 export default router;
 

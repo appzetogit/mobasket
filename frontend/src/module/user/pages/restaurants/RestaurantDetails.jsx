@@ -2051,8 +2051,9 @@ export default function RestaurantDetails() {
     );
   }
 
-  // Only show grayscale when user is out of service (not based on restaurant availability)
-  const shouldShowGrayscale = isOutOfService;
+  const isRestaurantUnavailable = !restaurantAvailability.isAvailable;
+  // Show grayscale if either user is out of service OR restaurant is offline/closed as per outlet timings.
+  const shouldShowGrayscale = isOutOfService || isRestaurantUnavailable;
 
   return (
     <AnimatedPage
@@ -2060,7 +2061,7 @@ export default function RestaurantDetails() {
       className={`min-h-screen bg-white dark:bg-[#0a0a0a] flex flex-col transition-all duration-300 ${shouldShowGrayscale ? "grayscale opacity-75" : ""
         }`}
     >
-      {!restaurantAvailability.isAvailable && (
+      {isRestaurantUnavailable && (
         <div className="sticky top-0 z-[55] px-4 pt-2">
           <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2">
             <p className="text-xs font-semibold text-red-700">
@@ -4316,13 +4317,15 @@ export default function RestaurantDetails() {
         )}
 
       {/* Add to Cart Animation Component */}
-      <AddToCartAnimation
-        bottomOffset={24}
-        pillClassName="scale-105"
-        linkTo="/cart"
-        hideOnPages={true}
-        hideWhenGroceryCart={true}
-      />
+      {!isRestaurantUnavailable && (
+        <AddToCartAnimation
+          bottomOffset={24}
+          pillClassName="scale-105"
+          linkTo="/cart"
+          hideOnPages={true}
+          hideWhenGroceryCart={true}
+        />
+      )}
     </AnimatedPage>
   );
 }

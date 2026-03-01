@@ -3,6 +3,70 @@ import Restaurant from '../models/Restaurant.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 
+const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+const parseTimeToMinutes = (value) => {
+  if (!value || typeof value !== 'string') return null;
+  const normalized = value.trim().toUpperCase();
+  const match = normalized.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/);
+  if (!match) return null;
+
+  let hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const meridiem = match[3] || null;
+
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null;
+  if (minutes < 0 || minutes > 59) return null;
+
+  if (meridiem) {
+    if (hours < 1 || hours > 12) return null;
+    if (meridiem === 'PM' && hours !== 12) hours += 12;
+    if (meridiem === 'AM' && hours === 12) hours = 0;
+  } else if (hours < 0 || hours > 23) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+};
+
+const minutesToTime24 = (totalMinutes) => {
+  if (!Number.isInteger(totalMinutes) || totalMinutes < 0) return null;
+  const hours = Math.floor(totalMinutes / 60) % 24;
+  const minutes = totalMinutes % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+
+const syncRestaurantTimingFields = async (restaurantId, timings) => {
+  if (!restaurantId || !Array.isArray(timings) || timings.length === 0) return;
+
+  const openEntries = timings.filter((entry) => entry?.isOpen !== false);
+  const openDays = openEntries
+    .map((entry) => entry?.day)
+    .filter((day) => DAY_ORDER.includes(day));
+
+  const openingMinutes = openEntries
+    .map((entry) => parseTimeToMinutes(entry?.openingTime))
+    .filter((value) => Number.isFinite(value));
+  const closingMinutes = openEntries
+    .map((entry) => parseTimeToMinutes(entry?.closingTime))
+    .filter((value) => Number.isFinite(value));
+
+  const updateData = {
+    openDays,
+    // Keep storefront availability aligned with updated schedule edits.
+    // Schedule windows will still control closed/open in user module.
+    isAcceptingOrders: true,
+  };
+  if (openingMinutes.length > 0 && closingMinutes.length > 0) {
+    updateData.deliveryTimings = {
+      openingTime: minutesToTime24(Math.min(...openingMinutes)),
+      closingTime: minutesToTime24(Math.max(...closingMinutes)),
+    };
+  }
+
+  await Restaurant.findByIdAndUpdate(restaurantId, { $set: updateData });
+};
+
 /**
  * Get outlet timings for the authenticated restaurant
  * @route GET /api/restaurant/outlet-timings
@@ -41,14 +105,17 @@ export const getOutletTimings = asyncHandler(async (req, res) => {
 export const getOutletTimingsByRestaurantId = asyncHandler(async (req, res) => {
   const { restaurantId } = req.params;
 
-  // Verify restaurant exists and is active
-  const restaurant = await Restaurant.findById(restaurantId);
+  // Accept either Mongo _id or business restaurantId.
+  let restaurant = await Restaurant.findById(restaurantId);
+  if (!restaurant) {
+    restaurant = await Restaurant.findOne({ restaurantId });
+  }
   if (!restaurant || !restaurant.isActive) {
     return errorResponse(res, 404, 'Restaurant not found');
   }
 
   const outletTimings = await OutletTimings.findOne({ 
-    restaurantId,
+    restaurantId: restaurant._id,
     isActive: true 
   });
 
@@ -95,17 +162,16 @@ export const upsertOutletTimings = asyncHandler(async (req, res) => {
     return errorResponse(res, 400, 'All 7 days must be provided');
   }
 
-  const dayOrder = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   if (timings) {
     const presentDays = timings.map(t => t.day);
-    const allDaysPresent = dayOrder.every(day => presentDays.includes(day));
+    const allDaysPresent = DAY_ORDER.every(day => presentDays.includes(day));
     if (!allDaysPresent) {
       return errorResponse(res, 400, 'All 7 days (Monday-Sunday) must be present');
     }
 
     // Validate each day's timing format
     for (const timing of timings) {
-      if (!dayOrder.includes(timing.day)) {
+      if (!DAY_ORDER.includes(timing.day)) {
         return errorResponse(res, 400, `Invalid day: ${timing.day}`);
       }
 
@@ -126,7 +192,7 @@ export const upsertOutletTimings = asyncHandler(async (req, res) => {
     if (outletType) outletTimings.outletType = outletType;
     if (timings) {
       // Sort timings by day order
-      timings.sort((a, b) => dayOrder.indexOf(a.day) - dayOrder.indexOf(b.day));
+      timings.sort((a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day));
       outletTimings.timings = timings;
     }
     await outletTimings.save();
@@ -148,6 +214,8 @@ export const upsertOutletTimings = asyncHandler(async (req, res) => {
       timings: defaultTimings
     });
   }
+
+  await syncRestaurantTimingFields(restaurantId, outletTimings.timings);
 
   return successResponse(res, 200, 'Outlet timings updated successfully', {
     outletTimings
@@ -212,6 +280,7 @@ export const updateDayTiming = asyncHandler(async (req, res) => {
   }
 
   await outletTimings.save();
+  await syncRestaurantTimingFields(restaurantId, outletTimings.timings);
 
   return successResponse(res, 200, `${day} timing updated successfully`, {
     outletTimings

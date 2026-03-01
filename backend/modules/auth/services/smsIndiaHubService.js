@@ -7,17 +7,52 @@ import axios from "axios";
  */
 class SMSIndiaHubService {
   constructor() {
-    this.baseUrl = "http://cloud.smsindiahub.in/vendorsms/pushsms.aspx";
+    this.baseUrl =
+      process.env.SMSINDIAHUB_BASE_URL ||
+      "https://cloud.smsindiahub.in/vendorsms/pushsms.aspx";
+    this.requestTimeoutMs = Number(process.env.SMSINDIAHUB_TIMEOUT_MS || 7000);
+    this.credentialsCache = null;
+    this.credentialsCacheAt = 0;
+    this.companyNameCache = null;
+    this.companyNameCacheAt = 0;
+    this.cacheTtlMs = Number(process.env.SMSINDIAHUB_CACHE_TTL_MS || 300000); // 5 min
     this.initializeCredentials();
   }
 
+  isCacheValid(cacheAt) {
+    return cacheAt && Date.now() - cacheAt < this.cacheTtlMs;
+  }
+
+  clearRuntimeCache() {
+    this.credentialsCache = null;
+    this.credentialsCacheAt = 0;
+    this.companyNameCache = null;
+    this.companyNameCacheAt = 0;
+  }
+
   async getCredentials() {
+    if (this.credentialsCache && this.isCacheValid(this.credentialsCacheAt)) {
+      return this.credentialsCache;
+    }
+
     const { getSMSHubIndiaCredentials } = await import('../../../shared/utils/envService.js');
     const creds = await getSMSHubIndiaCredentials();
-    return {
-      apiKey: creds.apiKey?.trim() || '',
-      senderId: creds.senderId?.trim() || ''
+    const normalized = {
+      // Prefer Admin ENV setup values from DB, but keep process.env fallback for resilience.
+      apiKey: creds.apiKey?.trim() || process.env.SMSINDIAHUB_API_KEY?.trim() || '',
+      senderId: creds.senderId?.trim() || process.env.SMSINDIAHUB_SENDER_ID?.trim() || ''
     };
+
+    // Do not sticky-cache empty credentials; DB may not be ready yet during startup.
+    if (normalized.apiKey && normalized.senderId) {
+      this.credentialsCache = normalized;
+      this.credentialsCacheAt = Date.now();
+    } else {
+      this.credentialsCache = null;
+      this.credentialsCacheAt = 0;
+    }
+
+    return normalized;
   }
 
   async initializeCredentials() {
@@ -42,11 +77,20 @@ class SMSIndiaHubService {
    * Get company name from business settings
    */
   async getCompanyName() {
+    if (this.companyNameCache && this.isCacheValid(this.companyNameCacheAt)) {
+      return this.companyNameCache;
+    }
+
     try {
       const BusinessSettings = (await import('../../admin/models/BusinessSettings.js')).default;
       const settings = await BusinessSettings.getSettings();
-      return settings?.companyName || 'MoBasket';
+      const resolved = settings?.companyName || 'MoBasket';
+      this.companyNameCache = resolved;
+      this.companyNameCacheAt = Date.now();
+      return resolved;
     } catch (error) {
+      this.companyNameCache = 'MoBasket';
+      this.companyNameCacheAt = Date.now();
       return 'MoBasket';
     }
   }
@@ -186,18 +230,36 @@ class SMSIndiaHubService {
 
       const apiUrl = `${this.baseUrl}?${params.toString()}`;
 
-      // Make GET request to SMSIndia Hub API
-      const response = await axios.get(apiUrl, {
+      const requestConfig = {
         headers: {
           "User-Agent": "DriveOn/1.0",
           Accept:
             "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
         },
-        timeout: 15000, // 15 second timeout
-      });
+        timeout: this.requestTimeoutMs,
+      };
 
-      console.log("📱 SMSIndia Hub Response Status:", response.status);
-      console.log("📱 SMSIndia Hub Response Data:", response.data);
+      // Make GET request to SMSIndia Hub API
+      let response;
+      try {
+        response = await axios.get(apiUrl, requestConfig);
+      } catch (firstError) {
+        const shouldRetry =
+          firstError?.code === "ECONNABORTED" ||
+          firstError?.code === "ECONNRESET" ||
+          firstError?.code === "ETIMEDOUT";
+        if (!shouldRetry) throw firstError;
+        // One fast retry for transient network jitter.
+        response = await axios.get(apiUrl, {
+          ...requestConfig,
+          timeout: Math.min(this.requestTimeoutMs, 5000),
+        });
+      }
+
+      if (process.env.NODE_ENV === "development") {
+        console.log("📱 SMSIndia Hub Response Status:", response.status);
+        console.log("📱 SMSIndia Hub Response Data:", response.data);
+      }
 
       // SMSIndia Hub can return JSON or plain text response
       let responseData = response.data;
@@ -205,7 +267,9 @@ class SMSIndiaHubService {
         ? responseData 
         : JSON.stringify(responseData);
       
-      console.log("📱 SMSIndia Hub Response Text:", responseText);
+      if (process.env.NODE_ENV === "development") {
+        console.log("📱 SMSIndia Hub Response Text:", responseText);
+      }
       
       // Try to parse as JSON first (SMSIndia Hub sometimes returns JSON)
       let parsedResponse = null;

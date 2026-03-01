@@ -122,20 +122,19 @@ export const getRestaurants = async (req, res) => {
       maxPrice,
       hasOffers,
       platform,
-      zoneId // User's zone ID (optional - if provided, filters by zone)
+      zoneId // User's zone ID (optional - used only for validation/metadata)
     } = req.query;
     const requestedPlatform = normalizePlatformFilter(platform);
     
-    // Optional: Zone-based filtering - if zoneId is provided, validate and filter by zone
+    // Optional: Zone lookup - if zoneId is provided, validate if possible.
+    // Do not hard-fail listing when zone is missing/invalid because home should still show all active restaurants.
     let userZone = null;
     if (zoneId) {
-      // Validate zone exists and is active
       userZone = await Zone.findById(zoneId).lean();
       if (!userZone || !userZone.isActive) {
-        return errorResponse(res, 400, 'Invalid or inactive zone. Please detect your zone again.');
-      }
-      if (requestedPlatform && userZone.platform && userZone.platform !== requestedPlatform) {
-        return errorResponse(res, 400, 'Selected zone does not match the requested platform.');
+        userZone = null;
+      } else if (requestedPlatform && userZone.platform && userZone.platform !== requestedPlatform) {
+        userZone = null;
       }
     }
     
@@ -242,12 +241,17 @@ export const getRestaurants = async (req, res) => {
 
       const lat = Number(restaurant?.location?.latitude ?? restaurant?.location?.coordinates?.[1]);
       const lng = Number(restaurant?.location?.longitude ?? restaurant?.location?.coordinates?.[0]);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return true;
 
       const platformZones = restaurantPlatform === 'mogrocery' ? mogroceryZones : mofoodZones;
       const restaurantZoneId = getRestaurantZoneId(lat, lng, platformZones);
-      if (!restaurantZoneId) return false;
-      if (userZoneIdNormalized && restaurantZoneId !== userZoneIdNormalized) return false;
+      if (!restaurantZoneId) return true;
+
+      // Keep optional strict zone filter only when explicitly requested.
+      if (req.query.onlyZone === 'true' && userZoneIdNormalized && restaurantZoneId !== userZoneIdNormalized) {
+        return false;
+      }
+
       return true;
     });
     

@@ -19,18 +19,28 @@ export default function ProtectedRoute({ children }) {
 
       try {
         // Silent recovery: if access token expired, try refresh once before forcing sign-in.
+        const fallbackRefreshToken = localStorage.getItem("delivery_refreshToken")
         const response = await axios.post(
           `${API_BASE_URL}/delivery/auth/refresh-token`,
-          {},
-          { withCredentials: true }
+          { refreshToken: fallbackRefreshToken || undefined },
+          {
+            withCredentials: true,
+            headers: fallbackRefreshToken
+              ? { "x-refresh-token": fallbackRefreshToken }
+              : undefined,
+          }
         )
 
         const accessToken = response?.data?.data?.accessToken || response?.data?.accessToken
+        const refreshToken = response?.data?.data?.refreshToken || response?.data?.refreshToken
         const role = getRoleFromToken(accessToken)
 
         if (accessToken && role === "delivery") {
           localStorage.setItem("delivery_accessToken", accessToken)
           localStorage.setItem("delivery_authenticated", "true")
+          if (refreshToken) {
+            localStorage.setItem("delivery_refreshToken", refreshToken)
+          }
           if (isMounted) setAuthState("authenticated")
           return
         }

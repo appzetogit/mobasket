@@ -8,8 +8,11 @@ import { MobileTimePicker } from "@mui/x-date-pickers/MobileTimePicker"
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider"
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
+import { restaurantAPI } from "@/lib/api"
+import { toast } from "sonner"
 
 const STORAGE_KEY = "restaurant_outlet_timings"
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 // Helper function to convert "HH:mm" string to Date object
 const stringToTime = (timeString) => {
@@ -53,20 +56,51 @@ const getDefaultDays = () => ({
   Sunday: { isOpen: true, openingTime: "09:00", closingTime: "22:00" },
 })
 
+const normalizeTime = (value, fallback) => {
+  if (!value || typeof value !== "string") return fallback
+  const parsed = stringToTime(value)
+  return timeToString(parsed)
+}
+
+const mapApiTimingsToDays = (timings) => {
+  const next = getDefaultDays()
+  if (!Array.isArray(timings)) return next
+
+  timings.forEach((entry) => {
+    const day = entry?.day
+    if (!DAY_NAMES.includes(day)) return
+    next[day] = {
+      isOpen: entry?.isOpen !== false,
+      openingTime: normalizeTime(entry?.openingTime, "09:00"),
+      closingTime: normalizeTime(entry?.closingTime, "22:00"),
+    }
+  })
+
+  return next
+}
+
+const mapDaysToApiTimings = (days) =>
+  DAY_NAMES.map((day) => ({
+    day,
+    isOpen: days?.[day]?.isOpen !== false,
+    openingTime: normalizeTime(days?.[day]?.openingTime, "09:00"),
+    closingTime: normalizeTime(days?.[day]?.closingTime, "22:00"),
+  }))
+
 export default function OutletTimings() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
   const [expandedDay, setExpandedDay] = useState("Monday")
   const isInternalUpdate = useRef(false)
+  const saveTimeoutRef = useRef(null)
   const [days, setDays] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
         // Validate and ensure all days have proper structure
-        const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         const validated = {}
-        dayNames.forEach(day => {
+        DAY_NAMES.forEach(day => {
           if (parsed[day]) {
             // Migrate from old slot-based format to new time-based format
             if (parsed[day].slots && Array.isArray(parsed[day].slots) && parsed[day].slots.length > 0) {
@@ -104,7 +138,7 @@ export default function OutletTimings() {
     return getDefaultDays()
   })
 
-  // Save to localStorage whenever days change (but only if it's an internal update)
+  // Save to localStorage and backend whenever days change via this page.
   useEffect(() => {
     if (isInternalUpdate.current) {
       try {
@@ -114,9 +148,54 @@ export default function OutletTimings() {
       } catch (error) {
         console.error("Error saving outlet timings:", error)
       }
+
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+      }
+      saveTimeoutRef.current = setTimeout(async () => {
+        try {
+          await restaurantAPI.upsertOutletTimings({
+            outletType: "MoBasket delivery",
+            timings: mapDaysToApiTimings(days),
+          })
+        } catch (error) {
+          console.error("Error syncing outlet timings to backend:", error)
+          toast.error("Failed to sync outlet timings. Please try again.")
+        }
+      }, 450)
+
       isInternalUpdate.current = false
     }
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current)
+      }
+    }
   }, [days])
+
+  // Load outlet timings from backend first so user-side availability uses real saved timings.
+  useEffect(() => {
+    const loadFromApi = async () => {
+      try {
+        const response = await restaurantAPI.getOutletTimings()
+        const apiTimings =
+          response?.data?.data?.outletTimings?.timings ||
+          response?.data?.outletTimings?.timings ||
+          []
+        if (Array.isArray(apiTimings) && apiTimings.length > 0) {
+          const mapped = mapApiTimingsToDays(apiTimings)
+          setDays(mapped)
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped))
+          window.dispatchEvent(new Event("outletTimingsUpdated"))
+        }
+      } catch (error) {
+        console.error("Error loading outlet timings from backend:", error)
+      }
+    }
+
+    loadFromApi()
+  }, [])
 
   // Listen for updates from other components
   useEffect(() => {
@@ -204,8 +283,6 @@ export default function OutletTimings() {
     }))
   }
 
-  const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
   return (
     <LocalizationProvider dateAdapter={AdapterDateFns}>
       <div className="min-h-screen bg-white overflow-x-hidden">
@@ -235,7 +312,7 @@ export default function OutletTimings() {
 
           {/* Day-wise Accordion */}
           <div className="space-y-2">
-            {dayNames.map((day, index) => {
+            {DAY_NAMES.map((day, index) => {
               const dayData = days[day] || { isOpen: true, openingTime: "09:00", closingTime: "22:00" }
               const isExpanded = expandedDay === day
 

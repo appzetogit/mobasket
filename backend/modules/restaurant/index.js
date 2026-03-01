@@ -94,6 +94,10 @@ router.get('/wallet/stats', authenticate, getWalletStats);
 router.post('/withdrawal/request', authenticate, createWithdrawalRequest);
 router.get('/withdrawal/requests', authenticate, getRestaurantWithdrawalRequests);
 
+// Outlet Timings routes (authenticated - for restaurant module)
+// Mount on dedicated prefix so auth middleware does not intercept unrelated public routes like /list.
+router.use('/outlet-timings', outletTimingsRoutes);
+
 // Restaurant routes (public - for user module)
 router.get('/list', getRestaurants);
 router.get('/under-250', getRestaurantsWithDishesUnder250);
@@ -116,9 +120,5 @@ router.post('/profile/menu-image', authenticate, uploadMiddleware.single('file')
 
 // Delivery status route (authenticated - for restaurant module)
 router.put('/delivery-status', authenticate, updateDeliveryStatus);
-
-// Outlet Timings routes (authenticated - for restaurant module)
-// Must come after all /:id routes to avoid route conflicts
-router.use('/', outletTimingsRoutes);
 
 export default router;

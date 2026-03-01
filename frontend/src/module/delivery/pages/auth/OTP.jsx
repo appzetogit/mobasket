@@ -193,6 +193,7 @@ export default function DeliveryOTP() {
       if (data.needsSignup) {
         // Store tokens for authenticated signup flow
         const accessToken = data.accessToken
+        const refreshToken = data.refreshToken
         const user = data.user
 
         if (!accessToken || !user) {
@@ -202,7 +203,7 @@ export default function DeliveryOTP() {
         // Store auth data using utility function
         try {
           console.log("Storing auth data for signup flow:", { hasToken: !!accessToken, hasUser: !!user })
-          storeAuthData("delivery", accessToken, user)
+          storeAuthData("delivery", accessToken, user, refreshToken)
           console.log("Auth data stored successfully for signup")
         } catch (storageError) {
           console.error("Failed to store authentication data:", storageError)
@@ -224,6 +225,7 @@ export default function DeliveryOTP() {
 
       // Otherwise, OTP verified and user logged in (existing user with complete profile)
       const accessToken = data.accessToken
+      const refreshToken = data.refreshToken
       const user = data.user
 
       if (!accessToken || !user) {
@@ -237,7 +239,7 @@ export default function DeliveryOTP() {
       // The setAuthData function includes error handling and verification
       try {
         console.log("Storing auth data for delivery:", { hasToken: !!accessToken, hasUser: !!user })
-        storeAuthData("delivery", accessToken, user)
+        storeAuthData("delivery", accessToken, user, refreshToken)
         console.log("Auth data stored successfully")
       } catch (storageError) {
         console.error("Failed to store authentication data:", storageError)
@@ -319,6 +321,7 @@ export default function DeliveryOTP() {
       const data = response?.data?.data || {}
 
       const accessToken = data.accessToken
+      const refreshToken = data.refreshToken
       const user = data.user
 
       if (!accessToken || !user) {
@@ -332,7 +335,7 @@ export default function DeliveryOTP() {
       // The setAuthData function includes error handling and verification
       try {
         console.log("Storing auth data for delivery (with name):", { hasToken: !!accessToken, hasUser: !!user })
-        storeAuthData("delivery", accessToken, user)
+        storeAuthData("delivery", accessToken, user, refreshToken)
         console.log("Auth data stored successfully")
       } catch (storageError) {
         console.error("Failed to store authentication data:", storageError)

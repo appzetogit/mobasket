@@ -32,6 +32,8 @@ const cuisinesOptions = [
 ]
 
 const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+const DEFAULT_OPENING_TIME = "09:00"
+const DEFAULT_CLOSING_TIME = "22:00"
 
 const ONBOARDING_STORAGE_KEY = "restaurant_onboarding_data"
 
@@ -196,8 +198,8 @@ export default function RestaurantOnboarding() {
     menuImages: [],
     profileImage: null,
     cuisines: [],
-    openingTime: "",
-    closingTime: "",
+    openingTime: DEFAULT_OPENING_TIME,
+    closingTime: DEFAULT_CLOSING_TIME,
     openDays: [],
   })
 
@@ -262,8 +264,8 @@ export default function RestaurantOnboarding() {
           menuImages: localData.step2.menuImages || [],
           profileImage: localData.step2.profileImage || null,
           cuisines: localData.step2.cuisines || [],
-          openingTime: localData.step2.openingTime || "",
-          closingTime: localData.step2.closingTime || "",
+          openingTime: localData.step2.openingTime || DEFAULT_OPENING_TIME,
+          closingTime: localData.step2.closingTime || DEFAULT_CLOSING_TIME,
           openDays: localData.step2.openDays || [],
         })
       }
@@ -337,8 +339,8 @@ export default function RestaurantOnboarding() {
               // Load profile image URL if available
               profileImage: data.step2.profileImageUrl || null,
               cuisines: data.step2.cuisines || [],
-              openingTime: data.step2.deliveryTimings?.openingTime || "",
-              closingTime: data.step2.deliveryTimings?.closingTime || "",
+              openingTime: data.step2.deliveryTimings?.openingTime || DEFAULT_OPENING_TIME,
+              closingTime: data.step2.deliveryTimings?.closingTime || DEFAULT_CLOSING_TIME,
               openDays: data.step2.openDays || [],
             })
           }

@@ -237,6 +237,7 @@ export default function OTP() {
 
       // Otherwise, OTP verified and user logged in/registered
       const accessToken = data.accessToken
+      const refreshToken = data.refreshToken
       const user = data.user
 
       if (!accessToken || !user) {
@@ -248,7 +249,7 @@ export default function OTP() {
       localStorage.removeItem("userAuthData")
 
       // Replace old token with new one (handles cross-module login)
-      setUserAuthData("user", accessToken, user)
+      setUserAuthData("user", accessToken, user, refreshToken)
 
       // Dispatch custom event for same-tab updates
       window.dispatchEvent(new Event("userAuthChanged"))
@@ -302,6 +303,7 @@ export default function OTP() {
       const data = response?.data?.data || {}
 
       const accessToken = data.accessToken
+      const refreshToken = data.refreshToken
       const user = data.user
 
       if (!accessToken || !user) {
@@ -313,7 +315,7 @@ export default function OTP() {
       localStorage.removeItem("userAuthData")
 
       // Replace old token with new one (handles cross-module login)
-      setUserAuthData("user", accessToken, user)
+      setUserAuthData("user", accessToken, user, refreshToken)
 
       // Dispatch custom event for same-tab updates
       window.dispatchEvent(new Event("userAuthChanged"))

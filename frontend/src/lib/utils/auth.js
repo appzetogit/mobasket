@@ -128,11 +128,19 @@ export function getCurrentUserRole(module = null) {
  */
 export function isModuleAuthenticated(module) {
   const token = getModuleToken(module);
-  if (!token) return false;
+  const hasRefreshToken = !!localStorage.getItem(`${module}_refreshToken`);
+  if (!token) {
+    // Allow refresh-only sessions; interceptors/guards can issue silent refresh.
+    return hasRefreshToken;
+  }
   
   if (isTokenExpired(token)) {
-    clearModuleAuth(module);
-    return false;
+    // Keep session alive if a refresh token exists; axios/route guards can refresh access token lazily.
+    if (!hasRefreshToken) {
+      clearModuleAuth(module);
+      return false;
+    }
+    return true;
   }
   
   return true;
@@ -144,6 +152,7 @@ export function isModuleAuthenticated(module) {
  */
 export function clearModuleAuth(module) {
   localStorage.removeItem(`${module}_accessToken`);
+  localStorage.removeItem(`${module}_refreshToken`);
   localStorage.removeItem(`${module}_authenticated`);
   localStorage.removeItem(`${module}_user`);
   // Also clear any sessionStorage data
@@ -226,9 +235,9 @@ export function setAuthData(module, token, user, refreshToken) {
     localStorage.setItem(tokenKey, token);
     localStorage.setItem(authKey, 'true');
 
-    if (module === 'grocery-store' && refreshToken) {
+    if (refreshToken) {
       try {
-        localStorage.setItem('grocery-store_refreshToken', refreshToken);
+        localStorage.setItem(`${module}_refreshToken`, refreshToken);
       } catch (e) {
         console.warn('Failed to store refresh token:', e);
       }

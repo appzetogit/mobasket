@@ -1,14 +1,7 @@
-import { useEffect, useMemo, useState } from "react"
+ï»¿import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
-import { Mail, ChevronDown, Phone } from "lucide-react"
+import { Mail, Phone } from "lucide-react"
 import { setAuthData } from "@/lib/utils/auth"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { restaurantAPI } from "@/lib/api"
 import api from "@/lib/api"
@@ -19,29 +12,7 @@ import { loadBusinessSettings } from "@/lib/utils/businessSettings"
 import PolicyModal from "@/components/legal/PolicyModal"
 import { redirectRestaurantAfterAuth } from "../../utils/onboardingUtils"
 
-// Common country codes
-const countryCodes = [
-  { code: "+1", country: "US/CA", flag: "????" },
-  { code: "+44", country: "UK", flag: "????" },
-  { code: "+91", country: "IN", flag: "????" },
-  { code: "+86", country: "CN", flag: "????" },
-  { code: "+81", country: "JP", flag: "????" },
-  { code: "+49", country: "DE", flag: "????" },
-  { code: "+33", country: "FR", flag: "????" },
-  { code: "+39", country: "IT", flag: "????" },
-  { code: "+34", country: "ES", flag: "????" },
-  { code: "+61", country: "AU", flag: "????" },
-  { code: "+7", country: "RU", flag: "????" },
-  { code: "+55", country: "BR", flag: "????" }, 
-  { code: "+52", country: "MX", flag: "????" },
-  { code: "+82", country: "KR", flag: "????" },
-  { code: "+65", country: "SG", flag: "????" },
-  { code: "+971", country: "AE", flag: "????" },
-  { code: "+966", country: "SA", flag: "????" },
-  { code: "+27", country: "ZA", flag: "????" },
-  { code: "+31", country: "NL", flag: "????" },
-  { code: "+46", country: "SE", flag: "????" },
-]
+const INDIA_COUNTRY = { code: "+91", country: "IN", flag: "IN" }
 
 export default function RestaurantLogin() {
   const companyName = useCompanyName()
@@ -95,7 +66,7 @@ export default function RestaurantLogin() {
   }, [])
 
   // Get selected country details dynamically
-  const selectedCountry = countryCodes.find(c => c.code === formData.countryCode) || countryCodes[2] // Default to India (+91)
+  const selectedCountry = INDIA_COUNTRY
 
   // Phone number validation
   const validatePhone = (phone, countryCode) => {
@@ -336,20 +307,6 @@ export default function RestaurantLogin() {
     setErrors({ ...errors, phone: error })
   }
 
-  const handleCountryCodeChange = (value) => {
-    const newFormData = {
-      ...formData,
-      countryCode: value,
-    }
-    setFormData(newFormData)
-    
-    // Re-validate phone if it's been touched
-    if (touched.phone) {
-      const error = validatePhone(formData.phone, value)
-      setErrors({ ...errors, phone: error })
-    }
-  }
-
   const isValidPhone = !errors.phone && formData.phone.trim().length > 0
   const isValidEmail = !errors.email && formData.email.trim().length > 0
   const displayCompanyName = useMemo(() => {
@@ -432,7 +389,7 @@ export default function RestaurantLogin() {
         {/* Restaurant Partner Badge */}
         <div className="">
           <span className="text-gray-600 font-light text-sm tracking-wide block text-center">
-          — restaurant partner —
+          â€” restaurant partner â€”
           </span>
         </div>        
       </div>
@@ -454,31 +411,16 @@ export default function RestaurantLogin() {
           {loginMethod === "phone" && (
             <div className="space-y-4">
               <div className="flex gap-2 items-stretch w-full">
-                {/* Country Code Selector */}
-                <Select
-                  value={formData.countryCode}
-                  onValueChange={handleCountryCodeChange}
+                {/* Country Code (India only) */}
+                <div
+                  className="w-[100px] h-12 border border-gray-300 rounded-lg bg-gray-50 flex items-center justify-center shrink-0"
+                  style={{ height: "48px" }}
                 >
-                  <SelectTrigger className="w-[100px] h-12 border border-gray-300 rounded-lg bg-gray-50 hover:bg-gray-100 flex items-center shrink-0" style={{ height: '48px' }}>
-                    <SelectValue>
-                      <span className="flex items-center gap-1.5">
-                        <span className="text-base">{selectedCountry.flag}</span>
-                        <span className="text-sm font-medium text-gray-900">{selectedCountry.code}</span>
-                        <ChevronDown className="w-3.5 h-3.5 text-gray-500" />
-                      </span>
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent className="max-h-[300px] overflow-y-auto">
-                    {countryCodes.map((country) => (
-                      <SelectItem key={country.code} value={country.code}>
-                        <span className="flex items-center gap-2">
-                          <span>{country.flag}</span>
-                          <span>{country.code}</span>
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  <span className="flex items-center gap-1.5">
+                    <span className="text-xs font-semibold text-gray-700">{selectedCountry.flag}</span>
+                    <span className="text-sm font-medium text-gray-900">{selectedCountry.code}</span>
+                  </span>
+                </div>
                 
                 {/* Phone Number Input */}
                 <div className="flex-1 flex flex-col">
@@ -631,9 +573,9 @@ export default function RestaurantLogin() {
           </p>
           <div className="text-xs text-center text-gray-600 mt-1 flex justify-center gap-2 flex-wrap">
             {renderPolicyLink("Terms of Service", "terms")}
-            <span>•</span>
+            <span>â€¢</span>
             {renderPolicyLink("Privacy Policy", "privacy")}
-            <span>•</span>
+            <span>â€¢</span>
             {renderPolicyLink("Code of Conduct", "content")}
           </div>
         </div>
@@ -649,4 +591,7 @@ export default function RestaurantLogin() {
     </div>
   )
 }
+
+
+
 

@@ -101,7 +101,6 @@ class OTPService {
       // Generate OTP
       // Use fixed OTP for default test number only.
       const isDefaultTestNumber = normalizedPhone === '+917610416911';
-      const smsConfigured = normalizedPhone ? await smsIndiaHubService.isConfigured() : true;
       const otp = isDefaultTestNumber ? '110211' : generateOTP();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
@@ -130,11 +129,6 @@ class OTPService {
       // Send OTP via SMS or Email
       // For default test number, skip external SMS and rely on static OTP 110211.
       if (normalizedPhone && !isDefaultTestNumber) {
-        if (!smsConfigured) {
-          throw new Error(
-            'SMS service is not configured. Please set SMSINDIAHUB_API_KEY and SMSINDIAHUB_SENDER_ID in Admin > ENV Setup.'
-          );
-        }
         await smsIndiaHubService.sendOTP(normalizedPhone, otp, purpose);
       } else if (email) {
         // Keep email service as is

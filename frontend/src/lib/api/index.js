@@ -367,6 +367,17 @@ export const restaurantAPI = {
     return apiClient.put(API_ENDPOINTS.RESTAURANT.DELIVERY_STATUS, { isAcceptingOrders });
   },
 
+  // Outlet timings
+  getOutletTimings: () => {
+    return apiClient.get('/restaurant/outlet-timings');
+  },
+  upsertOutletTimings: (payload) => {
+    return apiClient.put('/restaurant/outlet-timings', payload);
+  },
+  updateOutletDayTiming: (day, payload) => {
+    return apiClient.patch(`/restaurant/outlet-timings/day/${day}`, payload);
+  },
+
   // Upload profile image
   uploadProfileImage: (file) => {
     const formData = new FormData();

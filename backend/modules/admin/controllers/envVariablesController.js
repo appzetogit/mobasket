@@ -2,6 +2,7 @@ import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import EnvironmentVariable from '../models/EnvironmentVariable.js';
 import { clearEnvCache } from '../../../shared/utils/envService.js';
+import smsIndiaHubService from '../../auth/services/smsIndiaHubService.js';
 import { resetFirebaseAdmin } from '../../../shared/services/firebaseAdminService.js';
 import { initializeFirebaseRealtime, resetFirebaseRealtimeState } from '../../../shared/services/firebaseRealtimeService.js';
 import { reinitializeCloudinary } from '../../../config/cloudinary.js';
@@ -176,6 +177,9 @@ export const saveEnvVariables = asyncHandler(async (req, res) => {
     // Clear cache to force refresh
     try {
       clearEnvCache();
+      if (typeof smsIndiaHubService?.clearRuntimeCache === 'function') {
+        smsIndiaHubService.clearRuntimeCache();
+      }
       logger.info('Environment cache cleared');
     } catch (cacheError) {
       logger.warn('Error clearing cache:', cacheError.message);

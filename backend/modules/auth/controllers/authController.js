@@ -29,6 +29,28 @@ const getSafeOtpErrorMessage = (error) => {
   return rawMessage || "Failed to send OTP. Please try again.";
 };
 
+const setUserRefreshCookies = (res, token) => {
+  const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  };
+  // Keep legacy cookie for backward compatibility and add module-specific cookie to avoid collisions.
+  res.cookie('refreshToken', token, cookieOptions);
+  res.cookie('userRefreshToken', token, cookieOptions);
+};
+
+const clearUserRefreshCookies = (res) => {
+  const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict'
+  };
+  res.clearCookie('refreshToken', cookieOptions);
+  res.clearCookie('userRefreshToken', cookieOptions);
+};
+
 /**
  * Send OTP for phone number or email
  * POST /api/auth/send-otp
@@ -282,17 +304,12 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       phone: user.phone
     });
 
-    // Set refresh token in httpOnly cookie
-    res.cookie('refreshToken', tokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    });
+    setUserRefreshCookies(res, tokens.refreshToken);
 
     // Return access token and user info
     return successResponse(res, 200, 'Authentication successful', {
       accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
       user: {
         id: user._id,
         name: user.name,
@@ -315,8 +332,12 @@ export const verifyOTP = asyncHandler(async (req, res) => {
  * POST /api/auth/refresh-token
  */
 export const refreshToken = asyncHandler(async (req, res) => {
-  // Get refresh token from cookie
-  const refreshToken = req.cookies?.refreshToken;
+  // Get refresh token from module-specific cookie first, then legacy cookie/body/header fallback.
+  const refreshToken =
+    req.cookies?.userRefreshToken ||
+    req.cookies?.refreshToken ||
+    req.body?.refreshToken ||
+    req.headers['x-refresh-token'];
 
   if (!refreshToken) {
     return errorResponse(res, 401, 'Refresh token not found');
@@ -353,12 +374,7 @@ export const refreshToken = asyncHandler(async (req, res) => {
  * POST /api/auth/logout
  */
 export const logout = asyncHandler(async (req, res) => {
-  // Clear refresh token cookie
-  res.clearCookie('refreshToken', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict'
-  });
+  clearUserRefreshCookies(res);
 
   return successResponse(res, 200, 'Logged out successfully');
 });
@@ -416,18 +432,13 @@ export const register = asyncHandler(async (req, res) => {
     email: user.email
   });
 
-  // Set refresh token in httpOnly cookie
-  res.cookie('refreshToken', tokens.refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-  });
+  setUserRefreshCookies(res, tokens.refreshToken);
 
   logger.info(`New user registered via email: ${user._id}`, { email, userId: user._id, role: userRole });
 
   return successResponse(res, 201, 'Registration successful', {
     accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
     user: {
       id: user._id,
       name: user.name,
@@ -493,18 +504,13 @@ export const login = asyncHandler(async (req, res) => {
     email: user.email
   });
 
-  // Set refresh token in httpOnly cookie
-  res.cookie('refreshToken', tokens.refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-  });
+  setUserRefreshCookies(res, tokens.refreshToken);
 
   logger.info(`User logged in via email: ${user._id}`, { email, userId: user._id });
 
   return successResponse(res, 200, 'Login successful', {
     accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
     user: {
       id: user._id,
       name: user.name,
@@ -796,16 +802,11 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
       email: user.email
     });
 
-    // Set refresh token in httpOnly cookie
-    res.cookie('refreshToken', tokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    });
+    setUserRefreshCookies(res, tokens.refreshToken);
 
     return successResponse(res, 200, 'Firebase Google authentication successful', {
       accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
       user: {
         id: user._id,
         name: user.name,
@@ -960,13 +961,7 @@ export const googleCallback = asyncHandler(async (req, res) => {
       email: user.email
     });
 
-    // Set refresh token in httpOnly cookie
-    res.cookie('refreshToken', jwtTokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    });
+    setUserRefreshCookies(res, jwtTokens.refreshToken);
 
     // Clear OAuth state cookie
     res.clearCookie('oauth_state');
