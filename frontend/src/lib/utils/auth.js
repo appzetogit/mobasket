@@ -219,7 +219,7 @@ export function setAuthData(module, token, user, refreshToken) {
         localStorage.removeItem("userPaymentMethods");
         localStorage.removeItem("userFavorites");
         localStorage.removeItem("userDishFavorites");
-        localStorage.removeItem("appzeto_user_profile");
+        localStorage.removeItem("mobasket_user_profile");
       }
     }
 
@@ -294,4 +294,6 @@ export function setAuthData(module, token, user, refreshToken) {
     }
   }
 }
+
+
 

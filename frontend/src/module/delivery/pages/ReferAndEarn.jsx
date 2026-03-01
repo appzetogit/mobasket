@@ -5,7 +5,7 @@ import { ArrowLeft, Headphones, ArrowRight, CheckCircle, Contact } from "lucide-
 import BottomPopup from "../components/BottomPopup"
 import { getCompanyNameAsync } from "@/lib/utils/businessSettings"
 
-const STORAGE_KEY = "appzeto_food_referrals"
+const STORAGE_KEY = "mobasket_food_referrals"
 
 export default function ReferAndEarn() {
   const navigate = useNavigate()
@@ -260,4 +260,6 @@ export default function ReferAndEarn() {
     </div>
   )
 }
+
+
 

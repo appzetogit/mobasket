@@ -150,7 +150,7 @@ export default function GroceryStoreProductDetailsPage() {
       setUploadingImages(true)
       const uploads = []
       for (const file of files) {
-        const uploaded = await uploadAPI.uploadMedia(file, { folder: "appzeto/grocery-store/products" })
+        const uploaded = await uploadAPI.uploadMedia(file, { folder: "mobasket/grocery-store/products" })
         const url = uploaded?.data?.data?.url || uploaded?.data?.url
         if (url) {
           uploads.push(url)
@@ -534,3 +534,5 @@ export default function GroceryStoreProductDetailsPage() {
     </div>
   )
 }
+
+

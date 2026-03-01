@@ -32,7 +32,7 @@ export default function Logout() {
       localStorage.removeItem("userPaymentMethods");
       localStorage.removeItem("userFavorites");
       localStorage.removeItem("userDishFavorites");
-      localStorage.removeItem("appzeto_user_profile");
+      localStorage.removeItem("mobasket_user_profile");
       localStorage.removeItem("mobasket_preference");
       sessionStorage.removeItem("userAuthData");
     };
@@ -193,3 +193,5 @@ export default function Logout() {
     </AnimatedPage>
   );
 }
+
+

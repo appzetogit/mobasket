@@ -389,7 +389,7 @@ export default function GroceryStoresList() {
       if (editStoreImageFile) {
         setUploadingStoreImage(true)
         const uploadResponse = await uploadAPI.uploadMedia(editStoreImageFile, {
-          folder: "appzeto/grocery/stores",
+          folder: "mobasket/grocery/stores",
         })
         uploadedProfileImage = uploadResponse?.data?.data || null
       }
@@ -1008,3 +1008,5 @@ export default function GroceryStoresList() {
     </div>
   )
 }
+
+

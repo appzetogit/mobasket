@@ -16,7 +16,7 @@ export const uploadSingleMedia = async (req, res) => {
       return errorResponse(res, 400, 'File buffer is empty or invalid');
     }
 
-    const folder = req.body.folder || 'appzeto/uploads';
+    const folder = req.body.folder || 'mobasket/uploads';
 
     console.log('📤 Uploading file to Cloudinary:', {
       fileName: req.file.originalname,
@@ -66,5 +66,7 @@ export const uploadSingleMedia = async (req, res) => {
     return errorResponse(res, 500, `File upload failed: ${errorMessage}`);
   }
 };
+
+
 
 

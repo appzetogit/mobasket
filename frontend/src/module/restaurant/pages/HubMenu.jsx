@@ -473,7 +473,7 @@ export default function HubMenu() {
           const file = filesToUpload[i]
           try {
             const uploadResponse = await uploadAPI.uploadMedia(file, {
-              folder: 'appzeto/restaurant/addons'
+              folder: 'mobasket/restaurant/addons'
             })
             const imageUrl = uploadResponse?.data?.data?.url || uploadResponse?.data?.url
             if (imageUrl) {
@@ -2238,3 +2238,5 @@ export default function HubMenu() {
     </div>
   )
 }
+
+

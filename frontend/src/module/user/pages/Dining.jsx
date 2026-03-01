@@ -13,7 +13,7 @@ import { diningAPI } from "@/lib/api"
 import api from "@/lib/api"
 import PageNavbar from "../components/PageNavbar"
 import OptimizedImage from "@/components/OptimizedImage"
-import appzetoFoodLogo from "@/assets/appzetologo.png"
+import MoBasketLogo from "@/assets/mobasketlogo.png"
 // Using placeholders for dining card images
 const diningCard1 = "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&h=300&fit=crop"
 const diningCard2 = "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&h=300&fit=crop"
@@ -1238,4 +1238,7 @@ export default function Dining() {
     </AnimatedPage>
   )
 }
+
+
+
 

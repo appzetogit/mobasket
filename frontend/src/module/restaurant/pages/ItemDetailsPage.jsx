@@ -499,7 +499,7 @@ export default function ItemDetailsPage() {
           try {
             console.log(`Uploading image ${i + 1}/${filesToUpload.length}:`, file.name)
             const uploadResponse = await uploadAPI.uploadMedia(file, {
-              folder: 'appzeto/restaurant/menu-items'
+              folder: 'mobasket/restaurant/menu-items'
             })
             const imageUrl = uploadResponse?.data?.data?.url || uploadResponse?.data?.url
             if (imageUrl) {
@@ -1334,3 +1334,5 @@ export default function ItemDetailsPage() {
     </div>
   )
 }
+
+

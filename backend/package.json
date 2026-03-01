@@ -1,7 +1,7 @@
 {
-  "name": "appzeto-food-backend",
+  "name": "mobasket-backend",
   "version": "1.0.0",
-  "description": "Backend API for Appzeto Food Delivery Platform",
+  "description": "Backend API for MoBasket Delivery Platform",
   "main": "server.js",
   "type": "module",
   "scripts": {

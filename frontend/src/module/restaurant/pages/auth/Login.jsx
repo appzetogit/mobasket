@@ -21,26 +21,26 @@ import { redirectRestaurantAfterAuth } from "../../utils/onboardingUtils"
 
 // Common country codes
 const countryCodes = [
-  { code: "+1", country: "US/CA", flag: "🇺🇸" },
-  { code: "+44", country: "UK", flag: "🇬🇧" },
-  { code: "+91", country: "IN", flag: "🇮🇳" },
-  { code: "+86", country: "CN", flag: "🇨🇳" },
-  { code: "+81", country: "JP", flag: "🇯🇵" },
-  { code: "+49", country: "DE", flag: "🇩🇪" },
-  { code: "+33", country: "FR", flag: "🇫🇷" },
-  { code: "+39", country: "IT", flag: "🇮🇹" },
-  { code: "+34", country: "ES", flag: "🇪🇸" },
-  { code: "+61", country: "AU", flag: "🇦🇺" },
-  { code: "+7", country: "RU", flag: "🇷🇺" },
-  { code: "+55", country: "BR", flag: "🇧🇷" }, 
-  { code: "+52", country: "MX", flag: "🇲🇽" },
-  { code: "+82", country: "KR", flag: "🇰🇷" },
-  { code: "+65", country: "SG", flag: "🇸🇬" },
-  { code: "+971", country: "AE", flag: "🇦🇪" },
-  { code: "+966", country: "SA", flag: "🇸🇦" },
-  { code: "+27", country: "ZA", flag: "🇿🇦" },
-  { code: "+31", country: "NL", flag: "🇳🇱" },
-  { code: "+46", country: "SE", flag: "🇸🇪" },
+  { code: "+1", country: "US/CA", flag: "????" },
+  { code: "+44", country: "UK", flag: "????" },
+  { code: "+91", country: "IN", flag: "????" },
+  { code: "+86", country: "CN", flag: "????" },
+  { code: "+81", country: "JP", flag: "????" },
+  { code: "+49", country: "DE", flag: "????" },
+  { code: "+33", country: "FR", flag: "????" },
+  { code: "+39", country: "IT", flag: "????" },
+  { code: "+34", country: "ES", flag: "????" },
+  { code: "+61", country: "AU", flag: "????" },
+  { code: "+7", country: "RU", flag: "????" },
+  { code: "+55", country: "BR", flag: "????" }, 
+  { code: "+52", country: "MX", flag: "????" },
+  { code: "+82", country: "KR", flag: "????" },
+  { code: "+65", country: "SG", flag: "????" },
+  { code: "+971", country: "AE", flag: "????" },
+  { code: "+966", country: "SA", flag: "????" },
+  { code: "+27", country: "ZA", flag: "????" },
+  { code: "+31", country: "NL", flag: "????" },
+  { code: "+46", country: "SE", flag: "????" },
 ]
 
 export default function RestaurantLogin() {
@@ -415,7 +415,7 @@ export default function RestaurantLogin() {
     <div className="max-h-screen h-screen bg-white flex flex-col">
       {/* Top Section - Logo and Badge */}
       <div className="flex flex-col items-center pt-12 pb-8 px-6">
-        {/* Appzeto Logo */}
+        {/* MoBasket Logo */}
         <div>
           <h1 
             className="text-3xl italic md:text-4xl tracking-wide font-extrabold text-black"
@@ -432,7 +432,7 @@ export default function RestaurantLogin() {
         {/* Restaurant Partner Badge */}
         <div className="">
           <span className="text-gray-600 font-light text-sm tracking-wide block text-center">
-          — restaurant partner —
+          � restaurant partner �
           </span>
         </div>        
       </div>
@@ -631,9 +631,9 @@ export default function RestaurantLogin() {
           </p>
           <div className="text-xs text-center text-gray-600 mt-1 flex justify-center gap-2 flex-wrap">
             {renderPolicyLink("Terms of Service", "terms")}
-            <span>•</span>
+            <span>�</span>
             {renderPolicyLink("Privacy Policy", "privacy")}
-            <span>•</span>
+            <span>�</span>
             {renderPolicyLink("Code of Conduct", "content")}
           </div>
         </div>
@@ -649,3 +649,4 @@ export default function RestaurantLogin() {
     </div>
   )
 }
+

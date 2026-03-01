@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Mail, User, Lock, Eye, EyeOff, ArrowLeft, Shield } from "lucide-react"
-import appzetoLogo from "@/assets/appzetologo.png"
+import MOBASKETLogo from "@/assets/mobasketlogo.png"
 import { authAPI, adminAPI } from "@/lib/api"
 import { setAuthData } from "@/lib/utils/auth"
 import { loadBusinessSettings } from "@/lib/utils/businessSettings"
@@ -32,7 +32,7 @@ export default function AdminSignup() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [resendTimer, setResendTimer] = useState(0)
-  const [logoUrl, setLogoUrl] = useState(appzetoLogo)
+  const [logoUrl, setLogoUrl] = useState(MOBASKETLogo)
   const inputRefs = useRef(Array(6).fill(null).map(() => null))
 
   // Fetch business settings logo on mount
@@ -238,8 +238,8 @@ export default function AdminSignup() {
                   loading="lazy"
                   onError={(e) => {
                     // Fallback to default logo if business logo fails to load
-                    if (e.target.src !== appzetoLogo) {
-                      e.target.src = appzetoLogo
+                    if (e.target.src !== MOBASKETLogo) {
+                      e.target.src = MOBASKETLogo
                     }
                   }}
                 />
@@ -477,4 +477,7 @@ export default function AdminSignup() {
     </div>
   )
 }
+
+
+
 

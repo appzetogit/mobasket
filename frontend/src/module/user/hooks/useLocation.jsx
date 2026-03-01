@@ -25,16 +25,23 @@ export function useLocation() {
   const prevLocationCoordsRef = useRef({ latitude: null, longitude: null })
   const lastGeocodeRef = useRef({ ts: 0, latitude: null, longitude: null, addr: null })
   const lastDbWriteRef = useRef({ ts: 0, latitude: null, longitude: null, signature: "" })
+  const dbUnavailableBackoffUntilRef = useRef(0)
   const ENABLE_GOOGLE_MAPS_REVERSE_GEOCODE = false
   const ENABLE_GOOGLE_PLACES_DETAILS = false
-  const MIN_GEOCODE_INTERVAL_MS = 30000
-  const MIN_GEOCODE_DISTANCE_M = 30
+  const MIN_GEOCODE_INTERVAL_MS = 120000
+  const MIN_GEOCODE_DISTANCE_M = 100
   const MIN_DB_WRITE_INTERVAL_MS = 30000
   const MIN_DB_WRITE_DISTANCE_M = 25
+  const DB_UNAVAILABLE_BACKOFF_MS = 120000
 
   /* ===================== DB UPDATE (LIVE LOCATION TRACKING) ===================== */
   const updateLocationInDB = async (locationData) => {
     try {
+      const attemptTs = Date.now()
+      if (attemptTs < dbUnavailableBackoffUntilRef.current) {
+        return
+      }
+
       // Check if location has placeholder values - don't save placeholders
       const hasPlaceholder = 
         locationData?.city === "Current Location" ||
@@ -92,7 +99,7 @@ export function useLocation() {
         formattedAddress: locationPayload.formattedAddress || "",
       })
       const prevWrite = lastDbWriteRef.current
-      const now = Date.now()
+      const now = attemptTs
       let movedMeters = Number.POSITIVE_INFINITY
       if (
         typeof prevWrite.latitude === "number" &&
@@ -134,6 +141,9 @@ export function useLocation() {
       // Only log unexpected errors; 429 is an expected throttle signal.
       if (err.response?.status === 429) {
         console.log("ℹ️ Location update throttled; will retry on next cycle")
+      } else if (err.response?.status === 503) {
+        dbUnavailableBackoffUntilRef.current = Date.now() + DB_UNAVAILABLE_BACKOFF_MS
+        console.log("ℹ️ Location DB sync temporarily unavailable (503); pausing sync attempts for 2 minutes")
       } else if (err.code !== "ERR_NETWORK" && err.response?.status !== 404 && err.response?.status !== 401) {
         console.error("❌ DB location update error:", err)
       } else if (err.response?.status === 404 || err.response?.status === 401) {

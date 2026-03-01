@@ -1949,7 +1949,7 @@ export const createRestaurant = asyncHandler(async (req, res) => {
         const base64Data = profileImage.replace(/^data:image\/\w+;base64,/, '');
         const buffer = Buffer.from(base64Data, 'base64');
         const result = await uploadToCloudinary(buffer, {
-          folder: 'appzeto/restaurant/profile',
+          folder: 'mobasket/restaurant/profile',
           resource_type: 'image'
         });
         profileImageData = { url: result.secure_url, publicId: result.public_id };
@@ -1969,7 +1969,7 @@ export const createRestaurant = asyncHandler(async (req, res) => {
           const base64Data = img.replace(/^data:image\/\w+;base64,/, '');
           const buffer = Buffer.from(base64Data, 'base64');
           const result = await uploadToCloudinary(buffer, {
-            folder: 'appzeto/restaurant/menu',
+            folder: 'mobasket/restaurant/menu',
             resource_type: 'image'
           });
           menuImagesData.push({ url: result.secure_url, publicId: result.public_id });
@@ -1988,7 +1988,7 @@ export const createRestaurant = asyncHandler(async (req, res) => {
         const base64Data = panImage.replace(/^data:image\/\w+;base64,/, '');
         const buffer = Buffer.from(base64Data, 'base64');
         const result = await uploadToCloudinary(buffer, {
-          folder: 'appzeto/restaurant/pan',
+          folder: 'mobasket/restaurant/pan',
           resource_type: 'image'
         });
         panImageData = { url: result.secure_url, publicId: result.public_id };
@@ -2005,7 +2005,7 @@ export const createRestaurant = asyncHandler(async (req, res) => {
         const base64Data = gstImage.replace(/^data:image\/\w+;base64,/, '');
         const buffer = Buffer.from(base64Data, 'base64');
         const result = await uploadToCloudinary(buffer, {
-          folder: 'appzeto/restaurant/gst',
+          folder: 'mobasket/restaurant/gst',
           resource_type: 'image'
         });
         gstImageData = { url: result.secure_url, publicId: result.public_id };
@@ -2022,7 +2022,7 @@ export const createRestaurant = asyncHandler(async (req, res) => {
         const base64Data = fssaiImage.replace(/^data:image\/\w+;base64,/, '');
         const buffer = Buffer.from(base64Data, 'base64');
         const result = await uploadToCloudinary(buffer, {
-          folder: 'appzeto/restaurant/fssai',
+          folder: 'mobasket/restaurant/fssai',
           resource_type: 'image'
         });
         fssaiImageData = { url: result.secure_url, publicId: result.public_id };
@@ -3343,3 +3343,5 @@ export const getCustomerWalletReport = asyncHandler(async (req, res) => {
     return errorResponse(res, 500, error.message || 'Failed to fetch customer wallet report');
   }
 });
+
+

@@ -103,9 +103,9 @@ class EmailService {
     try {
       const BusinessSettings = (await import('../../admin/models/BusinessSettings.js')).default;
       const settings = await BusinessSettings.getSettings();
-      return settings?.companyName || 'Appzeto Food';
+      return settings?.companyName || 'MoBasket';
     } catch (error) {
-      return 'Appzeto Food';
+      return 'MoBasket';
     }
   }
 
@@ -220,7 +220,7 @@ Security Notice:
       // Get SMTP credentials for from email
       const { getSMTPCredentials } = await import('../../../shared/utils/envService.js');
       const smtpCreds = await getSMTPCredentials();
-      const fromEmail = process.env.SMTP_FROM || smtpCreds.user || 'noreply@appzetofood.com';
+      const fromEmail = process.env.SMTP_FROM || smtpCreds.user || 'noreply@mobasket.com';
       const companyName = await this.getCompanyName();
       const fromName = process.env.SMTP_FROM_NAME || companyName;
 
@@ -275,7 +275,7 @@ Security Notice:
       // Get SMTP credentials for from email
       const { getSMTPCredentials } = await import('../../../shared/utils/envService.js');
       const smtpCreds = await getSMTPCredentials();
-      const fromEmail = process.env.SMTP_FROM || smtpCreds.user || 'noreply@appzetofood.com';
+      const fromEmail = process.env.SMTP_FROM || smtpCreds.user || 'noreply@mobasket.com';
       const companyName = await this.getCompanyName();
       const fromName = process.env.SMTP_FROM_NAME || companyName;
 
@@ -299,4 +299,5 @@ Security Notice:
 }
 
 export default new EmailService();
+
 

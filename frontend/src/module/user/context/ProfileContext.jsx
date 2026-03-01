@@ -10,7 +10,7 @@ export function ProfileProvider({ children }) {
     localStorage.removeItem("userPaymentMethods")
     localStorage.removeItem("userFavorites")
     localStorage.removeItem("userDishFavorites")
-    localStorage.removeItem("appzeto_user_profile")
+    localStorage.removeItem("mobasket_user_profile")
   }
 
   const [userProfile, setUserProfile] = useState(() => {
@@ -499,4 +499,6 @@ export function useProfile() {
   }
   return context
 }
+
+
 

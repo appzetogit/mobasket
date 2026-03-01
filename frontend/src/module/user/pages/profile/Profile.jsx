@@ -190,17 +190,17 @@ export default function Profile() {
     );
 
     // Always log for debugging (remove in production if needed)
-    console.log("🔍 Profile completion check:", {
+    console.log("?? Profile completion check:", {
       requiredFields,
       completedRequiredFields,
       totalRequiredFields,
       percentage,
       fieldStatus: {
-        name: hasName ? "✅" : "❌",
-        contact: hasContact ? "✅" : "❌",
-        profileImage: hasImage ? "✅" : "❌",
-        dateOfBirth: hasDateOfBirth ? "✅" : "❌",
-        gender: hasGender ? "✅" : "❌",
+        name: hasName ? "?" : "?",
+        contact: hasContact ? "?" : "?",
+        profileImage: hasImage ? "?" : "?",
+        dateOfBirth: hasDateOfBirth ? "?" : "?",
+        gender: hasGender ? "?" : "?",
       },
       rawData: {
         name: userProfile.name || "missing",
@@ -424,7 +424,7 @@ export default function Profile() {
       localStorage.removeItem("userPaymentMethods");
       localStorage.removeItem("userFavorites");
       localStorage.removeItem("userDishFavorites");
-      localStorage.removeItem("appzeto_user_profile");
+      localStorage.removeItem("MoBasket_user_profile");
     };
 
     try {
@@ -545,7 +545,7 @@ export default function Profile() {
           </CardContent>
         </Card>
 
-        {/* Appzeto Money and Coupons - Side by Side */}
+        {/* MoBasket Money and Coupons - Side by Side */}
         <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 lg:gap-5 mt-3 mb-3">
           <Link to="/wallet" className="h-full">
             <motion.div
@@ -566,7 +566,7 @@ export default function Profile() {
                       {companyName} Money
                     </span>
                     <span className="text-base font-semibold text-[#EF4F5F] dark:text-[#EF4F5F]">
-                      ₹{userProfile?.wallet?.balance?.toFixed(0) || "0"}
+                      ?{userProfile?.wallet?.balance?.toFixed(0) || "0"}
                     </span>
                   </div>
                 </CardContent>
@@ -1386,3 +1386,4 @@ export default function Profile() {
     </AnimatedPage>
   );
 }
+

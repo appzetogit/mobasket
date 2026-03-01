@@ -177,7 +177,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         restaurantData.phoneVerified = true;
         restaurantData.ownerPhone = normalizedPhone;
         // For phone signup, set ownerEmail to empty string or phone-based email
-        restaurantData.ownerEmail = email || `${normalizedPhone}@restaurant.appzeto.com`;
+        restaurantData.ownerEmail = email || `${normalizedPhone}@restaurant.mobasket.com`;
         // CRITICAL: Do NOT set email field for phone signups to avoid null duplicate key error
         // Email field should be completely omitted, not set to null or undefined
       }
@@ -404,7 +404,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           restaurantData.phoneVerified = true;
           restaurantData.ownerPhone = normalizedPhone;
           // For phone signup, set ownerEmail to empty string or phone-based email
-          restaurantData.ownerEmail = email || `${normalizedPhone}@restaurant.appzeto.com`;
+          restaurantData.ownerEmail = email || `${normalizedPhone}@restaurant.mobasket.com`;
           // Explicitly don't set email field for phone signups to avoid null duplicate key error
         }
         if (email) {
@@ -1165,5 +1165,6 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     return errorResponse(res, 400, error.message || 'Firebase Google authentication failed');
   }
 });
+
 
 

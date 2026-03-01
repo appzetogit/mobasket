@@ -678,7 +678,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
       let resolvedImageValue = formData.image
       if (isGroceryScope && selectedImageFile) {
         const uploadResponse = await uploadAPI.uploadMedia(selectedImageFile, {
-          folder: "appzeto/grocery/categories",
+          folder: "mobasket/grocery/categories",
         })
         resolvedImageValue = uploadResponse?.data?.data?.url || ""
       }
@@ -1758,3 +1758,5 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     </div>
   )
 }
+
+

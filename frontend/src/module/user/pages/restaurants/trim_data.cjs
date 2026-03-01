@@ -1,5 +1,5 @@
 const fs = require('fs');
-const path = 'e:\\appzetofood\\appzetofood\\frontend\\src\\module\\user\\pages\\restaurants\\RestaurantDetails.jsx';
+const path = 'e:\\mobasket\\mobasket\\frontend\\src\\module\\user\\pages\\restaurants\\RestaurantDetails.jsx';
 const content = fs.readFileSync(path, 'utf8');
 const lines = content.split(/\r?\n/);
 console.log('Total lines:', lines.length);
@@ -13,3 +13,4 @@ const newLines = [...lines.slice(0, 41), ...lines.slice(2951)];
 const newContent = newLines.join('\n');
 fs.writeFileSync(path, newContent);
 console.log('File updated. New line count:', newLines.length);
+

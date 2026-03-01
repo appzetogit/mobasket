@@ -142,7 +142,7 @@ export const uploadProfileImage = asyncHandler(async (req, res) => {
     }
 
     // Upload to Cloudinary
-    const folder = 'appzeto/user-profiles';
+    const folder = 'mobasket/user-profiles';
     const result = await uploadToCloudinary(req.file.buffer, {
       folder,
       resource_type: 'image',
@@ -556,4 +556,6 @@ export const markAppShared = asyncHandler(async (req, res) => {
     return errorResponse(res, 500, 'Failed to record app sharing');
   }
 });
+
+
 

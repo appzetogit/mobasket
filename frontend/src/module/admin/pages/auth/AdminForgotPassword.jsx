@@ -12,7 +12,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Mail, ArrowLeft, Shield } from "lucide-react"
-import appzetoLogo from "@/assets/appzetologo.png"
+import MOBASKETLogo from "@/assets/mobasketlogo.png"
 import { authAPI } from "@/lib/api"
 import apiClient from "@/lib/api/axios"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
@@ -223,7 +223,7 @@ export default function AdminForgotPassword() {
             <div className="flex w-full items-center gap-4 sm:gap-5">
               <div className="flex h-14 w-28 shrink-0 items-center justify-center rounded-xl bg-gray-900/5 ring-1 ring-neutral-200">
                 <img
-                  src={appzetoLogo}
+                  src={MOBASKETLogo}
                   alt={companyName}
                   className="h-10 w-24 object-contain"
                   loading="lazy"
@@ -434,4 +434,7 @@ export default function AdminForgotPassword() {
     </div>
   )
 }
+
+
+
 

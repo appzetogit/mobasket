@@ -48,7 +48,7 @@ export default function SignupStep2() {
       // Create FormData for file upload
       const formData = new FormData()
       formData.append('file', file)
-      formData.append('folder', 'appzeto/delivery/documents')
+      formData.append('folder', 'mobasket/delivery/documents')
 
       // Upload to Cloudinary via backend
       const response = await apiClient.post('/upload/media', formData, {
@@ -233,4 +233,6 @@ export default function SignupStep2() {
     </div>
   )
 }
+
+
 

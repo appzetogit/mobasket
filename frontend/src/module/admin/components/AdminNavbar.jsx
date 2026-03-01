@@ -148,9 +148,9 @@ export default function AdminNavbar({ onMenuClick }) {
   ];
 
   const emails = [
-    { id: 1, subject: "Weekly Report Ready", from: "reports@appzeto.com", time: "5m ago", unread: true },
-    { id: 2, subject: "New Order Notification", from: "orders@appzeto.com", time: "1h ago", unread: true },
-    { id: 3, subject: "System Update", from: "admin@appzeto.com", time: "2h ago", unread: false },
+    { id: 1, subject: "Weekly Report Ready", from: "reports@mobasket.com", time: "5m ago", unread: true },
+    { id: 2, subject: "New Order Notification", from: "orders@mobasket.com", time: "1h ago", unread: true },
+    { id: 3, subject: "System Update", from: "admin@mobasket.com", time: "2h ago", unread: false },
   ];
 
   // Handle logout
@@ -554,3 +554,4 @@ export default function AdminNavbar({ onMenuClick }) {
     </>
   );
 }
+

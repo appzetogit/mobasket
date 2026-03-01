@@ -3,7 +3,7 @@ import io from 'socket.io-client';
 import { SOCKET_BASE_URL } from '@/lib/api/config';
 import bikeLogo from '@/assets/bikelogo.png';
 import { RouteBasedAnimationController } from '@/module/user/utils/routeBasedAnimation';
-import { decodePolyline, extractPolylineFromDirections, findNearestPointOnPolyline } from '@/module/delivery/utils/liveTrackingPolyline';
+import { decodePolyline, findNearestPointOnPolyline } from '@/module/delivery/utils/liveTrackingPolyline';
 import { ref as rtdbRef, onValue } from 'firebase/database';
 import { realtimeDb } from '@/lib/firebase';
 import './DeliveryTrackingMap.css';
@@ -49,9 +49,6 @@ const DeliveryTrackingMap = ({
   const userLocationCircleRef = useRef(null);
   const mapInstance = useRef(null);
   const socketRef = useRef(null);
-  const directionsServiceRef = useRef(null);
-  const directionsRendererRef = useRef(null);
-  
   const [isMapLoaded, setIsMapLoaded] = useState(false);
   const [currentLocation, setCurrentLocation] = useState(null);
   const [deliveryBoyLocation, setDeliveryBoyLocation] = useState(null);
@@ -67,7 +64,7 @@ const DeliveryTrackingMap = ({
   const userHasInteractedRef = useRef(false);
   const isProgrammaticChangeRef = useRef(false);
   const mapInitializedRef = useRef(false);
-  const directionsCacheRef = useRef(new Map()); // Cache for Directions API calls
+  const directionsCacheRef = useRef(new Map()); // Cache for locally generated route paths
   const lastRouteRequestRef = useRef({ start: null, end: null, timestamp: 0 });
 
   const backendUrl = SOCKET_BASE_URL;
@@ -89,10 +86,6 @@ const DeliveryTrackingMap = ({
     if (normalizedPath.length === 0) return;
 
     routePolylinePointsRef.current = normalizedPath;
-
-    if (directionsRendererRef.current) {
-      directionsRendererRef.current.setDirections({ routes: [] });
-    }
 
     if (routePolylineRef.current) {
       routePolylineRef.current.setMap(null);
@@ -218,12 +211,10 @@ const DeliveryTrackingMap = ({
     }
   }, [getInitialRiderLocationFromOrder, deliveryBoyLocation?.lat, deliveryBoyLocation?.lng, currentLocation?.lat, currentLocation?.lng]);
 
-  // Draw route using Google Maps Directions API with live updates
-  // OPTIMIZED: Added caching to reduce API calls
+  // Draw route from start/end coordinates using local interpolation (no Directions API calls).
   const drawRoute = useCallback((start, end) => {
-    if (!mapInstance.current || !directionsServiceRef.current || !directionsRendererRef.current) return;
+    if (!mapInstance.current || !window.google?.maps) return;
 
-    // Validate coordinates before making API call
     if (!start || !end) {
       console.warn('Invalid coordinates: start or end is missing');
       return;
@@ -234,102 +225,39 @@ const DeliveryTrackingMap = ({
     const endLat = Number(end.lat);
     const endLng = Number(end.lng);
 
-    // Check if coordinates are valid numbers
     if (isNaN(startLat) || isNaN(startLng) || isNaN(endLat) || isNaN(endLng)) {
       console.warn('Invalid coordinates: coordinates are not valid numbers', { start, end });
       return;
     }
 
-    // Check if coordinates are within valid range
     if (startLat < -90 || startLat > 90 || endLat < -90 || endLat > 90 ||
         startLng < -180 || startLng > 180 || endLng < -180 || endLng > 180) {
       console.warn('Invalid coordinates: coordinates are out of valid range', { start, end });
       return;
     }
 
-    // Check if start and end are the same (will cause API error)
     if (startLat === endLat && startLng === endLng) {
       console.warn('Invalid route: start and end coordinates are the same');
       return;
     }
 
-    // Round coordinates to 4 decimal places (~11 meters) for cache key
     const roundCoord = (coord) => Math.round(coord * 10000) / 10000;
     const cacheKey = `${roundCoord(startLat)},${roundCoord(startLng)}|${roundCoord(endLat)},${roundCoord(endLng)}`;
-    
-    // Check cache first (cache valid for 5 minutes)
-    const cached = directionsCacheRef.current.get(cacheKey);
     const now = Date.now();
-    if (cached && (now - cached.timestamp) < 300000) { // 5 minutes cache
-      console.log('✅ Using cached route');
-      // Use cached result
-      if (cached.result && cached.result.routes && cached.result.routes[0]) {
-        directionsRendererRef.current.setOptions({
-          preserveViewport: true,
-          polylineOptions: {
-            strokeColor: isCustomerLegRef.current ? '#2563eb' : '#10b981',
-            strokeWeight: 5,
-            strokeOpacity: 0.95
-          }
-        });
-        directionsRendererRef.current.setDirections(cached.result);
-        
-        const polylinePoints = extractPolylineFromDirections(cached.result);
-        if (polylinePoints && polylinePoints.length > 0) {
-          routePolylinePointsRef.current = polylinePoints;
-          
-          if (bikeMarkerRef.current && !animationControllerRef.current) {
-            animationControllerRef.current = new RouteBasedAnimationController(
-              bikeMarkerRef.current,
-              polylinePoints
-            );
-          }
-        }
-        
-        if (cached.result.routes && cached.result.routes[0] && cached.result.routes[0].overview_path) {
-          if (routePolylineRef.current) {
-            routePolylineRef.current.setMap(null);
-          }
 
-          const activeColor = isCustomerLegRef.current ? '#2563eb' : '#10b981';
-          
-          routePolylineRef.current = new window.google.maps.Polyline({
-            path: cached.result.routes[0].overview_path,
-            geodesic: true,
-            strokeColor: activeColor,
-            strokeOpacity: 0.8,
-            strokeWeight: 4,
-            icons: [{
-              icon: {
-                path: 'M 0,-1 0,1',
-                strokeOpacity: 1,
-                strokeWeight: 2,
-                strokeColor: activeColor,
-                scale: 4
-              },
-              offset: '0%',
-              repeat: '15px'
-            }],
-            map: mapInstance.current,
-            zIndex: 1
-          });
-        } else if (routePolylineRef.current) {
-          routePolylineRef.current.setMap(null);
-          routePolylineRef.current = null;
-        }
-      }
+    const cached = directionsCacheRef.current.get(cacheKey);
+    if (cached && (now - cached.timestamp) < 300000) {
+      renderPolylinePath(cached.points || [], isCustomerLegRef.current);
       return;
     }
 
-    // Throttle: Don't make API call if same route was requested within last 2 seconds
     const lastRequest = lastRouteRequestRef.current;
-    if (lastRequest.start && lastRequest.end && 
+    if (lastRequest.start && lastRequest.end &&
         Math.abs(lastRequest.start.lat - startLat) < 0.0001 &&
         Math.abs(lastRequest.start.lng - startLng) < 0.0001 &&
         Math.abs(lastRequest.end.lat - endLat) < 0.0001 &&
         Math.abs(lastRequest.end.lng - endLng) < 0.0001 &&
         (now - lastRequest.timestamp) < 2000) {
-      console.log('⏭️ Skipping duplicate route request (throttled)');
       return;
     }
 
@@ -339,101 +267,31 @@ const DeliveryTrackingMap = ({
       timestamp: now
     };
 
-    try {
-      directionsServiceRef.current.route({
-        origin: { lat: startLat, lng: startLng },
-        destination: { lat: endLat, lng: endLng },
-        travelMode: window.google.maps.TravelMode.DRIVING
-      }, (result, status) => {
-        if (status === 'OK' && result) {
-          // Cache the result
-          directionsCacheRef.current.set(cacheKey, {
-            result: result,
-            timestamp: now
-          });
-          
-          // Clean old cache entries (older than 10 minutes)
-          const tenMinutesAgo = now - 600000;
-          for (const [key, value] of directionsCacheRef.current.entries()) {
-            if (value.timestamp < tenMinutesAgo) {
-              directionsCacheRef.current.delete(key);
-            }
-          }
-          
-          // Ensure viewport doesn't change when route is set
-          directionsRendererRef.current.setOptions({
-            preserveViewport: true,
-            polylineOptions: {
-              strokeColor: isCustomerLegRef.current ? '#2563eb' : '#10b981',
-              strokeWeight: 5,
-              strokeOpacity: 0.95
-            }
-          });
-          directionsRendererRef.current.setDirections(result);
-          
-          // Extract polyline points for route-based animation (Rapido style)
-          const polylinePoints = extractPolylineFromDirections(result);
-          if (polylinePoints && polylinePoints.length > 0) {
-            routePolylinePointsRef.current = polylinePoints;
-            console.log('✅ Extracted', polylinePoints.length, 'polyline points for route-based animation');
-            
-            // Initialize animation controller if bike marker exists
-            if (bikeMarkerRef.current && !animationControllerRef.current) {
-              animationControllerRef.current = new RouteBasedAnimationController(
-                bikeMarkerRef.current,
-                polylinePoints
-              );
-              console.log('✅ Route-based animation controller initialized');
-            }
-          }
-          
-          // Create dashed polyline overlay for better visibility (both pickup and customer legs)
-          if (result.routes && result.routes[0] && result.routes[0].overview_path) {
-            // Remove existing custom polyline if any
-            if (routePolylineRef.current) {
-              routePolylineRef.current.setMap(null);
-            }
-
-            const activeColor = isCustomerLegRef.current ? '#2563eb' : '#10b981';
-            
-            // Create dashed polyline
-            routePolylineRef.current = new window.google.maps.Polyline({
-              path: result.routes[0].overview_path,
-              geodesic: true,
-              strokeColor: activeColor,
-              strokeOpacity: 0.8,
-              strokeWeight: 4,
-              icons: [{
-                icon: {
-                  path: 'M 0,-1 0,1',
-                  strokeOpacity: 1,
-                  strokeWeight: 2,
-                  strokeColor: activeColor,
-                  scale: 4
-                },
-                offset: '0%',
-                repeat: '15px'
-              }],
-              map: mapInstance.current,
-              zIndex: 1
-            });
-          } else if (routePolylineRef.current) {
-            routePolylineRef.current.setMap(null);
-            routePolylineRef.current = null;
-          }
-          
-        } else {
-          // Silently handle errors - don't log UNKNOWN_ERROR as it's often a temporary API issue
-          if (status !== 'UNKNOWN_ERROR') {
-            console.warn('Directions request failed:', status);
-          }
-        }
+    const routeDistanceMeters = calculateHaversineDistance(startLat, startLng, endLat, endLng);
+    const segmentCount = Math.max(1, Math.min(120, Math.ceil(routeDistanceMeters / 30)));
+    const points = [];
+    for (let i = 0; i <= segmentCount; i += 1) {
+      const t = i / segmentCount;
+      points.push({
+        lat: startLat + (endLat - startLat) * t,
+        lng: startLng + (endLng - startLng) * t
       });
-    } catch (error) {
-      console.warn('Error calling Directions API:', error);
     }
-  }, []);
 
+    directionsCacheRef.current.set(cacheKey, {
+      points,
+      timestamp: now
+    });
+
+    const tenMinutesAgo = now - 600000;
+    for (const [key, value] of directionsCacheRef.current.entries()) {
+      if (value.timestamp < tenMinutesAgo) {
+        directionsCacheRef.current.delete(key);
+      }
+    }
+
+    renderPolylinePath(points, isCustomerLegRef.current);
+  }, [renderPolylinePath]);
   // Check if delivery partner is assigned (memoized to avoid dependency issues)
   // MUST be defined BEFORE any useEffect that uses it
   const hasDeliveryPartner = useMemo(() => {
@@ -1255,22 +1113,6 @@ const DeliveryTrackingMap = ({
           }
         });
 
-        // Initialize Directions Service and Renderer
-        directionsServiceRef.current = new window.google.maps.DirectionsService();
-        directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
-          map: mapInstance.current,
-          suppressMarkers: true, // We'll add custom markers
-          preserveViewport: true, // CRITICAL: Don't auto-adjust viewport when route is set - keep map stable
-          polylineOptions: {
-            strokeColor: '#10b981',
-            strokeWeight: 0, // Hide default polyline, we'll use custom dashed one
-            strokeOpacity: 0
-          }
-        });
-        
-        // Ensure viewport never changes automatically - map stays stable
-        directionsRendererRef.current.setOptions({ preserveViewport: true });
-
         // Add restaurant marker with home icon (only once, when coordinates exist)
         if (!mapInstance.current._restaurantMarker && restaurantCoords && typeof restaurantCoords.lat === 'number' && typeof restaurantCoords.lng === 'number') {
           const restaurantHomeIconUrl = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
@@ -1472,9 +1314,6 @@ const DeliveryTrackingMap = ({
       if (routePolylineRef.current) {
         routePolylineRef.current.setMap(null);
         routePolylineRef.current = null;
-      }
-      if (directionsRendererRef.current) {
-        directionsRendererRef.current.setDirections({ routes: [] });
       }
       return;
     }
@@ -1804,5 +1643,4 @@ const DeliveryTrackingMap = ({
 };
 
 export default DeliveryTrackingMap;
-
 

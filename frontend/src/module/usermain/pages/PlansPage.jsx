@@ -22,7 +22,7 @@ import { orderAPI, restaurantAPI } from "@/lib/api";
 import { initRazorpayPayment } from "@/lib/utils/razorpay";
 import { getCachedSettings, loadBusinessSettings } from "@/lib/utils/businessSettings";
 import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
-import appzetoLogo from "@/assets/appzetologo.png";
+import MOBASKETLogo from "@/assets/mobasketlogo.png";
 import { useProfile } from "../../user/context/ProfileContext";
 import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
@@ -41,7 +41,7 @@ const PlansPage = () => {
   const [selectedOfferIds, setSelectedOfferIds] = useState([]);
   const [boughtPlans, setBoughtPlans] = useState([]);
   const [boughtPlansLoading, setBoughtPlansLoading] = useState(true);
-  const [logoUrl, setLogoUrl] = useState(appzetoLogo);
+  const [logoUrl, setLogoUrl] = useState(MOBASKETLogo);
   const { getDefaultAddress, userProfile, addresses } = useProfile();
   const { location: liveLocation } = useUserLocation();
   const { zoneId } = useZone(liveLocation, "mogrocery");
@@ -556,8 +556,8 @@ const PlansPage = () => {
                 className="w-10 h-10 object-contain"
                 loading="lazy"
                 onError={(e) => {
-                  if (e.currentTarget.src !== appzetoLogo) {
-                    e.currentTarget.src = appzetoLogo;
+                  if (e.currentTarget.src !== MOBASKETLogo) {
+                    e.currentTarget.src = MOBASKETLogo;
                   }
                 }}
               />
@@ -1006,3 +1006,6 @@ const PlansPage = () => {
 };
 
 export default PlansPage;
+
+
+

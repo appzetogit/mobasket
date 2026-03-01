@@ -59,7 +59,7 @@ export default function GroceryStoreOnboarding() {
 
     try {
       setSaving(true)
-      const uploaded = await handleUpload(file, "appzeto/grocery-store/store")
+      const uploaded = await handleUpload(file, "mobasket/grocery-store/store")
       setImages((prev) => ({ ...prev, storeImage: uploaded }))
       toast.success("Store image uploaded successfully")
     } catch (err) {
@@ -78,7 +78,7 @@ export default function GroceryStoreOnboarding() {
       setSaving(true)
       const uploads = []
       for (const file of files) {
-        const uploaded = await handleUpload(file, "appzeto/grocery-store/additional")
+        const uploaded = await handleUpload(file, "mobasket/grocery-store/additional")
         uploads.push(uploaded)
       }
       setImages((prev) => ({
@@ -256,3 +256,5 @@ export default function GroceryStoreOnboarding() {
     </div>
   )
 }
+
+

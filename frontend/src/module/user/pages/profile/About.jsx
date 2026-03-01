@@ -5,7 +5,7 @@ import { motion } from "framer-motion"
 import AnimatedPage from "../../components/AnimatedPage"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import appzetoFoodLogo from "@/assets/appzetologo.png"
+import MoBasketLogo from "@/assets/mobasketlogo.png"
 import api from "@/lib/api"
 import { API_ENDPOINTS } from "@/lib/api/config"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
@@ -24,7 +24,7 @@ export default function About() {
   const companyName = useCompanyName()
   const [loading, setLoading] = useState(true)
   const [aboutData, setAboutData] = useState({
-    appName: 'Appzeto Food',
+    appName: 'MoBasket',
     version: '1.0.0',
     description: 'Your trusted food delivery partner, bringing delicious meals right to your doorstep. Experience the convenience of ordering from your favorite restaurants with fast, reliable delivery.',
     logo: '',
@@ -95,7 +95,7 @@ export default function About() {
                   <div className="absolute inset-0 bg-green-400 rounded-full blur-2xl opacity-30 animate-pulse" />
                   <div className="relative bg-white dark:bg-gray-800 rounded-full p-4 md:p-6 shadow-xl">
                     <img
-                      src={aboutData.logo && aboutData.logo.trim() ? aboutData.logo : appzetoFoodLogo}
+                      src={aboutData.logo && aboutData.logo.trim() ? aboutData.logo : MoBasketLogo}
                       alt={`${aboutData.appName} Logo`}
                       className="h-16 w-16 md:h-20 md:w-20 object-contain rounded-full"
                     />
@@ -297,4 +297,7 @@ export default function About() {
     </AnimatedPage>
   )
 }
+
+
+
 

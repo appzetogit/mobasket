@@ -7,7 +7,7 @@ import { useCart } from "../context/CartContext";
 import { useLocationSelector } from "./UserLayout";
 import { FaLocationDot } from "react-icons/fa6";
 import { getCachedSettings, loadBusinessSettings } from "@/lib/utils/businessSettings";
-import appzetoFoodLogo from "@/assets/appzetologo.png";
+import MoBasketLogo from "@/assets/mobasketlogo.png";
 
 export default function DesktopNavbar() {
   const location = useLocation();
@@ -165,13 +165,13 @@ export default function DesktopNavbar() {
               {/* Logo aligned with location */}
               <div className="ml-6 flex-shrink-0">
                 <img
-                  src={logoUrl || appzetoFoodLogo}
+                  src={logoUrl || MoBasketLogo}
                   alt="MoBasket"
                   className="h-10 w-auto object-contain"
                   onError={(e) => {
                     // Fallback to imported logo if dynamic url fails
-                    if (e.target.src !== appzetoFoodLogo) {
-                      e.target.src = appzetoFoodLogo;
+                    if (e.target.src !== MoBasketLogo) {
+                      e.target.src = MoBasketLogo;
                     }
                   }}
                 />
@@ -283,3 +283,6 @@ export default function DesktopNavbar() {
     </nav >
   );
 }
+
+
+

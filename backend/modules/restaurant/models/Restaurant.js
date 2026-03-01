@@ -369,7 +369,7 @@ restaurantSchema.index({ googleId: 1 }, { unique: true, sparse: true });
   
   // Set default ownerEmail if not set and phone exists
   if (!this.ownerEmail && this.phone && !this.email) {
-    this.ownerEmail = `${this.phone.replace(/\D/g, '')}@restaurant.appzeto.com`;
+    this.ownerEmail = `${this.phone.replace(/\D/g, '')}@restaurant.mobasket.com`;
   }
   
   // Set ownerEmail from email if email exists and ownerEmail not set
@@ -389,4 +389,5 @@ restaurantSchema.methods.comparePassword = async function(candidatePassword) {
 };
 
 export default mongoose.model('Restaurant', restaurantSchema);
+
 

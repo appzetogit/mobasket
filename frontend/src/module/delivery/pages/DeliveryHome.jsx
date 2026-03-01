@@ -494,8 +494,7 @@ export default function DeliveryHome() {
   const smoothedLocationRef = useRef(null) // Current smoothed location
   const markerAnimationRef = useRef(null) // Track ongoing marker animation
   const zonesPolygonsRef = useRef([]) // Store zone polygons
-  // Google Maps Directions API refs
-  const directionsServiceRef = useRef(null) // Directions Service instance
+  // Google Maps renderer refs (route path is built locally from coordinates)
   const directionsRendererRef = useRef(null) // Directions Renderer instance
   const directionsMapInstanceRef = useRef(null) // Directions map instance
   const restaurantMarkerRef = useRef(null) // Restaurant marker on directions map
@@ -528,7 +527,6 @@ export default function DeliveryHome() {
   const markerAnimationCancelRef = useRef(null) // Cancel function for marker animation
   const directionsResponseRef = useRef(null) // Store directions response for use in callbacks
   const directionsRouteCacheRef = useRef(new Map()) // Cache directions responses by rounded origin/destination
-  const directionsInFlightRef = useRef(new Map()) // Deduplicate concurrent route requests for same path
   const fetchedOrderDetailsForDropRef = useRef(null) // Prevent re-fetching order details for Reached Drop customer coords
   const [zones, setZones] = useState([]) // Store nearby zones
   const [isOutOfZone, setIsOutOfZone] = useState(false)
@@ -3851,7 +3849,7 @@ export default function DeliveryHome() {
       
       // Upload to Cloudinary via backend
       const uploadResponse = await uploadAPI.uploadMedia(file, {
-        folder: 'appzeto/delivery/bills'
+        folder: 'mobasket/delivery/bills'
       })
 
       if (uploadResponse?.data?.success && uploadResponse?.data?.data) {
@@ -5939,19 +5937,24 @@ export default function DeliveryHome() {
     selectedRestaurant?.customerName
   ])
 
-  // Calculate route using Google Maps Directions API (Zomato-style road-based routing)
-  // Optimized for TWO_WHEELER mode with DRIVING fallback
+  // Build a route object locally from origin/destination coordinates.
+  // This keeps live tracking independent from Google Directions API calls.
   // NOTE: Must be defined BEFORE the useEffect that uses it (Rules of Hooks)
   const calculateRouteWithDirectionsAPI = useCallback(async (origin, destination) => {
-    if (!window.google || !window.google.maps || !window.google.maps.DirectionsService) {
-      console.warn('⚠️ Google Maps Directions API not available');
+    if (!window.google || !window.google.maps || !Array.isArray(origin) || !destination) {
       return null;
     }
 
     const round = (value) => Math.round(Number(value) * 10000) / 10000;
-    const cacheKey = `${round(origin?.[0])},${round(origin?.[1])}|${round(destination?.lat)},${round(destination?.lng)}`;
+    const cacheKey = [
+      round(origin?.[0]),
+      round(origin?.[1]),
+      round(destination?.lat),
+      round(destination?.lng)
+    ].join('|');
+
     const now = Date.now();
-    const cacheTtlMs = 120000; // 2 minutes
+    const cacheTtlMs = 120000;
     const cached = directionsRouteCacheRef.current.get(cacheKey);
     if (cached && (now - cached.timestamp) < cacheTtlMs) {
       setDirectionsResponse(cached.result);
@@ -5959,85 +5962,124 @@ export default function DeliveryHome() {
       return cached.result;
     }
 
-    const inFlight = directionsInFlightRef.current.get(cacheKey);
-    if (inFlight) {
-      return inFlight;
+    const startLat = Number(origin[0]);
+    const startLng = Number(origin[1]);
+    const endLat = Number(destination?.lat);
+    const endLng = Number(destination?.lng);
+
+    if (!Number.isFinite(startLat) || !Number.isFinite(startLng) || !Number.isFinite(endLat) || !Number.isFinite(endLng)) {
+      return null;
     }
 
-    const requestPromise = (async () => {
-      try {
-        // Initialize Directions Service if not already created
-        if (!directionsServiceRef.current) {
-          directionsServiceRef.current = new window.google.maps.DirectionsService();
-        }
+    const toRad = (deg) => deg * Math.PI / 180;
+    const haversineMeters = (lat1, lng1, lat2, lng2) => {
+      const earthRadius = 6371000;
+      const dLat = toRad(lat2 - lat1);
+      const dLng = toRad(lng2 - lng1);
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
+        Math.sin(dLng / 2) * Math.sin(dLng / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      return earthRadius * c;
+    };
 
-        // Try TWO_WHEELER first (optimized for bike/delivery), fallback to DRIVING
-        const tryRoute = (travelMode) => {
-          return new Promise((resolve, reject) => {
-            directionsServiceRef.current.route(
-              {
-                origin: { lat: origin[0], lng: origin[1] },
-                destination: { lat: destination.lat, lng: destination.lng },
-                travelMode: travelMode,
-                provideRouteAlternatives: false, // Save API cost - don't get alternatives
-                avoidHighways: false,
-                avoidTolls: false,
-                optimizeWaypoints: false
+    const interpolatePath = (from, to, spacingMeters = 30) => {
+      const distance = haversineMeters(from.lat, from.lng, to.lat, to.lng);
+      const steps = Math.max(1, Math.ceil(distance / spacingMeters));
+      const path = [];
+      for (let index = 0; index <= steps; index += 1) {
+        const t = index / steps;
+        path.push({
+          lat: from.lat + (to.lat - from.lat) * t,
+          lng: from.lng + (to.lng - from.lng) * t
+        });
+      }
+      return path;
+    };
+
+    const encodePolyline = (points) => {
+      if (!Array.isArray(points) || points.length === 0) return '';
+      const encoded = [];
+      let prevLat = 0;
+      let prevLng = 0;
+
+      const encodeValue = (value) => {
+        let num = value < 0 ? ~(value << 1) : (value << 1);
+        while (num >= 0x20) {
+          encoded.push(String.fromCharCode((0x20 | (num & 0x1f)) + 63));
+          num >>= 5;
+        }
+        encoded.push(String.fromCharCode(num + 63));
+      };
+
+      points.forEach((point) => {
+        const lat = Math.round(Number(point.lat) * 1e5);
+        const lng = Math.round(Number(point.lng) * 1e5);
+        encodeValue(lat - prevLat);
+        encodeValue(lng - prevLng);
+        prevLat = lat;
+        prevLng = lng;
+      });
+
+      return encoded.join('');
+    };
+
+    const overviewPath = interpolatePath(
+      { lat: startLat, lng: startLng },
+      { lat: endLat, lng: endLng }
+    );
+
+    const totalDistance = haversineMeters(startLat, startLng, endLat, endLng);
+    const avgSpeedMetersPerSecond = 8.33;
+    const durationSeconds = Math.max(60, Math.round(totalDistance / avgSpeedMetersPerSecond));
+
+    const bounds = new window.google.maps.LatLngBounds();
+    overviewPath.forEach((point) => bounds.extend(point));
+
+    const result = {
+      request: {
+        origin: { lat: startLat, lng: startLng },
+        destination: { lat: endLat, lng: endLng }
+      },
+      routes: [
+        {
+          bounds,
+          overview_path: overviewPath,
+          overview_polyline: { points: encodePolyline(overviewPath) },
+          legs: [
+            {
+              distance: {
+                text: totalDistance >= 1000
+                  ? ((totalDistance / 1000).toFixed(1) + ' km')
+                  : (Math.round(totalDistance) + ' m'),
+                value: Math.round(totalDistance)
               },
-              (result, status) => {
-                if (status === window.google.maps.DirectionsStatus.OK) {
-                  setDirectionsResponse(result);
-                  directionsResponseRef.current = result; // Store in ref for callbacks
-                  resolve(result);
-                } else if (status === 'REQUEST_DENIED') {
-                  reject(new Error(`Directions API not available: ${status}`));
-                } else {
-                  reject(new Error(`Directions request failed: ${status}`));
-                }
-              }
-            );
-          });
-        };
-
-        // Try TWO_WHEELER first (if available in region)
-        try {
-          if (window.google.maps.TravelMode.TWO_WHEELER) {
-            return await tryRoute(window.google.maps.TravelMode.TWO_WHEELER);
-          }
-        } catch {
-          // Fallback handled below.
+              duration: {
+                text: Math.max(1, Math.round(durationSeconds / 60)) + ' mins',
+                value: durationSeconds
+              },
+              start_location: { lat: startLat, lng: startLng },
+              end_location: { lat: endLat, lng: endLng },
+              steps: []
+            }
+          ]
         }
+      ]
+    };
 
-        // Fallback to DRIVING mode
-        return await tryRoute(window.google.maps.TravelMode.DRIVING);
-      } catch (error) {
-        if (error.message?.includes('REQUEST_DENIED') || error.message?.includes('not available')) {
-          console.warn('⚠️ Google Maps Directions API not available (billing/API key issue). Will use fallback route.');
-        } else {
-          console.error('❌ Error calculating route with Directions API:', error);
-        }
-        return null; // Return null to trigger fallback
+    setDirectionsResponse(result);
+    directionsResponseRef.current = result;
+
+    directionsRouteCacheRef.current.set(cacheKey, { result, timestamp: Date.now() });
+    const expireBefore = Date.now() - (cacheTtlMs * 5);
+    for (const [key, value] of directionsRouteCacheRef.current.entries()) {
+      if (!value?.timestamp || value.timestamp < expireBefore) {
+        directionsRouteCacheRef.current.delete(key);
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    })();
-
-    directionsInFlightRef.current.set(cacheKey, requestPromise);
-
-    try {
-      const result = await requestPromise;
-      if (result) {
-        directionsRouteCacheRef.current.set(cacheKey, { result, timestamp: Date.now() });
-        const expireBefore = Date.now() - (cacheTtlMs * 5);
-        for (const [key, value] of directionsRouteCacheRef.current.entries()) {
-          if (!value?.timestamp || value.timestamp < expireBefore) {
-            directionsRouteCacheRef.current.delete(key);
-          }
-        }
-      }
-      return result;
-    } finally {
-      directionsInFlightRef.current.delete(cacheKey);
     }
+
+    return result;
   }, []);
 
   /**
@@ -6282,11 +6324,6 @@ export default function DeliveryHome() {
         });
 
         directionsMapInstanceRef.current = map;
-
-        // Initialize Directions Service
-        if (!directionsServiceRef.current) {
-          directionsServiceRef.current = new window.google.maps.DirectionsService();
-        }
 
         // Initialize Directions Renderer
         if (!directionsRendererRef.current) {
@@ -11597,9 +11634,6 @@ export default function DeliveryHome() {
     </div>
   )
 }
-
-
-
 
 
 

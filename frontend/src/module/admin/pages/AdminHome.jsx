@@ -23,7 +23,7 @@ import {
   YAxis,
 } from "recharts"
 import { Activity, ArrowUpRight, ShoppingBag, CreditCard, Truck, Receipt, DollarSign, Store, UserCheck, Package, UserCircle, Clock, CheckCircle, Plus } from "lucide-react"
-import appzetoLogo from "@/assets/appzetologo.png"
+import MOBASKETLogo from "@/assets/mobasketlogo.png"
 import { adminAPI } from "@/lib/api"
 import { usePlatform } from "../context/PlatformContext"
 
@@ -516,3 +516,6 @@ function MetricCard({ title, value, helper, icon, accent }) {
     </Card>
   )
 }
+
+
+

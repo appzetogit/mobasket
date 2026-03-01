@@ -12,7 +12,7 @@ import { useZone } from "../hooks/useZone"
 import { useCart } from "../context/CartContext"
 import PageNavbar from "../components/PageNavbar"
 import { foodImages } from "@/constants/images"
-import appzetoFoodLogo from "@/assets/appzetologo.png"
+import MoBasketLogo from "@/assets/mobasketlogo.png"
 import offerImage from "@/assets/offerimage.png"
 import AddToCartAnimation from "../components/AddToCartAnimation"
 import OptimizedImage from "@/components/OptimizedImage"
@@ -1070,3 +1070,6 @@ export default function Under250() {
     </div>
   )
 }
+
+
+

@@ -1,7 +1,7 @@
 // Utility for managing restaurant data across pages
 import { restaurantsDummy } from "../data/restaurantsDummy"
 
-const STORAGE_KEY = "appzeto_restaurants"
+const STORAGE_KEY = "mobasket_restaurants"
 
 // Get restaurants from localStorage or use dummy data
 export const getRestaurants = () => {
@@ -67,4 +67,6 @@ export const deleteRestaurant = (id) => {
   saveRestaurants(updatedRestaurants)
   return true
 }
+
+
 

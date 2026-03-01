@@ -1,6 +1,6 @@
-# Appzeto Food Backend API
+# MoBasket Backend API
 
-Backend API for Appzeto Food Delivery Platform built with Node.js, Express, and MongoDB.
+Backend API for MoBasket delivery platform built with Node.js, Express, and MongoDB.
 
 ## Features
 

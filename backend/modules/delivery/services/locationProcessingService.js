@@ -189,84 +189,93 @@ export async function snapToRoad(points, riderId = null) {
  */
 export async function generateRoutePolyline(start, waypoint, end) {
   try {
-    const apiKey = await getGoogleMapsApiKey();
-    if (!apiKey) {
-      console.warn('⚠️ Google Maps API key not found, cannot generate route');
+    const isValidCoord = (point) => (
+      point &&
+      Number.isFinite(Number(point.lat)) &&
+      Number.isFinite(Number(point.lng)) &&
+      Number(point.lat) >= -90 &&
+      Number(point.lat) <= 90 &&
+      Number(point.lng) >= -180 &&
+      Number(point.lng) <= 180
+    );
+
+    if (!isValidCoord(start) || !isValidCoord(end)) {
       return null;
     }
-    
-    // Round coordinates to 4 decimal places (~11 meters precision) for cache key
-    // This allows caching similar routes
+
     const roundCoord = (coord) => Math.round(coord * 10000) / 10000;
-    const origin = `${roundCoord(start.lat)},${roundCoord(start.lng)}`;
-    const destination = `${roundCoord(end.lat)},${roundCoord(end.lng)}`;
-    const waypoints = waypoint ? `via:${roundCoord(waypoint.lat)},${roundCoord(waypoint.lng)}` : '';
-    
-    // Create cache key
-    const cacheKey = `${origin}|${destination}|${waypoints}`;
-    
-    // Check cache first
+    const origin = `${roundCoord(Number(start.lat))},${roundCoord(Number(start.lng))}`;
+    const destination = `${roundCoord(Number(end.lat))},${roundCoord(Number(end.lng))}`;
+    const via = isValidCoord(waypoint)
+      ? `${roundCoord(Number(waypoint.lat))},${roundCoord(Number(waypoint.lng))}`
+      : '';
+    const cacheKey = `${origin}|${destination}|${via}`;
+
     const cached = directionsCache.get(cacheKey);
     if (cached && (Date.now() - cached.timestamp) < DIRECTIONS_CACHE_TTL_MS) {
-      console.log('✅ Using cached route polyline');
       return cached.route;
     }
-    
-    const response = await axios.get(
-      `https://maps.googleapis.com/maps/api/directions/json`,
-      {
-        params: {
-          origin,
-          destination,
-          waypoints: waypoints || undefined,
-          key: apiKey,
-          alternatives: false,
-          optimize: false
-        },
-        timeout: 10000 // 10 second timeout
+
+    const interpolateSegment = (from, to, spacingMeters = 30) => {
+      const distance = calculateDistance(from, to);
+      const steps = Math.max(1, Math.ceil(distance / spacingMeters));
+      const points = [];
+      for (let i = 0; i <= steps; i += 1) {
+        const t = i / steps;
+        points.push({
+          lat: Number(from.lat) + (Number(to.lat) - Number(from.lat)) * t,
+          lng: Number(from.lng) + (Number(to.lng) - Number(from.lng)) * t
+        });
       }
-    );
-    
-    if (response.data?.routes?.[0]) {
-      const route = response.data.routes[0];
-      const polyline = route.overview_polyline.points;
-      
-      // Decode polyline to get all points
-      const points = decodePolyline(polyline);
-      
-      // Calculate total distance
-      let totalDistance = 0;
-      for (let i = 1; i < points.length; i++) {
-        totalDistance += calculateDistance(points[i-1], points[i]);
-      }
-      
-      const routeData = {
-        points,
-        totalDistance,
-        polyline,
-        duration: route.legs.reduce((sum, leg) => sum + leg.duration.value, 0)
-      };
-      
-      // Cache the result
-      directionsCache.set(cacheKey, {
-        route: routeData,
-        timestamp: Date.now()
-      });
-      
-      // Clean old cache entries (older than cache TTL)
-      const now = Date.now();
-      for (const [key, value] of directionsCache.entries()) {
-        if ((now - value.timestamp) > DIRECTIONS_CACHE_TTL_MS) {
-          directionsCache.delete(key);
-        }
-      }
-      
-      return routeData;
+      return points;
+    };
+
+    const routeAnchors = [{ lat: Number(start.lat), lng: Number(start.lng) }];
+    if (isValidCoord(waypoint)) {
+      routeAnchors.push({ lat: Number(waypoint.lat), lng: Number(waypoint.lng) });
     }
-    
-    return null;
+    routeAnchors.push({ lat: Number(end.lat), lng: Number(end.lng) });
+
+    const points = [];
+    for (let index = 0; index < routeAnchors.length - 1; index += 1) {
+      const segment = interpolateSegment(routeAnchors[index], routeAnchors[index + 1]);
+      if (index > 0 && segment.length > 0) {
+        segment.shift();
+      }
+      points.push(...segment);
+    }
+
+    let totalDistance = 0;
+    for (let i = 1; i < points.length; i += 1) {
+      totalDistance += calculateDistance(points[i - 1], points[i]);
+    }
+
+    const avgSpeedMetersPerSecond = 8.33;
+    const duration = Math.max(60, Math.round(totalDistance / avgSpeedMetersPerSecond));
+    const polyline = encodePolyline(points);
+
+    const routeData = {
+      points,
+      totalDistance,
+      polyline,
+      duration
+    };
+
+    directionsCache.set(cacheKey, {
+      route: routeData,
+      timestamp: Date.now()
+    });
+
+    const now = Date.now();
+    for (const [key, value] of directionsCache.entries()) {
+      if ((now - value.timestamp) > DIRECTIONS_CACHE_TTL_MS) {
+        directionsCache.delete(key);
+      }
+    }
+
+    return routeData;
   } catch (error) {
-    console.error('❌ Error generating route:', error.message);
+    console.error('Error generating route:', error.message);
     return null;
   }
 }
@@ -315,6 +324,36 @@ function decodePolyline(encoded) {
   }
   
   return points;
+}
+
+function encodePolyline(points = []) {
+  if (!Array.isArray(points) || points.length === 0) return '';
+
+  let lastLat = 0;
+  let lastLng = 0;
+  let encoded = '';
+
+  const encodeSigned = (num) => {
+    let value = num < 0 ? ~(num << 1) : (num << 1);
+    let chunk = '';
+    while (value >= 0x20) {
+      chunk += String.fromCharCode((0x20 | (value & 0x1f)) + 63);
+      value >>= 5;
+    }
+    chunk += String.fromCharCode(value + 63);
+    return chunk;
+  };
+
+  for (const point of points) {
+    const lat = Math.round(Number(point.lat) * 1e5);
+    const lng = Math.round(Number(point.lng) * 1e5);
+    encoded += encodeSigned(lat - lastLat);
+    encoded += encodeSigned(lng - lastLng);
+    lastLat = lat;
+    lastLng = lng;
+  }
+
+  return encoded;
 }
 
 /**

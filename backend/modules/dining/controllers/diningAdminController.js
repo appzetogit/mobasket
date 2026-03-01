@@ -25,7 +25,7 @@ export const createDiningCategory = async (req, res) => {
         if (!req.file) return errorResponse(res, 400, 'Image is required');
 
         const result = await uploadToCloudinary(req.file.buffer, {
-            folder: 'appzeto/dining/categories',
+            folder: 'mobasket/dining/categories',
             resource_type: 'image'
         });
 
@@ -88,7 +88,7 @@ export const createDiningOfferBanner = async (req, res) => {
         if (!req.file) return errorResponse(res, 400, 'Image is required');
 
         const result = await uploadToCloudinary(req.file.buffer, {
-            folder: 'appzeto/dining/offers',
+            folder: 'mobasket/dining/offers',
             resource_type: 'image'
         });
 
@@ -152,7 +152,7 @@ export const updateDiningOfferBanner = async (req, res) => {
             }
 
             const result = await uploadToCloudinary(req.file.buffer, {
-                folder: 'appzeto/dining/offers',
+                folder: 'mobasket/dining/offers',
                 resource_type: 'image'
             });
 
@@ -201,7 +201,7 @@ export const createDiningStory = async (req, res) => {
         if (!req.file) return errorResponse(res, 400, 'Image is required');
 
         const result = await uploadToCloudinary(req.file.buffer, {
-            folder: 'appzeto/dining/stories',
+            folder: 'mobasket/dining/stories',
             resource_type: 'image'
         });
 
@@ -258,7 +258,7 @@ export const updateDiningStory = async (req, res) => {
             }
 
             const result = await uploadToCloudinary(req.file.buffer, {
-                folder: 'appzeto/dining/stories',
+                folder: 'mobasket/dining/stories',
                 resource_type: 'image'
             });
 
@@ -274,3 +274,5 @@ export const updateDiningStory = async (req, res) => {
         return errorResponse(res, 500, 'Failed to update story');
     }
 };
+
+

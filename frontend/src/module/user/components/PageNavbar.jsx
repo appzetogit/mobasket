@@ -11,7 +11,7 @@ import {
   getCachedSettings,
   loadBusinessSettings,
 } from "@/lib/utils/businessSettings";
-import appzetoFoodLogo from "@/assets/appzetologo.png";
+import MoBasketLogo from "@/assets/mobasketlogo.png";
 
 export default function PageNavbar({
   textColor = "white",
@@ -1299,12 +1299,12 @@ export default function PageNavbar({
         {/* Center: Company Logo */}
         <div className="flex items-center justify-center">
           <img
-            src={logoUrl || appzetoFoodLogo}
+            src={logoUrl || MoBasketLogo}
             alt="MoBasket"
             className="h-8 w-auto object-contain"
             onError={(e) => {
-              if (e.target.src !== appzetoFoodLogo) {
-                e.target.src = appzetoFoodLogo;
+              if (e.target.src !== MoBasketLogo) {
+                e.target.src = MoBasketLogo;
               }
             }}
           />
@@ -1391,3 +1391,6 @@ export default function PageNavbar({
     </nav>
   );
 }
+
+
+

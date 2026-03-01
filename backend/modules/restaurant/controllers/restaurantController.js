@@ -622,7 +622,7 @@ export const uploadProfileImage = asyncHandler(async (req, res) => {
     }
 
     // Upload to Cloudinary
-    const folder = 'appzeto/restaurant/profile';
+    const folder = 'mobasket/restaurant/profile';
     const result = await uploadToCloudinary(req.file.buffer, {
       folder,
       resource_type: 'image',
@@ -694,7 +694,7 @@ export const uploadMenuImage = asyncHandler(async (req, res) => {
     });
 
     // Upload to Cloudinary
-    const folder = 'appzeto/restaurant/menu';
+    const folder = 'mobasket/restaurant/menu';
     const result = await uploadToCloudinary(req.file.buffer, {
       folder,
       resource_type: 'image',
@@ -1014,4 +1014,6 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
     return errorResponse(res, 500, 'Failed to fetch restaurants with dishes under ₹250');
   }
 };
+
+
 

@@ -508,7 +508,7 @@ export default function AddGroceryStore() {
       // Simplistic upload for demo purposes - in real use, we'd upload all
       let profileImageData = null
       if (step2.profileImage instanceof File) {
-        profileImageData = await handleUpload(step2.profileImage, "appzeto/grocery/profile")
+        profileImageData = await handleUpload(step2.profileImage, "mobasket/grocery/profile")
       }
 
       const payload = {
@@ -739,3 +739,5 @@ export default function AddGroceryStore() {
     </div>
   )
 }
+
+

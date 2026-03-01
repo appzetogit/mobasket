@@ -521,7 +521,7 @@ export default function RestaurantsList() {
       if (editRestaurantImageFile) {
         setUploadingRestaurantImage(true)
         const uploadResponse = await uploadAPI.uploadMedia(editRestaurantImageFile, {
-          folder: "appzeto/restaurants",
+          folder: "mobasket/restaurants",
         })
         uploadedProfileImage = uploadResponse?.data?.data || null
       }
@@ -1976,3 +1976,5 @@ export default function RestaurantsList() {
     </div>
   )
 }
+
+

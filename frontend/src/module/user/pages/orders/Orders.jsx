@@ -879,7 +879,7 @@ Order again from this restaurant in the ${companyName} app.`
 
         {/* Footer Branding */}
         <div className="flex justify-center mt-8 mb-4">
-          <h1 className="text-4xl font-black text-gray-200 tracking-tighter italic">appzeto</h1>
+          <h1 className="text-4xl font-black text-gray-200 tracking-tighter italic">MOBASKET</h1>
         </div>
 
         {/* Rating & Feedback Modal */}
@@ -994,3 +994,4 @@ Order again from this restaurant in the ${companyName} app.`
     </div>
   )
 }
+

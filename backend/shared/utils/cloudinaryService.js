@@ -60,7 +60,7 @@ export async function uploadToCloudinary(buffer, options = {}) {
       // Extract upload options
       const uploadOptions = {
         resource_type: options.resource_type || 'auto',
-        folder: options.folder || 'appzeto'
+        folder: options.folder || 'mobasket'
       };
 
       // Copy other options (excluding folder and resource_type which are already set)

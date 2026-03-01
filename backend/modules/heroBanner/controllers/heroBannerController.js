@@ -90,7 +90,7 @@ export const createHeroBanner = async (req, res) => {
     }
 
     // Upload to Cloudinary
-    const folder = `appzeto/${platform}/hero-banners`;
+    const folder = `mobasket/${platform}/hero-banners`;
     const result = await uploadToCloudinary(req.file.buffer, {
       folder,
       resource_type: 'image'
@@ -153,7 +153,7 @@ export const createMultipleHeroBanners = async (req, res) => {
 
     let currentOrder = lastBanner ? lastBanner.order + 1 : 0;
 
-    const folder = `appzeto/${platform}/hero-banners`;
+    const folder = `mobasket/${platform}/hero-banners`;
     const uploadedBanners = [];
     const errors = [];
 
@@ -419,7 +419,7 @@ export const createLandingCategory = async (req, res) => {
     const slug = label.toLowerCase().trim().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
 
     // Upload to Cloudinary
-    const folder = `appzeto/${platform}/landing/categories`;
+    const folder = `mobasket/${platform}/landing/categories`;
     const result = await uploadToCloudinary(req.file.buffer, {
       folder,
       resource_type: 'image'
@@ -586,7 +586,7 @@ export const createLandingExploreMore = async (req, res) => {
     }
 
     // Upload to Cloudinary
-    const folder = `appzeto/${platform}/landing/explore-more`;
+    const folder = `mobasket/${platform}/landing/explore-more`;
     const result = await uploadToCloudinary(req.file.buffer, {
       folder,
       resource_type: 'image'
@@ -818,7 +818,7 @@ export const createUnder250Banner = async (req, res) => {
     }
 
     // Upload to Cloudinary
-    const folder = `appzeto/${platform}/under-250-banners`;
+    const folder = `mobasket/${platform}/under-250-banners`;
     const result = await uploadToCloudinary(req.file.buffer, {
       folder,
       resource_type: 'image'
@@ -881,7 +881,7 @@ export const createMultipleUnder250Banners = async (req, res) => {
 
     let currentOrder = lastBanner ? lastBanner.order + 1 : 0;
 
-    const folder = `appzeto/${platform}/under-250-banners`;
+    const folder = `mobasket/${platform}/under-250-banners`;
     const uploadedBanners = [];
     const errors = [];
 
@@ -1080,7 +1080,7 @@ export const createDiningBanner = async (req, res) => {
     }
 
     // Upload to Cloudinary
-    const folder = 'appzeto/dining-banners';
+    const folder = 'mobasket/dining-banners';
     const result = await uploadToCloudinary(req.file.buffer, {
       folder,
       resource_type: 'image'
@@ -1141,7 +1141,7 @@ export const createMultipleDiningBanners = async (req, res) => {
 
     let currentOrder = lastBanner ? lastBanner.order + 1 : 0;
 
-    const folder = 'appzeto/dining-banners';
+    const folder = 'mobasket/dining-banners';
     const uploadedBanners = [];
     const errors = [];
 
@@ -1915,3 +1915,5 @@ export const toggleGroceryBestSellerStatus = async (req, res) => {
     return errorResponse(res, 500, 'Failed to update best seller status');
   }
 };
+
+

@@ -14,7 +14,7 @@ export const getBusinessSettingsPublic = asyncHandler(async (req, res) => {
     
     // Return only public-facing data with defaults if not set
     return successResponse(res, 200, 'Business settings retrieved successfully', {
-      companyName: settings?.companyName || 'Appzeto Food',
+      companyName: settings?.companyName || 'MoBasket',
       logo: settings?.logo || { url: '', publicId: '' },
       favicon: settings?.favicon || { url: '', publicId: '' },
       policyLinks: settings?.policyLinks || {
@@ -27,7 +27,7 @@ export const getBusinessSettingsPublic = asyncHandler(async (req, res) => {
     console.error('Error fetching public business settings:', error);
     // Return default values instead of error
     return successResponse(res, 200, 'Business settings retrieved successfully', {
-      companyName: 'Appzeto Food',
+      companyName: 'MoBasket',
       logo: { url: '', publicId: '' },
       favicon: { url: '', publicId: '' },
       policyLinks: {
@@ -146,7 +146,7 @@ export const updateBusinessSettings = asyncHandler(async (req, res) => {
 
         // Upload new logo
         const logoResult = await uploadToCloudinary(logoFile.buffer, {
-          folder: 'appzeto/business/logo',
+          folder: 'mobasket/business/logo',
           resource_type: 'image',
           transformation: [
             { width: 500, height: 500, crop: 'limit' },
@@ -194,7 +194,7 @@ export const updateBusinessSettings = asyncHandler(async (req, res) => {
 
         // Upload new favicon
         const faviconResult = await uploadToCloudinary(faviconFile.buffer, {
-          folder: 'appzeto/business/favicon',
+          folder: 'mobasket/business/favicon',
           resource_type: 'image',
           transformation: [
             { width: 64, height: 64, crop: 'limit' },
@@ -225,4 +225,6 @@ export const updateBusinessSettings = asyncHandler(async (req, res) => {
     return errorResponse(res, 500, 'Failed to update business settings');
   }
 });
+
+
 
