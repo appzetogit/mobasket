@@ -3,7 +3,7 @@ import io from 'socket.io-client';
 import { SOCKET_BASE_URL } from '@/lib/api/config';
 import bikeLogo from '@/assets/bikelogo.png';
 import { RouteBasedAnimationController } from '@/module/user/utils/routeBasedAnimation';
-import { decodePolyline, findNearestPointOnPolyline } from '@/module/delivery/utils/liveTrackingPolyline';
+import { decodePolyline, findNearestPointOnPolyline, trimPolylineBehindRider } from '@/module/delivery/utils/liveTrackingPolyline';
 import { ref as rtdbRef, onValue } from 'firebase/database';
 import { realtimeDb } from '@/lib/firebase';
 import './DeliveryTrackingMap.css';
@@ -56,6 +56,7 @@ const DeliveryTrackingMap = ({
   const routePolylineRef = useRef(null);
   const isCustomerLegRef = useRef(false);
   const routePolylinePointsRef = useRef(null); // Store decoded polyline points for route-based animation
+  const visibleRoutePolylinePointsRef = useRef(null); // Store currently visible (trimmed) route points
   const animationControllerRef = useRef(null); // Route-based animation controller
   const lastRouteUpdateRef = useRef(null);
   const hasFirebaseRouteRef = useRef(false);
@@ -86,6 +87,7 @@ const DeliveryTrackingMap = ({
     if (normalizedPath.length === 0) return;
 
     routePolylinePointsRef.current = normalizedPath;
+    visibleRoutePolylinePointsRef.current = normalizedPath;
 
     if (routePolylineRef.current) {
       routePolylineRef.current.setMap(null);
@@ -554,6 +556,21 @@ const DeliveryTrackingMap = ({
           const nearest = findNearestPointOnPolyline(routePolylinePointsRef.current, { lat, lng });
           
           if (nearest && nearest.nearestPoint) {
+            const trimmedRoute = trimPolylineBehindRider(
+              routePolylinePointsRef.current,
+              nearest.nearestPoint,
+              nearest.segmentIndex
+            );
+            if (routePolylineRef.current && Array.isArray(trimmedRoute) && trimmedRoute.length > 0) {
+              visibleRoutePolylinePointsRef.current = trimmedRoute;
+              routePolylineRef.current.setPath(
+                trimmedRoute.map((point) => ({
+                  lat: Number(point?.lat),
+                  lng: Number(point?.lng)
+                }))
+              );
+            }
+
             // Calculate progress on route (0 to 1) based on distance traveled
             const totalPoints = routePolylinePointsRef.current.length;
             
