@@ -1120,16 +1120,8 @@ export default function DeliveryHome() {
     Number.isFinite(Number(walletState?.availableCashLimit))
       ? Number(walletState.availableCashLimit)
       : (totalCashLimit - cashInHand - deductions)
-  const pocketBalanceForEligibility = Number.isFinite(Number(walletState?.pocketBalance))
-    ? Number(walletState.pocketBalance)
-    : (Number(walletState?.totalBalance) || 0)
   const isCashInHandLimitReached = cashInHand >= totalCashLimit
-  // Eligibility rule: pocket balance must be greater than or equal to available cash limit.
-  const orderEligibilityMinBalance = availableCashLimit
-  const isPocketBalanceTooLowForOrders =
-    pocketBalanceForEligibility < orderEligibilityMinBalance
-  const isMapLockedForOrderEligibility =
-    isPocketBalanceTooLowForOrders || isCashInHandLimitReached
+  const isMapLockedForOrderEligibility = isCashInHandLimitReached
 
   // State for active earning addon
   const [activeEarningAddon, setActiveEarningAddon] = useState(null)
@@ -9427,14 +9419,6 @@ export default function DeliveryHome() {
                     </p>
                   </>
                 )}
-                {isPocketBalanceTooLowForOrders && (
-                  <>
-                    <p className="text-sm font-semibold text-gray-900">Pocket balance too low</p>
-                    <p className="text-xs text-gray-700 mt-1">
-                      Pocket balance must be greater than or equal to available cash limit ₹{orderEligibilityMinBalance.toFixed(2)} to receive orders.
-                    </p>
-                  </>
-                )}
               </div>
             </div>
           )}
@@ -9445,8 +9429,6 @@ export default function DeliveryHome() {
               if (isMapLockedForOrderEligibility) {
                 if (isCashInHandLimitReached) {
                   toast.error(`Cash in hand limit reached (Rs ${totalCashLimit.toFixed(2)}). Deposit cash in hand to continue receiving orders.`)
-                } else {
-                  toast.error(`Pocket balance must be greater than or equal to available cash limit Rs ${orderEligibilityMinBalance.toFixed(2)} to receive orders.`)
                 }
                 return
               }

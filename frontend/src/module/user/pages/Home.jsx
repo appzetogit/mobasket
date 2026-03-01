@@ -2011,34 +2011,33 @@ export default function Home() {
 
         {/* Top Brands / Best Restaurants - Horizontal Scroll */}
         <motion.section
-          className="space-y-1 sm:space-y-1.5 lg:space-y-2 mt-2 sm:mt-3"
+          className="space-y-2 mt-3 sm:mt-4"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-100px" }}
           transition={{ duration: 0.5, delay: 0.2 }}
         >
-          <div className="px-3 sm:px-4 md:px-6 lg:px-8">
+          <div className="px-3 sm:px-4 md:px-6 lg:px-8 flex items-center justify-between">
             <h3 className="text-sm sm:text-base md:text-lg font-bold text-gray-900 dark:text-gray-100">
               Top Brands
             </h3>
           </div>
           <div
-            className="flex items-start gap-3 sm:gap-4 lg:gap-5 xl:gap-6 overflow-x-auto overflow-y-visible scrollbar-hide scroll-smooth px-2 sm:px-3 lg:px-4 py-2 sm:py-3 lg:py-4 min-h-[110px] sm:min-h-[150px] md:min-h-[170px]"
+            className="flex items-stretch gap-3 sm:gap-4 overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth snap-x snap-mandatory px-3 sm:px-4 lg:px-6 py-2 sm:py-3"
             style={{
               scrollbarWidth: "none",
               msOverflowStyle: "none",
-              touchAction: "pan-x pan-y pinch-zoom",
-              overflowY: "hidden",
+              touchAction: "pan-x",
             }}
           >
             {loadingRestaurants ? (
               [...Array(6)].map((_, i) => (
                 <div
                   key={`brand-skeleton-${i}`}
-                  className="flex flex-col items-center gap-2 w-[62px] sm:w-24 md:w-28 animate-pulse flex-shrink-0"
+                  className="flex flex-col items-center gap-2 w-[74px] sm:w-[92px] md:w-[104px] animate-pulse shrink-0 snap-start"
                 >
-                  <div className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full bg-gray-200 dark:bg-gray-800" />
-                  <div className="h-3 w-16 bg-gray-200 dark:bg-gray-800 rounded" />
+                  <div className="w-14 h-14 sm:w-[72px] sm:h-[72px] md:w-20 md:h-20 rounded-full bg-gray-200 dark:bg-gray-800" />
+                  <div className="h-3 w-14 sm:w-16 bg-gray-200 dark:bg-gray-800 rounded" />
                 </div>
               ))
             ) : visibleTopBrands.length > 0 ? (
@@ -2046,7 +2045,7 @@ export default function Home() {
                 {visibleTopBrands.map((restaurant, index) => (
                   <motion.div
                     key={`brand-${restaurant.id || index}`}
-                    className="flex-shrink-0"
+                    className="shrink-0 snap-start"
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{
@@ -2059,8 +2058,8 @@ export default function Home() {
                     <Link
                       to={`/restaurants/${restaurant.slug || restaurant.id}`}
                     >
-                      <div className="flex flex-col items-center gap-2 w-[62px] sm:w-24 md:w-28">
-                        <div className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full overflow-hidden shadow-md transition-all border border-gray-100 dark:border-gray-800">
+                      <div className="flex flex-col items-center gap-2 w-[74px] sm:w-[92px] md:w-[104px]">
+                        <div className="w-14 h-14 sm:w-[72px] sm:h-[72px] md:w-20 md:h-20 rounded-full overflow-hidden shadow-sm transition-all border border-gray-100 dark:border-gray-800 bg-white">
                           <img
                             src={sanitizeImageSrc(restaurant.image, restaurant.slug || restaurant.id || restaurant.name)}
                             alt={restaurant.name}
@@ -2071,7 +2070,7 @@ export default function Home() {
                             loading="lazy"
                           />
                         </div>
-                        <span className="text-xs sm:text-sm md:text-base font-semibold text-gray-800 dark:text-gray-200 text-center line-clamp-1 w-full px-1">
+                        <span className="text-xs sm:text-sm font-semibold text-gray-800 dark:text-gray-200 text-center leading-tight line-clamp-1 w-full px-1">
                           {restaurant.name}
                         </span>
                       </div>
@@ -2081,7 +2080,7 @@ export default function Home() {
 
                 {/* See All button - show if there are more than 10 restaurants */}
                 <motion.div
-                  className="flex-shrink-0 cursor-pointer"
+                  className="shrink-0 snap-start cursor-pointer"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.25, delay: 0.1 }}
@@ -2089,13 +2088,13 @@ export default function Home() {
                   whileTap={{ scale: 0.95 }}
                   onClick={() => navigate("/user/restaurants")}
                 >
-                  <div className="flex flex-col items-center gap-2 w-[62px] sm:w-24 md:w-28">
-                    <div className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full overflow-hidden shadow-md transition-all bg-[#EF4F5F] flex items-center justify-center">
+                  <div className="flex flex-col items-center gap-2 w-[74px] sm:w-[92px] md:w-[104px]">
+                    <div className="w-14 h-14 sm:w-[72px] sm:h-[72px] md:w-20 md:h-20 rounded-full overflow-hidden shadow-sm transition-all bg-[#EF4F5F] flex items-center justify-center">
                       <div className="flex items-center justify-center w-full h-full">
                         <Store className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 text-white" />
                       </div>
                     </div>
-                    <span className="text-xs sm:text-sm md:text-base font-semibold text-gray-800 dark:text-gray-200 text-center">
+                    <span className="text-xs sm:text-sm font-semibold text-gray-800 dark:text-gray-200 text-center leading-tight">
                       See all
                     </span>
                   </div>

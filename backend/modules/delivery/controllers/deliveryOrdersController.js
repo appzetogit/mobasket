@@ -504,9 +504,8 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, `Order cannot be accepted. Current status: ${order.status}. Order must be in 'preparing' or 'ready' status.`);
     }
 
-    // Enforce wallet eligibility before accepting any order.
-    // Rule: pocketBalance >= availableCashLimit
-    // availableCashLimit = totalCashLimit - cashInHand - deductions
+    // Enforce cash-in-hand limit before accepting any order.
+    // If delivery partner reaches the configured cash limit, they must deposit COD cash first.
     const wallet = await DeliveryWallet.findOrCreateByDeliveryId(delivery._id);
     let totalCashLimit = 750;
     try {
@@ -519,7 +518,6 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       totalCashLimit = 750;
     }
 
-    const pocketBalance = Math.max(0, Number(wallet.totalBalance) || 0);
     const cashInHand = Math.max(0, Number(wallet.cashInHand) || 0);
     const deductions = Math.max(0, Number(wallet.deductions) || 0);
     const availableCashLimit = Number(totalCashLimit) - cashInHand - deductions;
@@ -530,22 +528,6 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         400,
         'Cash in hand limit reached. Please deposit your cash in hand to continue receiving orders.',
         {
-          pocketBalance,
-          cashInHand,
-          deductions,
-          totalCashLimit,
-          availableCashLimit
-        }
-      );
-    }
-
-    if (pocketBalance < availableCashLimit) {
-      return errorResponse(
-        res,
-        400,
-        'Not eligible to accept orders. Please settle COD cash or improve wallet position.',
-        {
-          pocketBalance,
           cashInHand,
           deductions,
           totalCashLimit,

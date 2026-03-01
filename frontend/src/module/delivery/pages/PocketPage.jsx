@@ -378,7 +378,6 @@ export default function PocketPage() {
       ? Number(walletState.availableCashLimit)
       : (totalCashLimit - cashInHand - deductions)
   const isCashLimitReached = totalCashLimit > 0 && cashInHand >= totalCashLimit
-  const isPocketEligibleForRequests = pocketBalance >= availableCashLimit
   const depositAmount = pocketBalance < 0 ? Math.abs(pocketBalance) : 0
 
   // Customer tips balance - calculate from transactions
@@ -980,19 +979,7 @@ export default function PocketPage() {
               <div className="flex items-center justify-between">
                 <span className="text-black text-sm">Total cash limit (admin)</span>
                 <span className="text-black text-sm font-medium">₹{totalCashLimit.toFixed(2)}</span>
-              </div>
-
-              <div
-                className={`rounded-lg p-3 text-xs font-medium ${
-                  isPocketEligibleForRequests
-                    ? "bg-green-50 text-green-700"
-                    : "bg-red-50 text-red-700"
-                }`}
-              >
-                {isPocketEligibleForRequests
-                  ? `Eligible for order requests: pocket balance (₹${pocketBalance.toFixed(2)}) is greater than or equal to available cash limit (₹${availableCashLimit.toFixed(2)}).`
-                  : `Not eligible for order requests: pocket balance (₹${pocketBalance.toFixed(2)}) must be greater than or equal to available cash limit (₹${availableCashLimit.toFixed(2)}).`}
-              </div>
+              </div>\n              <div className="rounded-lg p-3 text-xs font-medium bg-slate-50 text-slate-700">\n                Available cash limit: ?{availableCashLimit.toFixed(2)}. Order assignment is controlled by cash-in-hand limit.\n              </div>
 
               {isCashLimitReached && (
                 <div className="rounded-lg p-3 text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">
@@ -1135,4 +1122,5 @@ export default function PocketPage() {
     </div>
   )
 }
+
 
