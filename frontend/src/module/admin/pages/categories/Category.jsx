@@ -561,7 +561,11 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
 
   const handleExportPDF = () => {
     try {
-      const doc = new jsPDF()
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+      })
       
       // Add title
       doc.setFontSize(18)
@@ -590,9 +594,11 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
       // Add table
       autoTable(doc, {
         startY: 35,
+        margin: { left: 10, right: 10, bottom: 15 },
         head: [['SL', 'Category Name', 'Type', 'Status', 'ID']],
         body: tableData,
         theme: 'striped',
+        tableWidth: 'auto',
         headStyles: {
           fillColor: [59, 130, 246], // Blue color
           textColor: 255,
@@ -607,16 +613,18 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
           fillColor: [245, 247, 250]
         },
         styles: {
-          cellPadding: 5,
+          cellPadding: 3,
+          overflow: 'linebreak',
+          valign: 'middle',
           lineColor: [200, 200, 200],
           lineWidth: 0.5
         },
         columnStyles: {
-          0: { cellWidth: 20 }, // SL
-          1: { cellWidth: 70 }, // Category Name
-          2: { cellWidth: 50 }, // Type
-          3: { cellWidth: 40 }, // Status
-          4: { cellWidth: 50 }  // ID
+          0: { cellWidth: 14, halign: 'center' }, // SL
+          1: { cellWidth: 80 }, // Category Name
+          2: { cellWidth: 55 }, // Type
+          3: { cellWidth: 26, halign: 'center' }, // Status
+          4: { cellWidth: 92 }  // ID
         }
       })
       

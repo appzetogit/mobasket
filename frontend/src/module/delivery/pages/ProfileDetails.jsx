@@ -68,6 +68,18 @@ export default function ProfileDetails() {
     fetchProfile()
   }, [navigate])
 
+  const getDocumentStatusLabel = (documentNode) => {
+    if (!documentNode?.document) return "Not uploaded"
+
+    const isDocVerified = documentNode?.verified === true
+    const profileStatus = String(profile?.status || "").toLowerCase()
+    const isProfileApproved = profileStatus === "approved" || profileStatus === "active"
+
+    return isDocVerified || isProfileApproved ? "Verified" : "Not verified"
+  }
+
+  const profileImageUrl = profile?.profileImage?.url || profile?.documents?.photo || ""
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
@@ -83,11 +95,17 @@ export default function ProfileDetails() {
 
       {/* Profile Picture Area */}
       <div className="relative w-full bg-gray-200 overflow-hidden flex items-center justify-center">
-        <img
-          src={profile?.profileImage?.url || profile?.documents?.photo || "https://i.pravatar.cc/400?img=12"}
-          alt="Profile"
-          className="w-full h-auto max-h-96 object-contain"
-        />
+        {loading ? (
+          <div className="w-full h-72 bg-gray-200" />
+        ) : profileImageUrl ? (
+          <img
+            src={profileImageUrl}
+            alt="Profile"
+            className="w-full h-auto max-h-96 object-contain"
+          />
+        ) : (
+          <div className="w-full h-72 bg-gray-200" />
+        )}
       </div>
 
       {/* Content */}
@@ -161,7 +179,7 @@ export default function ProfileDetails() {
               <div className="flex-1">
                 <p className="text-base font-medium text-gray-900">Aadhar Card</p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {profile?.documents?.aadhar?.verified ? "Verified" : profile?.documents?.aadhar?.document ? "Not verified" : "Not uploaded"}
+                  {getDocumentStatusLabel(profile?.documents?.aadhar)}
                 </p>
               </div>
               {profile?.documents?.aadhar?.document && (
@@ -185,7 +203,7 @@ export default function ProfileDetails() {
               <div className="flex-1">
                 <p className="text-base font-medium text-gray-900">PAN Card</p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {profile?.documents?.pan?.verified ? "Verified" : profile?.documents?.pan?.document ? "Not verified" : "Not uploaded"}
+                  {getDocumentStatusLabel(profile?.documents?.pan)}
                 </p>
               </div>
               {profile?.documents?.pan?.document && (
@@ -209,7 +227,7 @@ export default function ProfileDetails() {
               <div className="flex-1">
                 <p className="text-base font-medium text-gray-900">Driving License</p>
                 <p className="text-xs text-gray-500 mt-1">
-                  {profile?.documents?.drivingLicense?.verified ? "Verified" : profile?.documents?.drivingLicense?.document ? "Not verified" : "Not uploaded"}
+                  {getDocumentStatusLabel(profile?.documents?.drivingLicense)}
                 </p>
               </div>
               {profile?.documents?.drivingLicense?.document && (

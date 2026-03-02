@@ -24,7 +24,7 @@ import PaymentPage from "@/module/usermain/pages/PaymentPage";
 import OrdersPage from "@/module/usermain/pages/OrdersPage";
 import OrderTracking from "../pages/orders/OrderTracking";
 import OrderInvoice from "../pages/orders/OrderInvoice";
-import OrderDetailsPage from "@/module/usermain/pages/OrderDetailsPage";
+import UserOrderDetails from "../pages/orders/UserOrderDetails";
 
 // Offers
 import Offers from "../pages/Offers";
@@ -197,7 +197,7 @@ export default function UserRouter() {
           path="/orders/:orderId/details"
           element={
             <ProtectedRoute requiredRole="user" loginPath="/user/auth/sign-in">
-              <OrderDetailsPage />
+              <UserOrderDetails />
             </ProtectedRoute>
           }
         />
