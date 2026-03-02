@@ -1050,17 +1050,14 @@ export const getRestaurants = asyncHandler(async (req, res) => {
       ]
     };
 
-    // Status filter - Default to active only (approved restaurants)
-    // Only show inactive if explicitly requested via status filter
-    // IMPORTANT: Restaurants should only appear in main list AFTER admin approval
-    // Inactive restaurants (pending approval) should only appear in "New Joining Request" section
+    // Status filter - Show all restaurants by default, filter only when explicitly requested
+    // This allows admin to see and manage both active and inactive restaurants
     if (status === 'inactive') {
       query.isActive = false;
-    } else {
-      // Default: Show only active (approved) restaurants
-      // This ensures that restaurants only appear in main list after admin approval
+    } else if (status === 'active') {
       query.isActive = true;
     }
+    // If status is not provided or is 'all', show all restaurants (both active and inactive)
 
     console.log('🔍 Admin Restaurants List Query:', {
       status,
@@ -2224,6 +2221,70 @@ export const deleteRestaurant = asyncHandler(async (req, res) => {
   } catch (error) {
     logger.error(`Error deleting restaurant: ${error.message}`, { error: error.stack });
     return errorResponse(res, 500, 'Failed to delete restaurant');
+  }
+});
+
+/**
+ * Delete Restaurant Addon
+ * DELETE /api/admin/restaurants/:restaurantId/addons/:addonId
+ */
+export const deleteRestaurantAddon = asyncHandler(async (req, res) => {
+  try {
+    const { restaurantId, addonId } = req.params;
+    const adminId = req.user._id;
+
+    if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+      return errorResponse(res, 400, 'Invalid restaurant ID');
+    }
+
+    const Menu = (await import('../../restaurant/models/Menu.js')).default;
+    
+    // Find menu
+    const menu = await Menu.findOne({ restaurant: restaurantId });
+    
+    if (!menu) {
+      return errorResponse(res, 404, 'Menu not found');
+    }
+
+    // Find and remove add-on
+    // Log all addon IDs for debugging
+    logger.info(`Looking for addon ID: ${addonId} in menu with ${menu.addons.length} addons`);
+    if (menu.addons.length > 0) {
+      logger.info(`Available addon IDs: ${menu.addons.map(a => a.id).join(', ')}`);
+    }
+    
+    const addonIndex = menu.addons.findIndex(a => {
+      const menuAddonId = String(a.id || '');
+      const searchId = String(addonId || '');
+      return menuAddonId === searchId;
+    });
+    
+    if (addonIndex === -1) {
+      logger.warn(`Addon not found. Searched for: "${addonId}", Available IDs: ${menu.addons.map(a => `"${a.id}"`).join(', ')}`);
+      return errorResponse(res, 404, `Add-on not found. Searched ID: ${addonId}`);
+    }
+
+    const addonName = menu.addons[addonIndex].name || 'Unknown';
+    
+    menu.addons.splice(addonIndex, 1);
+    menu.markModified('addons');
+    await menu.save();
+
+    logger.info(`Restaurant addon deleted: ${addonId}`, {
+      deletedBy: adminId,
+      restaurantId: restaurantId,
+      addonName: addonName
+    });
+
+    return successResponse(res, 200, 'Add-on deleted successfully', {
+      menu: {
+        addons: menu.addons,
+        isActive: menu.isActive,
+      },
+    });
+  } catch (error) {
+    logger.error(`Error deleting restaurant addon: ${error.message}`, { error: error.stack });
+    return errorResponse(res, 500, 'Failed to delete addon');
   }
 });
 

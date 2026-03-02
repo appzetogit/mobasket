@@ -29,7 +29,8 @@ import {
   createOffer,
   updateOffer,
   getRestaurantAnalytics,
-  getCustomerWalletReport
+  getCustomerWalletReport,
+  deleteRestaurantAddon
 } from '../controllers/adminController.js';
 import {
   getBusinessSettings,
@@ -325,6 +326,7 @@ router.post('/restaurants/:id/reject', rejectRestaurant);
 router.post('/restaurants/:id/reverify', reverifyRestaurant);
 router.put('/restaurants/:id/status', updateRestaurantStatus);
 router.delete('/restaurants/:id', deleteRestaurant);
+router.delete('/restaurants/:restaurantId/addons/:addonId', deleteRestaurantAddon);
 
 // Grocery Store Management
 router.get('/grocery-stores/requests', getGroceryStoreJoinRequests);
