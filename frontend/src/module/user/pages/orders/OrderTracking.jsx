@@ -1213,6 +1213,15 @@ export default function OrderTracking() {
     })
   }
 
+  const handleViewOrderDetails = () => {
+    const selectedOrderId = String(order?.id || order?.orderId || orderId || "").trim()
+    if (!selectedOrderId) {
+      toast.error("Order ID not available")
+      return
+    }
+    navigate(`/orders/${encodeURIComponent(selectedOrderId)}/details`)
+  }
+
   function resolveOrderRestaurantId(rawOrder) {
     if (!rawOrder?.restaurantId) return null
     if (typeof rawOrder.restaurantId === "string") return rawOrder.restaurantId
@@ -1943,10 +1952,7 @@ export default function OrderTracking() {
             icon={HomeIcon}
             title="Delivery at Location"
             subtitle={deliveryAddressDisplay}
-            onClick={() => navigate("/profile/shipping")}
-            rightContent={
-              <span className="text-green-600 font-medium text-sm">Edit</span>
-            }
+            showArrow={false}
           />
         </motion.div>
           </>
@@ -2000,7 +2006,11 @@ export default function OrderTracking() {
 
           {/* Order Items */}
           <div className="p-4 border-b border-dashed border-gray-200">
-            <div className="flex items-start gap-3">
+            <button
+              type="button"
+              onClick={handleViewOrderDetails}
+              className="w-full flex items-start gap-3 text-left"
+            >
               <Receipt className="w-5 h-5 text-gray-500 mt-0.5" />
               <div className="flex-1">
                 <p className="font-medium text-gray-900">Order #{order?.id || order?.orderId || 'N/A'}</p>
@@ -2016,7 +2026,7 @@ export default function OrderTracking() {
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-gray-400" />
-            </div>
+            </button>
           </div>
         </motion.div>
 

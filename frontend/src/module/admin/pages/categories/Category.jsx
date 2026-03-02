@@ -561,7 +561,11 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
 
   const handleExportPDF = () => {
     try {
-      const doc = new jsPDF()
+      const doc = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: "a4",
+      })
       
       // Add title
       doc.setFontSize(18)
@@ -590,9 +594,11 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
       // Add table
       autoTable(doc, {
         startY: 35,
+        margin: { left: 10, right: 10, bottom: 15 },
         head: [['SL', 'Category Name', 'Type', 'Status', 'ID']],
         body: tableData,
         theme: 'striped',
+        tableWidth: 'auto',
         headStyles: {
           fillColor: [59, 130, 246], // Blue color
           textColor: 255,
@@ -607,16 +613,18 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
           fillColor: [245, 247, 250]
         },
         styles: {
-          cellPadding: 5,
+          cellPadding: 3,
+          overflow: 'linebreak',
+          valign: 'middle',
           lineColor: [200, 200, 200],
           lineWidth: 0.5
         },
         columnStyles: {
-          0: { cellWidth: 20 }, // SL
-          1: { cellWidth: 70 }, // Category Name
-          2: { cellWidth: 50 }, // Type
-          3: { cellWidth: 40 }, // Status
-          4: { cellWidth: 50 }  // ID
+          0: { cellWidth: 14, halign: 'center' }, // SL
+          1: { cellWidth: 80 }, // Category Name
+          2: { cellWidth: 55 }, // Type
+          3: { cellWidth: 26, halign: 'center' }, // Status
+          4: { cellWidth: 92 }  // ID
         }
       })
       
@@ -919,68 +927,6 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
         </div>
       </div>
 
-      {/* Filters Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-3 mb-6">
-        <div className="flex flex-col gap-1.5">
-          {/* Row 1 */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <Button
-              variant="outline"
-              onClick={() => setIsFilterOpen(true)}
-              className="h-5 px-1.5 rounded-md flex items-center gap-1 whitespace-nowrap shrink-0 transition-all bg-white border border-gray-200 hover:bg-gray-50"
-            >
-              <SlidersHorizontal className="h-2.5 w-2.5" />
-              <span className="text-[10px] font-bold text-black">Filters</span>
-            </Button>
-            {[
-              { id: 'delivery-under-30', label: 'Under 30 mins' },
-              { id: 'delivery-under-45', label: 'Under 45 mins' },
-            ].map((filter) => {
-              const isActive = activeFilters.has(filter.id)
-              return (
-                <Button
-                  key={filter.id}
-                  variant="outline"
-                  onClick={() => toggleFilter(filter.id)}
-                  className={`h-5 px-1.5 rounded-md flex items-center gap-1 whitespace-nowrap shrink-0 transition-all ${
-                    isActive
-                      ? 'bg-green-600 text-white border border-green-600 hover:bg-green-600/90'
-                      : 'bg-white border border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  <span className={`text-[10px] font-bold ${isActive ? 'text-white' : 'text-black'}`}>{filter.label}</span>
-                </Button>
-              )
-            })}
-          </div>
-          
-          {/* Row 2 */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {[
-              { id: 'distance-under-1km', label: 'Under 1km', icon: MapPin },
-              { id: 'distance-under-2km', label: 'Under 2km', icon: MapPin },
-            ].map((filter) => {
-              const Icon = filter.icon
-              const isActive = activeFilters.has(filter.id)
-              return (
-                <Button
-                  key={filter.id}
-                  variant="outline"
-                  onClick={() => toggleFilter(filter.id)}
-                  className={`h-5 px-1.5 rounded-md flex items-center gap-1 whitespace-nowrap shrink-0 transition-all ${
-                    isActive
-                      ? 'bg-green-600 text-white border border-green-600 hover:bg-green-600/90'
-                      : 'bg-white border border-gray-200 hover:bg-gray-50'
-                  }`}
-                >
-                  {Icon && <Icon className={`h-2.5 w-2.5 ${isActive ? 'text-white' : 'text-gray-900'}`} />}
-                  <span className={`text-[10px] font-bold ${isActive ? 'text-white' : 'text-black'}`}>{filter.label}</span>
-                </Button>
-              )
-            })}
-          </div>
-        </div>
-      </div>
 
       {/* Table */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
@@ -1098,11 +1044,11 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
         </div>
       </div>
 
-      {/* Filter Modal - Bottom Sheet */}
-      {typeof window !== "undefined" &&
+      {/* Filter Modal - Removed */}
+      {false && typeof window !== "undefined" &&
         createPortal(
           <AnimatePresence>
-            {isFilterOpen && (
+            {false && (
               <div className="fixed inset-0 z-[100]">
                 {/* Backdrop */}
                 <div 

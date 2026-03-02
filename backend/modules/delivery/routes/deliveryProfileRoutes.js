@@ -41,10 +41,18 @@ router.put('/profile', validate(Joi.object({
   }).optional(),
   documents: Joi.object({
     bankDetails: Joi.object({
-      accountHolderName: Joi.string().trim().min(2).max(100).optional().allow(null, ''),
-      accountNumber: Joi.string().trim().min(9).max(18).optional().allow(null, ''),
-      ifscCode: Joi.string().trim().length(11).uppercase().optional().allow(null, ''),
-      bankName: Joi.string().trim().min(2).max(100).optional().allow(null, '')
+      accountHolderName: Joi.string().trim().min(2).max(100).pattern(/^[a-zA-Z\s'-]+$/).messages({
+        'string.pattern.base': 'Account holder name can only contain letters, spaces, apostrophes, and hyphens'
+      }).optional().allow(null, ''),
+      accountNumber: Joi.string().trim().pattern(/^[0-9]{9,18}$/).messages({
+        'string.pattern.base': 'Account number must be between 9 and 18 digits'
+      }).optional().allow(null, ''),
+      ifscCode: Joi.string().trim().length(11).uppercase().pattern(/^[A-Z]{4}0[A-Z0-9]{6}$/).messages({
+        'string.pattern.base': 'Invalid IFSC code format. Format: AAAA0####0 (e.g., HDFC0001234)'
+      }).optional().allow(null, ''),
+      bankName: Joi.string().trim().min(2).max(100).pattern(/^[a-zA-Z\s'&-]+$/).messages({
+        'string.pattern.base': 'Bank name can only contain letters, spaces, apostrophes, hyphens, and ampersands'
+      }).optional().allow(null, '')
     }).optional()
   }).optional()
 })), updateProfile);

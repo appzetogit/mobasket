@@ -132,7 +132,7 @@ export default function RestaurantsList() {
             cuisine: Array.isArray(restaurant.cuisines) && restaurant.cuisines.length > 0 
               ? restaurant.cuisines[0] 
               : (restaurant.cuisine || "N/A"),
-            status: restaurant.isActive !== false, // Default to true if not set
+            status: restaurant.isActive !== false, // Default to true if not set (matches backend behavior)
             rating: restaurant.ratings?.average || restaurant.rating || 0,
             logo: restaurant.profileImage?.url || restaurant.logo || "https://via.placeholder.com/40",
             // Preserve original restaurant data for details modal
@@ -337,19 +337,41 @@ export default function RestaurantsList() {
   }
 
   const handleToggleStatus = async (id) => {
+    // Find the restaurant to get its current status and _id
+    const restaurant = restaurants.find(r => r.id === id || r._id === id)
+    if (!restaurant) {
+      console.error("Restaurant not found for status toggle")
+      return
+    }
+
+    const restaurantId = restaurant._id || restaurant.id
+    const currentStatus = restaurant.status
+    const newStatus = !currentStatus
+
     try {
       // Optimistically update UI
-      const updatedRestaurants = restaurants.map(restaurant =>
-        restaurant.id === id ? { ...restaurant, status: !restaurant.status } : restaurant
+      const updatedRestaurants = restaurants.map(r =>
+        (r.id === id || r._id === id) ? { ...r, status: newStatus } : r
       )
       setRestaurants(updatedRestaurants)
       
-      // TODO: Call API to update restaurant status
-      // await adminAPI.updateRestaurantStatus(id, !restaurants.find(r => r.id === id).status)
+      // Call API to update restaurant status in backend
+      await adminAPI.updateRestaurantStatus(restaurantId, newStatus)
+      
+      // Success - UI already updated optimistically
+      console.log(`Restaurant status updated to ${newStatus ? 'active' : 'inactive'}`)
     } catch (err) {
       console.error("Error updating restaurant status:", err)
-      // Revert on error
-      setRestaurants(restaurants)
+      
+      // Revert on error - restore original status
+      setRestaurants(prevRestaurants =>
+        prevRestaurants.map(r =>
+          (r.id === id || r._id === id) ? { ...r, status: currentStatus } : r
+        )
+      )
+      
+      // Show error message
+      alert(err?.response?.data?.message || "Failed to update restaurant status. Please try again.")
     }
   }
 
@@ -822,10 +844,6 @@ export default function RestaurantsList() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-
-              <button className="p-2.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-all">
-                <Settings className="w-4 h-4" />
-              </button>
             </div>
           </div>
 

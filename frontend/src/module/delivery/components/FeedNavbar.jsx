@@ -370,7 +370,7 @@ export default function FeedNavbar({ className = "" }) {
     };
   }, []);
 
-  const profileInitial = (profileName || "U").trim().charAt(0).toUpperCase();
+  const profileInitial = (profileName || "").trim().charAt(0).toUpperCase();
 
   return (
     <>

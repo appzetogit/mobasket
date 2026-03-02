@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from "react"
 import { Search, Trash2, Loader2 } from "lucide-react"
 import { adminAPI, restaurantAPI } from "@/lib/api"
-import apiClient from "@/lib/api"
 import { toast } from "sonner"
 
 export default function AddonsList() {
@@ -41,8 +40,19 @@ export default function AddonsList() {
             
             // Map addons with restaurant information
             restaurantAddons.forEach((addon) => {
+              // CRITICAL: Use the exact addon.id from the menu - this is the actual ID stored in database
+              // Format: "addon-1772450132864-i0luchkog"
+              const menuAddonId = addon.id // This MUST be the exact ID from menu
+              
+              if (!menuAddonId) {
+                console.warn(`Addon missing ID:`, addon)
+                return // Skip addons without proper ID
+              }
+              
+              // Use menuAddonId as the primary ID for React key and lookup
               allAddons.push({
-                id: addon.id || `${restaurantId}-${addon.name}`,
+                id: menuAddonId, // Use exact menu ID as primary identifier
+                menuAddonId: menuAddonId, // Store separately for clarity
                 _id: addon._id,
                 name: addon.name || "Unnamed Addon",
                 image: addon.image || addon.images?.[0] || "https://via.placeholder.com/40",
@@ -132,7 +142,10 @@ export default function AddonsList() {
 
   const handleDelete = async (id) => {
     const addon = addons.find(a => a.id === id)
-    if (!addon) return
+    if (!addon) {
+      toast.error("Addon not found")
+      return
+    }
 
     if (!window.confirm(`Are you sure you want to delete "${addon.name}"? This action cannot be undone.`)) {
       return
@@ -141,45 +154,38 @@ export default function AddonsList() {
     try {
       setDeleting(true)
       
-      // Get the restaurant's menu to find and remove the addon
-      const menuResponse = await restaurantAPI.getMenuByRestaurantId(addon.restaurantId)
-      const menu = menuResponse?.data?.data?.menu || menuResponse?.data?.menu
+      // Use admin API to delete the addon
+      // CRITICAL: Use the exact menu addon ID - this MUST match what's stored in the database
+      // The ID format in menu is like "addon-1772450132864-i0luchkog"
+      // Since we now use menuAddonId as the primary id, we can use addon.id directly
+      const addonId = addon.menuAddonId || addon.id
+      const restaurantId = addon.restaurantId
       
-      if (!menu) {
-        throw new Error("Menu not found")
+      if (!restaurantId) {
+        throw new Error("Missing restaurant ID")
       }
-
-      // Find and remove the addon from the menu
-      const addonIndex = menu.addons?.findIndex(a => 
-        String(a.id) === String(addon.id) || 
-        String(a.id) === String(addon.originalAddon?.id)
-      )
-
-      if (addonIndex === -1 || !menu.addons) {
-        throw new Error("Addon not found in menu")
+      
+      if (!addonId) {
+        console.error("Addon data:", addon)
+        throw new Error(`Missing addon ID. Addon: ${addon.name}, MenuAddonId: ${addon.menuAddonId}, ID: ${addon.id}`)
       }
-
-      // Remove addon from array
-      menu.addons.splice(addonIndex, 1)
-
-      // Update menu in backend
-      try {
-        const response = await apiClient.put(
-          `/restaurant/menu`,
-          { 
-            sections: menu.sections || [],
-            addons: menu.addons
-          }
-        )
-        
-        if (!response.data || !response.data.success) {
-          throw new Error(response.data?.message || "Failed to update menu")
-        }
-      } catch (apiError) {
-        if (apiError.response?.status === 401 || apiError.response?.status === 403) {
-          throw new Error("Admin cannot directly update restaurant menus. Please contact developer to add admin menu update endpoint.")
-        }
-        throw apiError
+      
+      console.log("Deleting addon:", { 
+        restaurantId, 
+        addonId, 
+        addonName: addon.name,
+        menuAddonId: addon.menuAddonId,
+        addonIdUsed: addon.id,
+        originalAddonId: addon.originalAddon?.id
+      })
+      
+      // Call DELETE API endpoint - this should be DELETE /api/admin/restaurants/:restaurantId/addons/:addonId
+      const response = await adminAPI.deleteRestaurantAddon(restaurantId, addonId)
+      
+      console.log("Delete response:", response)
+      
+      if (!response || !response.data || !response.data.success) {
+        throw new Error(response?.data?.message || "Failed to delete addon")
       }
 
       // Remove from local state
@@ -187,7 +193,8 @@ export default function AddonsList() {
       toast.success("Addon deleted successfully")
     } catch (error) {
       console.error("Error deleting addon:", error)
-      toast.error(error?.response?.data?.message || error?.message || "Failed to delete addon")
+      const errorMessage = error?.response?.data?.message || error?.message || "Failed to delete addon"
+      toast.error(errorMessage)
     } finally {
       setDeleting(false)
     }
