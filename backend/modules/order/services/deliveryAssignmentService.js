@@ -42,6 +42,25 @@ function isPointInZoneBoundary(lat, lng, zoneCoordinates = []) {
   return inside;
 }
 
+function normalizeZoneOption(rawOptions = null) {
+  // Backward compatibility: some legacy callers pass a 5th numeric arg (top-N hint).
+  if (!rawOptions || typeof rawOptions === 'number') {
+    return { requiredZoneId: null };
+  }
+
+  if (typeof rawOptions === 'string') {
+    const trimmed = rawOptions.trim();
+    return { requiredZoneId: trimmed || null };
+  }
+
+  if (typeof rawOptions === 'object') {
+    const zoneId = rawOptions.requiredZoneId || rawOptions.zoneId || null;
+    return { requiredZoneId: zoneId ? String(zoneId).trim() : null };
+  }
+
+  return { requiredZoneId: null };
+}
+
 async function resolveRestaurantPlatformAndZone(restaurantId) {
   let platform = 'mofood';
   let zone = null;
@@ -197,8 +216,19 @@ export async function findNearestDeliveryBoys(restaurantLat, restaurantLng, rest
       }
     };
 
+    const rawOptions = arguments.length >= 5 ? arguments[4] : null;
+    const { requiredZoneId } = normalizeZoneOption(rawOptions);
+
     const { zone: resolvedZone, activeZones } = await resolveRestaurantPlatformAndZone(restaurantId);
     zone = resolvedZone;
+    if (requiredZoneId) {
+      const zoneById = activeZones.find((z) => String(z._id) === String(requiredZoneId));
+      if (zoneById) {
+        zone = zoneById;
+      } else {
+        console.log(`⚠️ Required zone ${requiredZoneId} not found in active zones for restaurant ${restaurantId}`);
+      }
+    }
     if (zone) {
       console.log(`✅ Found zone: ${zone.name} for restaurant ${restaurantId}`);
     }
@@ -291,7 +321,14 @@ export async function findNearestDeliveryBoys(restaurantLat, restaurantLng, rest
  * @param {Array} excludeIds - Array of delivery partner IDs to exclude (already notified)
  * @returns {Promise<Object|null>} Nearest delivery boy or null
  */
-export async function findNearestDeliveryBoy(restaurantLat, restaurantLng, restaurantId = null, maxDistance = 50, excludeIds = []) {
+export async function findNearestDeliveryBoy(
+  restaurantLat,
+  restaurantLng,
+  restaurantId = null,
+  maxDistance = 50,
+  excludeIds = [],
+  options = null
+) {
   try {
     console.log(`🔍 Searching for nearest delivery partner near restaurant: ${restaurantLat}, ${restaurantLng} (Restaurant ID: ${restaurantId})`);
     
@@ -307,8 +344,17 @@ export async function findNearestDeliveryBoy(restaurantLat, restaurantLng, resta
       }
     };
 
+    const { requiredZoneId } = normalizeZoneOption(options);
     const { zone: resolvedZone, activeZones } = await resolveRestaurantPlatformAndZone(restaurantId);
     zone = resolvedZone;
+    if (requiredZoneId) {
+      const zoneById = activeZones.find((z) => String(z._id) === String(requiredZoneId));
+      if (zoneById) {
+        zone = zoneById;
+      } else {
+        console.log(`⚠️ Required zone ${requiredZoneId} not found in active zones for restaurant ${restaurantId}`);
+      }
+    }
     if (zone) {
       console.log(`✅ Found zone: ${zone.name} for restaurant ${restaurantId}`);
     } else {
@@ -557,7 +603,15 @@ export async function assignOrderToDeliveryBoy(order, restaurantLat, restaurantL
     const orderRestaurantId = restaurantId || order.restaurantId;
     
     // Find nearest delivery boy (with zone-based filtering)
-    const nearestDeliveryBoy = await findNearestDeliveryBoy(restaurantLat, restaurantLng, orderRestaurantId);
+    const requiredZoneId = order?.assignmentInfo?.zoneId ? String(order.assignmentInfo.zoneId) : null;
+    const nearestDeliveryBoy = await findNearestDeliveryBoy(
+      restaurantLat,
+      restaurantLng,
+      orderRestaurantId,
+      50,
+      [],
+      { requiredZoneId }
+    );
 
     if (!nearestDeliveryBoy) {
       console.log(`⚠️ No delivery boy found for order ${order.orderId}`);

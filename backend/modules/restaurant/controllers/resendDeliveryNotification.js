@@ -57,12 +57,13 @@ export const resendDeliveryNotification = asyncHandler(async (req, res) => {
     const [restaurantLng, restaurantLat] = restaurantDoc.location.coordinates;
 
     // Find nearest delivery boys
+    const requiredZoneId = order?.assignmentInfo?.zoneId ? String(order.assignmentInfo.zoneId) : null;
     const priorityDeliveryBoys = await findNearestDeliveryBoys(
       restaurantLat,
       restaurantLng,
       restaurantId,
       20, // 20km radius for priority
-      10  // Top 10 nearest
+      { requiredZoneId }
     );
 
     if (!priorityDeliveryBoys || priorityDeliveryBoys.length === 0) {
@@ -72,7 +73,7 @@ export const resendDeliveryNotification = asyncHandler(async (req, res) => {
         restaurantLng,
         restaurantId,
         50, // 50km radius
-        20  // Top 20 nearest
+        { requiredZoneId }
       );
 
       if (!allDeliveryBoys || allDeliveryBoys.length === 0) {

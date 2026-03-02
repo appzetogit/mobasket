@@ -1130,6 +1130,12 @@ export const createOrder = async (req, res) => {
       payment: {
         method: normalizedPaymentMethod,
         status: 'pending'
+      },
+      assignmentInfo: {
+        restaurantId: assignedRestaurantId,
+        zoneId: userZoneIdResolved,
+        zoneName: userZone?.name || userZone?.zoneName || restaurantZone?.name || restaurantZone?.zoneName || '',
+        assignedBy: 'zone_match'
       }
     });
 

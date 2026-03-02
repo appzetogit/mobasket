@@ -605,7 +605,14 @@ const triggerDeliveryBroadcastForApprovedOrder = async (order, restaurantDoc) =>
       await import('../../order/services/deliveryNotificationService.js');
 
     const restaurantLookupId = restaurantDoc?._id?.toString() || String(order.restaurantId);
-    const priorityDeliveryBoys = await findNearestDeliveryBoys(restaurantLat, restaurantLng, restaurantLookupId, 5);
+    const requiredZoneId = freshOrder?.assignmentInfo?.zoneId ? String(freshOrder.assignmentInfo.zoneId) : null;
+    const priorityDeliveryBoys = await findNearestDeliveryBoys(
+      restaurantLat,
+      restaurantLng,
+      restaurantLookupId,
+      5,
+      { requiredZoneId }
+    );
 
     if (priorityDeliveryBoys && priorityDeliveryBoys.length > 0) {
       const priorityIds = priorityDeliveryBoys.map((db) => db.deliveryPartnerId);
@@ -630,7 +637,13 @@ const triggerDeliveryBroadcastForApprovedOrder = async (order, restaurantDoc) =>
           const checkOrder = await Order.findById(order._id);
           if (!checkOrder || checkOrder.deliveryPartnerId || checkOrder.status === 'cancelled') return;
 
-          const allDeliveryBoys = await findNearestDeliveryBoys(restaurantLat, restaurantLng, restaurantLookupId, 50);
+          const allDeliveryBoys = await findNearestDeliveryBoys(
+            restaurantLat,
+            restaurantLng,
+            restaurantLookupId,
+            50,
+            { requiredZoneId }
+          );
           const expandedDeliveryBoys = allDeliveryBoys.filter(
             (db) => !priorityIds.includes(db.deliveryPartnerId)
           );
@@ -660,7 +673,14 @@ const triggerDeliveryBroadcastForApprovedOrder = async (order, restaurantDoc) =>
       return;
     }
 
-    const anyDeliveryBoy = await findNearestDeliveryBoy(restaurantLat, restaurantLng, restaurantLookupId, 50);
+    const anyDeliveryBoy = await findNearestDeliveryBoy(
+      restaurantLat,
+      restaurantLng,
+      restaurantLookupId,
+      50,
+      [],
+      { requiredZoneId }
+    );
     if (!anyDeliveryBoy) return;
 
     freshOrder.assignmentInfo = {

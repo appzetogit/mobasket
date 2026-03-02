@@ -610,7 +610,14 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       const platform = restaurantMeta?.platform === 'mogrocery' ? 'mogrocery' : 'mofood';
       const activeZones = await Zone.find(getPlatformZoneQuery(platform)).select('_id coordinates').lean();
 
-      const restaurantZone = activeZones.find((z) => isPointInZoneBoundary(Number(restaurantLat), Number(restaurantLng), z.coordinates));
+      const requiredZoneId = order?.assignmentInfo?.zoneId ? String(order.assignmentInfo.zoneId) : null;
+      const requiredZone = requiredZoneId
+        ? activeZones.find((z) => String(z._id) === requiredZoneId)
+        : null;
+
+      const restaurantZone = requiredZone || activeZones.find((z) =>
+        isPointInZoneBoundary(Number(restaurantLat), Number(restaurantLng), z.coordinates)
+      );
       const deliveryZone = activeZones.find((z) => isPointInZoneBoundary(Number(deliveryLat), Number(deliveryLng), z.coordinates));
 
       if (!restaurantZone || !deliveryZone || String(restaurantZone._id) !== String(deliveryZone._id)) {
