@@ -2863,16 +2863,12 @@ export default function DeliveryHome() {
                         setRoutePolyline(routeCoordinates);
                         console.log('✅ Route calculated with OSRM:', routeCoordinates.length, 'points');
                       } else {
-                        // Final fallback: straight line
-                        routeCoordinates = [currentLocation, [restaurantInfo.lat, restaurantInfo.lng]];
-                        setRoutePolyline(routeCoordinates);
-                        console.log('⚠️ Using straight line as fallback');
+                        console.warn('⚠️ OSRM returned no route, skipping straight-line fallback');
+                        setRoutePolyline([]);
                       }
                     } catch (osrmError) {
                       console.error('❌ Error calculating route with OSRM:', osrmError);
-                      // Final fallback: straight line
-                      routeCoordinates = [currentLocation, [restaurantInfo.lat, restaurantInfo.lng]];
-                      setRoutePolyline(routeCoordinates);
+                      setRoutePolyline([]);
                     }
                   }
                 }
@@ -2884,7 +2880,7 @@ export default function DeliveryHome() {
                   console.error('❌ Error calculating route with Directions API:', directionsError);
                 }
                 
-                // Fallback to OSRM or straight line
+                // Fallback to OSRM only (do not draw direct straight line)
                 if (!routeCoordinates || routeCoordinates.length === 0) {
                   try {
                     // Try OSRM first
@@ -2897,16 +2893,12 @@ export default function DeliveryHome() {
                       setRoutePolyline(routeCoordinates);
                       console.log('✅ Route calculated with OSRM fallback:', routeCoordinates.length, 'points');
                     } else {
-                      // Final fallback: straight line
-                      routeCoordinates = [currentLocation, [restaurantInfo.lat, restaurantInfo.lng]];
-                      setRoutePolyline(routeCoordinates);
-                      console.log('⚠️ Using straight line as final fallback');
+                      console.warn('⚠️ OSRM fallback returned no route, skipping straight-line fallback');
+                      setRoutePolyline([]);
                     }
                   } catch (osrmError) {
-                    console.warn('⚠️ OSRM fallback failed, using straight line');
-                    // Final fallback: straight line
-                    routeCoordinates = [currentLocation, [restaurantInfo.lat, restaurantInfo.lng]];
-                    setRoutePolyline(routeCoordinates);
+                    console.warn('⚠️ OSRM fallback failed, skipping straight-line fallback');
+                    setRoutePolyline([]);
                   }
                 }
               }
@@ -6022,8 +6014,7 @@ export default function DeliveryHome() {
     selectedRestaurant?.customerName
   ])
 
-  // Build a route object locally from origin/destination coordinates.
-  // This keeps live tracking independent from Google Directions API calls.
+  // Calculate a road-snapped route using Google Maps DirectionsService.
   // NOTE: Must be defined BEFORE the useEffect that uses it (Rules of Hooks)
   const calculateRouteWithDirectionsAPI = useCallback(async (origin, destination) => {
     if (!window.google || !window.google.maps || !Array.isArray(origin) || !destination) {
@@ -6056,102 +6047,28 @@ export default function DeliveryHome() {
       return null;
     }
 
-    const toRad = (deg) => deg * Math.PI / 180;
-    const haversineMeters = (lat1, lng1, lat2, lng2) => {
-      const earthRadius = 6371000;
-      const dLat = toRad(lat2 - lat1);
-      const dLng = toRad(lng2 - lng1);
-      const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-        Math.sin(dLng / 2) * Math.sin(dLng / 2);
-      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      return earthRadius * c;
-    };
+    if (typeof window.google.maps.DirectionsService !== "function") {
+      throw new Error("Directions service not available");
+    }
 
-    const interpolatePath = (from, to, spacingMeters = 30) => {
-      const distance = haversineMeters(from.lat, from.lng, to.lat, to.lng);
-      const steps = Math.max(1, Math.ceil(distance / spacingMeters));
-      const path = [];
-      for (let index = 0; index <= steps; index += 1) {
-        const t = index / steps;
-        path.push({
-          lat: from.lat + (to.lat - from.lat) * t,
-          lng: from.lng + (to.lng - from.lng) * t
-        });
-      }
-      return path;
-    };
-
-    const encodePolyline = (points) => {
-      if (!Array.isArray(points) || points.length === 0) return '';
-      const encoded = [];
-      let prevLat = 0;
-      let prevLng = 0;
-
-      const encodeValue = (value) => {
-        let num = value < 0 ? ~(value << 1) : (value << 1);
-        while (num >= 0x20) {
-          encoded.push(String.fromCharCode((0x20 | (num & 0x1f)) + 63));
-          num >>= 5;
-        }
-        encoded.push(String.fromCharCode(num + 63));
-      };
-
-      points.forEach((point) => {
-        const lat = Math.round(Number(point.lat) * 1e5);
-        const lng = Math.round(Number(point.lng) * 1e5);
-        encodeValue(lat - prevLat);
-        encodeValue(lng - prevLng);
-        prevLat = lat;
-        prevLng = lng;
-      });
-
-      return encoded.join('');
-    };
-
-    const overviewPath = interpolatePath(
-      { lat: startLat, lng: startLng },
-      { lat: endLat, lng: endLng }
-    );
-
-    const totalDistance = haversineMeters(startLat, startLng, endLat, endLng);
-    const avgSpeedMetersPerSecond = 8.33;
-    const durationSeconds = Math.max(60, Math.round(totalDistance / avgSpeedMetersPerSecond));
-
-    const bounds = new window.google.maps.LatLngBounds();
-    overviewPath.forEach((point) => bounds.extend(point));
-
-    const result = {
-      request: {
-        origin: { lat: startLat, lng: startLng },
-        destination: { lat: endLat, lng: endLng }
-      },
-      routes: [
+    const service = new window.google.maps.DirectionsService();
+    const result = await new Promise((resolve, reject) => {
+      service.route(
         {
-          bounds,
-          overview_path: overviewPath,
-          overview_polyline: { points: encodePolyline(overviewPath) },
-          legs: [
-            {
-              distance: {
-                text: totalDistance >= 1000
-                  ? ((totalDistance / 1000).toFixed(1) + ' km')
-                  : (Math.round(totalDistance) + ' m'),
-                value: Math.round(totalDistance)
-              },
-              duration: {
-                text: Math.max(1, Math.round(durationSeconds / 60)) + ' mins',
-                value: durationSeconds
-              },
-              start_location: { lat: startLat, lng: startLng },
-              end_location: { lat: endLat, lng: endLng },
-              steps: []
-            }
-          ]
+          origin: { lat: startLat, lng: startLng },
+          destination: { lat: endLat, lng: endLng },
+          travelMode: window.google.maps.TravelMode.DRIVING,
+          provideRouteAlternatives: false
+        },
+        (response, status) => {
+          if (status === window.google.maps.DirectionsStatus.OK && response?.routes?.length) {
+            resolve(response);
+            return;
+          }
+          reject(new Error(`Directions request failed: ${status}`));
         }
-      ]
-    };
+      );
+    });
 
     setDirectionsResponse(result);
     directionsResponseRef.current = result;

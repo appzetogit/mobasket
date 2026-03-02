@@ -979,7 +979,10 @@ export default function PocketPage() {
               <div className="flex items-center justify-between">
                 <span className="text-black text-sm">Total cash limit (admin)</span>
                 <span className="text-black text-sm font-medium">₹{totalCashLimit.toFixed(2)}</span>
-              </div>\n              <div className="rounded-lg p-3 text-xs font-medium bg-slate-50 text-slate-700">\n                Available cash limit: ?{availableCashLimit.toFixed(2)}. Order assignment is controlled by cash-in-hand limit.\n              </div>
+              </div>
+              <div className="rounded-lg p-3 text-xs font-medium bg-slate-50 text-slate-700">
+                Available cash limit: â‚¹{availableCashLimit.toFixed(2)}. Order assignment is controlled by cash-in-hand limit.
+              </div>
 
               {isCashLimitReached && (
                 <div className="rounded-lg p-3 text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">

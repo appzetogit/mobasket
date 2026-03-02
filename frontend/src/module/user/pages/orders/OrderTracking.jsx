@@ -257,24 +257,89 @@ const resolveRestaurantName = (apiOrder = {}) => {
   return apiOrder?.restaurantName || apiOrder?.restaurant || "Restaurant"
 }
 
-const resolveRestaurantPhone = (apiOrder = {}) => {
-  if (typeof apiOrder?.restaurantId === "object") {
-    return (
-      apiOrder.restaurantId.phone ||
-      apiOrder.restaurantId.ownerPhone ||
-      apiOrder.restaurantId.primaryContactNumber ||
-      ""
-    )
+const isLikelyValidPhone = (value = "") => {
+  const digitsOnly = String(value || "").replace(/\D/g, "")
+  return digitsOnly.length >= 8 && digitsOnly.length <= 15
+}
+
+const pickValidPhone = (...candidates) => {
+  for (const candidate of candidates) {
+    if (typeof candidate !== "string") continue
+    const trimmed = candidate.trim()
+    if (!trimmed) continue
+    if (isLikelyValidPhone(trimmed)) return trimmed
   }
-  if (typeof apiOrder?.restaurant === "object") {
-    return (
-      apiOrder.restaurant.phone ||
-      apiOrder.restaurant.ownerPhone ||
-      apiOrder.restaurant.primaryContactNumber ||
-      ""
-    )
+  return ""
+}
+
+const resolveRestaurantPhone = (apiOrder = {}, fetchedRestaurant = null) => {
+  const fromRestaurantIdObj =
+    typeof apiOrder?.restaurantId === "object" ? apiOrder.restaurantId : null
+  const fromRestaurantObj =
+    typeof apiOrder?.restaurant === "object" ? apiOrder.restaurant : null
+
+  return pickValidPhone(
+    fromRestaurantIdObj?.phone,
+    fromRestaurantIdObj?.ownerPhone,
+    fromRestaurantIdObj?.primaryContactNumber,
+    fromRestaurantObj?.phone,
+    fromRestaurantObj?.ownerPhone,
+    fromRestaurantObj?.primaryContactNumber,
+    apiOrder?.restaurantInfo?.phone,
+    fetchedRestaurant?.phone,
+    fetchedRestaurant?.ownerPhone,
+    fetchedRestaurant?.primaryContactNumber,
+    apiOrder?.restaurantPhone
+  )
+}
+
+const resolveRestaurantAddress = (apiOrder = {}, fetchedRestaurant = null) => {
+  const nestedRestaurant =
+    (typeof apiOrder?.restaurantId === "object" && apiOrder?.restaurantId) ||
+    (typeof apiOrder?.restaurant === "object" && apiOrder?.restaurant) ||
+    null
+
+  const directCandidates = [
+    apiOrder?.restaurantAddress,
+    apiOrder?.restaurantLocation?.formattedAddress,
+    apiOrder?.restaurantLocation?.address,
+    nestedRestaurant?.address,
+    nestedRestaurant?.location?.formattedAddress,
+    nestedRestaurant?.location?.address,
+    apiOrder?.restaurantInfo?.address,
+    fetchedRestaurant?.address,
+    fetchedRestaurant?.location?.formattedAddress,
+    fetchedRestaurant?.location?.address
+  ]
+
+  for (const candidate of directCandidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim()
+    }
   }
-  return apiOrder?.restaurantPhone || ""
+
+  const location =
+    nestedRestaurant?.location ||
+    fetchedRestaurant?.location ||
+    apiOrder?.restaurantLocation ||
+    null
+
+  if (location && typeof location === "object") {
+    const parts = [
+      location?.addressLine1,
+      location?.addressLine2,
+      location?.area,
+      location?.city,
+      location?.state,
+      location?.zipCode || location?.postalCode || location?.pincode
+    ]
+      .map((part) => (typeof part === "string" ? part.trim() : ""))
+      .filter(Boolean)
+
+    if (parts.length > 0) return parts.join(", ")
+  }
+
+  return ""
 }
 
 const sanitizePhoneForTel = (phone = "") => String(phone).replace(/[^\d+]/g, "")
@@ -296,13 +361,12 @@ const resolveTrackingRestaurantName = (rawOrder = null) => {
 }
 
 const resolveTrackingRestaurantPhone = (rawOrder = null) => {
-  return (
-    rawOrder?.restaurantPhone ||
-    rawOrder?.restaurantId?.phone ||
-    rawOrder?.restaurantId?.ownerPhone ||
-    rawOrder?.restaurantId?.primaryContactNumber ||
-    rawOrder?.restaurantInfo?.phone ||
-    ""
+  return pickValidPhone(
+    rawOrder?.restaurantPhone,
+    rawOrder?.restaurantId?.phone,
+    rawOrder?.restaurantId?.ownerPhone,
+    rawOrder?.restaurantId?.primaryContactNumber,
+    rawOrder?.restaurantInfo?.phone
   )
 }
 
@@ -678,6 +742,7 @@ export default function OrderTracking() {
             
             // Re-fetch and update order (same logic as initial fetch)
             let restaurantCoords = null;
+            let restaurantDetails = null;
             if (apiOrder.restaurantId?.location?.coordinates && 
                 Array.isArray(apiOrder.restaurantId.location.coordinates) && 
                 apiOrder.restaurantId.location.coordinates.length >= 2) {
@@ -687,6 +752,7 @@ export default function OrderTracking() {
                 const restaurantResponse = await restaurantAPI.getRestaurantById(apiOrder.restaurantId);
                 if (restaurantResponse?.data?.success && restaurantResponse.data.data?.restaurant) {
                   const restaurant = restaurantResponse.data.data.restaurant;
+                  restaurantDetails = restaurant;
                   if (restaurant.location?.coordinates && Array.isArray(restaurant.location.coordinates) && restaurant.location.coordinates.length >= 2) {
                     restaurantCoords = restaurant.location.coordinates;
                   }
@@ -696,11 +762,24 @@ export default function OrderTracking() {
               }
             }
             
+            const resolvedRestaurantAddress =
+              resolveRestaurantAddress(apiOrder, restaurantDetails) ||
+              order?.restaurantAddress ||
+              "";
+            const resolvedRestaurantPhone =
+              resolveRestaurantPhone(apiOrder, restaurantDetails) ||
+              order?.restaurantPhone ||
+              "";
+
             const transformedOrder = {
               ...apiOrder,
-              restaurantLocation: restaurantCoords ? {
-                coordinates: restaurantCoords
-              } : order.restaurantLocation,
+              restaurantPhone: resolvedRestaurantPhone,
+              restaurantAddress: resolvedRestaurantAddress,
+              restaurantLocation: {
+                coordinates: restaurantCoords || order?.restaurantLocation?.coordinates || null,
+                formattedAddress: resolvedRestaurantAddress || order?.restaurantLocation?.formattedAddress || "",
+                address: resolvedRestaurantAddress || order?.restaurantLocation?.address || ""
+              },
               planSubscription: apiOrder.planSubscription || null,
               deliveryPartnerId: apiOrder.deliveryPartnerId?._id || apiOrder.deliveryPartnerId || apiOrder.assignmentInfo?.deliveryPartnerId || null,
               assignmentInfo: apiOrder.assignmentInfo || null,
@@ -781,6 +860,7 @@ export default function OrderTracking() {
           
           // Extract restaurant location coordinates with multiple fallbacks
           let restaurantCoords = null;
+          let restaurantDetails = null;
           
           // Priority 1: restaurantId.location.coordinates (GeoJSON format: [lng, lat])
           if (apiOrder.restaurantId?.location?.coordinates && 
@@ -801,6 +881,7 @@ export default function OrderTracking() {
               const restaurantResponse = await restaurantAPI.getRestaurantById(apiOrder.restaurantId);
               if (restaurantResponse?.data?.success && restaurantResponse.data.data?.restaurant) {
                 const restaurant = restaurantResponse.data.data.restaurant;
+                restaurantDetails = restaurant;
                 if (restaurant.location?.coordinates && Array.isArray(restaurant.location.coordinates) && restaurant.location.coordinates.length >= 2) {
                   restaurantCoords = restaurant.location.coordinates;
                   console.log('✅ Fetched restaurant coordinates from API:', restaurantCoords);
@@ -819,11 +900,15 @@ export default function OrderTracking() {
           console.log('📍 Final restaurant coordinates:', restaurantCoords);
           console.log('📍 Customer coordinates:', apiOrder.address?.location?.coordinates);
           
+          const resolvedRestaurantAddress = resolveRestaurantAddress(apiOrder, restaurantDetails);
+          const resolvedRestaurantPhone = resolveRestaurantPhone(apiOrder, restaurantDetails);
+
           // Transform API order to match component structure
           const transformedOrder = {
             id: apiOrder.orderId || apiOrder._id,
             restaurant: resolveRestaurantName(apiOrder),
-            restaurantPhone: resolveRestaurantPhone(apiOrder),
+            restaurantPhone: resolvedRestaurantPhone,
+            restaurantAddress: resolvedRestaurantAddress || "",
             restaurantId: apiOrder.restaurantId || null, // Include restaurantId for location access
             userId: apiOrder.userId || null, // Include user data for phone number
             userName: apiOrder.userName || apiOrder.userId?.name || apiOrder.userId?.fullName || '',
@@ -841,7 +926,9 @@ export default function OrderTracking() {
               coordinates: apiOrder.address?.location?.coordinates || null
             },
             restaurantLocation: {
-              coordinates: restaurantCoords
+              coordinates: restaurantCoords,
+              formattedAddress: resolvedRestaurantAddress || "",
+              address: resolvedRestaurantAddress || ""
             },
             items: apiOrder.items?.map(item => ({
               itemId: item.itemId?._id || item.itemId || item._id || null,
@@ -967,6 +1054,7 @@ export default function OrderTracking() {
             id: apiOrder.orderId || apiOrder._id,
             restaurant: resolveRestaurantName(apiOrder) || prev.restaurant,
             restaurantPhone: resolveRestaurantPhone(apiOrder) || prev.restaurantPhone,
+            restaurantAddress: resolveRestaurantAddress(apiOrder) || prev.restaurantAddress,
             status: apiOrder.status ?? prev.status,
             deliveryState: apiOrder.deliveryState ?? prev.deliveryState,
             deliveryPartner: toValidDeliveryPartner(apiOrder.deliveryPartnerId) || prev.deliveryPartner,
@@ -1381,6 +1469,7 @@ export default function OrderTracking() {
         
         // Extract restaurant location coordinates with multiple fallbacks
         let restaurantCoords = null;
+        let restaurantDetails = null;
         
         // Priority 1: restaurantId.location.coordinates (GeoJSON format: [lng, lat])
         if (apiOrder.restaurantId?.location?.coordinates && 
@@ -1403,6 +1492,7 @@ export default function OrderTracking() {
             const restaurantResponse = await restaurantAPI.getRestaurantById(apiOrder.restaurantId);
             if (restaurantResponse?.data?.success && restaurantResponse.data.data?.restaurant) {
               const restaurant = restaurantResponse.data.data.restaurant;
+              restaurantDetails = restaurant;
               if (restaurant.location?.coordinates && Array.isArray(restaurant.location.coordinates) && restaurant.location.coordinates.length >= 2) {
                 restaurantCoords = restaurant.location.coordinates;
                 console.log('✅ Fetched restaurant coordinates from API:', restaurantCoords);
@@ -1413,10 +1503,14 @@ export default function OrderTracking() {
           }
         }
         
+        const resolvedRestaurantAddress = resolveRestaurantAddress(apiOrder, restaurantDetails);
+        const resolvedRestaurantPhone = resolveRestaurantPhone(apiOrder, restaurantDetails);
+
         const transformedOrder = {
           id: apiOrder.orderId || apiOrder._id,
           restaurant: resolveRestaurantName(apiOrder),
-          restaurantPhone: resolveRestaurantPhone(apiOrder),
+          restaurantPhone: resolvedRestaurantPhone,
+          restaurantAddress: resolvedRestaurantAddress || "",
           restaurantId: apiOrder.restaurantId || null, // Include restaurantId for location access
           userId: apiOrder.userId || null, // Include user data for phone number
           userName: apiOrder.userName || apiOrder.userId?.name || apiOrder.userId?.fullName || '',
@@ -1434,7 +1528,9 @@ export default function OrderTracking() {
             coordinates: apiOrder.address?.location?.coordinates || null
           },
           restaurantLocation: {
-            coordinates: restaurantCoords
+            coordinates: restaurantCoords,
+            formattedAddress: resolvedRestaurantAddress || "",
+            address: resolvedRestaurantAddress || ""
           },
           items: apiOrder.items?.map(item => ({
             itemId: item.itemId?._id || item.itemId || item._id || null,
@@ -1884,10 +1980,10 @@ export default function OrderTracking() {
                 whileTap={{ scale: 0.9 }}
                 onClick={() => {
                   const restaurantPhone =
+                    restaurantDisplayPhone ||
                     order?.restaurantId?.phone ||
                     order?.restaurantId?.ownerPhone ||
                     order?.restaurantId?.primaryContactNumber ||
-                    restaurantDisplayPhone ||
                     ""
                   const dialNumber = sanitizePhoneForTel(restaurantPhone)
                   if (dialNumber) {

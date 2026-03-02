@@ -21,32 +21,25 @@ function calculateHaversineDistance(lat1, lng1, lat2, lng2) {
   return R * c;
 }
 
-const createUserPinIcon = (googleMaps) => ({
-  url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
-    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="46" viewBox="0 0 36 46">
-      <path d="M18 0 C8.06 0 0 8.06 0 18 C0 30.5 18 46 18 46 C18 46 36 30.5 36 18 C36 8.06 27.94 0 18 0 Z" fill="#2563eb" stroke="#ffffff" stroke-width="2"/>
-      <circle cx="18" cy="14" r="4.2" fill="white"/>
-      <path d="M10.5 24 C11.8 20.6 14.6 18.8 18 18.8 C21.4 18.8 24.2 20.6 25.5 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
-    </svg>
-  `),
-  scaledSize: new googleMaps.Size(36, 46),
-  anchor: new googleMaps.Point(18, 46),
-  origin: new googleMaps.Point(0, 0)
-});
+function offsetCoordinateByMeters(lat, lng, northMeters = 0, eastMeters = 0) {
+  const earthRadius = 6378137; // meters
+  const dLat = northMeters / earthRadius;
+  const dLng = eastMeters / (earthRadius * Math.cos((Math.PI * lat) / 180));
+  return {
+    lat: lat + (dLat * 180) / Math.PI,
+    lng: lng + (dLng * 180) / Math.PI
+  };
+}
 
 const DeliveryTrackingMap = ({ 
   orderId, 
   restaurantCoords, 
   customerCoords,
-  userLiveCoords = null,
-  userLocationAccuracy = null,
   deliveryBoyData = null,
   order = null
 }) => {
   const mapRef = useRef(null);
   const bikeMarkerRef = useRef(null);
-  const userLocationMarkerRef = useRef(null);
-  const userLocationCircleRef = useRef(null);
   const mapInstance = useRef(null);
   const socketRef = useRef(null);
   const [isMapLoaded, setIsMapLoaded] = useState(false);
@@ -71,6 +64,18 @@ const DeliveryTrackingMap = ({
   const backendUrl = SOCKET_BASE_URL;
   const [GOOGLE_MAPS_API_KEY, setGOOGLE_MAPS_API_KEY] = useState("");
   const [hasFirebaseRoute, setHasFirebaseRoute] = useState(false);
+  const [firebaseCustomerCoords, setFirebaseCustomerCoords] = useState(null);
+
+  const effectiveCustomerCoords = useMemo(() => {
+    if (
+      firebaseCustomerCoords &&
+      typeof firebaseCustomerCoords.lat === 'number' &&
+      typeof firebaseCustomerCoords.lng === 'number'
+    ) {
+      return firebaseCustomerCoords;
+    }
+    return null;
+  }, [firebaseCustomerCoords]);
 
   const renderPolylinePath = useCallback((points, isCustomerLeg = false) => {
     if (!mapInstance.current || !window.google?.maps || !Array.isArray(points) || points.length === 0) {
@@ -354,9 +359,9 @@ const DeliveryTrackingMap = ({
       typeof restaurantCoords.lat === 'number' &&
       typeof restaurantCoords.lng === 'number';
     const hasCustomerCoords =
-      !!customerCoords &&
-      typeof customerCoords.lat === 'number' &&
-      typeof customerCoords.lng === 'number';
+      !!effectiveCustomerCoords &&
+      typeof effectiveCustomerCoords.lat === 'number' &&
+      typeof effectiveCustomerCoords.lng === 'number';
 
     if (!hasCustomerCoords) {
       return { start: null, end: null };
@@ -373,7 +378,7 @@ const DeliveryTrackingMap = ({
     if (hasRiderLocation) {
       return {
         start: { lat: liveRiderLocation.lat, lng: liveRiderLocation.lng },
-        end: customerCoords
+        end: effectiveCustomerCoords
       };
     }
 
@@ -395,14 +400,14 @@ const DeliveryTrackingMap = ({
       (!hasRiderLocation && status === 'pending' && currentPhase === 'assigned' && orderStatus !== 'out_for_delivery')
     ) {
       if (hasRestaurantCoords) {
-        return { start: customerCoords, end: restaurantCoords };
+        return { start: effectiveCustomerCoords, end: restaurantCoords };
       }
       return { start: null, end: null };
     }
 
     // Fallback: no route (prevents incorrect line from default/invalid store coords)
     return { start: null, end: null };
-  }, [order, deliveryBoyLocation, currentLocation, restaurantCoords, customerCoords, hasDeliveryPartner]);
+  }, [order, deliveryBoyLocation, currentLocation, restaurantCoords, effectiveCustomerCoords, hasDeliveryPartner]);
 
   // Move bike smoothly with rotation
   const moveBikeSmoothly = useCallback((lat, lng, heading) => {
@@ -660,6 +665,35 @@ const DeliveryTrackingMap = ({
           return; // Exit early - don't update marker
         }
         
+        // Prevent marker overlap: when rider reaches customer pin, keep bike icon slightly offset.
+        if (bikeMarkerRef.current && effectiveCustomerCoords) {
+          const currentMarkerPos = bikeMarkerRef.current.getPosition();
+          if (currentMarkerPos && typeof currentMarkerPos.lat === 'function' && typeof currentMarkerPos.lng === 'function') {
+            const markerLat = currentMarkerPos.lat();
+            const markerLng = currentMarkerPos.lng();
+            const distanceToCustomer = calculateHaversineDistance(
+              markerLat,
+              markerLng,
+              effectiveCustomerCoords.lat,
+              effectiveCustomerCoords.lng
+            );
+
+            const overlapThresholdMeters = 14;
+            if (distanceToCustomer <= overlapThresholdMeters) {
+              const sideAngleDegrees = (Number(heading) || 0) + 90;
+              const sideAngleRadians = (sideAngleDegrees * Math.PI) / 180;
+              const offsetMeters = 10;
+              const northMeters = Math.cos(sideAngleRadians) * offsetMeters;
+              const eastMeters = Math.sin(sideAngleRadians) * offsetMeters;
+              const offsetPoint = offsetCoordinateByMeters(markerLat, markerLng, northMeters, eastMeters);
+
+              bikeMarkerRef.current.setPosition(
+                new window.google.maps.LatLng(offsetPoint.lat, offsetPoint.lng)
+              );
+            }
+          }
+        }
+
         // Ensure bike is visible
         bikeMarkerRef.current.setVisible(true);
         
@@ -675,7 +709,7 @@ const DeliveryTrackingMap = ({
     } catch (error) {
       console.error('❌ Error moving bike:', error);
     }
-  }, [isMapLoaded, bikeLogo]);
+  }, [isMapLoaded, bikeLogo, effectiveCustomerCoords?.lat, effectiveCustomerCoords?.lng]);
 
   // Initialize Socket.io connection
   useEffect(() => {
@@ -888,12 +922,64 @@ const DeliveryTrackingMap = ({
           points = decodePolyline(value.polyline);
         }
 
-        if (points.length > 0) {
+        const customerLat = Number(value.customer_lat ?? value.user_lat);
+        const customerLng = Number(value.customer_lng ?? value.user_lng);
+        if (Number.isFinite(customerLat) && Number.isFinite(customerLng)) {
+          setFirebaseCustomerCoords({ lat: customerLat, lng: customerLng });
+        }
+
+        const normalizePoint = (point) => {
+          if (!point) return null;
+          if (Array.isArray(point) && point.length >= 2) {
+            const first = Number(point[0]);
+            const second = Number(point[1]);
+            if (!Number.isFinite(first) || !Number.isFinite(second)) return null;
+            if (Math.abs(first) <= 90 && Math.abs(second) <= 180) {
+              return { lat: first, lng: second };
+            }
+            if (Math.abs(second) <= 90 && Math.abs(first) <= 180) {
+              return { lat: second, lng: first };
+            }
+            return null;
+          }
+          const lat = Number(point.lat ?? point.latitude);
+          const lng = Number(point.lng ?? point.longitude);
+          if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+          return { lat, lng };
+        };
+
+        const normalizedPoints = Array.isArray(points)
+          ? points.map(normalizePoint).filter(Boolean)
+          : [];
+
+        const firebaseDestination =
+          Number.isFinite(customerLat) && Number.isFinite(customerLng)
+            ? { lat: customerLat, lng: customerLng }
+            : null;
+        const expectedDestination = firebaseDestination || effectiveCustomerCoords || null;
+
+        let canUseFirebaseRoute = normalizedPoints.length > 1;
+        if (canUseFirebaseRoute && expectedDestination) {
+          const routeEnd = normalizedPoints[normalizedPoints.length - 1];
+          const destinationGap = calculateHaversineDistance(
+            routeEnd.lat,
+            routeEnd.lng,
+            expectedDestination.lat,
+            expectedDestination.lng
+          );
+          const maxEndpointGapMeters = 150;
+          canUseFirebaseRoute = destinationGap <= maxEndpointGapMeters;
+        }
+
+        if (canUseFirebaseRoute) {
           hasFirebaseRouteRef.current = true;
           setHasFirebaseRoute(true);
           if (isMapLoaded) {
-            renderPolylinePath(points, isCustomerLeg);
+            renderPolylinePath(normalizedPoints, isCustomerLeg);
           }
+        } else {
+          hasFirebaseRouteRef.current = false;
+          setHasFirebaseRoute(false);
         }
 
         const lat = Number(value.boy_lat);
@@ -921,6 +1007,7 @@ const DeliveryTrackingMap = ({
       hasFirebaseRouteRef.current = false;
       setHasFirebaseRoute(false);
       activeFirebaseAliasRef.current = null;
+      setFirebaseCustomerCoords(null);
     };
   }, [
     orderId,
@@ -929,6 +1016,8 @@ const DeliveryTrackingMap = ({
     order?.id,
     order?.status,
     order?.deliveryState?.currentPhase,
+    effectiveCustomerCoords?.lat,
+    effectiveCustomerCoords?.lng,
     isMapLoaded,
     moveBikeSmoothly,
     renderPolylinePath
@@ -936,7 +1025,7 @@ const DeliveryTrackingMap = ({
 
   // Initialize Google Map (only once - prevent re-initialization)
   useEffect(() => {
-    if (!mapRef.current || !customerCoords || mapInitializedRef.current) return;
+    if (!mapRef.current || !effectiveCustomerCoords || mapInitializedRef.current) return;
 
     const loadGoogleMapsIfNeeded = async () => {
       // Wait for Google Maps to load from main.jsx first
@@ -1010,7 +1099,7 @@ const DeliveryTrackingMap = ({
 
         // Calculate center from available points (customer is required, restaurant/rider optional)
         const centerCandidates = [
-          customerCoords,
+          effectiveCustomerCoords,
           restaurantCoords,
           deliveryBoyLocation,
           currentLocation
@@ -1168,7 +1257,7 @@ const DeliveryTrackingMap = ({
           `);
           
           mapInstance.current._customerMarker = new window.google.maps.Marker({
-            position: { lat: customerCoords.lat, lng: customerCoords.lng },
+            position: { lat: effectiveCustomerCoords.lat, lng: effectiveCustomerCoords.lng },
             map: mapInstance.current,
             icon: {
               url: customerUserPinIconUrl,
@@ -1178,39 +1267,12 @@ const DeliveryTrackingMap = ({
             },
             zIndex: window.google.maps.Marker.MAX_ZINDEX + 1
           });
-        }
-
-        // Add user's live location marker (blue dot) and radius circle if available
-        if (userLiveCoords && userLiveCoords.lat && userLiveCoords.lng) {
-          userLocationMarkerRef.current = new window.google.maps.Marker({
-            position: { lat: userLiveCoords.lat, lng: userLiveCoords.lng },
-            map: mapInstance.current,
-            icon: createUserPinIcon(window.google.maps),
-            zIndex: window.google.maps.Marker.MAX_ZINDEX + 2,
-            optimized: false,
-            title: "Your live location"
-          });
-
-          // Create radius circle around user's location
-          const radiusMeters = Math.max(userLocationAccuracy || 50, 20); // Minimum 20m
-          userLocationCircleRef.current = new window.google.maps.Circle({
-            strokeColor: '#4285F4',
-            strokeOpacity: 0.4,
-            strokeWeight: 2,
-            fillColor: '#4285F4',
-            fillOpacity: 0.15, // Light transparent blue
-            map: mapInstance.current,
-            center: { lat: userLiveCoords.lat, lng: userLiveCoords.lng },
-            radius: radiusMeters, // Meters
-            zIndex: window.google.maps.Marker.MAX_ZINDEX + 1
-          });
-
-          console.log('✅ User live location marker and radius circle added:', {
-            position: userLiveCoords,
-            radius: radiusMeters
+        } else {
+          mapInstance.current._customerMarker.setPosition({
+            lat: effectiveCustomerCoords.lat,
+            lng: effectiveCustomerCoords.lng
           });
         }
-
         // Draw route based on order phase
         mapInstance.current.addListener('tilesloaded', () => {
           setIsMapLoaded(true);
@@ -1272,7 +1334,7 @@ const DeliveryTrackingMap = ({
         console.error('❌ Map initialization error:', error);
       }
     }
-  }, [restaurantCoords, customerCoords]); // Removed dependencies that cause re-initialization
+  }, [restaurantCoords, effectiveCustomerCoords]); // Removed dependencies that cause re-initialization
 
   // Memoize restaurant and customer coordinates to avoid dependency issues
   const restaurantLat = restaurantCoords?.lat;
@@ -1282,6 +1344,17 @@ const DeliveryTrackingMap = ({
   const deliveryBoyHeading = deliveryBoyLocation?.heading;
   const currentLat = currentLocation?.lat;
   const currentLng = currentLocation?.lng;
+
+  // Keep customer marker pinned to saved order destination (Firebase coords preferred).
+  useEffect(() => {
+    if (!isMapLoaded || !mapInstance.current || !effectiveCustomerCoords) return;
+    if (mapInstance.current._customerMarker) {
+      mapInstance.current._customerMarker.setPosition({
+        lat: effectiveCustomerCoords.lat,
+        lng: effectiveCustomerCoords.lng
+      });
+    }
+  }, [isMapLoaded, effectiveCustomerCoords?.lat, effectiveCustomerCoords?.lng]);
 
   // Update route when delivery boy location or order phase changes
   useEffect(() => {
@@ -1381,7 +1454,7 @@ const DeliveryTrackingMap = ({
         }
       }
     }
-  }, [isMapLoaded, deliveryBoyLat, deliveryBoyLng, currentLat, currentLng, order?.deliveryState?.currentPhase, order?.deliveryState?.status, restaurantLat, restaurantLng, customerCoords?.lat, customerCoords?.lng, moveBikeSmoothly, getRouteToShow, drawRoute, hasDeliveryPartner, hasFirebaseRoute]);
+  }, [isMapLoaded, deliveryBoyLat, deliveryBoyLng, currentLat, currentLng, order?.deliveryState?.currentPhase, order?.deliveryState?.status, restaurantLat, restaurantLng, effectiveCustomerCoords?.lat, effectiveCustomerCoords?.lng, moveBikeSmoothly, getRouteToShow, drawRoute, hasDeliveryPartner, hasFirebaseRoute]);
 
   // Update bike when REAL location changes (from socket)
   useEffect(() => {
@@ -1518,46 +1591,6 @@ const DeliveryTrackingMap = ({
     }
   }, [isMapLoaded, hasDeliveryPartner, deliveryBoyLat, deliveryBoyLng, deliveryBoyHeading, restaurantLat, restaurantLng, moveBikeSmoothly, order]);
 
-  // Update user's live location marker and circle when location changes
-  useEffect(() => {
-    if (isMapLoaded && userLiveCoords && userLiveCoords.lat && userLiveCoords.lng && mapInstance.current) {
-      const userPos = { lat: userLiveCoords.lat, lng: userLiveCoords.lng };
-      const radiusMeters = Math.max(userLocationAccuracy || 50, 20);
-
-      // Update or create user location marker
-      if (userLocationMarkerRef.current) {
-        userLocationMarkerRef.current.setPosition(userPos);
-      } else {
-        userLocationMarkerRef.current = new window.google.maps.Marker({
-          position: userPos,
-          map: mapInstance.current,
-          icon: createUserPinIcon(window.google.maps),
-          zIndex: window.google.maps.Marker.MAX_ZINDEX + 2,
-          optimized: false,
-          title: "Your live location"
-        });
-      }
-
-      // Update or create radius circle
-      if (userLocationCircleRef.current) {
-        userLocationCircleRef.current.setCenter(userPos);
-        userLocationCircleRef.current.setRadius(radiusMeters);
-      } else {
-        userLocationCircleRef.current = new window.google.maps.Circle({
-          strokeColor: '#4285F4',
-          strokeOpacity: 0.4,
-          strokeWeight: 2,
-          fillColor: '#4285F4',
-          fillOpacity: 0.15,
-          map: mapInstance.current,
-          center: userPos,
-          radius: radiusMeters,
-          zIndex: window.google.maps.Marker.MAX_ZINDEX + 1
-        });
-      }
-    }
-  }, [isMapLoaded, userLiveCoords, userLocationAccuracy]);
-
   // Emit live rider-to-destination distance for OrderTracking UI.
   // Destination must always be the order delivery address.
   useEffect(() => {
@@ -1566,8 +1599,8 @@ const DeliveryTrackingMap = ({
 
     const riderLat = deliveryBoyLocation?.lat ?? currentLocation?.lat;
     const riderLng = deliveryBoyLocation?.lng ?? currentLocation?.lng;
-    const targetLat = customerCoords?.lat;
-    const targetLng = customerCoords?.lng;
+    const targetLat = effectiveCustomerCoords?.lat;
+    const targetLng = effectiveCustomerCoords?.lng;
 
     if (
       typeof riderLat !== 'number' || Number.isNaN(riderLat) ||
@@ -1596,8 +1629,8 @@ const DeliveryTrackingMap = ({
     deliveryBoyLocation?.lng,
     currentLocation?.lat,
     currentLocation?.lng,
-    customerCoords?.lat,
-    customerCoords?.lng
+    effectiveCustomerCoords?.lat,
+    effectiveCustomerCoords?.lng
   ]);
 
   // Periodic check to ensure bike marker is created if it should be visible
@@ -1660,4 +1693,5 @@ const DeliveryTrackingMap = ({
 };
 
 export default DeliveryTrackingMap;
+
 
