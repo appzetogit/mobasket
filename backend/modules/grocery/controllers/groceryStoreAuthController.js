@@ -39,24 +39,30 @@ const getFcmPatchFromBody = (body = {}) => {
 
 const buildPhoneQuery = (normalizedPhone) => {
   if (!normalizedPhone) return null;
-  
+
+  const buildPhoneFieldOr = (phoneValue) => ([
+    { phone: phoneValue },
+    { ownerPhone: phoneValue },
+    { primaryContactNumber: phoneValue }
+  ]);
+
   if (normalizedPhone.startsWith('91') && normalizedPhone.length === 12) {
     const phoneWithoutCountryCode = normalizedPhone.substring(2);
     return {
       $or: [
-        { phone: normalizedPhone },
-        { phone: phoneWithoutCountryCode },
-        { phone: `+${normalizedPhone}` },
-        { phone: `+91${phoneWithoutCountryCode}` }
+        ...buildPhoneFieldOr(normalizedPhone),
+        ...buildPhoneFieldOr(phoneWithoutCountryCode),
+        ...buildPhoneFieldOr(`+${normalizedPhone}`),
+        ...buildPhoneFieldOr(`+91${phoneWithoutCountryCode}`)
       ]
     };
   } else {
     return {
       $or: [
-        { phone: normalizedPhone },
-        { phone: `91${normalizedPhone}` },
-        { phone: `+91${normalizedPhone}` },
-        { phone: `+${normalizedPhone}` }
+        ...buildPhoneFieldOr(normalizedPhone),
+        ...buildPhoneFieldOr(`91${normalizedPhone}`),
+        ...buildPhoneFieldOr(`+91${normalizedPhone}`),
+        ...buildPhoneFieldOr(`+${normalizedPhone}`)
       ]
     };
   }
@@ -150,7 +156,36 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       await otpService.verifyOTP(phone || null, otp, purpose, email || null);
 
       if (!store) {
-        return errorResponse(res, 404, `Grocery store not found with this ${identifierType}. Please sign up first.`);
+        // Login screen promises first-time users can continue with OTP.
+        // Auto-create a pending store account on first successful login verification.
+        const fallbackName = normalizedPhone
+          ? `Grocery Store ${normalizedPhone.slice(-4)}`
+          : ((email?.split('@')?.[0] || 'Grocery Store')
+            .replace(/[._-]+/g, ' ')
+            .trim()
+            .slice(0, 60) || 'Grocery Store');
+
+        const storeData = {
+          name: fallbackName,
+          signupMethod: normalizedPhone ? 'phone' : 'email',
+          platform: 'mogrocery',
+          role: 'restaurant',
+          isActive: false,
+          ownerName: fallbackName,
+          ...fcmPatch
+        };
+
+        if (normalizedPhone) {
+          storeData.phone = normalizedPhone;
+          storeData.ownerPhone = normalizedPhone;
+        }
+        if (email) {
+          storeData.email = email.toLowerCase().trim();
+          storeData.ownerEmail = email.toLowerCase().trim();
+        }
+
+        store = await Restaurant.create(storeData);
+        isNewlyRegistered = true;
       }
 
       if (fcmPatch.fcmTokenWeb) store.fcmTokenWeb = fcmPatch.fcmTokenWeb;

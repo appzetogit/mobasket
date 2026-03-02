@@ -13,30 +13,36 @@ import winston from 'winston';
  */
 const buildPhoneQuery = (normalizedPhone) => {
   if (!normalizedPhone) return null;
-  
+
+  const buildPhoneFieldOr = (phoneValue) => ([
+    { phone: phoneValue },
+    { ownerPhone: phoneValue },
+    { primaryContactNumber: phoneValue }
+  ]);
+
   // Check if normalized phone has country code (starts with 91 and is 12 digits)
   if (normalizedPhone.startsWith('91') && normalizedPhone.length === 12) {
     // Search for both: with country code and without country code
     const phoneWithoutCountryCode = normalizedPhone.substring(2);
     return {
       $or: [
-        { phone: normalizedPhone },
-        { phone: phoneWithoutCountryCode },
-        { phone: `+${normalizedPhone}` },
-        { phone: `+91${phoneWithoutCountryCode}` }
-      ]
-    };
-  } else {
-    // If it's already without country code, also check with country code
-    return {
-      $or: [
-        { phone: normalizedPhone },
-        { phone: `91${normalizedPhone}` },
-        { phone: `+91${normalizedPhone}` },
-        { phone: `+${normalizedPhone}` }
+        ...buildPhoneFieldOr(normalizedPhone),
+        ...buildPhoneFieldOr(phoneWithoutCountryCode),
+        ...buildPhoneFieldOr(`+${normalizedPhone}`),
+        ...buildPhoneFieldOr(`+91${phoneWithoutCountryCode}`)
       ]
     };
   }
+
+  // If it's already without country code, also check with country code
+  return {
+    $or: [
+      ...buildPhoneFieldOr(normalizedPhone),
+      ...buildPhoneFieldOr(`91${normalizedPhone}`),
+      ...buildPhoneFieldOr(`+91${normalizedPhone}`),
+      ...buildPhoneFieldOr(`+${normalizedPhone}`)
+    ]
+  };
 };
 
 const logger = winston.createLogger({
@@ -335,35 +341,10 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
     } else {
       // Login (with optional auto-registration)
-      // For phone, search in both formats (with and without country code) to handle old data
-      let findQuery;
-      if (normalizedPhone) {
-        // Check if normalized phone has country code (starts with 91 and is 12 digits)
-        if (normalizedPhone.startsWith('91') && normalizedPhone.length === 12) {
-          // Search for both: with country code and without country code
-          const phoneWithoutCountryCode = normalizedPhone.substring(2);
-          findQuery = {
-            $or: [
-              { phone: normalizedPhone },
-              { phone: phoneWithoutCountryCode },
-              { phone: `+${normalizedPhone}` },
-              { phone: `+91${phoneWithoutCountryCode}` }
-            ]
-          };
-        } else {
-          // If it's already without country code, also check with country code
-          findQuery = {
-            $or: [
-              { phone: normalizedPhone },
-              { phone: `91${normalizedPhone}` },
-              { phone: `+91${normalizedPhone}` },
-              { phone: `+${normalizedPhone}` }
-            ]
-          };
-        }
-      } else {
-        findQuery = { email: email?.toLowerCase().trim() };
-      }
+      // For phone, search across all phone-bearing fields and common formats.
+      const findQuery = normalizedPhone
+        ? buildPhoneQuery(normalizedPhone)
+        : { email: email?.toLowerCase().trim() };
       restaurant = await Restaurant.findOne(findQuery);
 
       if (!restaurant && !name) {

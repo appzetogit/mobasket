@@ -49,7 +49,7 @@ export const fetchDeliveryWallet = async () => {
       console.log('✅ Found wallet in: response.data')
     }
     
-    if (walletData) {
+    if (walletData && typeof walletData === 'object') {
       console.log('💰 Wallet Data from API:', JSON.stringify(walletData, null, 2))
       console.log('💰 Total Balance:', walletData.totalBalance)
       console.log('💰 Cash In Hand:', walletData.cashInHand)
@@ -95,9 +95,10 @@ export const fetchDeliveryWallet = async () => {
       console.warn('⚠️ Response structure:', Object.keys(response?.data || {}))
       console.warn('⚠️ Full response:', response)
     }
-    
-    console.log('⚠️ Returning empty wallet state')
-    return EMPTY_WALLET_STATE
+
+    const missingPayloadError = new Error('Wallet payload missing in API response')
+    missingPayloadError.isWalletFetchError = true
+    throw missingPayloadError
   } catch (error) {
     // Skip logging network errors - they're handled by axios interceptor
     // Network errors mean backend is not running, which is expected in some scenarios
@@ -107,7 +108,8 @@ export const fetchDeliveryWallet = async () => {
       console.error('❌ Error response data:', error.response?.data)
       console.error('❌ Error message:', error.message)
     }
-    return EMPTY_WALLET_STATE
+    error.isWalletFetchError = true
+    throw error
   }
 }
 
