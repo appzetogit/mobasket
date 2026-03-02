@@ -480,14 +480,17 @@ export default function SignIn() {
     return ""
   }
 
-  const validatePhone = (phone) => {
+  const validatePhone = (phone, countryCode = formData.countryCode) => {
     if (!phone.trim()) {
       return "Phone number is required"
     }
-    const cleanPhone = phone.replace(/[\s\-\(\)]/g, "")
-    const phoneRegex = /^\d{7,15}$/
+    const cleanPhone = phone.replace(/\D/g, "")
+    const isIndia = countryCode === "+91"
+    const phoneRegex = isIndia ? /^\d{7,10}$/ : /^\d{7,15}$/
     if (!phoneRegex.test(cleanPhone)) {
-      return "Phone number must be 7-15 digits"
+      return isIndia
+        ? "Phone number must be 7-10 digits"
+        : "Phone number must be 7-15 digits"
     }
     return ""
   }
@@ -547,7 +550,7 @@ export default function SignIn() {
     if (name === "email") {
       setErrors({ ...errors, email: validateEmail(value) })
     } else if (name === "phone") {
-      setErrors({ ...errors, phone: validatePhone(value) })
+      setErrors({ ...errors, phone: validatePhone(value, formData.countryCode) })
     } else if (name === "name") {
       setErrors({ ...errors, name: validateName(value) })
     }
@@ -570,7 +573,7 @@ export default function SignIn() {
     const newErrors = { phone: "", email: "", name: "" }
 
     if (authMethod === "phone") {
-      const phoneError = validatePhone(formData.phone)
+      const phoneError = validatePhone(formData.phone, formData.countryCode)
       newErrors.phone = phoneError
       if (phoneError) hasErrors = true
     } else {
@@ -859,6 +862,7 @@ export default function SignIn() {
                     placeholder="Enter Phone Number"
                     value={formData.phone}
                     onChange={handleChange}
+                    maxLength={formData.countryCode === "+91" ? 10 : 15}
                     className={`flex-1 h-12 md:h-14 text-base md:text-lg bg-white dark:bg-[#1a1a1a] text-black dark:text-white border-gray-300 dark:border-gray-700 rounded-lg ${errors.phone ? "border-red-500" : ""} transition-colors`}
                     aria-invalid={errors.phone ? "true" : "false"}
                   />

@@ -7,7 +7,6 @@ import {
   FileText,
   UtensilsCrossed,
   User,
-  ArrowLeft,
   ArrowRight,
   Star,
   Briefcase,
@@ -214,14 +213,6 @@ export default function ProfilePage() {
         {/* Back Button and Profile Section */}
         <div ref={profileRef} className="mb-0">
           <div className="bg-white p-4 w-full shadow-sm">
-            {/* Back Button */}
-            <button
-              onClick={() => navigate(-1)}
-              className="mb-6"
-            >
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-
             {/* Profile Information */}
             <div
               onClick={() => navigate("/delivery/profile/details")}

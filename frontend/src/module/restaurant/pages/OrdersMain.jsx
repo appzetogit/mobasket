@@ -513,6 +513,27 @@ export default function OrdersMain() {
   const [isReverifying, setIsReverifying] = useState(false)
 
   useEffect(() => {
+    const isAnyModalOpen =
+      showNewOrderPopup || showRejectPopup || (showCancelPopup && !!orderToCancel)
+
+    if (!isAnyModalOpen) return
+
+    const previousBodyOverflow = document.body.style.overflow
+    const previousHtmlOverflow = document.documentElement.style.overflow
+    const previousBodyTouchAction = document.body.style.touchAction
+
+    document.body.style.overflow = "hidden"
+    document.documentElement.style.overflow = "hidden"
+    document.body.style.touchAction = "none"
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow
+      document.documentElement.style.overflow = previousHtmlOverflow
+      document.body.style.touchAction = previousBodyTouchAction
+    }
+  }, [showNewOrderPopup, showRejectPopup, showCancelPopup, orderToCancel])
+
+  useEffect(() => {
     try {
       localStorage.setItem(ACTIVE_FILTER_STORAGE_KEY, activeFilter)
     } catch {
@@ -1623,7 +1644,11 @@ export default function OrdersMain() {
 
                 {/* Footer */}
                 <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
-                  <button className="text-sm text-gray-600 hover:text-gray-900 transition-colors underline mx-auto block">
+                  <button
+                    type="button"
+                    onClick={() => navigate("/restaurant/help-centre")}
+                    className="text-sm text-gray-600 hover:text-gray-900 transition-colors underline mx-auto block"
+                  >
                     Need help with this order?
                   </button>
                 </div>
