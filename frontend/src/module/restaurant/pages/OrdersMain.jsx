@@ -696,7 +696,6 @@ export default function OrdersMain() {
   // Show new order popup when real order notification arrives from Socket.IO
   useEffect(() => {
     if (newOrder) {
-      console.log('📦 New order received via Socket.IO:', newOrder)
       const orderId = newOrder.orderId || newOrder.orderMongoId
       if (orderId && !shownOrdersRef.current.has(orderId)) {
         shownOrdersRef.current.add(orderId)
@@ -756,8 +755,6 @@ export default function OrdersMain() {
               paymentMethod: latestConfirmedOrder.paymentMethod ?? latestConfirmedOrder.payment?.method,
               payment: latestConfirmedOrder.payment
             }
-            
-            console.log('📦 Found confirmed order (fallback):', orderForPopup)
             shownOrdersRef.current.add(orderId)
             setPopupOrder(orderForPopup)
             setShowNewOrderPopup(true)
@@ -787,7 +784,7 @@ export default function OrdersMain() {
     if (showNewOrderPopup && !isMuted) {
       if (audioRef.current) {
         audioRef.current.loop = true
-        audioRef.current.play().catch(err => console.log("Audio play failed:", err))
+        audioRef.current.play().catch(err => console.error("Audio play failed:", err))
       }
     } else if (audioRef.current) {
       audioRef.current.pause()
@@ -938,7 +935,7 @@ export default function OrdersMain() {
       if (!isMuted) {
         audioRef.current.pause()
       } else {
-        audioRef.current.play().catch(err => console.log("Audio play failed:", err))
+        audioRef.current.play().catch(err => console.error("Audio play failed:", err))
       }
     }
   }
@@ -1082,8 +1079,6 @@ export default function OrdersMain() {
       // Download PDF
       const fileName = `Order-${orderToPrint.orderId || 'Receipt'}-${Date.now()}.pdf`
       doc.save(fileName)
-      
-      console.log('✅ PDF generated successfully:', fileName)
     } catch (error) {
       console.error('❌ Error generating PDF:', error)
       alert('Failed to generate PDF. Please try again.')
@@ -2328,10 +2323,8 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI }) {
           // Mark as ready when ETA time has elapsed (with 2 second buffer)
           if (elapsedSeconds >= totalETASeconds - 2) {
             try {
-              console.log(`🔄 Auto-marking order ${order.orderId} as ready (ETA reached 0)`)
               markedReadyOrdersRef.current.add(orderKey) // Mark as processing
               await orderAPI.markOrderReady(order.mongoId || order.orderId)
-              console.log(`✅ Order ${order.orderId} marked as ready`)
               // Order will be removed from preparing list on next fetch
             } catch (error) {
               const status = error.response?.status

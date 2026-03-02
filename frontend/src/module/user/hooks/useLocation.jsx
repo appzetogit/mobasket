@@ -1082,8 +1082,6 @@ export function useLocation() {
       if (formattedAddress) {
         const addressParts = formattedAddress.split(',').map(part => part.trim()).filter(part => part.length > 0)
         
-        console.log("🔍 Parsing formatted address for area:", { formattedAddress, addressParts, city, state, currentArea: area })
-        
         // ZOMATO-STYLE: If we have 3+ parts, first part is ALWAYS the area/locality
         // Format: "New Palasia, Indore, Madhya Pradesh" -> area = "New Palasia"
         if (addressParts.length >= 3) {
@@ -1221,7 +1219,6 @@ export function useLocation() {
       // Even if formatted_address only has 2 parts (City, State), try to extract area
       if (!area && formattedAddress) {
         const parts = formattedAddress.split(',').map(p => p.trim()).filter(p => p.length > 0)
-        console.log("🔍 Final fallback: Parsing formatted_address for area", { parts, city, state })
         
         if (parts.length >= 2) {
           const potentialArea = parts[0]
@@ -1243,17 +1240,6 @@ export function useLocation() {
           }
         }
       }
-
-      // Final validation and logging
-      console.log("✅✅✅ FINAL PARSED OLA Maps response:", { 
-        city, 
-        state, 
-        country, 
-        area, 
-        formattedAddress,
-        hasArea: !!area,
-        areaLength: area?.length || 0
-      })
 
       // CRITICAL: If formattedAddress has only 2 parts, OLA Maps didn't provide sublocality
       // Try to get more detailed location using coordinates-based search
@@ -1318,7 +1304,6 @@ export function useLocation() {
           formattedAddress: formattedAddress || `${city || "Current Location"}`,
         }
         
-        console.log("✅✅✅ RETURNING LOCATION DATA:", finalLocation)
         return finalLocation
       }
 
@@ -1558,7 +1543,6 @@ export function useLocation() {
                 return
               }
               
-            console.log("💾 Saving location:", finalLoc)
             localStorage.setItem("userLocation", JSON.stringify(finalLoc))
             setLocation(finalLoc)
             setPermissionGranted(true)
@@ -1791,21 +1775,11 @@ export function useLocation() {
                     }
                   }
                 }
-                console.log("✅ Reverse geocoding successful:", { 
-                  city: addr.city, 
-                  area: addr.area, 
-                  formattedAddress: addr.formattedAddress 
-                })
               } catch (geocodeErr) {
                 console.error("❌ Reverse geocoding failed:", geocodeErr.message)
                 // Try fallback geocoding
                 try {
-                  console.log("🔄 Trying fallback geocoding...")
                   addr = await reverseGeocodeDirect(latitude, longitude)
-                  console.log("✅ Fallback geocoding successful:", { 
-                    city: addr.city, 
-                    area: addr.area 
-                  })
                 } catch (fallbackErr) {
                   console.error("❌ Fallback geocoding also failed:", fallbackErr.message)
                   // Don't use coordinates - use placeholder instead
@@ -1934,7 +1908,6 @@ export function useLocation() {
             // Only update location state if coordinates changed significantly
             if (coordsChanged) {
               prevLocationCoordsRef.current = { latitude: loc.latitude, longitude: loc.longitude }
-              console.log("💾 Updating live location:", loc)
               localStorage.setItem("userLocation", JSON.stringify(loc))
               setLocation(loc)
               setPermissionGranted(true)

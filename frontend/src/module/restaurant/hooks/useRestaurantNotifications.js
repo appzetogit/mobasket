@@ -68,7 +68,6 @@ export const useRestaurantNotifications = (options = {}) => {
     if (!enabled) return;
 
     if (!restaurantId) {
-      console.log('⏳ Waiting for restaurantId...');
       return;
     }
 
@@ -129,7 +128,6 @@ export const useRestaurantNotifications = (options = {}) => {
       
       // Clean up any existing socket connection
       if (socketRef.current) {
-        console.log('🧹 Cleaning up existing socket connection...');
         socketRef.current.disconnect();
         socketRef.current = null;
       }
@@ -171,14 +169,6 @@ export const useRestaurantNotifications = (options = {}) => {
       return; // Don't try to connect with invalid URL
     }
     
-    console.log('🔌 Attempting to connect to Socket.IO:', socketUrl);
-    console.log('🔌 Backend URL:', backendUrl);
-    console.log('🔌 API_BASE_URL:', API_BASE_URL);
-    console.log('🔌 Restaurant ID:', restaurantId);
-    console.log('🔌 Environment:', import.meta.env.MODE);
-    console.log('🔌 Is Production Build:', isProductionBuild);
-    console.log('🔌 Is Production Deployment:', isProductionDeployment);
-
     // Initialize socket connection to restaurant namespace
     // Use polling only to avoid repeated "WebSocket connection failed" when backend is down
     socketRef.current = io(socketUrl, {
@@ -199,22 +189,17 @@ export const useRestaurantNotifications = (options = {}) => {
     });
 
     socketRef.current.on('connect', () => {
-      console.log(`✅ ${isGroceryStore ? 'Grocery Store' : 'Restaurant'} Socket connected, ${isGroceryStore ? 'storeId' : 'restaurantId'}:`, restaurantId);
-      console.log('✅ Socket ID:', socketRef.current.id);
-      console.log('✅ Socket URL:', socketUrl);
       setIsConnected(true);
       
       // Join restaurant/store room immediately after connection with retry
       if (restaurantId) {
         const joinRoom = () => {
           const roomEvent = isGroceryStore ? 'join-grocery-store' : 'join-restaurant';
-          console.log(`📢 Joining ${isGroceryStore ? 'grocery store' : 'restaurant'} room with ID:`, restaurantId);
           socketRef.current.emit(roomEvent, restaurantId);
           
           // Retry join after 2 seconds if no confirmation received
           setTimeout(() => {
             if (socketRef.current?.connected) {
-              console.log(`🔄 Retrying ${isGroceryStore ? 'grocery store' : 'restaurant'} room join...`);
               socketRef.current.emit(roomEvent, restaurantId);
             }
           }, 2000);
@@ -228,11 +213,7 @@ export const useRestaurantNotifications = (options = {}) => {
 
     // Listen for room join confirmation
     const roomJoinedEvent = isGroceryStore ? 'grocery-store-room-joined' : 'restaurant-room-joined';
-    socketRef.current.on(roomJoinedEvent, (data) => {
-      console.log(`✅ ${isGroceryStore ? 'Grocery store' : 'Restaurant'} room joined successfully:`, data);
-      console.log('✅ Room:', data?.room);
-      console.log('✅ Store/Restaurant ID in room:', data?.restaurantId || data?.storeId);
-    });
+    socketRef.current.on(roomJoinedEvent, () => {});
 
     // Listen for connection errors (throttle logs to avoid console spam on reconnect loops)
     socketRef.current.on('connect_error', (error) => {
@@ -258,8 +239,7 @@ export const useRestaurantNotifications = (options = {}) => {
     });
 
     // Listen for disconnection
-    socketRef.current.on('disconnect', (reason) => {
-      console.log('❌ Restaurant Socket disconnected:', reason);
+    socketRef.current.on('disconnect', () => {
       setIsConnected(false);
       
       if (reason === 'io server disconnect') {
@@ -269,13 +249,10 @@ export const useRestaurantNotifications = (options = {}) => {
     });
 
     // Listen for reconnection attempts
-    socketRef.current.on('reconnect_attempt', (attemptNumber) => {
-      console.log(`🔄 Reconnection attempt ${attemptNumber}...`);
-    });
+    socketRef.current.on('reconnect_attempt', () => {});
 
     // Listen for successful reconnection
-    socketRef.current.on('reconnect', (attemptNumber) => {
-      console.log(`✅ Reconnected after ${attemptNumber} attempts`);
+    socketRef.current.on('reconnect', () => {
       setIsConnected(true);
       
       // Rejoin restaurant/store room after reconnection
@@ -287,7 +264,6 @@ export const useRestaurantNotifications = (options = {}) => {
 
     // Listen for new order notifications
     socketRef.current.on('new_order', (orderData) => {
-      console.log('📦 New order received:', orderData);
       setNewOrder(orderData);
       
       // Play notification sound
@@ -297,16 +273,14 @@ export const useRestaurantNotifications = (options = {}) => {
     });
 
     // Listen for sound notification event
-    socketRef.current.on('play_notification_sound', (data) => {
-      console.log('🔔 Sound notification:', data);
+    socketRef.current.on('play_notification_sound', () => {
       if (enableSoundRef.current) {
         playNotificationSound();
       }
     });
 
     // Listen for order status updates
-    socketRef.current.on('order_status_update', (data) => {
-      console.log('📊 Order status update:', data);
+    socketRef.current.on('order_status_update', () => {
       // You can handle status updates here if needed
     });
 
@@ -357,7 +331,6 @@ export const useRestaurantNotifications = (options = {}) => {
 
         // Only play if user has interacted with the page (browser autoplay policy)
         if (!userInteractedRef.current) {
-          console.log('🔇 Audio playback skipped - user has not interacted with page yet');
           return;
         }
         

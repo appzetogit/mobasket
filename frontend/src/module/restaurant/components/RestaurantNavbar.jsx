@@ -141,15 +141,6 @@ export default function RestaurantNavbar({
     }
     // Priority 2: Check restaurantData location
     else if (restaurantData) {
-      console.log('🔍 Checking restaurant data for address:', {
-        hasLocation: !!restaurantData.location,
-        locationKeys: restaurantData.location ? Object.keys(restaurantData.location) : [],
-        formattedAddress: restaurantData.location?.formattedAddress,
-        address: restaurantData.location?.address,
-        directAddress: restaurantData.address,
-        fullLocation: restaurantData.location
-      })
-      
       if (restaurantData.location) {
         // Use stored formattedAddress first (from database)
         if (restaurantData.location.formattedAddress && 
@@ -159,7 +150,6 @@ export default function RestaurantNavbar({
           const isCoordinates = /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(restaurantData.location.formattedAddress.trim())
           if (!isCoordinates) {
             newLocation = restaurantData.location.formattedAddress.trim()
-            console.log('✅ Using formattedAddress:', newLocation)
           }
         }
         
@@ -168,32 +158,22 @@ export default function RestaurantNavbar({
           const formatted = formatAddress(restaurantData.location)
           if (formatted && formatted.trim() !== "") {
             newLocation = formatted.trim()
-            console.log('✅ Using formatAddress result:', newLocation)
           }
         }
         
         // Additional fallback: check if address is directly on location
         if (!newLocation && restaurantData.location.address && restaurantData.location.address.trim() !== "") {
           newLocation = restaurantData.location.address.trim()
-          console.log('✅ Using location.address:', newLocation)
         }
       }
       
       // Priority 3: Fallback - check if address is directly on restaurantData (not in location object)
       if (!newLocation && restaurantData.address && restaurantData.address.trim() !== "") {
         newLocation = restaurantData.address.trim()
-        console.log('✅ Using restaurantData.address:', newLocation)
       }
     }
     
     setLocation(newLocation)
-    
-    // Debug log
-    if (newLocation) {
-      console.log('📍 Restaurant address displayed:', newLocation)
-    } else if (restaurantData) {
-      console.log('⚠️ Restaurant data available but no address found')
-    }
   }, [restaurantData, propLocation])
 
   // Load status from localStorage on mount and listen for changes

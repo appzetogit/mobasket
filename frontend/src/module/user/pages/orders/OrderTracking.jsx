@@ -75,15 +75,6 @@ const AnimatedCheckmark = ({ delay = 0 }) => (
 const DeliveryMap = ({ orderId, order, isVisible, userLiveCoords = null, userLocationAccuracy = null }) => {
   // Extract coordinates from order payload
   const getRestaurantCoords = () => {
-    console.log('🔍 Getting restaurant coordinates from order:', {
-      hasOrder: !!order,
-      restaurantLocation: order?.restaurantLocation,
-      coordinates: order?.restaurantLocation?.coordinates,
-      restaurantId: order?.restaurantId,
-      restaurantIdLocation: order?.restaurantId?.location,
-      restaurantIdCoordinates: order?.restaurantId?.location?.coordinates
-    });
-    
     // Try multiple sources for restaurant coordinates
     let coords = null;
     
@@ -92,32 +83,26 @@ const DeliveryMap = ({ orderId, order, isVisible, userLiveCoords = null, userLoc
         Array.isArray(order.restaurantLocation.coordinates) && 
         order.restaurantLocation.coordinates.length >= 2) {
       coords = order.restaurantLocation.coordinates;
-      console.log('✅ Using restaurantLocation.coordinates:', coords);
     }
     // Priority 2: restaurantId.location.coordinates (if restaurantId is populated)
     else if (order?.restaurantId?.location?.coordinates && 
              Array.isArray(order.restaurantId.location.coordinates) && 
              order.restaurantId.location.coordinates.length >= 2) {
       coords = order.restaurantId.location.coordinates;
-      console.log('✅ Using restaurantId.location.coordinates:', coords);
     }
     // Priority 3: restaurantId.location with latitude/longitude
     else if (order?.restaurantId?.location?.latitude && order?.restaurantId?.location?.longitude) {
       coords = [order.restaurantId.location.longitude, order.restaurantId.location.latitude];
-      console.log('✅ Using restaurantId.location (lat/lng):', coords);
     }
     
     if (coords && coords.length >= 2) {
       // GeoJSON format is [longitude, latitude]
-      const result = {
+      return {
         lat: coords[1], // Latitude is second element
         lng: coords[0]  // Longitude is first element
       };
-      console.log('✅ Final restaurant coordinates (lat, lng):', result, 'from GeoJSON:', coords);
-      return result;
     }
     
-    console.warn('⚠️ Restaurant coordinates not found for this order');
     return null;
   };
 
@@ -169,7 +154,6 @@ const DeliveryMap = ({ orderId, order, isVisible, userLiveCoords = null, userLoc
         lng: order.address.lng
       };
     }
-    console.warn('⚠️ Customer coordinates not found for this order');
     return null;
   };
 
@@ -733,13 +717,6 @@ export default function OrderTracking() {
               (newDeliveryStatus !== currentDeliveryStatus) ||
               (newPhase !== currentPhase) ||
               (newOrderStatus !== currentOrderStatus)) {
-            console.log('🔄 Order status updated:', {
-              oldStatus: currentDeliveryStatus,
-              newStatus: newDeliveryStatus,
-              oldPhase: currentPhase,
-              newPhase: newPhase
-            });
-            
             // Re-fetch and update order (same logic as initial fetch)
             let restaurantCoords = null;
             let restaurantDetails = null;
@@ -824,10 +801,7 @@ export default function OrderTracking() {
           };
         }
         // Also ensure restaurantId is present
-        if (!contextOrder.restaurantId && contextOrder.restaurant) {
-          // Try to preserve restaurantId if it exists
-          console.log('⚠️ Context order missing restaurantId, will fetch from API');
-        }
+        // If restaurantId is missing but restaurant exists, we still proceed and let API fetch handle details
         setOrder(contextOrder)
         const etaFromContext = getCombinedEtaMinutes(contextOrder)
         if (etaFromContext) setEstimatedTime(etaFromContext)
@@ -846,18 +820,6 @@ export default function OrderTracking() {
         if (response.data?.success && response.data.data?.order) {
           const apiOrder = response.data.data.order
           
-          // Log full API response structure for debugging
-          console.log('🔍 Full API Order Response:', {
-            orderId: apiOrder.orderId || apiOrder._id,
-            hasRestaurantId: !!apiOrder.restaurantId,
-            restaurantIdType: typeof apiOrder.restaurantId,
-            restaurantIdKeys: apiOrder.restaurantId ? Object.keys(apiOrder.restaurantId) : [],
-            restaurantIdLocation: apiOrder.restaurantId?.location,
-            restaurantIdLocationKeys: apiOrder.restaurantId?.location ? Object.keys(apiOrder.restaurantId.location) : [],
-            restaurantIdCoordinates: apiOrder.restaurantId?.location?.coordinates,
-            fullRestaurantId: apiOrder.restaurantId
-          });
-          
           // Extract restaurant location coordinates with multiple fallbacks
           let restaurantCoords = null;
           let restaurantDetails = null;
@@ -867,16 +829,13 @@ export default function OrderTracking() {
               Array.isArray(apiOrder.restaurantId.location.coordinates) && 
               apiOrder.restaurantId.location.coordinates.length >= 2) {
             restaurantCoords = apiOrder.restaurantId.location.coordinates;
-            console.log('✅ Found coordinates in restaurantId.location.coordinates:', restaurantCoords);
           }
           // Priority 2: restaurantId.location with latitude/longitude properties
           else if (apiOrder.restaurantId?.location?.latitude && apiOrder.restaurantId?.location?.longitude) {
             restaurantCoords = [apiOrder.restaurantId.location.longitude, apiOrder.restaurantId.location.latitude];
-            console.log('✅ Found coordinates in restaurantId.location (lat/lng):', restaurantCoords);
           }
           // Priority 3: Check if restaurantId is a string ID and fetch restaurant details
           else if (typeof apiOrder.restaurantId === 'string') {
-            console.log('⚠️ restaurantId is a string ID, fetching restaurant details...', apiOrder.restaurantId);
             try {
               const restaurantResponse = await restaurantAPI.getRestaurantById(apiOrder.restaurantId);
               if (restaurantResponse?.data?.success && restaurantResponse.data.data?.restaurant) {
@@ -884,7 +843,6 @@ export default function OrderTracking() {
                 restaurantDetails = restaurant;
                 if (restaurant.location?.coordinates && Array.isArray(restaurant.location.coordinates) && restaurant.location.coordinates.length >= 2) {
                   restaurantCoords = restaurant.location.coordinates;
-                  console.log('✅ Fetched restaurant coordinates from API:', restaurantCoords);
                 }
               }
             } catch (err) {
@@ -894,11 +852,7 @@ export default function OrderTracking() {
           // Priority 4: Check nested restaurant data
           else if (apiOrder.restaurant?.location?.coordinates) {
             restaurantCoords = apiOrder.restaurant.location.coordinates;
-            console.log('✅ Found coordinates in restaurant.location.coordinates:', restaurantCoords);
           }
-          
-          console.log('📍 Final restaurant coordinates:', restaurantCoords);
-          console.log('📍 Customer coordinates:', apiOrder.address?.location?.coordinates);
           
           const resolvedRestaurantAddress = resolveRestaurantAddress(apiOrder, restaurantDetails);
           const resolvedRestaurantPhone = resolveRestaurantPhone(apiOrder, restaurantDetails);

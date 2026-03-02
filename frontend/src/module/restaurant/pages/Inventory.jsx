@@ -1053,7 +1053,6 @@ export default function Inventory() {
         if (itemId) {
           // Update individual product stock
           await groceryStoreAPI.updateProductStock(itemId, { inStock: isAvailable })
-          console.log('Product stock updated successfully')
         } else if (categoryId) {
           // Update all products in category
           const productsResponse = await groceryStoreAPI.getProducts({ categoryId, activeOnly: 'false' })
@@ -1065,7 +1064,6 @@ export default function Inventory() {
               groceryStoreAPI.updateProductStock(product._id, { inStock: isAvailable })
             )
           )
-          console.log('Category products stock updated successfully')
         }
         return
       }
@@ -1127,7 +1125,6 @@ export default function Inventory() {
 
       // Save updated menu
       await restaurantAPI.updateMenu({ sections: updatedSections })
-      console.log('Menu updated successfully')
     } catch (error) {
       console.error('Error updating menu/product:', error)
       toast.error(isGroceryStore ? 'Failed to update product stock' : 'Failed to update menu')
@@ -1315,7 +1312,6 @@ export default function Inventory() {
 
       // Save updated menu
       await restaurantAPI.updateMenu({ sections: updatedSections })
-      console.log('Menu recommendation updated successfully')
     } catch (error) {
       console.error('Error updating menu recommendation:', error)
       toast.error('Failed to update recommendation')
