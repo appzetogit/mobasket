@@ -68,6 +68,28 @@ const buildPhoneQuery = (normalizedPhone) => {
   }
 };
 
+const buildIdentifierQuery = (normalizedPhone, email) => {
+  if (normalizedPhone) {
+    return buildPhoneQuery(normalizedPhone);
+  }
+  return { email: email?.toLowerCase().trim() };
+};
+
+const findAnyRestaurantByIdentifier = async (normalizedPhone, email) => {
+  const query = buildIdentifierQuery(normalizedPhone, email);
+  if (!query) return null;
+  return Restaurant.findOne(query).lean();
+};
+
+const findAnyRestaurantDocByIdentifier = async (normalizedPhone, email) => {
+  const query = buildIdentifierQuery(normalizedPhone, email);
+  if (!query) return null;
+  return Restaurant.findOne(query);
+};
+
+const isDuplicateKeyError = (error) =>
+  error?.code === 11000 || /E11000 duplicate key error/i.test(String(error?.message || ''));
+
 export const sendOTP = asyncHandler(async (req, res) => {
   const { phone, email, purpose = 'login' } = req.body;
 
@@ -121,6 +143,11 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         return errorResponse(res, 400, 'Store name is required for registration');
       }
 
+      const existingAnyPlatformStore = await findAnyRestaurantByIdentifier(normalizedPhone, email);
+      if (existingAnyPlatformStore) {
+        return errorResponse(res, 400, `Store already exists with this ${identifierType}. Please login.`);
+      }
+
       await otpService.verifyOTP(phone || null, otp, purpose, email || null);
 
       const storeData = {
@@ -156,36 +183,41 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       await otpService.verifyOTP(phone || null, otp, purpose, email || null);
 
       if (!store) {
-        // Login screen promises first-time users can continue with OTP.
-        // Auto-create a pending store account on first successful login verification.
-        const fallbackName = normalizedPhone
-          ? `Grocery Store ${normalizedPhone.slice(-4)}`
-          : ((email?.split('@')?.[0] || 'Grocery Store')
-            .replace(/[._-]+/g, ' ')
-            .trim()
-            .slice(0, 60) || 'Grocery Store');
+        // Existing account with this identifier should always login; never create duplicate.
+        const existingAnyPlatformStoreDoc = await findAnyRestaurantDocByIdentifier(normalizedPhone, email);
+        if (existingAnyPlatformStoreDoc) {
+          store = existingAnyPlatformStoreDoc;
+        } else {
+          // New account: auto-create pending store so onboarding can continue.
+          const fallbackName = normalizedPhone
+            ? `Grocery Store ${normalizedPhone.slice(-4)}`
+            : ((email?.split('@')?.[0] || 'Grocery Store')
+              .replace(/[._-]+/g, ' ')
+              .trim()
+              .slice(0, 60) || 'Grocery Store');
 
-        const storeData = {
-          name: fallbackName,
-          signupMethod: normalizedPhone ? 'phone' : 'email',
-          platform: 'mogrocery',
-          role: 'restaurant',
-          isActive: false,
-          ownerName: fallbackName,
-          ...fcmPatch
-        };
+          const storeData = {
+            name: fallbackName,
+            signupMethod: normalizedPhone ? 'phone' : 'email',
+            platform: 'mogrocery',
+            role: 'restaurant',
+            isActive: false,
+            ownerName: fallbackName,
+            ...fcmPatch
+          };
 
-        if (normalizedPhone) {
-          storeData.phone = normalizedPhone;
-          storeData.ownerPhone = normalizedPhone;
+          if (normalizedPhone) {
+            storeData.phone = normalizedPhone;
+            storeData.ownerPhone = normalizedPhone;
+          }
+          if (email) {
+            storeData.email = email.toLowerCase().trim();
+            storeData.ownerEmail = email.toLowerCase().trim();
+          }
+
+          store = await Restaurant.create(storeData);
+          isNewlyRegistered = true;
         }
-        if (email) {
-          storeData.email = email.toLowerCase().trim();
-          storeData.ownerEmail = email.toLowerCase().trim();
-        }
-
-        store = await Restaurant.create(storeData);
-        isNewlyRegistered = true;
       }
 
       if (fcmPatch.fcmTokenWeb) store.fcmTokenWeb = fcmPatch.fcmTokenWeb;
@@ -218,6 +250,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     logger.error(`Error verifying OTP: ${error.message}`);
+    if (isDuplicateKeyError(error)) {
+      return errorResponse(
+        res,
+        409,
+        'This phone/email is already linked to another account. Please use a different phone/email for grocery.'
+      );
+    }
     return errorResponse(res, 400, error.message || 'Invalid OTP or verification failed');
   }
 });
@@ -239,6 +278,11 @@ export const register = asyncHandler(async (req, res) => {
     const existingStore = await Restaurant.findOne(findQuery);
     if (existingStore) {
       return errorResponse(res, 400, 'Grocery store already exists with this email or phone. Please login.');
+    }
+
+    const existingAnyPlatformStore = await findAnyRestaurantByIdentifier(normalizedPhone, email);
+    if (existingAnyPlatformStore) {
+      return errorResponse(res, 400, 'Store already exists with this email or phone. Please login.');
     }
 
     const storeData = {
@@ -367,15 +411,22 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     });
 
     if (!store) {
-      store = await Restaurant.create({
-        name: firebaseUser.name || 'Grocery Store',
-        email: firebaseUser.email.toLowerCase().trim(),
-        platform: 'mogrocery',
-        role: 'restaurant',
-        isActive: false,
-        signupMethod: 'google',
-        ...fcmPatch
-      });
+      const existingAnyPlatformStore = await Restaurant.findOne({
+        email: firebaseUser.email.toLowerCase().trim()
+      }).lean();
+      if (existingAnyPlatformStore?._id) {
+        store = await Restaurant.findById(existingAnyPlatformStore._id);
+      } else {
+        store = await Restaurant.create({
+          name: firebaseUser.name || 'Grocery Store',
+          email: firebaseUser.email.toLowerCase().trim(),
+          platform: 'mogrocery',
+          role: 'restaurant',
+          isActive: false,
+          signupMethod: 'google',
+          ...fcmPatch
+        });
+      }
     }
 
     if (fcmPatch.fcmTokenWeb) store.fcmTokenWeb = fcmPatch.fcmTokenWeb;
@@ -407,6 +458,13 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     logger.error(`Error with Google login: ${error.message}`);
+    if (isDuplicateKeyError(error)) {
+      return errorResponse(
+        res,
+        409,
+        'This email is already linked to another account. Please use a different email for grocery.'
+      );
+    }
     return errorResponse(res, 400, error.message || 'Google login failed');
   }
 });
@@ -422,7 +480,7 @@ export const refreshToken = asyncHandler(async (req, res) => {
     const decoded = jwtService.verifyRefreshToken(refreshToken);
     const store = await Restaurant.findById(decoded.userId);
 
-    if (!store || store.platform !== 'mogrocery') {
+    if (!store) {
       return errorResponse(res, 401, 'Invalid refresh token');
     }
 
