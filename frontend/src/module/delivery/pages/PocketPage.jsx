@@ -442,18 +442,7 @@ export default function PocketPage() {
         console.log('💰 Total Bonus Amount:', totalBonus)
       } catch (error) {
         console.error('Error fetching wallet data:', error)
-        // Keep empty state on error
-        setWalletState({
-          totalBalance: 0,
-          cashInHand: 0,
-          deductions: 0,
-          totalCashLimit: 750,
-          availableCashLimit: 750,
-          totalWithdrawn: 0,
-          totalEarned: 0,
-          transactions: [],
-          joiningBonusClaimed: false
-        })
+        // Keep last known wallet values if fetch fails, so UI doesn't jump to fake zeros.
       } finally {
         setWalletLoading(false)
       }

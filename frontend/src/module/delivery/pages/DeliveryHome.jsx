@@ -449,6 +449,47 @@ export default function DeliveryHome() {
       }
     }
   }
+
+  const LOCATION_CACHE_TTL_MS = 10 * 60 * 1000
+  const saveCachedDeliveryLocation = (coords) => {
+    if (!Array.isArray(coords) || coords.length !== 2) return
+    const lat = Number(coords[0])
+    const lng = Number(coords[1])
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return
+    try {
+      localStorage.setItem('deliveryBoyLastLocation', JSON.stringify([lat, lng]))
+      localStorage.setItem('deliveryBoyLastLocationTs', String(Date.now()))
+    } catch {}
+  }
+
+  const readCachedDeliveryLocation = ({ allowStale = false } = {}) => {
+    try {
+      const raw = localStorage.getItem('deliveryBoyLastLocation')
+      if (!raw) return null
+
+      const tsRaw = localStorage.getItem('deliveryBoyLastLocationTs')
+      const ts = Number(tsRaw)
+      const isFresh = Number.isFinite(ts) && (Date.now() - ts) <= LOCATION_CACHE_TTL_MS
+      if (!allowStale && !isFresh) return null
+
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed) || parsed.length !== 2) return null
+      let lat = Number(parsed[0])
+      let lng = Number(parsed[1])
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null
+
+      const mightBeSwapped = (lat >= 68 && lat <= 98 && lng >= 8 && lng <= 38)
+      if (mightBeSwapped) {
+        [lat, lng] = [lng, lat]
+      }
+
+      return [lat, lng]
+    } catch {
+      return null
+    }
+  }
   const [walletState, setWalletState] = useState({
     totalBalance: 0,
     cashInHand: 0,
@@ -471,6 +512,7 @@ export default function DeliveryHome() {
   
   // Default location - will be set from saved location or GPS, not hardcoded
   const [riderLocation, setRiderLocation] = useState(null) // Will be set from GPS or saved location
+  const [locationPermissionState, setLocationPermissionState] = useState('unknown') // unknown | granted | prompt | denied | unsupported
   const [isRefreshingLocation, setIsRefreshingLocation] = useState(false)
   const [bankDetailsFilled, setBankDetailsFilled] = useState(false)
   const [deliveryStatus, setDeliveryStatus] = useState(null) // Store delivery partner status
@@ -535,6 +577,107 @@ export default function DeliveryHome() {
   const [mapLoading, setMapLoading] = useState(false)
   const [directionsMapLoading, setDirectionsMapLoading] = useState(false)
   const isInitializingMapRef = useRef(false)
+  const ensureGoogleMapsConstructors = useCallback(async () => {
+    if (!window.google?.maps) return false
+    if (typeof window.google.maps.Map === "function") return true
+
+    if (typeof window.google.maps.importLibrary === "function") {
+      try {
+        const mapsLib = await window.google.maps.importLibrary("maps")
+        if (mapsLib?.Map && typeof window.google.maps.Map !== "function") {
+          window.google.maps.Map = mapsLib.Map
+        }
+        if (mapsLib?.MapTypeId && !window.google.maps.MapTypeId) {
+          window.google.maps.MapTypeId = mapsLib.MapTypeId
+        }
+      } catch (error) {
+        console.warn("⚠️ Failed to import Google Maps 'maps' library:", error)
+      }
+    }
+
+    return typeof window.google?.maps?.Map === "function"
+  }, [])
+
+  const handleLocationPermissionDenied = useCallback(() => {
+    setLocationPermissionState('denied')
+    toast.error('Location permission is disabled. Please allow location access for live tracking.')
+  }, [])
+
+  const requestLocationPermission = useCallback(() => {
+    if (!navigator.geolocation) {
+      setLocationPermissionState('unsupported')
+      toast.error('Location services are not available in this browser/device.')
+      return
+    }
+
+    setIsRefreshingLocation(true)
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const latitude = position.coords.latitude
+        const longitude = position.coords.longitude
+
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+          setIsRefreshingLocation(false)
+          toast.error('Invalid location detected. Please try again.')
+          return
+        }
+
+        const nextLocation = [latitude, longitude]
+        setRiderLocation(nextLocation)
+        lastLocationRef.current = nextLocation
+        lastValidLocationRef.current = nextLocation
+        smoothedLocationRef.current = nextLocation
+        saveCachedDeliveryLocation(nextLocation)
+        setLocationPermissionState('granted')
+        setIsRefreshingLocation(false)
+      },
+      (error) => {
+        setIsRefreshingLocation(false)
+        if (error?.code === 1) {
+          handleLocationPermissionDenied()
+          return
+        }
+        toast.error('Unable to fetch location. Please ensure GPS is enabled and try again.')
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    )
+  }, [handleLocationPermissionDenied])
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocationPermissionState('unsupported')
+      return
+    }
+
+    if (!navigator.permissions || typeof navigator.permissions.query !== 'function') {
+      setLocationPermissionState('unknown')
+      return
+    }
+
+    let isMounted = true
+    let permissionStatus = null
+
+    navigator.permissions
+      .query({ name: 'geolocation' })
+      .then((status) => {
+        if (!isMounted) return
+        permissionStatus = status
+        setLocationPermissionState(status.state || 'unknown')
+        status.onchange = () => {
+          setLocationPermissionState(status.state || 'unknown')
+        }
+      })
+      .catch(() => {
+        if (isMounted) setLocationPermissionState('unknown')
+      })
+
+    return () => {
+      isMounted = false
+      if (permissionStatus) {
+        permissionStatus.onchange = null
+      }
+    }
+  }, [])
 
   // Safety timeout: hide "Loading map..." overlay after max 2 seconds
   useEffect(() => {
@@ -1759,58 +1902,15 @@ export default function DeliveryHome() {
   // Get rider location - App open होते ही location fetch करें
   useEffect(() => {
     // First, check if we have saved location in localStorage (for refresh handling)
-    const savedLocation = localStorage.getItem('deliveryBoyLastLocation')
-    if (savedLocation) {
-      try {
-        const parsed = JSON.parse(savedLocation)
-        if (parsed && Array.isArray(parsed) && parsed.length === 2) {
-          const [lat, lng] = parsed
-          
-          // Validate saved coordinates
-          if (typeof lat === 'number' && typeof lng === 'number' &&
-              lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-            // Check if coordinates might be swapped (common issue)
-            // If lat > 90 or lng > 180, they're definitely swapped
-            // If lat is in lng range (68-98 for India) and lng is in lat range (8-38), they might be swapped
-            const mightBeSwapped = (lat >= 68 && lat <= 98 && lng >= 8 && lng <= 38)
-            
-            if (mightBeSwapped) {
-              console.warn('⚠️ Saved coordinates might be swapped - correcting:', {
-                original: [lat, lng],
-                corrected: [lng, lat],
-                note: 'Swapping lat/lng based on India coordinate ranges'
-              })
-              // Swap coordinates
-              const correctedLocation = [lng, lat]
-              setRiderLocation(correctedLocation)
-              lastLocationRef.current = correctedLocation
-              routeHistoryRef.current = [{
-                lat: correctedLocation[0],
-                lng: correctedLocation[1]
-              }]
-              // Update localStorage with corrected coordinates
-              localStorage.setItem('deliveryBoyLastLocation', JSON.stringify(correctedLocation))
-              console.log('✅ Corrected and saved location:', correctedLocation)
-            } else {
-              setRiderLocation(parsed)
-              lastLocationRef.current = parsed
-              routeHistoryRef.current = [{
-                lat: parsed[0],
-                lng: parsed[1]
-              }]
-              console.log('📍 Restored location from localStorage:', {
-                location: parsed,
-                format: "[lat, lng]",
-                validated: true
-              })
-            }
-          } else {
-            console.warn('⚠️ Invalid saved coordinates in localStorage:', parsed)
-          }
-        }
-      } catch (e) {
-        console.warn('⚠️ Error parsing saved location:', e)
-      }
+    const cachedLocation = readCachedDeliveryLocation()
+    if (cachedLocation) {
+      setRiderLocation(cachedLocation)
+      lastLocationRef.current = cachedLocation
+      routeHistoryRef.current = [{
+        lat: cachedLocation[0],
+        lng: cachedLocation[1]
+      }]
+      console.log('📍 Restored recent cached location:', cachedLocation)
     }
 
     if (navigator.geolocation) {
@@ -1924,7 +2024,7 @@ export default function DeliveryHome() {
           }]
           
           // Save location to localStorage
-          localStorage.setItem('deliveryBoyLastLocation', JSON.stringify(smoothedLocation))
+          saveCachedDeliveryLocation(smoothedLocation)
           
           setRiderLocation(smoothedLocation)
           lastLocationRef.current = smoothedLocation
@@ -1958,10 +2058,13 @@ export default function DeliveryHome() {
         },
         (error) => {
           console.warn("⚠️ Error getting current location:", error)
+          if (error?.code === 1) {
+            handleLocationPermissionDenied()
+          }
           // Don't use default location - retry after delay
           // Check if we have saved location from localStorage
-          const savedLoc = localStorage.getItem('deliveryBoyLastLocation')
-          if (!savedLoc) {
+          const cachedLocation = readCachedDeliveryLocation()
+          if (!cachedLocation) {
             // No saved location, retry after 3 seconds
             setTimeout(() => {
               if (navigator.geolocation) {
@@ -1979,7 +2082,7 @@ export default function DeliveryHome() {
                       smoothedLocationRef.current = newLocation
                       lastValidLocationRef.current = newLocation
                       locationHistoryRef.current = [newLocation]
-                      localStorage.setItem('deliveryBoyLastLocation', JSON.stringify(newLocation))
+                      saveCachedDeliveryLocation(newLocation)
                       console.log('✅ Location obtained on retry:', newLocation)
                       
                       // Recenter map if already initialized, otherwise it will initialize when location is set
@@ -2135,7 +2238,7 @@ export default function DeliveryHome() {
               }]
               
               // Save to localStorage
-              localStorage.setItem('deliveryBoyLastLocation', JSON.stringify(newLocation))
+          saveCachedDeliveryLocation(newLocation)
               
               // Update marker with correct location
               if (window.deliveryMapInstance) {
@@ -2221,7 +2324,7 @@ export default function DeliveryHome() {
           }
           
           // Save smoothed location to localStorage
-          localStorage.setItem('deliveryBoyLastLocation', JSON.stringify(smoothedLocation))
+          saveCachedDeliveryLocation(smoothedLocation)
           
           // Update live tracking polyline for any active route (pickup or delivery)
           const currentDirectionsResponse = directionsResponseRef.current;
@@ -2369,6 +2472,9 @@ export default function DeliveryHome() {
         },
         (error) => {
           console.warn("⚠️ Error watching location:", error)
+          if (error?.code === 1) {
+            handleLocationPermissionDenied()
+          }
         },
         { 
           enableHighAccuracy: true, 
@@ -2397,7 +2503,7 @@ export default function DeliveryHome() {
           watchPositionIdRef.current = null
         }
       }
-  }, [isOnline, isDirectionsRouteToLocation]) // Re-run when online status changes - this controls start/stop of tracking
+  }, [isOnline, isDirectionsRouteToLocation, handleLocationPermissionDenied]) // Re-run when online status changes - this controls start/stop of tracking
 
   // Handle new order popup accept button swipe
   const handleNewOrderAcceptTouchStart = (e) => {
@@ -4839,18 +4945,7 @@ export default function DeliveryHome() {
         if (error.code !== 'ERR_NETWORK') {
           console.error('Error fetching wallet data:', error)
         }
-        // Keep empty state on error
-        setWalletState({
-          totalBalance: 0,
-          cashInHand: 0,
-          deductions: 0,
-          totalCashLimit: 0,
-          availableCashLimit: 0,
-          totalWithdrawn: 0,
-          totalEarned: 0,
-          transactions: [],
-          joiningBonusClaimed: false
-        })
+        // Keep last known wallet values if fetch fails.
       }
     }
 
@@ -5238,9 +5333,12 @@ export default function DeliveryHome() {
       setMapLoading(true)
 
       if (window.google && window.google.maps) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-        initializeGoogleMap()
-        return
+        const constructorsReady = await ensureGoogleMapsConstructors()
+        if (constructorsReady) {
+          await new Promise(resolve => setTimeout(resolve, 100))
+          initializeGoogleMap()
+          return
+        }
       }
 
       const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
@@ -5270,12 +5368,21 @@ export default function DeliveryHome() {
 
       const maxAttempts = 200 // 20 seconds max wait for app-level script load
       let attempts = 0
-      while ((!window.google || !window.google.maps) && attempts < maxAttempts) {
+      while (
+        (!window.google ||
+          !window.google.maps ||
+          typeof window.google.maps.Map !== "function") &&
+        attempts < maxAttempts
+      ) {
+        if (window.google?.maps && typeof window.google.maps.Map !== "function") {
+          await ensureGoogleMapsConstructors()
+        }
         await new Promise(resolve => setTimeout(resolve, 100))
         attempts++
       }
 
-      if (!window.google || !window.google.maps) {
+      const constructorsReady = await ensureGoogleMapsConstructors()
+      if (!window.google || !window.google.maps || !constructorsReady) {
         console.error("Google Maps failed to load from shared script")
         window.__googleMapsLoading = false
         setMapLoading(false)
@@ -5310,7 +5417,8 @@ export default function DeliveryHome() {
           }
         }
 
-        if (!window.google || !window.google.maps) {
+        const constructorsReady = await ensureGoogleMapsConstructors()
+        if (!window.google || !window.google.maps || !constructorsReady) {
           console.error('❌ Google Maps API not available');
           setMapLoading(false);
           return;
@@ -5328,22 +5436,10 @@ export default function DeliveryHome() {
           console.log('📍 Using current rider location for map center:', initialCenter);
         } else {
           // Try to get from localStorage (saved location from previous session)
-          const savedLocation = localStorage.getItem('deliveryBoyLastLocation');
-          if (savedLocation) {
-            try {
-              const parsed = JSON.parse(savedLocation);
-              if (parsed && Array.isArray(parsed) && parsed.length === 2) {
-                const [lat, lng] = parsed;
-                // Validate coordinates
-                if (typeof lat === 'number' && typeof lng === 'number' &&
-                    lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-                  initialCenter = { lat, lng };
-                  console.log('📍 Using saved location from localStorage for map center:', initialCenter);
-                }
-              }
-            } catch (e) {
-              console.warn('⚠️ Error parsing saved location:', e);
-            }
+          const cachedLocation = readCachedDeliveryLocation();
+          if (cachedLocation) {
+            initialCenter = { lat: cachedLocation[0], lng: cachedLocation[1] };
+            console.log('📍 Using recent cached location for map center:', initialCenter);
           }
         }
         
@@ -5524,19 +5620,12 @@ export default function DeliveryHome() {
             }, 500);
           } else {
             // Try to get location from localStorage if current location not available
-            const savedLocation = localStorage.getItem('deliveryBoyLastLocation');
-            if (savedLocation) {
-              try {
-                const parsed = JSON.parse(savedLocation);
-                if (parsed && Array.isArray(parsed) && parsed.length === 2) {
-                  console.log('📍 Creating bike marker from saved location after tiles loaded');
-                  setTimeout(() => {
-                    createOrUpdateBikeMarker(parsed[0], parsed[1], null);
-                  }, 500);
-                }
-              } catch (e) {
-                console.warn('⚠️ Error using saved location:', e);
-              }
+            const cachedLocation = readCachedDeliveryLocation();
+            if (cachedLocation) {
+              console.log('📍 Creating bike marker from recent cached location after tiles loaded');
+              setTimeout(() => {
+                createOrUpdateBikeMarker(cachedLocation[0], cachedLocation[1], null);
+              }, 500);
             }
           }
           
@@ -5599,7 +5688,7 @@ export default function DeliveryHome() {
         // Don't set to null - preserve reference for re-attachment
       }
     }
-  }, [showHomeSections, mapInitRetry]) // Re-run when showHomeSections or container retry
+  }, [showHomeSections, mapInitRetry, ensureGoogleMapsConstructors]) // Re-run when showHomeSections or container retry
 
   // When slider returns to map view, force Google Maps to recalculate layout.
   // Without this, map tiles can stay blank/misaligned after container transitions.
@@ -5654,7 +5743,7 @@ export default function DeliveryHome() {
     if (showHomeSections) return
     if (!riderLocation || riderLocation.length !== 2) return
     if (window.deliveryMapInstance) return // Map already initialized
-    if (!window.google || !window.google.maps) return // Google Maps not loaded yet
+    if (!window.google || !window.google.maps || typeof window.google.maps.Map !== "function") return // Google Maps not loaded yet
     if (!mapContainerRef.current) return // Container not ready
 
     console.log('📍 Rider location available, initializing map...')
@@ -5665,7 +5754,10 @@ export default function DeliveryHome() {
         const initialCenter = { lat: riderLocation[0], lng: riderLocation[1] }
         console.log('📍 Initializing map with rider location:', initialCenter)
         
-        if (!window.google || !window.google.maps) return
+        if (!window.google || !window.google.maps || typeof window.google.maps.Map !== "function") {
+          const constructorsReady = await ensureGoogleMapsConstructors()
+          if (!constructorsReady) return
+        }
         
         const map = new window.google.maps.Map(mapContainerRef.current, {
           center: initialCenter,
@@ -5695,7 +5787,7 @@ export default function DeliveryHome() {
     }
     
     initializeMap()
-  }, [riderLocation, showHomeSections]) // Initialize when location is available
+  }, [riderLocation, showHomeSections, ensureGoogleMapsConstructors]) // Initialize when location is available
 
   // Update bike marker when going online - ensure bike appears immediately
   useEffect(() => {
@@ -5761,38 +5853,10 @@ export default function DeliveryHome() {
       console.log('✅ Bike marker created/updated when going online:', riderLocation);
     } else {
       // Try to get location from localStorage if current location not available
-      const savedLocation = localStorage.getItem('deliveryBoyLastLocation')
-      if (savedLocation) {
-        try {
-          const parsed = JSON.parse(savedLocation)
-          if (parsed && Array.isArray(parsed) && parsed.length === 2) {
-            const [lat, lng] = parsed
-            
-            // Validate and check for coordinate swap
-            if (typeof lat === 'number' && typeof lng === 'number' &&
-                lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
-              const mightBeSwapped = (lat >= 68 && lat <= 98 && lng >= 8 && lng <= 38)
-              
-              if (mightBeSwapped) {
-                console.warn('⚠️ Saved coordinates might be swapped - correcting:', {
-                  original: [lat, lng],
-                  corrected: [lng, lat]
-                })
-                createOrUpdateBikeMarker(lng, lat, null, true)
-              } else {
-                console.log('📍 Using saved location from localStorage:', {
-                  location: parsed,
-                  format: "[lat, lng]"
-                })
-                createOrUpdateBikeMarker(parsed[0], parsed[1], null, true)
-              }
-            } else {
-              console.warn('⚠️ Invalid saved coordinates:', parsed)
-            }
-          }
-        } catch (e) {
-          console.warn('⚠️ Error using saved location:', e)
-        }
+      const cachedLocation = readCachedDeliveryLocation()
+      if (cachedLocation) {
+        console.log('📍 Using recent cached location:', cachedLocation)
+        createOrUpdateBikeMarker(cachedLocation[0], cachedLocation[1], null, true)
       } else {
         console.warn('⚠️ Cannot create bike marker - invalid rider location:', riderLocation);
       }
@@ -6231,8 +6295,8 @@ export default function DeliveryHome() {
                 const currentIcon = bikeMarkerRef.current.getIcon();
                 bikeMarkerRef.current.setIcon({
                   url: rotatedIconUrl,
-                  scaledSize: currentIcon?.scaledSize || new window.google.maps.Size(60, 60),
-                  anchor: currentIcon?.anchor || new window.google.maps.Point(30, 30)
+                  scaledSize: currentIcon?.scaledSize || new window.google.maps.Size(BIKE_ICON_CANVAS_SIZE, BIKE_ICON_CANVAS_SIZE),
+                  anchor: currentIcon?.anchor || new window.google.maps.Point(BIKE_ICON_CANVAS_SIZE / 2, BIKE_ICON_CANVAS_SIZE / 2)
                 });
               }
             });
@@ -6310,6 +6374,11 @@ export default function DeliveryHome() {
         console.log('🗺️ Initializing Directions Map with LIVE location...');
         console.log('📍 Origin (Delivery Boy LIVE Location):', currentLocation);
         console.log('📍 Destination:', destinationName, destinationLocation);
+
+        const directionsConstructorsReady = await ensureGoogleMapsConstructors()
+        if (!directionsConstructorsReady || typeof window.google?.maps?.Map !== "function") {
+          throw new Error("Google Maps Map constructor unavailable for directions map")
+        }
 
         // Create map instance
         const map = new window.google.maps.Map(directionsMapContainerRef.current, {
@@ -6427,20 +6496,18 @@ export default function DeliveryHome() {
           }
 
           // Add custom Bike Marker (Delivery Boy)
+          const directionsBikeIconUrl = await getRotatedBikeIcon(0);
           if (!directionsBikeMarkerRef.current) {
             directionsBikeMarkerRef.current = new window.google.maps.Marker({
               position: { lat: currentLocation[0], lng: currentLocation[1] },
               map: map,
-              icon: {
-                url: bikeLogo,
-                scaledSize: new window.google.maps.Size(50, 50),
-                anchor: new window.google.maps.Point(25, 25)
-              },
+              icon: buildBikeMarkerIcon(directionsBikeIconUrl),
               title: 'Your Location',
               zIndex: 100 // Bike marker should be on top
             });
           } else {
             directionsBikeMarkerRef.current.setPosition({ lat: currentLocation[0], lng: currentLocation[1] });
+            directionsBikeMarkerRef.current.setIcon(buildBikeMarkerIcon(directionsBikeIconUrl));
             directionsBikeMarkerRef.current.setMap(map);
           }
 
@@ -8210,6 +8277,15 @@ export default function DeliveryHome() {
 
   // Cache for rotated icons to avoid recreating them
   const rotatedIconCache = useRef(new Map());
+  const BIKE_ICON_CANVAS_SIZE = 60;
+  const BIKE_ICON_MAX_WIDTH = 40;
+  const BIKE_ICON_MAX_HEIGHT = 60;
+
+  const buildBikeMarkerIcon = (url) => ({
+    url,
+    scaledSize: new window.google.maps.Size(BIKE_ICON_CANVAS_SIZE, BIKE_ICON_CANVAS_SIZE),
+    anchor: new window.google.maps.Point(BIKE_ICON_CANVAS_SIZE / 2, BIKE_ICON_CANVAS_SIZE / 2)
+  });
 
   // Function to rotate bike logo image based on heading
   const getRotatedBikeIcon = (heading = 0) => {
@@ -8228,10 +8304,21 @@ export default function DeliveryHome() {
       img.onload = () => {
         try {
           const canvas = document.createElement('canvas');
-          const size = 60; // Icon size
+          const size = BIKE_ICON_CANVAS_SIZE; // Icon size
           canvas.width = size;
           canvas.height = size;
           const ctx = canvas.getContext('2d');
+
+          if (!ctx) {
+            resolve(bikeLogo);
+            return;
+          }
+
+          const widthScale = BIKE_ICON_MAX_WIDTH / img.width;
+          const heightScale = BIKE_ICON_MAX_HEIGHT / img.height;
+          const scale = Math.min(widthScale, heightScale);
+          const drawWidth = img.width * scale;
+          const drawHeight = img.height * scale;
           
           // Clear canvas
           ctx.clearRect(0, 0, size, size);
@@ -8240,7 +8327,7 @@ export default function DeliveryHome() {
           ctx.save();
           ctx.translate(size / 2, size / 2);
           ctx.rotate((roundedHeading * Math.PI) / 180); // Convert degrees to radians
-          ctx.drawImage(img, -size / 2, -size / 2, size, size);
+          ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
           ctx.restore();
           
           // Get data URL and cache it
@@ -8370,9 +8457,7 @@ export default function DeliveryHome() {
       console.log('📍 Creating new bike marker at:', { lat: latitude, lng: longitude });
       // Create bike marker with rotated icon - exact position
       const bikeIcon = {
-        url: rotatedIconUrl,
-        scaledSize: new window.google.maps.Size(60, 60), // Larger size for better visibility
-        anchor: new window.google.maps.Point(30, 30) // Center point
+        ...buildBikeMarkerIcon(rotatedIconUrl)
       };
 
       bikeMarkerRef.current = new window.google.maps.Marker({
@@ -8449,9 +8534,7 @@ export default function DeliveryHome() {
       const currentHeading = heading !== null && heading !== undefined ? heading : 0;
       const rotatedIconUrl = await getRotatedBikeIcon(currentHeading);
       const bikeIcon = {
-        url: rotatedIconUrl,
-        scaledSize: new window.google.maps.Size(60, 60),
-        anchor: new window.google.maps.Point(30, 30)
+        ...buildBikeMarkerIcon(rotatedIconUrl)
       };
       bikeMarkerRef.current.setIcon(bikeIcon);
       
@@ -9317,6 +9400,21 @@ export default function DeliveryHome() {
               <p className="text-[11px] font-semibold text-gray-700">You are offline</p>
             </div>
           )}
+
+          {locationPermissionState === 'denied' && (
+            <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 w-[92%] max-w-sm rounded-xl border border-red-200 bg-white/95 px-4 py-3 shadow">
+              <p className="text-sm font-semibold text-red-700">Location Permission Required</p>
+              <p className="text-xs text-gray-700 mt-1">
+                Live tracking needs location access. Enable location permission in your browser/app settings.
+              </p>
+              <button
+                onClick={requestLocationPermission}
+                className="mt-2 inline-flex items-center rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white"
+              >
+                Retry Location Access
+              </button>
+            </div>
+          )}
           
           {/* Loading indicator */}
           {mapLoading && (
@@ -9450,7 +9548,7 @@ export default function DeliveryHome() {
                     }
                     
                     // Save location to localStorage (for refresh handling)
-                    localStorage.setItem('deliveryBoyLastLocation', JSON.stringify(newLocation))
+                    saveCachedDeliveryLocation(newLocation)
                     
                     // Update route history
                     if (lastLocationRef.current) {
@@ -9505,6 +9603,9 @@ export default function DeliveryHome() {
                   },
                   (error) => {
                     console.error('Error getting location:', error)
+                    if (error?.code === 1) {
+                      handleLocationPermissionDenied()
+                    }
                     setIsRefreshingLocation(false)
                   },
                   { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }

@@ -40,14 +40,7 @@ export default function PocketBalancePage() {
       setWalletState(walletData)
     } catch (error) {
       console.error('Error fetching wallet data:', error)
-      setWalletState({
-        totalBalance: 0,
-        cashInHand: 0,
-        totalWithdrawn: 0,
-        totalEarned: 0,
-        transactions: [],
-        joiningBonusClaimed: false
-      })
+      // Keep last known wallet values if fetch fails.
     } finally {
       setWalletLoading(false)
     }
