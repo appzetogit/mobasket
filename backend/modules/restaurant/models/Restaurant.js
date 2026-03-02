@@ -294,15 +294,7 @@ restaurantSchema.index({ phone: 1 }, { unique: true, sparse: true });
 restaurantSchema.index({ googleId: 1 }, { unique: true, sparse: true });
 
   // Hash password before saving
-  restaurantSchema.pre('save', async function(next) {
-    // Single Store Constraint for MoGrocery
-    if (this.isNew && this.platform === 'mogrocery') {
-      const existingStore = await mongoose.models.Restaurant.findOne({ platform: 'mogrocery' });
-      if (existingStore) {
-        return next(new Error('A grocery store already exists. Only one store is allowed for the mogrocery platform.'));
-      }
-    }
-
+restaurantSchema.pre('save', async function(next) {
     // Generate restaurantId FIRST (before any validation)
     if (!this.restaurantId) {
       const timestamp = Date.now();

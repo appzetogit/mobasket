@@ -37,6 +37,7 @@ import RestaurantWelcome from "@/module/restaurant/pages/auth/Welcome";
 // Grocery Store imports
 import GroceryStoreOnboarding from "@/module/grocery-store/pages/Onboarding";
 import GroceryStoreLogin from "@/module/grocery-store/pages/auth/Login";
+import GroceryStoreSignup from "@/module/grocery-store/pages/auth/Signup";
 import GroceryStoreOTP from "@/module/grocery-store/pages/auth/OTP";
 import GroceryStoreProductDetailsPage from "@/module/grocery-store/pages/ProductDetailsPage";
 import GroceryStoreProductsListPage from "@/module/grocery-store/pages/ProductsListPage";
@@ -253,7 +254,14 @@ export default function App() {
             </AuthRedirect>
           }
         />
-        <Route path="/store/signup" element={<Navigate to="/store/login" replace />} />
+        <Route
+          path="/store/signup"
+          element={
+            <AuthRedirect module="grocery-store">
+              <GroceryStoreSignup />
+            </AuthRedirect>
+          }
+        />
         <Route
           path="/store/otp"
           element={

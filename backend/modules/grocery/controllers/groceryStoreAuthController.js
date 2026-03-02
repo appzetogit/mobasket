@@ -150,47 +150,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       await otpService.verifyOTP(phone || null, otp, purpose, email || null);
 
       if (!store) {
-        // Only one grocery store allowed: OTP was already verified for this phone/email, so log them into that store
-        const existingStore = await Restaurant.findOne({ platform: 'mogrocery' });
-        if (existingStore) {
-          store = existingStore;
-        }
+        return errorResponse(res, 404, `Grocery store not found with this ${identifierType}. Please sign up first.`);
       }
 
-      if (!store) {
-
-        const derivedName = normalizedPhone
-          ? `Grocery Store ${normalizedPhone.slice(-4)}`
-          : ((email || '').split('@')[0] || 'Grocery Store');
-        const ownerName = (derivedName && String(derivedName).trim()) ? String(derivedName).trim() : 'Store Owner';
-
-        const storeData = {
-          name: derivedName,
-          signupMethod: normalizedPhone ? 'phone' : 'email',
-          platform: 'mogrocery',
-          role: 'restaurant',
-          isActive: false,
-          ownerName,
-          ownerEmail: email ? email.toLowerCase().trim() : '',
-          ...fcmPatch
-        };
-
-        if (normalizedPhone) {
-          storeData.phone = normalizedPhone;
-          storeData.ownerPhone = normalizedPhone; // Restaurant model requires ownerPhone when phone is set
-        }
-        if (email) {
-          storeData.email = email.toLowerCase().trim();
-        }
-
-        store = await Restaurant.create(storeData);
-        isNewlyRegistered = true;
-      } else {
-        if (fcmPatch.fcmTokenWeb) store.fcmTokenWeb = fcmPatch.fcmTokenWeb;
-        if (fcmPatch.fcmTokenMobile) store.fcmTokenMobile = fcmPatch.fcmTokenMobile;
-        if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile) {
-          await store.save();
-        }
+      if (fcmPatch.fcmTokenWeb) store.fcmTokenWeb = fcmPatch.fcmTokenWeb;
+      if (fcmPatch.fcmTokenMobile) store.fcmTokenMobile = fcmPatch.fcmTokenMobile;
+      if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile) {
+        await store.save();
       }
     }
 

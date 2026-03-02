@@ -79,13 +79,6 @@ export const createGroceryStore = asyncHandler(async (req, res) => {
   try {
     const storeData = { ...req.body, platform: 'mogrocery' };
 
-    // "Single Only" check: if there's already a grocery store, prevent creating another
-    // This can be adjusted if "single only" means something else.
-    const existingStore = await Restaurant.findOne({ platform: 'mogrocery' });
-    if (existingStore) {
-      return errorResponse(res, 400, 'A grocery store already exists. Only one store is allowed.');
-    }
-
     if (storeData.phone) {
       storeData.phone = normalizePhoneNumber(storeData.phone);
     }

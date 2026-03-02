@@ -46,6 +46,7 @@ import { getUnreadDeliveryNotificationCount } from "../utils/deliveryNotificatio
 import { deliveryAPI, restaurantAPI, uploadAPI } from "@/lib/api"
 import { useDeliveryNotifications } from "../hooks/useDeliveryNotifications"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
+import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey"
 import {
   decodePolyline,
   extractPolylineFromDirections,
@@ -5009,7 +5010,7 @@ export default function DeliveryHome() {
             items: firstOrder.items || [],
             total: firstOrder.pricing?.total || 0,
             payment: firstOrder.payment?.method || 'COD',
-            amount: firstOrder.pricing?.total || 0
+            amount: firstOrder.pricing?.deliveryFee || 0
           }
           
           setSelectedRestaurant(restaurantData)
@@ -5242,34 +5243,58 @@ export default function DeliveryHome() {
     // Load Google Maps if not already loaded.
     // Cost optimization: avoid any secondary loader path and rely on single app-level script.
     const loadGoogleMapsIfNeeded = async () => {
+      setMapLoading(true)
+
       if (window.google && window.google.maps) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        initializeGoogleMap();
-        return;
+        await new Promise(resolve => setTimeout(resolve, 100))
+        initializeGoogleMap()
+        return
       }
 
-      const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
+      const existingScript = document.querySelector('script[src*="maps.googleapis.com"]')
       if (!existingScript && !window.__googleMapsLoading) {
-        console.error('❌ Google Maps script is not available yet');
-        setMapLoading(false);
-        return;
+        try {
+          window.__googleMapsLoading = true
+          const apiKey = await getGoogleMapsApiKey()
+          if (!apiKey) {
+            throw new Error("Google Maps API key not available")
+          }
+
+          const script = document.createElement("script")
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geometry,drawing&loading=async`
+          script.async = true
+          script.defer = true
+          document.head.appendChild(script)
+        } catch (error) {
+          console.error("Google Maps script/key unavailable:", error?.message || error)
+          window.__googleMapsLoading = false
+          setMapLoading(false)
+          if (mapInitRetry < 30) {
+            setTimeout(() => setMapInitRetry((r) => r + 1), 800)
+          }
+          return
+        }
       }
 
-      const maxAttempts = 120; // 12 seconds max wait for app-level script load
-      let attempts = 0;
+      const maxAttempts = 200 // 20 seconds max wait for app-level script load
+      let attempts = 0
       while ((!window.google || !window.google.maps) && attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        attempts++;
+        await new Promise(resolve => setTimeout(resolve, 100))
+        attempts++
       }
 
       if (!window.google || !window.google.maps) {
-        console.error('❌ Google Maps failed to load from shared script');
-        setMapLoading(false);
-        return;
+        console.error("Google Maps failed to load from shared script")
+        window.__googleMapsLoading = false
+        setMapLoading(false)
+        if (mapInitRetry < 30) {
+          setTimeout(() => setMapInitRetry((r) => r + 1), 1000)
+        }
+        return
       }
 
-      await initializeGoogleMap();
-    };
+      await initializeGoogleMap()
+    }
 
     loadGoogleMapsIfNeeded();
 
@@ -5583,6 +5608,54 @@ export default function DeliveryHome() {
       }
     }
   }, [showHomeSections, mapInitRetry]) // Re-run when showHomeSections or container retry
+
+  // When slider returns to map view, force Google Maps to recalculate layout.
+  // Without this, map tiles can stay blank/misaligned after container transitions.
+  useEffect(() => {
+    if (showHomeSections) return
+    if (!window.google?.maps || !window.deliveryMapInstance) return
+
+    const map = window.deliveryMapInstance
+
+    const refreshMapLayout = () => {
+      try {
+        window.google.maps.event.trigger(map, "resize")
+
+        const riderLat = riderLocation?.[0]
+        const riderLng = riderLocation?.[1]
+        const hasRiderLocation = Number.isFinite(riderLat) && Number.isFinite(riderLng)
+
+        if (selectedRestaurantRef.current) {
+          const fitted = fitMapToActiveRoute(map)
+          if (!fitted && hasRiderLocation) {
+            map.panTo({ lat: riderLat, lng: riderLng })
+            if ((map.getZoom?.() || 0) < 16) map.setZoom(16)
+          }
+        } else if (hasRiderLocation) {
+          map.panTo({ lat: riderLat, lng: riderLng })
+          if ((map.getZoom?.() || 0) < 16) map.setZoom(16)
+        }
+
+        if (bikeMarkerRef.current && bikeMarkerRef.current.getMap() !== map) {
+          bikeMarkerRef.current.setMap(map)
+        }
+        if (restaurantMarkerRef.current && restaurantMarkerRef.current.getMap() !== map) {
+          restaurantMarkerRef.current.setMap(map)
+        }
+        if (customerMarkerRef.current && customerMarkerRef.current.getMap() !== map) {
+          customerMarkerRef.current.setMap(map)
+        }
+
+        setMapLoading(false)
+      } catch (error) {
+        console.warn("Map reflow after slider transition failed:", error)
+      }
+    }
+
+    // Run immediately and after transition frames settle.
+    const timers = [0, 180, 420].map((delay) => setTimeout(refreshMapLayout, delay))
+    return () => timers.forEach((id) => clearTimeout(id))
+  }, [showHomeSections, riderLocation?.[0], riderLocation?.[1], selectedRestaurant?.id])
 
   // Initialize map when riderLocation becomes available (if map not already initialized)
   useEffect(() => {

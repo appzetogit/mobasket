@@ -16,26 +16,26 @@ import PolicyModal from "@/components/legal/PolicyModal"
 
 // Common country codes
 const countryCodes = [
-  { code: "+1", country: "US/CA", flag: "????" },
-  { code: "+44", country: "UK", flag: "????" },
-  { code: "+91", country: "IN", flag: "????" },
-  { code: "+86", country: "CN", flag: "????" },
-  { code: "+81", country: "JP", flag: "????" },
-  { code: "+49", country: "DE", flag: "????" },
-  { code: "+33", country: "FR", flag: "????" },
-  { code: "+39", country: "IT", flag: "????" },
-  { code: "+34", country: "ES", flag: "????" },
-  { code: "+61", country: "AU", flag: "????" },
-  { code: "+7", country: "RU", flag: "????" },
-  { code: "+55", country: "BR", flag: "????" },
-  { code: "+52", country: "MX", flag: "????" },
-  { code: "+82", country: "KR", flag: "????" },
-  { code: "+65", country: "SG", flag: "????" },
-  { code: "+971", country: "AE", flag: "????" },
-  { code: "+966", country: "SA", flag: "????" },
-  { code: "+27", country: "ZA", flag: "????" },
-  { code: "+31", country: "NL", flag: "????" },
-  { code: "+46", country: "SE", flag: "????" },
+  { code: "+91", country: "IN" },
+  { code: "+1", country: "US/CA" },
+  { code: "+44", country: "UK" },
+  { code: "+86", country: "CN" },
+  { code: "+81", country: "JP" },
+  { code: "+49", country: "DE" },
+  { code: "+33", country: "FR" },
+  { code: "+39", country: "IT" },
+  { code: "+34", country: "ES" },
+  { code: "+61", country: "AU" },
+  { code: "+7", country: "RU" },
+  { code: "+55", country: "BR" },
+  { code: "+52", country: "MX" },
+  { code: "+82", country: "KR" },
+  { code: "+65", country: "SG" },
+  { code: "+971", country: "AE" },
+  { code: "+966", country: "SA" },
+  { code: "+27", country: "ZA" },
+  { code: "+31", country: "NL" },
+  { code: "+46", country: "SE" },
 ]
 
 export default function DeliverySignIn() {
@@ -54,7 +54,7 @@ export default function DeliverySignIn() {
   })
 
   // Get selected country details dynamically
-  const selectedCountry = countryCodes.find(c => c.code === formData.countryCode) || countryCodes[2] // Default to India (+91)
+  const selectedCountry = countryCodes.find(c => c.code === formData.countryCode) || countryCodes[0] // Default to India (+91)
 
   const validatePhone = (phone, countryCode) => {
     if (!phone || phone.trim() === "") {
@@ -233,7 +233,6 @@ export default function DeliverySignIn() {
                 <SelectTrigger className="w-[100px] !h-12 border-gray-300 rounded-lg flex items-center shrink-0" size="default">
                   <SelectValue>
                     <span className="flex items-center gap-2">
-                      <span>{selectedCountry.flag}</span>
                       <span>{selectedCountry.code}</span>
                     </span>
                   </SelectValue>
@@ -242,8 +241,8 @@ export default function DeliverySignIn() {
                   {countryCodes.map((country) => (
                     <SelectItem key={country.code} value={country.code}>
                       <span className="flex items-center gap-2">
-                        <span>{country.flag}</span>
                         <span>{country.code}</span>
+                        <span className="text-gray-500">{country.country}</span>
                       </span>
                     </SelectItem>
                   ))}

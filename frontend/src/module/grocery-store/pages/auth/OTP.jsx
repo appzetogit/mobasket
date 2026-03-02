@@ -110,6 +110,12 @@ export default function GroceryStoreOTP() {
         throw new Error("Session expired. Please try logging in again.")
       }
 
+      const purpose = authData?.isSignUp ? "register" : "login"
+      const registerName = purpose === "register" ? (authData?.name || "").trim() : null
+      if (purpose === "register" && !registerName) {
+        throw new Error("Store name is required. Please restart signup.")
+      }
+
       const phone = authData.method === "phone" ? (authData.phone || "").trim() || null : null
       const email = authData.method === "email" ? (authData.email || "").trim() || null : null
       if (!phone && !email) {
@@ -119,8 +125,8 @@ export default function GroceryStoreOTP() {
       const response = await groceryStoreAPI.verifyOTP(
         phone || null,
         String(code),
-        "login",
-        null,
+        purpose,
+        registerName,
         email || null
       )
       const data = response?.data?.data || {}
@@ -166,13 +172,15 @@ export default function GroceryStoreOTP() {
         throw new Error("Session expired. Please try logging in again.")
       }
 
+      const purpose = authData?.isSignUp ? "register" : "login"
+
       const phone = authData.method === "phone" ? (authData.phone || "").trim() || null : null
       const email = authData.method === "email" ? (authData.email || "").trim() || null : null
       if (!phone && !email) {
         throw new Error("Session expired. Please try again from the login page.")
       }
 
-      await groceryStoreAPI.sendOTP(phone || undefined, "login", email || undefined)
+      await groceryStoreAPI.sendOTP(phone || undefined, purpose, email || undefined)
 
       setResendTimer(60)
       const timer = setInterval(() => {
