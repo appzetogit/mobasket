@@ -81,15 +81,8 @@ export default function SignIn() {
   // Helper function to process signed-in user
   const processSignedInUser = async (user, source = "unknown") => {
     if (redirectHandledRef.current) {
-      console.log(`ℹ️ User already being processed, skipping (source: ${source})`)
       return
     }
-
-    console.log(`✅ Processing signed-in user from ${source}:`, {
-      email: user.email,
-      uid: user.uid,
-      displayName: user.displayName
-    })
 
     redirectHandledRef.current = true
     setIsLoading(true)
@@ -97,16 +90,9 @@ export default function SignIn() {
 
     try {
       const idToken = await user.getIdToken()
-      console.log(`✅ Got ID token from ${source}, calling backend...`)
 
       const response = await authAPI.firebaseGoogleLogin(idToken, "user")
       const data = response?.data?.data || {}
-
-      console.log(`✅ Backend response from ${source}:`, {
-        hasAccessToken: !!data.accessToken,
-        hasUser: !!data.user,
-        userEmail: data.user?.email
-      })
 
       const accessToken = data.accessToken
       const refreshToken = data.refreshToken
@@ -123,21 +109,13 @@ export default function SignIn() {
           window.history.replaceState({}, document.title, window.location.pathname)
         }
 
-        console.log(`✅ Navigating to user dashboard from ${source}...`)
         navigate("/welcome", { replace: true })
       } else {
-        console.error(`❌ Invalid backend response from ${source}`)
         redirectHandledRef.current = false
         setIsLoading(false)
         setApiError("Invalid response from server. Please try again.")
       }
     } catch (error) {
-      console.error(`❌ Error processing user from ${source}:`, error)
-      console.error("Error details:", {
-        code: error?.code,
-        message: error?.message,
-        response: error?.response?.data
-      })
       redirectHandledRef.current = false
       setIsLoading(false)
 
@@ -165,14 +143,6 @@ export default function SignIn() {
         const hasHash = window.location.hash.length > 0
         const hasQueryParams = window.location.search.length > 0
 
-        console.log("🔍 Checking for redirect result...", {
-          url: currentUrl,
-          hasHash,
-          hasQueryParams,
-          pathname: window.location.pathname,
-          hash: window.location.hash,
-          search: window.location.search
-        })
 
         const { getRedirectResult, onAuthStateChanged } = await import("firebase/auth")
 
@@ -181,54 +151,25 @@ export default function SignIn() {
 
         // Check current user immediately (before getRedirectResult)
         const immediateUser = firebaseAuth.currentUser
-        console.log("🔍 Immediate current user check:", {
-          hasUser: !!immediateUser,
-          userEmail: immediateUser?.email
-        })
-
-        console.log("🔍 About to call getRedirectResult...", {
-          firebaseAuthExists: !!firebaseAuth,
-          firebaseAuthApp: firebaseAuth?.app?.name,
-          currentUser: firebaseAuth?.currentUser?.email || "none"
-        })
 
         // First, try to get redirect result (non-blocking with timeout)
         // Note: getRedirectResult returns null if there's no redirect result (normal on first load)
         // We use a short timeout to avoid hanging, and rely on auth state listener as primary method
         let result = null
         try {
-          console.log("🔍 Calling getRedirectResult now...")
-
           // Use a short timeout (3 seconds) - if it hangs, auth state listener will handle it
           result = await Promise.race([
             getRedirectResult(firebaseAuth),
             new Promise((resolve) =>
               setTimeout(() => {
-                console.log("ℹ️ getRedirectResult timeout (normal - no redirect result), relying on auth state listener")
                 resolve(null)
               }, 3000)
             )
           ])
-
-          if (result !== null) {
-            console.log("✅ getRedirectResult completed, result found")
-          } else {
-            console.log("ℹ️ No redirect result (normal on first page load)")
-          }
         } catch (redirectError) {
-          console.log("ℹ️ getRedirectResult error (will rely on auth state listener):", redirectError?.code || redirectError?.message)
-
           // Don't throw - auth state listener will handle sign-in
           result = null
         }
-
-        console.log("🔍 Redirect result details:", {
-          hasResult: !!result,
-          hasUser: !!result?.user,
-          userEmail: result?.user?.email,
-          providerId: result?.providerId,
-          operationType: result?.operationType
-        })
 
         if (result && result.user) {
           // Process redirect result
@@ -236,28 +177,16 @@ export default function SignIn() {
         } else {
           // No redirect result - check if user is already signed in
           const currentUser = firebaseAuth.currentUser
-          console.log("🔍 Checking current user after redirect check:", {
-            hasCurrentUser: !!currentUser,
-            userEmail: currentUser?.email,
-            redirectHandled: redirectHandledRef.current
-          })
 
           if (currentUser && !redirectHandledRef.current) {
             // Process current user
             await processSignedInUser(currentUser, "current-user-check")
           } else {
             // No redirect result - this is normal on first load
-            console.log("ℹ️ No redirect result found (normal on first page load)")
             setIsLoading(false)
           }
         }
       } catch (error) {
-        console.error("❌ Google sign-in redirect error:", error)
-        console.error("Error details:", {
-          code: error?.code,
-          message: error?.message,
-          stack: error?.stack
-        })
 
         redirectHandledRef.current = false
 
@@ -268,7 +197,6 @@ export default function SignIn() {
         // Don't show error for "no redirect result" - this is normal when page first loads
         if (errorCode === "auth/no-auth-event" || errorCode === "auth/popup-closed-by-user") {
           // These are expected cases, don't show error
-          console.log("ℹ️ Expected case - no auth event or popup closed")
           setIsLoading(false)
           return
         }
@@ -309,15 +237,8 @@ export default function SignIn() {
     // Helper function to process signed-in user
     const processSignedInUser = async (user, source = "unknown") => {
       if (redirectHandledRef.current) {
-        console.log(`ℹ️ User already being processed, skipping (source: ${source})`)
         return
       }
-
-      console.log(`✅ Processing signed-in user from ${source}:`, {
-        email: user.email,
-        uid: user.uid,
-        displayName: user.displayName
-      })
 
       redirectHandledRef.current = true
       setIsLoading(true)
@@ -325,16 +246,9 @@ export default function SignIn() {
 
       try {
         const idToken = await user.getIdToken()
-        console.log(`✅ Got ID token from ${source}, calling backend...`)
 
         const response = await authAPI.firebaseGoogleLogin(idToken, "user")
         const data = response?.data?.data || {}
-
-        console.log(`✅ Backend response from ${source}:`, {
-          hasAccessToken: !!data.accessToken,
-          hasUser: !!data.user,
-          userEmail: data.user?.email
-        })
 
         const accessToken = data.accessToken
         const appUser = data.user
@@ -350,21 +264,13 @@ export default function SignIn() {
             window.history.replaceState({}, document.title, window.location.pathname)
           }
 
-          console.log(`✅ Navigating to user dashboard from ${source}...`)
           navigate("/welcome", { replace: true })
         } else {
-          console.error(`❌ Invalid backend response from ${source}`)
           redirectHandledRef.current = false
           setIsLoading(false)
           setApiError("Invalid response from server. Please try again.")
         }
       } catch (error) {
-        console.error(`❌ Error processing user from ${source}:`, error)
-        console.error("Error details:", {
-          code: error?.code,
-          message: error?.message,
-          response: error?.response?.data
-        })
         redirectHandledRef.current = false
         setIsLoading(false)
 
@@ -386,31 +292,17 @@ export default function SignIn() {
         const { onAuthStateChanged } = await import("firebase/auth")
         ensureFirebaseInitialized()
 
-        console.log("🔔 Setting up auth state listener...")
-
         unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
-          console.log("🔔 Auth state changed:", {
-            hasUser: !!user,
-            userEmail: user?.email,
-            redirectHandled: redirectHandledRef.current,
-            currentPath: window.location.pathname
-          })
-
           // If user signed in and we haven't handled it yet
           if (user && !redirectHandledRef.current) {
             await processSignedInUser(user, "auth-state-listener")
           } else if (!user) {
             // User signed out
-            console.log("ℹ️ User signed out")
             redirectHandledRef.current = false
-          } else if (user && redirectHandledRef.current) {
-            console.log("ℹ️ User already signed in and handled, skipping...")
           }
         })
-
-        console.log("✅ Auth state listener set up successfully")
       } catch (error) {
-        console.error("❌ Error setting up auth state listener:", error)
+        // Error setting up auth state listener - silently handle
       }
     }
 
@@ -423,11 +315,10 @@ export default function SignIn() {
         ensureFirebaseInitialized()
         const currentUser = firebaseAuth.currentUser
         if (currentUser && !redirectHandledRef.current) {
-          console.log("✅ Current user found immediately, processing...")
           await processSignedInUser(currentUser, "immediate-check")
         }
       } catch (error) {
-        console.error("❌ Error checking current user:", error)
+        // Error checking current user - silently handle
       }
     }
 
@@ -480,14 +371,17 @@ export default function SignIn() {
     return ""
   }
 
-  const validatePhone = (phone) => {
+  const validatePhone = (phone, countryCode = formData.countryCode) => {
     if (!phone.trim()) {
       return "Phone number is required"
     }
-    const cleanPhone = phone.replace(/[\s\-\(\)]/g, "")
-    const phoneRegex = /^\d{7,15}$/
+    const cleanPhone = phone.replace(/\D/g, "")
+    const isIndia = countryCode === "+91"
+    const phoneRegex = isIndia ? /^\d{7,10}$/ : /^\d{7,15}$/
     if (!phoneRegex.test(cleanPhone)) {
-      return "Phone number must be 7-15 digits"
+      return isIndia
+        ? "Phone number must be 7-10 digits"
+        : "Phone number must be 7-15 digits"
     }
     return ""
   }
@@ -547,7 +441,7 @@ export default function SignIn() {
     if (name === "email") {
       setErrors({ ...errors, email: validateEmail(value) })
     } else if (name === "phone") {
-      setErrors({ ...errors, phone: validatePhone(value) })
+      setErrors({ ...errors, phone: validatePhone(value, formData.countryCode) })
     } else if (name === "name") {
       setErrors({ ...errors, name: validateName(value) })
     }
@@ -570,7 +464,7 @@ export default function SignIn() {
     const newErrors = { phone: "", email: "", name: "" }
 
     if (authMethod === "phone") {
-      const phoneError = validatePhone(formData.phone)
+      const phoneError = validatePhone(formData.phone, formData.countryCode)
       newErrors.phone = phoneError
       if (phoneError) hasErrors = true
     } else {
@@ -664,14 +558,10 @@ export default function SignIn() {
           throw popupError
         }
 
-        console.warn("Popup sign-in failed, falling back to redirect:", popupCode)
         await signInWithRedirect(firebaseAuth, googleProvider)
         return
       }
     } catch (error) {
-      console.error("Google sign-in error:", error)
-      console.error("Error code:", error?.code)
-      console.error("Error message:", error?.message)
       setIsLoading(false)
       redirectHandledRef.current = false
 
@@ -859,6 +749,7 @@ export default function SignIn() {
                     placeholder="Enter Phone Number"
                     value={formData.phone}
                     onChange={handleChange}
+                    maxLength={formData.countryCode === "+91" ? 10 : 15}
                     className={`flex-1 h-12 md:h-14 text-base md:text-lg bg-white dark:bg-[#1a1a1a] text-black dark:text-white border-gray-300 dark:border-gray-700 rounded-lg ${errors.phone ? "border-red-500" : ""} transition-colors`}
                     aria-invalid={errors.phone ? "true" : "false"}
                   />

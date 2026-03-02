@@ -6,7 +6,6 @@ import {
   Minus,
   Plus,
   ShoppingBag,
-  Clock,
   ShieldCheck,
   AlertCircle,
   Sparkles,
@@ -194,7 +193,14 @@ const GroceryCartPage = () => {
       return resolvedRestaurant;
     }
 
-    const cartRestaurantId = groceryItems[0]?.restaurantId;
+    const rawRestaurantId = groceryItems[0]?.restaurantId;
+    const rawStoreId = groceryItems[0]?.storeId;
+    const cartRestaurantId = String(
+      rawRestaurantId?._id || rawRestaurantId?.id || rawRestaurantId || "",
+    ).trim();
+    const cartStoreId = String(
+      rawStoreId?._id || rawStoreId?.id || rawStoreId || "",
+    ).trim();
     const cartRestaurantName = groceryItems[0]?.restaurant || groceryItems[0]?.storeName || "MoGrocery";
     const cartRestaurantAddress =
       groceryItems[0]?.restaurantAddress ||
@@ -205,9 +211,16 @@ const GroceryCartPage = () => {
       groceryItems[0]?.storeLocation ||
       null;
 
-    if (cartRestaurantId && cartRestaurantId !== "grocery-store") {
+    const resolvedId =
+      cartRestaurantId && cartRestaurantId !== "grocery-store"
+        ? cartRestaurantId
+        : cartStoreId && cartStoreId !== "grocery-store"
+          ? cartStoreId
+          : "";
+
+    if (resolvedId) {
       const resolved = {
-        restaurantId: cartRestaurantId,
+        restaurantId: resolvedId,
         restaurantName: cartRestaurantName,
         restaurantAddress: cartRestaurantAddress,
         restaurantLocation: cartRestaurantLocation,
@@ -427,16 +440,6 @@ const GroceryCartPage = () => {
           </div>
         )}
 
-        {/* Status Message */}
-        <div className="bg-white dark:bg-[#1a1a1a] mx-4 mt-4 rounded-xl p-4 flex items-start gap-3 shadow-sm border border-yellow-50 dark:border-gray-800">
-          <div className="bg-yellow-100 p-1.5 rounded-full">
-            <Clock size={18} className="text-yellow-600" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 leading-tight">Delivery in 8 minutes</h3>
-            <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Shipment of {groceryItems.length} items</p>
-          </div>
-        </div>
         <div className="bg-white dark:bg-[#1a1a1a] mx-4 mt-4 rounded-xl p-4 shadow-sm border border-yellow-50 dark:border-gray-800">
           <p className="text-[11px] uppercase tracking-wide text-gray-500 dark:text-gray-400 font-semibold">
             Selected Store

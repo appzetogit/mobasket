@@ -95,6 +95,25 @@ const detectItemPlatform = (item) => {
 
 const isGroceryItem = (item) => detectItemPlatform(item) === "mogrocery";
 
+const getNormalizedStoreId = (item) => {
+  const restaurantId = String(
+    item?.restaurantId?._id || item?.restaurantId?.id || item?.restaurantId || "",
+  ).trim();
+  const storeId = String(
+    item?.storeId?._id || item?.storeId?.id || item?.storeId || "",
+  ).trim();
+
+  if (storeId && storeId !== "grocery-store") return storeId;
+  if (restaurantId && restaurantId !== "grocery-store") return restaurantId;
+  return "";
+};
+
+const isValidGroceryCartItem = (item) => {
+  if (!item || typeof item !== "object") return false;
+  if (!item.id) return false;
+  return Boolean(getNormalizedStoreId(item));
+};
+
 const parseStoredCart = (raw) => {
   try {
     const parsed = raw ? JSON.parse(raw) : [];
@@ -134,7 +153,11 @@ export function CartProvider({ children }) {
     if (storedFood.length > 0 || storedGrocery.length > 0) {
       return {
         food: keepSingleRestaurant(storedFood.map((i) => ({ ...i, platform: "mofood" }))),
-        grocery: keepSingleRestaurant(storedGrocery.map((i) => ({ ...i, platform: "mogrocery" }))),
+        grocery: keepSingleRestaurant(
+          storedGrocery
+            .filter(isValidGroceryCartItem)
+            .map((i) => ({ ...i, platform: "mogrocery" })),
+        ),
       };
     }
 
@@ -145,6 +168,7 @@ export function CartProvider({ children }) {
       .map((item) => ({ ...item, platform: "mofood" }));
     const grocery = legacy
       .filter((item) => detectItemPlatform(item) === "mogrocery")
+      .filter(isValidGroceryCartItem)
       .map((item) => ({ ...item, platform: "mogrocery" }));
 
     return {

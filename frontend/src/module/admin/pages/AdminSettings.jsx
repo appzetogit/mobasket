@@ -13,6 +13,30 @@ import {
 import { toast } from "sonner";
 import { Lock, Eye, EyeOff, Save, Loader2, Shield } from "lucide-react";
 
+// CSS to hide browser's default password reveal buttons
+const hideBrowserPasswordButtonStyle = `
+  .password-input-no-browser-button::-webkit-credentials-auto-fill-button,
+  .password-input-no-browser-button::-webkit-strong-password-auto-fill-button {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    position: absolute !important;
+    right: -9999px !important;
+  }
+  .password-input-no-browser-button::-ms-reveal,
+  .password-input-no-browser-button::-ms-clear {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+  input[type="password"].password-input-no-browser-button::-webkit-credentials-auto-fill-button,
+  input[type="password"].password-input-no-browser-button::-webkit-strong-password-auto-fill-button {
+    display: none !important;
+    visibility: hidden !important;
+  }
+`;
+
 export default function AdminSettings() {
   const [passwordForm, setPasswordForm] = useState({
     currentPassword: "",
@@ -106,13 +130,15 @@ export default function AdminSettings() {
   };
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-neutral-900">Settings</h1>
-        <p className="text-neutral-600 mt-1">
-          Manage your account settings and preferences
-        </p>
-      </div>
+    <>
+      <style dangerouslySetInnerHTML={{ __html: hideBrowserPasswordButtonStyle }} />
+      <div className="p-6 space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-neutral-900">Settings</h1>
+          <p className="text-neutral-600 mt-1">
+            Manage your account settings and preferences
+          </p>
+        </div>
 
       {/* Password Change Card */}
       <Card>
@@ -141,17 +167,19 @@ export default function AdminSettings() {
                     handlePasswordChange("currentPassword", e.target.value)
                   }
                   placeholder="Enter your current password"
-                  className={`h-11 pr-12 ${
+                  className={`h-11 pr-12 password-input-no-browser-button ${
                     errors.currentPassword ? "border-red-500" : ""
                   }`}
+                  style={{ paddingRight: '3rem' }}
                   disabled={saving}
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-800 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 z-10 p-1.5 rounded-md text-neutral-500 hover:text-neutral-800 hover:bg-neutral-100 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:ring-offset-1 bg-white"
                   disabled={saving}
+                  aria-label={showCurrentPassword ? "Hide password" : "Show password"}
                 >
                   {showCurrentPassword ? (
                     <EyeOff className="w-5 h-5" />
@@ -179,17 +207,19 @@ export default function AdminSettings() {
                     handlePasswordChange("newPassword", e.target.value)
                   }
                   placeholder="Enter your new password"
-                  className={`h-11 pr-12 ${
+                  className={`h-11 pr-12 password-input-no-browser-button ${
                     errors.newPassword ? "border-red-500" : ""
                   }`}
+                  style={{ paddingRight: '3rem' }}
                   disabled={saving}
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowNewPassword(!showNewPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-800 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 z-10 p-1.5 rounded-md text-neutral-500 hover:text-neutral-800 hover:bg-neutral-100 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:ring-offset-1 bg-white"
                   disabled={saving}
+                  aria-label={showNewPassword ? "Hide password" : "Show password"}
                 >
                   {showNewPassword ? (
                     <EyeOff className="w-5 h-5" />
@@ -220,17 +250,19 @@ export default function AdminSettings() {
                     handlePasswordChange("confirmPassword", e.target.value)
                   }
                   placeholder="Confirm your new password"
-                  className={`h-11 pr-12 ${
+                  className={`h-11 pr-12 password-input-no-browser-button ${
                     errors.confirmPassword ? "border-red-500" : ""
                   }`}
+                  style={{ paddingRight: '3rem' }}
                   disabled={saving}
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-800 transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 z-10 p-1.5 rounded-md text-neutral-500 hover:text-neutral-800 hover:bg-neutral-100 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-neutral-300 focus:ring-offset-1 bg-white"
                   disabled={saving}
+                  aria-label={showConfirmPassword ? "Hide password" : "Show password"}
                 >
                   {showConfirmPassword ? (
                     <EyeOff className="w-5 h-5" />
@@ -281,7 +313,8 @@ export default function AdminSettings() {
           </p>
         </CardContent>
       </Card>
-    </div>
+      </div>
+    </>
   );
 }
 

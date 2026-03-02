@@ -85,13 +85,9 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const MIN_REVERSE_GEOCODE_DISTANCE_M = 20
   const MIN_REVERSE_GEOCODE_INTERVAL_MS = 15000
 
-  // Debug: Log API key status (only first few characters for security)
+  // API key status checked silently
   useEffect(() => {
-    if (GOOGLE_MAPS_API_KEY) {
-      console.log("✅ Google Maps API Key loaded:", GOOGLE_MAPS_API_KEY.substring(0, 10) + "...")
-    } else {
-      console.warn("⚠️ Google Maps API Key NOT found! Please set it in ENV Setup.")
-    }
+    // API key loaded silently
   }, [GOOGLE_MAPS_API_KEY])
 
   // Current location display - Show complete formatted address (SAVED ADDRESSES FORMAT)

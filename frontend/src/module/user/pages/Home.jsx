@@ -43,7 +43,6 @@ import { DotPattern } from "@/components/ui/dot-pattern";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -1009,13 +1008,25 @@ export default function Home() {
 
               // Keep single image for backward compatibility
               const image = allImages[0];
+              const rawRating =
+                restaurant?.rating ??
+                restaurant?.averageRating ??
+                restaurant?.avgRating ??
+                restaurant?.averageRatings ??
+                restaurant?.metrics?.rating ??
+                0;
+              const numericRating = Number(rawRating);
+              const rating =
+                Number.isFinite(numericRating) && numericRating > 0
+                  ? Number(numericRating.toFixed(1))
+                  : 0;
 
               return {
                 id: restaurant.restaurantId || restaurant._id,
                 name: restaurant.name,
                 cuisine: cuisine,
                 cuisines: Array.isArray(restaurant.cuisines) ? restaurant.cuisines : [],
-                rating: restaurant.rating || 4.5,
+                rating,
                 deliveryTime: deliveryTime,
                 distance: distance,
                 distanceInKm: distanceInKm, // Store numeric distance for sorting
@@ -1656,7 +1667,7 @@ export default function Home() {
                 />
                 <div className="flex-1 relative">
                   <div className="relative w-full">
-                    <Input
+                    <input
                       value={heroSearch}
                       onChange={(e) => setHeroSearch(e.target.value)}
                       onFocus={handleSearchFocus}
@@ -1669,6 +1680,7 @@ export default function Home() {
                           setHeroSearch("");
                         }
                       }}
+                      type="text"
                       className="pl-0 pr-8 h-8 sm:h-9 lg:h-11 w-full bg-transparent border-0 text-sm sm:text-base lg:text-lg font-semibold text-gray-700 dark:text-white focus-visible:ring-0 focus-visible:ring-offset-0 rounded-full placeholder:text-gray-400 dark:placeholder:text-gray-500"
                     />
                     {/* Animated placeholder */}
@@ -2535,7 +2547,7 @@ export default function Home() {
                               {/* Right Info */}
                               <div className="flex flex-col items-end gap-1 flex-shrink-0">
                                 <div className="bg-[#15803d] text-white px-1.5 py-0.5 rounded-md flex items-center gap-0.5 text-[11px] font-bold">
-                                  <span>{restaurant.rating}</span>
+                                  <span>{restaurant.rating > 0 ? restaurant.rating : "N/A"}</span>
                                   <Star
                                     className="h-2.5 w-2.5 fill-white text-white"
                                     strokeWidth={3}

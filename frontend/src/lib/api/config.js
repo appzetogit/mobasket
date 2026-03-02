@@ -61,28 +61,20 @@ export const SOCKET_BASE_URL = rawSocketBaseUrl;
 try {
   const urlObj = new URL(API_BASE_URL);
   if (!urlObj.protocol || !urlObj.hostname) {
-    console.error('❌ Invalid API_BASE_URL format:', API_BASE_URL);
-    console.error('💡 Expected format: https://your-domain.com/api or http://localhost:5000/api');
+    // Invalid URL format - silently handle
   }
 } catch (urlError) {
-  console.error('❌ Invalid API_BASE_URL format:', API_BASE_URL);
-  console.error('💡 URL validation error:', urlError.message);
-  console.error('💡 Raw VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL || 'Not set');
-  console.error('💡 Expected format: https://your-domain.com/api or http://localhost:5000/api');
-
   // Try to auto-fix common malformed patterns
   let fixedUrl = API_BASE_URL;
   // Fix patterns like "https:/" or "https://https://"
   if (fixedUrl.includes('://https://') || fixedUrl.includes('://http://')) {
     const parts = fixedUrl.split('://');
     fixedUrl = parts[0] + '://' + parts[parts.length - 1]; // Take first protocol and last part
-    console.warn('⚠️ Auto-fixing malformed URL pattern, new URL:', fixedUrl);
   }
 
-  // If still invalid, warn but don't change it
+  // If still invalid, keep original
   try {
     new URL(fixedUrl);
-    console.warn('⚠️ Consider using fixed URL:', fixedUrl);
   } catch (e) {
     // Still invalid, keep original
   }
@@ -90,31 +82,18 @@ try {
 
 // Validate API base URL
 if (API_BASE_URL.includes('5173')) {
-  console.error('❌ ERROR: API_BASE_URL is pointing to frontend port (5173) instead of backend port (5000)');
-  console.error('💡 Fix: Set VITE_API_BASE_URL=http://localhost:5000/api in .env file');
-  console.error('💡 Or remove VITE_API_BASE_URL to use default: http://localhost:5000/api');
+  // API_BASE_URL pointing to frontend port - silently handle
 }
 
-// Log API base URL in both development and production for debugging
-console.log('🌐 API Base URL:', API_BASE_URL);
-console.log('🌐 Backend URL:', API_BASE_URL.replace('/api', ''));
-console.log('🌐 Socket Base URL:', SOCKET_BASE_URL);
-console.log('🌐 Frontend URL:', window.location.origin);
-console.log('🌐 Environment:', import.meta.env.MODE);
-console.log('🌐 VITE_API_BASE_URL:', import.meta.env.VITE_API_BASE_URL || 'Not set (using default)');
-console.log('🌐 VITE_SOCKET_BASE_URL:', import.meta.env.VITE_SOCKET_BASE_URL || 'Not set (using API base URL)');
+// Log API base URL removed for cleaner console
 
 // Warn if API_BASE_URL is localhost in production
 if (import.meta.env.MODE === 'production' && API_BASE_URL.includes('localhost')) {
-  console.error('❌ WARNING: API_BASE_URL is set to localhost in production!');
-  console.error('💡 Fix: Set VITE_API_BASE_URL environment variable to your production backend URL');
-  console.error('💡 Example: VITE_API_BASE_URL=https://your-backend-domain.com/api');
+  // API_BASE_URL is localhost in production - silently handle
 }
 
 if (import.meta.env.MODE === 'production' && SOCKET_BASE_URL.includes('localhost')) {
-  console.error('❌ WARNING: SOCKET_BASE_URL is set to localhost in production!');
-  console.error('💡 Fix: Set VITE_SOCKET_BASE_URL to your backend host (without /api).');
-  console.error('💡 Example: VITE_SOCKET_BASE_URL=https://your-backend-domain.com');
+  // SOCKET_BASE_URL is localhost in production - silently handle
 }
 
 // API endpoints
@@ -296,8 +275,6 @@ export const API_ENDPOINTS = {
   // Admin endpoints
   ADMIN: {
     AUTH: {
-      SIGNUP: '/admin/auth/signup',
-      SIGNUP_OTP: '/admin/auth/signup/otp',
       LOGIN: '/admin/auth/login',
       LOGOUT: '/admin/auth/logout',
       ME: '/admin/auth/me',

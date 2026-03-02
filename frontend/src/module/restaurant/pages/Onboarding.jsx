@@ -1140,7 +1140,7 @@ export default function RestaurantOnboarding() {
               <div className="flex flex-col">
                 <span className="text-xs font-medium text-gray-900">Upload menu images</span>
                 <span className="text-[11px] text-gray-500">
-                  JPG, PNG, WebP • You can select multiple files
+                  JPG, PNG, WebP
                 </span>
               </div>
             </div>
@@ -1149,21 +1149,21 @@ export default function RestaurantOnboarding() {
               className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black  border-black text-xs font-medium cursor-pointer     w-full items-center"
             >
               <Upload className="w-4.5 h-4.5" />
-              <span>Choose files</span>
+              <span>Choose file</span>
             </label>
             <input
               id="menuImagesInput"
               type="file"
-              multiple
               accept="image/*"
               className="hidden"
               onChange={(e) => {
                 const files = Array.from(e.target.files || [])
                 if (!files.length) return
-                console.log('📸 Menu images selected:', files.length, 'files')
+                const selectedFile = files[0]
+                console.log('📸 Menu image selected:', selectedFile?.name || '1 file')
                 setStep2((prev) => ({
                   ...prev,
-                  menuImages: [...(prev.menuImages || []), ...files], // Append new files to existing ones
+                  menuImages: [selectedFile],
                 }))
                 // Reset input to allow selecting same file again
                 e.target.value = ''

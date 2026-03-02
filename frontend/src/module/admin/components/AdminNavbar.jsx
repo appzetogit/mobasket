@@ -484,14 +484,19 @@ export default function AdminNavbar({ onMenuClick }) {
                 <div className="text-sm text-neutral-500 mb-4">Quick Actions</div>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { icon: Package, label: "Orders" },
-                    { icon: Users, label: "Users" },
-                    { icon: UtensilsCrossed, label: "Products" },
-                    { icon: FileText, label: "Reports" },
+                    { icon: Package, label: "Orders", path: "/admin/orders/all" },
+                    { icon: Users, label: "Users", path: "/admin/customers" },
+                    { icon: UtensilsCrossed, label: "Products", path: "/admin/foods" },
+                    { icon: FileText, label: "Reports", path: "/admin/transaction-report" },
                   ].map((action, idx) => (
                     <button
                       key={idx}
-                      className="flex items-center gap-3 p-4 rounded-lg border border-neutral-200 bg-white hover:border-neutral-300 hover:bg-neutral-50 transition-all"
+                      onClick={() => {
+                        navigate(action.path);
+                        setSearchOpen(false);
+                        setSearchQuery("");
+                      }}
+                      className="flex items-center gap-3 p-4 rounded-lg border border-neutral-200 bg-white hover:border-neutral-300 hover:bg-neutral-50 transition-all cursor-pointer"
                     >
                       <div className="p-2 rounded-md bg-black text-white">
                         <action.icon className="w-5 h-5" />

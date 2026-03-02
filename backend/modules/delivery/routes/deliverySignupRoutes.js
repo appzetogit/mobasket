@@ -14,16 +14,30 @@ router.use(authenticate);
 
 // Signup routes
 router.post('/signup/details', validate(Joi.object({
-  name: Joi.string().trim().min(2).max(100).required(),
+  name: Joi.string().trim().min(2).max(100).pattern(/^[a-zA-Z\s]+$/).messages({
+    'string.pattern.base': 'Name should only contain alphabets and spaces'
+  }).required(),
   email: Joi.string().email().lowercase().trim().optional().allow(null, ''),
   address: Joi.string().trim().required(),
-  city: Joi.string().trim().required(),
-  state: Joi.string().trim().required(),
+  city: Joi.string().trim().pattern(/^[a-zA-Z\s]+$/).messages({
+    'string.pattern.base': 'City should only contain alphabets and spaces'
+  }).required(),
+  state: Joi.string().trim().pattern(/^[a-zA-Z\s]+$/).messages({
+    'string.pattern.base': 'State should only contain alphabets and spaces'
+  }).required(),
   vehicleType: Joi.string().valid('bike', 'scooter', 'bicycle', 'car').required(),
-  vehicleName: Joi.string().trim().optional().allow(null, ''),
-  vehicleNumber: Joi.string().trim().required(),
-  panNumber: Joi.string().trim().required(),
-  aadharNumber: Joi.string().trim().required()
+  vehicleName: Joi.string().trim().required().messages({
+    'any.required': 'Vehicle name/model is required'
+  }),
+  vehicleNumber: Joi.string().trim().pattern(/^[A-Z]{2}[0-9]{1,2}[A-Z]{1,2}[0-9]{4}$/).messages({
+    'string.pattern.base': 'Invalid vehicle number format (e.g. MH12AB1234)'
+  }).required(),
+  panNumber: Joi.string().trim().uppercase().pattern(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/).messages({
+    'string.pattern.base': 'Invalid PAN format (e.g. ABCDE1234F)'
+  }).required(),
+  aadharNumber: Joi.string().trim().length(12).pattern(/^[0-9]+$/).messages({
+    'string.pattern.base': 'Aadhar number must be 12 digits'
+  }).required()
 })), submitSignupDetails);
 
 router.post('/signup/documents', validate(Joi.object({

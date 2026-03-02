@@ -23,6 +23,87 @@ export default function SignupStep1() {
 
   const handleChange = (e) => {
     const { name, value } = e.target
+    
+    // Validation for Full Name - only letters and spaces
+    if (name === "name") {
+      const nameRegex = /^[a-zA-Z\s]*$/;
+      if (value === "" || nameRegex.test(value)) {
+        setFormData(prev => ({
+          ...prev,
+          [name]: value
+        }))
+      }
+      // Clear error when user starts typing
+      if (errors[name]) {
+        setErrors(prev => ({
+          ...prev,
+          [name]: ""
+        }))
+      }
+      return;
+    }
+
+    // Validation for City - only letters and spaces
+    if (name === "city") {
+      const cityRegex = /^[a-zA-Z\s]*$/;
+      if (value === "" || cityRegex.test(value)) {
+        setFormData(prev => ({
+          ...prev,
+          [name]: value
+        }))
+      }
+      // Clear error when user starts typing
+      if (errors[name]) {
+        setErrors(prev => ({
+          ...prev,
+          [name]: ""
+        }))
+      }
+      return;
+    }
+
+    // Validation for State - only letters and spaces
+    if (name === "state") {
+      const stateRegex = /^[a-zA-Z\s]*$/;
+      if (value === "" || stateRegex.test(value)) {
+        setFormData(prev => ({
+          ...prev,
+          [name]: value
+        }))
+      }
+      // Clear error when user starts typing
+      if (errors[name]) {
+        setErrors(prev => ({
+          ...prev,
+          [name]: ""
+        }))
+      }
+      return;
+    }
+
+    // Validation for Vehicle Number - format: XX##XX#### (e.g., MH12AB1234)
+    if (name === "vehicleNumber") {
+      // Remove spaces and convert to uppercase
+      const cleanedValue = value.replace(/\s/g, "").toUpperCase();
+      // Allow only alphanumeric, max 10 characters
+      const vehicleRegex = /^[A-Z0-9]{0,10}$/;
+      if (vehicleRegex.test(cleanedValue)) {
+        setFormData(prev => ({
+          ...prev,
+          [name]: cleanedValue
+        }))
+      }
+      // Clear error when user starts typing
+      if (errors[name]) {
+        setErrors(prev => ({
+          ...prev,
+          [name]: ""
+        }))
+      }
+      return;
+    }
+
+    // For other fields, update normally
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -39,8 +120,13 @@ export default function SignupStep1() {
   const validate = () => {
     const newErrors = {}
 
+    // Validate Full Name - only letters and spaces
     if (!formData.name.trim()) {
       newErrors.name = "Name is required"
+    } else if (!/^[a-zA-Z\s]+$/.test(formData.name.trim())) {
+      newErrors.name = "Name should only contain letters and spaces"
+    } else if (formData.name.trim().length < 2) {
+      newErrors.name = "Name must be at least 2 characters"
     }
 
     if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
@@ -51,16 +137,33 @@ export default function SignupStep1() {
       newErrors.address = "Address is required"
     }
 
+    // Validate City - only letters and spaces
     if (!formData.city.trim()) {
       newErrors.city = "City is required"
+    } else if (!/^[a-zA-Z\s]+$/.test(formData.city.trim())) {
+      newErrors.city = "City should only contain letters and spaces"
     }
 
+    // Validate State - only letters and spaces
     if (!formData.state.trim()) {
       newErrors.state = "State is required"
+    } else if (!/^[a-zA-Z\s]+$/.test(formData.state.trim())) {
+      newErrors.state = "State should only contain letters and spaces"
     }
 
+    // Validate Vehicle Name - mandatory
+    if (!formData.vehicleName.trim()) {
+      newErrors.vehicleName = "Vehicle name/model is required"
+    }
+
+    // Validate Vehicle Number - format: XX##XX#### (e.g., MH12AB1234)
     if (!formData.vehicleNumber.trim()) {
       newErrors.vehicleNumber = "Vehicle number is required"
+    } else {
+      const vehicleNumberRegex = /^[A-Z]{2}[0-9]{1,2}[A-Z]{1,2}[0-9]{4}$/;
+      if (!vehicleNumberRegex.test(formData.vehicleNumber.trim().toUpperCase())) {
+        newErrors.vehicleNumber = "Invalid vehicle number format (e.g., MH12AB1234)"
+      }
     }
 
     if (!formData.panNumber.trim()) {
@@ -151,8 +254,13 @@ export default function SignupStep1() {
                 errors.name ? "border-red-500" : "border-gray-300"
               }`}
               placeholder="Enter your full name"
+              pattern="[a-zA-Z\s]+"
+              title="Name should only contain letters and spaces"
             />
             {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
+            {!errors.name && formData.name && (
+              <p className="text-xs text-gray-500 mt-1">Only letters and spaces are allowed</p>
+            )}
           </div>
 
           {/* Email */}
@@ -206,8 +314,13 @@ export default function SignupStep1() {
                   errors.city ? "border-red-500" : "border-gray-300"
                 }`}
                 placeholder="City"
+                pattern="[a-zA-Z\s]+"
+                title="City should only contain letters and spaces"
               />
               {errors.city && <p className="text-red-500 text-sm mt-1">{errors.city}</p>}
+              {!errors.city && formData.city && (
+                <p className="text-xs text-gray-500 mt-1">Only letters and spaces are allowed</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -222,8 +335,13 @@ export default function SignupStep1() {
                   errors.state ? "border-red-500" : "border-gray-300"
                 }`}
                 placeholder="State"
+                pattern="[a-zA-Z\s]+"
+                title="State should only contain letters and spaces"
               />
               {errors.state && <p className="text-red-500 text-sm mt-1">{errors.state}</p>}
+              {!errors.state && formData.state && (
+                <p className="text-xs text-gray-500 mt-1">Only letters and spaces are allowed</p>
+              )}
             </div>
           </div>
 
@@ -248,16 +366,19 @@ export default function SignupStep1() {
           {/* Vehicle Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Vehicle Name/Model (Optional)
+              Vehicle Name/Model <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               name="vehicleName"
               value={formData.vehicleName}
               onChange={handleChange}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500"
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
+                errors.vehicleName ? "border-red-500" : "border-gray-300"
+              }`}
               placeholder="e.g., Honda Activa"
             />
+            {errors.vehicleName && <p className="text-red-500 text-sm mt-1">{errors.vehicleName}</p>}
           </div>
 
           {/* Vehicle Number */}
@@ -270,12 +391,18 @@ export default function SignupStep1() {
               name="vehicleNumber"
               value={formData.vehicleNumber}
               onChange={handleChange}
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 uppercase ${
                 errors.vehicleNumber ? "border-red-500" : "border-gray-300"
               }`}
               placeholder="e.g., MH12AB1234"
+              maxLength={10}
+              pattern="[A-Z]{2}[0-9]{1,2}[A-Z]{1,2}[0-9]{4}"
+              title="Vehicle number format: XX##XX#### (e.g., MH12AB1234)"
             />
             {errors.vehicleNumber && <p className="text-red-500 text-sm mt-1">{errors.vehicleNumber}</p>}
+            {!errors.vehicleNumber && formData.vehicleNumber && (
+              <p className="text-xs text-gray-500 mt-1">Format: XX##XX#### (e.g., MH12AB1234)</p>
+            )}
           </div>
 
           {/* PAN Number */}
