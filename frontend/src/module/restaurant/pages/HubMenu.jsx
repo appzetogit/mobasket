@@ -1280,7 +1280,6 @@ export default function HubMenu() {
                             <div className="absolute bottom-1 right-1 bg-black/60 rounded-full p-1">
                               <div className="flex items-center gap-1">
                                 <Camera className="w-3 h-3 text-white" />
-                                <span className="text-white text-xs font-semibold">{item.photoCount}</span>
                               </div>
                             </div>
                           </div>

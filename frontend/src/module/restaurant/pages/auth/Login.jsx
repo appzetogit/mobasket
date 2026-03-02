@@ -1,7 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Mail, Phone } from "lucide-react"
-import { setAuthData } from "@/lib/utils/auth"
+import { setAuthData, isModuleAuthenticated } from "@/lib/utils/auth"
 import { Button } from "@/components/ui/button"
 import { restaurantAPI } from "@/lib/api"
 import api from "@/lib/api"
@@ -45,6 +45,13 @@ export default function RestaurantLogin() {
     content: "",
     fallbackUrl: "",
   })
+
+  // If already authenticated, skip the login page and go to correct step
+  useEffect(() => {
+    if (isModuleAuthenticated("restaurant")) {
+      redirectRestaurantAfterAuth(navigate, { replace: true })
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const loadPolicyUrls = async () => {

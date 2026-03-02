@@ -560,7 +560,9 @@ export default function OrdersMain() {
         const response = isGroceryStore 
           ? await groceryStoreAPI.getCurrentStore()
           : await restaurantAPI.getCurrentRestaurant()
-        const restaurant = response?.data?.data?.restaurant || response?.data?.restaurant
+        const restaurant = isGroceryStore
+          ? (response?.data?.data?.store || response?.data?.store || response?.data?.data?.restaurant || response?.data?.restaurant)
+          : (response?.data?.data?.restaurant || response?.data?.restaurant)
         if (restaurant) {
           setRestaurantStatus({
             isActive: restaurant.isActive,
@@ -625,7 +627,9 @@ export default function OrdersMain() {
       const response = isGroceryStore 
         ? await groceryStoreAPI.getCurrentStore()
         : await restaurantAPI.getCurrentRestaurant()
-      const restaurant = response?.data?.data?.restaurant || response?.data?.restaurant
+      const restaurant = isGroceryStore
+        ? (response?.data?.data?.store || response?.data?.store || response?.data?.data?.restaurant || response?.data?.restaurant)
+        : (response?.data?.data?.restaurant || response?.data?.restaurant)
       if (restaurant) {
         setRestaurantStatus({
           isActive: restaurant.isActive,

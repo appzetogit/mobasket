@@ -85,7 +85,7 @@ export default function BottomNavigation() {
     }
   }, [])
 
-  const profileInitial = (profileName || "U").trim().charAt(0).toUpperCase()
+  const profileInitial = (profileName || "").trim().charAt(0).toUpperCase()
 
   return (
     <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
