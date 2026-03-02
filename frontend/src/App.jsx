@@ -109,7 +109,6 @@ import ZoneSetup from "@/module/restaurant/pages/ZoneSetup";
 
 import AdminRouter from "@/module/admin/components/AdminRouter";
 import AdminLogin from "@/module/admin/pages/auth/AdminLogin";
-import AdminSignup from "@/module/admin/pages/auth/AdminSignup";
 import AdminForgotPassword from "@/module/admin/pages/auth/AdminForgotPassword";
 import DeliveryRouter from "@/module/delivery/components/DeliveryRouter";
 import DeliverySignIn from "@/module/delivery/pages/auth/SignIn";
@@ -1384,14 +1383,6 @@ export default function App() {
           element={
             <AuthRedirect module="admin">
               <AdminLogin />
-            </AuthRedirect>
-          }
-        />
-        <Route
-          path="/admin/signup"
-          element={
-            <AuthRedirect module="admin">
-              <AdminSignup />
             </AuthRedirect>
           }
         />

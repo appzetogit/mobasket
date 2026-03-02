@@ -1066,17 +1066,6 @@ export const deliveryAPI = {
 // Export admin API helper functions
 export const adminAPI = {
   // Admin Auth
-  signup: (name, email, password, phone = null) => {
-    const payload = { name, email, password };
-    if (phone) payload.phone = phone;
-    return apiClient.post(API_ENDPOINTS.ADMIN.AUTH.SIGNUP, payload);
-  },
-
-  signupWithOTP: (name, email, password, otp, phone = null) => {
-    const payload = { name, email, password, otp };
-    if (phone) payload.phone = phone;
-    return apiClient.post(API_ENDPOINTS.ADMIN.AUTH.SIGNUP_OTP, payload);
-  },
 
   login: (email, password) => {
     return apiClient.post(API_ENDPOINTS.ADMIN.AUTH.LOGIN, { email, password });

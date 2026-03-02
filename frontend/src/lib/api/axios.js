@@ -44,10 +44,6 @@ if (import.meta.env.DEV) {
     console.error(
       "💡 Fix: Check .env file - VITE_API_BASE_URL should be http://localhost:5000/api",
     );
-  } else {
-    console.log("✅ API_BASE_URL correctly points to backend:", API_BASE_URL);
-    console.log("✅ Backend URL:", backendUrl);
-    console.log("✅ Frontend URL:", frontendUrl);
   }
 }
 
@@ -179,16 +175,7 @@ apiClient.interceptors.request.use(
       config.headers = {};
     }
 
-    // Debug logging for FormData requests
-    if (import.meta.env.DEV && config.data instanceof FormData) {
-      console.log("[API Interceptor] FormData request detected:", {
-        url: config.url,
-        method: config.method,
-        hasAuthHeader: !!config.headers.Authorization,
-        authHeaderPrefix: config.headers.Authorization?.substring(0, 30),
-        hasAccessToken: !!accessToken,
-      });
-    }
+    // FormData requests handled silently
 
     // Determine if this is an authenticated route
     const path = currentPath;
@@ -245,45 +232,6 @@ apiClient.interceptors.request.use(
           accessToken !== "undefined"
         ) {
           config.headers.Authorization = `Bearer ${accessToken.trim()}`;
-          if (import.meta.env.DEV && config.data instanceof FormData) {
-            console.log(
-              "[API Interceptor] Added Authorization header for authenticated FormData request",
-            );
-          }
-        } else {
-          // Log warning in development if token is missing for authenticated routes
-          if (import.meta.env.DEV) {
-            console.warn(
-              `[API Interceptor] No access token found for authenticated route: ${path}. Request may fail with 401.`,
-            );
-            console.warn(`[API Interceptor] Available tokens:`, {
-              admin: localStorage.getItem("admin_accessToken")
-                ? "exists"
-                : "missing",
-              restaurant: localStorage.getItem("restaurant_accessToken")
-                ? "exists"
-                : "missing",
-              "grocery-store": localStorage.getItem("grocery-store_accessToken")
-                ? "exists"
-                : "missing",
-              delivery: localStorage.getItem("delivery_accessToken")
-                ? "exists"
-                : "missing",
-              user: localStorage.getItem("user_accessToken")
-                ? "exists"
-                : "missing",
-              legacy: localStorage.getItem("accessToken")
-                ? "exists"
-                : "missing",
-            });
-          }
-        }
-      } else {
-        // Authorization header already set (from getAuthConfig), log in dev mode for FormData
-        if (import.meta.env.DEV && config.data instanceof FormData) {
-          console.log(
-            "[API Interceptor] Authorization header already set, preserving it for FormData request",
-          );
         }
       }
     } else {
@@ -314,11 +262,6 @@ apiClient.interceptors.request.use(
       // Always restore Authorization header if it was set (critical for authentication)
       if (authHeader) {
         config.headers.Authorization = authHeader;
-        if (import.meta.env.DEV) {
-          console.log(
-            "[API Interceptor] Preserved Authorization header for FormData request",
-          );
-        }
       } else if (
         accessToken &&
         accessToken.trim() !== "" &&
@@ -327,11 +270,6 @@ apiClient.interceptors.request.use(
       ) {
         // If no auth header but we have a token, add it
         config.headers.Authorization = `Bearer ${accessToken.trim()}`;
-        if (import.meta.env.DEV) {
-          console.log(
-            "[API Interceptor] Added Authorization header for FormData request",
-          );
-        }
       }
     }
 
@@ -353,9 +291,6 @@ apiClient.interceptors.response.use(
       networkErrorState.errorCount = 0;
       networkErrorState.lastErrorTime = 0;
       networkErrorState.toastShown = false;
-      if (import.meta.env.DEV) {
-        console.log("✅ Backend connection restored");
-      }
     }
 
     // If response contains new access token, store it for the current module
@@ -367,17 +302,13 @@ apiClient.interceptors.response.use(
       const token = response.data.accessToken;
       const role = getRoleFromToken(token);
 
-      // Only store the token if the role matches the current module
-      // For grocery stores, accept restaurant role since they use the same backend role
-      if (!role || (role !== expectedRole && !(currentModule === "grocery-store" && role === "restaurant"))) {
-        if (import.meta.env.DEV) {
-          console.warn(
-            `[API Interceptor] Ignoring accessToken due to role mismatch. expected=${expectedRole}, actual=${role || "unknown"}`,
-          );
-        }
-      } else {
-        localStorage.setItem(tokenKey, token);
-      }
+          // Only store the token if the role matches the current module
+          // For grocery stores, accept restaurant role since they use the same backend role
+          if (!role || (role !== expectedRole && !(currentModule === "grocery-store" && role === "restaurant"))) {
+            // Role mismatch - silently ignore
+          } else {
+            localStorage.setItem(tokenKey, token);
+          }
     }
     return response;
   },
@@ -391,7 +322,7 @@ apiClient.interceptors.response.use(
       const isStoreAuthPage = /^\/store\/(login|signup|otp)$/.test(currentPath);
       const isRestaurantAuthPage = /^\/restaurant\/(login|signup|signup-email|otp|forgot-password|welcome)$/.test(currentPath) || /^\/restaurant\/auth\/(sign-in|google-callback)$/.test(currentPath);
       const isDeliveryAuthPage = /^\/delivery\/(signin|signup|otp|welcome)/.test(currentPath);
-      const isAdminAuthPage = /^\/admin\/(login|signup|forgot-password)$/.test(currentPath);
+      const isAdminAuthPage = /^\/admin\/(login|forgot-password)$/.test(currentPath);
       const isUserAuthPage = /^\/(?:user\/auth\/|auth\/(?:sign-in|otp|callback))/.test(currentPath);
       const hasStoreToken = typeof localStorage !== "undefined" && (localStorage.getItem("grocery-store_accessToken") || localStorage.getItem("grocery-store_refreshToken"));
       const hasRestaurantToken = typeof localStorage !== "undefined" && (localStorage.getItem("restaurant_accessToken") || localStorage.getItem("restaurant_refreshToken"));
@@ -468,7 +399,7 @@ apiClient.interceptors.response.use(
             try {
               localStorage.setItem(refreshTokenKey, newRefreshToken);
             } catch (e) {
-              console.warn("Failed to store new refresh token", e);
+              // Failed to store refresh token - silently handle
             }
           }
 
@@ -477,7 +408,7 @@ apiClient.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;
           return apiClient(originalRequest);
         }
-      } catch (refreshError) {
+        } catch (refreshError) {
         // Show error toast in development mode for refresh errors
         if (import.meta.env.DEV) {
           const refreshErrorMessage =
@@ -486,6 +417,7 @@ apiClient.interceptors.response.use(
             refreshError.message ||
             "Token refresh failed";
 
+          // Show toast notification for refresh errors
           toast.error(refreshErrorMessage, {
             duration: 3000,
             style: {
@@ -521,7 +453,6 @@ apiClient.interceptors.response.use(
           currentPath.startsWith("/restaurant/auth/");
         const isAdminAuthPath =
           currentPath.startsWith("/admin/login") ||
-          currentPath.startsWith("/admin/signup") ||
           currentPath.startsWith("/admin/forgot-password");
         const isUserAuthPath =
           currentPath.startsWith("/user/auth/") ||
@@ -611,21 +542,12 @@ apiClient.interceptors.response.use(
         const timeSinceLastError = now - networkErrorState.lastErrorTime;
         const timeSinceLastToast = now - networkErrorState.lastToastTime;
 
-        // Only log console errors if cooldown period has passed
-        if (timeSinceLastError >= networkErrorState.COOLDOWN_PERIOD) {
-          networkErrorState.errorCount++;
-          networkErrorState.lastErrorTime = now;
-
-          // Log error details (only once per cooldown period)
-          if (networkErrorState.errorCount === 1) {
+          // Only log console errors if cooldown period has passed
+          if (timeSinceLastError >= networkErrorState.COOLDOWN_PERIOD) {
+            networkErrorState.errorCount++;
+            networkErrorState.lastErrorTime = now;
             // Network error logging removed - errors handled via toast notifications
-          } else {
-            // For subsequent errors, show a brief message
-            console.warn(
-              `⚠️ Network Error (${networkErrorState.errorCount}x) - Backend still not connected`,
-            );
           }
-        }
 
         // Only show toast if cooldown period has passed
         if (timeSinceLastToast >= networkErrorState.TOAST_COOLDOWN_PERIOD) {
@@ -705,7 +627,6 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 404) {
       if (import.meta.env.DEV) {
         const url = error.config?.url || "unknown";
-        // 404 error logging removed - errors handled via toast notifications
 
         // Show toast for auth routes (important)
         if (

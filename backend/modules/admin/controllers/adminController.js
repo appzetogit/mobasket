@@ -666,12 +666,35 @@ export const updateAdminProfile = asyncHandler(async (req, res) => {
 
     // Update fields (email cannot be changed via profile update)
     if (name !== undefined && name !== null) {
-      admin.name = name.trim();
+      const trimmedName = name.trim();
+      
+      // Validate name - only letters, spaces, apostrophes, and hyphens
+      const nameRegex = /^[a-zA-Z\s'-]+$/;
+      if (!nameRegex.test(trimmedName)) {
+        return errorResponse(res, 400, 'Full Name can only contain letters, spaces, apostrophes, and hyphens');
+      }
+      
+      if (trimmedName.length < 2) {
+        return errorResponse(res, 400, 'Full Name must be at least 2 characters long');
+      }
+      
+      admin.name = trimmedName;
     }
     
     if (phone !== undefined) {
       // Allow empty string to clear phone number
-      admin.phone = phone ? phone.trim() : null;
+      if (phone && phone.trim()) {
+        const phoneDigits = phone.trim().replace(/\D/g, '');
+        
+        // Validate phone - must be exactly 10 digits
+        if (phoneDigits.length !== 10) {
+          return errorResponse(res, 400, 'Phone Number must be exactly 10 digits');
+        }
+        
+        admin.phone = phoneDigits;
+      } else {
+        admin.phone = null;
+      }
     }
     
     if (profileImage !== undefined) {

@@ -58,6 +58,33 @@ export default function AdminProfile() {
   };
 
   const handleInputChange = (field, value) => {
+    // Validation for Full Name - only letters and spaces
+    if (field === "name") {
+      // Allow only letters, spaces, and common name characters (apostrophes, hyphens)
+      const nameRegex = /^[a-zA-Z\s'-]*$/;
+      if (value === "" || nameRegex.test(value)) {
+        setFormData((prev) => ({
+          ...prev,
+          [field]: value,
+        }));
+      }
+      return;
+    }
+
+    // Validation for Phone Number - only digits, max 10 digits
+    if (field === "phone") {
+      // Remove all non-digit characters
+      const digitsOnly = value.replace(/\D/g, "");
+      // Limit to 10 digits
+      const limitedDigits = digitsOnly.slice(0, 10);
+      setFormData((prev) => ({
+        ...prev,
+        [field]: limitedDigits,
+      }));
+      return;
+    }
+
+    // For other fields, update normally
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -102,6 +129,23 @@ export default function AdminProfile() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Validate Full Name
+    if (!formData.name.trim()) {
+      toast.error("Full Name is required");
+      return;
+    }
+    const nameRegex = /^[a-zA-Z\s'-]+$/;
+    if (!nameRegex.test(formData.name.trim())) {
+      toast.error("Full Name can only contain letters, spaces, apostrophes, and hyphens");
+      return;
+    }
+
+    // Validate Phone Number if provided
+    if (formData.phone && formData.phone.length !== 10) {
+      toast.error("Phone Number must be exactly 10 digits");
+      return;
+    }
+    
     try {
       setSaving(true);
       let profileImageUrl = formData.profileImage;
@@ -113,16 +157,23 @@ export default function AdminProfile() {
           const uploadResponse = await uploadAPI.uploadMedia(selectedFile, {
             folder: 'admin-profiles'
           });
-          profileImageUrl = uploadResponse?.data?.data?.url || uploadResponse?.data?.url;
+          
+          // Check multiple possible response structures
+          profileImageUrl = uploadResponse?.data?.data?.url 
+            || uploadResponse?.data?.url 
+            || uploadResponse?.data?.data?.profileImage
+            || uploadResponse?.data?.profileImage;
           
           if (!profileImageUrl) {
-            throw new Error("Failed to get uploaded image URL");
+            console.error("Upload response:", uploadResponse);
+            throw new Error("Failed to get uploaded image URL from response");
           }
         } catch (uploadError) {
           console.error("Error uploading image:", uploadError);
-          toast.error(
-            uploadError?.response?.data?.message || "Failed to upload image"
-          );
+          const errorMessage = uploadError?.response?.data?.message 
+            || uploadError?.message 
+            || "File upload failed. Please try again.";
+          toast.error(errorMessage);
           setUploading(false);
           setSaving(false);
           return;
@@ -133,8 +184,8 @@ export default function AdminProfile() {
 
       // Update profile with uploaded image URL
       const response = await adminAPI.updateAdminProfile({
-        name: formData.name,
-        phone: formData.phone || undefined,
+        name: formData.name.trim(),
+        phone: formData.phone && formData.phone.length === 10 ? formData.phone : undefined,
         profileImage: profileImageUrl || undefined,
       });
 
@@ -260,7 +311,12 @@ export default function AdminProfile() {
                   placeholder="Enter your full name"
                   required
                   className="h-11"
+                  pattern="[a-zA-Z\s'-]+"
+                  title="Full Name can only contain letters, spaces, apostrophes, and hyphens"
                 />
+                <p className="text-xs text-neutral-500">
+                  Only letters, spaces, apostrophes, and hyphens are allowed
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -288,9 +344,21 @@ export default function AdminProfile() {
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => handleInputChange("phone", e.target.value)}
-                  placeholder="Enter phone number (optional)"
+                  placeholder="Enter 10-digit phone number (optional)"
                   className="h-11"
+                  pattern="[0-9]{10}"
+                  title="Phone number must be exactly 10 digits"
+                  maxLength={10}
                 />
+                <p className="text-xs text-neutral-500">
+                  {formData.phone.length > 0 && formData.phone.length !== 10 && (
+                    <span className="text-red-500">Phone number must be exactly 10 digits</span>
+                  )}
+                  {formData.phone.length === 10 && (
+                    <span className="text-green-600">Valid phone number</span>
+                  )}
+                  {formData.phone.length === 0 && "Enter 10 digits (optional)"}
+                </p>
               </div>
 
               <div className="space-y-2 md:col-span-2">

@@ -16,6 +16,30 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Eye, EyeOff } from "lucide-react"
 
+// CSS to hide browser's default password reveal buttons
+const hideBrowserPasswordButtonStyle = `
+  .password-input-no-browser-button::-webkit-credentials-auto-fill-button,
+  .password-input-no-browser-button::-webkit-strong-password-auto-fill-button {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    position: absolute !important;
+    right: -9999px !important;
+  }
+  .password-input-no-browser-button::-ms-reveal,
+  .password-input-no-browser-button::-ms-clear {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+  input[type="password"].password-input-no-browser-button::-webkit-credentials-auto-fill-button,
+  input[type="password"].password-input-no-browser-button::-webkit-strong-password-auto-fill-button {
+    display: none !important;
+    visibility: hidden !important;
+  }
+`
+
 export default function AdminLogin() {
   const navigate = useNavigate()
   const [email, setEmail] = useState("")
@@ -88,7 +112,9 @@ export default function AdminLogin() {
   }
 
   return (
-    <div className="min-h-screen bg-linear-to-br from-neutral-50 via-gray-100 to-white relative">
+    <>
+      <style dangerouslySetInnerHTML={{ __html: hideBrowserPasswordButtonStyle }} />
+      <div className="min-h-screen bg-linear-to-br from-neutral-50 via-gray-100 to-white relative">
       <div className="absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute -left-24 -top-24 h-64 w-64 rounded-full bg-neutral-900/5 blur-3xl" />
         <div className="absolute right-[-80px] bottom-[-80px] h-72 w-72 rounded-full bg-gray-700/5 blur-3xl" />
@@ -152,13 +178,18 @@ export default function AdminLogin() {
                     disabled={isLoading}
                     autoComplete="new-password"
                     required
-                    className="h-12 pr-12 text-base"
+                    className="h-12 pr-12 text-base password-input-no-browser-button"
+                    style={{
+                      paddingRight: '3rem',
+                    }}
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 transition-colors hover:text-gray-800"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 z-10 p-1.5 rounded-md text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-300 focus:ring-offset-1 bg-white"
                     disabled={isLoading}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    tabIndex={0}
                   >
                     {showPassword ? (
                       <EyeOff className="h-5 w-5" />
@@ -192,19 +223,12 @@ export default function AdminLogin() {
           </CardContent>
 
           <CardFooter className="flex-col items-start gap-2 text-sm text-gray-500">
-            <span>Don't have an account?{" "}
-              <button
-                onClick={() => navigate("/admin/signup")}
-                className="text-black hover:underline font-medium"
-              >
-                Sign up
-              </button>
-            </span>
             <span>Secure sign-in helps protect admin tools.</span>
           </CardFooter>
         </Card>
       </div>
     </div>
+    </>
   )
 }
 

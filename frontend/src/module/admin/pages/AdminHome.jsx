@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { useNavigate } from "react-router-dom"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   Select,
@@ -28,6 +29,7 @@ import { adminAPI } from "@/lib/api"
 import { usePlatform } from "../context/PlatformContext"
 
 export default function AdminHome() {
+  const navigate = useNavigate()
   const { platform } = usePlatform()
   const isGrocery = platform === "mogrocery"
 
@@ -129,7 +131,103 @@ export default function AdminHome() {
     fill: item.color,
   }))
 
-  const activityFeed = []
+  // Generate activity feed from dashboard data
+  const getActivityFeed = () => {
+    const activities = []
+    
+    if (!dashboardData) return activities
+
+    // Pending restaurant/store requests
+    if (pendingRestaurantRequests > 0) {
+      activities.push({
+        title: `${pendingRestaurantRequests} ${isGrocery ? 'Store' : 'Restaurant'} Request${pendingRestaurantRequests > 1 ? 's' : ''} Pending`,
+        detail: `Awaiting admin approval`,
+        time: 'Just now'
+      })
+    }
+
+    // Pending delivery boy requests
+    if (pendingDeliveryBoyRequests > 0) {
+      activities.push({
+        title: `${pendingDeliveryBoyRequests} Delivery Partner Request${pendingDeliveryBoyRequests > 1 ? 's' : ''} Pending`,
+        detail: `Awaiting verification`,
+        time: 'Just now'
+      })
+    }
+
+    // High pending orders alert
+    if (pendingOrders > 10) {
+      activities.push({
+        title: `${pendingOrders} Orders Pending`,
+        detail: `High volume - requires attention`,
+        time: 'Active'
+      })
+    } else if (pendingOrders > 0) {
+      activities.push({
+        title: `${pendingOrders} Order${pendingOrders > 1 ? 's' : ''} Pending`,
+        detail: `Awaiting processing`,
+        time: 'Active'
+      })
+    }
+
+    // Recent orders activity (from recentActivity data - it's a count, not array)
+    if (dashboardData.recentActivity?.orders && typeof dashboardData.recentActivity.orders === 'number' && dashboardData.recentActivity.orders > 0) {
+      activities.push({
+        title: `${dashboardData.recentActivity.orders} New Order${dashboardData.recentActivity.orders > 1 ? 's' : ''} (24h)`,
+        detail: `Orders placed in last 24 hours`,
+        time: '24h'
+      })
+    }
+
+    // Recent restaurants activity (from recentActivity data - it's a count, not array)
+    if (dashboardData.recentActivity?.restaurants && typeof dashboardData.recentActivity.restaurants === 'number' && dashboardData.recentActivity.restaurants > 0) {
+      activities.push({
+        title: `${dashboardData.recentActivity.restaurants} New ${isGrocery ? 'Store' : 'Restaurant'}${dashboardData.recentActivity.restaurants > 1 ? 's' : ''} (24h)`,
+        detail: `${isGrocery ? 'Stores' : 'Restaurants'} registered in last 24 hours`,
+        time: '24h'
+      })
+    }
+
+    // System health indicators
+    if (ordersTotal > 0) {
+      const completionRate = completedOrders > 0 ? ((completedOrders / ordersTotal) * 100).toFixed(1) : 0
+      if (completionRate >= 80) {
+        activities.push({
+          title: 'System Health: Excellent',
+          detail: `${completionRate}% order completion rate`,
+          time: 'Active'
+        })
+      } else if (completionRate < 50 && ordersTotal > 10) {
+        activities.push({
+          title: 'System Health: Attention Needed',
+          detail: `${completionRate}% order completion rate`,
+          time: 'Active'
+        })
+      }
+    }
+
+    // Revenue milestone
+    if (revenueTotal > 100000) {
+      activities.push({
+        title: 'Revenue Milestone',
+        detail: `Total revenue crossed ₹${Math.floor(revenueTotal / 100000)}L`,
+        time: 'Active'
+      })
+    }
+
+    // Commission milestone
+    if (commissionTotal > 50000) {
+      activities.push({
+        title: 'Commission Milestone',
+        detail: `Total commission earned ₹${Math.floor(commissionTotal / 1000)}K`,
+        time: 'Active'
+      })
+    }
+
+    return activities.slice(0, 5) // Limit to 5 most recent activities
+  }
+
+  const activityFeed = getActivityFeed()
 
   return (
     <div className="px-4 pb-10 lg:px-6 pt-4">
@@ -191,6 +289,7 @@ export default function AdminHome() {
               helper="Rolling 12 months"
               icon={<ShoppingBag className="h-5 w-5 text-emerald-600" />}
               accent="bg-emerald-200/40"
+              onClick={() => navigate("/admin/transaction-report")}
             />
             <MetricCard
               title="Commission earned"
@@ -198,6 +297,7 @@ export default function AdminHome() {
               helper={isGrocery ? "Store commission" : "Restaurant commission"}
               icon={<ArrowUpRight className="h-5 w-5 text-indigo-600" />}
               accent="bg-indigo-200/40"
+              onClick={() => navigate("/admin/transaction-report")}
             />
             <MetricCard
               title="Orders processed"
@@ -205,6 +305,7 @@ export default function AdminHome() {
               helper="Fulfilled & billed"
               icon={<Activity className="h-5 w-5 text-amber-600" />}
               accent="bg-amber-200/40"
+              onClick={() => navigate("/admin/orders/all")}
             />
             <MetricCard
               title="Platform fee"
@@ -212,6 +313,7 @@ export default function AdminHome() {
               helper="Total platform fees"
               icon={<CreditCard className="h-5 w-5 text-purple-600" />}
               accent="bg-purple-200/40"
+              onClick={() => navigate("/admin/transaction-report")}
             />
             <MetricCard
               title="Delivery fee"
@@ -219,6 +321,7 @@ export default function AdminHome() {
               helper="Total delivery fees"
               icon={<Truck className="h-5 w-5 text-blue-600" />}
               accent="bg-blue-200/40"
+              onClick={() => navigate("/admin/transaction-report")}
             />
             <MetricCard
               title="GST"
@@ -226,6 +329,7 @@ export default function AdminHome() {
               helper="Total GST collected"
               icon={<Receipt className="h-5 w-5 text-orange-600" />}
               accent="bg-orange-200/40"
+              onClick={() => navigate("/admin/transaction-report")}
             />
             <MetricCard
               title="Total revenue"
@@ -233,6 +337,7 @@ export default function AdminHome() {
               helper={`Commission ₹${commissionTotal.toFixed(2)} + Platform ₹${platformFeeTotal.toFixed(2)} + Delivery ₹${deliveryFeeTotal.toFixed(2)} + GST ₹${gstTotal.toFixed(2)}`}
               icon={<DollarSign className="h-5 w-5 text-green-600" />}
               accent="bg-green-200/40"
+              onClick={() => navigate("/admin/transaction-report")}
             />
             <MetricCard
               title={isGrocery ? "Total stores" : "Total restaurants"}
@@ -240,6 +345,7 @@ export default function AdminHome() {
               helper={isGrocery ? "All registered stores" : "All registered restaurants"}
               icon={<Store className="h-5 w-5 text-blue-600" />}
               accent="bg-blue-200/40"
+              onClick={() => navigate(isGrocery ? "/admin/grocery-stores" : "/admin/restaurants")}
             />
             <MetricCard
               title={isGrocery ? "Store requests pending" : "Restaurant request pending"}
@@ -247,6 +353,7 @@ export default function AdminHome() {
               helper="Awaiting approval"
               icon={<UserCheck className="h-5 w-5 text-orange-600" />}
               accent="bg-orange-200/40"
+              onClick={() => navigate(isGrocery ? "/admin/grocery-stores/joining-request" : "/admin/restaurants/joining-request")}
             />
             <MetricCard
               title="Total delivery boy"
@@ -254,6 +361,7 @@ export default function AdminHome() {
               helper="All delivery partners"
               icon={<Truck className="h-5 w-5 text-indigo-600" />}
               accent="bg-indigo-200/40"
+              onClick={() => navigate("/admin/delivery-partners")}
             />
             <MetricCard
               title="Delivery boy request pending"
@@ -261,6 +369,7 @@ export default function AdminHome() {
               helper="Awaiting verification"
               icon={<Clock className="h-5 w-5 text-yellow-600" />}
               accent="bg-yellow-200/40"
+              onClick={() => navigate("/admin/delivery-partners/join-request")}
             />
             <MetricCard
               title={isGrocery ? "Total products" : "Total foods"}
@@ -268,6 +377,7 @@ export default function AdminHome() {
               helper={isGrocery ? "Active grocery items" : "Active menu items"}
               icon={<Package className="h-5 w-5 text-purple-600" />}
               accent="bg-purple-200/40"
+              onClick={() => navigate("/admin/foods")}
             />
             <MetricCard
               title={isGrocery ? "Total product addons" : "Total addons"}
@@ -275,6 +385,7 @@ export default function AdminHome() {
               helper={isGrocery ? "Active grocery addons" : "Active addon items"}
               icon={<Plus className="h-5 w-5 text-pink-600" />}
               accent="bg-pink-200/40"
+              onClick={() => navigate("/admin/addons")}
             />
             <MetricCard
               title="Total customers"
@@ -282,6 +393,7 @@ export default function AdminHome() {
               helper="Registered users"
               icon={<UserCircle className="h-5 w-5 text-cyan-600" />}
               accent="bg-cyan-200/40"
+              onClick={() => navigate("/admin/customers")}
             />
             <MetricCard
               title="Pending orders"
@@ -289,6 +401,7 @@ export default function AdminHome() {
               helper="Orders awaiting processing"
               icon={<Clock className="h-5 w-5 text-red-600" />}
               accent="bg-red-200/40"
+              onClick={() => navigate("/admin/orders/pending")}
             />
             <MetricCard
               title="Completed orders"
@@ -296,6 +409,7 @@ export default function AdminHome() {
               helper="Successfully delivered"
               icon={<CheckCircle className="h-5 w-5 text-emerald-600" />}
               accent="bg-emerald-200/40"
+              onClick={() => navigate("/admin/orders/delivered")}
             />
           </div>
 
@@ -447,18 +561,26 @@ export default function AdminHome() {
                 <p className="text-sm text-neutral-500">Ops notes and service health</p>
               </CardHeader>
               <CardContent className="space-y-3 pt-4">
-                {activityFeed.map((item, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-start justify-between rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-3"
-                  >
-                    <div>
-                      <p className="text-sm font-semibold text-neutral-900">{item.title}</p>
-                      <p className="text-xs text-neutral-600">{item.detail}</p>
+                {activityFeed.length > 0 ? (
+                  activityFeed.map((item, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-start justify-between rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-3 hover:bg-neutral-100 transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-neutral-900 truncate">{item.title}</p>
+                        <p className="text-xs text-neutral-600 mt-0.5">{item.detail}</p>
+                      </div>
+                      <span className="text-xs text-neutral-500 ml-2 flex-shrink-0">{item.time}</span>
                     </div>
-                    <span className="text-xs text-neutral-500">{item.time}</span>
+                  ))
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-8 text-center">
+                    <Activity className="h-8 w-8 text-neutral-300 mb-2" />
+                    <p className="text-sm text-neutral-500">No recent activity</p>
+                    <p className="text-xs text-neutral-400 mt-1">Activity will appear here as events occur</p>
                   </div>
-                ))}
+                )}
               </CardContent>
             </Card>
 
@@ -497,9 +619,14 @@ export default function AdminHome() {
   )
 }
 
-function MetricCard({ title, value, helper, icon, accent }) {
+function MetricCard({ title, value, helper, icon, accent, onClick }) {
   return (
-    <Card className="overflow-hidden border-neutral-200 bg-white p-0">
+    <Card 
+      className={`overflow-hidden border-neutral-200 bg-white p-0 transition-all ${
+        onClick ? "cursor-pointer hover:shadow-md hover:border-neutral-300 hover:-translate-y-0.5" : ""
+      }`}
+      onClick={onClick}
+    >
       <CardContent className="relative flex flex-col gap-1 px-3 py-2.5">
         <div className={`absolute inset-0 ${accent} `} />
         <div className="relative flex items-center justify-between">

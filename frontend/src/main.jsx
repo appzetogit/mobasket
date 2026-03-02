@@ -22,7 +22,6 @@ window.__googleMapsLoaded = window.__googleMapsLoaded || false;
 (async () => {
   // Check if Google Maps is already loaded
   if (window.google && window.google.maps) {
-    console.log('✅ Google Maps already loaded');
     window.__googleMapsLoaded = true;
     return;
   }
@@ -30,7 +29,6 @@ window.__googleMapsLoaded = window.__googleMapsLoaded || false;
   // Check if script is already being loaded
   const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
   if (existingScript) {
-    console.log('✅ Google Maps script already exists, waiting for it to load...');
     window.__googleMapsLoading = true;
     
     // Wait for script to load
@@ -43,7 +41,6 @@ window.__googleMapsLoaded = window.__googleMapsLoaded || false;
   
   // Check if Loader is already loading
   if (window.__googleMapsLoading) {
-    console.log('✅ Google Maps is already being loaded, waiting...');
     return;
   }
   
@@ -57,12 +54,10 @@ window.__googleMapsLoaded = window.__googleMapsLoaded || false;
       script.async = true
       script.defer = true
       script.onload = () => {
-        console.log('✅ Google Maps API loaded via script tag');
         window.__googleMapsLoaded = true;
         window.__googleMapsLoading = false;
       }
       script.onerror = () => {
-        console.error('❌ Failed to load Google Maps API script');
         window.__googleMapsLoading = false;
       }
       document.head.appendChild(script)
@@ -70,10 +65,8 @@ window.__googleMapsLoaded = window.__googleMapsLoaded || false;
       window.__googleMapsLoading = false;
     }
   } catch (error) {
-    console.warn('Failed to load Google Maps API key:', error.message)
     window.__googleMapsLoading = false;
     // No fallback - Google Maps will not load if key is not in database
-    console.warn('⚠️ Google Maps API key not available. Please set it in Admin → System → Environment Variables');
   }
 })()
 
