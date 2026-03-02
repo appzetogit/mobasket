@@ -270,11 +270,14 @@ export const getProducts = async (req, res) => {
       const store = product?.storeId;
       if (!store || typeof store !== 'object') return false;
       if (store?.isActive === false) return false;
-      if ((store?.platform || 'mogrocery') !== 'mogrocery') return false;
 
-      const storeZoneId = resolveStoreZoneId(store, activeGroceryZones);
-      if (!storeZoneId) return false;
-      if (userZoneId && storeZoneId !== userZoneId) return false;
+      // Only enforce strict zone match when client sends a resolved user zone.
+      // Without a zone hint, do not hide approved products.
+      if (userZoneId) {
+        const storeZoneId = resolveStoreZoneId(store, activeGroceryZones);
+        if (!storeZoneId) return false;
+        if (storeZoneId !== userZoneId) return false;
+      }
       return true;
     });
 
@@ -550,18 +553,19 @@ export const getProductById = async (req, res) => {
       .select('_id coordinates')
       .lean();
 
-    if (!product?.storeId || product.storeId.isActive === false || (product.storeId.platform && product.storeId.platform !== 'mogrocery')) {
+    if (!product?.storeId || product.storeId.isActive === false) {
       return res.status(404).json({ success: false, message: 'Product not available in active stores' });
     }
 
-    const storeZoneId = resolveStoreZoneId(product?.storeId, activeGroceryZones);
-    if (!storeZoneId) {
-      return res.status(404).json({ success: false, message: 'Product not available in service zones' });
-    }
-
     const userZoneId = userZone?._id ? userZone._id.toString() : null;
-    if (userZoneId && storeZoneId !== userZoneId) {
-      return res.status(403).json({ success: false, message: 'This product is not available in your zone' });
+    if (userZoneId) {
+      const storeZoneId = resolveStoreZoneId(product?.storeId, activeGroceryZones);
+      if (!storeZoneId) {
+        return res.status(404).json({ success: false, message: 'Product not available in service zones' });
+      }
+      if (storeZoneId !== userZoneId) {
+        return res.status(403).json({ success: false, message: 'This product is not available in your zone' });
+      }
     }
 
     return res.status(200).json({ success: true, data: product });

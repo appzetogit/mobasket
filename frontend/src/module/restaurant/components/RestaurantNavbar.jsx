@@ -37,7 +37,7 @@ export default function RestaurantNavbar({
       } catch (error) {
         // Only log error if it's not a network/timeout error (backend might be down/slow)
         if (error.code !== 'ERR_NETWORK' && error.code !== 'ECONNABORTED' && !error.message?.includes('timeout')) {
-          console.error("Error fetching restaurant data:", error)
+          console.error(`Error fetching ${isGroceryStore ? "store" : "restaurant"} data:`, error)
         }
         // Continue with default values if fetch fails
       } finally {
@@ -122,6 +122,12 @@ export default function RestaurantNavbar({
 
   // Get restaurant/store name (use prop if provided, otherwise use fetched data)
   const restaurantName = propRestaurantName || restaurantData?.name || (isGroceryStore ? "Store" : "Restaurant")
+  const displayName = isGroceryStore
+    ? (String(restaurantName || "")
+      .replace(/\brestaurant\b/gi, "Store")
+      .replace(/\s{2,}/g, " ")
+      .trim() || "Store")
+    : restaurantName
 
   const [location, setLocation] = useState("")
 
@@ -294,11 +300,11 @@ export default function RestaurantNavbar({
 
   return (
     <div className="w-full bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-      {/* Left Side - Restaurant Info */}
+      {/* Left Side - Store/Restaurant Info */}
       <div className="flex-1 min-w-0 pr-4">
-        {/* Restaurant Name */}
+        {/* Store/Restaurant Name */}
         <h1 className="text-base font-bold text-gray-900 truncate">
-          {loading ? "Loading..." : restaurantName}
+          {loading ? "Loading..." : displayName}
         </h1>
         
         {/* Location */}

@@ -240,7 +240,7 @@ function CompletedOrders({ onSelectOrder, orderAPI }) {
 }
 
 // Cancelled Orders List Component
-function CancelledOrders({ onSelectOrder, orderAPI }) {
+function CancelledOrders({ onSelectOrder, orderAPI, isGroceryStore = false }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -362,7 +362,7 @@ function CancelledOrders({ onSelectOrder, orderAPI }) {
             const cancelledByText = order.cancelledBy === 'user' 
               ? 'Cancelled by User' 
               : order.cancelledBy === 'restaurant'
-              ? 'Cancelled by Restaurant'
+              ? `Cancelled by ${isGroceryStore ? 'Store' : 'Restaurant'}`
               : 'Cancelled'
             
             return (
@@ -468,6 +468,8 @@ export default function OrdersMain() {
   // Determine if we're on grocery store route and use appropriate API
   const isGroceryStore = location.pathname.startsWith('/store')
   const orderAPI = isGroceryStore ? groceryStoreAPI : restaurantAPI
+  const entityLabel = isGroceryStore ? "store" : "restaurant"
+  const EntityLabel = isGroceryStore ? "Store" : "Restaurant"
   
   const [activeFilter, setActiveFilter] = useState(() => {
     try {
@@ -545,7 +547,7 @@ export default function OrdersMain() {
   const { newOrder, clearNewOrder, isConnected } = useRestaurantNotifications({ enableSound: false })
 
   const rejectReasons = [
-    "Restaurant is too busy",
+    `${EntityLabel} is too busy`,
     "Item not available",
     "Outside delivery area",
     "Kitchen closing soon",
@@ -591,7 +593,7 @@ export default function OrdersMain() {
       } catch (error) {
         // Only log error if it's not a network/timeout error (backend might be down/slow)
         if (error.code !== 'ERR_NETWORK' && error.code !== 'ECONNABORTED' && !error.message?.includes('timeout')) {
-          console.error("Error fetching restaurant status:", error)
+          console.error(`Error fetching ${entityLabel} status:`, error)
         }
         // Set loading to false so UI doesn't stay in loading state
         setRestaurantStatus(prev => ({ ...prev, isLoading: false }))
@@ -642,11 +644,11 @@ export default function OrdersMain() {
       // Trigger profile refresh event
       window.dispatchEvent(new Event('restaurantProfileRefresh'))
       
-      alert('Restaurant reverified successfully! Verification will be done in 24 hours.')
+      alert(`${EntityLabel} reverified successfully! Verification will be done in 24 hours.`)
     } catch (error) {
       // Don't log network/timeout errors (backend might be down)
       if (error.code !== 'ERR_NETWORK' && error.code !== 'ECONNABORTED' && !error.message?.includes('timeout')) {
-        console.error("Error reverifying restaurant:", error)
+        console.error(`Error reverifying ${entityLabel}:`, error)
       }
       
       // Handle 401 Unauthorized errors (token expired/invalid)
@@ -658,12 +660,12 @@ export default function OrdersMain() {
         if (!error.response?.data?.message?.includes('inactive')) {
           // Only redirect if it's not an "inactive" error (which we handle differently)
           setTimeout(() => {
-            window.location.href = '/restaurant/login'
+            window.location.href = isGroceryStore ? '/store/login' : '/restaurant/login'
           }, 1500)
         }
       } else {
         // Other errors (400, 500, etc.)
-        const errorMessage = error.response?.data?.message || "Failed to reverify restaurant. Please try again."
+        const errorMessage = error.response?.data?.message || `Failed to reverify ${entityLabel}. Please try again.`
         alert(errorMessage)
       }
     } finally {
@@ -959,10 +961,13 @@ export default function OrdersMain() {
       doc.setFontSize(20)
       doc.text('Order Receipt', 105, 20, { align: 'center' })
       
-      // Restaurant name
+      // Store/Restaurant name
       doc.setFontSize(14)
       doc.setFont('helvetica', 'normal')
-      doc.text(orderToPrint.restaurantName || 'Restaurant', 105, 30, { align: 'center' })
+      const printableOutletName = isGroceryStore
+        ? String(orderToPrint.restaurantName || 'Store').replace(/\brestaurant\b/gi, 'Store').replace(/\s{2,}/g, ' ').trim()
+        : (orderToPrint.restaurantName || 'Restaurant')
+      doc.text(printableOutletName, 105, 30, { align: 'center' })
       
       // Order details
       doc.setFontSize(10)
@@ -1205,7 +1210,7 @@ export default function OrdersMain() {
       case "completed":
         return <CompletedOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} />
       case "cancelled":
-        return <CancelledOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} />
+        return <CancelledOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} isGroceryStore={isGroceryStore} />
       default:
         return <EmptyState />
     }
@@ -1462,7 +1467,9 @@ export default function OrdersMain() {
                       {(popupOrder || newOrder)?.orderId || '#Order'}
                     </h3>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      {(popupOrder || newOrder)?.restaurantName || 'Restaurant'}
+                      {isGroceryStore
+                        ? String((popupOrder || newOrder)?.restaurantName || 'Store').replace(/\brestaurant\b/gi, 'Store').replace(/\s{2,}/g, ' ').trim()
+                        : ((popupOrder || newOrder)?.restaurantName || 'Restaurant')}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1650,7 +1657,7 @@ export default function OrdersMain() {
                 <div className="px-4 py-3 bg-gray-50 border-t border-gray-200">
                   <button
                     type="button"
-                    onClick={() => navigate("/restaurant/help-centre")}
+                    onClick={() => navigate(isGroceryStore ? "/store/help-centre" : "/restaurant/help-centre")}
                     className="text-sm text-gray-600 hover:text-gray-900 transition-colors underline mx-auto block"
                   >
                     Need help with this order?

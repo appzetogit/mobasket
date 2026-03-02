@@ -58,7 +58,7 @@ export const useRestaurantNotifications = (options = {}) => {
           }
         }
       } catch (error) {
-        console.error('Error fetching restaurant/store:', error);
+        console.error(`Error fetching ${isGroceryStore ? 'store' : 'restaurant'} data:`, error);
       }
     };
     fetchRestaurantId();
