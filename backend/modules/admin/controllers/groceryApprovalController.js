@@ -2,6 +2,7 @@ import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import Menu from '../../restaurant/models/Menu.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import winston from 'winston';
 import mongoose from 'mongoose';
 
@@ -38,14 +39,17 @@ const buildApprovalMenuCandidates = async ({ platform, restaurantMongoId }) => {
     return Menu.find(menuQuery).lean();
   }
 
-  const normalizedPlatform = String(platform || '').toLowerCase();
-  if (!normalizedPlatform) {
-    return Menu.find(menuQuery).lean();
-  }
+  const normalizedPlatform = String(platform || 'mogrocery').toLowerCase();
 
-  const platformMatch = resolvePlatformMatch(normalizedPlatform);
-  const restaurants = await Restaurant.find({ platform: platformMatch }).select('_id').lean();
-  const restaurantIds = restaurants.map((r) => r._id);
+  let restaurantIds = [];
+  if (normalizedPlatform === 'mogrocery' || normalizedPlatform === 'grocery') {
+    const stores = await GroceryStore.find({}).select('_id').lean();
+    restaurantIds = stores.map((store) => store._id);
+  } else {
+    const platformMatch = resolvePlatformMatch(normalizedPlatform);
+    const restaurants = await Restaurant.find({ platform: platformMatch }).select('_id').lean();
+    restaurantIds = restaurants.map((restaurant) => restaurant._id);
+  }
 
   if (restaurantIds.length === 0) return [];
 

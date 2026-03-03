@@ -1,6 +1,7 @@
 import Order from '../models/Order.js';
 import Delivery from '../../delivery/models/Delivery.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import mongoose from 'mongoose';
 
 // Dynamic import to avoid circular dependency
@@ -132,6 +133,9 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
     let restaurant = null;
     if (mongoose.Types.ObjectId.isValid(order.restaurantId)) {
       restaurant = await Restaurant.findById(order.restaurantId).lean();
+      if (!restaurant) {
+        restaurant = await GroceryStore.findById(order.restaurantId).lean();
+      }
     }
     if (!restaurant) {
       restaurant = await Restaurant.findOne({
@@ -140,6 +144,14 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
           { _id: order.restaurantId }
         ]
       }).lean();
+      if (!restaurant) {
+        restaurant = await GroceryStore.findOne({
+          $or: [
+            { restaurantId: order.restaurantId },
+            { _id: order.restaurantId }
+          ]
+        }).lean();
+      }
     }
 
     // Calculate distances
@@ -375,9 +387,15 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
         // If restaurantId is just an ID, fetch restaurant details
         try {
           const RestaurantModel = await import('../../restaurant/models/Restaurant.js');
-          const restaurant = await RestaurantModel.default.findById(orderWithUser.restaurantId)
+          const GroceryStoreModel = await import('../../grocery/models/GroceryStore.js');
+          let restaurant = await RestaurantModel.default.findById(orderWithUser.restaurantId)
             .select('name address location')
             .lean();
+          if (!restaurant) {
+            restaurant = await GroceryStoreModel.default.findById(orderWithUser.restaurantId)
+              .select('name address location')
+              .lean();
+          }
           if (restaurant) {
             restaurantAddress = restaurant.address || 
                               restaurant.location?.formattedAddress ||

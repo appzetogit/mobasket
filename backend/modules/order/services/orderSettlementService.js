@@ -4,6 +4,7 @@ import RestaurantCommission from '../../admin/models/RestaurantCommission.js';
 import DeliveryBoyCommission from '../../admin/models/DeliveryBoyCommission.js';
 import FeeSettings from '../../admin/models/FeeSettings.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import mongoose from 'mongoose';
 import { calculateDistance } from './orderCalculationService.js';
 
@@ -30,6 +31,9 @@ export const calculateOrderSettlement = async (orderId) => {
     let restaurant = null;
     if (mongoose.Types.ObjectId.isValid(order.restaurantId) && order.restaurantId.length === 24) {
       restaurant = await Restaurant.findById(order.restaurantId).lean();
+      if (!restaurant) {
+        restaurant = await GroceryStore.findById(order.restaurantId).lean();
+      }
     }
     if (!restaurant) {
       restaurant = await Restaurant.findOne({
@@ -38,6 +42,14 @@ export const calculateOrderSettlement = async (orderId) => {
           { slug: order.restaurantId }
         ]
       }).lean();
+      if (!restaurant) {
+        restaurant = await GroceryStore.findOne({
+          $or: [
+            { restaurantId: order.restaurantId },
+            { slug: order.restaurantId }
+          ]
+        }).lean();
+      }
     }
 
     if (!restaurant) {

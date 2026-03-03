@@ -1,6 +1,6 @@
 import FeedbackExperience from '../models/FeedbackExperience.js';
 import User from '../../auth/models/User.js';
-import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 
@@ -117,7 +117,7 @@ export const getFeedbackExperiences = asyncHandler(async (req, res) => {
     // Platform filter (used by admin mofood/mogrocery switch)
     // For mogrocery, return feedback linked only to grocery stores.
     if (String(platform || '').toLowerCase() === 'mogrocery') {
-      const groceryStores = await Restaurant.find({ platform: 'mogrocery' })
+      const groceryStores = await GroceryStore.find({})
         .select('_id')
         .lean();
       const groceryStoreIds = groceryStores.map((store) => store._id);

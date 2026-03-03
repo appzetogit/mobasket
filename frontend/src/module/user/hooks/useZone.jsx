@@ -54,12 +54,35 @@ export function useZone(location, platform = 'mofood') {
           localStorage.setItem(cacheKeysRef.current.zoneId, data.zoneId)
           localStorage.setItem(cacheKeysRef.current.zone, JSON.stringify(data.zone))
         } else {
-          // OUT_OF_SERVICE
-          setZoneId(null)
-          setZone(null)
-          setZoneStatus('OUT_OF_SERVICE')
-          localStorage.removeItem(cacheKeysRef.current.zoneId)
-          localStorage.removeItem(cacheKeysRef.current.zone)
+          // Fallback: if not in selected platform zone, check the other platform zone.
+          // This avoids false "out of zone" UI when user is inside any active service zone.
+          const selectedPlatform = normalizePlatform(platform)
+          const fallbackPlatform = selectedPlatform === 'mofood' ? 'mogrocery' : 'mofood'
+          const fallbackResponse = await zoneAPI.detectZone(lat, lng, fallbackPlatform)
+          const fallbackData = fallbackResponse?.data?.data
+
+          if (
+            fallbackResponse?.data?.success &&
+            fallbackData?.status === 'IN_SERVICE' &&
+            fallbackData?.zoneId
+          ) {
+            // Keep selected-platform zoneId unset so same-zone filtering remains strict.
+            setZoneId(null)
+            setZone({
+              ...(fallbackData.zone || null),
+              platform: fallbackPlatform,
+            })
+            setZoneStatus('IN_SERVICE')
+            localStorage.removeItem(cacheKeysRef.current.zoneId)
+            localStorage.removeItem(cacheKeysRef.current.zone)
+          } else {
+            // OUT_OF_SERVICE for both platforms
+            setZoneId(null)
+            setZone(null)
+            setZoneStatus('OUT_OF_SERVICE')
+            localStorage.removeItem(cacheKeysRef.current.zoneId)
+            localStorage.removeItem(cacheKeysRef.current.zone)
+          }
         }
       } else {
         throw new Error(response.data?.message || 'Failed to detect zone')

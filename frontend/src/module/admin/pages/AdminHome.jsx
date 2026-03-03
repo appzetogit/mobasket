@@ -423,7 +423,7 @@ export default function AdminHome() {
               </CardHeader>
               <CardContent className="pt-4">
                 <div className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={280}>
                     <AreaChart data={monthlyData}>
                       <defs>
                         <linearGradient id="revFill" x1="0" y1="0" x2="0" y2="1">
@@ -485,7 +485,7 @@ export default function AdminHome() {
               </CardHeader>
               <CardContent className="pt-4">
                 <div className="h-72">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
                     <PieChart>
                       <Pie
                         data={pieData}
@@ -536,7 +536,7 @@ export default function AdminHome() {
               </CardHeader>
               <CardContent className="pt-4">
                 <div className="h-64">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
                     <BarChart data={monthlyData.slice(-6)}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis dataKey="month" stroke="#6b7280" />

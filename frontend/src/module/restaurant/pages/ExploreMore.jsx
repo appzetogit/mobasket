@@ -744,7 +744,7 @@ export default function ExploreMore() {
 
   const helpItems = [
     { id: 1, label: "Help centre", icon: HelpCircle, route: `${baseRoute}/help-centre` },
-    { id: 3, label: "Share your feedback", icon: Edit, route: `${baseRoute}/Share-Feedback` },
+    { id: 3, label: "Share your feedback", icon: Edit, route: `${baseRoute}/share-feedback` },
   ]
 
   const accountingItems = isGroceryStore ? [
@@ -1217,8 +1217,7 @@ export default function ExploreMore() {
                     className="hover:text-gray-700 transition-colors border-b border-dotted border-gray-400"
                     onClick={(e) => {
                       e.preventDefault()
-                      // Navigate to terms of service
-                      console.log("Terms of Service clicked")
+                      navigate(isGroceryStore ? "/store/terms" : "/restaurant/terms")
                     }}
                   >
                     Terms of Service
@@ -1229,8 +1228,7 @@ export default function ExploreMore() {
                     className="hover:text-gray-700 transition-colors border-b border-dotted border-gray-400"
                     onClick={(e) => {
                       e.preventDefault()
-                      // Navigate to privacy policy
-                      console.log("Privacy Policy clicked")
+                      navigate(isGroceryStore ? "/store/privacy" : "/restaurant/privacy")
                     }}
                   >
                     Privacy Policy
@@ -1241,8 +1239,7 @@ export default function ExploreMore() {
                     className="hover:text-gray-700 transition-colors border-b border-dotted border-gray-400"
                     onClick={(e) => {
                       e.preventDefault()
-                      // Navigate to code of conduct
-                      console.log("Code of Conduct clicked")
+                      navigate("/legal/content-policy")
                     }}
                   >
                     Code of Conduct

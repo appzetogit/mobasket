@@ -6,7 +6,7 @@ import GroceryPlan from '../models/GroceryPlan.js';
 import GroceryPlanOffer from '../models/GroceryPlanOffer.js';
 import Order from '../../order/models/Order.js';
 import Zone from '../../admin/models/Zone.js';
-import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../models/GroceryStore.js';
 
 const slugify = (value = '') =>
   value
@@ -632,9 +632,8 @@ export const createProduct = async (req, res) => {
       return res.status(400).json({ success: false, message: 'At least one grocery store is required' });
     }
 
-    const stores = await Restaurant.find({
+    const stores = await GroceryStore.find({
       _id: { $in: normalizedStoreIds },
-      platform: 'mogrocery',
     })
       .select('_id')
       .lean();
@@ -705,7 +704,7 @@ export const updateProduct = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Valid grocery store is required' });
     }
     if (update.storeId) {
-      const storeExists = await Restaurant.exists({ _id: targetStoreId, platform: 'mogrocery' });
+      const storeExists = await GroceryStore.exists({ _id: targetStoreId });
       if (!storeExists) {
         return res.status(400).json({ success: false, message: 'Invalid grocery store' });
       }

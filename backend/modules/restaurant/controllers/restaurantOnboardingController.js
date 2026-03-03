@@ -11,14 +11,53 @@ export const getOnboarding = async (req, res) => {
     }
 
     const restaurantId = req.restaurant._id;
-    const restaurant = await Restaurant.findById(restaurantId).select('onboarding').lean();
+    const restaurant = await Restaurant.findById(restaurantId)
+      .select('onboarding profileImage menuImages cuisines openDays deliveryTimings')
+      .lean();
 
     if (!restaurant) {
       return errorResponse(res, 404, 'Restaurant not found');
     }
 
+    const onboarding = restaurant.onboarding || {};
+    const step2 = onboarding.step2 || {};
+
+    // Fallback to restaurant profile fields when onboarding.step2 is missing/incomplete.
+    const normalizedStep2 = {
+      ...step2,
+      menuImageUrls:
+        Array.isArray(step2.menuImageUrls) && step2.menuImageUrls.length > 0
+          ? step2.menuImageUrls
+          : Array.isArray(restaurant.menuImages)
+          ? restaurant.menuImages
+          : [],
+      profileImageUrl:
+        step2.profileImageUrl ||
+        restaurant.profileImage ||
+        null,
+      cuisines:
+        Array.isArray(step2.cuisines) && step2.cuisines.length > 0
+          ? step2.cuisines
+          : Array.isArray(restaurant.cuisines)
+          ? restaurant.cuisines
+          : [],
+      deliveryTimings:
+        step2.deliveryTimings ||
+        restaurant.deliveryTimings ||
+        { openingTime: '', closingTime: '' },
+      openDays:
+        Array.isArray(step2.openDays) && step2.openDays.length > 0
+          ? step2.openDays
+          : Array.isArray(restaurant.openDays)
+          ? restaurant.openDays
+          : [],
+    };
+
     return successResponse(res, 200, 'Onboarding data retrieved', {
-      onboarding: restaurant.onboarding || null,
+      onboarding: {
+        ...onboarding,
+        step2: normalizedStep2,
+      },
     });
   } catch (error) {
     console.error('Error fetching restaurant onboarding:', error);

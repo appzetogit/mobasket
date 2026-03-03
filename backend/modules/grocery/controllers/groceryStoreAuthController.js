@@ -1,4 +1,4 @@
-import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore, { hydrateGroceryStoreFromLegacy, hydrateGroceryStoreByIdFromLegacy } from '../models/GroceryStore.js';
 import otpService from '../../auth/services/otpService.js';
 import jwtService from '../../auth/services/jwtService.js';
 import firebaseAuthService from '../../auth/services/firebaseAuthService.js';
@@ -71,6 +71,14 @@ const buildPhoneQuery = (normalizedPhone) => {
 const isDuplicateKeyError = (error) =>
   error?.code === 11000 || /E11000 duplicate key error/i.test(String(error?.message || ''));
 
+const findStoreWithLegacyFallback = async (filter, projection = null) => {
+  let store = await GroceryStore.findOne(filter, projection);
+  if (!store) {
+    store = await hydrateGroceryStoreFromLegacy(filter, projection);
+  }
+  return store;
+};
+
 export const sendOTP = asyncHandler(async (req, res) => {
   const { phone, email, purpose = 'login' } = req.body;
 
@@ -114,7 +122,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       const findQuery = normalizedPhone 
         ? { ...buildPhoneQuery(normalizedPhone), platform: 'mogrocery' }
         : { email: email?.toLowerCase().trim(), platform: 'mogrocery' };
-      store = await Restaurant.findOne(findQuery);
+      store = await findStoreWithLegacyFallback(findQuery);
 
       if (store) {
         return errorResponse(res, 400, `Grocery store already exists with this ${identifierType}. Please login.`);
@@ -148,13 +156,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         storeData.password = password;
       }
 
-      store = await Restaurant.create(storeData);
+      store = await GroceryStore.create(storeData);
       isNewlyRegistered = true;
     } else {
       const findQuery = normalizedPhone 
         ? { ...buildPhoneQuery(normalizedPhone), platform: 'mogrocery' }
         : { email: email?.toLowerCase().trim(), platform: 'mogrocery' };
-      store = await Restaurant.findOne(findQuery);
+      store = await findStoreWithLegacyFallback(findQuery);
 
       await otpService.verifyOTP(phone || null, otp, purpose, email || null);
 
@@ -186,7 +194,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           storeData.ownerEmail = email.toLowerCase().trim();
         }
 
-        store = await Restaurant.create(storeData);
+        store = await GroceryStore.create(storeData);
         isNewlyRegistered = true;
       }
 
@@ -245,7 +253,7 @@ export const register = asyncHandler(async (req, res) => {
       ? { ...buildPhoneQuery(normalizedPhone), platform: 'mogrocery' }
       : { email: email.toLowerCase().trim(), platform: 'mogrocery' };
     
-    const existingStore = await Restaurant.findOne(findQuery);
+    const existingStore = await findStoreWithLegacyFallback(findQuery);
     if (existingStore) {
       return errorResponse(res, 400, 'Grocery store already exists with this email or phone. Please login.');
     }
@@ -268,7 +276,7 @@ export const register = asyncHandler(async (req, res) => {
     if (ownerEmail) storeData.ownerEmail = ownerEmail;
     if (ownerPhone) storeData.ownerPhone = normalizePhoneNumber(ownerPhone);
 
-    const store = await Restaurant.create(storeData);
+    const store = await GroceryStore.create(storeData);
     const tokens = jwtService.generateTokens({
       userId: store._id.toString(),
       role: 'restaurant', // JWT role so upload/media and other shared routes accept store token
@@ -305,10 +313,10 @@ export const login = asyncHandler(async (req, res) => {
   }
 
   try {
-    const store = await Restaurant.findOne({ 
+    const store = await findStoreWithLegacyFallback({ 
       email: email.toLowerCase().trim(), 
       platform: 'mogrocery' 
-    }).select('+password');
+    }, '+password');
 
     if (!store) {
       return errorResponse(res, 401, 'Invalid email or password');
@@ -370,13 +378,13 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, 'Email is required from Google account');
     }
 
-    let store = await Restaurant.findOne({ 
+    let store = await findStoreWithLegacyFallback({ 
       email: firebaseUser.email.toLowerCase().trim(), 
       platform: 'mogrocery' 
     });
 
     if (!store) {
-      store = await Restaurant.create({
+      store = await GroceryStore.create({
         name: firebaseUser.name || 'Grocery Store',
         email: firebaseUser.email.toLowerCase().trim(),
         platform: 'mogrocery',
@@ -436,7 +444,10 @@ export const refreshToken = asyncHandler(async (req, res) => {
 
   try {
     const decoded = jwtService.verifyRefreshToken(refreshToken);
-    const store = await Restaurant.findById(decoded.userId);
+    let store = await GroceryStore.findById(decoded.userId);
+    if (!store) {
+      store = await hydrateGroceryStoreByIdFromLegacy(decoded.userId);
+    }
 
     if (!store) {
       return errorResponse(res, 401, 'Invalid refresh token');

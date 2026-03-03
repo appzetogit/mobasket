@@ -2,6 +2,7 @@ import Order from '../models/Order.js';
 import Payment from '../../payment/models/Payment.js';
 import { createOrder as createRazorpayOrder, verifyPayment } from '../../payment/services/razorpayService.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import Zone from '../../admin/models/Zone.js';
 import mongoose from 'mongoose';
 import crypto from 'crypto';
@@ -41,6 +42,36 @@ const ORDER_MODIFICATION_WINDOW_MS = 2 * 60 * 1000;
 
 const normalizePlatform = (value) => (value === 'mogrocery' ? 'mogrocery' : 'mofood');
 
+const findRestaurantOrStoreByIdentifier = async (identifier) => {
+  const normalized = String(identifier || '').trim();
+  if (!normalized) return null;
+
+  let entity = null;
+  if (mongoose.Types.ObjectId.isValid(normalized) && normalized.length === 24) {
+    entity = await Restaurant.findById(normalized);
+    if (!entity) {
+      entity = await GroceryStore.findById(normalized);
+    }
+    if (entity) return entity;
+  }
+
+  entity = await Restaurant.findOne({
+    $or: [
+      { restaurantId: normalized },
+      { slug: normalized }
+    ]
+  });
+  if (entity) return entity;
+
+  entity = await GroceryStore.findOne({
+    $or: [
+      { restaurantId: normalized },
+      { slug: normalized }
+    ]
+  });
+  return entity;
+};
+
 const resolveOrderPlatform = async (restaurantId) => {
   if (!restaurantId) return 'mofood';
 
@@ -54,7 +85,10 @@ const resolveOrderPlatform = async (restaurantId) => {
     ]
   };
 
-  const restaurant = await Restaurant.findOne(query).select('platform').lean();
+  let restaurant = await Restaurant.findOne(query).select('platform').lean();
+  if (!restaurant) {
+    restaurant = await GroceryStore.findOne(query).select('platform').lean();
+  }
   return normalizePlatform(restaurant?.platform);
 };
 
@@ -372,14 +406,9 @@ const resolveRestaurantObjectId = async (restaurantId) => {
     return normalized;
   }
 
-  const restaurant = await Restaurant.findOne({
-    $or: [
-      { restaurantId: normalized },
-      { slug: normalized }
-    ]
-  }).select('_id').lean();
+  const restaurant = await findRestaurantOrStoreByIdentifier(normalized);
 
-  return restaurant?._id ? restaurant._id.toString() : null;
+  return restaurant?._id ? String(restaurant._id) : null;
 };
 
 const normalizeEntityId = (value) => {
@@ -865,31 +894,14 @@ export const createOrder = async (req, res) => {
     });
 
     // Find and validate the restaurant
-    let restaurant = null;
-    // Try to find restaurant by restaurantId, _id, or slug
-    if (mongoose.Types.ObjectId.isValid(normalizedIncomingRestaurantId) && normalizedIncomingRestaurantId.length === 24) {
-      restaurant = await Restaurant.findById(normalizedIncomingRestaurantId);
-      logger.info('🔍 Restaurant lookup by _id:', {
-        restaurantId: normalizedIncomingRestaurantId,
-        found: !!restaurant,
-        restaurantName: restaurant?.name
-      });
-    }
-    if (!restaurant) {
-      restaurant = await Restaurant.findOne({
-        $or: [
-          { restaurantId: normalizedIncomingRestaurantId },
-          { slug: normalizedIncomingRestaurantId }
-        ]
-      });
-      logger.info('🔍 Restaurant lookup by restaurantId/slug:', {
-        restaurantId: normalizedIncomingRestaurantId,
-        found: !!restaurant,
-        restaurantName: restaurant?.name,
-        restaurant_restaurantId: restaurant?.restaurantId,
-        restaurant__id: restaurant?._id?.toString()
-      });
-    }
+    const restaurant = await findRestaurantOrStoreByIdentifier(normalizedIncomingRestaurantId);
+    logger.info('🔍 Restaurant/store lookup by _id/restaurantId/slug:', {
+      restaurantId: normalizedIncomingRestaurantId,
+      found: !!restaurant,
+      restaurantName: restaurant?.name,
+      entityRestaurantId: restaurant?.restaurantId,
+      entityId: restaurant?._id?.toString?.()
+    });
 
     if (!restaurant) {
       logger.error('❌ Restaurant not found:', {
@@ -2774,19 +2786,8 @@ export const calculateOrder = async (req, res) => {
       });
     }
 
-    let restaurant = null;
     const normalizedRestaurantId = String(restaurantId).trim();
-    if (mongoose.Types.ObjectId.isValid(normalizedRestaurantId) && normalizedRestaurantId.length === 24) {
-      restaurant = await Restaurant.findById(normalizedRestaurantId);
-    }
-    if (!restaurant) {
-      restaurant = await Restaurant.findOne({
-        $or: [
-          { restaurantId: normalizedRestaurantId },
-          { slug: normalizedRestaurantId }
-        ]
-      });
-    }
+    const restaurant = await findRestaurantOrStoreByIdentifier(normalizedRestaurantId);
 
     if (!restaurant) {
       return res.status(404).json({

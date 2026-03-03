@@ -28,7 +28,7 @@ export default function Restaurants() {
         setLoading(true);
         setError("");
 
-        const params = { platform: "mofood", limit: 100 };
+        const params = { platform: "mofood", limit: 100, onlyZone: "true" };
         if (zoneId) params.zoneId = zoneId;
 
         const response = await restaurantAPI.getRestaurants(params);

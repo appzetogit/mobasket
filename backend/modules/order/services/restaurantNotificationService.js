@@ -1,6 +1,7 @@
 import Order from '../models/Order.js';
 import Payment from '../../payment/models/Payment.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import mongoose from 'mongoose';
 
 // Dynamic import to avoid circular dependency
@@ -93,6 +94,9 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
     const restaurantLookupQuery = buildRestaurantLookupQuery(restaurantId);
     if (restaurantLookupQuery) {
       restaurant = await Restaurant.findOne(restaurantLookupQuery).lean();
+      if (!restaurant) {
+        restaurant = await GroceryStore.findOne(restaurantLookupQuery).lean();
+      }
     }
     
     // Validate restaurant name matches order
@@ -281,9 +285,12 @@ export async function notifyRestaurantOrderUpdate(orderId, status) {
     }
 
     const restaurantLookupQuery = buildRestaurantLookupQuery(order.restaurantId);
-    const restaurant = restaurantLookupQuery
+    let restaurant = restaurantLookupQuery
       ? await Restaurant.findOne(restaurantLookupQuery).select('platform _id restaurantId').lean()
       : null;
+    if (!restaurant && restaurantLookupQuery) {
+      restaurant = await GroceryStore.findOne(restaurantLookupQuery).select('platform _id restaurantId').lean();
+    }
     const isGroceryStore = String(restaurant?.platform || '').toLowerCase() === 'mogrocery';
     const targetNamespacePath = isGroceryStore ? '/grocery-store' : '/restaurant';
     const roomPrefix = isGroceryStore ? 'grocery-store' : 'restaurant';

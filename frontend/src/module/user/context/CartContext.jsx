@@ -264,6 +264,17 @@ export function CartProvider({ children }) {
     }
   }, [foodCart, groceryCart]);
 
+  // Clear cart when authentication state changes (logout or new login)
+  useEffect(() => {
+    const handleAuthChange = () => {
+      setFoodCart([]);
+      setGroceryCart([]);
+    };
+
+    window.addEventListener('userAuthChanged', handleAuthChange);
+    return () => window.removeEventListener('userAuthChanged', handleAuthChange);
+  }, []);
+
   const addToCart = (item, sourcePosition = null) => {
     const itemPlatform = detectItemPlatform(item);
     const setTargetCart = itemPlatform === "mogrocery" ? setGroceryCart : setFoodCart;
