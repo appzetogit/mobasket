@@ -75,6 +75,31 @@ const GroceryPage = () => {
   const orderSnapshotRef = useRef(new Map());
   const hasSeededOrderSnapshotRef = useRef(false);
   const zoneRecoveryAttemptedRef = useRef(false);
+  const isAnySheetOpen = showCategorySheet || showCollectionSheet || showWishlistSheet;
+
+  useEffect(() => {
+    if (!isAnySheetOpen) return undefined;
+
+    const body = document.body;
+    const html = document.documentElement;
+    const scrollY = window.scrollY || window.pageYOffset || 0;
+    const previousBodyStyle = body.getAttribute("style") || "";
+    const previousHtmlStyle = html.getAttribute("style") || "";
+
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+    html.style.overflow = "hidden";
+
+    return () => {
+      body.setAttribute("style", previousBodyStyle);
+      html.setAttribute("style", previousHtmlStyle);
+      window.scrollTo(0, scrollY);
+    };
+  }, [isAnySheetOpen]);
 
   const getStoreCoordinates = (store) => {
     const geoCoordinates = store?.location?.coordinates;
@@ -2146,7 +2171,7 @@ const GroceryPage = () => {
                   setShowCollectionSheet(false);
                 }
               }}
-              className="fixed bottom-0 left-0 right-0 h-[92vh] z-[80] w-full"
+              className="fixed bottom-0 left-0 right-0 h-[92vh] z-[80] w-full overscroll-contain touch-pan-y"
             >
               <button
                 onClick={() => setShowCollectionSheet(false)}
@@ -2213,7 +2238,7 @@ const GroceryPage = () => {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-3">
+                <div className="flex-1 overflow-y-auto overscroll-contain p-3">
                   {collectionVisibleProducts.length === 0 ? (
                     <p className="text-sm text-slate-500 dark:text-slate-400 p-3 md:max-w-6xl md:mx-auto">No products available.</p>
                   ) : (
@@ -2313,7 +2338,7 @@ const GroceryPage = () => {
               onDragEnd={(_, info) => {
                 if (info.offset.y > 110) setShowWishlistSheet(false);
               }}
-              className="fixed bottom-0 left-0 right-0 h-[88vh] z-[85] w-full"
+              className="fixed bottom-0 left-0 right-0 h-[88vh] z-[85] w-full overscroll-contain touch-pan-y"
             >
               <div className="h-full bg-[#f4f5f7] dark:bg-[#0d1422] rounded-t-[22px] overflow-hidden shadow-2xl flex flex-col">
                 <div className="w-full flex justify-center pt-3 pb-1">
@@ -2336,7 +2361,7 @@ const GroceryPage = () => {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-3">
+                <div className="flex-1 overflow-y-auto overscroll-contain p-3">
                   {groceryWishlistedProducts.length === 0 ? (
                     <p className="text-sm text-slate-500 dark:text-slate-400 p-3 md:max-w-6xl md:mx-auto">No wishlisted products yet.</p>
                   ) : (
@@ -2478,7 +2503,7 @@ const GroceryPage = () => {
                   setShowCategorySheet(false);
                 }
               }}
-              className="fixed bottom-0 left-0 right-0 h-[92vh] z-[60] w-full"
+              className="fixed bottom-0 left-0 right-0 h-[92vh] z-[60] w-full overscroll-contain touch-pan-y"
             >
               {/* Floating Close Button */}
               <button
