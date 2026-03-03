@@ -1,5 +1,5 @@
 import jwtService from '../../auth/services/jwtService.js';
-import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../models/GroceryStore.js';
 import { errorResponse } from '../../../shared/utils/response.js';
 
 /**
@@ -20,15 +20,10 @@ export const authenticate = async (req, res, next) => {
     try {
       const decoded = jwtService.verifyAccessToken(token);
       
-      const store = await Restaurant.findById(decoded.userId);
+      const store = await GroceryStore.findById(decoded.userId);
 
       if (!store) {
         return errorResponse(res, 401, 'Store not found');
-      }
-
-      // Grocery module only: block non-grocery restaurant accounts.
-      if (store.platform !== 'mogrocery') {
-        return errorResponse(res, 403, 'This account belongs to restaurant module. Please login via /restaurant.');
       }
 
       // Allow inactive stores to access onboarding and profile/auth status endpoints.
@@ -46,8 +41,11 @@ export const authenticate = async (req, res, next) => {
         reqPath === '/me' ||
         reqPath === '/owner/me' ||
         (baseUrl.includes('/auth') && reqPath === '/me');
+      const isReadOrdersRoute =
+        req.method === 'GET' &&
+        (reqPath === '/orders' || /^\/orders\/[^/]+$/.test(reqPath) || requestPath.includes('/store/orders'));
 
-      if (!store.isActive && !isOnboardingRoute && !isProfileRoute) {
+      if (!store.isActive && !isOnboardingRoute && !isProfileRoute && !isReadOrdersRoute) {
         return errorResponse(res, 403, 'Grocery store account is not active');
       }
 

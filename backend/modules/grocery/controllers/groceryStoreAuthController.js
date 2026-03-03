@@ -1,4 +1,4 @@
-import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../models/GroceryStore.js';
 import otpService from '../../auth/services/otpService.js';
 import jwtService from '../../auth/services/jwtService.js';
 import firebaseAuthService from '../../auth/services/firebaseAuthService.js';
@@ -114,7 +114,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       const findQuery = normalizedPhone 
         ? { ...buildPhoneQuery(normalizedPhone), platform: 'mogrocery' }
         : { email: email?.toLowerCase().trim(), platform: 'mogrocery' };
-      store = await Restaurant.findOne(findQuery);
+      store = await GroceryStore.findOne(findQuery);
 
       if (store) {
         return errorResponse(res, 400, `Grocery store already exists with this ${identifierType}. Please login.`);
@@ -148,13 +148,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         storeData.password = password;
       }
 
-      store = await Restaurant.create(storeData);
+      store = await GroceryStore.create(storeData);
       isNewlyRegistered = true;
     } else {
       const findQuery = normalizedPhone 
         ? { ...buildPhoneQuery(normalizedPhone), platform: 'mogrocery' }
         : { email: email?.toLowerCase().trim(), platform: 'mogrocery' };
-      store = await Restaurant.findOne(findQuery);
+      store = await GroceryStore.findOne(findQuery);
 
       await otpService.verifyOTP(phone || null, otp, purpose, email || null);
 
@@ -186,7 +186,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           storeData.ownerEmail = email.toLowerCase().trim();
         }
 
-        store = await Restaurant.create(storeData);
+        store = await GroceryStore.create(storeData);
         isNewlyRegistered = true;
       }
 
@@ -245,7 +245,7 @@ export const register = asyncHandler(async (req, res) => {
       ? { ...buildPhoneQuery(normalizedPhone), platform: 'mogrocery' }
       : { email: email.toLowerCase().trim(), platform: 'mogrocery' };
     
-    const existingStore = await Restaurant.findOne(findQuery);
+    const existingStore = await GroceryStore.findOne(findQuery);
     if (existingStore) {
       return errorResponse(res, 400, 'Grocery store already exists with this email or phone. Please login.');
     }
@@ -268,7 +268,7 @@ export const register = asyncHandler(async (req, res) => {
     if (ownerEmail) storeData.ownerEmail = ownerEmail;
     if (ownerPhone) storeData.ownerPhone = normalizePhoneNumber(ownerPhone);
 
-    const store = await Restaurant.create(storeData);
+    const store = await GroceryStore.create(storeData);
     const tokens = jwtService.generateTokens({
       userId: store._id.toString(),
       role: 'restaurant', // JWT role so upload/media and other shared routes accept store token
@@ -305,7 +305,7 @@ export const login = asyncHandler(async (req, res) => {
   }
 
   try {
-    const store = await Restaurant.findOne({ 
+    const store = await GroceryStore.findOne({ 
       email: email.toLowerCase().trim(), 
       platform: 'mogrocery' 
     }).select('+password');
@@ -370,13 +370,13 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, 'Email is required from Google account');
     }
 
-    let store = await Restaurant.findOne({ 
+    let store = await GroceryStore.findOne({ 
       email: firebaseUser.email.toLowerCase().trim(), 
       platform: 'mogrocery' 
     });
 
     if (!store) {
-      store = await Restaurant.create({
+      store = await GroceryStore.create({
         name: firebaseUser.name || 'Grocery Store',
         email: firebaseUser.email.toLowerCase().trim(),
         platform: 'mogrocery',
@@ -436,7 +436,7 @@ export const refreshToken = asyncHandler(async (req, res) => {
 
   try {
     const decoded = jwtService.verifyRefreshToken(refreshToken);
-    const store = await Restaurant.findById(decoded.userId);
+    const store = await GroceryStore.findById(decoded.userId);
 
     if (!store) {
       return errorResponse(res, 401, 'Invalid refresh token');

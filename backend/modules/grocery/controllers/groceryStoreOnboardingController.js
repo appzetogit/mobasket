@@ -1,4 +1,4 @@
-import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../models/GroceryStore.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import winston from 'winston';
@@ -20,7 +20,7 @@ const logger = winston.createLogger({
 export const getOnboarding = asyncHandler(async (req, res) => {
   try {
     const storeId = req.store._id;
-    const store = await Restaurant.findById(storeId).lean();
+    const store = await GroceryStore.findById(storeId).lean();
 
     if (!store) {
       return errorResponse(res, 404, 'Grocery store not found');
@@ -65,7 +65,7 @@ export const updateOnboarding = asyncHandler(async (req, res) => {
       update['onboarding.completedSteps'] = completedSteps;
     }
 
-    const store = await Restaurant.findByIdAndUpdate(
+    const store = await GroceryStore.findByIdAndUpdate(
       storeId,
       { $set: update },
       { new: true }

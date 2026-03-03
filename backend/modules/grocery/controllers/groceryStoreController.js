@@ -1,4 +1,4 @@
-import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../models/GroceryStore.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
@@ -28,7 +28,7 @@ export const getGroceryStores = asyncHandler(async (req, res) => {
       status
     } = req.query;
 
-    const query = { platform: 'mogrocery' };
+    const query = {};
 
     if (status === 'inactive') {
       query.isActive = false;
@@ -47,14 +47,14 @@ export const getGroceryStores = asyncHandler(async (req, res) => {
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const stores = await Restaurant.find(query)
+    const stores = await GroceryStore.find(query)
       .select('-password')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit))
       .lean();
 
-    const total = await Restaurant.countDocuments(query);
+    const total = await GroceryStore.countDocuments(query);
 
     return successResponse(res, 200, 'Grocery stores retrieved successfully', {
       stores,
@@ -77,7 +77,7 @@ export const getGroceryStores = asyncHandler(async (req, res) => {
  */
 export const createGroceryStore = asyncHandler(async (req, res) => {
   try {
-    const storeData = { ...req.body, platform: 'mogrocery' };
+    const storeData = { ...req.body };
 
     if (storeData.phone) {
       storeData.phone = normalizePhoneNumber(storeData.phone);
@@ -86,7 +86,7 @@ export const createGroceryStore = asyncHandler(async (req, res) => {
       storeData.ownerPhone = normalizePhoneNumber(storeData.ownerPhone);
     }
 
-    const store = await Restaurant.create(storeData);
+    const store = await GroceryStore.create(storeData);
     
     const storeResponse = store.toObject();
     delete storeResponse.password;
@@ -104,7 +104,7 @@ export const createGroceryStore = asyncHandler(async (req, res) => {
  */
 export const getGroceryStoreById = asyncHandler(async (req, res) => {
   try {
-    const store = await Restaurant.findOne({ _id: req.params.id, platform: 'mogrocery' })
+    const store = await GroceryStore.findById(req.params.id)
       .select('-password')
       .lean();
 
@@ -124,8 +124,8 @@ export const getGroceryStoreById = asyncHandler(async (req, res) => {
  */
 export const updateGroceryStore = asyncHandler(async (req, res) => {
   try {
-    const store = await Restaurant.findOneAndUpdate(
-      { _id: req.params.id, platform: 'mogrocery' },
+    const store = await GroceryStore.findOneAndUpdate(
+      { _id: req.params.id },
       req.body,
       { new: true, runValidators: true }
     ).select('-password');
@@ -147,8 +147,8 @@ export const updateGroceryStore = asyncHandler(async (req, res) => {
 export const updateGroceryStoreStatus = asyncHandler(async (req, res) => {
   try {
     const { isActive } = req.body;
-    const store = await Restaurant.findOneAndUpdate(
-      { _id: req.params.id, platform: 'mogrocery' },
+    const store = await GroceryStore.findOneAndUpdate(
+      { _id: req.params.id },
       { isActive },
       { new: true }
     ).select('-password');
@@ -169,7 +169,7 @@ export const updateGroceryStoreStatus = asyncHandler(async (req, res) => {
  */
 export const deleteGroceryStore = asyncHandler(async (req, res) => {
   try {
-    const store = await Restaurant.findOneAndDelete({ _id: req.params.id, platform: 'mogrocery' });
+    const store = await GroceryStore.findOneAndDelete({ _id: req.params.id });
 
     if (!store) {
       return errorResponse(res, 404, 'Grocery store not found');
