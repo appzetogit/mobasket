@@ -1,9 +1,9 @@
 import GroceryStore from '../models/GroceryStore.js';
+import Restaurant from '../../restaurant/models/Restaurant.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
 import winston from 'winston';
-import mongoose from 'mongoose';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -14,6 +14,65 @@ const logger = winston.createLogger({
     })
   ]
 });
+
+const buildStoreSearchOr = (search = '') => ([
+  { name: { $regex: search, $options: 'i' } },
+  { ownerName: { $regex: search, $options: 'i' } },
+  { phone: { $regex: search, $options: 'i' } },
+  { email: { $regex: search, $options: 'i' } }
+]);
+
+const hydrateMissingLegacyGroceryStores = async ({ search, status }) => {
+  try {
+    const legacyQuery = { platform: 'mogrocery' };
+
+    if (status === 'inactive') {
+      legacyQuery.isActive = false;
+    } else if (status === 'active') {
+      legacyQuery.isActive = true;
+    }
+
+    if (search) {
+      legacyQuery.$or = buildStoreSearchOr(search);
+    }
+
+    const legacyStores = await Restaurant.find(legacyQuery)
+      .select('+password')
+      .lean();
+
+    if (!legacyStores.length) return;
+
+    const legacyIds = legacyStores.map((store) => store._id);
+    const existingStores = await GroceryStore.find({ _id: { $in: legacyIds } })
+      .select('_id')
+      .lean();
+    const existingIds = new Set(existingStores.map((store) => store._id.toString()));
+
+    const missingLegacyStores = legacyStores.filter(
+      (store) => !existingIds.has(store._id.toString())
+    );
+    if (!missingLegacyStores.length) return;
+
+    const bulkOps = missingLegacyStores.map((store) => {
+      const plain = { ...store };
+      delete plain.__v;
+      plain.platform = 'mogrocery';
+
+      return {
+        updateOne: {
+          filter: { _id: store._id },
+          update: { $set: plain },
+          upsert: true,
+        },
+      };
+    });
+
+    await GroceryStore.bulkWrite(bulkOps, { ordered: false });
+    logger.info(`Hydrated ${missingLegacyStores.length} legacy mogrocery stores into GroceryStore collection`);
+  } catch (error) {
+    logger.warn(`Legacy grocery store hydration skipped: ${error.message}`);
+  }
+};
 
 /**
  * Get All Grocery Stores
@@ -37,13 +96,12 @@ export const getGroceryStores = asyncHandler(async (req, res) => {
     }
 
     if (search) {
-      query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { ownerName: { $regex: search, $options: 'i' } },
-        { phone: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
-      ];
+      query.$or = buildStoreSearchOr(search);
     }
+
+    // Ensure old mogrocery stores from legacy Restaurant collection are visible
+    // even if dedicated migration was not run for all records.
+    await hydrateMissingLegacyGroceryStores({ search, status });
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 

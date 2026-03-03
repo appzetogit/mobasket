@@ -43,19 +43,26 @@ export default function BottomNavOrders() {
   const [transitionPhase, setTransitionPhase] = useState('idle') // 'idle', 'entering', 'exiting'
   const [transitionDirection, setTransitionDirection] = useState('right')
   const prevIsHubModeRef = useRef(null)
+  const ordersTabsForGrocery = useMemo(() => getOrdersTabs(true), [])
+  const ordersTabsForRestaurant = useMemo(() => getOrdersTabs(false), [])
 
   // Hide on internal pages (create-offers flow) and hide hub mode for grocery stores
   const isInternalPage = pathname.includes("/create-offers")
+  const isHubMode = useMemo(() => {
+    if (isGroceryStore) return false
+    return pathname.startsWith("/restaurant/hub") || pathname.startsWith("/restaurant/to-hub")
+  }, [pathname, isGroceryStore])
+  const tabs = useMemo(() => {
+    if (isGroceryStore) return ordersTabsForGrocery
+    return isHubMode ? hubTabs : ordersTabsForRestaurant
+  }, [isGroceryStore, isHubMode, ordersTabsForGrocery, ordersTabsForRestaurant])
+  const activeTab = useMemo(() => {
+    const match = findActiveTab(tabs, pathname)
+    return match?.id ?? (isHubMode ? "hub" : "orders")
+  }, [tabs, pathname, isHubMode])
   if (isInternalPage || isGroceryStore) {
     // For grocery stores, only show orders tabs, no hub mode
     if (isGroceryStore) {
-      const ordersTabs = getOrdersTabs(true)
-      const tabs = ordersTabs
-      const activeTab = useMemo(() => {
-        const match = findActiveTab(tabs, pathname)
-        return match?.id ?? "orders"
-      }, [tabs, pathname])
-
       return (
         <div className="sticky bottom-0 z-40 pb-3">
           <div className="flex items-center gap-2 w-full">
@@ -108,21 +115,10 @@ export default function BottomNavOrders() {
   }
 
   // 🔒 single source of truth for mode (restaurant only)
-  const isHubMode = useMemo(() => {
-    return pathname.startsWith("/restaurant/hub") || pathname.startsWith("/restaurant/to-hub")
-  }, [pathname])
-
-  const ordersTabs = getOrdersTabs(false)
-  const tabs = isHubMode ? hubTabs : ordersTabs
-
-  const activeTab = useMemo(() => {
-    const match = findActiveTab(tabs, pathname)
-    return match?.id ?? (isHubMode ? "hub" : "orders")
-  }, [tabs, pathname, isHubMode, isGroceryStore])
-
- 
   // Handle mode change detection for transition
   useEffect(() => {
+    if (isInternalPage || isGroceryStore) return
+
     if (prevIsHubModeRef.current !== null && prevIsHubModeRef.current !== isHubMode) {
       // Mode changed - new page has rendered, set it to start from opposite side
       const slideInStart = transitionDirection === 'right' ? '-100%' : '100%'
@@ -149,10 +145,12 @@ export default function BottomNavOrders() {
       return () => clearTimeout(exitTimer)
     }
     prevIsHubModeRef.current = isHubMode
-  }, [isHubMode, transitionDirection])
+  }, [isHubMode, transitionDirection, isInternalPage, isGroceryStore])
 
   // Apply slide transform to page content during transition (no blur)
   useEffect(() => {
+    if (isInternalPage || isGroceryStore) return
+
     if (isTransitioning) {
       // Calculate slide direction: right = to Hub (slide right), left = to Orders (slide left)
       let slideTransform = 'translate3d(0, 0, 0)'
@@ -192,7 +190,7 @@ export default function BottomNavOrders() {
         document.body.style.overflow = ''
       }
     }
-  }, [isTransitioning, transitionPhase, transitionDirection])
+  }, [isTransitioning, transitionPhase, transitionDirection, isInternalPage, isGroceryStore])
 
   const handleTabClick = (tab) => {
     if (tab.route && tab.route !== pathname) {

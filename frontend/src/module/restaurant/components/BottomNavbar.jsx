@@ -70,10 +70,10 @@ export default function BottomNavbar({ onMenuClick }) {
               return
             }
             // Fallback: only navigate if onMenuClick is not provided
-            navigate("/restaurant/food/all")
+            navigate("/restaurant/hub-menu")
           }}
           className={`flex flex-col items-center gap-1 p-2 transition-colors ${
-            isActive("/restaurant/food/all") ? "text-[#ff8100]" : "text-gray-600"
+            isActive("/restaurant/hub-menu") ? "text-[#ff8100]" : "text-gray-600"
           }`}
         >
           <Menu className="w-6 h-6" />

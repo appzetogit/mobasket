@@ -87,6 +87,7 @@ console.error = (...args) => {
   if (
     typeof args[0] === 'string' &&
     (args[0].includes('chrome-extension://') ||
+     (args[0].includes('content.js') && args[0].includes('useCache')) ||
      args[0].includes('_$initialUrl') ||
      args[0].includes('_$onReInit') ||
      args[0].includes('_$bindListeners'))
@@ -190,6 +191,16 @@ window.addEventListener('unhandledrejection', (event) => {
   const errorMsg = error?.message || String(error) || ''
   const errorName = error?.name || ''
   const errorStr = String(error) || ''
+  const errorStack = String(error?.stack || '')
+
+  // Suppress browser-extension content script errors (not app code)
+  if (
+    (errorMsg.includes('useCache') || errorStr.includes('useCache')) &&
+    (errorStr.includes('content.js') || errorStack.includes('content.js'))
+  ) {
+    event.preventDefault()
+    return
+  }
   
   // Suppress geolocation errors (permission denied, timeout, etc.)
   if (

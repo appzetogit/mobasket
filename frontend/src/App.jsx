@@ -16,9 +16,6 @@ import RestaurantOrdersPage from "@/module/restaurant/pages/OrdersPage";
 import AllOrdersPage from "@/module/restaurant/pages/AllOrdersPage";
 import RestaurantDetailsPage from "@/module/restaurant/pages/RestaurantDetailsPage";
 import EditRestaurantPage from "@/module/restaurant/pages/EditRestaurantPage";
-import FoodDetailsPage from "@/module/restaurant/pages/FoodDetailsPage";
-import EditFoodPage from "@/module/restaurant/pages/EditFoodPage";
-import AllFoodPage from "@/module/restaurant/pages/AllFoodPage";
 import WalletPage from "@/module/restaurant/pages/WalletPage";
 import RestaurantNotifications from "@/module/restaurant/pages/Notifications";
 import OrderDetails from "@/module/restaurant/pages/OrderDetails";
@@ -645,7 +642,7 @@ export default function App() {
               requiredRole="restaurant"
               loginPath="/restaurant/login"
             >
-              <AllFoodPage />
+              <Navigate to="/restaurant/hub-menu" replace />
             </ProtectedRoute>
           }
         />
@@ -656,7 +653,7 @@ export default function App() {
               requiredRole="restaurant"
               loginPath="/restaurant/login"
             >
-              <FoodDetailsPage />
+              <Navigate to="/restaurant/hub-menu" replace />
             </ProtectedRoute>
           }
         />
@@ -667,7 +664,7 @@ export default function App() {
               requiredRole="restaurant"
               loginPath="/restaurant/login"
             >
-              <EditFoodPage />
+              <Navigate to="/restaurant/hub-menu" replace />
             </ProtectedRoute>
           }
         />
@@ -678,7 +675,7 @@ export default function App() {
               requiredRole="restaurant"
               loginPath="/restaurant/login"
             >
-              <EditFoodPage />
+              <Navigate to="/restaurant/hub-menu/item/new" replace />
             </ProtectedRoute>
           }
         />

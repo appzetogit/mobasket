@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { uploadAPI, api } from "@/lib/api"
+import { uploadAPI, api, restaurantAPI } from "@/lib/api"
 import { MobileTimePicker } from "@mui/x-date-pickers/MobileTimePicker"
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider"
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns"
@@ -178,6 +178,7 @@ export default function RestaurantOnboarding() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  const [signedInPhone, setSignedInPhone] = useState("")
 
   const [step1, setStep1] = useState({
     restaurantName: "",
@@ -229,6 +230,7 @@ export default function RestaurantOnboarding() {
     offer: "",
   })
 
+  const normalizePhoneDigits = (value) => String(value || "").replace(/\D/g, "")
 
   // Load from localStorage on mount and check URL parameter
   useEffect(() => {
@@ -317,7 +319,7 @@ export default function RestaurantOnboarding() {
         const data = res?.data?.data?.onboarding
         if (data) {
           if (data.step1) {
-            setStep1((prev) => ({
+            setStep1(() => ({
               restaurantName: data.step1.restaurantName || "",
               ownerName: data.step1.ownerName || "",
               ownerEmail: data.step1.ownerEmail || "",
@@ -397,6 +399,58 @@ export default function RestaurantOnboarding() {
     fetchData()
   }, [])
 
+  useEffect(() => {
+    const resolveSignedInPhone = async () => {
+      try {
+        const cachedRaw = localStorage.getItem("restaurant_user")
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw)
+          const cachedPhone = normalizePhoneDigits(
+            cached?.ownerPhone || cached?.primaryContactNumber || cached?.phone
+          )
+          if (cachedPhone) {
+            setSignedInPhone(cachedPhone)
+            return
+          }
+        }
+      } catch (error) {
+        console.error("Failed to parse cached restaurant user:", error)
+      }
+
+      try {
+        const response = await restaurantAPI.getCurrentRestaurant()
+        const restaurant = response?.data?.data?.restaurant || response?.data?.data || {}
+        const profilePhone = normalizePhoneDigits(
+          restaurant?.ownerPhone || restaurant?.primaryContactNumber || restaurant?.phone
+        )
+        if (profilePhone) {
+          setSignedInPhone(profilePhone)
+        }
+      } catch (error) {
+        console.error("Failed to fetch signed-in restaurant phone:", error)
+      }
+    }
+
+    resolveSignedInPhone()
+  }, [])
+
+  useEffect(() => {
+    if (!signedInPhone) return
+    setStep1((prev) => {
+      const next = { ...prev }
+      let changed = false
+      if (!normalizePhoneDigits(prev.ownerPhone)) {
+        next.ownerPhone = signedInPhone
+        changed = true
+      }
+      if (!normalizePhoneDigits(prev.primaryContactNumber)) {
+        next.primaryContactNumber = signedInPhone
+        changed = true
+      }
+      return changed ? next : prev
+    })
+  }, [signedInPhone])
+
   const handleUpload = async (file, folder) => {
     try {
       const res = await uploadAPI.uploadMedia(file, { folder })
@@ -419,7 +473,7 @@ export default function RestaurantOnboarding() {
     }
     if (!step1.ownerName?.trim()) {
       errors.push("Owner name is required")
-    } else if (!/^[A-Za-z\s\-]+$/.test(step1.ownerName.trim())) {
+    } else if (!/^[A-Za-z\s-]+$/.test(step1.ownerName.trim())) {
       errors.push("Full name should contain only letters and spaces")
     }
     if (!step1.ownerEmail?.trim()) {
@@ -448,202 +502,15 @@ export default function RestaurantOnboarding() {
   }
 
   const validateStep2 = () => {
-    const errors = []
-
-    // Check menu images - must have at least one File or existing URL
-    const hasMenuImages = step2.menuImages && step2.menuImages.length > 0
-    if (!hasMenuImages) {
-      errors.push("At least one menu image is required")
-    } else {
-      const validMenuImages = step2.menuImages.filter(img => {
-        if (img instanceof File) return true
-        if (img?.url && typeof img.url === 'string') return true
-        if (typeof img === 'string' && img.startsWith('http')) return true
-        return false
-      })
-      if (validMenuImages.length === 0) {
-        errors.push("Please upload at least one valid menu image")
-      }
-    }
-
-    // Check profile image - must be a File or existing URL
-    if (!step2.profileImage) {
-      errors.push("Restaurant profile image is required")
-    } else {
-      const isValidProfileImage =
-        step2.profileImage instanceof File ||
-        (step2.profileImage?.url && typeof step2.profileImage.url === 'string') ||
-        (typeof step2.profileImage === 'string' && step2.profileImage.startsWith('http'))
-      if (!isValidProfileImage) {
-        errors.push("Please upload a valid restaurant profile image")
-      }
-    }
-
-    if (!step2.cuisines || step2.cuisines.length === 0) {
-      errors.push("Please select at least one cuisine")
-    }
-    if (!step2.openingTime?.trim()) {
-      errors.push("Opening time is required")
-    }
-    if (!step2.closingTime?.trim()) {
-      errors.push("Closing time is required")
-    }
-    // Closing time must be different from and after opening time
-    if (step2.openingTime && step2.closingTime && step2.openingTime === step2.closingTime) {
-      errors.push("Closing time must be different from opening time")
-    } else if (step2.openingTime && step2.closingTime) {
-      const [oh, om] = step2.openingTime.split(":").map(Number)
-      const [ch, cm] = step2.closingTime.split(":").map(Number)
-      const openMins = oh * 60 + om
-      const closeMins = ch * 60 + cm
-      if (closeMins <= openMins) {
-        errors.push("Closing time must be after opening time")
-      }
-    }
-    if (!step2.openDays || step2.openDays.length === 0) {
-      errors.push("Please select at least one open day")
-    }
-
-    return errors
+    return []
   }
 
   const validateStep4 = () => {
-    const errors = []
-    if (!step4.estimatedDeliveryTime || !step4.estimatedDeliveryTime.trim()) {
-      errors.push("Estimated delivery time is required")
-    }
-    if (!step4.featuredDish || !step4.featuredDish.trim()) {
-      errors.push("Featured dish name is required")
-    }
-    if (!step4.featuredPrice || step4.featuredPrice === "" || isNaN(parseFloat(step4.featuredPrice)) || parseFloat(step4.featuredPrice) <= 0) {
-      errors.push("Featured dish price is required and must be greater than 0")
-    }
-    if (!step4.offer || !step4.offer.trim()) {
-      errors.push("Special offer/promotion is required")
-    }
-    return errors
+    return []
   }
 
   const validateStep3 = () => {
-    const errors = []
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-
-    // PAN number — must follow format AAAAA9999A
-    if (!step3.panNumber?.trim()) {
-      errors.push("PAN number is required")
-    } else if (!/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/.test(step3.panNumber.trim())) {
-      errors.push("PAN number must be in format AAAAA9999A (e.g. ABCDE1234F)")
-    }
-
-    // Name on PAN — letters and spaces only
-    if (!step3.nameOnPan?.trim()) {
-      errors.push("Name on PAN is required")
-    } else if (!/^[A-Za-z\s\-]+$/.test(step3.nameOnPan.trim())) {
-      errors.push("Name on PAN should contain only letters and spaces")
-    }
-
-    // PAN image
-    if (!step3.panImage) {
-      errors.push("PAN image is required")
-    } else {
-      const isValidPanImage =
-        step3.panImage instanceof File ||
-        (step3.panImage?.url && typeof step3.panImage.url === 'string') ||
-        (typeof step3.panImage === 'string' && step3.panImage.startsWith('http'))
-      if (!isValidPanImage) {
-        errors.push("Please upload a valid PAN image")
-      }
-    }
-
-    // FSSAI number — 14 digits only
-    if (!step3.fssaiNumber?.trim()) {
-      errors.push("FSSAI number is required")
-    } else if (!/^\d{14}$/.test(step3.fssaiNumber.trim())) {
-      errors.push("FSSAI number must be exactly 14 digits")
-    }
-
-    // FSSAI expiry — required and must be a future date
-    if (!step3.fssaiExpiry?.trim()) {
-      errors.push("FSSAI expiry date is required")
-    } else {
-      const expiryDate = new Date(step3.fssaiExpiry)
-      expiryDate.setHours(0, 0, 0, 0)
-      if (expiryDate < today) {
-        errors.push("FSSAI expiry date cannot be in the past")
-      }
-    }
-
-    // FSSAI image (optional but validate if provided)
-    if (step3.fssaiImage) {
-      const isValidFssaiImage =
-        step3.fssaiImage instanceof File ||
-        (step3.fssaiImage?.url && typeof step3.fssaiImage.url === 'string') ||
-        (typeof step3.fssaiImage === 'string' && step3.fssaiImage.startsWith('http'))
-      if (!isValidFssaiImage) {
-        errors.push("Please upload a valid FSSAI image")
-      }
-    }
-
-    // GST details if registered
-    if (step3.gstRegistered) {
-      if (!step3.gstNumber?.trim()) {
-        errors.push("GST number is required when GST registered")
-      }
-      if (!step3.gstLegalName?.trim()) {
-        errors.push("GST legal name is required when GST registered")
-      }
-      if (!step3.gstAddress?.trim()) {
-        errors.push("GST registered address is required when GST registered")
-      }
-      if (!step3.gstImage) {
-        errors.push("GST image is required when GST registered")
-      } else {
-        const isValidGstImage =
-          step3.gstImage instanceof File ||
-          (step3.gstImage?.url && typeof step3.gstImage.url === 'string') ||
-          (typeof step3.gstImage === 'string' && step3.gstImage.startsWith('http'))
-        if (!isValidGstImage) {
-          errors.push("Please upload a valid GST image")
-        }
-      }
-    }
-
-    // Account number — digits only
-    if (!step3.accountNumber?.trim()) {
-      errors.push("Account number is required")
-    } else if (!/^\d+$/.test(step3.accountNumber.trim())) {
-      errors.push("Account number must contain digits only")
-    }
-    if (!step3.confirmAccountNumber?.trim()) {
-      errors.push("Please confirm your account number")
-    }
-    if (step3.accountNumber && step3.confirmAccountNumber && step3.accountNumber !== step3.confirmAccountNumber) {
-      errors.push("Account number and confirmation do not match")
-    }
-
-    // IFSC — format XXXX0XXXXXX
-    if (!step3.ifscCode?.trim()) {
-      errors.push("IFSC code is required")
-    } else if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(step3.ifscCode.trim())) {
-      errors.push("IFSC code must be in format XXXX0XXXXXX (e.g. HDFC0001234)")
-    }
-
-    // Account holder name — letters and spaces only
-    if (!step3.accountHolderName?.trim()) {
-      errors.push("Account holder name is required")
-    } else if (!/^[A-Za-z\s\-]+$/.test(step3.accountHolderName.trim())) {
-      errors.push("Account holder name should contain only letters and spaces")
-    }
-
-    // Account type — must be savings or current
-    if (!step3.accountType?.trim()) {
-      errors.push("Account type is required")
-    } else if (!['savings', 'current'].includes(step3.accountType.toLowerCase())) {
-      errors.push("Account type must be Savings or Current")
-    }
-
-    return errors
+    return []
   }
 
   // Fill dummy data for testing (development mode only)
@@ -704,7 +571,7 @@ export default function RestaurantOnboarding() {
         estimatedDeliveryTime: "25-30 mins",
         featuredDish: "Butter Chicken Special",
         featuredPrice: "249",
-        offer: "Flat ₹50 OFF above ₹199",
+        offer: "Flat Rs50 OFF above Rs199",
       })
       toast.success("Step 4 filled with dummy data", { duration: 2000 })
     }
@@ -723,11 +590,11 @@ export default function RestaurantOnboarding() {
       validationErrors = validateStep3()
     } else if (step === 4) {
       validationErrors = validateStep4()
-      console.log('🔍 Step 4 validation:', {
+      console.log('Step 4 validation:', {
         step4,
         errors: validationErrors,
-        estimatedDeliveryTime: step4.estimatedDeliveryTime,
-        featuredDish: step4.featuredDish,
+        estimatedDeliveryTime: step4.estimatedDeliveryTime || "",
+        featuredDish: step4.featuredDish || "",
         featuredPrice: step4.featuredPrice,
         offer: step4.offer
       })
@@ -742,7 +609,7 @@ export default function RestaurantOnboarding() {
           })
         }, index * 100)
       })
-      console.log('❌ Validation failed:', validationErrors)
+      console.log('Validation failed:', validationErrors)
       return
     }
 
@@ -773,14 +640,8 @@ export default function RestaurantOnboarding() {
         }
         // If menuImages already have URLs (from previous save), include them
         const existingMenuUrls = step2.menuImages.filter((img) => !(img instanceof File) && (img?.url || (typeof img === 'string' && img.startsWith('http'))))
-        const allMenuUrls = [...existingMenuUrls, ...menuUploads]
-
-        // Verify we have at least one menu image
-        if (allMenuUrls.length === 0) {
-          throw new Error('At least one menu image must be uploaded')
-        }
-
-        // Upload profile image if it's a File object
+        const allMenuUrls = [...existingMenuUrls, ...menuUploads]
+// Upload profile image if it's a File object
         let profileUpload = null
         if (step2.profileImage instanceof File) {
           try {
@@ -799,14 +660,8 @@ export default function RestaurantOnboarding() {
         } else if (typeof step2.profileImage === 'string' && step2.profileImage.startsWith('http')) {
           // If it's a direct URL string
           profileUpload = { url: step2.profileImage }
-        }
-
-        // Verify profile image is present
-        if (!profileUpload || !profileUpload.url) {
-          throw new Error('Profile image must be uploaded')
-        }
-
-        const payload = {
+        }
+const payload = {
           step2: {
             menuImageUrls: allMenuUrls.length > 0 ? allMenuUrls : [],
             profileImageUrl: profileUpload,
@@ -819,7 +674,7 @@ export default function RestaurantOnboarding() {
           },
           completedSteps: 2,
         }
-        console.log('📤 Step2 payload:', {
+        console.log('Step2 payload:', {
           menuImageUrlsCount: payload.step2.menuImageUrls.length,
           hasProfileImage: !!payload.step2.profileImageUrl,
           cuisines: payload.step2.cuisines,
@@ -828,7 +683,7 @@ export default function RestaurantOnboarding() {
         })
 
         const response = await api.put("/restaurant/onboarding", payload)
-        console.log('✅ Step2 response:', response?.data)
+        console.log('Step2 response:', response?.data)
 
         // Verify response is successful
         if (!response || !response.data) {
@@ -838,12 +693,12 @@ export default function RestaurantOnboarding() {
         // After step2, also update restaurant schema with step2 data
         // This ensures data is saved immediately, not just in onboarding subdocument
         if (response?.data?.data?.restaurant) {
-          console.log('✅ Step2 data saved and restaurant updated')
+          console.log('Step2 data saved and restaurant updated')
         }
 
         // Only proceed to step 3 if save was successful
         if (response?.data?.data?.onboarding || response?.data?.data) {
-          console.log('✅ Step2 completed successfully, moving to step 3')
+          console.log('Step2 completed successfully, moving to step 3')
           setStep(3)
         } else {
           throw new Error('Failed to save step2 data')
@@ -868,14 +723,8 @@ export default function RestaurantOnboarding() {
         } else if (typeof step3.panImage === 'string' && step3.panImage.startsWith('http')) {
           // If it's a direct URL string
           panImageUpload = { url: step3.panImage }
-        }
-
-        // Verify PAN image is present
-        if (!panImageUpload || !panImageUpload.url) {
-          throw new Error('PAN image must be uploaded')
-        }
-
-        // Upload GST image if it's a File object (only if GST registered)
+        }
+// Upload GST image if it's a File object (only if GST registered)
         let gstImageUpload = null
         if (step3.gstRegistered) {
           if (step3.gstImage instanceof File) {
@@ -895,13 +744,8 @@ export default function RestaurantOnboarding() {
           } else if (typeof step3.gstImage === 'string' && step3.gstImage.startsWith('http')) {
             // If it's a direct URL string
             gstImageUpload = { url: step3.gstImage }
-          }
-
-          // Verify GST image is present if GST registered
-          if (!gstImageUpload || !gstImageUpload.url) {
-            throw new Error('GST image must be uploaded when GST registered')
-          }
-        }
+          }
+}
 
         // Upload FSSAI image if it's a File object
         let fssaiImageUpload = null
@@ -929,7 +773,7 @@ export default function RestaurantOnboarding() {
             pan: {
               panNumber: step3.panNumber || "",
               nameOnPan: step3.nameOnPan || "",
-              image: panImageUpload,
+              image: panImageUpload || null,
             },
             gst: {
               isRegistered: step3.gstRegistered || false,
@@ -952,7 +796,7 @@ export default function RestaurantOnboarding() {
           },
           completedSteps: 3,
         }
-        console.log('📤 Step3 payload:', {
+        console.log('Step3 payload:', {
           hasPan: !!payload.step3.pan.panNumber,
           hasGst: payload.step3.gst.isRegistered,
           hasFssai: !!payload.step3.fssai.registrationNumber,
@@ -960,26 +804,26 @@ export default function RestaurantOnboarding() {
         })
 
         const response = await api.put("/restaurant/onboarding", payload)
-        console.log('✅ Step3 response:', response?.data)
+        console.log('Step3 response:', response?.data)
 
         if (response?.data?.data?.onboarding) {
-          console.log('✅ Step3 data saved successfully')
+          console.log('Step3 data saved successfully')
         }
         setStep(4)
       } else if (step === 4) {
-        console.log('📤 Submitting Step 4:', step4)
+        console.log('Submitting Step 4:', step4)
         const payload = {
           step4: {
-            estimatedDeliveryTime: step4.estimatedDeliveryTime,
-            featuredDish: step4.featuredDish,
-            featuredPrice: parseFloat(step4.featuredPrice) || 249,
-            offer: step4.offer,
+            estimatedDeliveryTime: step4.estimatedDeliveryTime || "",
+            featuredDish: step4.featuredDish || "",
+            featuredPrice: step4.featuredPrice === "" || step4.featuredPrice === null || step4.featuredPrice === undefined ? null : Number(step4.featuredPrice),
+            offer: step4.offer || "",
           },
           completedSteps: 4,
         }
-        console.log('📤 Step 4 payload:', payload)
+        console.log('Step 4 payload:', payload)
         const response = await api.put("/restaurant/onboarding", payload)
-        console.log('✅ Step4 completed, response:', response?.data)
+        console.log('Step4 completed, response:', response?.data)
 
         // Verify response is successful
         if (!response || !response.data) {
@@ -990,12 +834,12 @@ export default function RestaurantOnboarding() {
         clearOnboardingFromLocalStorage()
 
         // Show success message briefly, then navigate
-        console.log('✅ Onboarding completed successfully, redirecting to restaurant home...')
+        console.log('Onboarding completed successfully, redirecting to restaurant home...')
 
         // Wait a moment to ensure data is saved, then navigate
         setTimeout(() => {
           // Navigate to restaurant home page after onboarding completion
-          console.log('🚀 Navigating to restaurant home page...')
+          console.log('Navigating to restaurant home page...')
           navigate("/restaurant", { replace: true })
         }, 800)
       }
@@ -1062,7 +906,7 @@ export default function RestaurantOnboarding() {
               value={step1.ownerName || ""}
               onChange={(e) => {
                 // Allow only letters, spaces, hyphens
-                const val = e.target.value.replace(/[^A-Za-z\s\-]/g, "")
+                const val = e.target.value.replace(/[^A-Za-z\s-]/g, "")
                 setStep1({ ...step1, ownerName: val })
               }}
               className="mt-1 bg-white text-sm text-black placeholder-black"
@@ -1227,7 +1071,7 @@ export default function RestaurantOnboarding() {
                 const files = Array.from(e.target.files || [])
                 if (!files.length) return
                 const selectedFile = files[0]
-                console.log('📸 Menu image selected:', selectedFile?.name || '1 file')
+                console.log('Menu image selected:', selectedFile?.name || '1 file')
                 setStep2((prev) => ({
                   ...prev,
                   menuImages: [selectedFile],
@@ -1346,7 +1190,7 @@ export default function RestaurantOnboarding() {
             onChange={(e) => {
               const file = e.target.files?.[0] || null
               if (file) {
-                console.log('📸 Profile image selected:', file.name)
+                console.log('Profile image selected:', file.name)
                 setStep2((prev) => ({
                   ...prev,
                   profileImage: file,
@@ -1500,7 +1344,7 @@ export default function RestaurantOnboarding() {
                 value={step3.nameOnPan || ""}
                 onChange={(e) => {
                   // Allow only letters, spaces, hyphens
-                  const val = e.target.value.replace(/[^A-Za-z\s\-]/g, "")
+                  const val = e.target.value.replace(/[^A-Za-z\s-]/g, "")
                   setStep3({ ...step3, nameOnPan: val })
                 }}
                 className="mt-1 bg-white text-sm text-black placeholder-black"
@@ -1699,7 +1543,7 @@ export default function RestaurantOnboarding() {
               value={step3.accountHolderName || ""}
               onChange={(e) => {
                 // Allow only letters, spaces, hyphens
-                const val = e.target.value.replace(/[^A-Za-z\s\-]/g, "")
+                  const val = e.target.value.replace(/[^A-Za-z\s-]/g, "")
                 setStep3({ ...step3, accountHolderName: val })
               }}
               className="bg-white text-sm"
@@ -1741,7 +1585,7 @@ export default function RestaurantOnboarding() {
         </div>
 
         <div>
-          <Label className="text-xs text-gray-700">Featured Dish Price (₹)*</Label>
+          <Label className="text-xs text-gray-700">Featured Dish Price (Rs)*</Label>
           <Input
             type="number"
             value={step4.featuredPrice || ""}
@@ -1758,7 +1602,7 @@ export default function RestaurantOnboarding() {
             value={step4.offer || ""}
             onChange={(e) => setStep4({ ...step4, offer: e.target.value })}
             className="mt-1 bg-white text-sm"
-            placeholder="e.g., Flat ₹50 OFF above ₹199"
+            placeholder="e.g., Flat Rs50 OFF above Rs199"
           />
         </div>
       </section>
@@ -1833,6 +1677,7 @@ export default function RestaurantOnboarding() {
     </LocalizationProvider>
   )
 }
+
 
 
 

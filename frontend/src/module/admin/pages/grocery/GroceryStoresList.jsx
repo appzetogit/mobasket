@@ -1,11 +1,11 @@
 import { useState, useMemo, useEffect, useRef } from "react"
-import { useNavigate } from "react-router-dom"
 import { Search, Download, ChevronDown, Eye, Settings, ArrowUpDown, Loader2, X, MapPin, Phone, Mail, Star, Building2, User, FileText, ShieldX, Trash2, Plus } from "lucide-react"
 import { adminAPI, uploadAPI } from "../../../../lib/api"
 import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey"
 import { Loader as GoogleMapsLoader } from "@googlemaps/js-api-loader"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { exportRestaurantsToPDF } from "../../components/restaurants/restaurantsExportUtils"
+import AddGroceryStore from "./AddGroceryStore"
 
 // Import icons from Dashboard-icons
 import locationIcon from "../../assets/Dashboard-icons/image1.png"
@@ -13,11 +13,11 @@ import restaurantIcon from "../../assets/Dashboard-icons/image2.png"
 import inactiveIcon from "../../assets/Dashboard-icons/image3.png"
 
 export default function GroceryStoresList() {
-  const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState("")
   const [stores, setStores] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [showAddStoreDialog, setShowAddStoreDialog] = useState(false)
   const [selectedStore, setSelectedStore] = useState(null)
   const [storeDetails, setStoreDetails] = useState(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
@@ -557,15 +557,13 @@ export default function GroceryStoresList() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
             <h2 className="text-xl font-bold text-slate-900">Stores List</h2>
             <div className="flex items-center gap-3">
-              {stores.length === 0 && (
-                <button
-                  onClick={() => navigate("/admin/grocery-stores/add")}
-                  className="px-4 py-2.5 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2 transition-all"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Store</span>
-                </button>
-              )}
+              <button
+                onClick={() => setShowAddStoreDialog(true)}
+                className="px-4 py-2.5 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-2 transition-all"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Add Store</span>
+              </button>
               <div className="relative flex-1 sm:flex-initial min-w-[250px]">
                 <input
                   type="text"
@@ -1002,6 +1000,27 @@ export default function GroceryStoresList() {
                 {deleting ? "Deleting..." : "Delete"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showAddStoreDialog && (
+        <div
+          className="fixed inset-0 bg-black/55 z-[60] flex items-center justify-center p-2 sm:p-4"
+          onClick={() => setShowAddStoreDialog(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-5xl max-h-[96vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <AddGroceryStore
+              embedded
+              onCancel={() => setShowAddStoreDialog(false)}
+              onCreated={() => {
+                setShowAddStoreDialog(false)
+                fetchStores()
+              }}
+            />
           </div>
         </div>
       )}

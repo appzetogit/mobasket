@@ -345,9 +345,11 @@ apiClient.interceptors.response.use(
   },
   async (error) => {
     const originalRequest = error.config || {};
+    const requestUrl = String(originalRequest.url || "");
+    const isRefreshRequest = requestUrl.includes("/refresh-token");
 
     // If error is 401 and we haven't tried to refresh yet
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    if (error.response?.status === 401 && !originalRequest._retry && !isRefreshRequest) {
       const currentPath = window.location.pathname;
       const currentModule = getModuleFromPath(currentPath);
       const requestModule = getModuleFromRequestUrl(originalRequest.url, currentModule);
@@ -429,7 +431,7 @@ apiClient.interceptors.response.use(
           if (newRefreshToken && typeof localStorage !== "undefined") {
             try {
               localStorage.setItem(refreshTokenKey, newRefreshToken);
-            } catch (e) {
+            } catch {
               // Failed to store refresh token - silently handle
             }
           }
@@ -561,9 +563,62 @@ apiClient.interceptors.response.use(
           return Promise.reject(refreshError);
         }
 
+        // For grocery-store module, clear invalid sessions on hard auth failures
+        // so polling endpoints don't keep triggering repeated 401 loops.
+        if (isStorePath) {
+          const refreshStatus = refreshError?.response?.status;
+          const refreshMessage = String(
+            refreshError?.response?.data?.message ||
+            refreshError?.response?.data?.error ||
+            refreshError?.message ||
+            "",
+          ).toLowerCase();
+
+          const isHardAuthFailure =
+            refreshStatus === 401 &&
+            (
+              refreshMessage.includes("invalid refresh token") ||
+              refreshMessage.includes("refresh token is required") ||
+              refreshMessage.includes("refresh token not found") ||
+              refreshMessage.includes("jwt malformed") ||
+              refreshMessage.includes("jwt expired") ||
+              refreshMessage.includes("invalid or expired refresh token")
+            );
+
+          if (isHardAuthFailure) {
+            localStorage.removeItem("grocery-store_accessToken");
+            localStorage.removeItem("grocery-store_refreshToken");
+            localStorage.removeItem("grocery-store_authenticated");
+            localStorage.removeItem("grocery-store_user");
+            localStorage.removeItem("accessToken");
+
+            if (!window.location.pathname.startsWith("/store/login")) {
+              window.location.href = "/store/login";
+            }
+          }
+
+          return Promise.reject(refreshError);
+        }
+
         // For onboarding page, reject the promise so component can handle it
         return Promise.reject(refreshError);
       }
+    }
+
+    // If refresh endpoint itself returns 401, avoid retry recursion and clear broken session.
+    if (error.response?.status === 401 && isRefreshRequest) {
+      const requestModule = getModuleFromRequestUrl(originalRequest.url, getModuleFromPath(window.location.pathname));
+      if (requestModule === "grocery-store") {
+        localStorage.removeItem("grocery-store_accessToken");
+        localStorage.removeItem("grocery-store_refreshToken");
+        localStorage.removeItem("grocery-store_authenticated");
+        localStorage.removeItem("grocery-store_user");
+        localStorage.removeItem("accessToken");
+        if (!window.location.pathname.startsWith("/store/login")) {
+          window.location.href = "/store/login";
+        }
+      }
+      return Promise.reject(error);
     }
 
     // Handle network errors specifically (backend not running)

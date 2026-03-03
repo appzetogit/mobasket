@@ -1,4 +1,5 @@
 import Restaurant from '../models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import Menu from '../models/Menu.js';
 import Zone from '../../admin/models/Zone.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
@@ -246,13 +247,68 @@ export const getRestaurants = async (req, res) => {
       }
     }
     
-    // Fetch restaurants
-    let restaurants = await Restaurant.find(query)
-      .select('-owner -createdAt -updatedAt -password')
-      .sort(sortObj)
-      .limit(parseInt(limit))
-      .skip(parseInt(offset))
-      .lean();
+    const isMogroceryRequest = requestedPlatform === 'mogrocery';
+
+    // Fetch entities
+    let restaurants = [];
+    if (isMogroceryRequest) {
+      const groceryQuery = { isActive: true };
+
+      if (cuisine) {
+        groceryQuery.cuisines = { $in: [new RegExp(cuisine, 'i')] };
+      }
+
+      if (minRating) {
+        groceryQuery.rating = { $gte: parseFloat(minRating) };
+      }
+
+      if (req.query.topRated === 'true') {
+        groceryQuery.rating = { $gte: 4.5 };
+      } else if (req.query.trusted === 'true') {
+        groceryQuery.rating = { $gte: 4.0 };
+        groceryQuery.totalRatings = { $gte: 100 };
+      }
+
+      if (maxDeliveryTime) {
+        groceryQuery.$or = [
+          { estimatedDeliveryTime: { $regex: new RegExp(`(\\d+)-?\\d*\\s*mins?`, 'i') } }
+        ];
+      }
+
+      if (maxDistance) {
+        groceryQuery.$or = [
+          { distance: { $regex: new RegExp(`\\d+\\.?\\d*\\s*km`, 'i') } }
+        ];
+      }
+
+      if (maxPrice) {
+        const priceMap = { 200: ['$'], 500: ['$', '$$'] };
+        if (priceMap[maxPrice]) {
+          groceryQuery.priceRange = { $in: priceMap[maxPrice] };
+        }
+      }
+
+      if (hasOffers === 'true') {
+        groceryQuery.$or = [
+          { offer: { $exists: true, $ne: null, $ne: '' } },
+          { featuredPrice: { $exists: true } }
+        ];
+      }
+
+      restaurants = await GroceryStore.find(groceryQuery)
+        .select('-owner -createdAt -updatedAt -password')
+        .sort(sortObj)
+        .limit(parseInt(limit))
+        .skip(parseInt(offset))
+        .lean();
+    } else {
+      restaurants = await Restaurant.find(query)
+        .select('-owner -createdAt -updatedAt -password')
+        .sort(sortObj)
+        .limit(parseInt(limit))
+        .skip(parseInt(offset))
+        .lean();
+    }
 
     restaurants = restaurants.filter((restaurant) => {
       const restaurantPlatform = getRestaurantPlatform(restaurant);
@@ -293,9 +349,7 @@ export const getRestaurants = async (req, res) => {
     }
     
     // Get total count (before filtering by string fields)
-    const totalQuery = { ...query };
-    delete totalQuery.$or; // Remove $or for count
-    const total = await Restaurant.countDocuments(totalQuery);
+    const total = restaurants.length;
     
     console.log(`Fetched ${restaurants.length} restaurants from database with filters:`, {
       sortBy,
@@ -309,7 +363,7 @@ export const getRestaurants = async (req, res) => {
 
     return successResponse(res, 200, 'Restaurants retrieved successfully', {
       restaurants,
-      total: restaurants.length,
+      total,
       filters: {
         sortBy,
         cuisine,
@@ -348,9 +402,24 @@ export const getRestaurantById = async (req, res) => {
     
     queryConditions.$or = orConditions;
     
-    const restaurant = await Restaurant.findOne(queryConditions)
+    let restaurant = await Restaurant.findOne(queryConditions)
       .select('-owner -createdAt -updatedAt')
       .lean();
+
+    // Fallback for mogrocery store entities migrated to dedicated GroceryStore collection.
+    if (!restaurant) {
+      const groceryConditions = [{ restaurantId: id }, { slug: id }];
+      if (mongoose.Types.ObjectId.isValid(id) && id.length === 24) {
+        groceryConditions.push({ _id: new mongoose.Types.ObjectId(id) });
+      }
+
+      restaurant = await GroceryStore.findOne({
+        isActive: true,
+        $or: groceryConditions,
+      })
+        .select('-owner -createdAt -updatedAt -password')
+        .lean();
+    }
 
     if (!restaurant) {
       return errorResponse(res, 404, 'Restaurant not found');

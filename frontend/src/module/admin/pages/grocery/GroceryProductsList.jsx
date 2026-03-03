@@ -1,7 +1,6 @@
 import { useState, useMemo, useEffect } from "react"
 import { Search, Trash2, Loader2 } from "lucide-react"
-import { adminAPI, restaurantAPI } from "@/lib/api"
-import apiClient from "@/lib/api"
+import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
 import { usePlatform } from "../../context/PlatformContext"
 
@@ -18,93 +17,31 @@ export default function GroceryProductsList() {
     }
   }, [platform, switchPlatform])
 
-  // Fetch all products from all stores (restaurants with grocery platform)
+  // Fetch all grocery products from dedicated grocery products endpoint
   useEffect(() => {
     const fetchAllProducts = async () => {
       try {
         setLoading(true)
-        
-        // Fetch only grocery stores (platform scoped on backend)
-        const storesResponse = await adminAPI.getGroceryStores({ limit: 1000 })
-        const stores = storesResponse?.data?.data?.stores || 
-                       storesResponse?.data?.stores || 
-                       []
-        
-        if (stores.length === 0) {
-          setProducts([])
-          setLoading(false)
-          return
-        }
-
-        // Fetch menu for each restaurant/store and extract all product items
-        const allProducts = []
-        
-        for (const restaurant of stores) {
-          try {
-            const restaurantId = restaurant._id || restaurant.id
-            const menuResponse = await restaurantAPI.getMenuByRestaurantId(restaurantId)
-            const menu = menuResponse?.data?.data?.menu || menuResponse?.data?.menu
-            
-            if (menu && menu.sections) {
-              // Extract items from sections and subsections
-              menu.sections.forEach((section) => {
-                // Items directly in section
-                if (section.items && Array.isArray(section.items)) {
-                  section.items.forEach((item) => {
-                    allProducts.push({
-                      id: item.id || `${restaurantId}-${section.id}-${item.name}`,
-                      _id: item._id,
-                      name: item.name || "Unnamed Product",
-                      image: item.image || item.images?.[0] || "https://via.placeholder.com/40",
-                      priority: "Normal",
-                      status: item.isAvailable !== false && item.approvalStatus !== 'rejected',
-                      restaurantId: restaurantId,
-                      restaurantName: restaurant.name || "Unknown Store",
-                      sectionName: section.name || "Unknown Section",
-                      price: item.price || 0,
-                      foodType: item.foodType || "Non-Veg",
-                      approvalStatus: item.approvalStatus || 'pending',
-                      originalItem: item
-                    })
-                  })
-                }
-                
-                // Items in subsections
-                if (section.subsections && Array.isArray(section.subsections)) {
-                  section.subsections.forEach((subsection) => {
-                    if (subsection.items && Array.isArray(subsection.items)) {
-                      subsection.items.forEach((item) => {
-                        allProducts.push({
-                          id: item.id || `${restaurantId}-${section.id}-${subsection.id}-${item.name}`,
-                          _id: item._id,
-                          name: item.name || "Unnamed Product",
-                          image: item.image || item.images?.[0] || "https://via.placeholder.com/40",
-                          priority: "Normal",
-                          status: item.isAvailable !== false && item.approvalStatus !== 'rejected',
-                          restaurantId: restaurantId,
-                          restaurantName: restaurant.name || "Unknown Store",
-                          sectionName: section.name || "Unknown Section",
-                          subsectionName: subsection.name || "Unknown Subsection",
-                          price: item.price || 0,
-                          foodType: item.foodType || "Non-Veg",
-                          approvalStatus: item.approvalStatus || 'pending',
-                          originalItem: item
-                        })
-                      })
-                    }
-                  })
-                }
-              })
-            }
-          } catch (error) {
-            console.warn(`Failed to fetch menu for store ${restaurant._id || restaurant.id}:`, error.message)
-          }
-        }
-        
-        setProducts(allProducts)
+        const response = await adminAPI.getGroceryProducts({ limit: 5000, activeOnly: "false" })
+        const rows = response?.data?.data || []
+        const mapped = Array.isArray(rows)
+          ? rows.map((item) => ({
+              id: item?._id || item?.id || "",
+              _id: item?._id || item?.id || "",
+              name: item?.name || "Unnamed Product",
+              image: item?.images?.[0] || "https://via.placeholder.com/40",
+              status: item?.isActive !== false && item?.inStock !== false && item?.approvalStatus !== "rejected",
+              restaurantId: item?.storeId?._id || item?.storeId || "",
+              restaurantName: item?.storeId?.name || "Unknown Store",
+              price: item?.sellingPrice ?? item?.price ?? 0,
+              approvalStatus: item?.approvalStatus || "pending",
+              originalItem: item,
+            }))
+          : []
+        setProducts(mapped)
       } catch (error) {
         console.error("Error fetching products:", error)
-        toast.error("Failed to load products from stores")
+        toast.error("Failed to load grocery products")
         setProducts([])
       } finally {
         setLoading(false)
@@ -148,7 +85,7 @@ export default function GroceryProductsList() {
       const query = searchQuery.toLowerCase().trim()
       result = result.filter(product =>
         product.name.toLowerCase().includes(query) ||
-        product.id.toString().includes(query) ||
+        String(product.id).toLowerCase().includes(query) ||
         product.restaurantName?.toLowerCase().includes(query)
       )
     }
@@ -166,65 +103,7 @@ export default function GroceryProductsList() {
 
     try {
       setDeleting(true)
-      
-      const menuResponse = await restaurantAPI.getMenuByRestaurantId(product.restaurantId)
-      const menu = menuResponse?.data?.data?.menu || menuResponse?.data?.menu
-      
-      if (!menu || !menu.sections) {
-        throw new Error("Menu not found")
-      }
-
-      let itemRemoved = false
-      const updatedSections = menu.sections.map(section => {
-        if (section.items && Array.isArray(section.items)) {
-          const itemIndex = section.items.findIndex(item => 
-            String(item.id) === String(product.id) || 
-            String(item.id) === String(product.originalItem?.id)
-          )
-          if (itemIndex !== -1) {
-            section.items.splice(itemIndex, 1)
-            itemRemoved = true
-          }
-        }
-        
-        if (section.subsections && Array.isArray(section.subsections)) {
-          section.subsections = section.subsections.map(subsection => {
-            if (subsection.items && Array.isArray(subsection.items)) {
-              const itemIndex = subsection.items.findIndex(item => 
-                String(item.id) === String(product.id) || 
-                String(item.id) === String(product.originalItem?.id)
-              )
-              if (itemIndex !== -1) {
-                subsection.items.splice(itemIndex, 1)
-                itemRemoved = true
-              }
-            }
-            return subsection
-          })
-        }
-        
-        return section
-      })
-
-      if (!itemRemoved) {
-        throw new Error("Product not found in menu")
-      }
-
-      try {
-        const response = await apiClient.put(
-          `/restaurant/menu`,
-          { sections: updatedSections }
-        )
-        
-        if (!response.data || !response.data.success) {
-          throw new Error(response.data?.message || "Failed to update menu")
-        }
-      } catch (apiError) {
-        if (apiError.response?.status === 401 || apiError.response?.status === 403) {
-          throw new Error("Admin cannot directly update store menus. Please contact developer to add admin menu update endpoint.")
-        }
-        throw apiError
-      }
+      await adminAPI.deleteGroceryProduct(product._id)
 
       setProducts(products.filter(p => p.id !== id))
       toast.success("Product deleted successfully")

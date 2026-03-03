@@ -6,6 +6,7 @@ import GrocerySubcategory from '../models/GrocerySubcategory.js';
 import GroceryCategoryRequest from '../models/GroceryCategoryRequest.js';
 import GrocerySubcategoryRequest from '../models/GrocerySubcategoryRequest.js';
 import mongoose from 'mongoose';
+import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
 
 const slugify = (value = '') =>
   value
@@ -28,6 +29,50 @@ const normalizeSubcategoryIds = (subcategoryIds) => {
   return Array.from(unique);
 };
 
+const resolveStoreScopedIds = async (store) => {
+  const primaryId = store?._id?.toString?.();
+  if (!primaryId) return [];
+
+  const scopedIds = new Set([primaryId]);
+
+  const normalizedPhone = normalizePhoneNumber(store?.phone || '');
+  const normalizedOwnerPhone = normalizePhoneNumber(store?.ownerPhone || '');
+  const email = (store?.email || '').toLowerCase().trim();
+  const ownerEmail = (store?.ownerEmail || '').toLowerCase().trim();
+
+  const or = [];
+  if (normalizedPhone) {
+    or.push({ phone: normalizedPhone }, { ownerPhone: normalizedPhone }, { primaryContactNumber: normalizedPhone });
+  }
+  if (normalizedOwnerPhone) {
+    or.push({ phone: normalizedOwnerPhone }, { ownerPhone: normalizedOwnerPhone }, { primaryContactNumber: normalizedOwnerPhone });
+  }
+  if (email) {
+    or.push({ email }, { ownerEmail: email });
+  }
+  if (ownerEmail) {
+    or.push({ email: ownerEmail }, { ownerEmail });
+  }
+
+  if (!or.length) {
+    return [new mongoose.Types.ObjectId(primaryId)];
+  }
+
+  const aliases = await mongoose.model('GroceryStore')
+    .find({ $or: or })
+    .select('_id')
+    .lean();
+
+  aliases.forEach((alias) => {
+    const aliasId = alias?._id?.toString?.();
+    if (aliasId) scopedIds.add(aliasId);
+  });
+
+  return Array.from(scopedIds)
+    .filter((id) => mongoose.Types.ObjectId.isValid(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
+};
+
 /**
  * Get all grocery products (for store to view - only products added by this store)
  * GET /api/grocery/store/products
@@ -36,10 +81,11 @@ export const getGroceryStoreProducts = asyncHandler(async (req, res) => {
   try {
     const store = req.store; // From groceryStoreAuth middleware
     const { categoryId, subcategoryId, limit, activeOnly = 'false' } = req.query;
+    const scopedStoreIds = await resolveStoreScopedIds(store);
     
     // Filter by storeId - only show products added by this store
     const filter = {
-      storeId: store._id
+      storeId: { $in: scopedStoreIds }
     };
 
     if (activeOnly !== 'false') {
@@ -91,6 +137,7 @@ export const getGroceryStoreProductById = asyncHandler(async (req, res) => {
   try {
     const store = req.store; // From groceryStoreAuth middleware
     const { id } = req.params;
+    const scopedStoreIds = await resolveStoreScopedIds(store);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return errorResponse(res, 400, 'Invalid product ID');
@@ -98,7 +145,7 @@ export const getGroceryStoreProductById = asyncHandler(async (req, res) => {
 
     const product = await GroceryProduct.findOne({
       _id: id,
-      storeId: store._id
+      storeId: { $in: scopedStoreIds }
     })
       .populate('category', 'name slug section')
       .populate('subcategories', 'name slug')
@@ -125,6 +172,7 @@ export const updateGroceryStoreProductStock = asyncHandler(async (req, res) => {
     const store = req.store; // From groceryStoreAuth middleware
     const { id } = req.params;
     const { inStock, stockQuantity } = req.body;
+    const scopedStoreIds = await resolveStoreScopedIds(store);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return errorResponse(res, 400, 'Invalid product ID');
@@ -133,7 +181,7 @@ export const updateGroceryStoreProductStock = asyncHandler(async (req, res) => {
     // Verify product belongs to this store
     const existingProduct = await GroceryProduct.findOne({
       _id: id,
-      storeId: store._id
+      storeId: { $in: scopedStoreIds }
     }).lean();
 
     if (!existingProduct) {
@@ -323,6 +371,7 @@ export const updateGroceryStoreProduct = asyncHandler(async (req, res) => {
   try {
     const store = req.store; // From groceryStoreAuth middleware
     const { id } = req.params;
+    const scopedStoreIds = await resolveStoreScopedIds(store);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return errorResponse(res, 400, 'Invalid product ID');
@@ -331,7 +380,7 @@ export const updateGroceryStoreProduct = asyncHandler(async (req, res) => {
     // Verify product belongs to this store
     const existingProduct = await GroceryProduct.findOne({
       _id: id,
-      storeId: store._id
+      storeId: { $in: scopedStoreIds }
     }).lean();
 
     if (!existingProduct) {
@@ -352,7 +401,7 @@ export const updateGroceryStoreProduct = asyncHandler(async (req, res) => {
       const duplicate = await GroceryProduct.findOne({ 
         slug: update.slug, 
         _id: { $ne: id },
-        storeId: store._id 
+        storeId: { $in: scopedStoreIds }
       }).lean();
       if (duplicate) {
         return errorResponse(res, 409, 'Product with this name already exists');
@@ -403,6 +452,7 @@ export const deleteGroceryStoreProduct = asyncHandler(async (req, res) => {
   try {
     const store = req.store; // From groceryStoreAuth middleware
     const { id } = req.params;
+    const scopedStoreIds = await resolveStoreScopedIds(store);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return errorResponse(res, 400, 'Invalid product ID');
@@ -411,7 +461,7 @@ export const deleteGroceryStoreProduct = asyncHandler(async (req, res) => {
     // Verify product belongs to this store and delete
     const product = await GroceryProduct.findOneAndDelete({
       _id: id,
-      storeId: store._id
+      storeId: { $in: scopedStoreIds }
     });
 
     if (!product) {

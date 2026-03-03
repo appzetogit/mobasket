@@ -74,7 +74,7 @@ const parseAddressComponents = (components = []) => {
   }
 }
 
-export default function AddGroceryStore() {
+export default function AddGroceryStore({ embedded = false, onCreated = null, onCancel = null }) {
   const navigate = useNavigate()
   const mapRef = useRef(null)
   const autocompleteInputRef = useRef(null)
@@ -135,6 +135,12 @@ export default function AddGroceryStore() {
     phone: "",
     signupMethod: "email",
   })
+
+  useEffect(() => {
+    if (step1.ownerPhone?.trim() && !auth.phone?.trim()) {
+      setAuth((prev) => ({ ...prev, phone: step1.ownerPhone.trim() }))
+    }
+  }, [step1.ownerPhone, auth.phone])
 
   const selectedZone = useMemo(
     () => zones.find((zone) => (zone._id || zone.id) === selectedZoneId) || null,
@@ -511,12 +517,16 @@ export default function AddGroceryStore() {
         profileImageData = await handleUpload(step2.profileImage, "mobasket/grocery/profile")
       }
 
+      const loginPhone = (auth.phone || step1.ownerPhone || step1.primaryContactNumber || "").trim()
+      const loginEmail = (auth.email || step1.ownerEmail || "").trim()
+
       const payload = {
         name: step1.name,
         restaurantName: step1.name, // Keep for backward compatibility if backend expects it
         ownerName: step1.ownerName,
         ownerEmail: step1.ownerEmail,
-        ownerPhone: step1.ownerPhone,
+        ownerPhone: (step1.ownerPhone || loginPhone || "").trim(),
+        phone: loginPhone || null,
         primaryContactNumber: step1.primaryContactNumber,
         location: step1.location,
         zoneId: selectedZoneId,
@@ -526,15 +536,20 @@ export default function AddGroceryStore() {
         closingTime: step2.closingTime,
         openDays: step2.openDays,
         // Auth
-        email: auth.email || null,
-        phone: auth.phone || null,
-        signupMethod: auth.email ? 'email' : 'phone',
+        email: loginEmail || null,
+        signupMethod: loginPhone ? 'phone' : 'email',
       }
 
       const response = await adminAPI.createGroceryStore(payload)
       
       if (response.data.success) {
         toast.success("Store created successfully!")
+        if (typeof onCreated === "function") {
+          onCreated(response?.data?.data?.store || response?.data?.data || null)
+        }
+        if (embedded) {
+          return
+        }
         setShowSuccessDialog(true)
         setTimeout(() => navigate("/admin/grocery-stores"), 2000)
       }
@@ -546,13 +561,21 @@ export default function AddGroceryStore() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className={`${embedded ? "min-h-[80vh]" : "min-h-screen"} bg-gray-100 flex flex-col`}>
       <header className="px-6 py-4 bg-white flex items-center justify-between border-b">
         <div className="flex items-center gap-3">
           <Building2 className="w-5 h-5 text-blue-600" />
           <h1 className="font-semibold">Add New Grocery Store</h1>
         </div>
-        <div className="text-xs text-slate-500">Step {step} of 4</div>
+        <div className="flex items-center gap-3">
+          <div className="text-xs text-slate-500">Step {step} of 4</div>
+          {embedded && (
+            <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
+              <X className="w-4 h-4 mr-1" />
+              Close
+            </Button>
+          )}
+        </div>
       </header>
 
       <main className="flex-1 p-6 max-w-4xl mx-auto w-full">
@@ -703,8 +726,8 @@ export default function AddGroceryStore() {
             <section className="bg-white p-6 rounded-xl shadow-sm space-y-4">
               <h2 className="font-semibold">Authentication</h2>
               <div className="space-y-4">
-                <div><Label>Login Email*</Label><Input type="email" value={auth.email} onChange={e => setAuth({...auth, email: e.target.value})} /></div>
-                <div><Label>Login Phone</Label><Input type="tel" value={auth.phone} onChange={e => setAuth({...auth, phone: e.target.value})} /></div>
+                <div><Label>Login Phone</Label><Input type="tel" value={auth.phone} onChange={e => setAuth({...auth, phone: e.target.value})} placeholder="Store login number (OTP)" /></div>
+                <div><Label>Login Email (Optional)</Label><Input type="email" value={auth.email} onChange={e => setAuth({...auth, email: e.target.value})} /></div>
               </div>
             </section>
           </div>
@@ -721,14 +744,26 @@ export default function AddGroceryStore() {
 
       <footer className="p-6 bg-white border-t">
         <div className="max-w-4xl mx-auto flex justify-between">
-          <Button variant="ghost" disabled={step === 1} onClick={() => setStep(step - 1)}>Back</Button>
+          <Button
+            variant="ghost"
+            disabled={step === 1 && !embedded}
+            onClick={() => {
+              if (step > 1) {
+                setStep(step - 1)
+              } else if (embedded && typeof onCancel === "function") {
+                onCancel()
+              }
+            }}
+          >
+            Back
+          </Button>
           <Button onClick={handleNext} disabled={isSubmitting}>
             {step === 4 ? (isSubmitting ? "Creating..." : "Create Store") : "Continue"}
           </Button>
         </div>
       </footer>
 
-      <Dialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
+      <Dialog open={showSuccessDialog && !embedded} onOpenChange={setShowSuccessDialog}>
         <DialogContent className="bg-white">
           <DialogHeader>
             <DialogTitle>Store Created Successfully!</DialogTitle>
