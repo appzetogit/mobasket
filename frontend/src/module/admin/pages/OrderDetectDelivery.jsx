@@ -7,6 +7,7 @@ import OrderDetectDeliveryTable from "../components/orders/OrderDetectDeliveryTa
 import ViewOrderDetectDeliveryDialog from "../components/orders/ViewOrderDetectDeliveryDialog"
 import SettingsDialog from "../components/orders/SettingsDialog"
 import { useGenericTableManagement } from "../components/orders/useGenericTableManagement"
+import { usePlatform } from "../context/PlatformContext"
 
 // Function to map backend order status to frontend display status
 const mapOrderStatus = (order) => {
@@ -214,6 +215,8 @@ const transformOrder = (order, index) => {
 }
 
 export default function OrderDetectDelivery({ platformOverride }) {
+  const { platform } = usePlatform()
+  const activePlatform = platformOverride || platform || "mofood"
   const [visibleColumns, setVisibleColumns] = useState({
     si: true,
     orderId: true,
@@ -237,7 +240,7 @@ export default function OrderDetectDelivery({ platformOverride }) {
         const params = {
           page: 1,
           limit: 1000, // Fetch all orders for now
-          platform: platformOverride || undefined,
+          platform: activePlatform,
         }
         
         const response = await adminAPI.getOrders(params)
@@ -264,7 +267,7 @@ export default function OrderDetectDelivery({ platformOverride }) {
     }
 
     fetchOrders()
-  }, [platformOverride])
+  }, [activePlatform])
 
   const {
     searchQuery,

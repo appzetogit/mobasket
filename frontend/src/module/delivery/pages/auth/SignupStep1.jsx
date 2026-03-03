@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 import { deliveryAPI } from "@/lib/api"
@@ -6,7 +6,8 @@ import { toast } from "sonner"
 
 export default function SignupStep1() {
   const navigate = useNavigate()
-  const [formData, setFormData] = useState({
+
+  const defaultFormData = useMemo(() => ({
     name: "",
     email: "",
     address: "",
@@ -17,9 +18,46 @@ export default function SignupStep1() {
     vehicleNumber: "",
     panNumber: "",
     aadharNumber: ""
+  }), [])
+
+  const signupDraftKey = useMemo(() => {
+    try {
+      const rawDeliveryUser = localStorage.getItem("delivery_user")
+      const deliveryUser = rawDeliveryUser ? JSON.parse(rawDeliveryUser) : null
+      const deliveryIdentifier =
+        deliveryUser?._id ||
+        deliveryUser?.id ||
+        deliveryUser?.deliveryId ||
+        deliveryUser?.phone ||
+        "default"
+      return `delivery_signup_step1_draft_${deliveryIdentifier}`
+    } catch (error) {
+      console.error("Error building signup draft key:", error)
+      return "delivery_signup_step1_draft_default"
+    }
+  }, [])
+
+  const [formData, setFormData] = useState(() => {
+    try {
+      const draft = sessionStorage.getItem(signupDraftKey)
+      if (!draft) return defaultFormData
+      const parsedDraft = JSON.parse(draft)
+      return { ...defaultFormData, ...parsedDraft }
+    } catch (error) {
+      console.error("Error loading signup draft:", error)
+      return defaultFormData
+    }
   })
   const [errors, setErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(signupDraftKey, JSON.stringify(formData))
+    } catch (error) {
+      console.error("Error saving signup draft:", error)
+    }
+  }, [formData, signupDraftKey])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -207,6 +245,11 @@ export default function SignupStep1() {
       })
 
       if (response?.data?.success) {
+        try {
+          sessionStorage.setItem(signupDraftKey, JSON.stringify(formData))
+        } catch (error) {
+          console.error("Error persisting signup draft before navigation:", error)
+        }
         toast.success("Details saved successfully")
         navigate("/delivery/signup/documents")
       }

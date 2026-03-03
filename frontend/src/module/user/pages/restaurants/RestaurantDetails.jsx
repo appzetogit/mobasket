@@ -1816,6 +1816,23 @@ export default function RestaurantDetails() {
   const filterMenuItems = (items) => {
     if (!items) return items;
 
+    const query = searchQuery.toLowerCase().trim();
+    const hasSearchQuery = Boolean(query);
+    const itemMatchesSearch = (item) => {
+      if (!hasSearchQuery) return true;
+      const searchableText = [
+        item?.name,
+        item?.title,
+        item?.itemName,
+        item?.foodName,
+        item?.description,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return searchableText.includes(query);
+    };
+
     return items.filter((item) => {
       const itemDietType = getItemDietType(item);
 
@@ -1826,10 +1843,8 @@ export default function RestaurantDetails() {
       }
 
       // Search filter
-      if (searchQuery.trim()) {
-        const query = searchQuery.toLowerCase().trim();
-        const itemName = item.name?.toLowerCase() || "";
-        if (!itemName.includes(query)) return false;
+      if (!itemMatchesSearch(item)) {
+        return false;
       }
 
       // VegMode filter - when vegMode is ON, show only Veg items
@@ -1901,16 +1916,35 @@ export default function RestaurantDetails() {
   // Returns array of { section, originalIndex } to preserve original index for expanded sections
   const getFilteredSections = () => {
     if (!restaurant?.menuSections) return [];
-    if (!showOnlyUnder250) {
-      return restaurant.menuSections.map((section, index) => ({
-        section,
-        originalIndex: index,
-      }));
-    }
 
-    return restaurant.menuSections
-      .map((section, index) => ({ section, originalIndex: index }))
-      .filter(({ section }) => sectionHasItemsUnder250(section));
+    const hasSearchQuery = Boolean(searchQuery.trim());
+    const sectionEntries = restaurant.menuSections.map((section, index) => ({
+      section,
+      originalIndex: index,
+    }));
+
+    return sectionEntries.filter(({ section }) => {
+      if (showOnlyUnder250 && !sectionHasItemsUnder250(section)) {
+        return false;
+      }
+
+      if (!hasSearchQuery) return true;
+
+      const directItemsMatch =
+        Array.isArray(section?.items) &&
+        filterMenuItems(section.items).length > 0;
+      if (directItemsMatch) return true;
+
+      const subsectionItemsMatch =
+        Array.isArray(section?.subsections) &&
+        section.subsections.some(
+          (subsection) =>
+            Array.isArray(subsection?.items) &&
+            filterMenuItems(subsection.items).length > 0,
+        );
+
+      return subsectionItemsMatch;
+    });
   };
 
   const filteredSections = getFilteredSections();
@@ -2290,6 +2324,7 @@ export default function RestaurantDetails() {
               ({ section, originalIndex }, sectionIndex) => {
                 const isRecommendedSection =
                   section?.isPersonalizedRecommended === true;
+                const hasSearchQuery = Boolean(searchQuery.trim());
                 // Handle section name - check for valid non-empty string
                 let sectionTitle = "Unnamed Section";
                 if (isRecommendedSection) {
@@ -2310,6 +2345,10 @@ export default function RestaurantDetails() {
                 const sectionId = `menu-section-${originalIndex}`;
 
                 const isExpanded = expandedSections.has(originalIndex);
+                const shouldShowSectionItems = isExpanded || hasSearchQuery;
+                const filteredDirectItems = sortMenuItems(
+                  filterMenuItems(section?.items || []),
+                );
 
                 return (
                   <div
@@ -2399,12 +2438,9 @@ export default function RestaurantDetails() {
                           </p>
                         </div>
                       )}
-                    {isExpanded &&
-                      section.items &&
-                      section.items.length > 0 && (
+                    {shouldShowSectionItems && filteredDirectItems.length > 0 && (
                         <div className="grid grid-cols-1 md:grid-cols-3 md:gap-6 md:py-2">
-                          {sortMenuItems(filterMenuItems(section.items)).map(
-                            (item) => {
+                          {filteredDirectItems.map((item) => {
                               const quantity = quantities[item.id || item._id] || 0;
                               // Determine veg/non-veg based on foodType
                               const isVeg = getItemDietType(item) === "veg";
@@ -2661,13 +2697,12 @@ export default function RestaurantDetails() {
                                   </div>
                                 </div>
                               );
-                            },
-                          )}
+                            })}
                         </div>
                       )}
 
                     {/* Subsections */}
-                    {isExpanded &&
+                    {shouldShowSectionItems &&
                       section.subsections &&
                       section.subsections.length > 0 && (
                         <div className="space-y-4">
@@ -2690,6 +2725,15 @@ export default function RestaurantDetails() {
                               const subsectionKey = `${originalIndex}-${subIndex}`;
                               const isSubsectionExpanded =
                                 expandedSections.has(subsectionKey);
+                              const filteredSubsectionItems = sortMenuItems(
+                                filterMenuItems(subsection?.items || []),
+                              );
+                              const shouldShowSubsectionItems =
+                                isSubsectionExpanded || hasSearchQuery;
+
+                              if (filteredSubsectionItems.length === 0) {
+                                return null;
+                              }
 
                               return (
                                 <div key={subIndex} className="space-y-4">
@@ -2725,13 +2769,10 @@ export default function RestaurantDetails() {
                                   </div>
 
                                   {/* Subsection Items */}
-                                  {isSubsectionExpanded &&
-                                    subsection.items &&
-                                    subsection.items.length > 0 && (
+                                  {shouldShowSubsectionItems &&
+                                    filteredSubsectionItems.length > 0 && (
                                       <div className="space-y-0">
-                                        {sortMenuItems(
-                                          filterMenuItems(subsection.items),
-                                        ).map((item) => {
+                                        {filteredSubsectionItems.map((item) => {
                                           const quantity =
                                             quantities[item.id || item._id] || 0;
                                           // Determine veg/non-veg based on foodType

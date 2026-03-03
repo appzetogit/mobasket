@@ -1,7 +1,9 @@
+import { formatExportAmount } from "../exportFormatUtils"
+
 // Export utility functions for campaigns
 export const exportCampaignsToCSV = (campaigns, filename = "campaigns", isFoodCampaign = false) => {
   let headers, rows
-  
+
   if (isFoodCampaign) {
     headers = ["SI", "Title", "Date Start", "Date End", "Time Start", "Time End", "Price", "Status"]
     rows = campaigns.map((campaign, index) => [
@@ -11,8 +13,8 @@ export const exportCampaignsToCSV = (campaigns, filename = "campaigns", isFoodCa
       campaign.dateEnd,
       campaign.timeStart,
       campaign.timeEnd,
-      `$ ${(campaign.price || 0).toFixed(2)}`,
-      campaign.status ? "Active" : "Inactive"
+      formatExportAmount(campaign.price, { fallback: "INR 0.00" }),
+      campaign.status ? "Active" : "Inactive",
     ])
   } else {
     headers = ["SI", "Title", "Date Start", "Date End", "Time Start", "Time End", "Status"]
@@ -23,16 +25,17 @@ export const exportCampaignsToCSV = (campaigns, filename = "campaigns", isFoodCa
       campaign.dateEnd,
       campaign.timeStart,
       campaign.timeEnd,
-      campaign.status ? "Active" : "Inactive"
+      campaign.status ? "Active" : "Inactive",
     ])
   }
-  
+
   const csvContent = [
     headers.join(","),
-    ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
+    ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
   ].join("\n")
-  
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+
+  const BOM = "\uFEFF"
+  const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
   link.setAttribute("href", url)
@@ -45,7 +48,7 @@ export const exportCampaignsToCSV = (campaigns, filename = "campaigns", isFoodCa
 
 export const exportCampaignsToExcel = (campaigns, filename = "campaigns", isFoodCampaign = false) => {
   let headers, rows
-  
+
   if (isFoodCampaign) {
     headers = ["SI", "Title", "Date Start", "Date End", "Time Start", "Time End", "Price", "Status"]
     rows = campaigns.map((campaign, index) => [
@@ -55,8 +58,8 @@ export const exportCampaignsToExcel = (campaigns, filename = "campaigns", isFood
       campaign.dateEnd,
       campaign.timeStart,
       campaign.timeEnd,
-      `$ ${(campaign.price || 0).toFixed(2)}`,
-      campaign.status ? "Active" : "Inactive"
+      formatExportAmount(campaign.price, { fallback: "INR 0.00" }),
+      campaign.status ? "Active" : "Inactive",
     ])
   } else {
     headers = ["SI", "Title", "Date Start", "Date End", "Time Start", "Time End", "Status"]
@@ -67,15 +70,15 @@ export const exportCampaignsToExcel = (campaigns, filename = "campaigns", isFood
       campaign.dateEnd,
       campaign.timeStart,
       campaign.timeEnd,
-      campaign.status ? "Active" : "Inactive"
+      campaign.status ? "Active" : "Inactive",
     ])
   }
-  
+
   const csvContent = [
     headers.join("\t"),
-    ...rows.map(row => row.join("\t"))
+    ...rows.map((row) => row.join("\t")),
   ].join("\n")
-  
+
   const blob = new Blob([csvContent], { type: "application/vnd.ms-excel" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
@@ -89,7 +92,7 @@ export const exportCampaignsToExcel = (campaigns, filename = "campaigns", isFood
 
 export const exportCampaignsToPDF = (campaigns, filename = "campaigns", isFoodCampaign = false) => {
   let headers, rows
-  
+
   if (isFoodCampaign) {
     headers = ["SI", "Title", "Date Start", "Date End", "Time Start", "Time End", "Price", "Status"]
     rows = campaigns.map((campaign, index) => [
@@ -99,8 +102,8 @@ export const exportCampaignsToPDF = (campaigns, filename = "campaigns", isFoodCa
       campaign.dateEnd,
       campaign.timeStart,
       campaign.timeEnd,
-      `$ ${(campaign.price || 0).toFixed(2)}`,
-      campaign.status ? "Active" : "Inactive"
+      formatExportAmount(campaign.price, { fallback: "INR 0.00" }),
+      campaign.status ? "Active" : "Inactive",
     ])
   } else {
     headers = ["SI", "Title", "Date Start", "Date End", "Time Start", "Time End", "Status"]
@@ -111,10 +114,10 @@ export const exportCampaignsToPDF = (campaigns, filename = "campaigns", isFoodCa
       campaign.dateEnd,
       campaign.timeStart,
       campaign.timeEnd,
-      campaign.status ? "Active" : "Inactive"
+      campaign.status ? "Active" : "Inactive",
     ])
   }
-  
+
   const printWindow = window.open("", "_blank")
   const htmlContent = `
     <!DOCTYPE html>
@@ -135,15 +138,19 @@ export const exportCampaignsToPDF = (campaigns, filename = "campaigns", isFoodCa
         <table>
           <thead>
             <tr>
-              ${headers.map(h => `<th>${h}</th>`).join("")}
+              ${headers.map((h) => `<th>${h}</th>`).join("")}
             </tr>
           </thead>
           <tbody>
-            ${rows.map(row => `
+            ${rows
+              .map(
+                (row) => `
               <tr>
-                ${row.map(cell => `<td>${cell}</td>`).join("")}
+                ${row.map((cell) => `<td>${cell}</td>`).join("")}
               </tr>
-            `).join("")}
+            `,
+              )
+              .join("")}
           </tbody>
         </table>
         <script>
@@ -171,4 +178,3 @@ export const exportCampaignsToJSON = (campaigns, filename = "campaigns") => {
   link.click()
   document.body.removeChild(link)
 }
-

@@ -1,22 +1,25 @@
+import { formatExportAmount } from "../exportFormatUtils"
+
 // Export utility functions for commission rules
 export const exportCommissionToCSV = (commissions, filename = "delivery-boy-commission") => {
-  const headers = ["SI", "Name", "Min Distance (km)", "Max Distance (km)", "Commission Per Km (₹)", "Base Payout (₹)", "Status"]
+  const headers = ["SI", "Name", "Min Distance (km)", "Max Distance (km)", "Commission Per Km (INR)", "Base Payout (INR)", "Status"]
   const rows = commissions.map((commission) => [
     commission.sl,
     commission.name,
     commission.minDistance,
     commission.maxDistance === null ? "Unlimited" : commission.maxDistance,
-    commission.commissionPerKm,
-    commission.basePayout,
-    commission.status ? "Active" : "Inactive"
+    formatExportAmount(commission.commissionPerKm, { fallback: "INR 0.00" }),
+    formatExportAmount(commission.basePayout, { fallback: "INR 0.00" }),
+    commission.status ? "Active" : "Inactive",
   ])
-  
+
   const csvContent = [
     headers.join(","),
-    ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
+    ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
   ].join("\n")
-  
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+
+  const BOM = "\uFEFF"
+  const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
   link.setAttribute("href", url)
@@ -28,22 +31,22 @@ export const exportCommissionToCSV = (commissions, filename = "delivery-boy-comm
 }
 
 export const exportCommissionToExcel = (commissions, filename = "delivery-boy-commission") => {
-  const headers = ["SI", "Name", "Min Distance (km)", "Max Distance (km)", "Commission Per Km (₹)", "Base Payout (₹)", "Status"]
+  const headers = ["SI", "Name", "Min Distance (km)", "Max Distance (km)", "Commission Per Km (INR)", "Base Payout (INR)", "Status"]
   const rows = commissions.map((commission) => [
     commission.sl,
     commission.name,
     commission.minDistance,
     commission.maxDistance === null ? "Unlimited" : commission.maxDistance,
-    commission.commissionPerKm,
-    commission.basePayout,
-    commission.status ? "Active" : "Inactive"
+    formatExportAmount(commission.commissionPerKm, { fallback: "INR 0.00" }),
+    formatExportAmount(commission.basePayout, { fallback: "INR 0.00" }),
+    commission.status ? "Active" : "Inactive",
   ])
-  
+
   const csvContent = [
     headers.join("\t"),
-    ...rows.map(row => row.join("\t"))
+    ...rows.map((row) => row.join("\t")),
   ].join("\n")
-  
+
   const blob = new Blob([csvContent], { type: "application/vnd.ms-excel" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
@@ -56,13 +59,13 @@ export const exportCommissionToExcel = (commissions, filename = "delivery-boy-co
 }
 
 export const exportCommissionToPDF = (commissions, filename = "delivery-boy-commission") => {
-  const headers = ["SI", "Name", "Min Distance (km)", "Max Distance (km)", "Commission Per Km (₹)", "Base Payout (₹)", "Status"]
-  
-  let htmlContent = `
+  const headers = ["SI", "Name", "Min Distance (km)", "Max Distance (km)", "Commission Per Km (INR)", "Base Payout (INR)", "Status"]
+
+  const htmlContent = `
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Delivery Boy Commission Report</title>
+      <title>${filename}</title>
       <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
@@ -78,27 +81,31 @@ export const exportCommissionToPDF = (commissions, filename = "delivery-boy-comm
       <table>
         <thead>
           <tr>
-            ${headers.map(h => `<th>${h}</th>`).join("")}
+            ${headers.map((h) => `<th>${h}</th>`).join("")}
           </tr>
         </thead>
         <tbody>
-          ${commissions.map(commission => `
+          ${commissions
+            .map(
+              (commission) => `
             <tr>
               <td>${commission.sl}</td>
               <td>${commission.name}</td>
               <td>${commission.minDistance}</td>
               <td>${commission.maxDistance === null ? "Unlimited" : commission.maxDistance}</td>
-              <td>₹${commission.commissionPerKm}</td>
-              <td>₹${commission.basePayout}</td>
+              <td>${formatExportAmount(commission.commissionPerKm, { fallback: "INR 0.00" })}</td>
+              <td>${formatExportAmount(commission.basePayout, { fallback: "INR 0.00" })}</td>
               <td>${commission.status ? "Active" : "Inactive"}</td>
             </tr>
-          `).join("")}
+          `,
+            )
+            .join("")}
         </tbody>
       </table>
     </body>
     </html>
   `
-  
+
   const printWindow = window.open("", "_blank")
   printWindow.document.write(htmlContent)
   printWindow.document.close()
@@ -121,4 +128,3 @@ export const exportCommissionToJSON = (commissions, filename = "delivery-boy-com
   link.click()
   document.body.removeChild(link)
 }
-

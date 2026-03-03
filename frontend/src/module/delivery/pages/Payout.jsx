@@ -33,6 +33,7 @@ export default function Payout() {
           amount: t.amount || 0,
           status: t.status || 'Pending',
           description: t.description || 'Withdrawal request',
+          rawDate: t.date || t.createdAt || t.processedAt || null,
           date: t.date || t.createdAt ? new Date(t.date || t.createdAt).toLocaleDateString('en-IN', {
             day: '2-digit',
             month: 'short',
@@ -53,8 +54,8 @@ export default function Payout() {
         
         // Sort by date (newest first)
         formattedTransactions.sort((a, b) => {
-          const dateA = new Date(a.date)
-          const dateB = new Date(b.date)
+          const dateA = a.rawDate ? new Date(a.rawDate).getTime() : 0
+          const dateB = b.rawDate ? new Date(b.rawDate).getTime() : 0
           return dateB - dateA
         })
         
@@ -67,21 +68,43 @@ export default function Payout() {
       }
     }
     
-    loadWithdrawals()
+	    loadWithdrawals()
 
-    // Listen for wallet state updates
-    const handleWalletUpdate = () => {
-      loadWithdrawals()
-    }
+      // Keep list in sync with backend updates (admin approval/rejection)
+      const refreshInterval = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          loadWithdrawals()
+        }
+      }, 15000)
+
+      const handleVisibility = () => {
+        if (document.visibilityState === 'visible') {
+          loadWithdrawals()
+        }
+      }
+      document.addEventListener('visibilitychange', handleVisibility)
+
+      const handleFocus = () => {
+        loadWithdrawals()
+      }
+      window.addEventListener('focus', handleFocus)
+
+	    // Listen for wallet state updates
+	    const handleWalletUpdate = () => {
+	      loadWithdrawals()
+	    }
 
     window.addEventListener('deliveryWalletStateUpdated', handleWalletUpdate)
     window.addEventListener('storage', handleWalletUpdate)
     
-    return () => {
-      window.removeEventListener('deliveryWalletStateUpdated', handleWalletUpdate)
-      window.removeEventListener('storage', handleWalletUpdate)
-    }
-  }, [])
+	    return () => {
+        clearInterval(refreshInterval)
+        document.removeEventListener('visibilitychange', handleVisibility)
+        window.removeEventListener('focus', handleFocus)
+	      window.removeEventListener('deliveryWalletStateUpdated', handleWalletUpdate)
+	      window.removeEventListener('storage', handleWalletUpdate)
+	    }
+	  }, [])
   
   // Get status icon and color
   const getStatusInfo = (status) => {

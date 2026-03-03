@@ -566,7 +566,7 @@ export default function Profile() {
                       {companyName} Money
                     </span>
                     <span className="text-base font-semibold text-[#EF4F5F] dark:text-[#EF4F5F]">
-                      ?{userProfile?.wallet?.balance?.toFixed(0) || "0"}
+                      ₹{userProfile?.wallet?.balance?.toFixed(0) || "0"}
                     </span>
                   </div>
                 </CardContent>

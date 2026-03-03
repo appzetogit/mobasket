@@ -148,9 +148,9 @@ export default function EditProfile() {
       return
     }
 
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image size should be less than 5MB')
+    // Validate file size (max 20MB to match backend upload limit)
+    if (file.size > 20 * 1024 * 1024) {
+      toast.error('Image size should be less than 20MB')
       return
     }
 
@@ -185,6 +185,8 @@ export default function EditProfile() {
       setImagePreview(profileImage)
     } finally {
       setIsUploadingImage(false)
+      // Allow selecting the same file again after retry.
+      if (e.target) e.target.value = ""
     }
   }
 
@@ -254,6 +256,24 @@ export default function EditProfile() {
     console.log('Change email clicked')
   }
 
+  const handleImagePickerOpen = () => {
+    const input = fileInputRef.current
+    if (!input || isUploadingImage) return
+
+    // Prefer native picker where supported (better compatibility on mobile webviews/APKs).
+    if (typeof input.showPicker === 'function') {
+      try {
+        input.showPicker()
+        return
+      } catch (error) {
+        // Fallback to click for browsers/webviews where showPicker exists but is restricted.
+        console.warn('showPicker failed, falling back to input.click()', error)
+      }
+    }
+
+    input.click()
+  }
+
   return (
     <div className="min-h-screen bg-[#f5f5f5] dark:bg-[#0a0a0a]">
       {/* Header */}
@@ -287,7 +307,7 @@ export default function EditProfile() {
             </Avatar>
             {/* Edit Icon */}
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={handleImagePickerOpen}
               disabled={isUploadingImage}
               className="absolute bottom-0 right-0 w-8 h-8 bg-green-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -301,8 +321,9 @@ export default function EditProfile() {
               ref={fileInputRef}
               type="file"
               accept="image/*"
+              capture="environment"
               onChange={handleImageSelect}
-              className="hidden"
+              className="sr-only"
             />
           </div>
         </div>

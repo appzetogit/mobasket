@@ -1,26 +1,33 @@
+import { normalizeExportCell } from "../exportFormatUtils"
+
 // Export utility functions for transaction management
 
 export const exportTransactionsToCSV = (transactions, headers, filename = "transactions") => {
   const csvContent = [
-    headers.map(h => `"${h.label}"`).join(","),
-    ...transactions.map(row => headers.map(h => {
-      const value = row[h.key];
-      if (value === null || value === undefined) return '""';
-      if (typeof value === 'number') return value;
-      return `"${String(value).replace(/"/g, '""')}"`;
-    }).join(","))
-  ].join("\n");
+    headers.map((h) => `"${h.label}"`).join(","),
+    ...transactions.map((row) =>
+      headers
+        .map((h) => {
+          const value = normalizeExportCell(row[h.key])
+          if (value === null || value === undefined) return '""'
+          if (typeof value === "number") return value
+          return `"${String(value).replace(/"/g, '""')}"`
+        })
+        .join(","),
+    ),
+  ].join("\n")
 
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
-  link.setAttribute("href", url);
-  link.setAttribute("download", `${filename}_${new Date().toISOString().split("T")[0]}.csv`);
-  link.style.visibility = "hidden";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
+  const BOM = "\uFEFF"
+  const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" })
+  const link = document.createElement("a")
+  const url = URL.createObjectURL(blob)
+  link.setAttribute("href", url)
+  link.setAttribute("download", `${filename}_${new Date().toISOString().split("T")[0]}.csv`)
+  link.style.visibility = "hidden"
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
 
 export const exportTransactionsToExcel = (transactions, headers, filename = "transactions") => {
   // Create HTML table for better Excel compatibility and clear formatting
@@ -39,57 +46,63 @@ export const exportTransactionsToExcel = (transactions, headers, filename = "tra
         <table>
           <thead>
             <tr>
-              ${headers.map(h => `<th>${h.label}</th>`).join("")}
+              ${headers.map((h) => `<th>${h.label}</th>`).join("")}
             </tr>
           </thead>
           <tbody>
-            ${transactions.map(row => `
+            ${transactions
+              .map(
+                (row) => `
               <tr>
-                ${headers.map(h => {
-                  const value = row[h.key];
-                  if (value === null || value === undefined) return '<td></td>';
-                  // Escape HTML to prevent issues
-                  const escapedValue = String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                  return `<td>${escapedValue}</td>`;
-                }).join("")}
+                ${headers
+                  .map((h) => {
+                    const value = normalizeExportCell(row[h.key])
+                    if (value === null || value === undefined) return "<td></td>"
+                    // Escape HTML to prevent issues
+                    const escapedValue = String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                    return `<td>${escapedValue}</td>`
+                  })
+                  .join("")}
               </tr>
-            `).join("")}
+            `,
+              )
+              .join("")}
           </tbody>
         </table>
       </body>
     </html>
-  `;
+  `
 
-  const blob = new Blob([htmlContent], { type: "application/vnd.ms-excel" });
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
-  link.setAttribute("href", url);
-  link.setAttribute("download", `${filename}_${new Date().toISOString().split("T")[0]}.xls`);
-  link.style.visibility = "hidden";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
-};
+  const blob = new Blob([htmlContent], { type: "application/vnd.ms-excel" })
+  const link = document.createElement("a")
+  const url = URL.createObjectURL(blob)
+  link.setAttribute("href", url)
+  link.setAttribute("download", `${filename}_${new Date().toISOString().split("T")[0]}.xls`)
+  link.style.visibility = "hidden"
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
 
 export const exportTransactionsToPDF = async (transactions, headers, filename = "transactions", title = "Transaction Report") => {
   // Instant PDF download using jsPDF + autoTable (no print dialog)
-  const { default: jsPDF } = await import('jspdf')
-  const { default: autoTable } = await import('jspdf-autotable')
+  const { default: jsPDF } = await import("jspdf")
+  const { default: autoTable } = await import("jspdf-autotable")
 
   const doc = new jsPDF({
-    orientation: 'landscape',
-    unit: 'mm',
-    format: 'a4'
+    orientation: "landscape",
+    unit: "mm",
+    format: "a4",
   })
 
-  const reportDate = new Date().toLocaleString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true
+  const reportDate = new Date().toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
   })
 
   // Title
@@ -98,12 +111,12 @@ export const exportTransactionsToPDF = async (transactions, headers, filename = 
   doc.setFontSize(10)
   doc.text(`Generated: ${reportDate}`, 14, 22)
 
-  const head = [headers.map(h => h.label)]
-  const body = transactions.map(row =>
-    headers.map(h => {
-      const v = row[h.key]
-      return v === null || v === undefined ? '' : String(v)
-    })
+  const head = [headers.map((h) => h.label)]
+  const body = transactions.map((row) =>
+    headers.map((h) => {
+      const v = normalizeExportCell(row[h.key])
+      return v === null || v === undefined ? "" : String(v)
+    }),
   )
 
   autoTable(doc, {
@@ -111,33 +124,23 @@ export const exportTransactionsToPDF = async (transactions, headers, filename = 
     body,
     startY: 28,
     styles: { fontSize: 8, cellPadding: 2 },
-    headStyles: { fillColor: [0, 0, 0], textColor: 255, fontStyle: 'bold' },
+    headStyles: { fillColor: [0, 0, 0], textColor: 255, fontStyle: "bold" },
     alternateRowStyles: { fillColor: [245, 245, 245] },
-    margin: { left: 14, right: 14 }
+    margin: { left: 14, right: 14 },
   })
 
   doc.save(`${filename}_${new Date().toISOString().split("T")[0]}.pdf`)
-};
+}
 
 export const exportTransactionsToJSON = (transactions, filename = "transactions") => {
-  const jsonContent = JSON.stringify(transactions, null, 2);
-  const blob = new Blob([jsonContent], { type: "application/json" });
-  const link = document.createElement("a");
-  const url = URL.createObjectURL(blob);
-  link.setAttribute("href", url);
-  link.setAttribute("download", `${filename}_${new Date().toISOString().split("T")[0]}.json`);
-  link.style.visibility = "hidden";
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-};
-
-
-
-
-
-
-
-
-
-
+  const jsonContent = JSON.stringify(transactions, null, 2)
+  const blob = new Blob([jsonContent], { type: "application/json" })
+  const link = document.createElement("a")
+  const url = URL.createObjectURL(blob)
+  link.setAttribute("href", url)
+  link.setAttribute("download", `${filename}_${new Date().toISOString().split("T")[0]}.json`)
+  link.style.visibility = "hidden"
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}

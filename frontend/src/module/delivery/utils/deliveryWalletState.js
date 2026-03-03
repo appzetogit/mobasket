@@ -164,9 +164,11 @@ export const calculateDeliveryBalances = (state) => {
   // Calculate pending withdrawals from transactions if available
   let pendingWithdrawals = state.pendingWithdrawals || 0
   if (state.transactions && Array.isArray(state.transactions)) {
+    const isPendingStatus = (status) => String(status || '').trim().toLowerCase() === 'pending'
+    const isWithdrawalType = (type) => String(type || '').trim().toLowerCase() === 'withdrawal'
     const pendingFromTransactions = state.transactions
-      .filter(t => t.type === 'withdrawal' && t.status === 'Pending')
-      .reduce((sum, t) => sum + (t.amount || 0), 0)
+      .filter(t => isWithdrawalType(t.type) && isPendingStatus(t.status))
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
     if (pendingFromTransactions > 0) {
       pendingWithdrawals = pendingFromTransactions
     }
@@ -175,9 +177,14 @@ export const calculateDeliveryBalances = (state) => {
   // Calculate total earnings from transactions for display purposes
   let totalEarningsFromTransactions = totalEarned
   if (state.transactions && Array.isArray(state.transactions)) {
+    const isCompletedLikeStatus = (status) => {
+      const normalized = String(status || '').trim().toLowerCase()
+      return normalized === 'completed' || normalized === 'approved' || normalized === 'processed'
+    }
+    const isPaymentType = (type) => String(type || '').trim().toLowerCase() === 'payment'
     const earningsFromTransactions = state.transactions
-      .filter(t => t.type === 'payment' && t.status === 'Completed') // Exclude bonus from earnings
-      .reduce((sum, t) => sum + (t.amount || 0), 0)
+      .filter(t => isPaymentType(t.type) && isCompletedLikeStatus(t.status)) // Exclude bonus from earnings
+      .reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
     if (earningsFromTransactions > 0) {
       totalEarningsFromTransactions = earningsFromTransactions
     }
@@ -206,6 +213,26 @@ export const calculatePeriodEarnings = (state, period) => {
     return 0
   }
 
+  const isCompletedLikeStatus = (status) => {
+    const normalized = String(status || '').trim().toLowerCase()
+    return normalized === 'completed' || normalized === 'approved' || normalized === 'processed'
+  }
+
+  const isEarningType = (type) => {
+    const normalized = String(type || '').trim().toLowerCase()
+    return normalized === 'payment' || normalized === 'earning_addon'
+  }
+
+  const getTransactionDate = (transaction) => {
+    const candidates = [transaction?.date, transaction?.createdAt, transaction?.processedAt]
+    for (const candidate of candidates) {
+      if (!candidate) continue
+      const parsed = new Date(candidate)
+      if (!Number.isNaN(parsed.getTime())) return parsed
+    }
+    return null
+  }
+
   const now = new Date()
   let startDate = new Date()
   
@@ -228,15 +255,15 @@ export const calculatePeriodEarnings = (state, period) => {
   return state.transactions
     .filter(t => {
       // Include both payment and earning_addon transactions in earnings
-      if (t.type !== 'payment' && t.type !== 'earning_addon') return false
-      if (t.status !== 'Completed') return false
+      if (!isEarningType(t.type)) return false
+      if (!isCompletedLikeStatus(t.status)) return false
       
-      const transactionDate = t.date ? new Date(t.date) : (t.createdAt ? new Date(t.createdAt) : null)
+      const transactionDate = getTransactionDate(t)
       if (!transactionDate) return false
       
       return transactionDate >= startDate && transactionDate <= now
     })
-    .reduce((sum, t) => sum + (t.amount || 0), 0)
+    .reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
 }
 
 /**

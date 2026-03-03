@@ -41,8 +41,8 @@ export default function OutletInfo() {
   const [restaurantName, setRestaurantName] = useState("")
   const [cuisineTags, setCuisineTags] = useState("")
   const [address, setAddress] = useState("")
-  const [mainImage, setMainImage] = useState("https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&h=400&fit=crop")
-  const [thumbnailImage, setThumbnailImage] = useState("https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=200&h=200&fit=crop")
+  const [mainImage, setMainImage] = useState("")
+  const [thumbnailImage, setThumbnailImage] = useState("")
   const [coverImages, setCoverImages] = useState([]) // Array of cover images (separate from menu images)
   const [showEditNameDialog, setShowEditNameDialog] = useState(false)
   const [editNameValue, setEditNameValue] = useState("")
@@ -126,6 +126,8 @@ export default function OutletInfo() {
           // Set images
           if (data.profileImage?.url) {
             setThumbnailImage(data.profileImage.url)
+          } else {
+            setThumbnailImage("")
           }
           // Use coverImages if available, otherwise fallback to menuImages for backward compatibility
           if (data.coverImages && Array.isArray(data.coverImages) && data.coverImages.length > 0) {
@@ -146,6 +148,7 @@ export default function OutletInfo() {
             setMainImage(data.menuImages[0].url)
           } else {
             setCoverImages([])
+            setMainImage("")
           }
         }
       } catch (error) {
@@ -441,8 +444,8 @@ export default function OutletInfo() {
       if (indexToDelete === 0 && updatedImages.length > 0) {
         setMainImage(updatedImages[0].url)
       } else if (updatedImages.length === 0) {
-        // If no images left, set default
-        setMainImage("https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&h=400&fit=crop")
+        // If no images left, keep cover blank (no static fallback image)
+        setMainImage("")
       }
 
       // Update backend - convert coverImages back to menuImages format for API
@@ -476,8 +479,10 @@ export default function OutletInfo() {
               url: img.url,
               publicId: img.publicId
             })))
+            setMainImage(data.menuImages[0].url)
           } else {
             setCoverImages([])
+            setMainImage("")
           }
         }
       } catch (apiError) {
@@ -538,6 +543,9 @@ export default function OutletInfo() {
                 publicId: img.publicId
               })))
               setMainImage(data.menuImages[0].url)
+            } else {
+              setCoverImages([])
+              setMainImage("")
             }
           }
         } catch (refreshError) {
@@ -637,11 +645,15 @@ export default function OutletInfo() {
 
       {/* Main Image Section */}
       <div className="relative w-full h-[200px] overflow-visible">
-        <img 
-          src={mainImage}
-          alt="Restaurant banner"
-          className="w-full h-full object-cover"
-        />
+        {mainImage ? (
+          <img
+            src={mainImage}
+            alt="Restaurant banner"
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full bg-white" />
+        )}
         
         {/* Add Image Button - Black background with white text */}
         <button
@@ -704,11 +716,15 @@ export default function OutletInfo() {
         {/* Thumbnail Section - Overlapping bottom edge */}
         <div className="absolute bottom-0 left-4 -mb-[45px] flex flex-col gap-2 shrink-0 z-10">
           <div className="relative w-[70px] h-[70px] rounded overflow-hidden">
-            <img 
-              src={thumbnailImage}
-              alt="Restaurant thumbnail"
-              className="w-full h-full rounded-xl object-cover"
-            />
+            {thumbnailImage ? (
+              <img
+                src={thumbnailImage}
+                alt="Restaurant thumbnail"
+                className="w-full h-full rounded-xl object-cover"
+              />
+            ) : (
+              <div className="w-full h-full rounded-xl bg-white border border-gray-200" />
+            )}
           </div>
           <button
             onClick={() => profileImageInputRef.current?.click()}

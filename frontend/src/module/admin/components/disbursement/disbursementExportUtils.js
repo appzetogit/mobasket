@@ -1,19 +1,22 @@
+import { formatExportAmount } from "../exportFormatUtils"
+
 // Export utility functions for disbursements
 export const exportDisbursementsToCSV = (disbursements, filename = "disbursements") => {
   const headers = ["ID", "Status", "Total Amount", "Created At"]
   const rows = disbursements.map((disbursement) => [
     disbursement.id,
     disbursement.status,
-    `$${disbursement.totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-    disbursement.createdAt
+    formatExportAmount(disbursement.totalAmount, { fallback: "INR 0.00" }),
+    disbursement.createdAt,
   ])
-  
+
   const csvContent = [
     headers.join(","),
-    ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
+    ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
   ].join("\n")
-  
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+
+  const BOM = "\uFEFF"
+  const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
   link.setAttribute("href", url)
@@ -29,15 +32,15 @@ export const exportDisbursementsToExcel = (disbursements, filename = "disburseme
   const rows = disbursements.map((disbursement) => [
     disbursement.id,
     disbursement.status,
-    `$${disbursement.totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
-    disbursement.createdAt
+    formatExportAmount(disbursement.totalAmount, { fallback: "INR 0.00" }),
+    disbursement.createdAt,
   ])
-  
+
   const csvContent = [
     headers.join("\t"),
-    ...rows.map(row => row.join("\t"))
+    ...rows.map((row) => row.join("\t")),
   ].join("\n")
-  
+
   const blob = new Blob([csvContent], { type: "application/vnd.ms-excel" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
@@ -51,12 +54,12 @@ export const exportDisbursementsToExcel = (disbursements, filename = "disburseme
 
 export const exportDisbursementsToPDF = (disbursements, filename = "disbursements") => {
   const headers = ["ID", "Status", "Total Amount", "Created At"]
-  
-  let htmlContent = `
+
+  const htmlContent = `
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Disbursements Report</title>
+      <title>${filename}</title>
       <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
@@ -72,24 +75,28 @@ export const exportDisbursementsToPDF = (disbursements, filename = "disbursement
       <table>
         <thead>
           <tr>
-            ${headers.map(h => `<th>${h}</th>`).join("")}
+            ${headers.map((h) => `<th>${h}</th>`).join("")}
           </tr>
         </thead>
         <tbody>
-          ${disbursements.map(disbursement => `
+          ${disbursements
+            .map(
+              (disbursement) => `
             <tr>
               <td>${disbursement.id}</td>
               <td>${disbursement.status}</td>
-              <td>$${disbursement.totalAmount.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              <td>${formatExportAmount(disbursement.totalAmount, { fallback: "INR 0.00" })}</td>
               <td>${disbursement.createdAt}</td>
             </tr>
-          `).join("")}
+          `,
+            )
+            .join("")}
         </tbody>
       </table>
     </body>
     </html>
   `
-  
+
   const printWindow = window.open("", "_blank")
   printWindow.document.write(htmlContent)
   printWindow.document.close()
@@ -112,4 +119,3 @@ export const exportDisbursementsToJSON = (disbursements, filename = "disbursemen
   link.click()
   document.body.removeChild(link)
 }
-

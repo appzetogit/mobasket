@@ -138,6 +138,37 @@ export default function PocketPage() {
 
   // Calculate balances
   const balances = calculateDeliveryBalances(walletState)
+
+  const normalizeTransactionType = (transaction = {}) =>
+    String(transaction?.type || "").trim().toLowerCase()
+
+  const normalizeTransactionStatus = (transaction = {}) =>
+    String(transaction?.status || "").trim().toLowerCase()
+
+  const isCompletedLikeStatus = (status = "") =>
+    status === "completed" || status === "approved" || status === "processed"
+
+  const getTransactionAmount = (transaction = {}) => Number(transaction?.amount) || 0
+
+  const toValidDate = (value) => {
+    if (!value) return null
+    const parsed = new Date(value)
+    return Number.isNaN(parsed.getTime()) ? null : parsed
+  }
+
+  const getTransactionDate = (transaction = {}, options = {}) => {
+    const { preferProcessedAt = false } = options
+    const candidates = preferProcessedAt
+      ? [transaction?.processedAt, transaction?.date, transaction?.createdAt]
+      : [transaction?.date, transaction?.createdAt, transaction?.processedAt]
+
+    for (const candidate of candidates) {
+      const parsed = toValidDate(candidate)
+      if (parsed) return parsed
+    }
+
+    return null
+  }
   
   // Debug: Log wallet state and balances
   useEffect(() => {
@@ -163,16 +194,18 @@ export default function PocketPage() {
   const weeklyEarnings = walletState?.transactions
     ?.filter(t => {
       // Include both payment and earning_addon transactions
-      if ((t.type !== 'payment' && t.type !== 'earning_addon') || t.status !== 'Completed') return false
+      const transactionType = normalizeTransactionType(t)
+      const transactionStatus = normalizeTransactionStatus(t)
+      if ((transactionType !== 'payment' && transactionType !== 'earning_addon') || !isCompletedLikeStatus(transactionStatus)) return false
       const now = new Date()
       const startOfWeek = new Date(now)
       startOfWeek.setDate(now.getDate() - now.getDay())
       startOfWeek.setHours(0, 0, 0, 0)
-      const transactionDate = t.date ? new Date(t.date) : (t.createdAt ? new Date(t.createdAt) : null)
+      const transactionDate = getTransactionDate(t)
       if (!transactionDate) return false
       return transactionDate >= startOfWeek && transactionDate <= now
     })
-    .reduce((sum, t) => sum + (t.amount || 0), 0) || 0
+    .reduce((sum, t) => sum + getTransactionAmount(t), 0) || 0
 
   // Calculate weekly orders count from transactions
   const calculateWeeklyOrders = () => {
@@ -187,8 +220,10 @@ export default function PocketPage() {
 
     return walletState.transactions.filter(t => {
       // Count payment transactions (completed orders)
-      if (t.type !== 'payment' || t.status !== 'Completed') return false
-      const transactionDate = t.date ? new Date(t.date) : (t.createdAt ? new Date(t.createdAt) : null)
+      const transactionType = normalizeTransactionType(t)
+      const transactionStatus = normalizeTransactionStatus(t)
+      if (transactionType !== 'payment' || !isCompletedLikeStatus(transactionStatus)) return false
+      const transactionDate = getTransactionDate(t)
       if (!transactionDate) return false
       return transactionDate >= startOfWeek && transactionDate <= now
     }).length
@@ -343,8 +378,12 @@ export default function PocketPage() {
 
   // Calculate total bonus amount from all bonus transactions
   const totalBonus = walletState?.transactions
-    ?.filter(t => t.type === 'bonus' && t.status === 'Completed')
-    .reduce((sum, t) => sum + (t.amount || 0), 0) || 0
+    ?.filter(t => {
+      const transactionType = normalizeTransactionType(t)
+      const transactionStatus = normalizeTransactionStatus(t)
+      return transactionType === 'bonus' && isCompletedLikeStatus(transactionStatus)
+    })
+    .reduce((sum, t) => sum + getTransactionAmount(t), 0) || 0
   
   // Pocket balance should come from backend source-of-truth wallet totals.
   const pocketBalance = walletState?.pocketBalance !== undefined
@@ -380,8 +419,13 @@ export default function PocketPage() {
 
   // Customer tips balance - calculate from transactions
   const customerTipsBalance = walletState.transactions
-    ?.filter(t => t.type === 'payment' && t.description?.toLowerCase().includes('tip'))
-    .reduce((sum, t) => sum + (t.amount || 0), 0) || 0
+    ?.filter(t => {
+      const transactionType = normalizeTransactionType(t)
+      const transactionStatus = normalizeTransactionStatus(t)
+      const description = String(t?.description || "").toLowerCase()
+      return transactionType === 'payment' && isCompletedLikeStatus(transactionStatus) && description.includes('tip')
+    })
+    .reduce((sum, t) => sum + getTransactionAmount(t), 0) || 0
 
   // Payout data - calculate from completed withdrawals in previous week
   const calculatePayoutAmount = () => {
@@ -395,12 +439,14 @@ export default function PocketPage() {
 
     return walletState.transactions
       ?.filter(t => {
-        if (t.type !== 'withdrawal' || t.status !== 'Completed') return false
-        const transactionDate = t.date ? new Date(t.date) : (t.createdAt ? new Date(t.createdAt) : null)
+        const transactionType = normalizeTransactionType(t)
+        const transactionStatus = normalizeTransactionStatus(t)
+        if (transactionType !== 'withdrawal' || !isCompletedLikeStatus(transactionStatus)) return false
+        const transactionDate = getTransactionDate(t, { preferProcessedAt: true })
         if (!transactionDate) return false
         return transactionDate >= lastWeekStart && transactionDate <= lastWeekEnd
       })
-      .reduce((sum, t) => sum + (t.amount || 0), 0) || 0
+      .reduce((sum, t) => sum + getTransactionAmount(t), 0) || 0
   }
 
   const payoutAmount = calculatePayoutAmount()

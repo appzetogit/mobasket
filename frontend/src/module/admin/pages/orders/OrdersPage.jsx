@@ -11,6 +11,7 @@ import SettingsDialog from "../../components/orders/SettingsDialog"
 import RefundModal from "../../components/orders/RefundModal"
 import { useOrdersManagement } from "../../components/orders/useOrdersManagement"
 import { Loader2 } from "lucide-react"
+import { usePlatform } from "../../context/PlatformContext"
 
 // Status configuration with titles, colors, and icons
 const statusConfig = {
@@ -30,6 +31,8 @@ const statusConfig = {
 
 export default function OrdersPage({ statusKey = "all", platformOverride }) {
   const config = statusConfig[statusKey] || statusConfig["all"]
+  const { platform } = usePlatform()
+  const activePlatform = platformOverride || platform || "mofood"
   const [orders, setOrders] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [totalCount, setTotalCount] = useState(0)
@@ -69,7 +72,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         status: statusKey === "all" ? undefined :
                statusKey === "restaurant-cancelled" ? "cancelled" : statusKey,
         cancelledBy: statusKey === "restaurant-cancelled" ? "restaurant" : undefined,
-        platform: platformOverride || undefined,
+        platform: activePlatform,
       }
 
       const response = await adminAPI.getOrders(params)
@@ -106,7 +109,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
   // Fetch orders from backend API
   useEffect(() => {
     fetchOrders({ showLoader: true })
-  }, [statusKey, platformOverride])
+  }, [statusKey, activePlatform])
 
   // Poll orders list and trigger sound even when tab is in background.
   useEffect(() => {
@@ -153,7 +156,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
       isAudioUnlockedRef.current = false
       pendingSoundRef.current = false
     }
-  }, [statusKey, platformOverride])
+  }, [statusKey, activePlatform])
 
   const handleApproveOrderRequest = async (order) => {
     const orderIdToUse = order.id || order._id || order.orderId
@@ -350,7 +353,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
           status: statusKey === "all" ? undefined : 
                  statusKey === "restaurant-cancelled" ? "cancelled" : statusKey,
           cancelledBy: statusKey === "restaurant-cancelled" ? "restaurant" : undefined,
-          platform: platformOverride || undefined,
+          platform: activePlatform,
         }
         const refreshResponse = await adminAPI.getOrders(params)
         if (refreshResponse.data?.success && refreshResponse.data?.data?.orders) {
@@ -450,14 +453,14 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
   } = useOrdersManagement(orders, statusKey, config.title)
 
   const pendingApprovalCount = useMemo(() => {
-    if (platformOverride !== "mogrocery") return 0
+    if (activePlatform !== "mogrocery") return 0
 
     return filteredOrders.filter((order) =>
       order.canAdminApprove &&
       (order.status === "confirmed" || order.status === "pending" || order.status === "scheduled") &&
       (order.adminApprovalStatus === "pending" || !order.adminApprovalStatus)
     ).length
-  }, [filteredOrders, platformOverride])
+  }, [filteredOrders, activePlatform])
 
   if (isLoading) {
     return (
@@ -482,7 +485,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         onExport={handleExport}
         onSettingsClick={() => setIsSettingsOpen(true)}
       />
-      {platformOverride === "mogrocery" && pendingApprovalCount > 0 && (
+      {activePlatform === "mogrocery" && pendingApprovalCount > 0 && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-center gap-3">
           <BellRing className="w-5 h-5 text-amber-700 shrink-0" />
           <div className="text-sm text-amber-900">
@@ -527,8 +530,8 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         onRefund={handleRefund}
         onAcceptOrder={handleApproveOrderRequest}
         onRejectOrder={handleRejectOrderRequest}
-        enableApprovalActions={platformOverride === "mogrocery" && (statusKey === "all" || statusKey === "scheduled")}
-        enableRiderActions={platformOverride === "mogrocery" && statusKey === "all"}
+        enableApprovalActions={activePlatform === "mogrocery" && (statusKey === "all" || statusKey === "scheduled")}
+        enableRiderActions={activePlatform === "mogrocery" && statusKey === "all"}
         onResendRiderNotification={handleResendRiderNotification}
         onShowRiderDetails={handleShowRiderDetails}
         onCancelOrder={handleCancelApprovedOrder}
