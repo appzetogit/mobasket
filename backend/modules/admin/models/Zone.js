@@ -222,11 +222,14 @@ zoneSchema.methods.containsPoint = function(latitude, longitude) {
   let inside = false;
   
   for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
-    const xi = coords[i][0], yi = coords[i][1];
-    const xj = coords[j][0], yj = coords[j][1];
+    // GeoJSON stores coordinates as [lng, lat]
+    const xi = Number(coords[i][0]), yi = Number(coords[i][1]);
+    const xj = Number(coords[j][0]), yj = Number(coords[j][1]);
     
-    const intersect = ((yi > longitude) !== (yj > longitude)) &&
-      (longitude < (xj - xi) * (longitude - yi) / (yj - yi) + xi);
+    if (![xi, yi, xj, yj].every(Number.isFinite)) continue;
+
+    const intersect = ((yi > latitude) !== (yj > latitude)) &&
+      (longitude < ((xj - xi) * (latitude - yi)) / (yj - yi) + xi);
     
     if (intersect) inside = !inside;
   }

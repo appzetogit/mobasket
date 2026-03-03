@@ -464,6 +464,7 @@ const GroceryPage = () => {
         const response = await restaurantAPI.getRestaurants({
           limit: 200,
           platform: "mogrocery",
+          onlyZone: "true",
           ...(zoneId ? { zoneId } : {}),
         });
         const restaurants = Array.isArray(response?.data?.data?.restaurants)
