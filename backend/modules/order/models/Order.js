@@ -112,6 +112,12 @@ const orderSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  restaurantPlatform: {
+    type: String,
+    enum: ['mofood', 'mogrocery'],
+    default: 'mofood',
+    index: true
+  },
   items: {
     type: [orderItemSchema],
     required: true,

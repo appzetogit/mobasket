@@ -33,61 +33,31 @@ export default function OrdersPage() {
           try {
             const parsed = JSON.parse(userData);
             currentUserId = parsed._id || parsed.id;
-            console.log("👤 Current User ID:", currentUserId);
           } catch (e) {
-            console.warn("⚠️ Could not parse user data:", e);
+            // Ignore malformed cached profile; API call below is the source of truth
           }
         }
-
-        console.log("🔐 User Token exists:", !!userToken);
-        console.log("👤 Current User ID from localStorage:", currentUserId);
-        console.log("🔄 Fetching user orders from API...");
-        console.log("📡 API Endpoint: /api/user/orders");
-        console.log("📡 Request params: { limit: 100, page: 1 }");
 
         const response = await userAPI.getOrders({
           limit: 100, // Get all orders
           page: 1,
         });
 
-        console.log("📦 User Orders API Response:", response?.data);
-        console.log("📦 Response Status:", response?.status);
-        console.log("📦 Full Response:", response);
-
         // Check multiple possible response structures
         let ordersData = [];
 
         if (response?.data?.success && response?.data?.data?.orders) {
           ordersData = response.data.data.orders || [];
-          console.log(
-            "✅ Found orders in response.data.data.orders:",
-            ordersData.length,
-          );
         } else if (response?.data?.orders) {
           ordersData = response.data.orders || [];
-          console.log(
-            "✅ Found orders in response.data.orders:",
-            ordersData.length,
-          );
         } else if (response?.data?.data && Array.isArray(response.data.data)) {
           ordersData = response.data.data || [];
-          console.log(
-            "✅ Found orders in response.data.data (array):",
-            ordersData.length,
-          );
         } else {
-          console.warn("⚠️ No orders found in response");
-          console.warn(
-            "⚠️ Response structure:",
-            JSON.stringify(response?.data, null, 2),
-          );
           setOrders([]);
           return;
         }
 
         if (ordersData.length > 0) {
-          console.log("✅ Processing orders:", ordersData.length);
-
           // Transform API orders to match UI structure
           const transformedOrders = ordersData.map((order) => {
             const createdAt = new Date(order.createdAt);
@@ -124,21 +94,10 @@ export default function OrdersPage() {
           });
 
           setOrders(transformedOrders);
-          console.log(
-            "✅ Orders transformed and set:",
-            transformedOrders.length,
-          );
         } else {
-          console.warn("⚠️ No orders to transform");
           setOrders([]);
         }
       } catch (error) {
-        console.error("❌ Error fetching user orders:", error);
-        console.error("❌ Error message:", error?.message);
-        console.error("❌ Error response:", error?.response?.data);
-        console.error("❌ Error status:", error?.response?.status);
-        console.error("❌ Error config:", error?.config);
-
         // More detailed error message
         let errorMessage = "Failed to load orders";
         if (error?.response?.status === 401) {

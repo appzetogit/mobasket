@@ -541,7 +541,7 @@ const validateSingleSourceOrderItems = async ({
   if (invalidMenuItems.length > 0) {
     return {
       valid: false,
-      message: 'Your cart has items from another restaurant. Please keep items from one restaurant only.'
+      message: 'Some cart items are unavailable for the selected restaurant. Please refresh cart and try again.'
     };
   }
 
@@ -741,8 +741,10 @@ export const createOrder = async (req, res) => {
       deliveryOption,
       scheduledFor: scheduledForRaw,
       deliveryTimeSlot,
-      planSubscription
+      planSubscription,
+      platform
     } = req.body;
+    const requestedPlatform = platform === 'mogrocery' ? 'mogrocery' : 'mofood';
     // Support both camelCase and snake_case from client
     const paymentMethod = bodyPaymentMethod ?? req.body.payment_method;
 
@@ -925,6 +927,8 @@ export const createOrder = async (req, res) => {
     }
 
     const restaurantPlatform = restaurant.platform === 'mogrocery' ? 'mogrocery' : 'mofood';
+    // Respect explicit grocery orders even if store platform flag is stale in DB.
+    const platformForValidation = requestedPlatform === 'mogrocery' ? 'mogrocery' : restaurantPlatform;
     // Align MoGrocery with restaurant flow: send orders directly to store without admin queue.
     requiresAdminApproval = false;
 
@@ -949,14 +953,14 @@ export const createOrder = async (req, res) => {
       });
       return res.status(400).json({
         success: false,
-        message: restaurantPlatform === 'mogrocery'
+      message: platformForValidation === 'mogrocery'
           ? 'Store location is not set. Please contact support.'
           : 'Restaurant location is not set. Please contact support.'
       });
     }
 
     // Check if restaurant/store is within any active zone for this platform
-    const activeZoneQuery = restaurantPlatform === 'mogrocery'
+    const activeZoneQuery = platformForValidation === 'mogrocery'
       ? { isActive: true, platform: 'mogrocery' }
       : {
         isActive: true,
@@ -971,13 +975,13 @@ export const createOrder = async (req, res) => {
       logger.warn('⚠️ Restaurant location is not within any active zone:', {
         restaurantId: restaurant._id?.toString() || restaurant.restaurantId,
         restaurantName: restaurant.name,
-        platform: restaurantPlatform,
+        platform: platformForValidation,
         restaurantLat,
         restaurantLng
       });
       return res.status(403).json({
         success: false,
-        message: restaurantPlatform === 'mogrocery'
+        message: platformForValidation === 'mogrocery'
           ? 'This store is not available in your area. Only stores within active delivery zones can receive orders.'
           : 'This restaurant is not available in your area. Only restaurants within active delivery zones can receive orders.'
       });
@@ -1011,13 +1015,13 @@ export const createOrder = async (req, res) => {
     if (!userZone) {
       logger.warn('⚠️ User delivery location is outside active zone:', {
         orderUserId: String(userId),
-        platform: restaurantPlatform,
+        platform: platformForValidation,
         userLat,
         userLng
       });
       return res.status(403).json({
         success: false,
-        message: restaurantPlatform === 'mogrocery'
+        message: platformForValidation === 'mogrocery'
           ? 'You are out of zone. Please choose an address inside the service area.'
           : 'You are out of zone. Please choose an address inside the service area.'
       });
@@ -1035,7 +1039,7 @@ export const createOrder = async (req, res) => {
       });
       return res.status(403).json({
         success: false,
-        message: restaurantPlatform === 'mogrocery'
+        message: platformForValidation === 'mogrocery'
           ? 'This store is not available in your zone. Please select a store from your current delivery zone.'
           : 'This restaurant is not available in your zone. Please select a restaurant from your current delivery zone.'
       });
@@ -1052,7 +1056,7 @@ export const createOrder = async (req, res) => {
 
     const singleSourceValidation = await validateSingleSourceOrderItems({
       items,
-      platform: restaurantPlatform,
+      platform: platformForValidation,
       expectedRestaurant: {
         _id: restaurant._id,
         restaurantId: restaurant.restaurantId,
@@ -1069,7 +1073,7 @@ export const createOrder = async (req, res) => {
 
     // Always trust server-side pricing so plan benefits (free delivery/discount) are guaranteed.
     const couponCode = req.body?.couponCode || incomingPricing?.couponCode || incomingPricing?.appliedCoupon?.code || null;
-    const pricingPlatform = restaurantPlatform === 'mogrocery' ? 'mogrocery' : 'mofood';
+    const pricingPlatform = requestedPlatform === 'mogrocery' ? 'mogrocery' : restaurantPlatform;
     const pricing = await calculateOrderPricing({
       items,
       restaurantId: assignedRestaurantId,
@@ -1077,7 +1081,8 @@ export const createOrder = async (req, res) => {
       couponCode,
       deliveryFleet: deliveryFleet || 'standard',
       userId,
-      platform: pricingPlatform
+      platform: pricingPlatform,
+      zoneId: userZoneIdResolved || null
     });
 
     // Log restaurant assignment for debugging
@@ -1103,6 +1108,7 @@ export const createOrder = async (req, res) => {
       userId,
       restaurantId: assignedRestaurantId,
       restaurantName: assignedRestaurantName,
+      restaurantPlatform: pricingPlatform === 'mogrocery' ? 'mogrocery' : 'mofood',
       items,
       address: normalizedAddress,
       pricing: {
@@ -1130,6 +1136,12 @@ export const createOrder = async (req, res) => {
       payment: {
         method: normalizedPaymentMethod,
         status: 'pending'
+      },
+      assignmentInfo: {
+        restaurantId: assignedRestaurantId,
+        zoneId: userZoneIdResolved,
+        zoneName: userZone?.name || userZone?.zoneName || restaurantZone?.name || restaurantZone?.zoneName || '',
+        assignedBy: 'zone_match'
       }
     });
 
@@ -2743,8 +2755,9 @@ export const verifyEditedOrderCartPayment = async (req, res) => {
  */
 export const calculateOrder = async (req, res) => {
   try {
-    const { items, restaurantId, deliveryAddress, couponCode, deliveryFleet, platform } = req.body;
+    const { items, restaurantId, deliveryAddress, couponCode, deliveryFleet, platform, zoneId } = req.body;
     const userId = req.user?.id || req.user?._id || null;
+    const requestedPlatform = platform === 'mogrocery' ? 'mogrocery' : 'mofood';
 
     // Validate required fields
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -2790,7 +2803,12 @@ export const calculateOrder = async (req, res) => {
       });
     }
 
-    const platformForValidation = restaurant.platform === 'mogrocery' ? 'mogrocery' : 'mofood';
+    // Respect client-requested platform for grocery cart previews.
+    // Some stores may be missing/incorrect platform flag in DB, which would otherwise force mofood menu validation.
+    const platformForValidation =
+      requestedPlatform === 'mogrocery'
+        ? 'mogrocery'
+        : (restaurant.platform === 'mogrocery' ? 'mogrocery' : 'mofood');
     const singleSourceValidation = await validateSingleSourceOrderItems({
       items,
       platform: platformForValidation,
@@ -2816,7 +2834,8 @@ export const calculateOrder = async (req, res) => {
       couponCode,
       deliveryFleet: deliveryFleet || 'standard',
       userId,
-      platform: platform === 'mogrocery' ? 'mogrocery' : 'mofood'
+      platform: requestedPlatform,
+      zoneId: zoneId || null
     });
 
     res.json({

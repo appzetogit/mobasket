@@ -697,6 +697,8 @@ export default function Inventory() {
                 isRecommended: false,
                 stockQuantity: product.stockQuantity || 0,
                 unit: product.unit || 'piece',
+                approvalStatus: product.approvalStatus || '',
+                status: product.status || '',
                 expiryDate: null,
                 lastRestocked: null,
               })
@@ -736,6 +738,8 @@ export default function Inventory() {
                   isRecommended: item.isRecommended !== undefined ? item.isRecommended : false,
                   stockQuantity: item.stock || "Unlimited",
                   unit: item.itemSizeUnit || "piece",
+                  approvalStatus: item.approvalStatus || '',
+                  status: item.status || '',
                   expiryDate: null,
                   lastRestocked: null,
                 })
@@ -755,6 +759,8 @@ export default function Inventory() {
                   isRecommended: item.isRecommended !== undefined ? item.isRecommended : false,
                   stockQuantity: item.stock || "Unlimited",
                   unit: item.itemSizeUnit || "piece",
+                  approvalStatus: item.approvalStatus || '',
+                  status: item.status || '',
                   expiryDate: null,
                   lastRestocked: null,
                 })
@@ -1007,6 +1013,21 @@ export default function Inventory() {
     return category.items.filter(item => !item.inStock).length
   }
 
+  const getItemStatusLabel = (item = {}) => {
+    const raw = String(item?.approvalStatus || item?.status || '').trim().toLowerCase()
+    if (!raw) return ''
+    if (raw === 'pending') return 'Pending'
+    return raw.charAt(0).toUpperCase() + raw.slice(1)
+  }
+
+  const getItemStatusClasses = (statusLabel = '') => {
+    const normalized = String(statusLabel || '').toLowerCase()
+    if (normalized === 'pending') return 'bg-amber-100 text-amber-800'
+    if (normalized === 'approved' || normalized === 'active') return 'bg-green-100 text-green-800'
+    if (normalized === 'rejected' || normalized === 'inactive') return 'bg-red-100 text-red-800'
+    return 'bg-gray-100 text-gray-700'
+  }
+
   // Handle filter apply
   const handleFilterApply = () => {
     setIsLoading(true)
@@ -1032,7 +1053,6 @@ export default function Inventory() {
         if (itemId) {
           // Update individual product stock
           await groceryStoreAPI.updateProductStock(itemId, { inStock: isAvailable })
-          console.log('Product stock updated successfully')
         } else if (categoryId) {
           // Update all products in category
           const productsResponse = await groceryStoreAPI.getProducts({ categoryId, activeOnly: 'false' })
@@ -1044,7 +1064,6 @@ export default function Inventory() {
               groceryStoreAPI.updateProductStock(product._id, { inStock: isAvailable })
             )
           )
-          console.log('Category products stock updated successfully')
         }
         return
       }
@@ -1106,7 +1125,6 @@ export default function Inventory() {
 
       // Save updated menu
       await restaurantAPI.updateMenu({ sections: updatedSections })
-      console.log('Menu updated successfully')
     } catch (error) {
       console.error('Error updating menu/product:', error)
       toast.error(isGroceryStore ? 'Failed to update product stock' : 'Failed to update menu')
@@ -1294,7 +1312,6 @@ export default function Inventory() {
 
       // Save updated menu
       await restaurantAPI.updateMenu({ sections: updatedSections })
-      console.log('Menu recommendation updated successfully')
     } catch (error) {
       console.error('Error updating menu recommendation:', error)
       toast.error('Failed to update recommendation')
@@ -1693,7 +1710,14 @@ export default function Inventory() {
                                     }`} />
                                 </div>
                                 <div>
-                                  <p className="text-sm font-medium text-gray-900">{item.name}</p>
+                                  <div className="flex items-center gap-2">
+                                    <p className="text-sm font-medium text-gray-900">{item.name}</p>
+                                    {isGroceryStore && getItemStatusLabel(item) && (
+                                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${getItemStatusClasses(getItemStatusLabel(item))}`}>
+                                        {getItemStatusLabel(item)}
+                                      </span>
+                                    )}
+                                  </div>
                                   {item.inStock ? (
                                     <p className="text-xs text-green-600 font-medium">In stock</p>
                                   ) : (

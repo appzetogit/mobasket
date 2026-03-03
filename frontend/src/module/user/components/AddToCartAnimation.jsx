@@ -5,6 +5,13 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { gsap } from 'gsap';
 
+const getSafeImageUrl = (imageUrl) => {
+  const url = String(imageUrl || '').trim();
+  if (!url) return '';
+  if (/^https?:\/\/via\.placeholder\.com\//i.test(url)) return '';
+  return url;
+};
+
 
 /**
  * AddToCartAnimation Component
@@ -416,9 +423,9 @@ export default function AddToCartAnimation({
             objectFit: 'cover',
           }}
         >
-          {removedProduct.product?.imageUrl ? (
+          {getSafeImageUrl(removedProduct.product?.imageUrl) ? (
             <img
-              src={removedProduct.product.imageUrl}
+              src={getSafeImageUrl(removedProduct.product.imageUrl)}
               alt={removedProduct.product.name}
               className="w-full h-full object-cover rounded-full"
             />
@@ -440,9 +447,9 @@ export default function AddToCartAnimation({
             objectFit: 'cover',
           }}
         >
-          {flyingProduct.product.imageUrl ? (
+          {getSafeImageUrl(flyingProduct.product?.imageUrl) ? (
             <img
-              src={flyingProduct.product.imageUrl}
+              src={getSafeImageUrl(flyingProduct.product.imageUrl)}
               alt={flyingProduct.product.name}
               className="w-full h-full object-cover rounded-full"
             />
@@ -500,9 +507,9 @@ export default function AddToCartAnimation({
                     }}
                     className="w-9 h-9 rounded-full border-2 border-white/90 overflow-hidden bg-white flex-shrink-0 shadow-md"
                   >
-                    {item.product.imageUrl ? (
+                    {getSafeImageUrl(item.product?.imageUrl) ? (
                       <img
-                        src={item.product.imageUrl}
+                        src={getSafeImageUrl(item.product.imageUrl)}
                         alt={item.product.name}
                         className="w-full h-full object-cover"
                       />

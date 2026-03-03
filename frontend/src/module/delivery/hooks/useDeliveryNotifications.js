@@ -205,14 +205,16 @@ export const useDeliveryNotifications = () => {
 
     socketRef.current = io(socketUrl, {
       path: '/socket.io/',
-      transports: ['polling'], // Start with polling only
-      upgrade: false, // Disable WebSocket upgrade to prevent WebSocket connection errors
+      transports: ['websocket', 'polling'],
+      upgrade: true,
+      rememberUpgrade: true,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       reconnectionAttempts: Infinity,
       timeout: 20000,
-      forceNew: false,
+      forceNew: true,
+      withCredentials: true,
       autoConnect: true,
       auth: {
         token: localStorage.getItem('delivery_accessToken') || localStorage.getItem('accessToken')
@@ -248,7 +250,7 @@ export const useDeliveryNotifications = () => {
         // Silently handle transport errors - backend might not be running or WebSocket not available
         // Socket.IO will automatically retry with exponential backoff and fall back to polling
         // Only log in development for debugging
-        if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env.DEV) {
           console.log('⏳ Delivery Socket: WebSocket upgrade failed, using polling fallback');
         }
       }

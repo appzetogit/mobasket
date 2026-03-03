@@ -58,8 +58,18 @@ const CartContext = createContext(defaultCartContext);
 
 const normalizeName = (name) => (name ? String(name).trim().toLowerCase() : "");
 
+const resolveEntityId = (value) =>
+  String(
+    value?._id ||
+      value?.id ||
+      value?.restaurantId ||
+      value?.storeId ||
+      value ||
+      "",
+  ).trim();
+
 const getRestaurantIdentity = (item) => {
-  const restaurantId = String(item?.restaurantId || item?.storeId || "").trim();
+  const restaurantId = resolveEntityId(item?.restaurantId) || resolveEntityId(item?.storeId);
   const restaurantName = normalizeName(item?.restaurant || item?.storeName || "");
   const identityKey = restaurantId
     ? `id:${restaurantId}`
@@ -95,13 +105,36 @@ const detectItemPlatform = (item) => {
 
 const isGroceryItem = (item) => detectItemPlatform(item) === "mogrocery";
 
+const isMongoObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || "").trim());
+
+const resolveGroceryProductId = (item) => {
+  const candidates = [
+    item?._id,
+    item?.itemId,
+    item?.productId,
+    item?.id,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  return candidates.find((id) => isMongoObjectId(id)) || "";
+};
+
+const normalizeGroceryCartItem = (item) => {
+  const normalizedId = resolveGroceryProductId(item);
+  if (!normalizedId) return null;
+  return { ...item, id: normalizedId };
+};
+
+const normalizeFoodCartItem = (item) => {
+  const normalizedId = String(item?.itemId || item?.id || item?._id || "").trim();
+  if (!normalizedId) return null;
+  return { ...item, id: normalizedId, itemId: normalizedId };
+};
+
 const getNormalizedStoreId = (item) => {
-  const restaurantId = String(
-    item?.restaurantId?._id || item?.restaurantId?.id || item?.restaurantId || "",
-  ).trim();
-  const storeId = String(
-    item?.storeId?._id || item?.storeId?.id || item?.storeId || "",
-  ).trim();
+  const restaurantId = resolveEntityId(item?.restaurantId);
+  const storeId = resolveEntityId(item?.storeId);
 
   if (storeId && storeId !== "grocery-store") return storeId;
   if (restaurantId && restaurantId !== "grocery-store") return restaurantId;
@@ -110,7 +143,7 @@ const getNormalizedStoreId = (item) => {
 
 const isValidGroceryCartItem = (item) => {
   if (!item || typeof item !== "object") return false;
-  if (!item.id) return false;
+  if (!resolveGroceryProductId(item)) return false;
   return Boolean(getNormalizedStoreId(item));
 };
 
@@ -152,11 +185,16 @@ export function CartProvider({ children }) {
 
     if (storedFood.length > 0 || storedGrocery.length > 0) {
       return {
-        food: keepSingleRestaurant(storedFood.map((i) => ({ ...i, platform: "mofood" }))),
+        food: keepSingleRestaurant(
+          storedFood
+            .map((i) => normalizeFoodCartItem({ ...i, platform: "mofood" }))
+            .filter(Boolean),
+        ),
         grocery: keepSingleRestaurant(
           storedGrocery
             .filter(isValidGroceryCartItem)
-            .map((i) => ({ ...i, platform: "mogrocery" })),
+            .map((i) => normalizeGroceryCartItem({ ...i, platform: "mogrocery" }))
+            .filter(Boolean),
         ),
       };
     }
@@ -165,11 +203,13 @@ export function CartProvider({ children }) {
     const legacy = parseStoredCart(localStorage.getItem(STORAGE_KEYS.legacy));
     const food = legacy
       .filter((item) => detectItemPlatform(item) === "mofood")
-      .map((item) => ({ ...item, platform: "mofood" }));
+      .map((item) => normalizeFoodCartItem({ ...item, platform: "mofood" }))
+      .filter(Boolean);
     const grocery = legacy
       .filter((item) => detectItemPlatform(item) === "mogrocery")
       .filter(isValidGroceryCartItem)
-      .map((item) => ({ ...item, platform: "mogrocery" }));
+      .map((item) => normalizeGroceryCartItem({ ...item, platform: "mogrocery" }))
+      .filter(Boolean);
 
     return {
       food: keepSingleRestaurant(food),
@@ -179,6 +219,25 @@ export function CartProvider({ children }) {
 
   const [foodCart, setFoodCart] = useState(initialCarts.food);
   const [groceryCart, setGroceryCart] = useState(initialCarts.grocery);
+
+  useEffect(() => {
+    setFoodCart((prev) => {
+      const normalized = prev
+        .map((item) => normalizeFoodCartItem(item))
+        .filter(Boolean);
+      return normalized.length === prev.length ? prev : normalized;
+    });
+  }, []);
+
+  useEffect(() => {
+    setGroceryCart((prev) => {
+      const normalized = prev
+        .filter(isValidGroceryCartItem)
+        .map((item) => normalizeGroceryCartItem(item))
+        .filter(Boolean);
+      return normalized.length === prev.length ? prev : normalized;
+    });
+  }, []);
 
   // Track last add event for animation
   const [lastAddEvent, setLastAddEvent] = useState(null);
@@ -209,6 +268,14 @@ export function CartProvider({ children }) {
     const itemPlatform = detectItemPlatform(item);
     const setTargetCart = itemPlatform === "mogrocery" ? setGroceryCart : setFoodCart;
     const targetCart = itemPlatform === "mogrocery" ? groceryCart : foodCart;
+    const normalizedGroceryProductId =
+      itemPlatform === "mogrocery" ? resolveGroceryProductId(item) : "";
+
+    if (itemPlatform === "mogrocery" && !normalizedGroceryProductId) {
+      console.error("Cannot add grocery item: invalid product id", item);
+      toast.error("Invalid product. Please refresh and try again.");
+      return false;
+    }
 
     if (!item?.restaurantId && !item?.restaurant) {
       console.error("Cannot add item: missing restaurant information", item);
@@ -235,13 +302,24 @@ export function CartProvider({ children }) {
       }
     }
 
+    const normalizedItemId =
+      itemPlatform === "mogrocery"
+        ? normalizedGroceryProductId
+        : String(item?.itemId || item?.id || item?._id || "").trim();
+
+    if (!normalizedItemId) {
+      console.error("Cannot add item: missing item id", item);
+      toast.error("Invalid item. Please refresh and try again.");
+      return false;
+    }
+
     setTargetCart((prev) => {
-      const existing = prev.find((i) => i.id === item.id);
+      const existing = prev.find((i) => String(i.id) === normalizedItemId);
       if (existing) {
         if (sourcePosition) {
           const addEvent = {
             product: {
-              id: item.id,
+              id: normalizedItemId,
               name: item.name,
               imageUrl: item.image || item.imageUrl,
             },
@@ -258,12 +336,14 @@ export function CartProvider({ children }) {
           setTimeout(() => setLastAddEvent(null), 1500);
         }
         return prev.map((i) =>
-          i.id === item.id ? { ...i, quantity: (i.quantity || 0) + 1 } : i,
+          String(i.id) === normalizedItemId ? { ...i, quantity: (i.quantity || 0) + 1 } : i,
         );
       }
 
       const newItem = {
         ...item,
+        ...(itemPlatform === "mogrocery" ? { id: normalizedGroceryProductId } : {}),
+        ...(itemPlatform === "mofood" ? { id: normalizedItemId, itemId: normalizedItemId } : {}),
         platform: itemPlatform,
         restaurantPlatform: itemPlatform,
         quantity: 1,
@@ -272,7 +352,7 @@ export function CartProvider({ children }) {
       if (sourcePosition) {
         const addEvent = {
           product: {
-            id: item.id,
+            id: normalizedItemId,
             name: item.name,
             imageUrl: item.image || item.imageUrl,
           },

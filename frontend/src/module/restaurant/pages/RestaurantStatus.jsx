@@ -21,6 +21,8 @@ export default function RestaurantStatus() {
   const isGroceryStore = routeLocation.pathname.startsWith("/store")
   const statusStorageKey = isGroceryStore ? "grocery-store_online_status" : "restaurant_online_status"
   const statusEventName = isGroceryStore ? "groceryStoreStatusChanged" : "restaurantStatusChanged"
+  const entityLabel = isGroceryStore ? "store" : "restaurant"
+  const EntityLabel = isGroceryStore ? "Store" : "Restaurant"
   const [deliveryStatus, setDeliveryStatus] = useState(false)
   const [restaurantData, setRestaurantData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -83,7 +85,7 @@ export default function RestaurantStatus() {
       } catch (error) {
         // Only log error if it's not a network/timeout error (backend might be down/slow)
         if (error.code !== 'ERR_NETWORK' && error.code !== 'ECONNABORTED' && !error.message?.includes('timeout')) {
-          console.error("Error fetching restaurant data:", error)
+          console.error(`Error fetching ${entityLabel} data:`, error)
         }
         // Continue with default values if fetch fails
       } finally {
@@ -466,7 +468,14 @@ export default function RestaurantStatus() {
             <div className="flex items-start justify-between">
               <div className="flex-1 min-w-0">
                 <h2 className="text-base font-bold text-gray-900 mb-1">
-                  {loading ? "Loading..." : (restaurantData?.name || "Restaurant")}
+                  {loading
+                    ? "Loading..."
+                    : ((isGroceryStore
+                      ? String(restaurantData?.name || "Store")
+                        .replace(/\brestaurant\b/gi, "Store")
+                        .replace(/\s{2,}/g, " ")
+                        .trim()
+                      : restaurantData?.name) || EntityLabel)}
                 </h2>
                 <p className="text-sm text-gray-500">
                   {loading ? "Loading..." : (
@@ -481,8 +490,8 @@ export default function RestaurantStatus() {
               </div>
               <button
                 onClick={() => {
-                  // Navigate to restaurant settings
-                  navigate("/restaurant/explore")
+                  // Navigate to store/restaurant settings
+                  navigate(isGroceryStore ? "/store/explore" : "/restaurant/explore")
                 }}
                 className="ml-3 p-2 bg-gray-200 hover:bg-gray-300 rounded-full transition-colors shrink-0"
                 aria-label="Explore more"

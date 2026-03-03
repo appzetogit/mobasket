@@ -33,9 +33,9 @@ export default function AddZone() {
   const [innerCoordinates, setInnerCoordinates] = useState([])
   const [outerCoordinates, setOuterCoordinates] = useState([])
   const [layerDeliveryCharges, setLayerDeliveryCharges] = useState({
-    inner: 0,
-    outer: 0,
-    outermost: 0
+    inner: "",
+    outer: "",
+    outermost: ""
   })
   const [drawLayerMode, setDrawLayerMode] = useState(null) // null | 'zone' | 'outer' | 'inner'
   const [isDrawing, setIsDrawing] = useState(false)
@@ -146,16 +146,19 @@ export default function AddZone() {
           setCoordinates(zoneData.coordinates)
         }
         if (Array.isArray(zoneData.layers) && zoneData.layers.length > 0) {
-          const charges = { inner: 0, outer: 0, outermost: 0 }
+          const charges = { inner: "", outer: "", outermost: "" }
           zoneData.layers.forEach((ly) => {
             if (ly.type === 'inner') {
               setInnerCoordinates(ly.coordinates || [])
-              charges.inner = Number(ly.deliveryCharge) || 0
+              const charge = Number(ly.deliveryCharge)
+              charges.inner = (!isNaN(charge) && charge > 0) ? charge : ""
             } else if (ly.type === 'outer') {
               setOuterCoordinates(ly.coordinates || [])
-              charges.outer = Number(ly.deliveryCharge) || 0
+              const charge = Number(ly.deliveryCharge)
+              charges.outer = (!isNaN(charge) && charge > 0) ? charge : ""
             } else if (ly.type === 'outermost') {
-              charges.outermost = Number(ly.deliveryCharge) || 0
+              const charge = Number(ly.deliveryCharge)
+              charges.outermost = (!isNaN(charge) && charge > 0) ? charge : ""
             }
           })
           setLayerDeliveryCharges((prev) => ({ ...prev, ...charges }))
@@ -1027,7 +1030,19 @@ export default function AddZone() {
                       min={0}
                       step={1}
                       value={layerDeliveryCharges.outermost}
-                      onChange={(e) => setLayerDeliveryCharges((prev) => ({ ...prev, outermost: Number(e.target.value) || 0 }))}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        // Allow empty string or valid number
+                        if (value === "") {
+                          setLayerDeliveryCharges((prev) => ({ ...prev, outermost: "" }))
+                        } else {
+                          const numValue = Number(value)
+                          if (!isNaN(numValue) && numValue >= 0) {
+                            setLayerDeliveryCharges((prev) => ({ ...prev, outermost: numValue }))
+                          }
+                        }
+                      }}
+                      placeholder="0"
                       className="w-24 px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
@@ -1039,7 +1054,19 @@ export default function AddZone() {
                       min={0}
                       step={1}
                       value={layerDeliveryCharges.outer}
-                      onChange={(e) => setLayerDeliveryCharges((prev) => ({ ...prev, outer: Number(e.target.value) || 0 }))}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        // Allow empty string or valid number
+                        if (value === "") {
+                          setLayerDeliveryCharges((prev) => ({ ...prev, outer: "" }))
+                        } else {
+                          const numValue = Number(value)
+                          if (!isNaN(numValue) && numValue >= 0) {
+                            setLayerDeliveryCharges((prev) => ({ ...prev, outer: numValue }))
+                          }
+                        }
+                      }}
+                      placeholder="0"
                       className="w-24 px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <button
@@ -1063,7 +1090,19 @@ export default function AddZone() {
                       min={0}
                       step={1}
                       value={layerDeliveryCharges.inner}
-                      onChange={(e) => setLayerDeliveryCharges((prev) => ({ ...prev, inner: Number(e.target.value) || 0 }))}
+                      onChange={(e) => {
+                        const value = e.target.value
+                        // Allow empty string or valid number
+                        if (value === "") {
+                          setLayerDeliveryCharges((prev) => ({ ...prev, inner: "" }))
+                        } else {
+                          const numValue = Number(value)
+                          if (!isNaN(numValue) && numValue >= 0) {
+                            setLayerDeliveryCharges((prev) => ({ ...prev, inner: numValue }))
+                          }
+                        }
+                      }}
+                      placeholder="0"
                       className="w-24 px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                     <button

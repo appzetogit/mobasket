@@ -128,6 +128,7 @@ export const API_ENDPOINTS = {
   // Zone endpoints
   ZONE: {
     DETECT: '/zones/detect', // Public endpoint for zone detection
+    ACTIVE: '/zones/active',
   },
   // Restaurant endpoints
   RESTAURANT: {
@@ -287,6 +288,7 @@ export const API_ENDPOINTS = {
     RESTAURANTS: '/admin/restaurants',
     RESTAURANT_BY_ID: '/admin/restaurants/:id',
     RESTAURANT_ANALYTICS: '/admin/restaurant-analytics/:restaurantId',
+    RESTAURANT_ADDON_DELETE: '/admin/restaurants/:restaurantId/addons/:addonId',
     RESTAURANT_STATUS: '/admin/restaurants/:id/status',
     RESTAURANT_REQUESTS: '/admin/restaurants/requests',
     RESTAURANT_APPROVE: '/admin/restaurants/:id/approve',

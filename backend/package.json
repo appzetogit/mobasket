@@ -16,7 +16,8 @@
     "seed:grocery-demo-catalog": "node scripts/seed-grocery-catalog-demo.js",
     "reset:grocery-demo-catalog": "node scripts/reset-grocery-demo-catalog.js",
     "backfill:grocery-product-images": "node scripts/backfill-grocery-product-images.js",
-    "migrate:grocery-categories-static": "node scripts/migrate-static-grocery-categories.js"
+    "migrate:grocery-categories-static": "node scripts/migrate-static-grocery-categories.js",
+    "migrate:restaurant-platform-indexes": "node scripts/migrate-restaurant-platform-indexes.js"
   },
   "keywords": [
     "food-delivery",

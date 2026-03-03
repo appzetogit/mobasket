@@ -289,8 +289,21 @@ const restaurantSchema = new mongoose.Schema(
 );
 
 // Indexes for authentication
-restaurantSchema.index({ email: 1 }, { unique: true, sparse: true });
-restaurantSchema.index({ phone: 1 }, { unique: true, sparse: true });
+// Keep identity unique per platform so same phone/email can exist in mofood and mogrocery.
+restaurantSchema.index(
+  { email: 1, platform: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { email: { $type: 'string' } }
+  }
+);
+restaurantSchema.index(
+  { phone: 1, platform: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { phone: { $type: 'string' } }
+  }
+);
 restaurantSchema.index({ googleId: 1 }, { unique: true, sparse: true });
 
   // Hash password before saving

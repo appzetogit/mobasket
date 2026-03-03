@@ -37,7 +37,7 @@ export default function RestaurantNavbar({
       } catch (error) {
         // Only log error if it's not a network/timeout error (backend might be down/slow)
         if (error.code !== 'ERR_NETWORK' && error.code !== 'ECONNABORTED' && !error.message?.includes('timeout')) {
-          console.error("Error fetching restaurant data:", error)
+          console.error(`Error fetching ${isGroceryStore ? "store" : "restaurant"} data:`, error)
         }
         // Continue with default values if fetch fails
       } finally {
@@ -122,6 +122,12 @@ export default function RestaurantNavbar({
 
   // Get restaurant/store name (use prop if provided, otherwise use fetched data)
   const restaurantName = propRestaurantName || restaurantData?.name || (isGroceryStore ? "Store" : "Restaurant")
+  const displayName = isGroceryStore
+    ? (String(restaurantName || "")
+      .replace(/\brestaurant\b/gi, "Store")
+      .replace(/\s{2,}/g, " ")
+      .trim() || "Store")
+    : restaurantName
 
   const [location, setLocation] = useState("")
 
@@ -135,15 +141,6 @@ export default function RestaurantNavbar({
     }
     // Priority 2: Check restaurantData location
     else if (restaurantData) {
-      console.log('🔍 Checking restaurant data for address:', {
-        hasLocation: !!restaurantData.location,
-        locationKeys: restaurantData.location ? Object.keys(restaurantData.location) : [],
-        formattedAddress: restaurantData.location?.formattedAddress,
-        address: restaurantData.location?.address,
-        directAddress: restaurantData.address,
-        fullLocation: restaurantData.location
-      })
-      
       if (restaurantData.location) {
         // Use stored formattedAddress first (from database)
         if (restaurantData.location.formattedAddress && 
@@ -153,7 +150,6 @@ export default function RestaurantNavbar({
           const isCoordinates = /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(restaurantData.location.formattedAddress.trim())
           if (!isCoordinates) {
             newLocation = restaurantData.location.formattedAddress.trim()
-            console.log('✅ Using formattedAddress:', newLocation)
           }
         }
         
@@ -162,32 +158,22 @@ export default function RestaurantNavbar({
           const formatted = formatAddress(restaurantData.location)
           if (formatted && formatted.trim() !== "") {
             newLocation = formatted.trim()
-            console.log('✅ Using formatAddress result:', newLocation)
           }
         }
         
         // Additional fallback: check if address is directly on location
         if (!newLocation && restaurantData.location.address && restaurantData.location.address.trim() !== "") {
           newLocation = restaurantData.location.address.trim()
-          console.log('✅ Using location.address:', newLocation)
         }
       }
       
       // Priority 3: Fallback - check if address is directly on restaurantData (not in location object)
       if (!newLocation && restaurantData.address && restaurantData.address.trim() !== "") {
         newLocation = restaurantData.address.trim()
-        console.log('✅ Using restaurantData.address:', newLocation)
       }
     }
     
     setLocation(newLocation)
-    
-    // Debug log
-    if (newLocation) {
-      console.log('📍 Restaurant address displayed:', newLocation)
-    } else if (restaurantData) {
-      console.log('⚠️ Restaurant data available but no address found')
-    }
   }, [restaurantData, propLocation])
 
   // Load status from localStorage on mount and listen for changes
@@ -294,11 +280,11 @@ export default function RestaurantNavbar({
 
   return (
     <div className="w-full bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-      {/* Left Side - Restaurant Info */}
+      {/* Left Side - Store/Restaurant Info */}
       <div className="flex-1 min-w-0 pr-4">
-        {/* Restaurant Name */}
+        {/* Store/Restaurant Name */}
         <h1 className="text-base font-bold text-gray-900 truncate">
-          {loading ? "Loading..." : restaurantName}
+          {loading ? "Loading..." : displayName}
         </h1>
         
         {/* Location */}

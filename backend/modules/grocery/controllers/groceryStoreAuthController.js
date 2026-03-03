@@ -68,6 +68,9 @@ const buildPhoneQuery = (normalizedPhone) => {
   }
 };
 
+const isDuplicateKeyError = (error) =>
+  error?.code === 11000 || /E11000 duplicate key error/i.test(String(error?.message || ''));
+
 export const sendOTP = asyncHandler(async (req, res) => {
   const { phone, email, purpose = 'login' } = req.body;
 
@@ -156,8 +159,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       await otpService.verifyOTP(phone || null, otp, purpose, email || null);
 
       if (!store) {
-        // Login screen promises first-time users can continue with OTP.
-        // Auto-create a pending store account on first successful login verification.
+        // New account: auto-create pending store so onboarding can continue.
         const fallbackName = normalizedPhone
           ? `Grocery Store ${normalizedPhone.slice(-4)}`
           : ((email?.split('@')?.[0] || 'Grocery Store')
@@ -218,6 +220,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     logger.error(`Error verifying OTP: ${error.message}`);
+    if (isDuplicateKeyError(error)) {
+      return errorResponse(
+        res,
+        409,
+        'This phone/email is already linked to another account. Please use a different phone/email for grocery.'
+      );
+    }
     return errorResponse(res, 400, error.message || 'Invalid OTP or verification failed');
   }
 });
@@ -407,6 +416,13 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     logger.error(`Error with Google login: ${error.message}`);
+    if (isDuplicateKeyError(error)) {
+      return errorResponse(
+        res,
+        409,
+        'This email is already linked to another account. Please use a different email for grocery.'
+      );
+    }
     return errorResponse(res, 400, error.message || 'Google login failed');
   }
 });
@@ -422,7 +438,7 @@ export const refreshToken = asyncHandler(async (req, res) => {
     const decoded = jwtService.verifyRefreshToken(refreshToken);
     const store = await Restaurant.findById(decoded.userId);
 
-    if (!store || store.platform !== 'mogrocery') {
+    if (!store) {
       return errorResponse(res, 401, 'Invalid refresh token');
     }
 

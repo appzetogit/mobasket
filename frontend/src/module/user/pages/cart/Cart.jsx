@@ -526,7 +526,7 @@ export default function Cart() {
       try {
         setLoadingPricing(true)
         const items = cart.map(item => ({
-          itemId: item.id,
+          itemId: item.itemId || item.id || item._id,
           name: item.name,
           price: item.price, // Price should already be in INR
           quantity: item.quantity || 1,
@@ -692,7 +692,7 @@ export default function Cart() {
       if (cart.length > 0 && defaultAddress) {
         try {
           const items = cart.map(item => ({
-            itemId: item.id,
+            itemId: item.itemId || item.id || item._id,
             name: item.name,
             price: item.price,
             quantity: item.quantity || 1,
@@ -729,7 +729,7 @@ export default function Cart() {
     if (cart.length > 0 && defaultAddress) {
       try {
         const items = cart.map(item => ({
-          itemId: item.id,
+          itemId: item.itemId || item.id || item._id,
           name: item.name,
           price: item.price,
           quantity: item.quantity || 1,
@@ -797,7 +797,7 @@ export default function Cart() {
       // Include all cart items (main items + addons)
       // Note: Addons are added as separate cart items when user clicks the + button
       const orderItems = cart.map(item => ({
-        itemId: item.id,
+        itemId: item.itemId || item.id || item._id,
         restaurantId: item.restaurantId || "",
         storeId: item.storeId || item.restaurantId || "",
         name: item.name,

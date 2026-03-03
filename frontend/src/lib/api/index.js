@@ -251,6 +251,11 @@ export const zoneAPI = {
       params: { lat, lng, platform }
     });
   },
+  getActiveZones: (platform = "mofood") => {
+    return apiClient.get(API_ENDPOINTS.ZONE.ACTIVE, {
+      params: { platform }
+    });
+  },
 };
 
 // Export restaurant API helper functions
@@ -1213,6 +1218,15 @@ export const adminAPI = {
   // Delete restaurant
   deleteRestaurant: (id) => {
     return apiClient.delete(API_ENDPOINTS.ADMIN.RESTAURANT_DELETE.replace(':id', id));
+  },
+
+  deleteRestaurantAddon: (restaurantId, addonId) => {
+    // Use exact IDs as they are (Express will handle URL encoding automatically)
+    return apiClient.delete(
+      API_ENDPOINTS.ADMIN.RESTAURANT_ADDON_DELETE
+        .replace(':restaurantId', String(restaurantId))
+        .replace(':addonId', String(addonId))
+    );
   },
 
   // Grocery Store Join Requests

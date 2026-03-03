@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react"
-import { Eye, Printer, ArrowUpDown, Loader2, CheckCircle2, XCircle, BellRing, Info } from "lucide-react"
+import { Eye, Printer, ArrowUpDown, ArrowUp, ArrowDown, Loader2, CheckCircle2, XCircle, BellRing, Info } from "lucide-react"
 
 const getStatusColor = (orderStatus) => {
   const colors = {
@@ -46,6 +46,7 @@ export default function OrdersTable({
   onCancelOrder,
 }) {
   const [currentPage, setCurrentPage] = useState(1)
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
   const itemsPerPage = 10
   const totalPages = Math.ceil(orders.length / itemsPerPage)
   
@@ -54,11 +55,106 @@ export default function OrdersTable({
     setCurrentPage(1)
   }, [orders.length])
   
+  // Sort orders based on sortConfig
+  const sortedOrders = useMemo(() => {
+    if (!sortConfig.key) return orders
+    
+    const sorted = [...orders].sort((a, b) => {
+      let aValue, bValue
+      
+      switch (sortConfig.key) {
+        case 'si':
+          // Sort by index (already sorted by default)
+          return sortConfig.direction === 'asc' ? 0 : 0
+        case 'orderId':
+          aValue = a.orderId || ''
+          bValue = b.orderId || ''
+          break
+        case 'orderDate':
+          // Parse date format "02 MAR 2026"
+          const parseDate = (dateStr) => {
+            const months = {
+              "JAN": "01", "FEB": "02", "MAR": "03", "APR": "04", "MAY": "05", "JUN": "06",
+              "JUL": "07", "AUG": "08", "SEP": "09", "OCT": "10", "NOV": "11", "DEC": "12"
+            }
+            const parts = dateStr.split(" ")
+            if (parts.length === 3) {
+              const day = parts[0].padStart(2, "0")
+              const month = months[parts[1].toUpperCase()] || "01"
+              const year = parts[2]
+              return new Date(`${year}-${month}-${day}`).getTime()
+            }
+            return new Date(dateStr).getTime()
+          }
+          aValue = parseDate(a.date || '')
+          bValue = parseDate(b.date || '')
+          break
+        case 'customer':
+          aValue = (a.customerName || '').toLowerCase()
+          bValue = (b.customerName || '').toLowerCase()
+          break
+        case 'restaurant':
+          aValue = (a.restaurant || '').toLowerCase()
+          bValue = (b.restaurant || '').toLowerCase()
+          break
+        case 'totalAmount':
+          aValue = parseFloat(a.totalAmount || 0)
+          bValue = parseFloat(b.totalAmount || 0)
+          break
+        case 'paymentType':
+          aValue = (a.paymentType || '').toLowerCase()
+          bValue = (b.paymentType || '').toLowerCase()
+          break
+        case 'paymentStatus':
+          aValue = (a.paymentStatus || '').toLowerCase()
+          bValue = (b.paymentStatus || '').toLowerCase()
+          break
+        case 'orderStatus':
+          aValue = (a.orderStatus || '').toLowerCase()
+          bValue = (b.orderStatus || '').toLowerCase()
+          break
+        default:
+          return 0
+      }
+      
+      if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1
+      if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1
+      return 0
+    })
+    
+    return sorted
+  }, [orders, sortConfig])
+  
   const paginatedOrders = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage
     const end = start + itemsPerPage
-    return orders.slice(start, end)
-  }, [orders, currentPage])
+    return sortedOrders.slice(start, end)
+  }, [sortedOrders, currentPage])
+  
+  const handleSort = (key) => {
+    setSortConfig(prevConfig => {
+      if (prevConfig.key === key) {
+        // Toggle direction if same column
+        return {
+          key,
+          direction: prevConfig.direction === 'asc' ? 'desc' : 'asc'
+        }
+      }
+      // New column, default to ascending
+      return { key, direction: 'asc' }
+    })
+    setCurrentPage(1) // Reset to first page when sorting
+  }
+  
+  const getSortIcon = (columnKey) => {
+    if (sortConfig.key !== columnKey) {
+      return <ArrowUpDown className="w-4 h-4 text-slate-400 cursor-pointer hover:text-slate-600" />
+    }
+    if (sortConfig.direction === 'asc') {
+      return <ArrowUp className="w-4 h-4 text-blue-600 cursor-pointer hover:text-blue-700" />
+    }
+    return <ArrowDown className="w-4 h-4 text-blue-600 cursor-pointer hover:text-blue-700" />
+  }
 
   const formatRestaurantName = (name) => {
     if (name === "Cafe Monarch") return "Café Monarch"
@@ -91,7 +187,9 @@ export default function OrdersTable({
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
                     <span>SI</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
+                    <button onClick={() => handleSort('si')} className="flex items-center">
+                      {getSortIcon('si')}
+                    </button>
                   </div>
                 </th>
               )}
@@ -99,7 +197,9 @@ export default function OrdersTable({
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
                     <span>Order ID</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
+                    <button onClick={() => handleSort('orderId')} className="flex items-center">
+                      {getSortIcon('orderId')}
+                    </button>
                   </div>
                 </th>
               )}
@@ -107,7 +207,9 @@ export default function OrdersTable({
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
                     <span>Order Date</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
+                    <button onClick={() => handleSort('orderDate')} className="flex items-center">
+                      {getSortIcon('orderDate')}
+                    </button>
                   </div>
                 </th>
               )}
@@ -115,7 +217,9 @@ export default function OrdersTable({
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
                     <span>Customer Information</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
+                    <button onClick={() => handleSort('customer')} className="flex items-center">
+                      {getSortIcon('customer')}
+                    </button>
                   </div>
                 </th>
               )}
@@ -123,7 +227,9 @@ export default function OrdersTable({
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
                     <span>Restaurant</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
+                    <button onClick={() => handleSort('restaurant')} className="flex items-center">
+                      {getSortIcon('restaurant')}
+                    </button>
                   </div>
                 </th>
               )}
@@ -131,7 +237,7 @@ export default function OrdersTable({
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider min-w-[200px]">
                   <div className="flex items-center gap-2">
                     <span>Food Items</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
+                    <ArrowUpDown className="w-4 h-4 text-slate-400 opacity-50" />
                   </div>
                 </th>
               )}
@@ -139,7 +245,9 @@ export default function OrdersTable({
                 <th className="px-6 py-4 text-right text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <div className="flex items-center justify-end gap-2">
                     <span>Total Amount</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
+                    <button onClick={() => handleSort('totalAmount')} className="flex items-center">
+                      {getSortIcon('totalAmount')}
+                    </button>
                   </div>
                 </th>
               )}
@@ -147,7 +255,9 @@ export default function OrdersTable({
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
                     <span>Payment Type</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
+                    <button onClick={() => handleSort('paymentType')} className="flex items-center">
+                      {getSortIcon('paymentType')}
+                    </button>
                   </div>
                 </th>
               )}
@@ -155,7 +265,9 @@ export default function OrdersTable({
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
                     <span>Payment Status</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
+                    <button onClick={() => handleSort('paymentStatus')} className="flex items-center">
+                      {getSortIcon('paymentStatus')}
+                    </button>
                   </div>
                 </th>
               )}
@@ -163,7 +275,9 @@ export default function OrdersTable({
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
                     <span>Order Status</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
+                    <button onClick={() => handleSort('orderStatus')} className="flex items-center">
+                      {getSortIcon('orderStatus')}
+                    </button>
                   </div>
                 </th>
               )}
@@ -417,21 +531,20 @@ export default function OrdersTable({
                                           order.orderStatus === "Cancelled by User" ||
                                           (order.status === "cancelled" && (order.cancelledBy === "user" || order.cancelledBy === "restaurant"));
                         
-                        // Check if payment type is Online or Wallet (not Cash on Delivery)
-                        const paymentMethod = order.payment?.method || order.paymentMethod;
-                        const isOnlinePayment = order.paymentType === "Online" ||
-                                              (order.paymentType !== "Cash on Delivery" && 
-                                               order.payment?.method !== "cash" && 
-                                               order.payment?.method !== "cod" &&
-                                               (order.paymentMethod === "razorpay" || 
-                                                order.paymentMethod === "online" || 
-                                                order.payment?.paymentMethod === "razorpay" || 
-                                                order.payment?.method === "razorpay" ||
-                                                order.payment?.method === "online"));
-                        
-                        const isWalletPayment = order.paymentType === "Wallet" || paymentMethod === "wallet";
-                        
-                        return isCancelled && (isOnlinePayment || isWalletPayment);
+                        // Show refund only for non-COD/cash payments.
+                        const paymentType = String(order.paymentType || "").toLowerCase();
+                        const paymentMethod = String(order.payment?.method || order.paymentMethod || "").toLowerCase();
+                        const paymentGatewayMethod = String(order.payment?.paymentMethod || "").toLowerCase();
+                        const isCodPayment =
+                          paymentType.includes("cash on delivery") ||
+                          paymentType === "cod" ||
+                          paymentType === "cash" ||
+                          paymentMethod === "cash" ||
+                          paymentMethod === "cod" ||
+                          paymentGatewayMethod === "cash" ||
+                          paymentGatewayMethod === "cod";
+
+                        return isCancelled && !isCodPayment;
                       })() && (
                         <>
                           {order.refundStatus === 'processed' || order.refundStatus === 'initiated' ? (

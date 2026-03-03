@@ -54,7 +54,6 @@ import AdRequests from "../pages/advertisement/AdRequests";
 import AdsList from "../pages/advertisement/AdsList";
 import PushNotification from "../pages/PushNotification";
 // Help & Support
-import Chattings from "../pages/Chattings";
 import ContactMessages from "../pages/ContactMessages";
 import SafetyEmergencyReports from "../pages/SafetyEmergencyReports";
 // Customer Management
@@ -246,7 +245,6 @@ export default function AdminRouter() {
         <Route path="push-notification" element={<PushNotification />} />
 
         {/* HELP & SUPPORT */}
-        <Route path="chattings" element={<Chattings />} />
         <Route path="contact-messages" element={<ContactMessages />} />
         <Route path="safety-emergency-reports" element={<SafetyEmergencyReports />} />
 

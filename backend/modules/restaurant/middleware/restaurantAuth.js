@@ -36,6 +36,9 @@ export const authenticate = async (req, res, next) => {
       });
       return errorResponse(res, 401, 'Restaurant not found');
     }
+    if (restaurant.platform === 'mogrocery') {
+      return errorResponse(res, 403, 'This account belongs to grocery store module. Please login via /store.');
+    }
 
     // Allow inactive restaurants to access onboarding and profile routes
     // They need to complete onboarding even if not yet approved by admin
