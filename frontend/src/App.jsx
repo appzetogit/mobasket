@@ -349,6 +349,17 @@ export default function App() {
           }
         />
         <Route
+          path="/store/orders/all"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <AllOrdersPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/store/feedback"
           element={
             <ProtectedRoute
@@ -356,6 +367,28 @@ export default function App() {
               loginPath="/store/login"
             >
               <Feedback />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/store/share-feedback"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <ShareFeedback />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/store/help-centre"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <HelpCentre />
             </ProtectedRoute>
           }
         />
@@ -389,6 +422,39 @@ export default function App() {
               loginPath="/store/login"
             >
               <SettingsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/store/switch-outlet"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <SwitchOutlet />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/store/outlet-info"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <OutletInfo />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/store/delivery-settings"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <DeliverySettings />
             </ProtectedRoute>
           }
         />
