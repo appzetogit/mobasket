@@ -7,7 +7,8 @@ import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
 
 export default function RestaurantWithdraws() {
-  const [activeTab, setActiveTab] = useState("Pending")
+  // default to 'All' instead of 'Pending' so initial view shows every request
+  const [activeTab, setActiveTab] = useState("All")
   const [searchQuery, setSearchQuery] = useState("")
   const [withdraws, setWithdraws] = useState([])
   const [loading, setLoading] = useState(true)
