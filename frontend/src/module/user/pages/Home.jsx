@@ -794,6 +794,15 @@ export default function Home() {
       try {
         setLoadingRestaurants(true);
 
+        // Enforce strict same-zone listing on Home.
+        if (zoneLoading) {
+          return;
+        }
+        if (!zoneId) {
+          setRestaurantsData([]);
+          return;
+        }
+
         // First, test backend connection
         try {
           // Use API_BASE_URL from config (supports both dev and production)
@@ -870,11 +879,9 @@ export default function Home() {
         // Home page is MoFood-only.
         params.platform = "mofood";
 
-        // Optional: Add zoneId if available (for sorting/filtering, but show all restaurants)
-        if (zoneId) {
-          params.zoneId = zoneId;
-        }
-        // Note: We show all restaurants regardless of zone, but apply grayscale styling if user is out of service
+        // Strict zone filter: show only restaurants from the same detected zone.
+        params.zoneId = zoneId;
+        params.onlyZone = "true";
 
         console.log("Fetching restaurants with params:", params);
         const response = await restaurantAPI.getRestaurants(params);
@@ -1095,7 +1102,7 @@ export default function Home() {
         );
       }
     },
-    [zoneId],
+    [zoneId, zoneLoading],
   );
 
   // Fetch restaurants when appliedFilters change

@@ -139,6 +139,24 @@ export const getRestaurants = async (req, res) => {
     }
     
     const userZoneIdNormalized = userZone?._id ? userZone._id.toString() : null;
+    const strictZoneFilterRequested = req.query.onlyZone === 'true';
+
+    // Strict zone mode: never fall back to all restaurants when zone cannot be resolved.
+    if (strictZoneFilterRequested && !userZoneIdNormalized) {
+      return successResponse(res, 200, 'Restaurants retrieved successfully', {
+        restaurants: [],
+        total: 0,
+        filters: {
+          sortBy,
+          cuisine,
+          minRating,
+          maxDeliveryTime,
+          maxDistance,
+          maxPrice,
+          hasOffers
+        }
+      });
+    }
     const activeZones = requestedPlatform
       ? await Zone.find(getActiveZoneQueryByPlatform(requestedPlatform)).lean()
       : await Zone.find({ isActive: true }).lean();
@@ -248,7 +266,7 @@ export const getRestaurants = async (req, res) => {
       if (!restaurantZoneId) return true;
 
       // Keep optional strict zone filter only when explicitly requested.
-      if (req.query.onlyZone === 'true' && userZoneIdNormalized && restaurantZoneId !== userZoneIdNormalized) {
+      if (strictZoneFilterRequested && restaurantZoneId !== userZoneIdNormalized) {
         return false;
       }
 
