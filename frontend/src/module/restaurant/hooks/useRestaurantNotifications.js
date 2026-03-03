@@ -51,7 +51,11 @@ export const useRestaurantNotifications = (options = {}) => {
           ? await groceryStoreAPI.getCurrentStore()
           : await restaurantAPI.getCurrentRestaurant();
         if (response.data?.success) {
-          const restaurant = response.data.data?.restaurant || response.data.data?.store;
+          const restaurant =
+            response?.data?.data?.restaurant ||
+            response?.data?.data?.store ||
+            response?.data?.restaurant ||
+            response?.data?.store;
           if (restaurant) {
             const id = restaurant._id?.toString() || restaurant.restaurantId;
             setRestaurantId(id);
@@ -239,7 +243,7 @@ export const useRestaurantNotifications = (options = {}) => {
     });
 
     // Listen for disconnection
-    socketRef.current.on('disconnect', () => {
+    socketRef.current.on('disconnect', (reason) => {
       setIsConnected(false);
       
       if (reason === 'io server disconnect') {

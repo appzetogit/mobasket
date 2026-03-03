@@ -531,21 +531,20 @@ export default function OrdersTable({
                                           order.orderStatus === "Cancelled by User" ||
                                           (order.status === "cancelled" && (order.cancelledBy === "user" || order.cancelledBy === "restaurant"));
                         
-                        // Check if payment type is Online or Wallet (not Cash on Delivery)
-                        const paymentMethod = order.payment?.method || order.paymentMethod;
-                        const isOnlinePayment = order.paymentType === "Online" ||
-                                              (order.paymentType !== "Cash on Delivery" && 
-                                               order.payment?.method !== "cash" && 
-                                               order.payment?.method !== "cod" &&
-                                               (order.paymentMethod === "razorpay" || 
-                                                order.paymentMethod === "online" || 
-                                                order.payment?.paymentMethod === "razorpay" || 
-                                                order.payment?.method === "razorpay" ||
-                                                order.payment?.method === "online"));
-                        
-                        const isWalletPayment = order.paymentType === "Wallet" || paymentMethod === "wallet";
-                        
-                        return isCancelled && (isOnlinePayment || isWalletPayment);
+                        // Show refund only for non-COD/cash payments.
+                        const paymentType = String(order.paymentType || "").toLowerCase();
+                        const paymentMethod = String(order.payment?.method || order.paymentMethod || "").toLowerCase();
+                        const paymentGatewayMethod = String(order.payment?.paymentMethod || "").toLowerCase();
+                        const isCodPayment =
+                          paymentType.includes("cash on delivery") ||
+                          paymentType === "cod" ||
+                          paymentType === "cash" ||
+                          paymentMethod === "cash" ||
+                          paymentMethod === "cod" ||
+                          paymentGatewayMethod === "cash" ||
+                          paymentGatewayMethod === "cod";
+
+                        return isCancelled && !isCodPayment;
                       })() && (
                         <>
                           {order.refundStatus === 'processed' || order.refundStatus === 'initiated' ? (

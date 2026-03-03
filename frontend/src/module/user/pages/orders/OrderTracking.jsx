@@ -78,21 +78,21 @@ const DeliveryMap = ({ orderId, order, isVisible, userLiveCoords = null, userLoc
     // Try multiple sources for restaurant coordinates
     let coords = null;
     
-    // Priority 1: restaurantLocation.coordinates (already extracted in transformed order)
-    if (order?.restaurantLocation?.coordinates && 
-        Array.isArray(order.restaurantLocation.coordinates) && 
-        order.restaurantLocation.coordinates.length >= 2) {
-      coords = order.restaurantLocation.coordinates;
-    }
-    // Priority 2: restaurantId.location.coordinates (if restaurantId is populated)
-    else if (order?.restaurantId?.location?.coordinates && 
+    // Priority 1: restaurantId.location.coordinates (store saved location)
+    if (order?.restaurantId?.location?.coordinates && 
              Array.isArray(order.restaurantId.location.coordinates) && 
              order.restaurantId.location.coordinates.length >= 2) {
       coords = order.restaurantId.location.coordinates;
     }
-    // Priority 3: restaurantId.location with latitude/longitude
+    // Priority 2: restaurantId.location with latitude/longitude
     else if (order?.restaurantId?.location?.latitude && order?.restaurantId?.location?.longitude) {
       coords = [order.restaurantId.location.longitude, order.restaurantId.location.latitude];
+    }
+    // Priority 3: transformed order fallback
+    else if (order?.restaurantLocation?.coordinates && 
+        Array.isArray(order.restaurantLocation.coordinates) && 
+        order.restaurantLocation.coordinates.length >= 2) {
+      coords = order.restaurantLocation.coordinates;
     }
     
     if (coords && coords.length >= 2) {
@@ -283,17 +283,19 @@ const resolveRestaurantAddress = (apiOrder = {}, fetchedRestaurant = null) => {
     (typeof apiOrder?.restaurant === "object" && apiOrder?.restaurant) ||
     null
 
+  const location =
+    nestedRestaurant?.location ||
+    fetchedRestaurant?.location ||
+    apiOrder?.restaurantLocation ||
+    null
+
   const directCandidates = [
-    apiOrder?.restaurantAddress,
-    apiOrder?.restaurantLocation?.formattedAddress,
-    apiOrder?.restaurantLocation?.address,
+    location?.formattedAddress,
+    location?.address,
     nestedRestaurant?.address,
-    nestedRestaurant?.location?.formattedAddress,
-    nestedRestaurant?.location?.address,
     apiOrder?.restaurantInfo?.address,
     fetchedRestaurant?.address,
-    fetchedRestaurant?.location?.formattedAddress,
-    fetchedRestaurant?.location?.address
+    apiOrder?.restaurantAddress
   ]
 
   for (const candidate of directCandidates) {
@@ -301,12 +303,6 @@ const resolveRestaurantAddress = (apiOrder = {}, fetchedRestaurant = null) => {
       return candidate.trim()
     }
   }
-
-  const location =
-    nestedRestaurant?.location ||
-    fetchedRestaurant?.location ||
-    apiOrder?.restaurantLocation ||
-    null
 
   if (location && typeof location === "object") {
     const parts = [
@@ -410,9 +406,9 @@ const resolveTrackingRestaurantAddress = (rawOrder = null) => {
   const restaurant = rawOrder?.restaurantId;
   const location = restaurant?.location || rawOrder?.restaurantLocation || {};
   const directAddress =
-    restaurant?.address ||
     location?.formattedAddress ||
     location?.address ||
+    restaurant?.address ||
     rawOrder?.restaurantAddress ||
     "";
 

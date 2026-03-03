@@ -560,6 +560,59 @@ export const detectUserZone = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Get active zones for map overlays (PUBLIC API)
+ * GET /api/zones/active?platform=mofood|mogrocery
+ */
+export const getActiveZonesPublic = asyncHandler(async (req, res) => {
+  try {
+    const { platform } = req.query;
+    const zones = await Zone.find({
+      isActive: true,
+      ...buildPlatformQuery(platform)
+    })
+      .select('name zoneName coordinates layers unit platform')
+      .lean();
+
+    const normalizedZones = (zones || []).map((zone) => ({
+      _id: zone._id?.toString?.() || String(zone._id || ''),
+      name: zone.name || zone.zoneName || 'Zone',
+      zoneName: zone.zoneName || zone.name || 'Zone',
+      unit: zone.unit || 'km',
+      platform: normalizePlatform(zone.platform),
+      coordinates: Array.isArray(zone.coordinates)
+        ? zone.coordinates
+            .map((c) => ({
+              latitude: Number(c?.latitude ?? c?.lat),
+              longitude: Number(c?.longitude ?? c?.lng)
+            }))
+            .filter((c) => Number.isFinite(c.latitude) && Number.isFinite(c.longitude))
+        : [],
+      layers: Array.isArray(zone.layers)
+        ? zone.layers.map((layer) => ({
+            type: layer?.type,
+            deliveryCharge: Number(layer?.deliveryCharge ?? 0),
+            coordinates: Array.isArray(layer?.coordinates)
+              ? layer.coordinates
+                  .map((c) => ({
+                    latitude: Number(c?.latitude ?? c?.lat),
+                    longitude: Number(c?.longitude ?? c?.lng)
+                  }))
+                  .filter((c) => Number.isFinite(c.latitude) && Number.isFinite(c.longitude))
+              : []
+          }))
+        : []
+    }));
+
+    return successResponse(res, 200, 'Active zones retrieved successfully', {
+      zones: normalizedZones
+    });
+  } catch (error) {
+    console.error('Error fetching active zones:', error);
+    return errorResponse(res, 500, 'Failed to fetch active zones');
+  }
+});
+
+/**
  * Calculate zone centroid (average of all coordinates)
  */
 function calculateZoneCentroid(coordinates) {

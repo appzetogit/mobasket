@@ -1,16 +1,19 @@
 import { useState, useEffect, useRef } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
 import { MapPin, Search, Save, Loader2, ArrowLeft } from "lucide-react"
 import RestaurantNavbar from "../components/RestaurantNavbar"
-import { restaurantAPI } from "@/lib/api"
+import { restaurantAPI, groceryStoreAPI, zoneAPI } from "@/lib/api"
 import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey"
 import { Loader } from "@googlemaps/js-api-loader"
 
 export default function ZoneSetup() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const isGroceryStore = location.pathname.startsWith("/store")
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
   const markerRef = useRef(null)
+  const zonePolygonsRef = useRef([])
   const autocompleteInputRef = useRef(null)
   const autocompleteRef = useRef(null)
   
@@ -21,10 +24,25 @@ export default function ZoneSetup() {
   const [locationSearch, setLocationSearch] = useState("")
   const [selectedLocation, setSelectedLocation] = useState(null)
   const [selectedAddress, setSelectedAddress] = useState("")
+  const [availableZones, setAvailableZones] = useState([])
 
   useEffect(() => {
     fetchRestaurantData()
+    fetchActiveZones()
     loadGoogleMaps()
+  }, [isGroceryStore])
+
+  useEffect(() => {
+    if (!mapLoading && mapInstanceRef.current && window.google) {
+      renderZoneOverlays()
+    }
+  }, [mapLoading, availableZones])
+
+  useEffect(() => {
+    return () => {
+      zonePolygonsRef.current.forEach((polygon) => polygon?.setMap?.(null))
+      zonePolygonsRef.current = []
+    }
   }, [])
 
   // Initialize Places Autocomplete when map is loaded
@@ -96,14 +114,87 @@ export default function ZoneSetup() {
 
   const fetchRestaurantData = async () => {
     try {
-      const response = await restaurantAPI.getCurrentRestaurant()
-      const data = response?.data?.data?.restaurant || response?.data?.restaurant
+      const response = isGroceryStore
+        ? await groceryStoreAPI.getCurrentStore()
+        : await restaurantAPI.getCurrentRestaurant()
+      const data = isGroceryStore
+        ? (response?.data?.data?.store || response?.data?.store || response?.data?.data?.restaurant || response?.data?.restaurant)
+        : (response?.data?.data?.restaurant || response?.data?.restaurant)
       if (data) {
         setRestaurantData(data)
       }
     } catch (error) {
-      console.error("Error fetching restaurant data:", error)
+      console.error(`Error fetching ${isGroceryStore ? "store" : "restaurant"} data:`, error)
     }
+  }
+
+  const fetchActiveZones = async () => {
+    try {
+      const platform = isGroceryStore ? "mogrocery" : "mofood"
+      const response = await zoneAPI.getActiveZones(platform)
+      const zones = response?.data?.data?.zones || []
+      setAvailableZones(Array.isArray(zones) ? zones : [])
+    } catch (error) {
+      console.error("Error fetching active zones:", error)
+      setAvailableZones([])
+    }
+  }
+
+  const getPolygonPaths = (coordinates = []) =>
+    (Array.isArray(coordinates) ? coordinates : [])
+      .map((coord) => ({
+        lat: Number(coord?.latitude ?? coord?.lat),
+        lng: Number(coord?.longitude ?? coord?.lng),
+      }))
+      .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
+
+  const renderZoneOverlays = () => {
+    if (!mapInstanceRef.current || !window.google) return
+
+    zonePolygonsRef.current.forEach((polygon) => polygon?.setMap?.(null))
+    zonePolygonsRef.current = []
+
+    availableZones.forEach((zone) => {
+      const outerPaths = getPolygonPaths(zone?.coordinates)
+      if (outerPaths.length >= 3) {
+        const outerPolygon = new window.google.maps.Polygon({
+          paths: outerPaths,
+          strokeColor: "#7c3aed",
+          strokeOpacity: 0.9,
+          strokeWeight: 2,
+          fillColor: "#7c3aed",
+          fillOpacity: 0.14,
+          map: mapInstanceRef.current,
+          clickable: false,
+        })
+        zonePolygonsRef.current.push(outerPolygon)
+      }
+
+      const layers = Array.isArray(zone?.layers) ? zone.layers : []
+      layers.forEach((layer) => {
+        const layerPaths = getPolygonPaths(layer?.coordinates)
+        if (layerPaths.length < 3) return
+
+        const layerColor =
+          layer?.type === "inner"
+            ? "#16a34a"
+            : layer?.type === "outer"
+              ? "#2563eb"
+              : "#7c3aed"
+
+        const layerPolygon = new window.google.maps.Polygon({
+          paths: layerPaths,
+          strokeColor: layerColor,
+          strokeOpacity: 0.95,
+          strokeWeight: 2,
+          fillColor: layerColor,
+          fillOpacity: 0.2,
+          map: mapInstanceRef.current,
+          clickable: false,
+        })
+        zonePolygonsRef.current.push(layerPolygon)
+      })
+    })
   }
 
   const loadGoogleMaps = async () => {
@@ -219,6 +310,7 @@ export default function ZoneSetup() {
 
       mapInstanceRef.current = map
       console.log("✅ Map initialized successfully")
+      renderZoneOverlays()
 
       // Add click listener to place marker
       map.addListener('click', (event) => {
@@ -268,14 +360,14 @@ export default function ZoneSetup() {
       map: mapInstanceRef.current,
       draggable: true,
       animation: window.google.maps.Animation.DROP,
-      title: address || "Restaurant Location"
+      title: address || `${isGroceryStore ? "Store" : "Restaurant"} Location`
     })
 
     // Add info window
     const infoWindow = new window.google.maps.InfoWindow({
       content: `
         <div style="padding: 8px; max-width: 250px;">
-          <strong>Restaurant Location</strong><br/>
+          <strong>${isGroceryStore ? "Store" : "Restaurant"} Location</strong><br/>
           <small>${address || `${lat.toFixed(6)}, ${lng.toFixed(6)}`}</small>
         </div>
       `
@@ -343,7 +435,7 @@ export default function ZoneSetup() {
       
       const { lat, lng, address } = selectedLocation
       
-      // Update restaurant location
+      // Update store/restaurant location
       const response = await restaurantAPI.updateProfile({
         location: {
           ...(restaurantData?.location || {}),
@@ -354,8 +446,14 @@ export default function ZoneSetup() {
         }
       })
 
-      if (response?.data?.data?.restaurant) {
-        setRestaurantData(response.data.data.restaurant)
+      const updatedEntity =
+        response?.data?.data?.restaurant ||
+        response?.data?.data?.store ||
+        response?.data?.restaurant ||
+        response?.data?.store
+
+      if (updatedEntity) {
+        setRestaurantData(updatedEntity)
         alert("Location saved successfully!")
         
         // Refresh the page to update navbar
@@ -391,7 +489,9 @@ export default function ZoneSetup() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Zone Setup</h1>
-              <p className="text-sm text-gray-600">Set your restaurant location on the map</p>
+              <p className="text-sm text-gray-600">
+                Set your {isGroceryStore ? "store" : "restaurant"} location on the map
+              </p>
             </div>
           </div>
         </div>
@@ -406,7 +506,7 @@ export default function ZoneSetup() {
                 type="text"
                 value={locationSearch}
                 onChange={(e) => setLocationSearch(e.target.value)}
-                placeholder="Search for your restaurant location..."
+                placeholder={`Search for your ${isGroceryStore ? "store" : "restaurant"} location...`}
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
               />
             </div>
@@ -447,7 +547,8 @@ export default function ZoneSetup() {
             <li>Search for your location using the search bar above, or</li>
             <li>Click anywhere on the map to place a pin at that location</li>
             <li>You can drag the pin to adjust the exact position</li>
-            <li>Click "Save Location" to save your restaurant location</li>
+            <li>Colored polygons show available delivery zones and their layers</li>
+            <li>Click "Save Location" to save your {isGroceryStore ? "store" : "restaurant"} location</li>
           </ul>
         </div>
 

@@ -21,18 +21,46 @@ import {
 import { useCart } from "../../user/context/CartContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { useProfile } from "../../user/context/ProfileContext";
-import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
 import api, { adminAPI, orderAPI, restaurantAPI, userAPI } from "@/lib/api";
 import { initRazorpayPayment } from "@/lib/utils/razorpay";
 import { toast } from "sonner";
 import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
 
+const extractAddressCoordinates = (address) => {
+  if (!address || typeof address !== "object") return null;
+
+  const locationCoordinates = Array.isArray(address?.location?.coordinates)
+    ? address.location.coordinates
+    : null;
+  const directCoordinates = Array.isArray(address?.coordinates) ? address.coordinates : null;
+
+  const latitude = Number(
+    address?.latitude ??
+      address?.lat ??
+      address?.location?.latitude ??
+      address?.location?.lat ??
+      (locationCoordinates ? locationCoordinates[1] : undefined) ??
+      (directCoordinates ? directCoordinates[1] : undefined),
+  );
+
+  const longitude = Number(
+    address?.longitude ??
+      address?.lng ??
+      address?.location?.longitude ??
+      address?.location?.lng ??
+      (locationCoordinates ? locationCoordinates[0] : undefined) ??
+      (directCoordinates ? directCoordinates[0] : undefined),
+  );
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  return { latitude, longitude };
+};
+
 export default function GroceryCheckoutPage() {
   const navigate = useNavigate();
   const { cart, clearCart, isGroceryItem } = useCart();
   const { getDefaultAddress, userProfile, addresses } = useProfile();
-  const { location: liveLocation } = useUserLocation();
 
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("card");
@@ -111,6 +139,15 @@ export default function GroceryCheckoutPage() {
 
   const selectedAddress = useMemo(() => {
     const defaultAddress = getDefaultAddress();
+    const defaultAddressId = String(defaultAddress?._id || defaultAddress?.id || "").trim();
+    if (defaultAddressId && Array.isArray(addresses)) {
+      const hydratedDefault = addresses.find(
+        (address) => String(address?._id || address?.id || "").trim() === defaultAddressId,
+      );
+      if (hydratedDefault) {
+        return hydratedDefault;
+      }
+    }
     if (defaultAddress) {
       return defaultAddress;
     }
@@ -122,61 +159,69 @@ export default function GroceryCheckoutPage() {
     return null;
   }, [addresses, getDefaultAddress]);
 
-  const selectedAddressLocationForZone = useMemo(() => {
-    const coordinates = selectedAddress?.location?.coordinates;
-    const latitude = Number(
-      selectedAddress?.latitude ??
-        selectedAddress?.lat ??
-        (Array.isArray(coordinates) ? coordinates[1] : undefined),
-    );
-    const longitude = Number(
-      selectedAddress?.longitude ??
-        selectedAddress?.lng ??
-        (Array.isArray(coordinates) ? coordinates[0] : undefined),
-    );
+  const normalizedSelectedAddress = useMemo(() => {
+    if (!selectedAddress) return null;
 
-    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
-      return { latitude, longitude };
+    const coords = extractAddressCoordinates(selectedAddress);
+    if (!coords) return selectedAddress;
+
+    return {
+      ...selectedAddress,
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      lat: coords.latitude,
+      lng: coords.longitude,
+      location: {
+        ...(selectedAddress.location || {}),
+        type: "Point",
+        coordinates: [coords.longitude, coords.latitude],
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+      },
+      coordinates: [coords.longitude, coords.latitude],
+    };
+  }, [selectedAddress]);
+
+  const selectedAddressLocationForZone = useMemo(() => {
+    const coords = extractAddressCoordinates(normalizedSelectedAddress);
+    if (coords) {
+      return coords;
     }
 
-    return liveLocation;
-  }, [liveLocation, selectedAddress]);
+    return null;
+  }, [normalizedSelectedAddress]);
 
   const { zoneId } = useZone(selectedAddressLocationForZone, "mogrocery");
 
   const formattedDeliveryAddress = useMemo(() => {
-    if (!selectedAddress) return deliveryAddress;
-    if (selectedAddress.formattedAddress) return selectedAddress.formattedAddress;
+    if (!normalizedSelectedAddress) return deliveryAddress;
+    if (normalizedSelectedAddress.formattedAddress) return normalizedSelectedAddress.formattedAddress;
 
     const parts = [
-      selectedAddress.street,
-      selectedAddress.additionalDetails,
-      selectedAddress.city,
-      selectedAddress.state,
-      selectedAddress.zipCode,
+      normalizedSelectedAddress.street,
+      normalizedSelectedAddress.additionalDetails,
+      normalizedSelectedAddress.city,
+      normalizedSelectedAddress.state,
+      normalizedSelectedAddress.zipCode,
     ].filter(Boolean);
 
     return parts.join(", ") || deliveryAddress;
-  }, [selectedAddress]);
+  }, [normalizedSelectedAddress]);
   const selectedAddressKey = useMemo(() => {
-    if (!selectedAddress) return "none";
-    const coords = selectedAddress?.location?.coordinates || [];
-    const latitude = Number(
-      selectedAddress?.latitude ?? selectedAddress?.lat ?? coords?.[1],
-    );
-    const longitude = Number(
-      selectedAddress?.longitude ?? selectedAddress?.lng ?? coords?.[0],
-    );
+    if (!normalizedSelectedAddress) return "none";
+    const coords = extractAddressCoordinates(normalizedSelectedAddress);
+    const latitude = Number(coords?.latitude);
+    const longitude = Number(coords?.longitude);
     return [
-      selectedAddress.formattedAddress || "",
-      selectedAddress.street || "",
-      selectedAddress.city || "",
-      selectedAddress.state || "",
-      selectedAddress.zipCode || "",
+      normalizedSelectedAddress.formattedAddress || "",
+      normalizedSelectedAddress.street || "",
+      normalizedSelectedAddress.city || "",
+      normalizedSelectedAddress.state || "",
+      normalizedSelectedAddress.zipCode || "",
       Number.isFinite(longitude) ? String(longitude) : "",
       Number.isFinite(latitude) ? String(latitude) : "",
     ].join("|");
-  }, [selectedAddress]);
+  }, [normalizedSelectedAddress]);
   const cartStoreIdentities = useMemo(() => {
     const identities = [];
     const seen = new Set();
@@ -388,7 +433,7 @@ export default function GroceryCheckoutPage() {
 
   useEffect(() => {
     const calculatePricingPreview = async () => {
-      if (!groceryItems.length || !selectedAddress || !resolvedRestaurant?.restaurantId) {
+      if (!groceryItems.length || !normalizedSelectedAddress || !resolvedRestaurant?.restaurantId) {
         setLoadingPricing(false);
         setCalculatedPricing(null);
         return;
@@ -405,7 +450,7 @@ export default function GroceryCheckoutPage() {
         const response = await orderAPI.calculateOrder({
           items: orderItems,
           restaurantId: resolvedRestaurant.restaurantId,
-          deliveryAddress: selectedAddress,
+          deliveryAddress: normalizedSelectedAddress,
           couponCode: appliedCouponCode || undefined,
           deliveryFleet: "standard",
           platform: "mogrocery",
@@ -425,7 +470,7 @@ export default function GroceryCheckoutPage() {
     };
 
     calculatePricingPreview();
-  }, [appliedCouponCode, groceryItemsKey, selectedAddressKey, resolvedRestaurant?.restaurantId, zoneId]);
+  }, [appliedCouponCode, groceryItemsKey, selectedAddressKey, resolvedRestaurant?.restaurantId, zoneId, normalizedSelectedAddress]);
 
   useEffect(() => {
     const fetchAvailableCoupons = async () => {
@@ -624,7 +669,7 @@ export default function GroceryCheckoutPage() {
       const response = await orderAPI.calculateOrder({
         items: buildOrderItems(),
         restaurantId: resolvedRestaurant.restaurantId,
-        deliveryAddress: selectedAddress || undefined,
+        deliveryAddress: normalizedSelectedAddress || undefined,
         couponCode: normalizedCode,
         deliveryFleet: "standard",
         platform: "mogrocery",
@@ -718,7 +763,7 @@ export default function GroceryCheckoutPage() {
       navigate("/profile/addresses");
       return;
     }
-    if (!selectedAddress) {
+    if (!normalizedSelectedAddress) {
       toast.error("Please add/select a delivery address first.");
       navigate("/profile/addresses");
       return;
@@ -755,7 +800,7 @@ export default function GroceryCheckoutPage() {
       const pricingResponse = await orderAPI.calculateOrder({
         items,
         restaurantId,
-        deliveryAddress: selectedAddress,
+        deliveryAddress: normalizedSelectedAddress,
         couponCode: appliedCouponCode || undefined,
         deliveryFleet: "standard",
         platform: "mogrocery",
@@ -805,7 +850,7 @@ export default function GroceryCheckoutPage() {
 
       const orderPayload = {
         items,
-        address: selectedAddress,
+        address: normalizedSelectedAddress,
         restaurantId,
         restaurantName,
         platform: "mogrocery",

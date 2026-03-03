@@ -1108,6 +1108,7 @@ export const createOrder = async (req, res) => {
       userId,
       restaurantId: assignedRestaurantId,
       restaurantName: assignedRestaurantName,
+      restaurantPlatform: pricingPlatform === 'mogrocery' ? 'mogrocery' : 'mofood',
       items,
       address: normalizedAddress,
       pricing: {

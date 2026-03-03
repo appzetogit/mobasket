@@ -404,6 +404,17 @@ export default function App() {
           }
         />
         <Route
+          path="/store/zone-setup"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <ZoneSetup />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/store/outlet-timings"
           element={
             <ProtectedRoute

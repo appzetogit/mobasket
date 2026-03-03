@@ -429,6 +429,7 @@ export default function ExploreMore() {
   // Get restaurant display data
   const restaurantDisplayName = restaurantData?.name || "Loading..."
   const restaurantDisplayAddress = restaurantData?.location ? formatAddress(restaurantData.location) : ""
+  const showExploreAddress = !isGroceryStore && Boolean(restaurantDisplayAddress)
 
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
@@ -729,6 +730,7 @@ export default function ExploreMore() {
 
   const settingsItems = isGroceryStore ? [
     { id: 3, label: "Delivery settings", icon: Truck, route: "/store/delivery-settings" },
+    { id: 4, label: "Zone Setup", icon: MapPin, route: "/store/zone-setup" },
   ] : [
     { id: 3, label: "Delivery settings", icon: Truck, route: "/restaurant/delivery-settings" },
     { id: 4, label: "Zone Setup", icon: MapPin, route: "/restaurant/zone-setup" },
@@ -934,7 +936,7 @@ export default function ExploreMore() {
                     <h2 className="text-base font-semibold text-gray-900 mb-0.5">
                       {restaurantDisplayName}
                     </h2>
-                    {restaurantDisplayAddress && (
+                    {showExploreAddress && (
                       <p className="text-sm text-gray-500 truncate">
                         {restaurantDisplayAddress}
                       </p>

@@ -115,9 +115,10 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
     }
 
     const inferredPlatform = String(
-      restaurant?.platform ||
       order?.restaurantPlatform ||
       order?.platform ||
+      (String(order?.note || '').toLowerCase().includes('[mogrocery]') ? 'mogrocery' : '') ||
+      restaurant?.platform ||
       ''
     ).toLowerCase();
     const isGroceryStore = inferredPlatform === 'mogrocery';
