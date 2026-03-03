@@ -22,10 +22,13 @@ import { useCart } from "../../user/context/CartContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { useProfile } from "../../user/context/ProfileContext";
 import { useZone } from "../../user/hooks/useZone";
-import api, { adminAPI, orderAPI, restaurantAPI, userAPI } from "@/lib/api";
+import api, { adminAPI, locationAPI, orderAPI, restaurantAPI, userAPI } from "@/lib/api";
 import { initRazorpayPayment } from "@/lib/utils/razorpay";
 import { toast } from "sonner";
 import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
+import { Loader } from "@googlemaps/js-api-loader";
+import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey";
+import { useRef } from "react";
 
 const extractAddressCoordinates = (address) => {
   if (!address || typeof address !== "object") return null;
@@ -37,20 +40,20 @@ const extractAddressCoordinates = (address) => {
 
   const latitude = Number(
     address?.latitude ??
-      address?.lat ??
-      address?.location?.latitude ??
-      address?.location?.lat ??
-      (locationCoordinates ? locationCoordinates[1] : undefined) ??
-      (directCoordinates ? directCoordinates[1] : undefined),
+    address?.lat ??
+    address?.location?.latitude ??
+    address?.location?.lat ??
+    (locationCoordinates ? locationCoordinates[1] : undefined) ??
+    (directCoordinates ? directCoordinates[1] : undefined),
   );
 
   const longitude = Number(
     address?.longitude ??
-      address?.lng ??
-      address?.location?.longitude ??
-      address?.location?.lng ??
-      (locationCoordinates ? locationCoordinates[0] : undefined) ??
-      (directCoordinates ? directCoordinates[0] : undefined),
+    address?.lng ??
+    address?.location?.longitude ??
+    address?.location?.lng ??
+    (locationCoordinates ? locationCoordinates[0] : undefined) ??
+    (directCoordinates ? directCoordinates[0] : undefined),
   );
 
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
@@ -60,7 +63,29 @@ const extractAddressCoordinates = (address) => {
 export default function GroceryCheckoutPage() {
   const navigate = useNavigate();
   const { cart, clearCart, isGroceryItem } = useCart();
-  const { getDefaultAddress, userProfile, addresses } = useProfile();
+  const { getDefaultAddress, userProfile, addresses, addAddress } = useProfile();
+
+  const [showAddAddressForm, setShowAddAddressForm] = useState(false);
+  const [isDetectingAddress, setIsDetectingAddress] = useState(false);
+  const [isSavingAddress, setIsSavingAddress] = useState(false);
+  const [newAddress, setNewAddress] = useState({
+    label: "Home",
+    street: "",
+    additionalDetails: "",
+    city: "",
+    state: "",
+    zipCode: "",
+    latitude: "",
+    longitude: "",
+    isDefault: false,
+  });
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [loadingAddressSuggestions, setLoadingAddressSuggestions] = useState(false);
+  const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
+  const [googlePlacesReady, setGooglePlacesReady] = useState(false);
+  const autocompleteServiceRef = useRef(null);
+  const placesServiceRef = useRef(null);
+  const suggestionsDebounceRef = useRef(null);
 
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("card");
@@ -134,29 +159,328 @@ export default function GroceryCheckoutPage() {
     [groceryItems],
   );
 
+  const resetNewAddressForm = () => {
+    setNewAddress({
+      label: "Home",
+      street: "",
+      additionalDetails: "",
+      city: "",
+      state: "",
+      zipCode: "",
+      latitude: "",
+      longitude: "",
+      isDefault: false,
+    });
+    setAddressSuggestions([]);
+    setShowAddressSuggestions(false);
+  };
+
+  const parseAddressComponents = useCallback((components = []) => {
+    const findByType = (type) =>
+      components.find((component) => component?.types?.includes(type))?.long_name || "";
+
+    const streetNumber = findByType("street_number");
+    const route = findByType("route");
+    const sublocality =
+      findByType("sublocality_level_1") ||
+      findByType("sublocality") ||
+      findByType("neighborhood");
+    const city =
+      findByType("locality") ||
+      findByType("administrative_area_level_2");
+    const state = findByType("administrative_area_level_1");
+    const zipCode = findByType("postal_code");
+
+    return {
+      street: [streetNumber, route].filter(Boolean).join(" ").trim(),
+      additionalDetails: sublocality,
+      city,
+      state,
+      zipCode,
+    };
+  }, []);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!showAddAddressForm) return undefined;
+    if (autocompleteServiceRef.current && placesServiceRef.current) {
+      setGooglePlacesReady(true);
+      return undefined;
+    }
+
+    const initGooglePlaces = async () => {
+      try {
+        const apiKey = await getGoogleMapsApiKey();
+        if (!apiKey || !isMounted) return;
+
+        const loader = new Loader({
+          apiKey,
+          version: "weekly",
+          libraries: ["places"],
+        });
+        const google = await loader.load();
+        if (!isMounted) return;
+
+        autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
+        placesServiceRef.current = new google.maps.places.PlacesService(document.createElement("div"));
+        setGooglePlacesReady(true);
+      } catch (error) {
+        console.error("Checkout address suggestions init failed:", error);
+        if (isMounted) setGooglePlacesReady(false);
+      }
+    };
+
+    initGooglePlaces();
+    return () => {
+      isMounted = false;
+    };
+  }, [showAddAddressForm]);
+
+  const fetchAddressSuggestions = useCallback(
+    (inputValue) => {
+      const query = String(inputValue || "").trim();
+      if (!query || query.length < 3 || !autocompleteServiceRef.current) {
+        setAddressSuggestions([]);
+        setLoadingAddressSuggestions(false);
+        return;
+      }
+
+      setLoadingAddressSuggestions(true);
+      autocompleteServiceRef.current.getPlacePredictions(
+        {
+          input: query,
+          componentRestrictions: { country: "in" },
+          types: ["address"],
+        },
+        (predictions, status) => {
+          const ok =
+            status === window.google?.maps?.places?.PlacesServiceStatus?.OK ||
+            status === "OK";
+          setAddressSuggestions(ok && Array.isArray(predictions) ? predictions.slice(0, 6) : []);
+          setLoadingAddressSuggestions(false);
+        },
+      );
+    },
+    [],
+  );
+
+  const handleStreetInputChange = (value) => {
+    setNewAddress((prev) => ({ ...prev, street: value }));
+    setShowAddressSuggestions(Boolean(value));
+
+    if (suggestionsDebounceRef.current) {
+      clearTimeout(suggestionsDebounceRef.current);
+    }
+    suggestionsDebounceRef.current = setTimeout(() => {
+      fetchAddressSuggestions(value);
+    }, 220);
+  };
+
+  const handleAddressSuggestionSelect = useCallback(
+    (suggestion) => {
+      if (!suggestion?.place_id || !placesServiceRef.current) {
+        setNewAddress((prev) => ({ ...prev, street: suggestion?.description || prev.street }));
+        setShowAddressSuggestions(false);
+        return;
+      }
+
+      placesServiceRef.current.getDetails(
+        {
+          placeId: suggestion.place_id,
+          fields: ["formatted_address", "address_components", "geometry"],
+        },
+        (placeResult, status) => {
+          const ok =
+            status === window.google?.maps?.places?.PlacesServiceStatus?.OK ||
+            status === "OK";
+          if (!ok || !placeResult) {
+            setNewAddress((prev) => ({ ...prev, street: suggestion.description || prev.street }));
+            setShowAddressSuggestions(false);
+            return;
+          }
+
+          const parsed = parseAddressComponents(placeResult.address_components || []);
+          const lat = placeResult?.geometry?.location?.lat?.();
+          const lng = placeResult?.geometry?.location?.lng?.();
+          const formatted = String(placeResult.formatted_address || "");
+          const fallbackStreet =
+            parsed.street ||
+            suggestion?.structured_formatting?.main_text ||
+            suggestion.description;
+
+          setNewAddress((prev) => ({
+            ...prev,
+            street: fallbackStreet || prev.street,
+            additionalDetails: parsed.additionalDetails || prev.additionalDetails,
+            city: parsed.city || prev.city,
+            state: parsed.state || prev.state,
+            zipCode: parsed.zipCode || prev.zipCode,
+            latitude: Number.isFinite(lat) ? String(lat) : prev.latitude,
+            longitude: Number.isFinite(lng) ? String(lng) : prev.longitude,
+          }));
+
+          if (formatted && !parsed.additionalDetails) {
+            setNewAddress((prev) => ({
+              ...prev,
+              additionalDetails: prev.additionalDetails || formatted,
+            }));
+          }
+          setShowAddressSuggestions(false);
+        },
+      );
+    },
+    [parseAddressComponents],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (suggestionsDebounceRef.current) {
+        clearTimeout(suggestionsDebounceRef.current);
+      }
+    };
+  }, []);
+
+  const extractDetectedAddress = (response, latitude, longitude) => {
+    const results = response?.data?.data?.results || [];
+    const firstResult = results[0] || {};
+    const components = firstResult?.address_components || {};
+
+    const fromArray = Array.isArray(components)
+      ? {
+        city:
+          components.find((c) => c.types?.includes("locality"))?.long_name ||
+          components.find((c) => c.types?.includes("administrative_area_level_2"))?.long_name ||
+          "",
+        state:
+          components.find((c) => c.types?.includes("administrative_area_level_1"))?.long_name ||
+          "",
+        zipCode:
+          components.find((c) => c.types?.includes("postal_code"))?.long_name || "",
+      }
+      : {
+        city: components.city || "",
+        state: components.state || "",
+        zipCode: components.zipCode || components.postal_code || "",
+      };
+
+    const formattedAddress = firstResult?.formatted_address || "";
+    const pincodeFromText =
+      formattedAddress.match(/\b\d{6}\b/)?.[0] ||
+      response?.data?.data?.formattedAddress?.match(/\b\d{6}\b/)?.[0] ||
+      "";
+    const parts = formattedAddress.split(",").map((part) => part.trim()).filter(Boolean);
+
+    return {
+      street: firstResult?.street || parts[0] || "",
+      additionalDetails:
+        firstResult?.area ||
+        firstResult?.sublocality ||
+        firstResult?.neighborhood ||
+        (parts.length > 1 ? parts.slice(1, Math.min(parts.length - 2, 3)).join(", ") : ""),
+      city: fromArray.city,
+      state: fromArray.state,
+      zipCode: fromArray.zipCode || pincodeFromText,
+      latitude: String(latitude),
+      longitude: String(longitude),
+    };
+  };
+
+  const handleDetectCurrentLocationForAddress = async () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported on this device.");
+      return;
+    }
+
+    setIsDetectingAddress(true);
+    try {
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 15000,
+          maximumAge: 0,
+        });
+      });
+
+      const latitude = Number(position?.coords?.latitude);
+      const longitude = Number(position?.coords?.longitude);
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        throw new Error("Unable to detect valid coordinates.");
+      }
+
+      const response = await locationAPI.reverseGeocode(latitude, longitude);
+      const detected = extractDetectedAddress(response, latitude, longitude);
+      setNewAddress((prev) => ({ ...prev, ...detected }));
+      toast.success("Address auto-filled from current location.");
+    } catch (error) {
+      console.error("Checkout address detection failed:", error);
+      toast.error("Unable to detect location. Fill address manually.");
+    } finally {
+      setIsDetectingAddress(false);
+    }
+  };
+
+  const handleSaveNewAddress = async () => {
+    const payload = {
+      label: newAddress.label,
+      street: String(newAddress.street || "").trim(),
+      additionalDetails: String(newAddress.additionalDetails || "").trim(),
+      city: String(newAddress.city || "").trim(),
+      state: String(newAddress.state || "").trim(),
+      zipCode: String(newAddress.zipCode || "").trim(),
+      latitude: newAddress.latitude || undefined,
+      longitude: newAddress.longitude || undefined,
+      isDefault: Boolean(newAddress.isDefault),
+    };
+
+    if (!payload.street || !payload.city || !payload.state) {
+      toast.error("Street, city and state are required.");
+      return;
+    }
+
+    setIsSavingAddress(true);
+    try {
+      const created = await addAddress(payload);
+      if (created) {
+        setSelectedAddress(created);
+      }
+      setShowAddAddressForm(false);
+      resetNewAddressForm();
+      toast.success("Address added successfully.");
+    } catch (error) {
+      console.error("Add checkout address failed:", error);
+      toast.error(error?.response?.data?.message || "Failed to add address.");
+    } finally {
+      setIsSavingAddress(false);
+    }
+  };
+
   const deliveryAddress =
     "Select delivery address";
 
-  const selectedAddress = useMemo(() => {
+  const [selectedAddress, setSelectedAddress] = useState(null);
+
+  useEffect(() => {
     const defaultAddress = getDefaultAddress();
-    const defaultAddressId = String(defaultAddress?._id || defaultAddress?.id || "").trim();
-    if (defaultAddressId && Array.isArray(addresses)) {
-      const hydratedDefault = addresses.find(
-        (address) => String(address?._id || address?.id || "").trim() === defaultAddressId,
-      );
-      if (hydratedDefault) {
-        return hydratedDefault;
+    const selectedId = selectedAddress?.id || selectedAddress?._id;
+    if (selectedId && Array.isArray(addresses) && addresses.length > 0) {
+      const stillExists = addresses.find((a) => (a.id || a._id) === selectedId);
+      if (stillExists) {
+        setSelectedAddress(stillExists);
+        return;
       }
     }
+
     if (defaultAddress) {
-      return defaultAddress;
+      setSelectedAddress(defaultAddress);
+      return;
     }
 
     if (Array.isArray(addresses) && addresses.length > 0) {
-      return addresses[0];
+      setSelectedAddress(addresses[0]);
+      return;
     }
 
-    return null;
+    setSelectedAddress(null);
   }, [addresses, getDefaultAddress]);
 
   const normalizedSelectedAddress = useMemo(() => {
@@ -207,6 +531,17 @@ export default function GroceryCheckoutPage() {
 
     return parts.join(", ") || deliveryAddress;
   }, [normalizedSelectedAddress]);
+
+  const formatAddressLine = (address) =>
+    [
+      address?.street,
+      address?.additionalDetails,
+      address?.city,
+      address?.state,
+      address?.zipCode,
+    ]
+      .filter(Boolean)
+      .join(", ");
   const selectedAddressKey = useMemo(() => {
     if (!normalizedSelectedAddress) return "none";
     const coords = extractAddressCoordinates(normalizedSelectedAddress);
@@ -305,8 +640,8 @@ export default function GroceryCheckoutPage() {
       };
       setResolvedRestaurant((prev) =>
         prev?.restaurantId === resolved.restaurantId &&
-        prev?.restaurantName === resolved.restaurantName &&
-        prev?.restaurantAddress === resolved.restaurantAddress
+          prev?.restaurantName === resolved.restaurantName &&
+          prev?.restaurantAddress === resolved.restaurantAddress
           ? prev
           : resolved,
       );
@@ -345,23 +680,23 @@ export default function GroceryCheckoutPage() {
         itemId,
         storeId: String(
           item?.storeId?._id ||
-            item?.storeId?.id ||
-            item?.storeId ||
-            item?.restaurantId?._id ||
-            item?.restaurantId?.id ||
-            item?.restaurantId ||
-            resolvedRestaurant?.restaurantId ||
-            "",
+          item?.storeId?.id ||
+          item?.storeId ||
+          item?.restaurantId?._id ||
+          item?.restaurantId?.id ||
+          item?.restaurantId ||
+          resolvedRestaurant?.restaurantId ||
+          "",
         ).trim(),
         restaurantId: String(
           item?.restaurantId?._id ||
-            item?.restaurantId?.id ||
-            item?.restaurantId ||
-            item?.storeId?._id ||
-            item?.storeId?.id ||
-            item?.storeId ||
-            resolvedRestaurant?.restaurantId ||
-            "",
+          item?.restaurantId?.id ||
+          item?.restaurantId ||
+          item?.storeId?._id ||
+          item?.storeId?.id ||
+          item?.storeId ||
+          resolvedRestaurant?.restaurantId ||
+          "",
         ).trim(),
         name: item.name,
         price: Number(item.price || 0),
@@ -614,7 +949,7 @@ export default function GroceryCheckoutPage() {
   }, [appliedPlanBenefits, hasActivePlanSubscription, hasPlanDiscount, planDiscountAmount]);
   const grandTotal = Number(
     calculatedPricing?.total ??
-      subtotal + summaryDeliveryFee + summaryPlatformFee + summaryTax - Number(calculatedPricing?.discount ?? 0),
+    subtotal + summaryDeliveryFee + summaryPlatformFee + summaryTax - Number(calculatedPricing?.discount ?? 0),
   );
   const summaryCouponDiscount = Number(
     calculatedPricing?.breakdown?.couponDiscountAmount ?? calculatedPricing?.appliedCoupon?.discount ?? 0,
@@ -903,15 +1238,15 @@ export default function GroceryCheckoutPage() {
           },
           ...(paymentMethod === "upi"
             ? {
-                method: {
-                  upi: true,
-                  card: false,
-                  netbanking: false,
-                  wallet: false,
-                  emi: false,
-                  paylater: false,
-                },
-              }
+              method: {
+                upi: true,
+                card: false,
+                netbanking: false,
+                wallet: false,
+                emi: false,
+                paylater: false,
+              },
+            }
             : {}),
           handler: async (response) => {
             try {
@@ -976,13 +1311,167 @@ export default function GroceryCheckoutPage() {
               <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-1">
                 Delivery Address
               </h3>
-              <p className="text-xs text-gray-600 dark:text-gray-400">{formattedDeliveryAddress}</p>
-              <button
-                onClick={() => navigate("/profile/addresses")}
-                className="text-yellow-700 text-xs font-bold mt-2 hover:underline"
-              >
-                Change Address
-              </button>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">{formattedDeliveryAddress}</p>
+
+              <div className="mt-3 space-y-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
+                <p className="text-xs font-semibold text-gray-500 mb-2">Saved Addresses</p>
+                {Array.isArray(addresses) && addresses.length > 0 ? (
+                  addresses.map((address) => {
+                    const addressId = address.id || address._id;
+                    const selectedId = selectedAddress?.id || selectedAddress?._id;
+                    const isSelected = selectedId && addressId && String(selectedId) === String(addressId);
+                    return (
+                      <button
+                        key={String(addressId)}
+                        type="button"
+                        onClick={() => setSelectedAddress(address)}
+                        className={`w-full text-left rounded-xl border px-3 py-2 transition-colors ${isSelected
+                          ? "border-[#ff8100] bg-orange-50 dark:bg-[#facd01]/10 dark:border-[#facd01]"
+                          : "border-gray-200 bg-white dark:bg-[#1f1f1f] dark:border-gray-700"
+                          }`}
+                      >
+                        <p className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+                          {address.label || "Address"} {address.isDefault ? "(Default)" : ""}
+                        </p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">{formatAddressLine(address)}</p>
+                      </button>
+                    );
+                  })
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={() => setShowAddAddressForm((prev) => !prev)}
+                  className="text-xs font-semibold text-[#ff8100] mt-2 block w-full text-left"
+                >
+                  {showAddAddressForm ? "Close Add Address" : "+ Add New Address"}
+                </button>
+
+                {showAddAddressForm ? (
+                  <div className="rounded-xl border border-gray-200 p-3 space-y-2 bg-gray-50 dark:bg-[#1a1a1a] dark:border-gray-700">
+                    <div className="grid grid-cols-3 gap-2">
+                      {["Home", "Office", "Other"].map((label) => (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() => setNewAddress((prev) => ({ ...prev, label }))}
+                          className={`h-8 rounded-lg text-xs font-semibold border ${newAddress.label === label
+                            ? "border-[#ff8100] bg-orange-100 text-[#ff8100] dark:bg-[#facd01]/20 dark:border-[#facd01] dark:text-[#facd01]"
+                            : "border-gray-200 bg-white text-gray-700 dark:bg-[#1f1f1f] dark:border-gray-700 dark:text-gray-300"
+                            }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleDetectCurrentLocationForAddress}
+                      disabled={isDetectingAddress}
+                      className="h-8 w-full rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-700 flex items-center justify-center gap-1 dark:bg-[#1f1f1f] dark:border-gray-700 dark:text-gray-300"
+                    >
+                      {isDetectingAddress ? "Detecting..." : "Detect Current Location"}
+                    </button>
+
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={newAddress.street}
+                        onChange={(e) => handleStreetInputChange(e.target.value)}
+                        onFocus={() => {
+                          if (newAddress.street.trim().length >= 3) {
+                            setShowAddressSuggestions(true);
+                            fetchAddressSuggestions(newAddress.street);
+                          }
+                        }}
+                        onBlur={() => {
+                          setTimeout(() => setShowAddressSuggestions(false), 150);
+                        }}
+                        placeholder="Street / House No."
+                        className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:bg-[#1f1f1f] dark:border-gray-700 dark:text-white dark:placeholder-gray-500"
+                      />
+                      {showAddressSuggestions && (
+                        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg dark:bg-[#1a1a1a] dark:border-gray-700">
+                          {loadingAddressSuggestions ? (
+                            <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Loading suggestions...</p>
+                          ) : addressSuggestions.length > 0 ? (
+                            addressSuggestions.map((suggestion) => (
+                              <button
+                                key={suggestion.place_id}
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => handleAddressSuggestionSelect(suggestion)}
+                                className="block w-full border-b border-gray-100 px-3 py-2 text-left text-xs text-gray-700 hover:bg-orange-50 last:border-b-0 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-[#facd01]/10"
+                              >
+                                {suggestion.description}
+                              </button>
+                            ))
+                          ) : (
+                            <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
+                              {googlePlacesReady
+                                ? "No address suggestions found."
+                                : "Preparing suggestions..."}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      value={newAddress.additionalDetails}
+                      onChange={(e) =>
+                        setNewAddress((prev) => ({ ...prev, additionalDetails: e.target.value }))
+                      }
+                      placeholder="Area / Landmark"
+                      className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:bg-[#1f1f1f] dark:border-gray-700 dark:text-white dark:placeholder-gray-500"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={newAddress.city}
+                        onChange={(e) => setNewAddress((prev) => ({ ...prev, city: e.target.value }))}
+                        placeholder="City"
+                        className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:bg-[#1f1f1f] dark:border-gray-700 dark:text-white dark:placeholder-gray-500"
+                      />
+                      <input
+                        type="text"
+                        value={newAddress.state}
+                        onChange={(e) => setNewAddress((prev) => ({ ...prev, state: e.target.value }))}
+                        placeholder="State"
+                        className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:bg-[#1f1f1f] dark:border-gray-700 dark:text-white dark:placeholder-gray-500"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      value={newAddress.zipCode}
+                      onChange={(e) => setNewAddress((prev) => ({ ...prev, zipCode: e.target.value }))}
+                      placeholder="Pincode"
+                      className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:bg-[#1f1f1f] dark:border-gray-700 dark:text-white dark:placeholder-gray-500"
+                    />
+
+                    <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <input
+                        type="checkbox"
+                        checked={newAddress.isDefault}
+                        onChange={(e) =>
+                          setNewAddress((prev) => ({ ...prev, isDefault: e.target.checked }))
+                        }
+                      />
+                      Set as default
+                    </label>
+
+                    <button
+                      type="button"
+                      className="w-full h-8 rounded-lg text-xs font-bold bg-[#facd01] hover:bg-[#facd01]/90 text-gray-900 transition-colors"
+                      onClick={handleSaveNewAddress}
+                      disabled={isSavingAddress}
+                    >
+                      {isSavingAddress ? "Saving..." : "Save Address"}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </div>
         </div>

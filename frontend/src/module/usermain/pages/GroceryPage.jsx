@@ -26,6 +26,7 @@ import { toast } from "sonner";
 import { useCart } from "../../user/context/CartContext";
 import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
+import { useLocationSelector } from "../../user/components/UserLayout";
 import { CategoryFoodsContent } from "./CategoryFoodsPage";
 import AddToCartAnimation from "../../user/components/AddToCartAnimation";
 import api, { restaurantAPI, userAPI } from "@/lib/api";
@@ -40,6 +41,7 @@ const GroceryPage = () => {
   const routerLocation = useRouterLocation();
   const { getGroceryCartCount, addToCart, isInCart } = useCart();
   const { location: userLocation } = useUserLocation();
+  const { openLocationSelector } = useLocationSelector();
   const { zoneId } = useZone(userLocation, "mogrocery");
   const isGroceryCategoriesRoute = routerLocation.pathname === "/grocery/categories";
   const itemCount = getGroceryCartCount();
@@ -1403,7 +1405,7 @@ const GroceryPage = () => {
                     {deliveryEtaMinutes} minutes
                   </span>
                 </div>
-                <div className="flex items-center gap-1 -mt-0.5 cursor-pointer">
+                <div onClick={openLocationSelector} className="flex items-center gap-1 -mt-0.5 cursor-pointer">
                   <span className="text-[#1a1a1a] text-[0.8rem] font-bold tracking-tight leading-tight line-clamp-2">
                     {topAddress}
                   </span>
