@@ -2203,13 +2203,13 @@ const GroceryPage = () => {
                   </div>
                 </div>
 
-                <div className="bg-white dark:bg-[#121b2b] border-b border-slate-200 dark:border-slate-700 px-2 py-2 overflow-x-auto no-scrollbar">
-                  <div className="flex gap-2 min-w-max md:max-w-6xl md:mx-auto md:px-2">
+                <div className="bg-white dark:bg-[#121b2b] border-b border-slate-200 dark:border-slate-700 px-2 py-2 overflow-x-hidden">
+                  <div className="grid grid-cols-4 gap-2 md:flex md:flex-wrap md:gap-2 md:max-w-6xl md:mx-auto md:px-2">
                     {collectionCategoryTabs.map((tab) => (
                       <button
                         key={`collection-tab-${tab._id}`}
                         type="button"
-                        className="flex flex-col items-center gap-1 min-w-[72px]"
+                        className="w-full max-w-[88px] mx-auto flex flex-col items-center gap-1"
                         onClick={() => {
                           setCollectionCategoryId(String(tab._id));
                           if (String(tab._id) === "all") {
@@ -2228,7 +2228,7 @@ const GroceryPage = () => {
                           <img src={tab.image || FALLBACK_IMAGE} alt={tab.name} className="w-full h-full object-contain" />
                         </div>
                         <span
-                          className={`text-[11px] leading-tight font-bold text-center line-clamp-2 ${String(collectionCategoryId || "all") === String(tab._id) ? "text-slate-900 dark:text-slate-100" : "text-slate-500 dark:text-slate-400"
+                          className={`w-full px-0.5 text-[11px] leading-tight font-bold text-center line-clamp-2 break-words ${String(collectionCategoryId || "all") === String(tab._id) ? "text-slate-900 dark:text-slate-100" : "text-slate-500 dark:text-slate-400"
                             }`}
                         >
                           {tab.name}
@@ -2238,7 +2238,7 @@ const GroceryPage = () => {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto overscroll-contain p-3">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-3">
                   {collectionVisibleProducts.length === 0 ? (
                     <p className="text-sm text-slate-500 dark:text-slate-400 p-3 md:max-w-6xl md:mx-auto">No products available.</p>
                   ) : (
