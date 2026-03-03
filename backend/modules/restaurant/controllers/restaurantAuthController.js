@@ -55,6 +55,12 @@ const logger = winston.createLogger({
   ]
 });
 
+const RESTAURANT_PLATFORM_FILTER = { platform: { $ne: 'mogrocery' } };
+const withRestaurantPlatformFilter = (query = {}) => ({
+  ...query,
+  ...RESTAURANT_PLATFORM_FILTER
+});
+
 const getFcmPatchFromBody = (body = {}) => {
   const patch = {};
   const normalizedPlatform = String(body?.platform || '').toLowerCase();
@@ -158,7 +164,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       const findQuery = normalizedPhone 
         ? buildPhoneQuery(normalizedPhone)
         : { email: email?.toLowerCase().trim() };
-      restaurant = await Restaurant.findOne(findQuery);
+      restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(findQuery));
 
       if (restaurant) {
         return errorResponse(res, 400, `Restaurant already exists with this ${identifierType}. Please login.`);
@@ -241,7 +247,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               keyPattern: createError.keyPattern
             });
             // Try to find existing restaurant by phone
-            restaurant = await Restaurant.findOne({ phone });
+            restaurant = await Restaurant.findOne(withRestaurantPlatformFilter({ phone }));
             if (restaurant) {
               return errorResponse(res, 400, `Restaurant already exists with this phone number. Please login.`);
             }
@@ -277,7 +283,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               if (retryError.code === 11000) {
                 // Try to find restaurant again (search in both formats)
                 const phoneQuery = buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone };
-                restaurant = await Restaurant.findOne(phoneQuery);
+                restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(phoneQuery));
                 if (restaurant) {
                   return errorResponse(res, 400, `Restaurant already exists with this phone number. Please login.`);
                 }
@@ -287,7 +293,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             } else if (createError.keyPattern && createError.keyPattern.phone) {
               // Phone duplicate key error - search in both formats
               const phoneQuery = buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone };
-              restaurant = await Restaurant.findOne(phoneQuery);
+              restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(phoneQuery));
                 if (restaurant) {
                   return errorResponse(res, 400, `Restaurant already exists with this phone number. Please login.`);
                 }
@@ -301,7 +307,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               .replace(/(^-|-$)/g, '');
             let counter = 1;
             let uniqueSlug = `${baseSlug}-${counter}`;
-            while (await Restaurant.findOne({ slug: uniqueSlug })) {
+            while (await Restaurant.findOne(withRestaurantPlatformFilter({ slug: uniqueSlug }))) {
               counter++;
               uniqueSlug = `${baseSlug}-${counter}`;
             }
@@ -318,7 +324,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               const findQuery = normalizedPhone 
                 ? { phone: normalizedPhone } 
                 : { email: email?.toLowerCase().trim() };
-              restaurant = await Restaurant.findOne(findQuery);
+              restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(findQuery));
               if (!restaurant) {
                 throw retryError;
               }
@@ -329,7 +335,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             const findQuery = normalizedPhone 
               ? { phone: normalizedPhone } 
               : { email: email?.toLowerCase().trim() };
-            restaurant = await Restaurant.findOne(findQuery);
+            restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(findQuery));
             if (!restaurant) {
               throw createError;
             }
@@ -345,7 +351,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       const findQuery = normalizedPhone
         ? buildPhoneQuery(normalizedPhone)
         : { email: email?.toLowerCase().trim() };
-      restaurant = await Restaurant.findOne(findQuery);
+      restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(findQuery));
 
       if (!restaurant && !name) {
         // Tell the client that we need restaurant name to proceed with auto-registration
@@ -439,7 +445,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               });
               // Try to find existing restaurant by phone (search in both formats)
               const phoneQuery = buildPhoneQuery(normalizedPhone) || { phone };
-              restaurant = await Restaurant.findOne(phoneQuery);
+              restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(phoneQuery));
               if (restaurant) {
                 logger.info(`Restaurant found after email null duplicate key error: ${restaurant._id}`);
                 // Continue with login flow
@@ -476,7 +482,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
                   if (retryError.code === 11000) {
                     // Try to find restaurant again (search in both formats)
                     const phoneQuery = buildPhoneQuery(normalizedPhone) || { phone };
-                    restaurant = await Restaurant.findOne(phoneQuery);
+                    restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(phoneQuery));
                     if (restaurant) {
                       logger.info(`Restaurant found after retry error: ${restaurant._id}`);
                       // Continue with login flow
@@ -490,7 +496,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               }
             } else if (createError.keyPattern && createError.keyPattern.phone) {
               // Phone duplicate key error
-              restaurant = await Restaurant.findOne({ phone });
+              restaurant = await Restaurant.findOne(withRestaurantPlatformFilter({ phone }));
               if (restaurant) {
                 logger.info(`Restaurant found after phone duplicate key error: ${restaurant._id}`);
                 // Continue with login flow
@@ -506,7 +512,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
                 .replace(/(^-|-$)/g, '');
               let counter = 1;
               let uniqueSlug = `${baseSlug}-${counter}`;
-              while (await Restaurant.findOne({ slug: uniqueSlug })) {
+              while (await Restaurant.findOne(withRestaurantPlatformFilter({ slug: uniqueSlug }))) {
                 counter++;
                 uniqueSlug = `${baseSlug}-${counter}`;
               }
@@ -523,7 +529,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
                 const findQuery = phone 
                   ? { phone } 
                   : { email };
-                restaurant = await Restaurant.findOne(findQuery);
+                restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(findQuery));
                 if (!restaurant) {
                   throw retryError;
                 }
@@ -534,7 +540,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               const findQuery = phone 
                 ? { phone } 
                 : { email };
-              restaurant = await Restaurant.findOne(findQuery);
+              restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(findQuery));
               if (!restaurant) {
                 throw createError;
               }
@@ -621,12 +627,12 @@ export const register = asyncHandler(async (req, res) => {
   }
 
   // Check if restaurant already exists
-  const existingRestaurant = await Restaurant.findOne({ 
+  const existingRestaurant = await Restaurant.findOne(withRestaurantPlatformFilter({ 
     $or: [
       { email: email.toLowerCase().trim() },
       ...(normalizedPhone ? [{ phone: normalizedPhone }] : [])
     ]
-  });
+  }));
 
   if (existingRestaurant) {
     if (existingRestaurant.email === email.toLowerCase().trim()) {
@@ -703,7 +709,7 @@ export const login = asyncHandler(async (req, res) => {
     return errorResponse(res, 400, 'Email and password are required');
   }
 
-  const restaurant = await Restaurant.findOne({ email }).select('+password');
+  const restaurant = await Restaurant.findOne(withRestaurantPlatformFilter({ email })).select('+password');
 
   if (!restaurant) {
     return errorResponse(res, 401, 'Invalid email or password');
@@ -784,7 +790,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
     return errorResponse(res, 400, 'Password must be at least 6 characters long');
   }
 
-  const restaurant = await Restaurant.findOne({ email }).select('+password');
+  const restaurant = await Restaurant.findOne(withRestaurantPlatformFilter({ email })).select('+password');
 
   if (!restaurant) {
     return errorResponse(res, 404, 'No restaurant account found with this email.');
@@ -833,6 +839,9 @@ export const refreshToken = asyncHandler(async (req, res) => {
 
     if (!restaurant) {
       return errorResponse(res, 401, 'Restaurant not found');
+    }
+    if (restaurant.platform === 'mogrocery') {
+      return errorResponse(res, 401, 'Invalid token for restaurant module');
     }
 
     // Allow inactive restaurants to refresh tokens - they need access to complete onboarding
@@ -1016,12 +1025,12 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     }
 
     // Find existing restaurant by firebase UID (stored in googleId) or email
-    let restaurant = await Restaurant.findOne({
+    let restaurant = await Restaurant.findOne(withRestaurantPlatformFilter({
       $or: [
         { googleId: firebaseUid },
         { email }
       ]
-    });
+    }));
 
     if (restaurant) {
       // If restaurant exists but googleId not linked yet, link it
@@ -1071,7 +1080,7 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
         // Handle duplicate key error
         if (createError.code === 11000) {
           logger.warn('Duplicate key error during restaurant creation, retrying find', { email });
-          restaurant = await Restaurant.findOne({ email });
+          restaurant = await Restaurant.findOne(withRestaurantPlatformFilter({ email }));
           if (!restaurant) {
             logger.error('Restaurant not found after duplicate key error', { email });
             throw createError;
@@ -1146,6 +1155,7 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     return errorResponse(res, 400, error.message || 'Firebase Google authentication failed');
   }
 });
+
 
 
 

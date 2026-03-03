@@ -174,16 +174,19 @@ export const useRestaurantNotifications = (options = {}) => {
     }
     
     // Initialize socket connection to restaurant namespace
-    // Use polling only to avoid repeated "WebSocket connection failed" when backend is down
+    // Prefer websocket for stability; fallback to polling when websocket is unavailable.
     socketRef.current = io(socketUrl, {
       path: '/socket.io/',
-      transports: ['polling'],
+      transports: ['websocket', 'polling'],
+      upgrade: true,
+      rememberUpgrade: true,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       reconnectionAttempts: Infinity,
       timeout: 20000,
-      forceNew: false,
+      forceNew: true,
+      withCredentials: true,
       autoConnect: true,
       auth: {
         token: isGroceryStore 
@@ -225,7 +228,10 @@ export const useRestaurantNotifications = (options = {}) => {
       const shouldLog = now - lastConnectErrorLogRef.current >= CONNECT_ERROR_LOG_THROTTLE_MS;
       if (shouldLog) {
         lastConnectErrorLogRef.current = now;
-        const isTransportError = error.type === 'TransportError' || error.message?.includes('xhr poll error');
+        const isTransportError =
+          error.type === 'TransportError' ||
+          error.message?.includes('xhr poll error') ||
+          error.message?.includes('websocket');
         console.warn(
           'Restaurant Socket:',
           isTransportError
