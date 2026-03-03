@@ -857,6 +857,15 @@ export default function HubMenu() {
     setIsAddPopupOpen(false) // Close the main add popup
   }
 
+  const handleAddItemFromPopup = () => {
+    // Close floating popups first so route transition is reliable on mobile taps.
+    setIsAddPopupOpen(false)
+    setIsMenuOpen(false)
+    requestAnimationFrame(() => {
+      navigate("/restaurant/hub-menu/item/new")
+    })
+  }
+
   const handleContinueAddCategory = async () => {
     if (!newCategoryName.trim()) {
       toast.error('Please enter a category name')
@@ -1408,9 +1417,8 @@ export default function HubMenu() {
               </div>
               <div className="px-4 py-4 space-y-2">
                 <button
-                  onClick={() => {
-                    navigate(`/restaurant/hub-menu/item/new`)
-                  }}
+                  type="button"
+                  onClick={handleAddItemFromPopup}
                   className="w-full py-3 px-4 text-left rounded-lg hover:bg-gray-50 transition-colors"
                 >
                   <span className="text-sm font-medium text-gray-900">Add item</span>
@@ -1544,7 +1552,7 @@ export default function HubMenu() {
         {activeTab !== "add-ons" && (
           <motion.button
           whileTap={{ scale: 0.96 }}
-          onClick={() => setIsAddPopupOpen(true)}
+          onClick={handleAddItemFromPopup}
           className="px-4 py-2 border bg-black text-white border-gray-800 rounded-lg text-sm font-bold"
         >
           + ADD
@@ -2237,5 +2245,3 @@ export default function HubMenu() {
     </div>
   )
 }
-
-

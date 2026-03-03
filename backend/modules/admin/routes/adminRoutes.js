@@ -251,6 +251,10 @@ import {
   getFeeSettingsHistory,
   getPublicFeeSettings
 } from '../controllers/feeSettingsController.js';
+import {
+  getPushNotifications,
+  createPushNotification,
+} from '../controllers/pushNotificationController.js';
 import zoneRoutes from './zoneRoutes.js';
 import { authenticateAdmin } from '../middleware/adminAuth.js';
 import { uploadMiddleware } from '../../../shared/utils/cloudinaryService.js';
@@ -281,6 +285,8 @@ router.use((req, res, next) => {
 
 // Dashboard
 router.get('/dashboard/stats', getDashboardStats);
+router.get('/push-notifications', getPushNotifications);
+router.post('/push-notifications', createPushNotification);
 
 // Delivery Partner global cash limit (applies to all delivery boys)
 router.get('/delivery-cash-limit', getDeliveryCashLimit);

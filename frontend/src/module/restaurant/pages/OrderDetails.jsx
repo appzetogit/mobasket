@@ -172,8 +172,8 @@ export default function OrderDetails() {
             customer: {
               name: order.userId?.name || 'Customer',
               orderCount: 1,
-              location: `${order.address?.city || ''}, ${order.address?.state || ''}`.trim(),
-              distance: 'N/A'
+              location: [order.address?.city, order.address?.state].filter(Boolean).join(', ') || 'Location not available',
+              distance: order.distance || order.customerDistance || ''
             },
             items: order.items?.map(item => ({
               name: item.name,
@@ -681,7 +681,10 @@ export default function OrderDetails() {
               <div className="flex-1">
                 <p className="text-sm text-gray-900">{orderData.customer.location}</p>
               </div>
-              <p className="text-sm text-gray-600">{orderData.customer.distance}</p>
+              {orderData.customer.distance &&
+                String(orderData.customer.distance).trim().toLowerCase() !== "n/a" && (
+                  <p className="text-sm text-gray-600">{orderData.customer.distance}</p>
+                )}
             </div>
           </div>
 

@@ -122,12 +122,23 @@ export default function RestaurantReport({ platformOverride = "mofood", entityLa
   const activeFiltersCount = (filters.zone !== "All Zones" ? 1 : 0) + (filters.all !== "All" ? 1 : 0) + (filters.type !== "All types" ? 1 : 0) + (filters.time !== "All Time" ? 1 : 0)
 
   const renderStars = (rating, reviews) => {
-    if (rating === 0) {
+    const rawRating = Number(rating || 0)
+    const safeRating = Number.isFinite(rawRating)
+      ? Math.max(0, Math.min(5, rawRating))
+      : 0
+    const safeReviews = Number(reviews || 0)
+    if (safeRating === 0) {
       return "★0"
     }
-    const fullStars = Math.floor(rating)
-    const hasHalfStar = rating % 1 !== 0
-    return "★".repeat(fullStars) + (hasHalfStar ? "½" : "") + "☆".repeat(5 - Math.ceil(rating)) + ` (${reviews})`
+    const fullStars = Math.floor(safeRating)
+    const hasHalfStar = safeRating % 1 !== 0
+    return "★".repeat(fullStars) + (hasHalfStar ? "½" : "") + "☆".repeat(5 - Math.ceil(safeRating)) + ` (${safeReviews})`
+  }
+
+  const isNegativeAmount = (value) => {
+    if (typeof value === "number") return value < 0
+    const str = String(value ?? "").trim()
+    return str.startsWith("₹-") || str.startsWith("-₹") || str.startsWith("-")
   }
 
   if (loading) {
@@ -380,18 +391,21 @@ export default function RestaurantReport({ platformOverride = "mofood", entityLa
                     </td>
                   </tr>
                 ) : (
-                  filteredRestaurants.map((restaurant) => (
-                    <tr key={restaurant.sl} className="hover:bg-slate-50 transition-colors">
+                  filteredRestaurants.map((restaurant, index) => {
+                    const safeName = String(restaurant?.restaurantName || restaurant?.name || `${entityLabel} ${index + 1}`)
+                    const safeCommission = restaurant?.totalAdminCommission ?? "₹0"
+                    return (
+                    <tr key={restaurant?.sl ?? restaurant?._id ?? index} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-slate-700">{restaurant.sl}</span>
+                        <span className="text-sm font-medium text-slate-700">{restaurant?.sl ?? index + 1}</span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0">
-                            {restaurant.icon ? (
+                            {restaurant?.icon ? (
                               <img
                                 src={restaurant.icon}
-                                alt={restaurant.restaurantName}
+                                alt={safeName}
                                 className="w-full h-full object-cover"
                                 onError={(e) => {
                                   e.target.src = "https://via.placeholder.com/32"
@@ -399,42 +413,42 @@ export default function RestaurantReport({ platformOverride = "mofood", entityLa
                               />
                             ) : (
                               <div className="w-full h-full bg-slate-300 flex items-center justify-center text-xs text-slate-600 font-semibold">
-                                {restaurant.restaurantName.charAt(0).toUpperCase()}
+                                {safeName.charAt(0).toUpperCase()}
                               </div>
                             )}
                           </div>
-                          <span className="text-sm font-medium text-slate-900">{restaurant.restaurantName}</span>
+                          <span className="text-sm font-medium text-slate-900">{safeName}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-slate-700">{restaurant.totalFood}</span>
+                        <span className="text-sm text-slate-700">{restaurant?.totalFood ?? 0}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-slate-700">{restaurant.totalOrder}</span>
+                        <span className="text-sm text-slate-700">{restaurant?.totalOrder ?? 0}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-slate-900">{restaurant.totalOrderAmount}</span>
+                        <span className="text-sm font-medium text-slate-900">{restaurant?.totalOrderAmount ?? "₹0"}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-slate-700">{restaurant.totalDiscountGiven}</span>
+                        <span className="text-sm text-slate-700">{restaurant?.totalDiscountGiven ?? "₹0"}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`text-sm font-medium ${
-                          restaurant.totalAdminCommission.startsWith('₹-') || restaurant.totalAdminCommission.startsWith('-₹')
+                          isNegativeAmount(safeCommission)
                             ? 'text-red-600'
                             : 'text-slate-900'
                         }`}>
-                          {restaurant.totalAdminCommission}
+                          {safeCommission}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-slate-700">{restaurant.totalVATTAX}</span>
+                        <span className="text-sm text-slate-700">{restaurant?.totalVATTAX ?? "₹0"}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm text-slate-700">{renderStars(restaurant.averageRatings, restaurant.reviews)}</span>
+                        <span className="text-sm text-slate-700">{renderStars(restaurant?.averageRatings, restaurant?.reviews)}</span>
                       </td>
                     </tr>
-                  ))
+                  )})
                 )}
               </tbody>
             </table>

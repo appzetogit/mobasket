@@ -2,6 +2,7 @@ import Order from '../models/Order.js';
 import Payment from '../../payment/models/Payment.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import GroceryStore from '../../grocery/models/GroceryStore.js';
+import RestaurantNotification from '../../restaurant/models/RestaurantNotification.js';
 import mongoose from 'mongoose';
 
 // Dynamic import to avoid circular dependency
@@ -55,6 +56,36 @@ const buildRestaurantLookupQuery = (restaurantId) => {
   }
 
   return { $or: orConditions };
+};
+
+const createRestaurantNotification = async ({
+  restaurantId,
+  type = 'system',
+  title,
+  message,
+  orderId = '',
+  orderMongoId = null,
+  metadata = {},
+}) => {
+  try {
+    const normalizedRestaurantId = normalizeIdentifier(restaurantId);
+    if (!mongoose.Types.ObjectId.isValid(normalizedRestaurantId)) return;
+
+    await RestaurantNotification.create({
+      restaurant: new mongoose.Types.ObjectId(normalizedRestaurantId),
+      type,
+      title,
+      message,
+      orderId: String(orderId || '').trim(),
+      orderMongoId: mongoose.Types.ObjectId.isValid(orderMongoId)
+        ? new mongoose.Types.ObjectId(orderMongoId)
+        : undefined,
+      metadata,
+    });
+  } catch (error) {
+    // Notification persistence should not block order flow/socket events
+    console.warn('⚠️ Failed to persist restaurant notification:', error?.message);
+  }
 };
 
 /**
@@ -242,7 +273,7 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
           orderId: order.orderId,
           message: `New order received: ${order.orderId}`
         });
-        console.log(`📤 Emitted to room ${room} (no sockets found, but room exists for future connections)`);
+      console.log(`📤 Emitted to room ${room} (no sockets found, but room exists for future connections)`);
       });
       
       // Return error instead of success
@@ -254,6 +285,19 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
         message: `${isGroceryStore ? 'Store' : 'Restaurant'} ${normalizedRestaurantId} (${order.restaurantName}) is not connected. Order notification not sent.`
       };
     }
+
+    await createRestaurantNotification({
+      restaurantId: normalizeIdentifier(restaurantId),
+      type: 'new_order',
+      title: 'New order received',
+      message: `Order ${order.orderId} received for ${order.restaurantName || 'your restaurant'}`,
+      orderId: order.orderId,
+      orderMongoId: order._id,
+      metadata: {
+        total: order.pricing?.total ?? 0,
+        status: order.status,
+      },
+    });
 
     return {
       success: true,
@@ -314,6 +358,20 @@ export async function notifyRestaurantOrderUpdate(orderId, status) {
         status,
         updatedAt: new Date()
       });
+    });
+
+    const prettyStatus = String(status || '')
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+
+    await createRestaurantNotification({
+      restaurantId: normalizeIdentifier(order.restaurantId),
+      type: 'order_status',
+      title: 'Order status updated',
+      message: `Order ${order.orderId} is now ${prettyStatus || 'Updated'}`,
+      orderId: order.orderId,
+      orderMongoId: order._id,
+      metadata: { status },
     });
 
     console.log(`📢 Notified restaurant ${order.restaurantId} about order ${order.orderId} status: ${status}`);

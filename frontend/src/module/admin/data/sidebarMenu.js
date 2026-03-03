@@ -234,12 +234,10 @@ export const sidebarMenuData = [
         icon: "FileText",
       },
       {
-        type: "expandable",
+        type: "link",
         label: "Restaurant Report",
+        path: "/admin/restaurant-report",
         icon: "FileText",
-        subItems: [
-          { label: "Restaurant Report", path: "/admin/restaurant-report" },
-        ],
       },
       {
         type: "expandable",
@@ -571,12 +569,10 @@ export const mogroceryMenuData = [
         icon: "FileText",
       },
       {
-        type: "expandable",
+        type: "link",
         label: "Store Report",
+        path: "/admin/grocery-store-report",
         icon: "FileText",
-        subItems: [
-          { label: "Store Report", path: "/admin/grocery-store-report" },
-        ],
       },
       {
         type: "expandable",

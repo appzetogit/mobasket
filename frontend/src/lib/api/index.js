@@ -676,6 +676,17 @@ export const restaurantAPI = {
   respondToComplaint: (id, response) => {
     return apiClient.put(API_ENDPOINTS.RESTAURANT.COMPLAINT_RESPOND.replace(':id', id), { response });
   },
+
+  // Notifications
+  getNotifications: () => {
+    return apiClient.get(API_ENDPOINTS.RESTAURANT.NOTIFICATIONS);
+  },
+  deleteNotification: (id) => {
+    return apiClient.delete(API_ENDPOINTS.RESTAURANT.NOTIFICATION_BY_ID.replace(':id', id));
+  },
+  clearNotifications: () => {
+    return apiClient.delete(API_ENDPOINTS.RESTAURANT.NOTIFICATIONS);
+  },
 };
 
 // Export grocery store API helper functions
@@ -810,6 +821,17 @@ export const groceryStoreAPI = {
 
   resendDeliveryNotification: (id) => {
     return apiClient.post(API_ENDPOINTS.GROCERY_STORE.ORDER_RESEND_DELIVERY_NOTIFICATION.replace(':id', id));
+  },
+
+  // Notifications
+  getNotifications: () => {
+    return apiClient.get(API_ENDPOINTS.GROCERY_STORE.NOTIFICATIONS);
+  },
+  deleteNotification: (id) => {
+    return apiClient.delete(API_ENDPOINTS.GROCERY_STORE.NOTIFICATION_BY_ID.replace(':id', id));
+  },
+  clearNotifications: () => {
+    return apiClient.delete(API_ENDPOINTS.GROCERY_STORE.NOTIFICATIONS);
   },
 
   // Products
@@ -1109,6 +1131,17 @@ export const adminAPI = {
         ...params,
         platform: params.platform || getAdminPlatform(),
       },
+    });
+  },
+
+  // Push notifications (admin -> app inbox)
+  getPushNotifications: () => {
+    return apiClient.get(API_ENDPOINTS.ADMIN.PUSH_NOTIFICATIONS);
+  },
+  createPushNotification: (payload) => {
+    return apiClient.post(API_ENDPOINTS.ADMIN.PUSH_NOTIFICATIONS, {
+      ...payload,
+      platform: payload?.platform || getAdminPlatform(),
     });
   },
 
