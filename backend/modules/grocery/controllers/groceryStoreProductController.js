@@ -29,6 +29,29 @@ const normalizeSubcategoryIds = (subcategoryIds) => {
   return Array.from(unique);
 };
 
+const mapCreateProductError = (error) => {
+  if (!error) return { status: 500, message: 'Failed to create product' };
+
+  // Duplicate index (likely storeId + slug race condition)
+  if (error.code === 11000) {
+    return { status: 409, message: 'Product with this name already exists' };
+  }
+
+  if (error.name === 'ValidationError') {
+    const firstError = Object.values(error.errors || {})[0];
+    return {
+      status: 400,
+      message: firstError?.message || 'Invalid product data',
+    };
+  }
+
+  if (error.name === 'CastError') {
+    return { status: 400, message: `Invalid ${error.path}` };
+  }
+
+  return { status: 500, message: 'Failed to create product' };
+};
+
 const resolveStoreScopedIds = async (store) => {
   const primaryId = store?._id?.toString?.();
   if (!primaryId) return [];
@@ -273,6 +296,10 @@ export const createGroceryStoreProduct = asyncHandler(async (req, res) => {
 
     // Generate slug - make it unique per store
     const normalizedSlug = slugify(slug || name);
+    if (!normalizedSlug) {
+      return errorResponse(res, 400, 'Product name must contain letters or numbers');
+    }
+
     const existing = await GroceryProduct.findOne({
       slug: normalizedSlug,
       storeId: store._id
@@ -315,46 +342,58 @@ export const createGroceryStoreProduct = asyncHandler(async (req, res) => {
       })),
     });
 
+    const warnings = [];
+
     // Optional: create category request (skip if already pending)
     if (categoryRequestName) {
-      const catSlug = slugify(categoryRequestName);
-      const existingCatReq = await GroceryCategoryRequest.findOne({
-        storeId: store._id,
-        $or: [{ name: categoryRequestName }, { slug: catSlug }],
-        approvalStatus: 'pending',
-      }).lean();
-      if (!existingCatReq) {
-        await GroceryCategoryRequest.create({
+      try {
+        const catSlug = slugify(categoryRequestName);
+        const existingCatReq = await GroceryCategoryRequest.findOne({
           storeId: store._id,
-          name: categoryRequestName,
-          slug: catSlug,
-          section: 'Grocery & Kitchen',
-          order: 0,
-          isActive: true,
+          $or: [{ name: categoryRequestName }, { slug: catSlug }],
           approvalStatus: 'pending',
-        });
+        }).lean();
+        if (!existingCatReq) {
+          await GroceryCategoryRequest.create({
+            storeId: store._id,
+            name: categoryRequestName,
+            slug: catSlug,
+            section: 'Grocery & Kitchen',
+            order: 0,
+            isActive: true,
+            approvalStatus: 'pending',
+          });
+        }
+      } catch (requestError) {
+        console.error('Category request creation failed after product creation:', requestError);
+        warnings.push('Category request could not be created');
       }
     }
 
     // Optional: create subcategory requests for this category (skip if already pending)
     for (const subName of subNames) {
-      const subSlug = slugify(subName);
-      const existingSubReq = await GrocerySubcategoryRequest.findOne({
-        storeId: store._id,
-        category,
-        $or: [{ name: subName }, { slug: subSlug }],
-        approvalStatus: 'pending',
-      }).lean();
-      if (!existingSubReq) {
-        await GrocerySubcategoryRequest.create({
+      try {
+        const subSlug = slugify(subName);
+        const existingSubReq = await GrocerySubcategoryRequest.findOne({
           storeId: store._id,
           category,
-          name: subName,
-          slug: subSlug,
-          order: 0,
-          isActive: true,
+          $or: [{ name: subName }, { slug: subSlug }],
           approvalStatus: 'pending',
-        });
+        }).lean();
+        if (!existingSubReq) {
+          await GrocerySubcategoryRequest.create({
+            storeId: store._id,
+            category,
+            name: subName,
+            slug: subSlug,
+            order: 0,
+            isActive: true,
+            approvalStatus: 'pending',
+          });
+        }
+      } catch (requestError) {
+        console.error('Subcategory request creation failed after product creation:', requestError);
+        warnings.push(`Subcategory request "${subName}" could not be created`);
       }
     }
 
@@ -364,10 +403,14 @@ export const createGroceryStoreProduct = asyncHandler(async (req, res) => {
       .populate('subcategory', 'name slug')
       .lean();
 
-    return successResponse(res, 201, 'Product created successfully', { product: populatedProduct });
+    return successResponse(res, 201, 'Product created successfully', {
+      product: populatedProduct,
+      ...(warnings.length ? { warnings } : {}),
+    });
   } catch (error) {
     console.error('Error creating grocery store product:', error);
-    return errorResponse(res, 500, 'Failed to create product');
+    const { status, message } = mapCreateProductError(error);
+    return errorResponse(res, status, message);
   }
 });
 
