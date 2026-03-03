@@ -101,6 +101,22 @@ export default function RestaurantsList() {
     return `REST${lastDigits}`
   }
 
+  const buildSlugFromName = (name) => {
+    if (!name) return ""
+    return String(name)
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)/g, "")
+  }
+
+  const getDisplaySlug = (restaurant) => {
+    const derivedFromName = buildSlugFromName(
+      restaurant?.name || restaurant?.onboarding?.step1?.restaurantName || ""
+    )
+    return derivedFromName || restaurant?.slug || ""
+  }
+
   // Fetch restaurants from backend API
   useEffect(() => {
     const fetchRestaurants = async () => {
@@ -1262,10 +1278,10 @@ export default function RestaurantsList() {
                             <p className="font-medium text-slate-900">{formatRestaurantId(restaurantDetails.restaurantId)}</p>
                           </div>
                         )}
-                        {restaurantDetails.slug && (
+                        {getDisplaySlug(restaurantDetails) && (
                           <div>
                             <p className="text-xs text-slate-500 mb-1">Slug</p>
-                            <p className="font-medium text-slate-900">{restaurantDetails.slug}</p>
+                            <p className="font-medium text-slate-900">{getDisplaySlug(restaurantDetails)}</p>
                           </div>
                         )}
                         {restaurantDetails.phoneVerified !== undefined && (
@@ -1284,10 +1300,126 @@ export default function RestaurantsList() {
                     </div>
                   )}
 
-                  {/* Registration Documents - PAN, GST, FSSAI, Bank */}
+                  {/* Onboarding Step 1 Details */}
+                  {restaurantDetails?.onboarding?.step1 && (
+                    <div className="pt-6 border-t border-slate-200">
+                      <h4 className="text-lg font-semibold text-slate-900 mb-4">Registration Step 1 Details</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        {restaurantDetails.onboarding.step1.restaurantName && (
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">Restaurant Name (at registration)</p>
+                            <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step1.restaurantName}</p>
+                          </div>
+                        )}
+                        {restaurantDetails.onboarding.step1.ownerName && (
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">Owner Name (at registration)</p>
+                            <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step1.ownerName}</p>
+                          </div>
+                        )}
+                        {restaurantDetails.onboarding.step1.ownerEmail && (
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">Owner Email (at registration)</p>
+                            <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step1.ownerEmail}</p>
+                          </div>
+                        )}
+                        {restaurantDetails.onboarding.step1.ownerPhone && (
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">Owner Phone (at registration)</p>
+                            <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step1.ownerPhone}</p>
+                          </div>
+                        )}
+                        {restaurantDetails.onboarding.step1.primaryContactNumber && (
+                          <div>
+                            <p className="text-xs text-slate-500 mb-1">Primary Contact (at registration)</p>
+                            <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step1.primaryContactNumber}</p>
+                          </div>
+                        )}
+                        {restaurantDetails.onboarding.step1.location && (
+                          <div className="md:col-span-2">
+                            <p className="text-xs text-slate-500 mb-1">Location (at registration)</p>
+                            <p className="font-medium text-slate-900">
+                              {restaurantDetails.onboarding.step1.location.addressLine1 || ""}
+                              {restaurantDetails.onboarding.step1.location.addressLine2 && `, ${restaurantDetails.onboarding.step1.location.addressLine2}`}
+                              {restaurantDetails.onboarding.step1.location.area && `, ${restaurantDetails.onboarding.step1.location.area}`}
+                              {restaurantDetails.onboarding.step1.location.city && `, ${restaurantDetails.onboarding.step1.location.city}`}
+                              {restaurantDetails.onboarding.step1.location.landmark && `, ${restaurantDetails.onboarding.step1.location.landmark}`}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Onboarding Step 2 Details */}
+                  {restaurantDetails?.onboarding?.step2 && (
+                    <div className="pt-6 border-t border-slate-200">
+                      <h4 className="text-lg font-semibold text-slate-900 mb-4">Registration Step 2 Details</h4>
+                      <div className="space-y-4">
+                        {restaurantDetails.onboarding.step2.cuisines && Array.isArray(restaurantDetails.onboarding.step2.cuisines) && restaurantDetails.onboarding.step2.cuisines.length > 0 && (
+                          <div>
+                            <p className="text-xs text-slate-500 mb-2">Cuisines (at registration)</p>
+                            <div className="flex flex-wrap gap-2">
+                              {restaurantDetails.onboarding.step2.cuisines.map((cuisine, idx) => (
+                                <span key={idx} className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
+                                  {cuisine}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {restaurantDetails.onboarding.step2.deliveryTimings && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <p className="text-xs text-slate-500 mb-1">Opening Time (at registration)</p>
+                              <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step2.deliveryTimings.openingTime || "N/A"}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-slate-500 mb-1">Closing Time (at registration)</p>
+                              <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step2.deliveryTimings.closingTime || "N/A"}</p>
+                            </div>
+                          </div>
+                        )}
+                        {restaurantDetails.onboarding.step2.openDays && Array.isArray(restaurantDetails.onboarding.step2.openDays) && restaurantDetails.onboarding.step2.openDays.length > 0 && (
+                          <div>
+                            <p className="text-xs text-slate-500 mb-2">Open Days (at registration)</p>
+                            <div className="flex flex-wrap gap-2">
+                              {restaurantDetails.onboarding.step2.openDays.map((day, idx) => (
+                                <span key={idx} className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm font-medium capitalize">
+                                  {day}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {restaurantDetails.onboarding.step2.profileImageUrl?.url && (
+                          <div>
+                            <p className="text-xs text-slate-500 mb-2">Profile Image (at registration)</p>
+                            <a
+                              href={restaurantDetails.onboarding.step2.profileImageUrl.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-block"
+                            >
+                              <img
+                                src={restaurantDetails.onboarding.step2.profileImageUrl.url}
+                                alt="Profile"
+                                className="w-32 h-32 rounded-lg object-cover border border-slate-200 hover:border-blue-500 transition-colors"
+                                onError={(e) => {
+                                  e.target.src = "https://via.placeholder.com/128"
+                                }}
+                              />
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Onboarding Step 3 Details */}
                   {restaurantDetails?.onboarding?.step3 && (
                     <div className="pt-6 border-t border-slate-200">
-                      <h4 className="text-lg font-semibold text-slate-900 mb-4">Registration Documents</h4>
+                      <h4 className="text-lg font-semibold text-slate-900 mb-4">Registration Step 3 Details</h4>
                       <div className="space-y-6">
                         {/* PAN Details */}
                         {restaurantDetails.onboarding.step3.pan && (
@@ -1465,122 +1597,6 @@ export default function RestaurantsList() {
                     </div>
                   )}
 
-                  {/* Onboarding Step 1 Details */}
-                  {restaurantDetails?.onboarding?.step1 && (
-                    <div className="pt-6 border-t border-slate-200">
-                      <h4 className="text-lg font-semibold text-slate-900 mb-4">Registration Step 1 Details</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                        {restaurantDetails.onboarding.step1.restaurantName && (
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1">Restaurant Name (at registration)</p>
-                            <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step1.restaurantName}</p>
-                          </div>
-                        )}
-                        {restaurantDetails.onboarding.step1.ownerName && (
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1">Owner Name (at registration)</p>
-                            <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step1.ownerName}</p>
-                          </div>
-                        )}
-                        {restaurantDetails.onboarding.step1.ownerEmail && (
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1">Owner Email (at registration)</p>
-                            <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step1.ownerEmail}</p>
-                          </div>
-                        )}
-                        {restaurantDetails.onboarding.step1.ownerPhone && (
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1">Owner Phone (at registration)</p>
-                            <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step1.ownerPhone}</p>
-                          </div>
-                        )}
-                        {restaurantDetails.onboarding.step1.primaryContactNumber && (
-                          <div>
-                            <p className="text-xs text-slate-500 mb-1">Primary Contact (at registration)</p>
-                            <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step1.primaryContactNumber}</p>
-                          </div>
-                        )}
-                        {restaurantDetails.onboarding.step1.location && (
-                          <div className="md:col-span-2">
-                            <p className="text-xs text-slate-500 mb-1">Location (at registration)</p>
-                            <p className="font-medium text-slate-900">
-                              {restaurantDetails.onboarding.step1.location.addressLine1 || ""}
-                              {restaurantDetails.onboarding.step1.location.addressLine2 && `, ${restaurantDetails.onboarding.step1.location.addressLine2}`}
-                              {restaurantDetails.onboarding.step1.location.area && `, ${restaurantDetails.onboarding.step1.location.area}`}
-                              {restaurantDetails.onboarding.step1.location.city && `, ${restaurantDetails.onboarding.step1.location.city}`}
-                              {restaurantDetails.onboarding.step1.location.landmark && `, ${restaurantDetails.onboarding.step1.location.landmark}`}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Onboarding Step 2 Details */}
-                  {restaurantDetails?.onboarding?.step2 && (
-                    <div className="pt-6 border-t border-slate-200">
-                      <h4 className="text-lg font-semibold text-slate-900 mb-4">Registration Step 2 Details</h4>
-                      <div className="space-y-4">
-                        {restaurantDetails.onboarding.step2.cuisines && Array.isArray(restaurantDetails.onboarding.step2.cuisines) && restaurantDetails.onboarding.step2.cuisines.length > 0 && (
-                          <div>
-                            <p className="text-xs text-slate-500 mb-2">Cuisines (at registration)</p>
-                            <div className="flex flex-wrap gap-2">
-                              {restaurantDetails.onboarding.step2.cuisines.map((cuisine, idx) => (
-                                <span key={idx} className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-medium">
-                                  {cuisine}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {restaurantDetails.onboarding.step2.deliveryTimings && (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <p className="text-xs text-slate-500 mb-1">Opening Time (at registration)</p>
-                              <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step2.deliveryTimings.openingTime || "N/A"}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-slate-500 mb-1">Closing Time (at registration)</p>
-                              <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step2.deliveryTimings.closingTime || "N/A"}</p>
-                            </div>
-                          </div>
-                        )}
-                        {restaurantDetails.onboarding.step2.openDays && Array.isArray(restaurantDetails.onboarding.step2.openDays) && restaurantDetails.onboarding.step2.openDays.length > 0 && (
-                          <div>
-                            <p className="text-xs text-slate-500 mb-2">Open Days (at registration)</p>
-                            <div className="flex flex-wrap gap-2">
-                              {restaurantDetails.onboarding.step2.openDays.map((day, idx) => (
-                                <span key={idx} className="px-3 py-1 bg-indigo-100 text-indigo-700 rounded-full text-sm font-medium capitalize">
-                                  {day}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                        {restaurantDetails.onboarding.step2.profileImageUrl?.url && (
-                          <div>
-                            <p className="text-xs text-slate-500 mb-2">Profile Image (at registration)</p>
-                            <a
-                              href={restaurantDetails.onboarding.step2.profileImageUrl.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-block"
-                            >
-                              <img
-                                src={restaurantDetails.onboarding.step2.profileImageUrl.url}
-                                alt="Profile"
-                                className="w-32 h-32 rounded-lg object-cover border border-slate-200 hover:border-blue-500 transition-colors"
-                                onError={(e) => {
-                                  e.target.src = "https://via.placeholder.com/128"
-                                }}
-                              />
-                            </a>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
                   {/* Onboarding Step 4 Details */}
                   {restaurantDetails?.onboarding?.step4 && (
                     <div className="pt-6 border-t border-slate-200">
@@ -1615,14 +1631,14 @@ export default function RestaurantsList() {
                   )}
 
                   {/* Additional Information */}
-                  {(restaurantDetails?.slug || restaurantDetails?.restaurantId || restaurantDetails?.phoneVerified !== undefined || restaurantDetails?.signupMethod) && (
+                  {(getDisplaySlug(restaurantDetails) || restaurantDetails?.restaurantId || restaurantDetails?.phoneVerified !== undefined || restaurantDetails?.signupMethod) && (
                     <div className="pt-6 border-t border-slate-200">
                       <h4 className="text-lg font-semibold text-slate-900 mb-4">Additional Information</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                        {restaurantDetails?.slug && (
+                        {getDisplaySlug(restaurantDetails) && (
                           <div>
                             <p className="text-xs text-slate-500 mb-1">Slug</p>
-                            <p className="font-medium text-slate-900">{restaurantDetails.slug}</p>
+                            <p className="font-medium text-slate-900">{getDisplaySlug(restaurantDetails)}</p>
                           </div>
                         )}
                         {restaurantDetails?.restaurantId && (

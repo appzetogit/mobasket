@@ -799,6 +799,19 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
         )}
       </nav>
     </div>
+
+    {/* Always-visible expand handle when sidebar is collapsed */}
+    {isCollapsed && (
+      <button
+        type="button"
+        onClick={toggleCollapse}
+        className="hidden lg:flex fixed left-20 top-6 -translate-x-1/2 z-[60] items-center justify-center w-7 h-10 rounded-r-md bg-neutral-900 border border-neutral-700 text-neutral-200 hover:text-white hover:bg-neutral-800 transition-all duration-200 shadow-lg"
+        title="Expand sidebar"
+        aria-label="Expand sidebar"
+      >
+        <ChevronRight className="w-4 h-4" />
+      </button>
+    )}
     </>
   )
 }

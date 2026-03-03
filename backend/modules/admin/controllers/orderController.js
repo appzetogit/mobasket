@@ -67,6 +67,12 @@ export const getOrders = asyncHandler(async (req, res) => {
       platform
     } = req.query;
     const now = new Date();
+    const restaurantCancellationReasonRegex = /rejected by restaurant|restaurant rejected|restaurant cancelled|restaurant is too busy|item not available|outside delivery area|kitchen closing|technical issue|order not accepted within time limit/i;
+    const addAndCondition = (condition) => {
+      if (!condition) return;
+      if (!query.$and) query.$and = [];
+      query.$and.push(condition);
+    };
 
     // Build query
     const query = {};
@@ -98,18 +104,23 @@ export const getOrders = asyncHandler(async (req, res) => {
         'scheduled': 'scheduled',
         'pending': 'pending',
         'accepted': 'confirmed',
-        'processing': 'preparing',
+        // "processing" tab should include both preparing and ready states.
+        'processing': ['preparing', 'ready'],
         'food-on-the-way': 'out_for_delivery',
         'delivered': 'delivered',
         'canceled': 'cancelled',
         'restaurant-cancelled': 'cancelled', // Restaurant cancelled orders
-        'payment-failed': 'pending', // Payment failed orders have pending status
+        // For payment-failed, we filter by payment status below.
+        'payment-failed': null,
         'refunded': 'cancelled', // Refunded orders might be cancelled
         'dine-in': 'dine_in',
-        'offline-payments': 'pending' // Offline payment orders
+        // For offline-payments, we filter by payment method below.
+        'offline-payments': null
       };
       
-      let mappedStatus = statusMap[status] || status;
+      let mappedStatus = Object.prototype.hasOwnProperty.call(statusMap, status)
+        ? statusMap[status]
+        : status;
 
       // MoGrocery approval flow can move directly to "preparing",
       // so Accepted tab should include those records as well.
@@ -117,7 +128,9 @@ export const getOrders = asyncHandler(async (req, res) => {
         mappedStatus = ['confirmed', 'preparing'];
       }
 
-      query.status = Array.isArray(mappedStatus) ? { $in: mappedStatus } : mappedStatus;
+      if (mappedStatus) {
+        query.status = Array.isArray(mappedStatus) ? { $in: mappedStatus } : mappedStatus;
+      }
 
       // Scheduled tab should show only future scheduled orders.
       if (status === 'scheduled') {
@@ -127,18 +140,36 @@ export const getOrders = asyncHandler(async (req, res) => {
       
       // If restaurant-cancelled, filter by cancellation reason
       if (status === 'restaurant-cancelled') {
-        query.cancellationReason = { 
-          $regex: /rejected by restaurant|restaurant rejected|restaurant cancelled/i 
-        };
+        addAndCondition({
+          $or: [
+            { cancelledBy: 'restaurant' },
+            { cancellationReason: { $regex: restaurantCancellationReasonRegex } }
+          ]
+        });
+      }
+
+      if (status === 'payment-failed') {
+        addAndCondition({
+          'payment.status': { $in: ['failed', 'cancelled'] }
+        });
+      }
+
+      if (status === 'offline-payments') {
+        addAndCondition({
+          'payment.method': { $in: ['cash', 'cod'] }
+        });
       }
     }
     
     // Also handle cancelledBy query parameter (if passed separately)
     if (cancelledBy === 'restaurant') {
       query.status = 'cancelled';
-      query.cancellationReason = { 
-        $regex: /rejected by restaurant|restaurant rejected|restaurant cancelled/i 
-      };
+      addAndCondition({
+        $or: [
+          { cancelledBy: 'restaurant' },
+          { cancellationReason: { $regex: restaurantCancellationReasonRegex } }
+        ]
+      });
     }
 
     // Default admin listings (including "all") should not show future scheduled orders.
@@ -326,6 +357,8 @@ export const getOrders = asyncHandler(async (req, res) => {
       const customerPhone = order.userId?.phone || '';
 
       // Map payment status
+      const paymentMethod = String(order.payment?.method || '').toLowerCase();
+      const isCodPayment = paymentMethod === 'cash' || paymentMethod === 'cod';
       const paymentStatusMap = {
         'completed': 'Paid',
         'pending': 'Pending',
@@ -333,7 +366,10 @@ export const getOrders = asyncHandler(async (req, res) => {
         'refunded': 'Refunded',
         'processing': 'Processing'
       };
-      const paymentStatusDisplay = paymentStatusMap[order.payment?.status] || 'Pending';
+      // COD/cash orders are considered paid only after delivery is completed.
+      const paymentStatusDisplay = isCodPayment
+        ? (order.status === 'delivered' ? 'Paid' : 'Pending')
+        : (paymentStatusMap[order.payment?.status] || 'Pending');
 
       // Map order status for display
       // Check if cancelled and determine who cancelled it

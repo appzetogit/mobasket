@@ -1182,7 +1182,31 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
 
     const updateData = {};
 
-    if (name !== undefined) updateData.name = String(name || '').trim();
+    if (name !== undefined) {
+      const normalizedName = String(name || '').trim();
+      updateData.name = normalizedName;
+
+      // Keep slug synced with the current restaurant name when admin edits it.
+      if (normalizedName && (normalizedName !== restaurant.name || !restaurant.slug)) {
+        let baseSlug = normalizedName
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/(^-|-$)/g, '');
+
+        if (!baseSlug) {
+          baseSlug = restaurant.slug || `restaurant-${String(restaurant._id).slice(-6)}`;
+        }
+
+        let candidateSlug = baseSlug;
+        let counter = 1;
+        while (await Restaurant.findOne({ slug: candidateSlug, _id: { $ne: restaurant._id } }).select('_id').lean()) {
+          candidateSlug = `${baseSlug}-${counter}`;
+          counter += 1;
+        }
+
+        updateData.slug = candidateSlug;
+      }
+    }
     if (ownerName !== undefined) updateData.ownerName = String(ownerName || '').trim();
     if (ownerPhone !== undefined) updateData.ownerPhone = String(ownerPhone || '').trim();
     if (ownerEmail !== undefined) updateData.ownerEmail = String(ownerEmail || '').trim();
