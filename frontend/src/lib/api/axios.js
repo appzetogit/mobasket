@@ -79,6 +79,33 @@ function getModuleFromPath(path = "") {
   return "user";
 }
 
+function getModuleFromRequestUrl(url = "", fallbackModule = "user") {
+  const rawUrl = String(url || "");
+  let path = rawUrl;
+
+  try {
+    if (/^https?:\/\//i.test(rawUrl)) {
+      path = new URL(rawUrl).pathname || "";
+    }
+  } catch {
+    path = rawUrl;
+  }
+
+  if (!path.startsWith("/")) {
+    path = `/${path}`;
+  }
+
+  if (path.startsWith("/api/")) {
+    path = path.slice(4) || "/";
+  }
+
+  if (path.startsWith("/admin")) return "admin";
+  if (path.startsWith("/grocery/store")) return "grocery-store";
+  if (path.startsWith("/restaurant")) return "restaurant";
+  if (path.startsWith("/delivery")) return "delivery";
+  return fallbackModule;
+}
+
 function getTokenMetaForModule(module = "user") {
   switch (module) {
     case "admin":
@@ -112,13 +139,20 @@ apiClient.interceptors.request.use(
   async (config) => {
     const currentPath = window.location.pathname;
     const currentModule = getModuleFromPath(currentPath);
-    const { tokenKey, refreshTokenKey } = getTokenMetaForModule(currentModule);
+    const requestModule = getModuleFromRequestUrl(config.url, currentModule);
+    const { tokenKey, refreshTokenKey } = getTokenMetaForModule(requestModule);
 
-    // Get access token for the current module based on route
-    let accessToken = localStorage.getItem(tokenKey) || getTokenForCurrentRoute();
+    // Prefer token for the request module; only use route-based fallback when modules match.
+    let accessToken = localStorage.getItem(tokenKey);
+    if ((!accessToken || accessToken.trim() === "") && requestModule === currentModule) {
+      accessToken = getTokenForCurrentRoute();
+    }
 
-    // Fallback to legacy token if module-specific token not found
-    if (!accessToken || accessToken.trim() === "") {
+    // Fallback to legacy token only for user module
+    if (
+      requestModule === "user" &&
+      (!accessToken || accessToken.trim() === "")
+    ) {
       accessToken = localStorage.getItem("accessToken");
     }
 
@@ -134,13 +168,13 @@ apiClient.interceptors.request.use(
     ) {
       try {
         let refreshEndpoint = "/auth/refresh-token";
-        if (currentModule === "admin") refreshEndpoint = "/admin/auth/refresh-token";
-        else if (currentModule === "grocery-store") refreshEndpoint = "/grocery/store/auth/refresh-token";
-        else if (currentModule === "restaurant") refreshEndpoint = "/restaurant/auth/refresh-token";
-        else if (currentModule === "delivery") refreshEndpoint = "/delivery/auth/refresh-token";
+        if (requestModule === "admin") refreshEndpoint = "/admin/auth/refresh-token";
+        else if (requestModule === "grocery-store") refreshEndpoint = "/grocery/store/auth/refresh-token";
+        else if (requestModule === "restaurant") refreshEndpoint = "/restaurant/auth/refresh-token";
+        else if (requestModule === "delivery") refreshEndpoint = "/delivery/auth/refresh-token";
 
         const refreshBody = { refreshToken };
-        const refreshHeaders = currentModule === "delivery" ? { "x-refresh-token": refreshToken } : {};
+        const refreshHeaders = requestModule === "delivery" ? { "x-refresh-token": refreshToken } : {};
 
         if (!refreshRequestPromise) {
           refreshRequestPromise = axios
@@ -178,7 +212,6 @@ apiClient.interceptors.request.use(
     // FormData requests handled silently
 
     // Determine if this is an authenticated route
-    const path = currentPath;
     const requestUrl = config.url || "";
 
     // Check if this is a public restaurant route (should not require authentication)
@@ -208,12 +241,7 @@ apiClient.interceptors.request.use(
           requestUrl.match(/\/restaurant\/[^/]+\/offers/)));
 
     const isAuthenticatedRoute =
-      (path.startsWith("/admin") ||
-        path.startsWith("/store") ||
-        (path.startsWith("/restaurant") &&
-          !path.startsWith("/restaurants") &&
-          !isPublicRestaurantRoute) ||
-        path.startsWith("/delivery")) &&
+      ["admin", "grocery-store", "restaurant", "delivery"].includes(requestModule) &&
       !isPublicRestaurantRoute;
 
     // For authenticated routes, ALWAYS ensure Authorization header is set if we have a token
@@ -319,6 +347,7 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401 && !originalRequest._retry) {
       const currentPath = window.location.pathname;
       const currentModule = getModuleFromPath(currentPath);
+      const requestModule = getModuleFromRequestUrl(originalRequest.url, currentModule);
       const isStoreAuthPage = /^\/store\/(login|signup|otp)$/.test(currentPath);
       const isRestaurantAuthPage = /^\/restaurant\/(login|signup|signup-email|otp|forgot-password|welcome)$/.test(currentPath) || /^\/restaurant\/auth\/(sign-in|google-callback)$/.test(currentPath);
       const isDeliveryAuthPage = /^\/delivery\/(signin|signup|otp|welcome)/.test(currentPath);
@@ -344,20 +373,20 @@ apiClient.interceptors.response.use(
       try {
         // Determine which module's refresh endpoint to use based on current route
         let refreshEndpoint = "/auth/refresh-token";
-        if (currentModule === "admin") refreshEndpoint = "/admin/auth/refresh-token";
-        else if (currentModule === "grocery-store") refreshEndpoint = "/grocery/store/auth/refresh-token";
-        else if (currentModule === "restaurant") refreshEndpoint = "/restaurant/auth/refresh-token";
-        else if (currentModule === "delivery") refreshEndpoint = "/delivery/auth/refresh-token";
+        if (requestModule === "admin") refreshEndpoint = "/admin/auth/refresh-token";
+        else if (requestModule === "grocery-store") refreshEndpoint = "/grocery/store/auth/refresh-token";
+        else if (requestModule === "restaurant") refreshEndpoint = "/restaurant/auth/refresh-token";
+        else if (requestModule === "delivery") refreshEndpoint = "/delivery/auth/refresh-token";
 
         // Try to refresh the token (single-flight).
         // Prefer sending refreshToken in body for store (cookie may not be sent cross-origin).
         const body = {};
         if (typeof localStorage !== "undefined") {
-          const { refreshTokenKey } = getTokenMetaForModule(currentModule);
+          const { refreshTokenKey } = getTokenMetaForModule(requestModule);
           body.refreshToken = localStorage.getItem(refreshTokenKey) || undefined;
         }
         const refreshHeaders = {};
-        if (currentModule === "delivery" && body.refreshToken) {
+        if (requestModule === "delivery" && body.refreshToken) {
           refreshHeaders["x-refresh-token"] = body.refreshToken;
         }
         if (!refreshRequestPromise) {
@@ -381,8 +410,7 @@ apiClient.interceptors.response.use(
 
         if (accessToken) {
           // Determine which module's token to update based on current route
-          const currentPath = window.location.pathname;
-          const moduleAfterRefresh = getModuleFromPath(currentPath);
+          const moduleAfterRefresh = getModuleFromRequestUrl(originalRequest.url, requestModule);
           const { tokenKey, refreshTokenKey, expectedRole } = getTokenMetaForModule(moduleAfterRefresh);
 
           const role = getRoleFromToken(accessToken);
