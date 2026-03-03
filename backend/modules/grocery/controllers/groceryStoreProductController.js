@@ -29,6 +29,27 @@ const normalizeSubcategoryIds = (subcategoryIds) => {
   return Array.from(unique);
 };
 
+const buildUniqueProductSlug = async ({ baseSlug, storeId, excludeId = null }) => {
+  const safeBaseSlug = String(baseSlug || '').trim() || `product-${Date.now()}`;
+  let candidateSlug = safeBaseSlug;
+  let counter = 2;
+
+  while (true) {
+    const duplicate = await GroceryProduct.exists({
+      slug: candidateSlug,
+      storeId,
+      ...(excludeId ? { _id: { $ne: excludeId } } : {}),
+    });
+
+    if (!duplicate) {
+      return candidateSlug;
+    }
+
+    candidateSlug = `${safeBaseSlug}-${counter}`;
+    counter += 1;
+  }
+};
+
 const mapCreateProductError = (error) => {
   if (!error) return { status: 500, message: 'Failed to create product' };
 
@@ -294,20 +315,14 @@ export const createGroceryStoreProduct = asyncHandler(async (req, res) => {
       }
     }
 
-    // Generate slug - make it unique per store
-    const normalizedSlug = slugify(slug || name);
-    if (!normalizedSlug) {
+    const baseSlug = slugify(slug || name);
+    if (!baseSlug) {
       return errorResponse(res, 400, 'Product name must contain letters or numbers');
     }
-
-    const existing = await GroceryProduct.findOne({
-      slug: normalizedSlug,
-      storeId: store._id
-    }).lean();
-
-    if (existing) {
-      return errorResponse(res, 409, 'Product with this name already exists');
-    }
+    const normalizedSlug = await buildUniqueProductSlug({
+      baseSlug,
+      storeId: store._id,
+    });
 
     const categoryRequestName = requestedNewCategory && typeof requestedNewCategory === 'object' && requestedNewCategory.name
       ? String(requestedNewCategory.name).trim()
@@ -448,15 +463,11 @@ export const updateGroceryStoreProduct = asyncHandler(async (req, res) => {
     }
 
     if (update.slug || update.name) {
-      update.slug = slugify(update.slug || update.name || existingProduct.name);
-      const duplicate = await GroceryProduct.findOne({ 
-        slug: update.slug, 
-        _id: { $ne: id },
-        storeId: { $in: scopedStoreIds }
-      }).lean();
-      if (duplicate) {
-        return errorResponse(res, 409, 'Product with this name already exists');
-      }
+      update.slug = await buildUniqueProductSlug({
+        baseSlug: slugify(update.slug || update.name || existingProduct.name),
+        storeId: existingProduct.storeId?.toString?.() || store._id,
+        excludeId: id,
+      });
     }
 
     if (update.subcategories !== undefined) {

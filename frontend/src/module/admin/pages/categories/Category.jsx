@@ -121,11 +121,14 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     if (!isGroceryScope || activeGroceryEntity !== "products") {
       return grocerySubcategoryOptions
     }
+    if (createProductCategoryInline) {
+      return []
+    }
     if (!formData.productCategory) {
       return grocerySubcategoryOptions
     }
     return grocerySubcategoryOptions.filter((item) => item.categoryId === formData.productCategory)
-  }, [activeGroceryEntity, formData.productCategory, grocerySubcategoryOptions, isGroceryScope])
+  }, [activeGroceryEntity, createProductCategoryInline, formData.productCategory, grocerySubcategoryOptions, isGroceryScope])
 
   const handleToggleProductSubcategory = (subcategoryId) => {
     setFormData((prev) => {
@@ -1568,7 +1571,8 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                             Category *
                           </label>
                           <select
-                            required
+                            required={!createProductCategoryInline}
+                            disabled={createProductCategoryInline}
                             value={formData.productCategory}
                             onChange={(e) =>
                               setFormData({
@@ -1577,7 +1581,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                                 productSubcategories: [],
                               })
                             }
-                            className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                            className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:cursor-not-allowed"
                           >
                             <option value="">Select category</option>
                             {groceryCategoryOptions.map((categoryOption) => (
@@ -1595,9 +1599,12 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                                   onChange={(e) => {
                                     const checked = e.target.checked
                                     setCreateProductCategoryInline(checked)
-                                    if (!checked) {
-                                      setInlineProductCategoryName("")
-                                    }
+                                    setFormData((prev) => ({
+                                      ...prev,
+                                      productCategory: checked ? "" : prev.productCategory,
+                                      productSubcategories: checked ? [] : prev.productSubcategories,
+                                    }))
+                                    if (!checked) setInlineProductCategoryName("")
                                   }}
                                   className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
                                 />

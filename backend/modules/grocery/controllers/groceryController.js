@@ -63,6 +63,27 @@ const normalizePercentage = (value) => {
   return Math.min(100, Math.max(0, parsed));
 };
 
+const buildUniqueProductSlug = async ({ baseSlug, storeId, excludeId = null }) => {
+  const safeBaseSlug = String(baseSlug || '').trim() || `product-${Date.now()}`;
+  let candidateSlug = safeBaseSlug;
+  let counter = 2;
+
+  while (true) {
+    const duplicate = await GroceryProduct.exists({
+      slug: candidateSlug,
+      storeId,
+      ...(excludeId ? { _id: { $ne: excludeId } } : {}),
+    });
+
+    if (!duplicate) {
+      return candidateSlug;
+    }
+
+    candidateSlug = `${safeBaseSlug}-${counter}`;
+    counter += 1;
+  }
+};
+
 const isPointInZone = (lat, lng, zoneCoordinates = []) => {
   if (!Array.isArray(zoneCoordinates) || zoneCoordinates.length < 3) return false;
   let inside = false;
@@ -641,24 +662,17 @@ export const createProduct = async (req, res) => {
       return res.status(400).json({ success: false, message: 'One or more grocery stores are invalid' });
     }
 
-    const normalizedSlug = slugify(slug || name);
-    const duplicateProducts = await GroceryProduct.find({
-      slug: normalizedSlug,
-      storeId: { $in: normalizedStoreIds },
-    })
-      .select('storeId')
-      .lean();
-    if (duplicateProducts.length > 0) {
-      return res.status(409).json({ success: false, message: 'Product with this name already exists for one or more selected stores' });
-    }
-
-    const docs = normalizedStoreIds.map((targetStoreId) => ({
+    const baseSlug = slugify(slug || name);
+    const docs = await Promise.all(normalizedStoreIds.map(async (targetStoreId) => ({
+      slug: await buildUniqueProductSlug({
+        baseSlug,
+        storeId: targetStoreId,
+      }),
       category,
       subcategories: normalizedSubcategories,
       // keep first value in legacy field for old consumers
       subcategory: normalizedSubcategories[0] || null,
       name: name.trim(),
-      slug: normalizedSlug,
       images: Array.isArray(images) ? images : [],
       description,
       mrp,
@@ -671,7 +685,7 @@ export const createProduct = async (req, res) => {
       storeId: targetStoreId,
       approvalStatus: 'approved',
       rejectionReason: '',
-    }));
+    })));
 
     const products = await GroceryProduct.insertMany(docs, { ordered: true });
     const responseData = products.length === 1 ? products[0] : products;
@@ -711,15 +725,11 @@ export const updateProduct = async (req, res) => {
     }
 
     if (update.slug || update.name) {
-      update.slug = slugify(update.slug || update.name || existingProduct.name);
-      const duplicate = await GroceryProduct.findOne({
-        slug: update.slug,
+      update.slug = await buildUniqueProductSlug({
+        baseSlug: slugify(update.slug || update.name || existingProduct.name),
         storeId: targetStoreId,
-        _id: { $ne: id },
-      }).lean();
-      if (duplicate) {
-        return res.status(409).json({ success: false, message: 'Product with this name already exists for this store' });
-      }
+        excludeId: id,
+      });
     }
 
     if (update.subcategories !== undefined) {
