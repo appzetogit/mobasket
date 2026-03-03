@@ -1239,9 +1239,6 @@ export const adminAPI = {
   rejectGroceryStore: (id, reason) => {
     return apiClient.post(API_ENDPOINTS.ADMIN.GROCERY_STORE_REJECT.replace(':id', id), { reason });
   },
-  getGroceryStoreById: (id) => {
-    return apiClient.get(API_ENDPOINTS.ADMIN.GROCERY_STORE_BY_ID.replace(':id', id));
-  },
 
   // Get all offers (with restaurant and dish details)
   getAllOffers: (params = {}) => {

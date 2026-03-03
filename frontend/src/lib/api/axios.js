@@ -100,6 +100,9 @@ function getModuleFromRequestUrl(url = "", fallbackModule = "user") {
   }
 
   if (path.startsWith("/admin")) return "admin";
+  // Admin grocery-store management endpoints are under /grocery/stores (plural).
+  // These require admin auth, not user/store auth.
+  if (path.startsWith("/grocery/stores")) return "admin";
   if (path.startsWith("/grocery/store")) return "grocery-store";
   if (path.startsWith("/restaurant")) return "restaurant";
   if (path.startsWith("/delivery")) return "delivery";

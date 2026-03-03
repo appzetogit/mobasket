@@ -1,5 +1,6 @@
 import RestaurantCommission from '../models/RestaurantCommission.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import AuditLog from '../models/AuditLog.js';
@@ -11,6 +12,36 @@ const normalizePlatformFilter = (value) => {
   if (normalized === 'mogrocery') return 'mogrocery';
   if (normalized === 'mofood') return 'mofood';
   return null;
+};
+
+const getMofoodRestaurantQuery = () => ({ $or: [{ platform: 'mofood' }, { platform: { $exists: false } }] });
+
+const hydrateGroceryCommissionRows = async (commissions = []) => {
+  const ids = commissions
+    .map((commission) => commission?.restaurant)
+    .filter((id) => mongoose.Types.ObjectId.isValid(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
+
+  if (ids.length === 0) {
+    return commissions.map((commission) => ({
+      ...commission,
+      restaurant: null,
+    }));
+  }
+
+  const stores = await GroceryStore.find({ _id: { $in: ids } })
+    .select('_id name restaurantId platform isActive email phone ownerName businessModel')
+    .lean();
+
+  const storeMap = new Map(stores.map((store) => [String(store._id), store]));
+
+  return commissions.map((commission) => {
+    const store = storeMap.get(String(commission.restaurant));
+    return {
+      ...commission,
+      restaurant: store || null,
+    };
+  });
 };
 
 /**
@@ -46,8 +77,13 @@ export const getRestaurantCommissions = asyncHandler(async (req, res) => {
 
     const platformFilter = normalizePlatformFilter(platform);
     if (platformFilter) {
-      const platformRestaurants = await Restaurant.find({ platform: platformFilter }).select('_id').lean();
-      query.restaurant = { $in: platformRestaurants.map((r) => r._id) };
+      if (platformFilter === 'mogrocery') {
+        const platformStores = await GroceryStore.find({}).select('_id').lean();
+        query.restaurant = { $in: platformStores.map((r) => r._id) };
+      } else {
+        const platformRestaurants = await Restaurant.find(getMofoodRestaurantQuery()).select('_id').lean();
+        query.restaurant = { $in: platformRestaurants.map((r) => r._id) };
+      }
     }
 
     // Pagination
@@ -58,14 +94,26 @@ export const getRestaurantCommissions = asyncHandler(async (req, res) => {
     const total = await RestaurantCommission.countDocuments(query);
 
     // Get commissions
-    const commissions = await RestaurantCommission.find(query)
-      .populate('restaurant', 'name restaurantId platform isActive email phone')
-      .populate('createdBy', 'name email')
-      .populate('updatedBy', 'name email')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limitNum)
-      .lean();
+    let commissions;
+    if (platformFilter === 'mogrocery') {
+      const baseCommissions = await RestaurantCommission.find(query)
+        .populate('createdBy', 'name email')
+        .populate('updatedBy', 'name email')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean();
+      commissions = await hydrateGroceryCommissionRows(baseCommissions);
+    } else {
+      commissions = await RestaurantCommission.find(query)
+        .populate('restaurant', 'name restaurantId platform isActive email phone')
+        .populate('createdBy', 'name email')
+        .populate('updatedBy', 'name email')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean();
+    }
 
     // Add serial numbers
     const commissionsWithSl = commissions.map((commission, index) => ({
@@ -101,14 +149,13 @@ export const getApprovedRestaurants = asyncHandler(async (req, res) => {
       limit = 100
     } = req.query;
 
-    // Build query - only approved restaurants
-    const query = {
-      isActive: true
-    };
-
     const platformFilter = normalizePlatformFilter(platform);
-    if (platformFilter) {
-      query.platform = platformFilter;
+    const isGrocery = platformFilter === 'mogrocery';
+
+    // Build query - only approved entities
+    const query = { isActive: true };
+    if (!isGrocery) {
+      query.$or = [{ platform: 'mofood' }, { platform: { $exists: false } }];
     }
 
     // Search filter
@@ -127,10 +174,11 @@ export const getApprovedRestaurants = asyncHandler(async (req, res) => {
     const limitNum = parseInt(limit);
 
     // Get total count
-    const total = await Restaurant.countDocuments(query);
+    const EntityModel = isGrocery ? GroceryStore : Restaurant;
+    const total = await EntityModel.countDocuments(query);
 
-    // Get restaurants
-    const restaurants = await Restaurant.find(query)
+    // Get entities
+    const restaurants = await EntityModel.find(query)
       .select('_id name restaurantId ownerName email phone isActive approvedAt businessModel')
       .sort({ approvedAt: -1, createdAt: -1 })
       .skip(skip)
@@ -180,7 +228,8 @@ export const getRestaurantCommissionById = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, 'Invalid commission ID');
     }
 
-    const commission = await RestaurantCommission.findById(id)
+    const rawCommission = await RestaurantCommission.findById(id).select('restaurant').lean();
+    let commission = await RestaurantCommission.findById(id)
       .populate('restaurant', 'name restaurantId platform isActive email phone ownerName businessModel')
       .populate('createdBy', 'name email')
       .populate('updatedBy', 'name email')
@@ -188,6 +237,17 @@ export const getRestaurantCommissionById = asyncHandler(async (req, res) => {
 
     if (!commission) {
       return errorResponse(res, 404, 'Restaurant commission not found');
+    }
+
+    // If populate could not resolve from Restaurant collection, try GroceryStore.
+    const rawRestaurantId = rawCommission?.restaurant ? String(rawCommission.restaurant) : null;
+    if (!commission.restaurant && rawRestaurantId && mongoose.Types.ObjectId.isValid(rawRestaurantId)) {
+      const store = await GroceryStore.findById(rawRestaurantId)
+        .select('_id name restaurantId platform isActive email phone ownerName businessModel')
+        .lean();
+      if (store) {
+        commission = { ...commission, restaurant: store };
+      }
     }
 
     return successResponse(res, 200, 'Restaurant commission retrieved successfully', {
@@ -211,7 +271,7 @@ export const getCommissionByRestaurantId = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, 'Invalid restaurant ID');
     }
 
-    const commission = await RestaurantCommission.findOne({ restaurant: restaurantId })
+    let commission = await RestaurantCommission.findOne({ restaurant: restaurantId })
       .populate('restaurant', 'name restaurantId platform isActive email phone ownerName businessModel')
       .populate('createdBy', 'name email')
       .populate('updatedBy', 'name email')
@@ -219,6 +279,15 @@ export const getCommissionByRestaurantId = asyncHandler(async (req, res) => {
 
     if (!commission) {
       return errorResponse(res, 404, 'Commission not found for this restaurant');
+    }
+
+    if (!commission.restaurant) {
+      const store = await GroceryStore.findById(restaurantId)
+        .select('_id name restaurantId platform isActive email phone ownerName businessModel')
+        .lean();
+      if (store) {
+        commission = { ...commission, restaurant: store };
+      }
     }
 
     return successResponse(res, 200, 'Restaurant commission retrieved successfully', {
@@ -241,7 +310,8 @@ export const createRestaurantCommission = asyncHandler(async (req, res) => {
       commissionRules,
       defaultCommission,
       status,
-      notes
+      notes,
+      platform
     } = req.body;
 
     const adminId = req.user._id;
@@ -251,14 +321,21 @@ export const createRestaurantCommission = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, 'Invalid restaurant ID');
     }
 
-    // Check if restaurant exists and is approved
-    const restaurant = await Restaurant.findById(restaurantId);
+    const platformFilter = normalizePlatformFilter(platform);
+    const isGrocery = platformFilter === 'mogrocery';
+
+    // Check if entity exists and is approved
+    const EntityModel = isGrocery ? GroceryStore : Restaurant;
+    const entityQuery = isGrocery ? { _id: restaurantId } : { _id: restaurantId, ...getMofoodRestaurantQuery() };
+    const restaurant = await EntityModel.findOne(entityQuery);
     if (!restaurant) {
-      return errorResponse(res, 404, 'Restaurant not found');
+      return errorResponse(res, 404, isGrocery ? 'Store not found' : 'Restaurant not found');
     }
 
     if (!restaurant.isActive) {
-      return errorResponse(res, 400, 'Restaurant is not approved. Please approve the restaurant first.');
+      return errorResponse(res, 400, isGrocery
+        ? 'Store is not approved. Please approve the store first.'
+        : 'Restaurant is not approved. Please approve the restaurant first.');
     }
 
     // Check if commission already exists
@@ -350,10 +427,17 @@ export const createRestaurantCommission = asyncHandler(async (req, res) => {
     }
 
     // Populate and return
-    const populatedCommission = await RestaurantCommission.findById(commission._id)
+    let populatedCommission = await RestaurantCommission.findById(commission._id)
       .populate('restaurant', 'name restaurantId platform isActive email phone')
       .populate('createdBy', 'name email')
       .lean();
+
+    if (isGrocery) {
+      const store = await GroceryStore.findById(commission.restaurant)
+        .select('_id name restaurantId platform isActive email phone ownerName businessModel')
+        .lean();
+      populatedCommission = { ...populatedCommission, restaurant: store || null };
+    }
 
     return successResponse(res, 201, 'Restaurant commission created successfully', {
       commission: populatedCommission
@@ -503,11 +587,21 @@ export const updateRestaurantCommission = asyncHandler(async (req, res) => {
     }
 
     // Populate and return
-    const populatedCommission = await RestaurantCommission.findById(commission._id)
+    let populatedCommission = await RestaurantCommission.findById(commission._id)
       .populate('restaurant', 'name restaurantId platform isActive email phone')
       .populate('createdBy', 'name email')
       .populate('updatedBy', 'name email')
       .lean();
+
+    const rawRestaurantId = commission?.restaurant ? String(commission.restaurant) : null;
+    if (!populatedCommission.restaurant && rawRestaurantId && mongoose.Types.ObjectId.isValid(rawRestaurantId)) {
+      const store = await GroceryStore.findById(rawRestaurantId)
+        .select('_id name restaurantId platform isActive email phone ownerName businessModel')
+        .lean();
+      if (store) {
+        populatedCommission = { ...populatedCommission, restaurant: store };
+      }
+    }
 
     return successResponse(res, 200, 'Restaurant commission updated successfully', {
       commission: populatedCommission

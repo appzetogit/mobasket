@@ -32,11 +32,11 @@ const logger = winston.createLogger({
 export const getDashboardStats = asyncHandler(async (req, res) => {
   try {
     const requestedPlatform = req.query?.platform === 'mogrocery' ? 'mogrocery' : 'mofood';
+    const restaurantPlatformQuery = { $or: [{ platform: 'mofood' }, { platform: { $exists: false } }] };
     let scopedRestaurants = [];
     if (requestedPlatform === 'mogrocery') {
       scopedRestaurants = await GroceryStore.find({}).select('_id').lean();
     } else {
-      const restaurantPlatformQuery = { $or: [{ platform: 'mofood' }, { platform: { $exists: false } }] };
       scopedRestaurants = await Restaurant.find(restaurantPlatformQuery).select('_id').lean();
     }
 
@@ -146,7 +146,9 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     const totalOrders = await Order.countDocuments({ ...scopedOrderMatch, status: 'delivered' });
 
     // Get active partners count
-    const activeRestaurants = await Restaurant.countDocuments({ ...restaurantPlatformQuery, isActive: true });
+    const activeRestaurants = requestedPlatform === 'mogrocery'
+      ? await GroceryStore.countDocuments({ isActive: true })
+      : await Restaurant.countDocuments({ ...restaurantPlatformQuery, isActive: true });
     // Note: Delivery partners are stored in User model
     const User = (await import('../../auth/models/User.js')).default;
     const activeDeliveryPartners = await User.countDocuments({ 
@@ -158,11 +160,12 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     // Get additional stats
     // Total restaurants (only active/approved restaurants)
     // This matches the admin restaurants list which shows only active restaurants by default
-    const totalRestaurants = await Restaurant.countDocuments({ ...restaurantPlatformQuery, isActive: true });
+    const totalRestaurants = requestedPlatform === 'mogrocery'
+      ? await GroceryStore.countDocuments({ isActive: true })
+      : await Restaurant.countDocuments({ ...restaurantPlatformQuery, isActive: true });
     
     // Restaurant requests pending (inactive restaurants with completed onboarding, no rejection)
     const pendingRestaurantRequestsQuery = {
-      ...restaurantPlatformQuery,
       isActive: false,
       $and: [
         {
@@ -187,7 +190,9 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
         }
       ]
     };
-    const pendingRestaurantRequests = await Restaurant.countDocuments(pendingRestaurantRequestsQuery);
+    const pendingRestaurantRequests = requestedPlatform === 'mogrocery'
+      ? await GroceryStore.countDocuments(pendingRestaurantRequestsQuery)
+      : await Restaurant.countDocuments({ ...restaurantPlatformQuery, ...pendingRestaurantRequestsQuery });
     
     // Total delivery boys (all delivery users)
     const totalDeliveryBoys = await User.countDocuments({ role: 'delivery' });
@@ -287,11 +292,16 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       ...scopedOrderMatch,
       createdAt: { $gte: last24Hours }
     });
-    const recentRestaurants = await Restaurant.countDocuments({
-      ...restaurantPlatformQuery,
-      createdAt: { $gte: last24Hours },
-      isActive: true
-    });
+    const recentRestaurants = requestedPlatform === 'mogrocery'
+      ? await GroceryStore.countDocuments({
+          createdAt: { $gte: last24Hours },
+          isActive: true
+        })
+      : await Restaurant.countDocuments({
+          ...restaurantPlatformQuery,
+          createdAt: { $gte: last24Hours },
+          isActive: true
+        });
 
     // Get monthly data for last 12 months
     // Use aggregation to match orders with settlements by orderId and use order's deliveredAt
@@ -1644,39 +1654,20 @@ export const getGroceryStoreJoinRequests = asyncHandler(async (req, res) => {
     let query = {};
     
     if (status === 'pending') {
-      const conditions = [
+      // Show all inactive stores that are not rejected.
+      query.$and = [
         { isActive: false },
         {
           $or: [
-            { 'rejectionReason': { $exists: false } },
-            { 'rejectionReason': null }
+            { rejectionReason: { $exists: false } },
+            { rejectionReason: null }
           ]
         }
       ];
-      
-      const completionCheck = {
-        $or: [
-          { 'onboarding.completedSteps': 1 },
-          {
-            $and: [
-              { 'name': { $exists: true, $ne: null, $ne: '' } },
-              { 'onboarding.storeImage': { $exists: true } }
-            ]
-          }
-        ]
-      };
-      
-      conditions.push(completionCheck);
-      query.$and = conditions;
     } else if (status === 'rejected') {
-      query['rejectionReason'] = { $exists: true, $ne: null };
-      query.$or = [
-        { 'onboarding.completedSteps': 1 },
-        {
-          $and: [
-            { 'name': { $exists: true, $ne: null, $ne: '' } }
-          ]
-        }
+      query.$and = [
+        { isActive: false },
+        { rejectionReason: { $exists: true, $ne: null } }
       ];
     }
 

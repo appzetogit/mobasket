@@ -284,6 +284,7 @@ export default function RestaurantCommission({ platformOverride = "mofood", enti
       
       const payload = {
         restaurantId: formData.restaurantId,
+        platform: platformOverride,
         defaultCommission: {
           type: formData.defaultCommission.type,
           value: parseFloat(formData.defaultCommission.value)
