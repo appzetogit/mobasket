@@ -168,19 +168,6 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
 
   // Fetch categories from API
   useEffect(() => {
-    // Check if admin is authenticated
-    const adminToken = localStorage.getItem('admin_accessToken')
-    if (!adminToken) {
-      console.warn('No admin token found. User may need to login.')
-      toast.error('Please login to access categories')
-      setLoading(false)
-      return
-    }
-    
-    // Log API base URL for debugging
-    console.log('API Base URL:', API_BASE_URL)
-    console.log('Admin Token:', adminToken ? 'Present' : 'Missing')
-    
     fetchCategories()
     if (isGroceryScope) {
       fetchGroceryTypeOptions()

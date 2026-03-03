@@ -75,6 +75,31 @@ const GroceryPage = () => {
   const orderSnapshotRef = useRef(new Map());
   const hasSeededOrderSnapshotRef = useRef(false);
   const zoneRecoveryAttemptedRef = useRef(false);
+  const isAnySheetOpen = showCategorySheet || showCollectionSheet || showWishlistSheet;
+
+  useEffect(() => {
+    if (!isAnySheetOpen) return undefined;
+
+    const body = document.body;
+    const html = document.documentElement;
+    const scrollY = window.scrollY || window.pageYOffset || 0;
+    const previousBodyStyle = body.getAttribute("style") || "";
+    const previousHtmlStyle = html.getAttribute("style") || "";
+
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.left = "0";
+    body.style.right = "0";
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+    html.style.overflow = "hidden";
+
+    return () => {
+      body.setAttribute("style", previousBodyStyle);
+      html.setAttribute("style", previousHtmlStyle);
+      window.scrollTo(0, scrollY);
+    };
+  }, [isAnySheetOpen]);
 
   const getStoreCoordinates = (store) => {
     const geoCoordinates = store?.location?.coordinates;
@@ -1383,7 +1408,7 @@ const GroceryPage = () => {
   return (
     // Main Container with White Background
     <div
-      className={`min-h-screen text-slate-800 dark:text-slate-100 pb-24 font-sans w-full shadow-none overflow-x-hidden relative bg-white dark:bg-[#0a0a0a] ${isGroceryUnavailable ? "grayscale-[0.95] opacity-70" : ""
+      className={`min-h-screen text-slate-800 dark:text-slate-100 pb-24 font-sans w-full shadow-none overflow-x-hidden relative bg-white dark:bg-[radial-gradient(120%_90%_at_50%_-10%,#1f2937_0%,#0b0f17_45%,#070b12_100%)] ${isGroceryUnavailable ? "grayscale-[0.95] opacity-70" : ""
         }`}
     >
       {isGroceryUnavailable && (
@@ -1427,12 +1452,12 @@ const GroceryPage = () => {
       </AnimatePresence>
       {/* --- 1. HEADER (Yellow) --- */}
       <div
-        className={`sticky top-0 z-40 transition-all duration-300 bg-white dark:bg-[#111111] ${isScrolled ? "shadow-sm" : ""}`}
+        className={`sticky top-0 z-40 transition-all duration-300 bg-white/95 dark:bg-[#0b111c]/90 backdrop-blur-md ${isScrolled ? "shadow-sm dark:shadow-black/30" : ""}`}
       >
         <div className="relative z-20">
           {/* Top Info Row - YELLOW BACKGROUND ADDED HERE */}
           <div
-            className={`rounded-b-[2.5rem] pb-10 shadow-sm relative z-20 transition-all duration-500 ${activeTab === "Electronics" ? "" :
+            className={`rounded-b-[2.5rem] pb-10 shadow-sm relative z-20 transition-all duration-500 dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)] dark:border-b dark:border-white/10 ${activeTab === "Electronics" ? "" :
               activeTab === "Beauty" ? "" :
                 activeTab === "Pharmacy" ? "" :
                   activeTab === "Valentine's" ? "" : "bg-[#FACC15]"
@@ -1451,12 +1476,12 @@ const GroceryPage = () => {
           >
             <div className="px-4 pt-6 flex justify-between items-start mb-0 md:max-w-6xl md:mx-auto w-full">
               <div className="flex flex-col">
-                <h1 className="text-[10px] uppercase font-black tracking-[0.15em] text-[#3e3212] leading-none mb-0.5">
+                <h1 className="text-[10px] uppercase font-black tracking-[0.15em] text-[#3e3212] dark:text-[#fff5cc] leading-none mb-0.5">
                   MoBasket in
                 </h1>
                 <div className="flex items-baseline gap-2 leading-none">
                   <span
-                    className="text-[1.5rem] font-[900] text-[#1a1a1a] tracking-tight -ml-0.5"
+                    className="text-[1.5rem] font-[900] text-[#1a1a1a] dark:text-[#fff9e8] tracking-tight -ml-0.5"
                     style={{
                       fontFamily: "system-ui, -apple-system, sans-serif",
                     }}
@@ -1465,25 +1490,25 @@ const GroceryPage = () => {
                   </span>
                 </div>
                 <div onClick={openLocationSelector} className="flex items-center gap-1 -mt-0.5 cursor-pointer">
-                  <span className="text-[#1a1a1a] text-[0.8rem] font-bold tracking-tight leading-tight line-clamp-2">
+                  <span className="text-[#1a1a1a] dark:text-[#fff4d1] text-[0.8rem] font-bold tracking-tight leading-tight line-clamp-2">
                     {topAddress}
                   </span>
                   <ChevronDown
                     size={14}
-                    className="text-[#1a1a1a] stroke-[3]"
+                    className="text-[#1a1a1a] dark:text-[#fff4d1] stroke-[3]"
                   />
                 </div>
               </div>
 
               {/* Desktop Search Bar */}
-              <div className="hidden md:flex flex-1 max-w-lg mx-8 items-center bg-white rounded-xl px-4 py-2.5 shadow-sm border border-transparent focus-within:border-black/10 transition-colors">
-                <Search className="h-4 w-4 text-slate-500 stroke-[2.5] mr-3" />
+              <div className="hidden md:flex flex-1 max-w-lg mx-8 items-center bg-white dark:bg-[#101825] rounded-xl px-4 py-2.5 shadow-sm border border-transparent dark:border-white/10 focus-within:border-black/10 dark:focus-within:border-cyan-400/50 transition-colors">
+                <Search className="h-4 w-4 text-slate-500 dark:text-slate-300 stroke-[2.5] mr-3" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder='Search "chocolate"'
-                  className="flex-1 bg-transparent outline-none text-slate-800 placeholder:text-slate-400 text-sm font-medium"
+                  className="flex-1 bg-transparent outline-none text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-400/90 text-sm font-medium"
                 />
               </div>
 
@@ -1492,7 +1517,7 @@ const GroceryPage = () => {
               {/* Profile & Cart Icons */}
               <div className="flex gap-2 mt-1">
                 <button
-                  className="relative w-8 h-8 bg-[#1a1a1a] rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+                  className="relative w-8 h-8 bg-[#1a1a1a] dark:bg-[#0e1624] dark:border dark:border-white/15 rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-transform"
                   onClick={() => setShowWishlistSheet(true)}
                 >
                   <Heart size={16} className="text-white" />
@@ -1510,7 +1535,7 @@ const GroceryPage = () => {
 
                 {/* Cart Icon */}
                 <button
-                  className="relative w-8 h-8 bg-[#1a1a1a] rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+                  className="relative w-8 h-8 bg-[#1a1a1a] dark:bg-[#0e1624] dark:border dark:border-white/15 rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-transform"
                   onClick={() => navigate("/grocery/cart")}
                 >
                   <ShoppingCart size={16} className="text-white" />
@@ -1527,7 +1552,7 @@ const GroceryPage = () => {
                 </button>
 
                 <button
-                  className="w-8 h-8 bg-[#1a1a1a] rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+                  className="w-8 h-8 bg-[#1a1a1a] dark:bg-[#0e1624] dark:border dark:border-white/15 rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-transform"
                   onClick={() => navigate("/grocery/profile")}
                 >
                   <User size={16} className="text-white" />
@@ -1538,16 +1563,16 @@ const GroceryPage = () => {
 
           {/* Search Bar (Mobile) - OUTSIDE YELLOW BOX */}
           <div className="px-4 mt-3 mb-2 relative z-30 md:hidden">
-            <div className="bg-gray-100 rounded-2xl h-12 flex items-center px-4 border border-transparent focus-within:border-black/5 transition-all w-full">
-              <Search className="text-slate-400 w-5 h-5 stroke-[2.5] mr-3" />
+            <div className="bg-gray-100 dark:bg-[#111b2a] rounded-2xl h-12 flex items-center px-4 border border-transparent dark:border-white/10 focus-within:border-black/5 dark:focus-within:border-cyan-400/45 transition-all w-full shadow-sm dark:shadow-black/25">
+              <Search className="text-slate-400 dark:text-slate-300 w-5 h-5 stroke-[2.5] mr-3" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder='Search "pet food"'
-                className="flex-1 bg-transparent text-slate-800 text-[15px] font-semibold outline-none placeholder:text-slate-400/90 h-full"
+                className="flex-1 bg-transparent text-slate-800 dark:text-slate-100 text-[15px] font-semibold outline-none placeholder:text-slate-400/90 dark:placeholder:text-slate-500 h-full"
               />
-              <div className="w-[1px] h-6 bg-slate-200 mx-3"></div>
+              <div className="w-[1px] h-6 bg-slate-200 dark:bg-slate-700 mx-3"></div>
               <Mic
                 onClick={startListening}
                 className={`w-5 h-5 stroke-[2.5] transition-colors cursor-pointer ${isListening ? "text-[#EF4F5F] animate-pulse" : "text-slate-400"}`}
@@ -1562,7 +1587,7 @@ const GroceryPage = () => {
                 {topNavCategories.map((cat) => (
                   <div
                     key={cat.id}
-                    className={`flex flex-col items-center gap-1.5 cursor-pointer min-w-[68px] px-1 py-1 rounded-xl transition-colors ${activeTab === cat.name ? "bg-white/55" : "hover:bg-white/35"
+                    className={`flex flex-col items-center gap-1.5 cursor-pointer min-w-[68px] px-1 py-1 rounded-xl transition-colors ${activeTab === cat.name ? "bg-white/60 dark:bg-white/12" : "hover:bg-white/35 dark:hover:bg-white/8"
                       }`}
                     onClick={() => {
                       setActiveTab(cat.name);
@@ -1577,11 +1602,11 @@ const GroceryPage = () => {
                       />
                     </div>
                     <span
-                      className={`text-[11px] font-bold tracking-tight text-center line-clamp-2 min-h-[30px] ${activeTab === cat.name ? "text-[#1a1a1a]" : "text-[#1a1a1a]/80"}`}
+                      className={`text-[11px] font-bold tracking-tight text-center line-clamp-2 min-h-[30px] ${activeTab === cat.name ? "text-[#1a1a1a] dark:text-white" : "text-[#1a1a1a]/80 dark:text-slate-300"}`}
                     >
                       {cat.name}
                     </span>
-                    {activeTab === cat.name && <div className="w-6 h-0.5 bg-[#1a1a1a] rounded-full"></div>}
+                    {activeTab === cat.name && <div className="w-6 h-0.5 bg-[#1a1a1a] dark:bg-cyan-300 rounded-full"></div>}
                   </div>
                 ))}
               </div>
@@ -1689,7 +1714,7 @@ const GroceryPage = () => {
 
       {!shouldShowShimmer && !hasActiveSearch && activeCategoryId === "all" && visibleBestSellers.length > 0 && (
         <div className="px-4 pt-4 pb-2 relative z-10 md:max-w-6xl md:mx-auto">
-          <h3 className="text-lg font-[800] text-[#3e2723] mb-4">Bestsellers</h3>
+          <h3 className="text-lg font-[800] text-[#3e2723] dark:text-slate-100 mb-4">Bestsellers</h3>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-6">
             {visibleBestSellers.map((item, idx) => {
@@ -1701,25 +1726,25 @@ const GroceryPage = () => {
                 <button
                   type="button"
                   key={`${item.id}-${idx}`}
-                  className="px-3 py-2.5 md:px-4 md:py-5 bg-[#e9edf2] md:bg-sky-50 md:border-sky-100 rounded-[22px] border border-[#d9dee5] shadow-[0_4px_12px_rgba(15,23,42,0.08)] md:shadow-sm text-left active:scale-95 transition-all duration-300 md:hover:shadow-lg md:hover:-translate-y-1 md:hover:border-sky-200 group"
+                  className="px-3 py-2.5 md:px-4 md:py-5 bg-[#e9edf2] md:bg-sky-50 dark:bg-[#141f2e] rounded-[22px] border border-[#d9dee5] dark:border-[#24344c] shadow-[0_4px_12px_rgba(15,23,42,0.08)] dark:shadow-[0_12px_24px_rgba(0,0,0,0.35)] text-left active:scale-95 transition-all duration-300 md:hover:shadow-lg md:hover:-translate-y-1 md:hover:border-sky-200 dark:md:hover:border-cyan-400/40 group"
                   onClick={() => handleBestSellerClick(item)}
                 >
                   <div className="relative grid grid-cols-2 gap-1 mb-2 md:gap-2 md:w-[85%] md:mx-auto md:mb-5">
                     {cardImages.map((imageSrc, imageIdx) => (
                       <div
                         key={`${item.id}-${imageIdx}`}
-                        className="aspect-square rounded-xl bg-white border border-[#eceff3] md:border-slate-100 overflow-hidden flex items-center justify-center p-0.5 transition-all duration-300 md:group-hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] md:group-hover:border-slate-200"
+                        className="aspect-square rounded-xl bg-white dark:bg-[#0d1624] border border-[#eceff3] dark:border-[#2a3a51] overflow-hidden flex items-center justify-center p-0.5 transition-all duration-300 md:group-hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] md:group-hover:border-slate-200 dark:md:group-hover:border-cyan-400/40"
                       >
                         <img src={imageSrc} alt={item.name} className="w-full h-full object-contain scale-115 md:scale-[0.85] md:group-hover:scale-100 transition-transform duration-500" />
                       </div>
                     ))}
                     {item.countLabel ? (
-                      <div className="absolute left-1/2 -translate-x-1/2 bottom-1 md:-bottom-2.5 h-8 min-w-8 px-2 md:px-2.5 rounded-full bg-white border border-[#d7dce4] md:border-white shadow-sm md:shadow-md text-[11px] font-[800] text-[#5b6472] md:text-slate-800 flex items-center justify-center z-10 md:group-hover:text-[#EF4F5F] transition-colors">
+                      <div className="absolute left-1/2 -translate-x-1/2 bottom-1 md:-bottom-2.5 h-8 min-w-8 px-2 md:px-2.5 rounded-full bg-white dark:bg-[#0f1b2c] border border-[#d7dce4] dark:border-[#2a3a51] shadow-sm md:shadow-md text-[11px] font-[800] text-[#5b6472] dark:text-slate-200 md:text-slate-800 flex items-center justify-center z-10 md:group-hover:text-[#EF4F5F] transition-colors">
                         {item.countLabel}
                       </div>
                     ) : null}
                   </div>
-                  <p className="text-[15px] md:text-[16px] font-[800] text-[#262a33] md:text-slate-800 leading-[1.08] md:leading-[1.2] text-center line-clamp-2 min-h-[24px] md:min-h-[36px] flex items-center justify-center">
+                  <p className="text-[15px] md:text-[16px] font-[800] text-[#262a33] md:text-slate-800 dark:text-slate-100 leading-[1.08] md:leading-[1.2] text-center line-clamp-2 min-h-[24px] md:min-h-[36px] flex items-center justify-center">
                     {item.name}
                   </p>
                 </button>
@@ -1732,13 +1757,13 @@ const GroceryPage = () => {
       {!shouldShowShimmer && !hasActiveSearch && activeCategoryId !== "all" && (
         <div className="px-2 sm:px-4 pb-24 pt-2 relative z-10 md:max-w-6xl md:mx-auto">
           <div className="flex gap-2 sm:gap-3">
-            <aside className="w-[86px] sm:w-[100px] shrink-0 border-r border-slate-200 pr-2">
+            <aside className="w-[86px] sm:w-[100px] shrink-0 border-r border-slate-200 dark:border-slate-700/80 pr-2">
               <div className="max-h-[calc(100vh-230px)] overflow-y-auto space-y-2 pb-3">
                 <button
                   type="button"
                   className={`w-full rounded-xl px-2 py-2 text-[11px] font-semibold text-center border ${activeSubcategoryId === "all-subcategories"
-                    ? "bg-[#fff4cc] border-[#facc15] text-slate-900"
-                    : "bg-white border-slate-200 text-slate-600"
+                    ? "bg-[#fff4cc] dark:bg-[#1c2c42] border-[#facc15] dark:border-cyan-400/70 text-slate-900 dark:text-cyan-100"
+                    : "bg-white dark:bg-[#111a28] border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300"
                     }`}
                   onClick={() => setActiveSubcategoryId("all-subcategories")}
                 >
@@ -1749,17 +1774,17 @@ const GroceryPage = () => {
                     type="button"
                     key={subcategory._id}
                     className={`w-full rounded-xl px-1.5 py-2 border flex flex-col items-center gap-1.5 ${activeSubcategoryId === subcategory._id
-                      ? "bg-[#fff4cc] border-[#facc15]"
-                      : "bg-white border-slate-200"
+                      ? "bg-[#fff4cc] dark:bg-[#1c2c42] border-[#facc15] dark:border-cyan-400/70"
+                      : "bg-white dark:bg-[#111a28] border-slate-200 dark:border-slate-700"
                       }`}
                     onClick={() => setActiveSubcategoryId(subcategory._id)}
                   >
                     <img
                       src={subcategory.image}
                       alt={subcategory.name}
-                      className="w-10 h-10 rounded-full object-cover bg-slate-50"
+                      className="w-10 h-10 rounded-full object-cover bg-slate-50 dark:bg-slate-800"
                     />
-                    <span className="text-[10px] font-semibold text-slate-700 leading-tight line-clamp-2">
+                    <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200 leading-tight line-clamp-2">
                       {subcategory.name}
                     </span>
                   </button>
@@ -1769,16 +1794,16 @@ const GroceryPage = () => {
 
             <section className="flex-1 min-w-0">
               <div className="flex items-center justify-between mb-3 px-1">
-                <h3 className="text-base sm:text-lg font-[800] text-[#3e2723]">
+                <h3 className="text-base sm:text-lg font-[800] text-[#3e2723] dark:text-slate-100">
                   {activeSubcategoryId === "all-subcategories"
                     ? activeTab
                     : normalizedSidebarSubcategories.find((subcat) => subcat._id === activeSubcategoryId)?.name || "Products"}
                 </h3>
-                <span className="text-xs font-semibold text-slate-500">{visibleLayoutProducts.length} items</span>
+                <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">{visibleLayoutProducts.length} items</span>
               </div>
 
               {visibleLayoutProducts.length === 0 ? (
-                <p className="px-1 py-6 text-sm text-slate-500">No products found in this subcategory.</p>
+                <p className="px-1 py-6 text-sm text-slate-500 dark:text-slate-400">No products found in this subcategory.</p>
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
                   {visibleLayoutProducts.map((product) => {
@@ -1788,14 +1813,14 @@ const GroceryPage = () => {
                     return (
                       <div
                         key={`layout-product-${productId}`}
-                        className="rounded-2xl border border-slate-200 bg-white shadow-sm p-2.5 sm:p-3 cursor-pointer relative"
+                        className="rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#111a28] shadow-sm dark:shadow-black/20 p-2.5 sm:p-3 cursor-pointer relative"
                         onClick={() => handleProductCardClick(product, activeCategoryId)}
                       >
                         <button
                           type="button"
                           className={`absolute top-2 right-2 z-20 w-7 h-7 rounded-full border flex items-center justify-center transition-all duration-300 ${isProductWishlisted(product)
-                            ? "bg-pink-50 border-pink-200 text-pink-500 shadow-sm"
-                            : "bg-white/80 backdrop-blur-sm border-slate-200 text-slate-400 hover:text-slate-600"
+                            ? "bg-pink-50 dark:bg-pink-500/15 border-pink-200 dark:border-pink-400/40 text-pink-500 shadow-sm"
+                            : "bg-white/80 dark:bg-[#0e1624]/80 backdrop-blur-sm border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                             }`}
                           onClick={(event) => toggleProductWishlist(product, event)}
                         >
@@ -1806,31 +1831,31 @@ const GroceryPage = () => {
                           />
                         </button>
 
-                        <div className="w-full aspect-square bg-slate-50 rounded-xl overflow-hidden mb-2 flex items-center justify-center">
+                        <div className="w-full aspect-square bg-slate-50 dark:bg-[#0d1624] rounded-xl overflow-hidden mb-2 flex items-center justify-center">
                           <img
                             src={getProductImage(product)}
                             alt={product?.name || "Product"}
                             className="w-full h-full object-contain scale-110"
                           />
                         </div>
-                        <p className="text-[12px] sm:text-sm font-semibold text-slate-900 line-clamp-2 min-h-[34px]">
+                        <p className="text-[12px] sm:text-sm font-semibold text-slate-900 dark:text-slate-100 line-clamp-2 min-h-[34px]">
                           {product?.name || "Product"}
                         </p>
-                        <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">
                           {product?.unit || "Unit not specified"}
                         </p>
                         <div className="mt-2 flex items-end justify-between gap-2">
                           <div>
-                            <p className="text-sm font-bold text-slate-900">Rs {Number(product?.sellingPrice || 0)}</p>
+                            <p className="text-sm font-bold text-slate-900 dark:text-slate-100">Rs {Number(product?.sellingPrice || 0)}</p>
                             {Number(product?.mrp || 0) > Number(product?.sellingPrice || 0) && (
-                              <p className="text-[10px] text-slate-400 line-through">Rs {Number(product?.mrp || 0)}</p>
+                              <p className="text-[10px] text-slate-400 dark:text-slate-500 line-through">Rs {Number(product?.mrp || 0)}</p>
                             )}
                           </div>
                           <button
                             type="button"
                             className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg text-[10px] sm:text-xs font-[900] border ${alreadyInCart
-                              ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                              : "bg-white text-slate-900 border-[#facd01]"
+                              ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-400/40"
+                              : "bg-white dark:bg-[#0f1b2c] text-slate-900 dark:text-slate-100 border-[#facd01] dark:border-cyan-400/70"
                               }`}
                             onClick={(event) => {
                               event.stopPropagation();
@@ -1852,7 +1877,7 @@ const GroceryPage = () => {
 
       {!shouldShowShimmer && hasActiveSearch && (
         <div className="px-4 pt-4 pb-2 relative z-10 md:max-w-6xl md:mx-auto">
-          <h3 className="text-lg font-[800] text-[#3e2723]">
+          <h3 className="text-lg font-[800] text-[#3e2723] dark:text-slate-100">
             Search results for "{searchQuery.trim()}"
           </h3>
         </div>
@@ -1860,7 +1885,7 @@ const GroceryPage = () => {
 
       {!shouldShowShimmer && hasActiveSearch && visibleBestSellers.length > 0 && (
         <div className="px-4 pt-2 pb-2 relative z-10 md:max-w-6xl md:mx-auto">
-          <h4 className="text-base font-[800] text-[#3e2723] mb-3">Related Bestsellers</h4>
+          <h4 className="text-base font-[800] text-[#3e2723] dark:text-slate-100 mb-3">Related Bestsellers</h4>
           <div className="grid grid-cols-3 gap-2.5">
             {visibleBestSellers.map((item, idx) => {
               const cardImages = Array.from({ length: 4 }).map(
@@ -1871,23 +1896,23 @@ const GroceryPage = () => {
                 <button
                   type="button"
                   key={`search-bestseller-${item.id}-${idx}`}
-                  className="p-2.5 bg-[#e9edf2] rounded-[16px] border border-[#dde3ea] shadow-sm text-left active:scale-95 transition-transform"
+                  className="p-2.5 bg-[#e9edf2] dark:bg-[#141f2e] rounded-[16px] border border-[#dde3ea] dark:border-[#24344c] shadow-sm dark:shadow-black/20 text-left active:scale-95 transition-transform"
                   onClick={() => handleBestSellerClick(item)}
                 >
                   <div className="grid grid-cols-2 gap-1.5 mb-2">
                     {cardImages.map((imageSrc, imageIdx) => (
                       <div
                         key={`${item.id}-search-${imageIdx}`}
-                        className="h-10 rounded-[8px] bg-white border border-[#eceff3] overflow-hidden flex items-center justify-center p-1"
+                        className="h-10 rounded-[8px] bg-white dark:bg-[#0d1624] border border-[#eceff3] dark:border-[#2a3a51] overflow-hidden flex items-center justify-center p-1"
                       >
                         <img src={imageSrc} alt={item.name} className="w-full h-full object-contain" />
                       </div>
                     ))}
                   </div>
-                  <p className="text-[10px] font-semibold text-slate-500 leading-none mb-1 text-center min-h-[10px]">
+                  <p className="text-[10px] font-semibold text-slate-500 dark:text-slate-400 leading-none mb-1 text-center min-h-[10px]">
                     {item.countLabel || ""}
                   </p>
-                  <p className="text-[13px] font-[700] text-[#2b2b2b] leading-[1.2] text-center line-clamp-2 min-h-[32px]">
+                  <p className="text-[13px] font-[700] text-[#2b2b2b] dark:text-slate-100 leading-[1.2] text-center line-clamp-2 min-h-[32px]">
                     {item.name}
                   </p>
                 </button>
@@ -1899,7 +1924,7 @@ const GroceryPage = () => {
 
       {!shouldShowShimmer && hasActiveSearch && visibleSearchProducts.length > 0 && (
         <div className="px-4 pt-2 pb-2 relative z-10 md:max-w-6xl md:mx-auto">
-          <h4 className="text-base font-[800] text-[#3e2723] mb-3">Products</h4>
+          <h4 className="text-base font-[800] text-[#3e2723] dark:text-slate-100 mb-3">Products</h4>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {visibleSearchProducts.map((product) => {
               const primarySubcategory =
@@ -1910,14 +1935,14 @@ const GroceryPage = () => {
               return (
                 <div
                   key={`search-product-${product._id}`}
-                  className="rounded-2xl border border-slate-200 p-3 bg-white shadow-sm text-left relative cursor-pointer"
+                  className="rounded-2xl border border-slate-200 dark:border-slate-700/80 p-3 bg-white dark:bg-[#111a28] shadow-sm dark:shadow-black/20 text-left relative cursor-pointer"
                   onClick={() => handleProductCardClick(product)}
                 >
                   <button
                     type="button"
                     className={`absolute top-2 right-2 z-20 w-7 h-7 rounded-full border flex items-center justify-center transition-all duration-300 ${isProductWishlisted(product)
-                      ? "bg-pink-50 border-pink-200 text-pink-500 shadow-sm"
-                      : "bg-white/80 backdrop-blur-sm border-slate-200 text-slate-400 hover:text-slate-600"
+                      ? "bg-pink-50 dark:bg-pink-500/15 border-pink-200 dark:border-pink-400/40 text-pink-500 shadow-sm"
+                      : "bg-white/80 dark:bg-[#0e1624]/80 backdrop-blur-sm border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                       }`}
                     onClick={(event) => toggleProductWishlist(product, event)}
                   >
@@ -1927,16 +1952,16 @@ const GroceryPage = () => {
                       strokeWidth={isProductWishlisted(product) ? 2.5 : 2}
                     />
                   </button>
-                  <div className="w-full aspect-square bg-slate-50 rounded-xl overflow-hidden mb-2 flex items-center justify-center">
+                  <div className="w-full aspect-square bg-slate-50 dark:bg-[#0d1624] rounded-xl overflow-hidden mb-2 flex items-center justify-center">
                     <img
                       src={getProductImage(product)}
                       alt={product?.name || "Product"}
                       className="w-full h-full object-contain scale-110"
                     />
                   </div>
-                  <p className="text-sm font-semibold text-slate-900 line-clamp-2">{product?.name}</p>
-                  <p className="text-xs text-slate-500 mt-1 line-clamp-1">{product?.unit || "Unit not specified"}</p>
-                  <p className="text-sm font-bold text-slate-900 mt-1">Rs {Number(product?.sellingPrice || 0)}</p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 line-clamp-2">{product?.name}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">{product?.unit || "Unit not specified"}</p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-slate-100 mt-1">Rs {Number(product?.sellingPrice || 0)}</p>
                 </div>
               );
             })}
@@ -1946,7 +1971,7 @@ const GroceryPage = () => {
 
       {!shouldShowShimmer && hasActiveSearch && !hasAnySearchMatch && (
         <div className="px-4 pt-4 pb-24 relative z-10 md:max-w-6xl md:mx-auto">
-          <p className="text-sm text-slate-500">No matching results found.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">No matching results found.</p>
         </div>
       )}
 
@@ -1956,9 +1981,9 @@ const GroceryPage = () => {
           className={`px-4 relative z-10 md:max-w-6xl md:mx-auto ${sectionIndex === homepageCategoryDisplaySections.length - 1 ? "pb-24" : "pb-6"
             }`}
         >
-          <h3 className="text-lg font-[800] text-[#3e2723] mb-4">{category.name}</h3>
+          <h3 className="text-lg font-[800] text-[#3e2723] dark:text-slate-100 mb-4">{category.name}</h3>
           {(!category.homepageCards || category.homepageCards.length === 0) && (
-            <p className="text-sm text-slate-500 mb-2">No subcategories available.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">No subcategories available.</p>
           )}
           <div className="grid grid-cols-4 md:grid-cols-5 gap-x-2 md:gap-x-4 gap-y-2 md:gap-y-4">
             {(category.homepageCards || []).map((card, cardIndex) => (
@@ -1996,7 +2021,7 @@ const GroceryPage = () => {
                 }}
               >
                 <div
-                  className="w-full h-[88px] rounded-[18px] flex items-center justify-center p-2 shadow-sm border border-[#fef3c7] overflow-hidden relative bg-[#fffbeb]"
+                  className="w-full h-[88px] rounded-[18px] flex items-center justify-center p-2 shadow-sm border border-[#fef3c7] dark:border-[#29405e] overflow-hidden relative bg-[#fffbeb] dark:bg-[#101b2a]"
                 >
                   <img
                     src={card.image || FALLBACK_IMAGE}
@@ -2008,7 +2033,7 @@ const GroceryPage = () => {
                 <div className="h-7 flex items-start justify-center w-full">
                   <p
                     className={`${cardIndex === 0 ? "text-[12px]" : "text-[11px]"
-                      } font-[700] text-center text-[#2b2b2b] leading-tight px-0.5 line-clamp-2`}
+                    } font-[700] text-center text-[#2b2b2b] dark:text-slate-200 leading-tight px-0.5 line-clamp-2`}
                   >
                     {card.name}
                   </p>
@@ -2084,19 +2109,19 @@ const GroceryPage = () => {
       )}
 
       {/* --- 6. BOTTOM NAVIGATION (Fixed) --- */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/85 dark:bg-[#111111]/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-800 z-50 w-full pb-4">
+      <div className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-[#0a121f]/95 backdrop-blur-md border-t border-slate-100 dark:border-white/10 z-50 w-full pb-4 shadow-[0_-8px_30px_rgba(2,6,23,0.08)] dark:shadow-[0_-12px_30px_rgba(0,0,0,0.5)]">
         <div className="md:max-w-6xl md:mx-auto w-full flex justify-between items-end py-2 px-6">
           <div
-            className={`flex flex-col items-center gap-1 cursor-pointer ${isGroceryCategoriesRoute ? "text-slate-400 hover:text-slate-600" : ""}`}
+            className={`flex flex-col items-center gap-1 cursor-pointer ${isGroceryCategoriesRoute ? "text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300" : ""}`}
             onClick={handleHomeNavClick}
           >
-            <Home size={24} className={isGroceryCategoriesRoute ? "text-slate-400" : "text-slate-900 fill-current"} />
-            <span className={`text-[10px] ${isGroceryCategoriesRoute ? "font-medium text-slate-400" : "font-bold text-slate-900"}`}>Home</span>
-            {!isGroceryCategoriesRoute && <div className="w-8 h-1 bg-slate-900 rounded-full mt-0.5"></div>}
+            <Home size={24} className={isGroceryCategoriesRoute ? "text-slate-400 dark:text-slate-500" : "text-slate-900 dark:text-cyan-200 fill-current"} />
+            <span className={`text-[10px] ${isGroceryCategoriesRoute ? "font-medium text-slate-400 dark:text-slate-500" : "font-bold text-slate-900 dark:text-cyan-100"}`}>Home</span>
+            {!isGroceryCategoriesRoute && <div className="w-8 h-1 bg-slate-900 dark:bg-cyan-300 rounded-full mt-0.5"></div>}
           </div>
 
           <div
-            className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 hover:text-slate-600"
+            className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
             onClick={() => navigate("/plans")}
           >
             <ShoppingBag size={24} />
@@ -2104,16 +2129,16 @@ const GroceryPage = () => {
           </div>
 
           <div
-            className={`flex flex-col items-center gap-1 cursor-pointer ${isGroceryCategoriesRoute ? "text-slate-900" : "text-slate-400 hover:text-slate-600"}`}
+            className={`flex flex-col items-center gap-1 cursor-pointer ${isGroceryCategoriesRoute ? "text-slate-900 dark:text-cyan-100" : "text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"}`}
             onClick={handleCategoriesNavClick}
           >
             <LayoutGrid size={24} />
-            <span className={`text-[10px] ${isGroceryCategoriesRoute ? "font-bold text-slate-900" : "font-medium"}`}>Categories</span>
-            {isGroceryCategoriesRoute && <div className="w-8 h-1 bg-slate-900 rounded-full mt-0.5"></div>}
+            <span className={`text-[10px] ${isGroceryCategoriesRoute ? "font-bold text-slate-900 dark:text-cyan-100" : "font-medium"}`}>Categories</span>
+            {isGroceryCategoriesRoute && <div className="w-8 h-1 bg-slate-900 dark:bg-cyan-300 rounded-full mt-0.5"></div>}
           </div>
 
           <button
-            className="mb-1 bg-[#EF4F5F] hover:bg-red-700 text-white px-6 py-2 rounded-full shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"
+            className="mb-1 bg-[#EF4F5F] hover:bg-red-700 dark:bg-gradient-to-r dark:from-[#ef4f5f] dark:to-[#f97316] text-white px-6 py-2 rounded-full shadow-lg active:scale-95 transition-transform flex items-center justify-center gap-2"
             onClick={() => navigate("/home")}
           >
             <span className="font-black italic text-lg tracking-tighter">
@@ -2146,7 +2171,7 @@ const GroceryPage = () => {
                   setShowCollectionSheet(false);
                 }
               }}
-              className="fixed bottom-0 left-0 right-0 h-[92vh] z-[80] w-full"
+              className="fixed bottom-0 left-0 right-0 h-[92vh] z-[80] w-full overscroll-contain touch-pan-y"
             >
               <button
                 onClick={() => setShowCollectionSheet(false)}
@@ -2155,30 +2180,30 @@ const GroceryPage = () => {
                 <X size={22} className="text-white" strokeWidth={2.5} />
               </button>
 
-              <div className="h-full bg-[#f4f5f7] rounded-t-[22px] overflow-hidden shadow-2xl flex flex-col">
+              <div className="h-full bg-[#f4f5f7] dark:bg-[#0d1422] rounded-t-[22px] overflow-hidden shadow-2xl flex flex-col">
                 <div className="w-full flex justify-center pt-3 pb-1">
-                  <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
+                  <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full" />
                 </div>
 
-                <div className="px-3 pb-2 bg-white border-b border-slate-200">
+                <div className="px-3 pb-2 bg-white dark:bg-[#121b2b] border-b border-slate-200 dark:border-slate-700">
                   <div className="flex items-center gap-2 md:max-w-6xl md:mx-auto">
                     <button
                       type="button"
                       onClick={() => setShowCollectionSheet(false)}
-                      className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center"
+                      className="w-8 h-8 rounded-full bg-slate-100 dark:bg-[#0c1422] dark:text-slate-200 flex items-center justify-center"
                     >
                       <ArrowLeft size={16} />
                     </button>
                     <div className="min-w-0">
-                      <p className="text-[15px] font-extrabold text-slate-900 truncate">
+                      <p className="text-[15px] font-extrabold text-slate-900 dark:text-slate-100 truncate">
                         {activeCollectionCategory?.name || (collectionCategoryId === "all" ? "All Categories" : collectionTitle)}
                       </p>
-                      <p className="text-[11px] font-semibold text-slate-500">{collectionVisibleProducts.length} items</p>
+                      <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">{collectionVisibleProducts.length} items</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="bg-white border-b border-slate-200 px-2 py-2 overflow-x-auto no-scrollbar">
+                <div className="bg-white dark:bg-[#121b2b] border-b border-slate-200 dark:border-slate-700 px-2 py-2 overflow-x-auto no-scrollbar">
                   <div className="flex gap-2 min-w-max md:max-w-6xl md:mx-auto md:px-2">
                     {collectionCategoryTabs.map((tab) => (
                       <button
@@ -2196,14 +2221,14 @@ const GroceryPage = () => {
                       >
                         <div
                           className={`w-14 h-14 rounded-full border-2 p-1 overflow-hidden flex items-center justify-center ${String(collectionCategoryId || "all") === String(tab._id)
-                            ? "border-[#facc15] bg-[#fff8dd]"
-                            : "border-slate-200 bg-slate-50"
+                            ? "border-[#facc15] dark:border-cyan-400/70 bg-[#fff8dd] dark:bg-[#142134]"
+                            : "border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-[#0f1828]"
                             }`}
                         >
                           <img src={tab.image || FALLBACK_IMAGE} alt={tab.name} className="w-full h-full object-contain" />
                         </div>
                         <span
-                          className={`text-[11px] leading-tight font-bold text-center line-clamp-2 ${String(collectionCategoryId || "all") === String(tab._id) ? "text-slate-900" : "text-slate-500"
+                          className={`text-[11px] leading-tight font-bold text-center line-clamp-2 ${String(collectionCategoryId || "all") === String(tab._id) ? "text-slate-900 dark:text-slate-100" : "text-slate-500 dark:text-slate-400"
                             }`}
                         >
                           {tab.name}
@@ -2213,9 +2238,9 @@ const GroceryPage = () => {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-3">
+                <div className="flex-1 overflow-y-auto overscroll-contain p-3">
                   {collectionVisibleProducts.length === 0 ? (
-                    <p className="text-sm text-slate-500 p-3 md:max-w-6xl md:mx-auto">No products available.</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 p-3 md:max-w-6xl md:mx-auto">No products available.</p>
                   ) : (
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 md:max-w-6xl md:mx-auto pb-4">
                       {collectionVisibleProducts.map((product) => {
@@ -2230,19 +2255,19 @@ const GroceryPage = () => {
                         return (
                           <div
                             key={`collection-product-${productId}`}
-                            className="rounded-[16px] border border-slate-200 bg-white shadow-sm p-2 relative cursor-pointer md:hover:-translate-y-1 md:hover:shadow-md md:hover:border-slate-300 transition-all duration-300 group"
+                            className="rounded-[16px] border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#111a28] shadow-sm dark:shadow-black/20 p-2 relative cursor-pointer md:hover:-translate-y-1 md:hover:shadow-md md:hover:border-slate-300 dark:md:hover:border-cyan-400/40 transition-all duration-300 group"
                             onClick={() => handleProductCardClick(product)}
                           >
                             {discountPercent > 0 && (
-                              <span className="absolute top-2 left-2 z-10 bg-[#facc15] text-[10px] font-black text-slate-900 px-1.5 py-0.5 rounded">
+                              <span className="absolute top-2 left-2 z-10 bg-[#facc15] dark:bg-cyan-400 text-[10px] font-black text-slate-900 px-1.5 py-0.5 rounded">
                                 {discountPercent}% OFF
                               </span>
                             )}
                             <button
                               type="button"
                               className={`absolute top-2 right-2 z-20 w-7 h-7 rounded-full border flex items-center justify-center transition-all duration-300 ${isProductWishlisted(product)
-                                ? "bg-pink-50 border-pink-200 text-pink-500 shadow-sm"
-                                : "bg-white/80 backdrop-blur-sm border-slate-200 text-slate-400 hover:text-slate-600"
+                                ? "bg-pink-50 dark:bg-pink-500/15 border-pink-200 dark:border-pink-400/40 text-pink-500 shadow-sm"
+                                : "bg-white/80 dark:bg-[#0e1624]/80 backdrop-blur-sm border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                                 }`}
                               onClick={(event) => toggleProductWishlist(product, event)}
                             >
@@ -2253,27 +2278,27 @@ const GroceryPage = () => {
                               />
                             </button>
 
-                            <div className="w-full h-[110px] rounded-xl bg-slate-50 overflow-hidden flex items-center justify-center mb-2 md:group-hover:bg-slate-100/50 transition-colors duration-300">
+                            <div className="w-full h-[110px] rounded-xl bg-slate-50 dark:bg-[#0d1624] overflow-hidden flex items-center justify-center mb-2 md:group-hover:bg-slate-100/50 dark:md:group-hover:bg-[#13233a] transition-colors duration-300">
                               <img src={getProductImage(product)} alt={product?.name || "Product"} className="w-full h-full object-contain scale-110 md:group-hover:scale-115 transition-transform duration-500" />
                             </div>
 
-                            <p className="text-[13px] font-bold text-slate-900 leading-tight line-clamp-2 min-h-[34px]">
+                            <p className="text-[13px] font-bold text-slate-900 dark:text-slate-100 leading-tight line-clamp-2 min-h-[34px]">
                               {product?.name || "Product"}
                             </p>
-                            <p className="text-[11px] text-slate-500 mt-1">{product?.unit || "100 g"}</p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{product?.unit || "100 g"}</p>
 
                             <div className="mt-1.5 flex items-end justify-between gap-2">
                               <div>
-                                <p className="text-[18px] leading-none font-black text-slate-900">Rs {sellingPrice}</p>
+                                <p className="text-[18px] leading-none font-black text-slate-900 dark:text-slate-100">Rs {sellingPrice}</p>
                                 {mrp > sellingPrice && (
-                                  <p className="text-[11px] text-slate-400 line-through">Rs {mrp}</p>
+                                  <p className="text-[11px] text-slate-400 dark:text-slate-500 line-through">Rs {mrp}</p>
                                 )}
                               </div>
                               <button
                                 type="button"
                                 className={`h-7 px-3 rounded-md text-[11px] font-black border ${alreadyInCart
-                                  ? "bg-emerald-100 text-emerald-700 border-emerald-300"
-                                  : "bg-white text-slate-900 border-[#facd01]"
+                                  ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-400/40"
+                                  : "bg-white dark:bg-[#0f1b2c] text-slate-900 dark:text-slate-100 border-[#facd01] dark:border-cyan-400/70"
                                   }`}
                                 onClick={(event) => handleAddProductToCart(product, event)}
                               >
@@ -2313,32 +2338,32 @@ const GroceryPage = () => {
               onDragEnd={(_, info) => {
                 if (info.offset.y > 110) setShowWishlistSheet(false);
               }}
-              className="fixed bottom-0 left-0 right-0 h-[88vh] z-[85] w-full"
+              className="fixed bottom-0 left-0 right-0 h-[88vh] z-[85] w-full overscroll-contain touch-pan-y"
             >
-              <div className="h-full bg-[#f4f5f7] rounded-t-[22px] overflow-hidden shadow-2xl flex flex-col">
+              <div className="h-full bg-[#f4f5f7] dark:bg-[#0d1422] rounded-t-[22px] overflow-hidden shadow-2xl flex flex-col">
                 <div className="w-full flex justify-center pt-3 pb-1">
-                  <div className="w-12 h-1.5 bg-slate-300 rounded-full" />
+                  <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full" />
                 </div>
 
-                <div className="px-3 pb-2 bg-white border-b border-slate-200">
+                <div className="px-3 pb-2 bg-white dark:bg-[#121b2b] border-b border-slate-200 dark:border-slate-700">
                   <div className="flex items-center gap-2 md:max-w-6xl md:mx-auto">
                     <button
                       type="button"
                       onClick={() => setShowWishlistSheet(false)}
-                      className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center"
+                      className="w-8 h-8 rounded-full bg-slate-100 dark:bg-[#0c1422] dark:text-slate-200 flex items-center justify-center"
                     >
                       <ArrowLeft size={16} />
                     </button>
                     <div className="min-w-0">
-                      <p className="text-[15px] font-extrabold text-slate-900 truncate">Wishlisted Products</p>
-                      <p className="text-[11px] font-semibold text-slate-500">{groceryWishlistedProducts.length} items</p>
+                      <p className="text-[15px] font-extrabold text-slate-900 dark:text-slate-100 truncate">Wishlisted Products</p>
+                      <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">{groceryWishlistedProducts.length} items</p>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-3">
+                <div className="flex-1 overflow-y-auto overscroll-contain p-3">
                   {groceryWishlistedProducts.length === 0 ? (
-                    <p className="text-sm text-slate-500 p-3 md:max-w-6xl md:mx-auto">No wishlisted products yet.</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 p-3 md:max-w-6xl md:mx-auto">No wishlisted products yet.</p>
                   ) : (
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 md:max-w-6xl md:mx-auto pb-4">
                       {groceryWishlistedProducts.map((product) => {
@@ -2350,7 +2375,7 @@ const GroceryPage = () => {
                         return (
                           <div
                             key={`wishlist-product-${productId}`}
-                            className="rounded-[16px] border border-slate-200 bg-white shadow-sm p-2 relative cursor-pointer md:hover:-translate-y-1 md:hover:shadow-md md:hover:border-slate-300 transition-all duration-300 group"
+                            className="rounded-[16px] border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#111a28] shadow-sm dark:shadow-black/20 p-2 relative cursor-pointer md:hover:-translate-y-1 md:hover:shadow-md md:hover:border-slate-300 dark:md:hover:border-cyan-400/40 transition-all duration-300 group"
                             onClick={() => handleProductCardClick(product)}
                           >
                             <button
@@ -2361,27 +2386,27 @@ const GroceryPage = () => {
                               <Heart size={14} className="fill-current" strokeWidth={2.5} />
                             </button>
 
-                            <div className="w-full h-[110px] rounded-xl bg-slate-50 overflow-hidden flex items-center justify-center mb-2 md:group-hover:bg-slate-100/50 transition-colors duration-300">
+                            <div className="w-full h-[110px] rounded-xl bg-slate-50 dark:bg-[#0d1624] overflow-hidden flex items-center justify-center mb-2 md:group-hover:bg-slate-100/50 dark:md:group-hover:bg-[#13233a] transition-colors duration-300">
                               <img src={getProductImage(product)} alt={product?.name || "Product"} className="w-full h-full object-contain scale-110 md:group-hover:scale-115 transition-transform duration-500" />
                             </div>
 
-                            <p className="text-[13px] font-bold text-slate-900 leading-tight line-clamp-2 min-h-[34px]">
+                            <p className="text-[13px] font-bold text-slate-900 dark:text-slate-100 leading-tight line-clamp-2 min-h-[34px]">
                               {product?.name || "Product"}
                             </p>
-                            <p className="text-[11px] text-slate-500 mt-1">{product?.unit || "100 g"}</p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">{product?.unit || "100 g"}</p>
 
                             <div className="mt-1.5 flex items-end justify-between gap-2">
                               <div>
-                                <p className="text-[18px] leading-none font-black text-slate-900">Rs {sellingPrice}</p>
+                                <p className="text-[18px] leading-none font-black text-slate-900 dark:text-slate-100">Rs {sellingPrice}</p>
                                 {mrp > sellingPrice && (
-                                  <p className="text-[11px] text-slate-400 line-through">Rs {mrp}</p>
+                                  <p className="text-[11px] text-slate-400 dark:text-slate-500 line-through">Rs {mrp}</p>
                                 )}
                               </div>
                               <button
                                 type="button"
                                 className={`h-7 px-3 rounded-md text-[11px] font-black border ${alreadyInCart
-                                  ? "bg-emerald-100 text-emerald-700 border-emerald-300"
-                                  : "bg-white text-slate-900 border-[#facd01]"
+                                  ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-400/40"
+                                  : "bg-white dark:bg-[#0f1b2c] text-slate-900 dark:text-slate-100 border-[#facd01] dark:border-cyan-400/70"
                                   }`}
                                 onClick={(event) => handleAddProductToCart(product, event)}
                               >
@@ -2446,6 +2471,10 @@ const GroceryPage = () => {
                     background-size: 200% 100%;
                     animation: shimmer 1.2s ease-in-out infinite;
                 }
+                .dark .shimmer-bg {
+                    background: linear-gradient(90deg, #111827 20%, #1f2937 50%, #111827 80%);
+                    background-size: 200% 100%;
+                }
             `}</style>
       {/* --- BOTTOM SHEET MODAL --- */}
       <AnimatePresence>
@@ -2474,7 +2503,7 @@ const GroceryPage = () => {
                   setShowCategorySheet(false);
                 }
               }}
-              className="fixed bottom-0 left-0 right-0 h-[92vh] z-[60] w-full"
+              className="fixed bottom-0 left-0 right-0 h-[92vh] z-[60] w-full overscroll-contain touch-pan-y"
             >
               {/* Floating Close Button */}
               <button
