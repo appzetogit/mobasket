@@ -228,8 +228,12 @@ export const updateGroceryStoreStatus = asyncHandler(async (req, res) => {
 export const deleteGroceryStore = asyncHandler(async (req, res) => {
   try {
     const store = await GroceryStore.findOneAndDelete({ _id: req.params.id });
+    const legacyDeleteResult = await Restaurant.deleteOne({
+      _id: req.params.id,
+      platform: 'mogrocery'
+    });
 
-    if (!store) {
+    if (!store && !legacyDeleteResult?.deletedCount) {
       return errorResponse(res, 404, 'Grocery store not found');
     }
 

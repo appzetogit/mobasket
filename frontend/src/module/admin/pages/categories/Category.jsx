@@ -57,6 +57,10 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
   const [groceryCategoryOptions, setGroceryCategoryOptions] = useState([])
   const [grocerySubcategoryOptions, setGrocerySubcategoryOptions] = useState([])
   const [groceryStoreOptions, setGroceryStoreOptions] = useState([])
+  const [createProductCategoryInline, setCreateProductCategoryInline] = useState(false)
+  const [inlineProductCategoryName, setInlineProductCategoryName] = useState("")
+  const [createProductSubcategoryInline, setCreateProductSubcategoryInline] = useState(false)
+  const [inlineProductSubcategoryNamesText, setInlineProductSubcategoryNamesText] = useState("")
   const [isCustomTypeMode, setIsCustomTypeMode] = useState(false)
   const [customTypeValue, setCustomTypeValue] = useState("")
 
@@ -505,6 +509,10 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
 
   const handleEdit = (category) => {
     setEditingCategory(category)
+    setCreateProductCategoryInline(false)
+    setInlineProductCategoryName("")
+    setCreateProductSubcategoryInline(false)
+    setInlineProductSubcategoryNamesText("")
     setIsCustomTypeMode(false)
     setCustomTypeValue("")
     if (isGroceryScope && activeGroceryEntity === "subcategories") {
@@ -549,6 +557,10 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
   const handleAddNew = () => {
     setEditingCategory(null)
     setFormData(getInitialFormData())
+    setCreateProductCategoryInline(false)
+    setInlineProductCategoryName("")
+    setCreateProductSubcategoryInline(false)
+    setInlineProductSubcategoryNamesText("")
     setIsCustomTypeMode(false)
     setCustomTypeValue("")
     setSelectedImageFile(null)
@@ -691,6 +703,10 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
   const handleCloseModal = () => {
     setIsModalOpen(false)
     setEditingCategory(null)
+    setCreateProductCategoryInline(false)
+    setInlineProductCategoryName("")
+    setCreateProductSubcategoryInline(false)
+    setInlineProductSubcategoryNamesText("")
     setIsCustomTypeMode(false)
     setCustomTypeValue("")
     setSelectedImageFile(null)
@@ -769,9 +785,71 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
           return
         }
 
+        const parseEntityId = (response) => {
+          const data = response?.data?.data
+          return data?._id || data?.id || response?.data?._id || response?.data?.id || ""
+        }
+
+        let resolvedCategoryId = formData.productCategory
+        if (createProductCategoryInline) {
+          const categoryName = inlineProductCategoryName.trim()
+          if (!categoryName) {
+            toast.error("Please enter a new category name.")
+            return
+          }
+          const categoryCreateResponse = await adminAPI.createGroceryCategory({
+            name: categoryName,
+            section: categoryName,
+            isActive: true,
+            image: "",
+          })
+          const createdCategoryId = parseEntityId(categoryCreateResponse)
+          if (!createdCategoryId) {
+            toast.error("Failed to create new category.")
+            return
+          }
+          resolvedCategoryId = createdCategoryId
+        }
+
+        if (!resolvedCategoryId) {
+          toast.error("Please select a category or create a new one.")
+          return
+        }
+
+        const resolvedSubcategoryIds = Array.isArray(formData.productSubcategories)
+          ? [...new Set(formData.productSubcategories.filter(Boolean).map((id) => String(id)))]
+          : []
+
+        if (createProductSubcategoryInline) {
+          const names = inlineProductSubcategoryNamesText
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean)
+
+          if (names.length === 0) {
+            toast.error("Please enter at least one new subcategory name.")
+            return
+          }
+
+          for (const subcategoryName of names) {
+            const subcategoryCreateResponse = await adminAPI.createGrocerySubcategory({
+              category: resolvedCategoryId,
+              name: subcategoryName,
+              isActive: true,
+              image: "",
+            })
+            const createdSubcategoryId = parseEntityId(subcategoryCreateResponse)
+            if (createdSubcategoryId) {
+              resolvedSubcategoryIds.push(String(createdSubcategoryId))
+            }
+          }
+        }
+
+        const uniqueResolvedSubcategoryIds = [...new Set(resolvedSubcategoryIds)]
+
         const payload = {
-          category: formData.productCategory,
-          subcategories: formData.productSubcategories,
+          category: resolvedCategoryId,
+          subcategories: uniqueResolvedSubcategoryIds,
           name: formData.name,
           description: (formData.description || "").trim(),
           mrp: Number(formData.mrp || 0),
@@ -796,6 +874,10 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
             toast.success(createdCount > 1 ? `Product created for ${createdCount} stores` : 'Product created successfully')
           }
         }
+
+        // Sync local options for newly created category/subcategory choices.
+        await fetchGroceryTypeOptions()
+        await fetchGrocerySubcategoryOptions()
       } else {
         const normalizedCategoryName = (formData.name || "").trim()
         const payload = {
@@ -1517,6 +1599,34 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                               </option>
                             ))}
                           </select>
+                          {!editingCategory && (
+                            <div className="mt-2 space-y-2">
+                              <label className="inline-flex items-center gap-2 text-xs text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={createProductCategoryInline}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked
+                                    setCreateProductCategoryInline(checked)
+                                    if (!checked) {
+                                      setInlineProductCategoryName("")
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                                />
+                                Create new category now
+                              </label>
+                              {createProductCategoryInline && (
+                                <input
+                                  type="text"
+                                  value={inlineProductCategoryName}
+                                  onChange={(e) => setInlineProductCategoryName(e.target.value)}
+                                  placeholder="Enter new category name"
+                                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                />
+                              )}
+                            </div>
+                          )}
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -1549,6 +1659,34 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                             </div>
                           </div>
                           <p className="text-xs text-slate-500 mt-1">Tap/click to select one or multiple subcategories</p>
+                          {!editingCategory && (
+                            <div className="mt-2 space-y-2">
+                              <label className="inline-flex items-center gap-2 text-xs text-slate-700">
+                                <input
+                                  type="checkbox"
+                                  checked={createProductSubcategoryInline}
+                                  onChange={(e) => {
+                                    const checked = e.target.checked
+                                    setCreateProductSubcategoryInline(checked)
+                                    if (!checked) {
+                                      setInlineProductSubcategoryNamesText("")
+                                    }
+                                  }}
+                                  className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                                />
+                                Create new subcategory now
+                              </label>
+                              {createProductSubcategoryInline && (
+                                <input
+                                  type="text"
+                                  value={inlineProductSubcategoryNamesText}
+                                  onChange={(e) => setInlineProductSubcategoryNamesText(e.target.value)}
+                                  placeholder="Enter new subcategory name(s), comma separated"
+                                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                                />
+                              )}
+                            </div>
+                          )}
                         </div>
                       </>
                     )}

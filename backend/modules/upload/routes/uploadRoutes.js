@@ -6,6 +6,7 @@ import jwtService from '../../auth/services/jwtService.js';
 import User from '../../auth/models/User.js';
 import Admin from '../../admin/models/Admin.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import { errorResponse } from '../../../shared/utils/response.js';
 
 const router = express.Router();
@@ -47,22 +48,24 @@ const authenticateFlexible = async (req, res, next) => {
     // Check if token is for restaurant
     if (decoded.role === 'restaurant') {
       const restaurant = await Restaurant.findById(decoded.userId).select('-password');
-      
-      if (!restaurant) {
-        return errorResponse(res, 401, 'Restaurant not found');
+      if (restaurant) {
+        // Allow inactive restaurants to access upload routes - they need to upload images during onboarding
+        req.user = restaurant; // Use req.user for consistency with other modules
+        req.restaurant = restaurant; // Also attach as req.restaurant for clarity
+        req.token = decoded;
+        return next();
       }
 
-      // Allow inactive restaurants to access upload routes - they need to upload images during onboarding
-      // Similar to delivery partners, inactive restaurants can access upload during onboarding/verification
-      // The middleware in restaurant routes will handle blocking inactive restaurants from other restricted routes
-      // if (!restaurant.isActive) {
-      //   return errorResponse(res, 401, 'Restaurant account is inactive');
-      // }
+      // Fallback for dedicated GroceryStore collection (mogrocery).
+      const store = await GroceryStore.findById(decoded.userId).select('-password');
+      if (store) {
+        req.user = store;
+        req.store = store;
+        req.token = decoded;
+        return next();
+      }
 
-      req.user = restaurant; // Use req.user for consistency with other modules
-      req.restaurant = restaurant; // Also attach as req.restaurant for clarity
-      req.token = decoded;
-      return next();
+      return errorResponse(res, 401, 'Restaurant not found');
     }
 
     // Check if token is for delivery
@@ -97,9 +100,7 @@ const authenticateFlexible = async (req, res, next) => {
     }).select('-password');
 
     if (groceryStore) {
-      if (!groceryStore.isActive) {
-        return errorResponse(res, 401, 'Grocery store account is inactive');
-      }
+      // Allow inactive grocery stores to upload during onboarding.
       req.user = groceryStore;
       req.store = groceryStore;
       req.token = decoded;

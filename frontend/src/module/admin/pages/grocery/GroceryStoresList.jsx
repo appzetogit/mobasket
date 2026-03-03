@@ -56,6 +56,22 @@ export default function GroceryStoresList() {
   })
   const editMapRef = useRef(null)
 
+  const getStoreObjectId = (store = {}) => {
+    const candidates = [
+      store?._id,
+      store?.id,
+      store?.originalData?._id,
+      store?.originalData?.id,
+      store?.restaurantId,
+      store?.originalData?.restaurantId,
+    ]
+    for (const candidate of candidates) {
+      const value = String(candidate || "").trim()
+      if (value) return value
+    }
+    return ""
+  }
+
   // Format Store ID (e.g., STOR000001)
   const formatStoreId = (id) => {
     if (!id) return "STOR000000"
@@ -80,7 +96,7 @@ export default function GroceryStoresList() {
         
         const mappedStores = storesData.map((store, index) => ({
           id: store._id || store.id || index + 1,
-          _id: store._id,
+          _id: store._id || store.id || "",
           name: store.name || "N/A",
           ownerName: store.ownerName || "N/A",
           ownerPhone: store.ownerPhone || store.phone || "N/A",
@@ -284,26 +300,35 @@ export default function GroceryStoresList() {
   const handleToggleStatus = async (id) => {
     const store = stores.find(s => s.id === id)
     if (!store) return
+    const storeId = getStoreObjectId(store)
+    if (!storeId) {
+      alert("Missing store id. Please refresh and try again.")
+      return
+    }
 
     try {
       const newStatus = !store.status
-      await adminAPI.updateGroceryStoreStatus(store._id, newStatus)
+      await adminAPI.updateGroceryStoreStatus(storeId, newStatus)
       setStores(prev => prev.map(s => s.id === id ? { ...s, status: newStatus } : s))
     } catch (err) {
       console.error("Error updating store status:", err)
-      alert("Failed to update status")
+      alert(err?.response?.data?.message || "Failed to update status")
     }
   }
 
   const handleViewDetails = async (store) => {
     setSelectedStore(store)
     setLoadingDetails(true)
+    const storeId = getStoreObjectId(store)
     if (store.originalData) {
       setStoreDetails(store.originalData)
       setLoadingDetails(false)
     } else {
       try {
-        const response = await adminAPI.getGroceryStoreById(store._id)
+        if (!storeId) {
+          throw new Error("Store id is missing")
+        }
+        const response = await adminAPI.getGroceryStoreById(storeId)
         if (response.data?.success) {
           setStoreDetails(response.data.data.store || response.data.data)
         }
@@ -319,8 +344,12 @@ export default function GroceryStoresList() {
   const handleEditStore = async (store) => {
     try {
       let storeData = store?.originalData
-      if (!storeData?._id) {
-        const response = await adminAPI.getGroceryStoreById(store._id)
+      const storeId = getStoreObjectId(storeData || store)
+      if (!storeData?._id && !storeData?.id) {
+        if (!storeId) {
+          throw new Error("Store id is missing")
+        }
+        const response = await adminAPI.getGroceryStoreById(storeId)
         storeData = response?.data?.data?.store || response?.data?.data || store
       }
 
@@ -373,12 +402,28 @@ export default function GroceryStoresList() {
   }
 
   const handleSaveStoreEdit = async () => {
-    if (!editingStore?._id) return
+    const storeId = getStoreObjectId(editingStore)
+    if (!storeId) {
+      alert("Missing store id. Please close and reopen edit.")
+      return
+    }
 
     const lat = Number(editForm.latitude)
     const lng = Number(editForm.longitude)
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
       alert("Please select a valid map location")
+      return
+    }
+    if (!editForm.name?.trim()) {
+      alert("Store name is required")
+      return
+    }
+    if (!editForm.ownerName?.trim()) {
+      alert("Owner name is required")
+      return
+    }
+    if (!editForm.ownerPhone?.trim()) {
+      alert("Owner phone is required")
       return
     }
 
@@ -422,12 +467,12 @@ export default function GroceryStoresList() {
         }
       }
 
-      const response = await adminAPI.updateGroceryStore(editingStore._id, payload)
+      const response = await adminAPI.updateGroceryStore(storeId, payload)
       const updatedStore = response?.data?.data?.store || response?.data?.data
 
       setStores((prev) =>
         prev.map((store) =>
-          store._id === editingStore._id
+          getStoreObjectId(store) === storeId
             ? {
                 ...store,
                 name: updatedStore?.name || store.name,
@@ -441,7 +486,7 @@ export default function GroceryStoresList() {
         )
       )
 
-      if (selectedStore?._id === editingStore._id) {
+      if (getStoreObjectId(selectedStore) === storeId) {
         setStoreDetails(updatedStore || storeDetails)
       }
 
@@ -449,6 +494,7 @@ export default function GroceryStoresList() {
       setEditingStore(null)
       setEditStoreImageFile(null)
       setEditStoreImagePreview("")
+      await fetchStores()
       alert("Store updated successfully")
     } catch (err) {
       console.error("Error updating store:", err)
@@ -467,14 +513,20 @@ export default function GroceryStoresList() {
     if (!banConfirmDialog) return
     const { store, action } = banConfirmDialog
     const newStatus = action !== 'ban'
+    const storeId = getStoreObjectId(store)
+    if (!storeId) {
+      alert("Missing store id. Please refresh and try again.")
+      return
+    }
     
     try {
       setBanning(true)
-      await adminAPI.updateGroceryStoreStatus(store._id, newStatus)
-      setStores(prev => prev.map(s => s._id === store._id ? { ...s, status: newStatus } : s))
+      await adminAPI.updateGroceryStoreStatus(storeId, newStatus)
+      setStores(prev => prev.map(s => getStoreObjectId(s) === storeId ? { ...s, status: newStatus } : s))
       setBanConfirmDialog(null)
     } catch (err) {
       console.error("Error banning store:", err)
+      alert(err?.response?.data?.message || "Failed to update store status")
     } finally {
       setBanning(false)
     }
@@ -487,14 +539,25 @@ export default function GroceryStoresList() {
   const confirmDeleteStore = async () => {
     if (!deleteConfirmDialog) return
     const { store } = deleteConfirmDialog
+    const storeId = getStoreObjectId(store)
+    if (!storeId) {
+      alert("Missing store id. Please refresh and try again.")
+      return
+    }
     
     try {
       setDeleting(true)
-      await adminAPI.deleteGroceryStore(store._id)
-      setStores(prev => prev.filter(s => s._id !== store._id))
+      await adminAPI.deleteGroceryStore(storeId)
+      setStores(prev => prev.filter(s => getStoreObjectId(s) !== storeId))
+      if (getStoreObjectId(selectedStore) === storeId) {
+        setSelectedStore(null)
+        setStoreDetails(null)
+      }
       setDeleteConfirmDialog(null)
+      alert("Store deleted successfully")
     } catch (err) {
       console.error("Error deleting store:", err)
+      alert(err?.response?.data?.message || "Failed to delete store")
     } finally {
       setDeleting(false)
     }

@@ -282,6 +282,13 @@ export const createGroceryStoreProduct = asyncHandler(async (req, res) => {
       return errorResponse(res, 409, 'Product with this name already exists');
     }
 
+    const categoryRequestName = requestedNewCategory && typeof requestedNewCategory === 'object' && requestedNewCategory.name
+      ? String(requestedNewCategory.name).trim()
+      : (typeof requestedNewCategory === 'string' ? String(requestedNewCategory).trim() : '');
+    const subNames = Array.isArray(requestedNewSubcategoryNames)
+      ? requestedNewSubcategoryNames.map((n) => String(n).trim()).filter(Boolean)
+      : [];
+
     const product = await GroceryProduct.create({
       category,
       subcategories: normalizedSubcategories,
@@ -299,12 +306,16 @@ export const createGroceryStoreProduct = asyncHandler(async (req, res) => {
       order: Number(order) || 0,
       storeId: store._id,
       approvalStatus: 'pending',
+      requestedCategory: categoryRequestName
+        ? { name: categoryRequestName, slug: slugify(categoryRequestName) }
+        : { name: '', slug: '' },
+      requestedSubcategories: subNames.map((nameValue) => ({
+        name: nameValue,
+        slug: slugify(nameValue),
+      })),
     });
 
     // Optional: create category request (skip if already pending)
-    const categoryRequestName = requestedNewCategory && typeof requestedNewCategory === 'object' && requestedNewCategory.name
-      ? String(requestedNewCategory.name).trim()
-      : (typeof requestedNewCategory === 'string' ? String(requestedNewCategory).trim() : '');
     if (categoryRequestName) {
       const catSlug = slugify(categoryRequestName);
       const existingCatReq = await GroceryCategoryRequest.findOne({
@@ -326,9 +337,6 @@ export const createGroceryStoreProduct = asyncHandler(async (req, res) => {
     }
 
     // Optional: create subcategory requests for this category (skip if already pending)
-    const subNames = Array.isArray(requestedNewSubcategoryNames)
-      ? requestedNewSubcategoryNames.map((n) => String(n).trim()).filter(Boolean)
-      : [];
     for (const subName of subNames) {
       const subSlug = slugify(subName);
       const existingSubReq = await GrocerySubcategoryRequest.findOne({

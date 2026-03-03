@@ -94,6 +94,37 @@ const groceryProductSchema = new mongoose.Schema(
       trim: true,
       default: '',
     },
+    requestedCategory: {
+      name: {
+        type: String,
+        trim: true,
+        default: '',
+      },
+      slug: {
+        type: String,
+        trim: true,
+        lowercase: true,
+        default: '',
+      },
+    },
+    requestedSubcategories: {
+      type: [
+        {
+          name: {
+            type: String,
+            trim: true,
+            default: '',
+          },
+          slug: {
+            type: String,
+            trim: true,
+            lowercase: true,
+            default: '',
+          },
+        },
+      ],
+      default: [],
+    },
   },
   {
     timestamps: true,

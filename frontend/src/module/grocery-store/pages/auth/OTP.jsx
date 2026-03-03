@@ -142,9 +142,10 @@ export default function GroceryStoreOTP() {
       setAuthData("grocery-store", accessToken, store, refreshToken)
       window.dispatchEvent(new Event("groceryStoreAuthChanged"))
 
-      // Check if onboarding is needed
+      // Force onboarding only for inactive stores with incomplete onboarding.
       const onboardingStatus = store.onboarding?.completedSteps || 0
-      if (onboardingStatus < 1) {
+      const needsOnboarding = onboardingStatus < 1 && store?.isActive === false
+      if (needsOnboarding) {
         navigate("/store/onboarding")
       } else {
         navigate("/store")

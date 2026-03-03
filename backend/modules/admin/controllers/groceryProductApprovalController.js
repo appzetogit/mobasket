@@ -1,7 +1,138 @@
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import GroceryProduct from '../../grocery/models/GroceryProduct.js';
+import GroceryCategory from '../../grocery/models/GroceryCategory.js';
+import GrocerySubcategory from '../../grocery/models/GrocerySubcategory.js';
+import GroceryCategoryRequest from '../../grocery/models/GroceryCategoryRequest.js';
+import GrocerySubcategoryRequest from '../../grocery/models/GrocerySubcategoryRequest.js';
 import mongoose from 'mongoose';
+
+const slugify = (value = '') =>
+  value
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '');
+
+const getValidObjectId = (value) => (mongoose.Types.ObjectId.isValid(value) ? new mongoose.Types.ObjectId(value) : null);
+
+const normalizeRequestedSubcategories = (requestedSubcategories = []) => {
+  if (!Array.isArray(requestedSubcategories)) return [];
+  return requestedSubcategories
+    .map((item) => {
+      const name = String(item?.name || '').trim();
+      const slug = slugify(item?.slug || name);
+      if (!name || !slug) return null;
+      return { name, slug };
+    })
+    .filter(Boolean);
+};
+
+const resolveRequestedCategoryAndSubcategories = async (product, adminId) => {
+  const update = {};
+  const storeId = getValidObjectId(product?.storeId);
+  let resolvedCategoryId = getValidObjectId(product?.category);
+
+  const requestedCategoryName = String(product?.requestedCategory?.name || '').trim();
+  const requestedCategorySlug = slugify(product?.requestedCategory?.slug || requestedCategoryName);
+
+  if (requestedCategorySlug) {
+    let category = await GroceryCategory.findOne({ slug: requestedCategorySlug });
+    if (!category) {
+      category = await GroceryCategory.create({
+        name: requestedCategoryName || requestedCategorySlug.replace(/-/g, ' '),
+        slug: requestedCategorySlug,
+        section: 'Grocery & Kitchen',
+        isActive: true,
+      });
+    } else if (category.isActive === false) {
+      category.isActive = true;
+      await category.save();
+    }
+
+    resolvedCategoryId = category._id;
+    update.category = category._id;
+
+    if (storeId) {
+      await GroceryCategoryRequest.updateMany(
+        {
+          storeId,
+          approvalStatus: 'pending',
+          $or: [{ slug: requestedCategorySlug }, { name: requestedCategoryName }],
+        },
+        {
+          $set: {
+            approvalStatus: 'approved',
+            approvedBy: adminId,
+            approvedAt: new Date(),
+            createdCategoryId: category._id,
+            rejectionReason: '',
+          },
+        }
+      );
+    }
+  }
+
+  const requestedSubcategories = normalizeRequestedSubcategories(product?.requestedSubcategories || []);
+  if (requestedSubcategories.length > 0 && resolvedCategoryId) {
+    const mergedSubcategoryIds = new Set(
+      (Array.isArray(product?.subcategories) ? product.subcategories : [])
+        .filter((id) => mongoose.Types.ObjectId.isValid(id))
+        .map((id) => String(id))
+    );
+
+    for (const requestedSubcategory of requestedSubcategories) {
+      let subcategory = await GrocerySubcategory.findOne({
+        category: resolvedCategoryId,
+        slug: requestedSubcategory.slug,
+      });
+
+      if (!subcategory) {
+        subcategory = await GrocerySubcategory.create({
+          category: resolvedCategoryId,
+          name: requestedSubcategory.name,
+          slug: requestedSubcategory.slug,
+          isActive: true,
+        });
+      } else if (subcategory.isActive === false) {
+        subcategory.isActive = true;
+        await subcategory.save();
+      }
+
+      mergedSubcategoryIds.add(String(subcategory._id));
+
+      if (storeId) {
+        await GrocerySubcategoryRequest.updateMany(
+          {
+            storeId,
+            approvalStatus: 'pending',
+            $or: [{ slug: requestedSubcategory.slug }, { name: requestedSubcategory.name }],
+          },
+          {
+            $set: {
+              approvalStatus: 'approved',
+              approvedBy: adminId,
+              approvedAt: new Date(),
+              createdSubcategoryId: subcategory._id,
+              category: resolvedCategoryId,
+              rejectionReason: '',
+            },
+          }
+        );
+      }
+    }
+
+    const nextSubcategories = Array.from(mergedSubcategoryIds)
+      .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      .map((id) => new mongoose.Types.ObjectId(id));
+
+    update.subcategories = nextSubcategories;
+    update.subcategory = nextSubcategories[0] || null;
+  }
+
+  return update;
+};
 
 /**
  * Get pending grocery products for approval
@@ -60,13 +191,21 @@ export const approveGroceryProduct = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, 'Invalid product ID');
     }
 
+    const existingProduct = await GroceryProduct.findById(id).lean();
+    if (!existingProduct) {
+      return errorResponse(res, 404, 'Product not found');
+    }
+
+    const requestResolutionUpdate = await resolveRequestedCategoryAndSubcategories(existingProduct, req?.admin?._id || null);
+
     const product = await GroceryProduct.findByIdAndUpdate(
       id,
       {
         $set: {
           approvalStatus: 'approved',
-          rejectionReason: ''
-        }
+          rejectionReason: '',
+          ...requestResolutionUpdate,
+        },
       },
       { new: true, runValidators: true }
     )
@@ -75,10 +214,6 @@ export const approveGroceryProduct = asyncHandler(async (req, res) => {
       .populate('subcategory', 'name slug')
       .populate('storeId', 'name email phone')
       .lean();
-
-    if (!product) {
-      return errorResponse(res, 404, 'Product not found');
-    }
 
     return successResponse(res, 200, 'Product approved successfully', { product });
   } catch (error) {
@@ -144,18 +279,31 @@ export const bulkApproveGroceryProducts = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, 'No valid product IDs provided');
     }
 
-    const result = await GroceryProduct.updateMany(
-      { _id: { $in: validIds }, approvalStatus: 'pending' },
-      {
-        $set: {
-          approvalStatus: 'approved',
-          rejectionReason: ''
+    const pendingProducts = await GroceryProduct.find({
+      _id: { $in: validIds },
+      approvalStatus: 'pending',
+    }).lean();
+
+    let approvedCount = 0;
+    for (const pendingProduct of pendingProducts) {
+      const requestResolutionUpdate = await resolveRequestedCategoryAndSubcategories(pendingProduct, req?.admin?._id || null);
+      const updateResult = await GroceryProduct.updateOne(
+        { _id: pendingProduct._id, approvalStatus: 'pending' },
+        {
+          $set: {
+            approvalStatus: 'approved',
+            rejectionReason: '',
+            ...requestResolutionUpdate,
+          },
         }
+      );
+      if (updateResult.modifiedCount > 0) {
+        approvedCount += 1;
       }
-    );
+    }
 
     return successResponse(res, 200, 'Products approved successfully', {
-      approved: result.modifiedCount,
+      approved: approvedCount,
       total: validIds.length
     });
   } catch (error) {

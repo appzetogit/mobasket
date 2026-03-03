@@ -573,10 +573,16 @@ export default function OrdersMain() {
             isLoading: false
           })
           
-          // Check if onboarding is incomplete and redirect if needed
+          // Check if onboarding is incomplete and redirect if needed.
+          // For grocery stores, only force onboarding when account is inactive.
           const completedSteps = restaurant.onboarding?.completedSteps || 0
           const requiredSteps = isGroceryStore ? 1 : 4
-          if (completedSteps < requiredSteps) {
+          const needsOnboarding = completedSteps < requiredSteps
+          const shouldRedirectToOnboarding = isGroceryStore
+            ? (needsOnboarding && restaurant.isActive === false)
+            : needsOnboarding
+
+          if (shouldRedirectToOnboarding) {
             // Onboarding is incomplete, redirect to onboarding page
             if (isGroceryStore) {
               navigate(`/store/onboarding`, { replace: true })
