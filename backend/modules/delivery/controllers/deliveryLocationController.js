@@ -244,10 +244,44 @@ export const getZonesInRadius = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, 'Radius must be a positive number');
     }
 
-    // Fetch all active zones
+    const normalizePlatform = (rawPlatform) => {
+      const value = String(rawPlatform || '').trim().toLowerCase();
+      return value === 'mogrocery' ? 'mogrocery' : 'mofood';
+    };
+
+    const isPointInsideZoneBoundary = (pointLat, pointLng, zoneCoordinates = []) => {
+      if (!Array.isArray(zoneCoordinates) || zoneCoordinates.length < 3) return false;
+      let inside = false;
+      for (let i = 0, j = zoneCoordinates.length - 1; i < zoneCoordinates.length; j = i++) {
+        const xi = Number(zoneCoordinates[i]?.longitude ?? zoneCoordinates[i]?.lng);
+        const yi = Number(zoneCoordinates[i]?.latitude ?? zoneCoordinates[i]?.lat);
+        const xj = Number(zoneCoordinates[j]?.longitude ?? zoneCoordinates[j]?.lng);
+        const yj = Number(zoneCoordinates[j]?.latitude ?? zoneCoordinates[j]?.lat);
+        if (
+          Number.isNaN(xi) ||
+          Number.isNaN(yi) ||
+          Number.isNaN(xj) ||
+          Number.isNaN(yj)
+        ) {
+          continue;
+        }
+        const intersects =
+          yi > pointLat !== yj > pointLat &&
+          pointLng < ((xj - xi) * (pointLat - yi)) / ((yj - yi) || Number.EPSILON) + xi;
+        if (intersects) inside = !inside;
+      }
+      return inside;
+    };
+
+    // Fetch all active zones for both mofood and mogrocery
     const zones = await Zone.find({
       isActive: true,
-      $or: [{ platform: 'mofood' }, { platform: { $exists: false } }]
+      $or: [
+        { platform: 'mofood' },
+        { platform: 'mogrocery' },
+        { platform: { $exists: false } },
+        { platform: null }
+      ]
     })
       .populate('restaurantId', 'name email phone')
       .lean();
@@ -285,11 +319,15 @@ export const getZonesInRadius = asyncHandler(async (req, res) => {
     // Filter zones within radius
     const nearbyZones = zones.filter(zone => {
       if (!zone.coordinates || zone.coordinates.length < 3) return false;
+      if (isPointInsideZoneBoundary(lat, lng, zone.coordinates)) return true;
       const center = getZoneCenter(zone.coordinates);
       if (!center) return false;
       const distance = calculateDistance(lat, lng, center.lat, center.lng);
       return distance <= radiusKm;
-    });
+    }).map((zone) => ({
+      ...zone,
+      platform: normalizePlatform(zone?.platform)
+    }));
 
     return successResponse(res, 200, 'Zones retrieved successfully', {
       zones: nearbyZones,
