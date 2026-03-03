@@ -35,6 +35,11 @@ import groceryStoreProductRoutes from './groceryStoreProductRoutes.js';
 import groceryStoreCategoryRequestRoutes from './groceryStoreCategoryRequestRoutes.js';
 import { getOnboarding, updateOnboarding } from '../controllers/groceryStoreOnboardingController.js';
 import { authenticate } from '../middleware/groceryStoreAuth.js';
+import {
+  getStoreNotifications,
+  deleteStoreNotification,
+  clearStoreNotifications,
+} from '../controllers/groceryStoreNotificationController.js';
 
 const router = express.Router();
 
@@ -105,5 +110,9 @@ router.get('/store/owner/me', authenticate, async (req, res) => {
   });
 });
 
-export default router;
+// Grocery Store Notifications (authenticated)
+router.get('/store/notifications', authenticate, getStoreNotifications);
+router.delete('/store/notifications/:id', authenticate, deleteStoreNotification);
+router.delete('/store/notifications', authenticate, clearStoreNotifications);
 
+export default router;

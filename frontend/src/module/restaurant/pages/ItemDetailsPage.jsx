@@ -470,6 +470,10 @@ export default function ItemDetailsPage() {
       toast.error("Please enter an item name")
       return
     }
+    if (!String(category || "").trim()) {
+      toast.error("Please select a category")
+      return
+    }
 
     try {
       setUploadingImages(true)
@@ -547,7 +551,7 @@ export default function ItemDetailsPage() {
       // Ensure we use the ID from itemData if available, otherwise use the URL param id
       let itemId
       if (isNewItem) {
-        itemId = `item-${Date.now()}-${Math.random()}`
+        itemId = `item-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
       } else {
         // Try to get ID from itemData first (most reliable), then from URL param
         itemId = itemData?.id || id
@@ -614,25 +618,11 @@ export default function ItemDetailsPage() {
         }
       }
 
-      // Find or create the category section
-      let targetSection = sections.find(s => s.name === category)
-      if (!targetSection) {
-        // Create new section for this category
-        targetSection = {
-          id: `section-${Date.now()}`,
-          name: category,
-          items: [],
-          subsections: [],
-          isEnabled: true,
-          order: sections.length
-        }
-        sections.push(targetSection)
-      }
-
-      // Ensure items array exists
-      if (!targetSection.items) {
-        targetSection.items = []
-      }
+      // Find section by name (case-insensitive) for reliable add flow.
+      const normalizedCategory = String(category || "").trim().toLowerCase()
+      let targetSection = sections.find(
+        (s) => String(s?.name || "").trim().toLowerCase() === normalizedCategory
+      )
 
       // Prepare nutrition data as strings (as per menu model)
       const nutritionStrings = []
@@ -674,25 +664,39 @@ export default function ItemDetailsPage() {
         gst: parseFloat(gst) || 0,
       }
 
-      // Add or update item in target section
-      // Since we already removed the item from its old location, we should always add it here
-      // But check if it somehow still exists (shouldn't happen, but safety check)
-      const existingItemIndex = targetSection.items.findIndex(item => {
-        const itemIdStr = String(item.id || item._id || '').trim()
-        return itemIdStr === String(itemId).trim()
-      })
-      
-      if (existingItemIndex !== -1) {
-        // Update existing item (shouldn't happen if removal worked, but handle it)
-        console.log(`Updating existing item at index ${existingItemIndex} in section: ${targetSection.name}`)
-        targetSection.items[existingItemIndex] = itemDataToSave
-      } else {
-        // Add new item (or re-add after removal)
-        console.log(`Adding item to section: ${targetSection.name}`)
-        targetSection.items.push(itemDataToSave)
+      // Save new item using dedicated endpoint to avoid full-menu overwrite failures.
+      if (isNewItem) {
+        if (!targetSection?.id) {
+          try {
+            const addSectionResponse = await restaurantAPI.addSection(category)
+            targetSection = addSectionResponse?.data?.data?.section || null
+          } catch {
+            // Section may already exist due concurrent save; re-read menu and continue.
+            const refreshMenuResponse = await restaurantAPI.getMenu()
+            const refreshSections = refreshMenuResponse?.data?.data?.menu?.sections || []
+            targetSection = refreshSections.find(
+              (s) => String(s?.name || "").trim().toLowerCase() === normalizedCategory
+            ) || null
+          }
+        }
+
+        if (!targetSection?.id) {
+          throw new Error("Unable to resolve target category section")
+        }
+
+        const addItemResponse = await restaurantAPI.addItemToSection(targetSection.id, itemDataToSave)
+        if (addItemResponse?.data?.success) {
+          const imageCount = allImageUrls.length
+          toast.success(`Item created successfully with ${imageCount} image(s)`)
+          await new Promise(resolve => setTimeout(resolve, 300))
+          navigate("/restaurant/hub-menu", { replace: true })
+          window.dispatchEvent(new CustomEvent('foodsChanged'))
+          return
+        }
+        throw new Error(addItemResponse?.data?.message || "Failed to create item")
       }
 
-      // Update menu with new sections
+      // Edit flow: update existing menu with mutated sections.
       console.log('=== SAVING ITEM DATA ===')
       console.log('Item ID:', itemId, 'Is new item:', isNewItem)
       console.log('Item name:', itemDataToSave.name)
@@ -702,6 +706,33 @@ export default function ItemDetailsPage() {
       console.log('PhotoCount:', itemDataToSave.photoCount)
       console.log('Full itemDataToSave:', JSON.stringify(itemDataToSave, null, 2))
       
+      // Add updated item into its resolved section before PUT.
+      if (!targetSection) {
+        targetSection = {
+          id: `section-${Date.now()}`,
+          name: category,
+          items: [],
+          subsections: [],
+          isEnabled: true,
+          order: sections.length
+        }
+        sections.push(targetSection)
+      }
+
+      if (!Array.isArray(targetSection.items)) {
+        targetSection.items = []
+      }
+
+      const existingItemIndex = targetSection.items.findIndex(item => {
+        const itemIdStr = String(item.id || item._id || '').trim()
+        return itemIdStr === String(itemId).trim()
+      })
+      if (existingItemIndex !== -1) {
+        targetSection.items[existingItemIndex] = itemDataToSave
+      } else {
+        targetSection.items.push(itemDataToSave)
+      }
+
       // Verify sections structure
       console.log('Sections being sent:', sections.length, 'sections')
       const itemSection = sections.find(s => s.items?.some(item => item.id === itemId))
@@ -1334,5 +1365,3 @@ export default function ItemDetailsPage() {
     </div>
   )
 }
-
-

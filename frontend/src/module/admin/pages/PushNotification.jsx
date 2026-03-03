@@ -1,6 +1,7 @@
-import { useState, useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Search, Download, ChevronDown, Bell, Edit, Trash2, Upload, Settings, Image as ImageIcon } from "lucide-react"
-import { pushNotificationsDummy } from "../data/pushNotificationsDummy"
+import { adminAPI } from "@/lib/api"
+import { toast } from "sonner"
 // Using placeholders for notification images
 const notificationImage1 = "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&h=400&fit=crop"
 const notificationImage2 = "https://images.unsplash.com/photo-1559339352-11d035aa65de?w=800&h=400&fit=crop"
@@ -16,11 +17,13 @@ export default function PushNotification() {
   const [formData, setFormData] = useState({
     title: "",
     zone: "All",
-    sendTo: "Customer",
+    sendTo: "Restaurant",
     description: "",
   })
   const [searchQuery, setSearchQuery] = useState("")
-  const [notifications, setNotifications] = useState(pushNotificationsDummy)
+  const [notifications, setNotifications] = useState([])
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [loadingList, setLoadingList] = useState(true)
 
   const filteredNotifications = useMemo(() => {
     if (!searchQuery.trim()) {
@@ -38,30 +41,78 @@ export default function PushNotification() {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  const handleSubmit = (e) => {
+  const loadPushNotifications = async () => {
+    try {
+      setLoadingList(true)
+      const response = await adminAPI.getPushNotifications()
+      const list = response?.data?.data?.notifications || []
+      setNotifications(Array.isArray(list) ? list : [])
+    } catch (error) {
+      console.error("Failed to load push notifications:", error)
+      toast.error(error?.response?.data?.message || "Failed to load push notifications")
+      setNotifications([])
+    } finally {
+      setLoadingList(false)
+    }
+  }
+
+  useEffect(() => {
+    loadPushNotifications()
+  }, [])
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    console.log("Notification sent:", formData)
-    alert("Notification sent successfully!")
+    const title = formData.title.trim()
+    const description = formData.description.trim()
+
+    if (!title || !description) {
+      toast.error("Title and description are required")
+      return
+    }
+
+    try {
+      setIsSubmitting(true)
+      const response = await adminAPI.createPushNotification({
+        title,
+        description,
+        zone: formData.zone,
+        sendTo: formData.sendTo,
+      })
+
+      const created = response?.data?.data?.notification
+      const recipientCount = response?.data?.data?.recipientCount || 0
+      if (created) {
+        setNotifications((prev) => [created, ...prev])
+      }
+
+      toast.success(`Notification sent${formData.sendTo === "Restaurant" ? ` to ${recipientCount} recipients` : ""}`)
+      handleReset()
+    } catch (error) {
+      console.error("Failed to send notification:", error)
+      toast.error(error?.response?.data?.message || "Failed to send notification")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
   const handleReset = () => {
     setFormData({
       title: "",
       zone: "All",
-      sendTo: "Customer",
+      sendTo: "Restaurant",
       description: "",
     })
   }
 
-  const handleToggleStatus = (sl) => {
+  const handleToggleStatus = (id) => {
     setNotifications(notifications.map(notification =>
-      notification.sl === sl ? { ...notification, status: !notification.status } : notification
+      (notification._id || notification.sl) === id ? { ...notification, status: !notification.status } : notification
     ))
   }
 
-  const handleDelete = (sl) => {
+  const handleDelete = (id) => {
     if (window.confirm("Are you sure you want to delete this notification?")) {
-      setNotifications(notifications.filter(notification => notification.sl !== sl))
+      setNotifications(notifications.filter(notification => (notification._id || notification.sl) !== id))
     }
   }
 
@@ -156,12 +207,13 @@ export default function PushNotification() {
                 Reset
               </button>
               <div className="flex items-center gap-2">
-                <button
-                  type="submit"
-                  className="px-6 py-2.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-md"
-                >
-                  Send Notification
-                </button>
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="px-6 py-2.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-md"
+              >
+                  {isSubmitting ? "Sending..." : "Send Notification"}
+              </button>
                 <button className="p-2.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-all">
                   <Settings className="w-5 h-5" />
                 </button>
@@ -216,13 +268,13 @@ export default function PushNotification() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-slate-100">
-                {filteredNotifications.map((notification) => (
+                {filteredNotifications.map((notification, index) => (
                   <tr
-                    key={notification.sl}
+                    key={notification._id || notification.sl || index}
                     className="hover:bg-slate-50 transition-colors"
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-medium text-slate-700">{notification.sl}</span>
+                      <span className="text-sm font-medium text-slate-700">{index + 1}</span>
                     </td>
                     <td className="px-6 py-4">
                       <span className="text-sm font-medium text-slate-900">{notification.title}</span>
@@ -249,14 +301,14 @@ export default function PushNotification() {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-slate-700">{notification.zone}</span>
+                      <span className="text-sm text-slate-700">{notification.zone || "All"}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-slate-700">{notification.target}</span>
+                      <span className="text-sm text-slate-700">{notification.sendTo || notification.target || "Restaurant"}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
-                        onClick={() => handleToggleStatus(notification.sl)}
+                        onClick={() => handleToggleStatus(notification._id || notification.sl)}
                         className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                           notification.status ? "bg-blue-600" : "bg-slate-300"
                         }`}
@@ -277,7 +329,7 @@ export default function PushNotification() {
                           <Edit className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => handleDelete(notification.sl)}
+                          onClick={() => handleDelete(notification._id || notification.sl)}
                           className="p-1.5 rounded text-red-600 hover:bg-red-50 transition-colors"
                           title="Delete"
                         >
@@ -289,6 +341,9 @@ export default function PushNotification() {
                 ))}
               </tbody>
             </table>
+            {loadingList && (
+              <div className="py-6 text-center text-sm text-slate-500">Loading notifications...</div>
+            )}
           </div>
         </div>
       </div>

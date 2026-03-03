@@ -445,6 +445,17 @@ export default function App() {
           }
         />
         <Route
+          path="/store/notifications"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <RestaurantNotifications />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/store/delivery-settings"
           element={
             <ProtectedRoute
