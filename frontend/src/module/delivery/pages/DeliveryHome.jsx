@@ -6772,7 +6772,8 @@ export default function DeliveryHome() {
       routePolylineRef.current.setMap(null);
     }
 
-    // Initialize DirectionsRenderer for main map if not exists
+    // Keep DirectionsRenderer detached from map; we only use custom/live polylines.
+    // This prevents duplicate route visuals on the feed map.
     if (!directionsRendererRef.current) {
       console.log('📦 Creating DirectionsRenderer for main map');
       // Don't create DirectionsRenderer with map - it adds dots
@@ -6793,30 +6794,11 @@ export default function DeliveryHome() {
         preserveViewport: true
       });
       // Explicitly don't set map - we use custom polyline instead
-      console.log('✅ DirectionsRenderer created with bright blue polyline (markers suppressed)');
-      
-      // Ensure it's visible by explicitly setting map
-      directionsRendererRef.current.setMap(window.deliveryMapInstance);
+      console.log('✅ DirectionsRenderer created in detached mode (not added to map)');
     } else {
-      // Ensure renderer is attached to main map
-      directionsRendererRef.current.setMap(window.deliveryMapInstance);
-      // Update polyline options to ensure visibility and suppress markers
-      directionsRendererRef.current.setOptions({
-        suppressMarkers: true, // Hide default markers including car icon
-        suppressInfoWindows: false,
-        polylineOptions: {
-          strokeColor: '#4285F4', // Bright blue like Zomato
-          strokeWeight: 0, // Completely hide DirectionsRenderer polyline (has dots)
-          strokeOpacity: 0, // Hide completely
-          zIndex: -1, // Put behind everything
-          icons: [] // No custom icons
-        },
-        markerOptions: {
-          visible: false // Explicitly hide all markers
-        },
-        preserveViewport: true
-      });
-      console.log('✅ DirectionsRenderer re-attached to main map with updated styling (markers suppressed)');
+      // Ensure renderer remains detached from main map.
+      directionsRendererRef.current.setMap(null);
+      console.log('✅ DirectionsRenderer kept detached from main map');
     }
 
     // Set directions response to renderer
@@ -7379,6 +7361,12 @@ export default function DeliveryHome() {
 
     // Always use custom polyline (DirectionsRenderer is never active - it adds dots)
     if (routePolylineRef.current) {
+      // If live-tracking route exists, suppress legacy fallback route to avoid duplicate paths.
+      if (liveTrackingPolylineRef.current) {
+        routePolylineRef.current.setMap(null);
+        return;
+      }
+
       const orderStatus = selectedRestaurant?.orderStatus || selectedRestaurant?.status || ''
       const deliveryPhase = selectedRestaurant?.deliveryPhase || selectedRestaurant?.deliveryState?.currentPhase || ''
       const deliveryStateStatus = selectedRestaurant?.deliveryState?.status || ''
@@ -8571,9 +8559,9 @@ export default function DeliveryHome() {
       Number.isFinite(Number(selectedRestaurant.customerLng)) &&
       !(Number(selectedRestaurant.customerLat) === 0 && Number(selectedRestaurant.customerLng) === 0);
 
-    // During delivery leg, prefer live directions polyline if available.
-    // If it is unavailable, keep fallback route visible and trimmed from rider.
-    if (isPickedUpPhase && liveTrackingPolylineRef.current) {
+    // Prefer live-tracking route whenever available to avoid duplicate paths.
+    // Fallback polyline should only render when live-tracking route is unavailable.
+    if (liveTrackingPolylineRef.current) {
       if (routePolylineRef.current) {
         routePolylineRef.current.setMap(null);
       }
