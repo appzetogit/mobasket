@@ -231,7 +231,7 @@ const io = new Server(httpServer, {
     },
     methods: ['GET', 'POST', 'OPTIONS'],
     credentials: true,
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-refresh-token']
   },
   transports: ['polling', 'websocket'], // Polling first, then upgrade to websocket
   allowEIO3: true, // Allow Engine.IO v3 clients for compatibility
@@ -507,7 +507,7 @@ const corsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'x-refresh-token']
 };
 
 app.use(cors(corsOptions));
