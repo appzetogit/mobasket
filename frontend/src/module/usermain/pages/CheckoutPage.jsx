@@ -34,6 +34,7 @@ import {
   saveOrderEditSession,
 } from "@/module/user/utils/orderEditSession";
 import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
+import { ensureAddressCoordinates } from "@/lib/utils/addressGeocoding";
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
@@ -1001,6 +1002,26 @@ export default function CheckoutPage() {
         throw new Error("Cart item data is invalid. Please refresh and try again.");
       }
 
+      // Geocode address if it's missing coordinates (do this early for pricing calculation)
+      const apiKey = await getGoogleMapsApiKey();
+      let addressForOrder = selectedAddress;
+      
+      const hasValidCoordinates = 
+        (selectedAddress?.location?.coordinates && 
+         Number.isFinite(selectedAddress.location.coordinates[1]) && 
+         Number.isFinite(selectedAddress.location.coordinates[0]) &&
+         !(selectedAddress.location.coordinates[0] === 0 && selectedAddress.location.coordinates[1] === 0)) ||
+        (Number.isFinite(selectedAddress?.latitude) && Number.isFinite(selectedAddress?.longitude) &&
+         !(selectedAddress.latitude === 0 && selectedAddress.longitude === 0));
+      
+      if (!hasValidCoordinates) {
+        const geocodedAddress = await ensureAddressCoordinates(selectedAddress, apiKey);
+        if (geocodedAddress?.latitude && geocodedAddress?.longitude) {
+          addressForOrder = geocodedAddress;
+          console.log('✅ Address geocoded before order submission');
+        }
+      }
+
       if (
         paymentMethod === "cash" &&
         pendingOnlineOrder?.id &&
@@ -1021,7 +1042,7 @@ export default function CheckoutPage() {
       const pricingResponse = await orderAPI.calculateOrder({
         items,
         restaurantId,
-        deliveryAddress: selectedAddress,
+        deliveryAddress: addressForOrder,
         couponCode: appliedCouponCode || undefined,
         deliveryFleet: "standard",
         platform: "mofood",
@@ -1030,6 +1051,9 @@ export default function CheckoutPage() {
       if (!calculatedPricing?.total) {
         throw new Error("Failed to calculate order pricing.");
       }
+
+      // Double-check coordinates before creating order
+      const finalAddress = await ensureAddressCoordinates(addressForOrder, apiKey);
 
       const backendPaymentMethod =
         paymentMethod === "cash"
@@ -1042,7 +1066,7 @@ export default function CheckoutPage() {
 
       const orderPayload = {
         items,
-        address: selectedAddress,
+        address: finalAddress,
         restaurantId,
         restaurantName,
         pricing: calculatedPricing,

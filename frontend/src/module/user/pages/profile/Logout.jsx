@@ -34,6 +34,10 @@ export default function Logout() {
       localStorage.removeItem("userDishFavorites");
       localStorage.removeItem("mobasket_user_profile");
       localStorage.removeItem("mobasket_preference");
+      // also clear cart storage so new account starts with empty cart
+      localStorage.removeItem("cart_mofood");
+      localStorage.removeItem("cart_mogrocery");
+      localStorage.removeItem("cart");
       sessionStorage.removeItem("userAuthData");
     };
 

@@ -402,10 +402,18 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
   }, [location.pathname, platform, menuData])
 
   const toggleSection = (sectionKey) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [sectionKey]: !prev[sectionKey]
-    }))
+    // Only one section open at a time. clicking an already-open section will close it.
+    setExpandedSections(prev => {
+      const isCurrently = !!prev[sectionKey]
+      const newState = {}
+      Object.keys(prev).forEach(k => {
+        newState[k] = false
+      })
+      if (!isCurrently) {
+        newState[sectionKey] = true
+      }
+      return newState
+    })
   }
 
   const renderMenuItem = (item, index, isInSection = false) => {
