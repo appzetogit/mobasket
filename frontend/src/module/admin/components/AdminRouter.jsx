@@ -155,19 +155,19 @@ export default function AdminRouter() {
 
         {/* ORDER MANAGEMENT */}
         {/* Orders */}
-        <Route path="orders/all" element={<OrdersPage statusKey="all" />} />
-        <Route path="orders/scheduled" element={<OrdersPage statusKey="scheduled" />} />
-        <Route path="orders/pending" element={<OrdersPage statusKey="pending" />} />
-        <Route path="orders/accepted" element={<OrdersPage statusKey="accepted" />} />
-        <Route path="orders/processing" element={<OrdersPage statusKey="processing" />} />
-        <Route path="orders/food-on-the-way" element={<OrdersPage statusKey="food-on-the-way" />} />
-        <Route path="orders/delivered" element={<OrdersPage statusKey="delivered" />} />
-        <Route path="orders/canceled" element={<OrdersPage statusKey="canceled" />} />
-        <Route path="orders/restaurant-cancelled" element={<OrdersPage statusKey="restaurant-cancelled" />} />
-        <Route path="orders/payment-failed" element={<OrdersPage statusKey="payment-failed" />} />
-        <Route path="orders/refunded" element={<OrdersPage statusKey="refunded" />} />
-        <Route path="orders/offline-payments" element={<OrdersPage statusKey="offline-payments" />} />
-        <Route path="order-detect-delivery" element={<OrderDetectDelivery />} />
+        <Route path="orders/all" element={<OrdersPage statusKey="all" platformOverride="mofood" />} />
+        <Route path="orders/scheduled" element={<OrdersPage statusKey="scheduled" platformOverride="mofood" />} />
+        <Route path="orders/pending" element={<OrdersPage statusKey="pending" platformOverride="mofood" />} />
+        <Route path="orders/accepted" element={<OrdersPage statusKey="accepted" platformOverride="mofood" />} />
+        <Route path="orders/processing" element={<OrdersPage statusKey="processing" platformOverride="mofood" />} />
+        <Route path="orders/food-on-the-way" element={<OrdersPage statusKey="food-on-the-way" platformOverride="mofood" />} />
+        <Route path="orders/delivered" element={<OrdersPage statusKey="delivered" platformOverride="mofood" />} />
+        <Route path="orders/canceled" element={<OrdersPage statusKey="canceled" platformOverride="mofood" />} />
+        <Route path="orders/restaurant-cancelled" element={<OrdersPage statusKey="restaurant-cancelled" platformOverride="mofood" />} />
+        <Route path="orders/payment-failed" element={<OrdersPage statusKey="payment-failed" platformOverride="mofood" />} />
+        <Route path="orders/refunded" element={<OrdersPage statusKey="refunded" platformOverride="mofood" />} />
+        <Route path="orders/offline-payments" element={<OrdersPage statusKey="offline-payments" platformOverride="mofood" />} />
+        <Route path="order-detect-delivery" element={<OrderDetectDelivery platformOverride="mofood" />} />
         <Route path="grocery-orders/all" element={<OrdersPage statusKey="all" platformOverride="mogrocery" />} />
         <Route path="grocery-orders/scheduled" element={<OrdersPage statusKey="scheduled" platformOverride="mogrocery" />} />
         <Route path="grocery-orders/pending" element={<OrdersPage statusKey="pending" platformOverride="mogrocery" />} />

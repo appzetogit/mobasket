@@ -1672,11 +1672,7 @@ export default function OrderTracking() {
       </AnimatePresence>
 
       {/* Green Header */}
-      <motion.div 
-        className={`${currentStatus.color} text-white sticky top-0 z-40`}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-      >
+      <div className={`${currentStatus.color} text-white sticky top-0 z-40`}>
         {/* Navigation bar */}
         <div className="flex items-center justify-between px-4 py-3">
           <Link to="/orders" replace>
@@ -1746,7 +1742,7 @@ export default function OrderTracking() {
             </div>
           )}
         </div>
-      </motion.div>
+      </div>
 
       {/* Map Section */}
       {!isPlanSubscriptionOrder && (

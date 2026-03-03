@@ -56,9 +56,15 @@ export const authenticate = async (req, res, next) => {
     // - reqPath: /me or /reverify (relative to /auth mount point)
     // - baseUrl: /auth (if mounted)
     // /owner/me is directly under /api/restaurant, so reqPath would be /owner/me
+    // /profile routes include:
+    // - /api/restaurant/profile
+    // - /api/restaurant/profile/image
+    // - /api/restaurant/profile/menu-image
     const isProfileRoute = requestPath.includes('/auth/me') || requestPath.includes('/auth/reverify') || 
+                          requestPath.includes('/profile') ||
                           requestPath.includes('/owner/me') || 
                           reqPath === '/me' || reqPath === '/reverify' || reqPath === '/owner/me' ||
+                          reqPath === '/profile' || reqPath.startsWith('/profile/') ||
                           (baseUrl.includes('/auth') && (reqPath === '/me' || reqPath === '/reverify'));
     
     // Check for menu routes - restaurants need to access menu even when inactive

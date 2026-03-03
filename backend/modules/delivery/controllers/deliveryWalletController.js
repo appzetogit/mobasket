@@ -162,6 +162,8 @@ export const getWallet = asyncHandler(async (req, res) => {
       description: t.description,
       date: t.createdAt || t.date,
       createdAt: t.createdAt,
+      processedAt: t.processedAt,
+      failureReason: t.failureReason,
       orderId: t.orderId,
       paymentMethod: t.paymentMethod,
       paymentCollected: t.paymentCollected

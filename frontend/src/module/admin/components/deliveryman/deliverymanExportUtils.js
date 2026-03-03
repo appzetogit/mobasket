@@ -1,3 +1,5 @@
+import { formatExportAmount } from "../exportFormatUtils"
+
 // Export utility functions for deliveryman data
 export const exportDeliverymenToCSV = (deliverymen, filename = "deliverymen") => {
   const headers = ["SI", "Name", "Contact", "Zone", "Total Orders", "Availability Status"]
@@ -215,7 +217,7 @@ export const exportReviewsToPDF = (reviews, filename = "deliveryman_reviews") =>
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Deliveryman Reviews Report</title>
+      <title>${filename}</title>
       <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
@@ -281,7 +283,7 @@ export const exportBonusToCSV = (transactions, filename = "deliveryman_bonus") =
     transaction.transactionId,
     transaction.deliveryId || 'N/A',
     transaction.deliveryman,
-    transaction.bonus,
+    formatBonusForExport(transaction),
     transaction.reference,
     transaction.createdAt
   ])
@@ -306,8 +308,7 @@ export const exportBonusToCSV = (transactions, filename = "deliveryman_bonus") =
 const formatBonusForExport = (transaction) => {
   // First priority: use raw amount value if available
   if (transaction.amount !== undefined && transaction.amount !== null && !isNaN(transaction.amount)) {
-    const amount = parseFloat(transaction.amount)
-    return `₹${amount.toFixed(2)}`
+    return formatExportAmount(transaction.amount, { fallback: 'INR 0.00' })
   }
   
   // Second priority: clean and extract from bonus string
@@ -327,12 +328,12 @@ const formatBonusForExport = (transaction) => {
     if (numericMatch) {
       const amount = parseFloat(numericMatch[0])
       if (!isNaN(amount)) {
-        return `₹${amount.toFixed(2)}`
+        return formatExportAmount(amount, { fallback: 'INR 0.00' })
       }
     }
   }
   
-  return '₹0.00'
+  return 'INR 0.00'
 }
 
 export const exportBonusToExcel = (transactions, filename = "deliveryman_bonus") => {
@@ -424,7 +425,7 @@ export const exportBonusToPDF = (transactions, filename = "deliveryman_bonus") =
         // Prepare table data - ensure bonus is properly formatted
         const tableData = transactions.map((transaction) => {
           // ALWAYS use raw amount value - don't rely on formatted bonus string
-          let bonusAmount = '₹0.00'
+          let bonusAmount = 'INR 0.00'
           
           // First priority: Use raw numeric amount from transaction.amount
           if (transaction.amount !== undefined && transaction.amount !== null) {
@@ -432,7 +433,7 @@ export const exportBonusToPDF = (transactions, filename = "deliveryman_bonus") =
               ? parseFloat(transaction.amount.replace(/[^\d.-]/g, ''))
               : parseFloat(transaction.amount)
             if (!isNaN(numAmount)) {
-              bonusAmount = `₹${numAmount.toFixed(2)}`
+              bonusAmount = formatExportAmount(numAmount, { fallback: 'INR 0.00' })
             }
           } 
           // Second priority: Extract number from bonus string and rebuild
@@ -441,7 +442,7 @@ export const exportBonusToPDF = (transactions, filename = "deliveryman_bonus") =
             const numericPart = String(transaction.bonus).replace(/[^\d.-]/g, '')
             const numAmount = parseFloat(numericPart)
             if (!isNaN(numAmount) && numAmount > 0) {
-              bonusAmount = `₹${numAmount.toFixed(2)}`
+              bonusAmount = formatExportAmount(numAmount, { fallback: 'INR 0.00' })
             }
           }
           
@@ -514,4 +515,5 @@ export const exportBonusToJSON = (transactions, filename = "deliveryman_bonus") 
   link.click()
   document.body.removeChild(link)
 }
+
 

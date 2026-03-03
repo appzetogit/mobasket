@@ -1,19 +1,23 @@
+import { formatExportAmount, normalizeExportCell } from "../exportFormatUtils"
+
 // Export utility functions for reports
 export const exportReportsToCSV = (data, headers, filename = "report") => {
-  const rows = data.map((item, index) => {
-    return headers.map(header => {
+  const rows = data.map((item) => {
+    return headers.map((header) => {
       const value = item[header.key] || item[header] || ""
-      return typeof value === 'object' ? JSON.stringify(value) : value
+      const normalized = typeof value === "object" ? JSON.stringify(value) : value
+      return normalizeExportCell(normalized)
     })
   })
-  
-  const headerRow = headers.map(h => typeof h === 'string' ? h : h.label).join(",")
+
+  const headerRow = headers.map((h) => (typeof h === "string" ? h : h.label)).join(",")
   const csvContent = [
     headerRow,
-    ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+    ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")),
   ].join("\n")
-  
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+
+  const BOM = "\uFEFF"
+  const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
   link.setAttribute("href", url)
@@ -26,18 +30,19 @@ export const exportReportsToCSV = (data, headers, filename = "report") => {
 
 export const exportReportsToExcel = (data, headers, filename = "report") => {
   const rows = data.map((item) => {
-    return headers.map(header => {
+    return headers.map((header) => {
       const value = item[header.key] || item[header] || ""
-      return typeof value === 'object' ? JSON.stringify(value) : value
+      const normalized = typeof value === "object" ? JSON.stringify(value) : value
+      return normalizeExportCell(normalized)
     })
   })
-  
-  const headerRow = headers.map(h => typeof h === 'string' ? h : h.label).join("\t")
+
+  const headerRow = headers.map((h) => (typeof h === "string" ? h : h.label)).join("\t")
   const csvContent = [
     headerRow,
-    ...rows.map(row => row.join("\t"))
+    ...rows.map((row) => row.join("\t")),
   ].join("\n")
-  
+
   const blob = new Blob([csvContent], { type: "application/vnd.ms-excel" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
@@ -50,13 +55,13 @@ export const exportReportsToExcel = (data, headers, filename = "report") => {
 }
 
 export const exportReportsToPDF = (data, headers, filename = "report", title = "Report") => {
-  const headerRow = headers.map(h => typeof h === 'string' ? h : h.label)
-  
-  let htmlContent = `
+  const headerRow = headers.map((h) => (typeof h === "string" ? h : h.label))
+
+  const htmlContent = `
     <!DOCTYPE html>
     <html>
     <head>
-      <title>${title}</title>
+      <title>${filename}</title>
       <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
@@ -72,23 +77,25 @@ export const exportReportsToPDF = (data, headers, filename = "report", title = "
       <table>
         <thead>
           <tr>
-            ${headerRow.map(h => `<th>${h}</th>`).join("")}
+            ${headerRow.map((h) => `<th>${h}</th>`).join("")}
           </tr>
         </thead>
         <tbody>
-          ${data.map(item => {
-            const cells = headers.map(header => {
-              const value = item[header.key] || item[header] || ""
-              return `<td>${String(value)}</td>`
+          ${data
+            .map((item) => {
+              const cells = headers.map((header) => {
+                const value = item[header.key] || item[header] || ""
+                return `<td>${String(normalizeExportCell(value))}</td>`
+              })
+              return `<tr>${cells.join("")}</tr>`
             })
-            return `<tr>${cells.join("")}</tr>`
-          }).join("")}
+            .join("")}
         </tbody>
       </table>
     </body>
     </html>
   `
-  
+
   const printWindow = window.open("", "_blank")
   printWindow.document.write(htmlContent)
   printWindow.document.close()
@@ -120,22 +127,23 @@ export const exportTransactionReportToCSV = (transactions, filename = "transacti
     transaction.orderId,
     transaction.restaurant,
     transaction.customerName,
-    transaction.totalItemAmount.toFixed(2),
-    transaction.itemDiscount.toFixed(2),
-    transaction.couponDiscount.toFixed(2),
-    transaction.referralDiscount.toFixed(2),
-    transaction.discountedAmount.toFixed(2),
-    transaction.vatTax.toFixed(2),
-    transaction.deliveryCharge.toFixed(2),
-    transaction.orderAmount.toFixed(2)
+    formatExportAmount(transaction.totalItemAmount, { fallback: "INR 0.00" }),
+    formatExportAmount(transaction.itemDiscount, { fallback: "INR 0.00" }),
+    formatExportAmount(transaction.couponDiscount, { fallback: "INR 0.00" }),
+    formatExportAmount(transaction.referralDiscount, { fallback: "INR 0.00" }),
+    formatExportAmount(transaction.discountedAmount, { fallback: "INR 0.00" }),
+    formatExportAmount(transaction.vatTax, { fallback: "INR 0.00" }),
+    formatExportAmount(transaction.deliveryCharge, { fallback: "INR 0.00" }),
+    formatExportAmount(transaction.orderAmount, { fallback: "INR 0.00" }),
   ])
-  
+
   const csvContent = [
     headers.join(","),
-    ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
+    ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
   ].join("\n")
-  
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+
+  const BOM = "\uFEFF"
+  const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
   link.setAttribute("href", url)
@@ -153,21 +161,21 @@ export const exportTransactionReportToExcel = (transactions, filename = "transac
     transaction.orderId,
     transaction.restaurant,
     transaction.customerName,
-    transaction.totalItemAmount.toFixed(2),
-    transaction.itemDiscount.toFixed(2),
-    transaction.couponDiscount.toFixed(2),
-    transaction.referralDiscount.toFixed(2),
-    transaction.discountedAmount.toFixed(2),
-    transaction.vatTax.toFixed(2),
-    transaction.deliveryCharge.toFixed(2),
-    transaction.orderAmount.toFixed(2)
+    formatExportAmount(transaction.totalItemAmount, { fallback: "INR 0.00" }),
+    formatExportAmount(transaction.itemDiscount, { fallback: "INR 0.00" }),
+    formatExportAmount(transaction.couponDiscount, { fallback: "INR 0.00" }),
+    formatExportAmount(transaction.referralDiscount, { fallback: "INR 0.00" }),
+    formatExportAmount(transaction.discountedAmount, { fallback: "INR 0.00" }),
+    formatExportAmount(transaction.vatTax, { fallback: "INR 0.00" }),
+    formatExportAmount(transaction.deliveryCharge, { fallback: "INR 0.00" }),
+    formatExportAmount(transaction.orderAmount, { fallback: "INR 0.00" }),
   ])
-  
+
   const csvContent = [
     headers.join("\t"),
-    ...rows.map(row => row.join("\t"))
+    ...rows.map((row) => row.join("\t")),
   ].join("\n")
-  
+
   const blob = new Blob([csvContent], { type: "application/vnd.ms-excel" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
@@ -181,12 +189,12 @@ export const exportTransactionReportToExcel = (transactions, filename = "transac
 
 export const exportTransactionReportToPDF = (transactions, filename = "transaction_report") => {
   const headers = ["SI", "Order ID", "Restaurant", "Customer Name", "Total Item Amount", "Item Discount", "Coupon Discount", "Referral Discount", "Discounted Amount", "VAT/Tax", "Delivery Charge", "Order Amount"]
-  
-  let htmlContent = `
+
+  const htmlContent = `
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Transaction Report</title>
+      <title>${filename}</title>
       <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 8px; }
@@ -202,32 +210,36 @@ export const exportTransactionReportToPDF = (transactions, filename = "transacti
       <table>
         <thead>
           <tr>
-            ${headers.map(h => `<th>${h}</th>`).join("")}
+            ${headers.map((h) => `<th>${h}</th>`).join("")}
           </tr>
         </thead>
         <tbody>
-          ${transactions.map((transaction, index) => `
+          ${transactions
+            .map(
+              (transaction, index) => `
             <tr>
               <td>${index + 1}</td>
               <td>${transaction.orderId}</td>
               <td>${transaction.restaurant}</td>
               <td>${transaction.customerName}</td>
-              <td>$${transaction.totalItemAmount.toFixed(2)}</td>
-              <td>$${transaction.itemDiscount.toFixed(2)}</td>
-              <td>$${transaction.couponDiscount.toFixed(2)}</td>
-              <td>$${transaction.referralDiscount.toFixed(2)}</td>
-              <td>$${transaction.discountedAmount.toFixed(2)}</td>
-              <td>$${transaction.vatTax.toFixed(2)}</td>
-              <td>$${transaction.deliveryCharge.toFixed(2)}</td>
-              <td>$${transaction.orderAmount.toFixed(2)}</td>
+              <td>${formatExportAmount(transaction.totalItemAmount, { fallback: "INR 0.00" })}</td>
+              <td>${formatExportAmount(transaction.itemDiscount, { fallback: "INR 0.00" })}</td>
+              <td>${formatExportAmount(transaction.couponDiscount, { fallback: "INR 0.00" })}</td>
+              <td>${formatExportAmount(transaction.referralDiscount, { fallback: "INR 0.00" })}</td>
+              <td>${formatExportAmount(transaction.discountedAmount, { fallback: "INR 0.00" })}</td>
+              <td>${formatExportAmount(transaction.vatTax, { fallback: "INR 0.00" })}</td>
+              <td>${formatExportAmount(transaction.deliveryCharge, { fallback: "INR 0.00" })}</td>
+              <td>${formatExportAmount(transaction.orderAmount, { fallback: "INR 0.00" })}</td>
             </tr>
-          `).join("")}
+          `,
+            )
+            .join("")}
         </tbody>
       </table>
     </body>
     </html>
   `
-  
+
   const printWindow = window.open("", "_blank")
   printWindow.document.write(htmlContent)
   printWindow.document.close()
@@ -250,4 +262,3 @@ export const exportTransactionReportToJSON = (transactions, filename = "transact
   link.click()
   document.body.removeChild(link)
 }
-

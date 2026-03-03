@@ -1,3 +1,5 @@
+import { formatExportAmount } from "../exportFormatUtils"
+
 // Export utility functions for incentive requests and history
 export const exportIncentivesToCSV = (incentives, filename = "incentives") => {
   const headers = ["SI", "Deliveryman", "Zone", "Total Earning", "Incentive", "Date", "Status"]
@@ -5,18 +7,19 @@ export const exportIncentivesToCSV = (incentives, filename = "incentives") => {
     item.sl,
     item.deliveryman,
     item.zone,
-    `$${item.totalEarning.toFixed(2)}`,
-    `$${item.incentive.toFixed(2)}`,
+    formatExportAmount(item.totalEarning, { fallback: "INR 0.00" }),
+    formatExportAmount(item.incentive, { fallback: "INR 0.00" }),
     item.date,
-    item.status
+    item.status,
   ])
-  
+
   const csvContent = [
     headers.join(","),
-    ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
+    ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
   ].join("\n")
-  
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+
+  const BOM = "\uFEFF"
+  const blob = new Blob([BOM + csvContent], { type: "text/csv;charset=utf-8;" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
   link.setAttribute("href", url)
@@ -33,17 +36,17 @@ export const exportIncentivesToExcel = (incentives, filename = "incentives") => 
     item.sl,
     item.deliveryman,
     item.zone,
-    `$${item.totalEarning.toFixed(2)}`,
-    `$${item.incentive.toFixed(2)}`,
+    formatExportAmount(item.totalEarning, { fallback: "INR 0.00" }),
+    formatExportAmount(item.incentive, { fallback: "INR 0.00" }),
     item.date,
-    item.status
+    item.status,
   ])
-  
+
   const csvContent = [
     headers.join("\t"),
-    ...rows.map(row => row.join("\t"))
+    ...rows.map((row) => row.join("\t")),
   ].join("\n")
-  
+
   const blob = new Blob([csvContent], { type: "application/vnd.ms-excel" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
@@ -57,12 +60,12 @@ export const exportIncentivesToExcel = (incentives, filename = "incentives") => 
 
 export const exportIncentivesToPDF = (incentives, filename = "incentives") => {
   const headers = ["SI", "Deliveryman", "Zone", "Total Earning", "Incentive", "Date", "Status"]
-  
-  let htmlContent = `
+
+  const htmlContent = `
     <!DOCTYPE html>
     <html>
     <head>
-      <title>Incentives Report</title>
+      <title>${filename}</title>
       <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; }
@@ -78,27 +81,31 @@ export const exportIncentivesToPDF = (incentives, filename = "incentives") => {
       <table>
         <thead>
           <tr>
-            ${headers.map(h => `<th>${h}</th>`).join("")}
+            ${headers.map((h) => `<th>${h}</th>`).join("")}
           </tr>
         </thead>
         <tbody>
-          ${incentives.map(item => `
+          ${incentives
+            .map(
+              (item) => `
             <tr>
               <td>${item.sl}</td>
               <td>${item.deliveryman}</td>
               <td>${item.zone}</td>
-              <td>$${item.totalEarning.toFixed(2)}</td>
-              <td>$${item.incentive.toFixed(2)}</td>
+              <td>${formatExportAmount(item.totalEarning, { fallback: "INR 0.00" })}</td>
+              <td>${formatExportAmount(item.incentive, { fallback: "INR 0.00" })}</td>
               <td>${item.date}</td>
               <td>${item.status}</td>
             </tr>
-          `).join("")}
+          `,
+            )
+            .join("")}
         </tbody>
       </table>
     </body>
     </html>
   `
-  
+
   const printWindow = window.open("", "_blank")
   printWindow.document.write(htmlContent)
   printWindow.document.close()
@@ -121,4 +128,3 @@ export const exportIncentivesToJSON = (incentives, filename = "incentives") => {
   link.click()
   document.body.removeChild(link)
 }
-
