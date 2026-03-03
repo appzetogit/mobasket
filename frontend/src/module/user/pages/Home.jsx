@@ -794,6 +794,15 @@ export default function Home() {
       try {
         setLoadingRestaurants(true);
 
+        // Enforce strict same-zone listing on Home.
+        if (zoneLoading) {
+          return;
+        }
+        if (!zoneId) {
+          setRestaurantsData([]);
+          return;
+        }
+
         // First, test backend connection
         try {
           // Use API_BASE_URL from config (supports both dev and production)
@@ -870,11 +879,9 @@ export default function Home() {
         // Home page is MoFood-only.
         params.platform = "mofood";
 
-        // Optional: Add zoneId if available (for sorting/filtering, but show all restaurants)
-        if (zoneId) {
-          params.zoneId = zoneId;
-        }
-        // Note: We show all restaurants regardless of zone, but apply grayscale styling if user is out of service
+        // Strict zone filter: show only restaurants from the same detected zone.
+        params.zoneId = zoneId;
+        params.onlyZone = "true";
 
         console.log("Fetching restaurants with params:", params);
         const response = await restaurantAPI.getRestaurants(params);
@@ -1034,7 +1041,7 @@ export default function Home() {
                 images: allImages, // Array of cover images for carousel (separate from menu images)
                 menuImages: fallbackImages, // Product/menu images (preferred for category icons)
                 coverImages, // Store-front/banner images
-                priceRange: restaurant.priceRange || "$$", // Use from API or default
+                priceRange: restaurant.priceRange && !["$", "$$", "$$$"].includes(restaurant.priceRange) ? restaurant.priceRange : (restaurant.featuredPrice || 200), // Use from API or default to featuredPrice
                 featuredDish:
                   restaurant.featuredDish ||
                   (restaurant.cuisines && restaurant.cuisines.length > 0
@@ -1095,7 +1102,7 @@ export default function Home() {
         );
       }
     },
-    [zoneId],
+    [zoneId, zoneLoading],
   );
 
   // Fetch restaurants when appliedFilters change
@@ -1287,11 +1294,11 @@ export default function Home() {
     // Apply filters
     if (activeFilters.has("price-under-200")) {
       filtered = filtered.filter(
-        (r) => r.priceRange === "$" || r.priceRange === "$$",
+        (r) => r.priceRange <= 200,
       );
     }
     if (activeFilters.has("price-under-500")) {
-      filtered = filtered.filter((r) => r.priceRange !== "$$$");
+      filtered = filtered.filter((r) => r.priceRange <= 500);
     }
     if (activeFilters.has("delivery-under-30")) {
       filtered = filtered.filter((r) => {
@@ -1348,14 +1355,14 @@ export default function Home() {
     // Apply sorting
     if (sortBy === "price-low") {
       filtered.sort((a, b) => {
-        const aPrice = a.priceRange === "$" ? 1 : a.priceRange === "$$" ? 2 : 3;
-        const bPrice = b.priceRange === "$" ? 1 : b.priceRange === "$$" ? 2 : 3;
+        const aPrice = Number(a.priceRange) || 0;
+        const bPrice = Number(b.priceRange) || 0;
         return aPrice - bPrice;
       });
     } else if (sortBy === "price-high") {
       filtered.sort((a, b) => {
-        const aPrice = a.priceRange === "$" ? 1 : a.priceRange === "$$" ? 2 : 3;
-        const bPrice = b.priceRange === "$" ? 1 : b.priceRange === "$$" ? 2 : 3;
+        const aPrice = Number(a.priceRange) || 0;
+        const bPrice = Number(b.priceRange) || 0;
         return bPrice - aPrice;
       });
     } else if (sortBy === "rating-high") {
@@ -2129,14 +2136,14 @@ export default function Home() {
           transition={{ duration: 0.5, delay: 0.2 }}
         >
           <div
-            className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 overflow-x-auto scrollbar-hide pb-1 lg:pb-2"
+            className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 overflow-x-auto scrollbar-hide pb-1 lg:pb-2 pr-4"
             style={{
               scrollbarWidth: "none",
               msOverflowStyle: "none",
             }}
           >
             {/* Filter Button - Opens Modal */}
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <motion.div className="flex-shrink-0" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
               <Button
                 variant="outline"
                 onClick={() => setIsFilterOpen(true)}
@@ -2161,9 +2168,9 @@ export default function Home() {
               return (
                 <motion.div
                   key={filter.id}
+                  className="flex-shrink-0"
                   initial={{ opacity: 0, x: -20 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  viewport={{ once: true }}
+                  animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.4, delay: index * 0.1 }}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}

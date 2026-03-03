@@ -449,7 +449,7 @@ export const detectUserZone = asyncHandler(async (req, res) => {
     const userLat = parseFloat(lat || latitude);
     const userLng = parseFloat(lng || longitude);
 
-    if (!userLat || !userLng || isNaN(userLat) || isNaN(userLng)) {
+    if (!Number.isFinite(userLat) || !Number.isFinite(userLng)) {
       return errorResponse(res, 400, 'Latitude and longitude are required');
     }
 
@@ -488,12 +488,12 @@ export const detectUserZone = asyncHandler(async (req, res) => {
         for (let i = 0, j = zone.coordinates.length - 1; i < zone.coordinates.length; j = i++) {
           const coordI = zone.coordinates[i];
           const coordJ = zone.coordinates[j];
-          const xi = typeof coordI === 'object' ? (coordI.latitude || coordI.lat) : null;
-          const yi = typeof coordI === 'object' ? (coordI.longitude || coordI.lng) : null;
-          const xj = typeof coordJ === 'object' ? (coordJ.latitude || coordJ.lat) : null;
-          const yj = typeof coordJ === 'object' ? (coordJ.longitude || coordJ.lng) : null;
+          const xi = typeof coordI === 'object' ? Number(coordI.latitude ?? coordI.lat) : null;
+          const yi = typeof coordI === 'object' ? Number(coordI.longitude ?? coordI.lng) : null;
+          const xj = typeof coordJ === 'object' ? Number(coordJ.latitude ?? coordJ.lat) : null;
+          const yj = typeof coordJ === 'object' ? Number(coordJ.longitude ?? coordJ.lng) : null;
           
-          if (xi === null || yi === null || xj === null || yj === null) continue;
+          if (!Number.isFinite(xi) || !Number.isFinite(yi) || !Number.isFinite(xj) || !Number.isFinite(yj)) continue;
           
           const intersect = ((yi > userLng) !== (yj > userLng)) && 
                            (userLat < (xj - xi) * (userLng - yi) / (yj - yi) + xi);
