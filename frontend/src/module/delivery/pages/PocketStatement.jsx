@@ -13,12 +13,19 @@ import { fetchWalletTransactions } from "../utils/deliveryWalletState"
 
 export default function PocketStatement() {
   const navigate = useNavigate()
+  const normalizeStatus = (status) => String(status || "").trim().toLowerCase()
+  const isCompletedLikeStatus = (status) => {
+    const normalized = normalizeStatus(status)
+    return normalized === "completed" || normalized === "approved" || normalized === "processed"
+  }
 
   // Current week range (Sunday–Saturday)
   const getInitialWeekRange = () => {
     const now = new Date()
     const start = new Date(now)
-    start.setDate(now.getDate() - now.getDay())
+    const dayOfWeek = now.getDay()
+    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+    start.setDate(now.getDate() + diff)
     start.setHours(0, 0, 0, 0)
     const end = new Date(start)
     end.setDate(start.getDate() + 6)
@@ -62,6 +69,21 @@ export default function PocketStatement() {
     }
 
     fetchData()
+
+    const handleWalletUpdate = () => {
+      fetchData()
+    }
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") fetchData()
+    }
+
+    window.addEventListener("deliveryWalletStateUpdated", handleWalletUpdate)
+    document.addEventListener("visibilitychange", handleVisibility)
+
+    return () => {
+      window.removeEventListener("deliveryWalletStateUpdated", handleWalletUpdate)
+      document.removeEventListener("visibilitychange", handleVisibility)
+    }
   }, [weekRange])
 
   // Compute summary for selected week
@@ -85,7 +107,7 @@ export default function PocketStatement() {
       const baseDate = b.date || b.createdAt
       if (!baseDate) return
       const d = new Date(baseDate)
-      if (d >= weekRange.start && d <= weekRange.end) {
+      if (d >= weekRange.start && d <= weekRange.end && isCompletedLikeStatus(b.status)) {
         totalBonus += b.amount || 0
       }
     })
@@ -136,6 +158,7 @@ export default function PocketStatement() {
       <div className="px-4 py-6">
         {/* Week selector controls selected week range */}
         <WeekSelector
+          weekStartsOn={1}
           onChange={setWeekRange}
         />
 
@@ -276,4 +299,3 @@ export default function PocketStatement() {
     </div>
   )
 }
-

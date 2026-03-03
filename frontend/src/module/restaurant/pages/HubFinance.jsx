@@ -114,6 +114,52 @@ export default function HubFinance() {
     }
   }, [financeData])
 
+  const invoiceData = useMemo(() => {
+    const pastOrders = pastCyclesData?.orders || []
+    const currentOrders = financeData?.currentCycle?.orders || []
+    const usePastOrders = pastOrders.length > 0
+    const sourceOrders = usePastOrders ? pastOrders : currentOrders
+
+    const sourceSummary = usePastOrders
+      ? {
+          totalTax: pastCyclesData?.totalTax || 0,
+          totalPlatformFee: pastCyclesData?.totalPlatformFee || 0,
+          totalDeliveryFee: pastCyclesData?.totalDeliveryFee || 0,
+        }
+      : {
+          totalTax: financeData?.currentCycle?.totalTax || 0,
+          totalPlatformFee: financeData?.currentCycle?.totalPlatformFee || 0,
+          totalDeliveryFee: financeData?.currentCycle?.totalDeliveryFee || 0,
+        }
+
+    const rows = sourceOrders.map((order) => {
+      const orderDate = order?.deliveredAt || order?.createdAt
+      return {
+        orderId: order?.orderId || "N/A",
+        date: orderDate ? new Date(orderDate).toLocaleDateString("en-IN") : "N/A",
+        paymentMethod: order?.paymentMethod || "N/A",
+        totalAmount: Number(order?.totalAmount || 0),
+        taxAmount: Number(order?.taxAmount || 0),
+        platformFee: Number(order?.platformFee || 0),
+        deliveryFee: Number(order?.deliveryFee || 0),
+      }
+    })
+
+    // Fallback aggregate from rows (in case backend totals are missing)
+    const taxFromRows = rows.reduce((sum, row) => sum + row.taxAmount, 0)
+    const platformFromRows = rows.reduce((sum, row) => sum + row.platformFee, 0)
+    const deliveryFromRows = rows.reduce((sum, row) => sum + row.deliveryFee, 0)
+
+    return {
+      rows,
+      totalTax: sourceSummary.totalTax || taxFromRows,
+      totalPlatformFee: sourceSummary.totalPlatformFee || platformFromRows,
+      totalDeliveryFee: sourceSummary.totalDeliveryFee || deliveryFromRows,
+      totalOrders: rows.length,
+      periodLabel: usePastOrders ? selectedDateRange : "Current cycle",
+    }
+  }, [financeData, pastCyclesData, selectedDateRange])
+
   const handleViewDetails = () => {
     navigate("/restaurant/finance-details")
   }
@@ -937,10 +983,81 @@ export default function HubFinance() {
         )}
 
         {activeTab === "invoices" && (
-          <div className=" rounded-lg p-4">
-            <p className="text-sm text-gray-600 text-center py-8">
-              Invoices & Taxes content will be displayed here
-            </p>
+          <div className="space-y-4">
+            <div className="bg-white rounded-lg p-4">
+              <p className="text-xs text-gray-500 mb-1">Invoice period</p>
+              <p className="text-sm font-semibold text-gray-900">{invoiceData.periodLabel}</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="bg-white rounded-lg p-4">
+                <p className="text-xs text-gray-500">Tax Collected</p>
+                <p className="text-lg font-bold text-gray-900 mt-1">
+                  ₹{invoiceData.totalTax.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="bg-white rounded-lg p-4">
+                <p className="text-xs text-gray-500">Platform Fee</p>
+                <p className="text-lg font-bold text-gray-900 mt-1">
+                  ₹{invoiceData.totalPlatformFee.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="bg-white rounded-lg p-4">
+                <p className="text-xs text-gray-500">Delivery Fee</p>
+                <p className="text-lg font-bold text-gray-900 mt-1">
+                  ₹{invoiceData.totalDeliveryFee.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-lg p-4">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-sm font-bold text-gray-900">Invoice rows</h3>
+                <span className="text-xs text-gray-500">{invoiceData.totalOrders} orders</span>
+              </div>
+
+              {loading ? (
+                <p className="text-sm text-gray-600 text-center py-6">Loading invoices...</p>
+              ) : invoiceData.rows.length === 0 ? (
+                <p className="text-sm text-gray-600 text-center py-6">No invoice data available</p>
+              ) : (
+                <div className="space-y-3">
+                  {invoiceData.rows.map((row, index) => (
+                    <div key={`${row.orderId}-${index}`} className="border border-gray-100 rounded-lg p-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-gray-900">{row.orderId}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">{row.date} • {row.paymentMethod}</p>
+                        </div>
+                        <p className="text-sm font-bold text-gray-900">
+                          ₹{row.totalAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 mt-3">
+                        <div>
+                          <p className="text-[11px] text-gray-500">Tax</p>
+                          <p className="text-xs font-medium text-gray-900">
+                            ₹{row.taxAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-gray-500">Platform</p>
+                          <p className="text-xs font-medium text-gray-900">
+                            ₹{row.platformFee.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-gray-500">Delivery</p>
+                          <p className="text-xs font-medium text-gray-900">
+                            ₹{row.deliveryFee.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

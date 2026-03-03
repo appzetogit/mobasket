@@ -75,13 +75,18 @@ export default function PocketBalancePage() {
   }, [])
 
   const balances = calculateDeliveryBalances(walletState)
+  const normalizeStatus = (status) => String(status || "").trim().toLowerCase()
+  const isCompletedLikeStatus = (status) => {
+    const normalized = normalizeStatus(status)
+    return normalized === "completed" || normalized === "approved" || normalized === "processed"
+  }
   
   // Calculate weekly earnings for the current week (excludes bonus)
   const weeklyEarnings = calculatePeriodEarnings(walletState, 'week')
   
   // Calculate total bonus amount from all bonus transactions
   const totalBonus = walletState?.transactions
-    ?.filter(t => t.type === 'bonus' && t.status === 'Completed')
+    ?.filter(t => String(t?.type || "").trim().toLowerCase() === 'bonus' && isCompletedLikeStatus(t?.status))
     .reduce((sum, t) => sum + (t.amount || 0), 0) || 0
   
   // Calculate total withdrawn (needed for pocket balance calculation)
@@ -96,7 +101,7 @@ export default function PocketBalancePage() {
   const cashCollected = balances.cashInHand || 0
   
   // Deductions = actual deductions only (fees, penalties). Pending withdrawal is NOT a deduction.
-  const deductions = 0
+  const deductions = Math.max(0, Number(walletState?.deductions ?? balances?.deductions) || 0)
   
   // Amount withdrawn = approved + pending (requested) withdrawals. Withdraw ki hui amount yahin dikhegi.
   const amountWithdrawnDisplay = (balances.totalWithdrawn || 0) + (balances.pendingWithdrawals || 0)

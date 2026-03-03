@@ -14,12 +14,19 @@ import { fetchWalletTransactions } from "../utils/deliveryWalletState"
 
 export default function PocketDetails() {
   const navigate = useNavigate()
+  const normalizeStatus = (status) => String(status || "").trim().toLowerCase()
+  const isCompletedLikeStatus = (status) => {
+    const normalized = normalizeStatus(status)
+    return normalized === "completed" || normalized === "approved" || normalized === "processed"
+  }
 
   // Current week range (Sunday–Saturday)
   const getInitialWeekRange = () => {
     const now = new Date()
     const start = new Date(now)
-    start.setDate(now.getDate() - now.getDay())
+    const dayOfWeek = now.getDay()
+    const diff = dayOfWeek === 0 ? -6 : 1 - dayOfWeek
+    start.setDate(now.getDate() + diff)
     start.setHours(0, 0, 0, 0)
     const end = new Date(start)
     end.setDate(start.getDate() + 6)
@@ -65,7 +72,7 @@ export default function PocketDetails() {
           const paymentDate = p.date || p.createdAt
           if (!paymentDate) return false
           const d = new Date(paymentDate)
-          return d >= weekRange.start && d <= weekRange.end && p.status === "Completed"
+          return d >= weekRange.start && d <= weekRange.end && isCompletedLikeStatus(p.status)
         })
 
         // 3) Fetch bonus transactions for mapping by orderId
@@ -76,7 +83,7 @@ export default function PocketDetails() {
           const bonusDate = b.date || b.createdAt
           if (!bonusDate) return false
           const d = new Date(bonusDate)
-          return d >= weekRange.start && d <= weekRange.end && b.status === "Completed"
+          return d >= weekRange.start && d <= weekRange.end && isCompletedLikeStatus(b.status)
         })
 
         setOrders(filteredTrips)
@@ -93,6 +100,21 @@ export default function PocketDetails() {
     }
 
     fetchData()
+
+    const handleWalletUpdate = () => {
+      fetchData()
+    }
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") fetchData()
+    }
+
+    window.addEventListener("deliveryWalletStateUpdated", handleWalletUpdate)
+    document.addEventListener("visibilitychange", handleVisibility)
+
+    return () => {
+      window.removeEventListener("deliveryWalletStateUpdated", handleWalletUpdate)
+      document.removeEventListener("visibilitychange", handleVisibility)
+    }
   }, [weekRange])
 
   // Compute summary for selected week
@@ -259,7 +281,7 @@ export default function PocketDetails() {
         <div className="mb-6">
           <WeekSelector 
             onChange={(range) => setWeekRange(range)}
-            weekStartsOn={0}
+            weekStartsOn={1}
           />
         </div>
 
@@ -365,4 +387,3 @@ export default function PocketDetails() {
     </div>
   )
 }
-

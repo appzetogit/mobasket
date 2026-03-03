@@ -251,7 +251,10 @@ export default function MyOrders() {
             type="text" 
             placeholder="Search by restaurant or dish" 
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === " ") e.preventDefault()
+            }}
+            onChange={(e) => setSearchQuery(e.target.value.replace(/\s+/g, ""))}
             className="flex-1 ml-3 outline-none text-gray-600 placeholder-gray-400"
           />
           <Mic className="w-5 h-5 text-red-500 border-l pl-2 box-content border-gray-300" />

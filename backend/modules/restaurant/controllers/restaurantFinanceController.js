@@ -203,6 +203,9 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
     // IMPORTANT: Commission is calculated on FOOD PRICE (subtotal - discount), NOT on total (which includes platform fee, GST, delivery fee)
     let currentCycleTotal = 0;
     let currentCycleCommission = 0;
+    let currentCycleTax = 0;
+    let currentCyclePlatformFee = 0;
+    let currentCycleDeliveryFee = 0;
     const currentCycleOrdersData = await Promise.all(currentCycleOrders.map(async (order) => {
       // Food price = subtotal - discount (this is what commission is calculated on)
       const foodPrice = (order.pricing?.subtotal || 0) - (order.pricing?.discount || 0);
@@ -287,10 +290,25 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
         }
       }
       
+      const taxAmount = order.pricing?.tax || 0;
+      const platformFee = order.pricing?.platformFee || 0;
+      const deliveryFee = order.pricing?.deliveryFee || 0;
+      const subtotal = order.pricing?.subtotal || 0;
+      const discount = order.pricing?.discount || 0;
+
+      currentCycleTax += taxAmount;
+      currentCyclePlatformFee += platformFee;
+      currentCycleDeliveryFee += deliveryFee;
+
       return {
         orderId: order.orderId || order._id?.toString() || 'N/A',
         orderTotal: foodPrice, // Food price (subtotal - discount) for display
         totalAmount: order.pricing?.total || 0, // Total order amount paid by customer
+        subtotal,
+        discount,
+        taxAmount,
+        platformFee,
+        deliveryFee,
         commission: commissionData.commission,
         payout,
         deliveredAt: order.deliveredAt || order.createdAt,
@@ -387,6 +405,9 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
 
       let pastCycleTotal = 0;
       let pastCycleCommission = 0;
+      let pastCycleTax = 0;
+      let pastCyclePlatformFee = 0;
+      let pastCycleDeliveryFee = 0;
       const pastCycleOrdersData = await Promise.all(pastCycleOrders.map(async (order) => {
         // Food price = subtotal - discount (this is what commission is calculated on)
         const foodPrice = (order.pricing?.subtotal || 0) - (order.pricing?.discount || 0);
@@ -449,10 +470,25 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
           console.log(`⚠️ No status found for past order: ${order.orderId}`);
         }
         
+        const taxAmount = order.pricing?.tax || 0;
+        const platformFee = order.pricing?.platformFee || 0;
+        const deliveryFee = order.pricing?.deliveryFee || 0;
+        const subtotal = order.pricing?.subtotal || 0;
+        const discount = order.pricing?.discount || 0;
+
+        pastCycleTax += taxAmount;
+        pastCyclePlatformFee += platformFee;
+        pastCycleDeliveryFee += deliveryFee;
+
         return {
           orderId: order.orderId || order._id?.toString() || 'N/A',
           orderTotal: foodPrice, // Food price (subtotal - discount) for display
           totalAmount: order.pricing?.total || 0, // Total order amount paid by customer
+          subtotal,
+          discount,
+          taxAmount,
+          platformFee,
+          deliveryFee,
           commission: commissionData.commission,
           payout,
           deliveredAt: order.deliveredAt || order.createdAt,
@@ -476,6 +512,9 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
         totalOrders: pastCycleOrders.length,
         totalOrderValue: Math.round(pastCycleTotal * 100) / 100,
         totalCommission: Math.round(pastCycleCommission * 100) / 100,
+        totalTax: Math.round(pastCycleTax * 100) / 100,
+        totalPlatformFee: Math.round(pastCyclePlatformFee * 100) / 100,
+        totalDeliveryFee: Math.round(pastCycleDeliveryFee * 100) / 100,
         estimatedPayout: Math.round((pastCycleTotal - pastCycleCommission) * 100) / 100,
         orders: pastCycleOrdersData
       };
@@ -512,6 +551,9 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
         totalOrders: currentCycleOrders.length,
         totalOrderValue: Math.round(currentCycleTotal * 100) / 100,
         totalCommission: Math.round(currentCycleCommission * 100) / 100,
+        totalTax: Math.round(currentCycleTax * 100) / 100,
+        totalPlatformFee: Math.round(currentCyclePlatformFee * 100) / 100,
+        totalDeliveryFee: Math.round(currentCycleDeliveryFee * 100) / 100,
         estimatedPayout: availablePayout, // Show available balance after pending withdrawals
         payoutDate: null, // Will be set when payout is processed
         orders: currentCycleOrdersData // Include orders array in response

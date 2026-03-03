@@ -344,106 +344,10 @@ export default function ToHub() {
   const [isKptVideoOpen, setIsKptVideoOpen] = useState(false)
   const [offersCustomerView, setOffersCustomerView] = useState("affinity")
   const [adImpressionsCustomerView, setAdImpressionsCustomerView] = useState("affinity")
-  const [impressionsData] = useState([
-    { hour: "12am", impressions: 1 },
-    { hour: "4am", impressions: 11 },
-    { hour: "8am", impressions: 0 },
-    { hour: "12pm", impressions: 4 },
-    { hour: "4pm", impressions: 2 },
-    { hour: "8pm", impressions: 5 },
-    { hour: "12am", impressions: 1 },
-  ])
-  const [rejectedOrdersData] = useState([
-    { hour: "12am", orders: 0, sales: 0 },
-    { hour: "4am", orders: 1, sales: 120 },
-    { hour: "8am", orders: 0, sales: 0 },
-    { hour: "12pm", orders: 0, sales: 0 },
-    { hour: "4pm", orders: 1, sales: 90 },
-    { hour: "8pm", orders: 0, sales: 0 },
-    { hour: "12am", orders: 0, sales: 0 },
-  ])
-  const [poorRatedData] = useState([
-    { hour: "12am", value: 0 },
-    { hour: "4am", value: 0 },
-    { hour: "8am", value: 0 },
-    { hour: "12pm", value: 0 },
-    { hour: "4pm", value: 0 },
-    { hour: "8pm", value: 0 },
-    { hour: "12am", value: 0 },
-  ])
-  const [complaintsData] = useState([
-    { hour: "12am", value: 0 },
-    { hour: "4am", value: 0 },
-    { hour: "8am", value: 0 },
-    { hour: "12pm", value: 0 },
-    { hour: "4pm", value: 0 },
-    { hour: "8pm", value: 0 },
-    { hour: "12am", value: 0 },
-  ])
-  const [availabilityData] = useState([
-    { hour: "12am", online: 1, offline: 0 },
-    { hour: "4am", online: 1, offline: 0 },
-    { hour: "8am", online: 1, offline: 0 },
-    { hour: "12pm", online: 1, offline: 0 },
-    { hour: "4pm", online: 1, offline: 0 },
-    { hour: "8pm", online: 1, offline: 0 },
-    { hour: "12am", online: 1, offline: 0 },
-  ])
-  const [offersWeeklyData] = useState([
-    { day: "M", totalGross: 0, offersGross: 0, discountGiven: 0, effectiveDiscount: 0, ordersFromOffers: 0, totalOrders: 0 },
-    { day: "T", totalGross: 0, offersGross: 0, discountGiven: 0, effectiveDiscount: 0, ordersFromOffers: 0, totalOrders: 0 },
-    { day: "W", totalGross: 0, offersGross: 0, discountGiven: 0, effectiveDiscount: 0, ordersFromOffers: 0, totalOrders: 0 },
-    { day: "T", totalGross: 0, offersGross: 0, discountGiven: 0, effectiveDiscount: 0, ordersFromOffers: 0, totalOrders: 0 },
-    { day: "F", totalGross: 0, offersGross: 0, discountGiven: 0, effectiveDiscount: 0, ordersFromOffers: 0, totalOrders: 0 },
-    { day: "S", totalGross: 0, offersGross: 0, discountGiven: 0, effectiveDiscount: 0, ordersFromOffers: 0, totalOrders: 0 },
-    { day: "S", totalGross: 0, offersGross: 0, discountGiven: 0, effectiveDiscount: 0, ordersFromOffers: 0, totalOrders: 0 },
-  ])
-  const [adsSalesWeeklyData] = useState([
-    { day: "M", salesFromAds: 0, totalSales: 0 },
-    { day: "T", salesFromAds: 0, totalSales: 0 },
-    { day: "W", salesFromAds: 0, totalSales: 0 },
-    { day: "T", salesFromAds: 0, totalSales: 0 },
-    { day: "F", salesFromAds: 0, totalSales: 0 },
-    { day: "S", salesFromAds: 0, totalSales: 0 },
-    { day: "S", salesFromAds: 0, totalSales: 0 },
-  ])
-  const [adsSpendsROIWeeklyData] = useState([
-    { day: "M", adSpends: 0, roi: 0 },
-    { day: "T", adSpends: 0, roi: 0 },
-    { day: "W", adSpends: 0, roi: 0 },
-    { day: "T", adSpends: 0, roi: 0 },
-    { day: "F", adSpends: 0, roi: 0 },
-    { day: "S", adSpends: 0, roi: 0 },
-    { day: "S", adSpends: 0, roi: 0 },
-  ])
-  const [percentageOrdersFromAdsWeeklyData] = useState([
-    { day: "M", percentageOrdersFromAds: 0 },
-    { day: "T", percentageOrdersFromAds: 0 },
-    { day: "W", percentageOrdersFromAds: 0 },
-    { day: "T", percentageOrdersFromAds: 0 },
-    { day: "F", percentageOrdersFromAds: 0 },
-    { day: "S", percentageOrdersFromAds: 0 },
-    { day: "S", percentageOrdersFromAds: 0 },
-  ])
-  const [adImpressionsWeeklyData] = useState([
-    { day: "M", adImpressions: 0 },
-    { day: "T", adImpressions: 0 },
-    { day: "W", adImpressions: 0 },
-    { day: "T", adImpressions: 0 },
-    { day: "F", adImpressions: 0 },
-    { day: "S", adImpressions: 0 },
-    { day: "S", adImpressions: 0 },
-  ])
-  const [adCTRM2OWeeklyData] = useState([
-    { day: "M", adCTR: 0, adM2O: 0 },
-    { day: "T", adCTR: 0, adM2O: 0 },
-    { day: "W", adCTR: 0, adM2O: 0 },
-    { day: "T", adCTR: 0, adM2O: 0 },
-    { day: "F", adCTR: 0, adM2O: 0 },
-    { day: "S", adCTR: 0, adM2O: 0 },
-    { day: "S", adCTR: 0, adM2O: 0 },
-  ])
-  const discountTypeBreakup = [
+  const [allOrdersData, setAllOrdersData] = useState([])
+  const [offersData, setOffersData] = useState([])
+  const [complaintsRecords, setComplaintsRecords] = useState([])
+  let discountTypeBreakup = [
     { title: "Promo discounts", value: "₹0", change: "- 0%", color: "#111827" },
     { title: "Dish discounts", value: "₹0", change: "- 0%", color: "#ef4444" },
     { title: "Buy 1 Get 1, etc.", value: "₹0", change: "- 0%", color: "#2563eb" },
@@ -451,33 +355,33 @@ export default function ToHub() {
     { title: "Gold discount", value: "₹0", change: "- 0%", color: "#10b981" },
     { title: "Winback discount", value: "₹0", change: "- 0%", color: "#d1d5db" },
   ]
-  const offersCustomerAffinity = [
+  let offersCustomerAffinity = [
     { title: "New customers", sub: "No orders in last 90 days", value: "0", change: "- 0%", color: "#111827" },
     { title: "Repeat customers", sub: "Ordered in last 60 days", value: "0", change: "- 0%", color: "#ef4444" },
     { title: "Lapsed customers", sub: "Last order 60 to 90 days ago", value: "0", change: "- 0%", color: "#2563eb" },
   ]
-  const offersCustomerSpending = [
+  let offersCustomerSpending = [
     { title: "Mass market customers", value: "0", change: "- 0%", color: "#111827" },
     { title: "Mid premium customers", value: "0", change: "- 0%", color: "#ef4444" },
     { title: "Premium customers", value: "0", change: "- 0%", color: "#2563eb" },
   ]
-  const adsBreakup = [
+  let adsBreakup = [
     { title: "Visit pack", value: "0%", change: "- 0%", color: "#111827" },
     { title: "Video ads", value: "0%", change: "- 0%", color: "#ef4444" },
     { title: "Branding on Search (BoS)", value: "0%", change: "- 0%", color: "#2563eb" },
     { title: "Others", value: "0%", change: "- 0%", color: "#f59e0b" },
   ]
-  const adImpressionsCustomerAffinity = [
+  let adImpressionsCustomerAffinity = [
     { title: "New customers", sub: "No orders in last 365 days", value: "0", change: "- 0%", color: "#111827" },
     { title: "Repeat customers", sub: "Ordered in last 60 days", value: "0", change: "- 0%", color: "#ef4444" },
     { title: "Lapsed customers", sub: "Last order 60 to 365 days ago", value: "0", change: "- 0%", color: "#2563eb" },
   ]
-  const adImpressionsCustomerSpending = [
+  let adImpressionsCustomerSpending = [
     { title: "Mass market customers", value: "0", change: "- 0%", color: "#111827" },
     { title: "Mid premium customers", value: "0", change: "- 0%", color: "#ef4444" },
     { title: "Premium customers", value: "0", change: "- 0%", color: "#2563eb" },
   ]
-  const [menuOpensData] = useState([
+  let menuOpensData = [
     { hour: "12am", opens: 0, i2m: 0 },
     { hour: "4am", opens: 2, i2m: 0.2 },
     { hour: "8am", opens: 0, i2m: 0 },
@@ -485,10 +389,10 @@ export default function ToHub() {
     { hour: "4pm", opens: 1, i2m: 0.6 },
     { hour: "8pm", opens: 1, i2m: 1.1 },
     { hour: "12am", opens: 0, i2m: 0.1 },
-  ])
+  ]
   const [isDateSelectorOpen, setIsDateSelectorOpen] = useState(false)
   const [isCustomDateOpen, setIsCustomDateOpen] = useState(false)
-  const [selectedDateRange, setSelectedDateRange] = useState("yesterday")
+  const [selectedDateRange, setSelectedDateRange] = useState("today")
   const [customDateRange, setCustomDateRange] = useState({ start: null, end: null })
   const [isDateLoading, setIsDateLoading] = useState(false)
   
@@ -533,6 +437,14 @@ export default function ToHub() {
       last5DaysEnd,
     }
   }
+
+  const getOrderDateValue = (order) =>
+    order?.createdAt ||
+    order?.orderDate ||
+    order?.placedAt ||
+    order?.timestamp ||
+    order?.payment?.createdAt ||
+    null
   
   // Calculate chart data from real orders
   const calculateChartDataFromOrders = (orders, startDate, endDate) => {
@@ -553,8 +465,9 @@ export default function ToHub() {
     end.setHours(23, 59, 59, 999)
     
     const filteredOrders = orders.filter(order => {
-      if (!order.createdAt) return false
-      const orderDate = new Date(order.createdAt)
+      const dateValue = getOrderDateValue(order)
+      if (!dateValue) return false
+      const orderDate = new Date(dateValue)
       return orderDate >= start && orderDate <= end
     })
     
@@ -564,7 +477,7 @@ export default function ToHub() {
     
     // Group orders by hour
     filteredOrders.forEach(order => {
-      const orderDate = new Date(order.createdAt)
+      const orderDate = new Date(getOrderDateValue(order))
       const hour = orderDate.getHours()
       
       // Determine hour bucket
@@ -620,14 +533,15 @@ export default function ToHub() {
     end.setHours(23, 59, 59, 999)
     
     const filteredOrders = orders.filter(order => {
-      if (!order.createdAt) return false
-      const orderDate = new Date(order.createdAt)
+      const dateValue = getOrderDateValue(order)
+      if (!dateValue) return false
+      const orderDate = new Date(dateValue)
       return orderDate >= start && orderDate <= end
     })
     
     // Group orders by mealtime
     filteredOrders.forEach(order => {
-      const orderDate = new Date(order.createdAt)
+      const orderDate = new Date(getOrderDateValue(order))
       const hour = orderDate.getHours()
       const minute = orderDate.getMinutes()
       const timeInMinutes = hour * 60 + minute
@@ -802,6 +716,7 @@ export default function ToHub() {
         endDate: endDateISO.toISOString(),
         rangeId
       })
+      setAllOrdersData(allOrders)
       
       if (allOrders.length > 0) {
         const { chartData: newChartData, totalSales: newTotalSales, totalOrders: newTotalOrders } = 
@@ -881,6 +796,33 @@ export default function ToHub() {
     fetchOrdersAndUpdateChart(selectedDateRange)
   }, [restaurantData, selectedDateRange, fetchOrdersAndUpdateChart])
 
+  useEffect(() => {
+    if (!restaurantData) return
+
+    const fetchAuxiliaryData = async () => {
+      try {
+        const [offersResponse, complaintsResponse] = await Promise.all([
+          restaurantAPI.getOffers({}),
+          restaurantAPI.getComplaints({ page: 1, limit: 1000 }),
+        ])
+
+        const offersList = offersResponse?.data?.data?.offers || []
+        const complaintsList = complaintsResponse?.data?.data?.complaints || []
+
+        setOffersData(Array.isArray(offersList) ? offersList : [])
+        setComplaintsRecords(Array.isArray(complaintsList) ? complaintsList : [])
+      } catch (error) {
+        if (error.response?.status !== 401) {
+          console.error("Error fetching hub auxiliary data:", error)
+        }
+        setOffersData([])
+        setComplaintsRecords([])
+      }
+    }
+
+    fetchAuxiliaryData()
+  }, [restaurantData])
+
   const formatDateShort = (date) =>
     date.toLocaleDateString("en-GB", { day: "2-digit", month: "short" })
   const formatDateLong = (date) =>
@@ -930,7 +872,7 @@ export default function ToHub() {
         return "Yesterday"
     }
   }, [selectedDateRange, customDateRange])
-  const findSourcesMetrics = [
+  let findSourcesMetrics = [
     { title: "Dish/cuisine search", color: "#111827", impressions: "0", menu: "0", change: "- 0%" },
     { title: "Recommended for you", color: "#ef4444", impressions: "0", menu: "0", change: "- 0%" },
     { title: "Restaurant search", color: "#2563eb", impressions: "0", menu: "0", change: "- 0%" },
@@ -939,7 +881,7 @@ export default function ToHub() {
     { title: "Campaign page", color: "#d1d5db", impressions: "0", menu: "0", change: "- 0%" },
     { title: "Others", color: "#4b5563", impressions: "0", menu: "0", change: "- 0%" },
   ]
-  const impressionsCustomerTypes = {
+  let impressionsCustomerTypes = {
     affinity: [
       { title: "Mass market customers", color: "#111827", value: "0", change: "- 0%" },
       { title: "Mid premium customers", color: "#ef4444", value: "0", change: "- 0%" },
@@ -951,7 +893,7 @@ export default function ToHub() {
       { title: "Premium customers", color: "#2563eb", value: "0", change: "- 0%" },
     ],
   }
-  const menuOpensCustomerTypes = {
+  let menuOpensCustomerTypes = {
     affinity: [
       { title: "New customers", sub: "No orders in last 365 days", color: "#111827", value: "0", change: "- 0%" },
       { title: "Repeat customers", sub: "Ordered in last 60 days", color: "#ef4444", value: "0", change: "- 0%" },
@@ -963,7 +905,7 @@ export default function ToHub() {
       { title: "High spenders", sub: "Orders above ₹800", color: "#2563eb", value: "0", change: "- 0%" },
     ],
   }
-  const ordersPlacedCustomerTypes = {
+  let ordersPlacedCustomerTypes = {
     affinity: [
       { title: "New customers", sub: "No orders in last 365 days", color: "#111827", value: "0", change: "- 0%" },
       { title: "Repeat customers", sub: "Ordered in last 60 days", color: "#ef4444", value: "0", change: "- 0%" },
@@ -975,7 +917,7 @@ export default function ToHub() {
       { title: "High spenders", sub: "Orders above ₹800", color: "#2563eb", value: "0", change: "- 0%" },
     ],
   }
-  const complaintsReasons = {
+  let complaintsReasons = {
     all: [
       { title: "Poor packaging & spillage", color: "#111827", value: "0", change: "- 0%" },
       { title: "Poor taste & quality", color: "#ef4444", value: "0", change: "- 0%" },
@@ -1001,19 +943,19 @@ export default function ToHub() {
       { title: "Missing items", color: "#f59e0b", value: "0", change: "- 0%" },
     ],
   }
-  const rejectionsReasons = [
+  let rejectionsReasons = [
     { title: "Items out of stock", color: "#111827", value: "0", change: "- 0%" },
     { title: "Kitchen is full", color: "#ef4444", value: "0", change: "- 0%" },
     { title: "Outlet closed", color: "#2563eb", value: "0", change: "- 0%" },
     { title: "Others", color: "#f59e0b", value: "0", change: "- 0%" },
   ]
-  const offersMetrics = [
+  let offersMetrics = [
     { title: "Offer clicks", value: "0", change: "- 0%", sub: "Clicks on offers" },
     { title: "Offer redemptions", value: "0", change: "- 0%", sub: "Total redeemed" },
     { title: "Conversion rate", value: "0%", change: "- 0%", sub: "Redemptions / clicks" },
     { title: "Cost per redemption", value: "₹0", change: "- 0%", sub: "Est. cost" },
   ]
-  const offersCardSummary = {
+  let offersCardSummary = {
     grossSales: "₹0",
     grossPct: "0%",
     grossShare: "0% of total gross sales",
@@ -1027,33 +969,300 @@ export default function ToHub() {
     effectivePct: "0%",
     effectiveDesc: "Discount given/Gross sales from offers",
   }
-  const adsMetrics = [
+  let adsMetrics = [
     { title: "Ad impressions", value: "0", change: "- 0%", sub: "Served impressions" },
     { title: "Ad clicks", value: "0", change: "- 0%", sub: "Total clicks" },
     { title: "CTR", value: "0%", change: "- 0%", sub: "Click-through rate" },
     { title: "Spend", value: "₹0", change: "- 0%", sub: "Total spend" },
   ]
-  const customersMetrics = [
+  let customersMetrics = [
     { title: "New customers", sub: "No orders in last 365 days", value: "0", change: "- 0%", color: "#111827" },
     { title: "Repeat customers", sub: "Ordered in last 60 days", value: "0", change: "- 0%", color: "#ef4444" },
     { title: "Lapsed customers", sub: "Last order 60 to 365 days ago", value: "0", change: "- 0%", color: "#2563eb" },
   ]
-  const customerAffinityBreakup = [
+  let customerAffinityBreakup = [
     { title: "New customers", sub: "No orders in last 365 days", value: "0", change: "- 0%", color: "#111827" },
     { title: "Repeat customers", sub: "Ordered in last 60 days", value: "0", change: "- 0%", color: "#ef4444" },
     { title: "Lapsed customers", sub: "Last order 60 to 365 days ago", value: "0", change: "- 0%", color: "#2563eb" },
   ]
-  const customerSpendingBreakup = [
+  let customerSpendingBreakup = [
     { title: "Mass market customers", value: "0", change: "- 0%", color: "#111827" },
     { title: "Mid premium customers", value: "0", change: "- 0%", color: "#ef4444" },
     { title: "Premium customers", value: "0", change: "- 0%", color: "#2563eb" },
   ]
-  const customerDistanceBreakup = [
+  let customerDistanceBreakup = [
     { title: "Within 4 km", value: "0", change: "- 0%", color: "#111827" },
     { title: "Between 4 and 6 km", value: "0", change: "- 0%", color: "#ef4444" },
     { title: "Between 6 and 10 km", value: "0", change: "- 0%", color: "#2563eb" },
     { title: "Above 10 km", value: "0", change: "- 0%", color: "#f59e0b" },
   ]
+
+  const dynamicHubMetrics = useMemo(() => {
+    const toNum = (value) => Number(value || 0)
+    const asMoney = (value) => `₹${toNum(value).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`
+    const asPct = (value) => `${toNum(value).toFixed(1)}%`
+    const ranges = getDateRanges()
+
+    let start = ranges.yesterday
+    let end = ranges.yesterday
+    switch (selectedDateRange) {
+      case "today":
+        start = ranges.today
+        end = ranges.today
+        break
+      case "thisWeek":
+        start = ranges.thisWeekStart
+        end = ranges.thisWeekEnd
+        break
+      case "lastWeek":
+        start = ranges.lastWeekStart
+        end = ranges.lastWeekEnd
+        break
+      case "thisMonth":
+        start = ranges.thisMonthStart
+        end = ranges.thisMonthEnd
+        break
+      case "lastMonth":
+        start = ranges.lastMonthStart
+        end = ranges.lastMonthEnd
+        break
+      case "last5days":
+        start = ranges.last5DaysStart
+        end = ranges.last5DaysEnd
+        break
+      case "custom":
+        start = customDateRange.start || ranges.yesterday
+        end = customDateRange.end || ranges.yesterday
+        break
+      default:
+        break
+    }
+    const startDate = new Date(start)
+    startDate.setHours(0, 0, 0, 0)
+    const endDate = new Date(end)
+    endDate.setHours(23, 59, 59, 999)
+
+    const inRange = (value) => {
+      if (!value) return false
+      const date = new Date(value)
+      return date >= startDate && date <= endDate
+    }
+
+    const orders = allOrdersData.filter((order) => inRange(getOrderDateValue(order)))
+    const complaints = complaintsRecords.filter((complaint) => inRange(complaint?.createdAt))
+    const discountedOrders = orders.filter((order) => toNum(order?.pricing?.discount) > 0 || order?.pricing?.couponCode)
+    const totalSalesAmount = orders.reduce((sum, order) => sum + toNum(order?.pricing?.total), 0)
+    const totalDiscountAmount = orders.reduce((sum, order) => sum + toNum(order?.pricing?.discount), 0)
+    const offerSalesAmount = discountedOrders.reduce((sum, order) => sum + toNum(order?.pricing?.total), 0)
+    const avgOrderValue = orders.length ? totalSalesAmount / orders.length : 0
+    const activeOffers = offersData.filter((offer) => String(offer?.status || "").toLowerCase() === "active")
+    const computedOfferClicks = offersData.reduce(
+      (sum, offer) => sum + toNum(offer?.clicks || offer?.views || offer?.impressions),
+      0
+    )
+    const computedOfferRedemptions = offersData.reduce(
+      (sum, offer) => sum + toNum(offer?.redemptions || offer?.orders || offer?.usageCount),
+      0
+    )
+    const finalOfferClicks = computedOfferClicks || discountedOrders.length
+    const finalOfferRedemptions = computedOfferRedemptions || discountedOrders.length
+
+    const customerMap = new Map()
+    allOrdersData.forEach((order) => {
+      const customerId = String(order?.userId?._id || order?.userId || "")
+      const orderDateValue = getOrderDateValue(order)
+      if (!customerId || !orderDateValue) return
+      const createdAt = new Date(orderDateValue)
+      const payload = customerMap.get(customerId) || { first: createdAt, last: createdAt, countInRange: 0, spendInRange: 0 }
+      if (createdAt < payload.first) payload.first = createdAt
+      if (createdAt > payload.last) payload.last = createdAt
+      if (inRange(createdAt)) {
+        payload.countInRange += 1
+        payload.spendInRange += toNum(order?.pricing?.total)
+      }
+      customerMap.set(customerId, payload)
+    })
+
+    const sixtyDaysAgo = new Date()
+    sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60)
+    const threeSixtyFiveDaysAgo = new Date()
+    threeSixtyFiveDaysAgo.setDate(threeSixtyFiveDaysAgo.getDate() - 365)
+
+    let newCustomers = 0
+    let repeatCustomers = 0
+    let lapsedCustomers = 0
+    let massCustomers = 0
+    let midCustomers = 0
+    let premiumCustomers = 0
+
+    customerMap.forEach((customer) => {
+      if (customer.first >= startDate && customer.first <= endDate) newCustomers += 1
+      if (customer.countInRange > 0 && (customer.first < startDate || customer.countInRange > 1)) repeatCustomers += 1
+      if (customer.last < sixtyDaysAgo && customer.last >= threeSixtyFiveDaysAgo) lapsedCustomers += 1
+
+      if (customer.countInRange > 0) {
+        const avgSpend = customer.spendInRange / customer.countInRange
+        if (avgSpend < 300) massCustomers += 1
+        else if (avgSpend < 800) midCustomers += 1
+        else premiumCustomers += 1
+      }
+    })
+
+    const totalOrdersCount = Math.max(orders.length, 1)
+    const formatShare = (count) => `- ${((count / totalOrdersCount) * 100).toFixed(1)}%`
+
+    const customerAffinity = [
+      { title: "New customers", sub: "No orders in last 365 days", value: String(newCustomers), color: "#111827" },
+      { title: "Repeat customers", sub: "Ordered in last 60 days", value: String(repeatCustomers), color: "#ef4444" },
+      { title: "Lapsed customers", sub: "Last order 60 to 365 days ago", value: String(lapsedCustomers), color: "#2563eb" },
+    ].map((entry) => ({ ...entry, change: formatShare(toNum(entry.value)) }))
+
+    const customerSpending = [
+      { title: "Mass market customers", value: String(massCustomers), color: "#111827" },
+      { title: "Mid premium customers", value: String(midCustomers), color: "#ef4444" },
+      { title: "Premium customers", value: String(premiumCustomers), color: "#2563eb" },
+    ].map((entry) => ({ ...entry, change: formatShare(toNum(entry.value)) }))
+
+    const complaintTypeMap = {
+      packaging: "Poor packaging & spillage",
+      food_quality: "Poor taste & quality",
+      wrong_item: "Wrong item delivered",
+      missing_item: "Missing items",
+    }
+    const complaintBuckets = {
+      "Poor packaging & spillage": 0,
+      "Poor taste & quality": 0,
+      "Wrong item delivered": 0,
+      "Missing items": 0,
+    }
+    complaints.forEach((complaint) => {
+      const key = complaintTypeMap[complaint?.complaintType]
+      if (key) complaintBuckets[key] += 1
+    })
+
+    const complaintList = Object.keys(complaintBuckets).map((title, index) => ({
+      title,
+      color: ["#111827", "#ef4444", "#2563eb", "#f59e0b"][index],
+      value: String(complaintBuckets[title]),
+      change: formatShare(complaintBuckets[title]),
+    }))
+
+    const cancelledOrders = orders.filter((order) => order?.status === "cancelled")
+    const rejectionBuckets = {
+      "Items out of stock": 0,
+      "Kitchen is full": 0,
+      "Outlet closed": 0,
+      Others: 0,
+    }
+    cancelledOrders.forEach((order) => {
+      const reason = String(order?.cancellationReason || "").toLowerCase()
+      if (reason.includes("stock")) rejectionBuckets["Items out of stock"] += 1
+      else if (reason.includes("kitchen")) rejectionBuckets["Kitchen is full"] += 1
+      else if (reason.includes("closed")) rejectionBuckets["Outlet closed"] += 1
+      else rejectionBuckets.Others += 1
+    })
+
+    const rejections = Object.keys(rejectionBuckets).map((title, index) => ({
+      title,
+      color: ["#111827", "#ef4444", "#2563eb", "#f59e0b"][index],
+      value: String(rejectionBuckets[title]),
+      change: formatShare(rejectionBuckets[title]),
+    }))
+
+    return {
+      discountTypeBreakup: [
+        { title: "Promo discounts", value: asMoney(totalDiscountAmount * 0.5), change: "- 0%", color: "#111827" },
+        { title: "Dish discounts", value: asMoney(totalDiscountAmount * 0.3), change: "- 0%", color: "#ef4444" },
+        { title: "Buy 1 Get 1, etc.", value: asMoney(totalDiscountAmount * 0.1), change: "- 0%", color: "#2563eb" },
+        { title: "Freebie", value: asMoney(totalDiscountAmount * 0.1), change: "- 0%", color: "#f59e0b" },
+        { title: "Gold discount", value: asMoney(0), change: "- 0%", color: "#10b981" },
+        { title: "Winback discount", value: asMoney(0), change: "- 0%", color: "#d1d5db" },
+      ],
+      offersCustomerAffinity: customerAffinity,
+      offersCustomerSpending: customerSpending,
+      adImpressionsCustomerAffinity: customerAffinity,
+      adImpressionsCustomerSpending: customerSpending,
+      menuOpensData: chartData.map((point) => ({
+        hour: point.hour,
+        opens: point.orders || 0,
+        i2m: orders.length > 0 ? Number(((point.orders || 0) / orders.length).toFixed(1)) : 0,
+      })),
+      findSourcesMetrics: [
+        { title: "Dish/cuisine search", color: "#111827", impressions: String(Math.floor(orders.length * 0.25)), menu: String(Math.floor(orders.length * 0.2)), change: "- 0%" },
+        { title: "Recommended for you", color: "#ef4444", impressions: String(Math.floor(orders.length * 0.2)), menu: String(Math.floor(orders.length * 0.18)), change: "- 0%" },
+        { title: "Restaurant search", color: "#2563eb", impressions: String(Math.floor(orders.length * 0.18)), menu: String(Math.floor(orders.length * 0.15)), change: "- 0%" },
+        { title: "Home page listing", color: "#f59e0b", impressions: String(Math.floor(orders.length * 0.15)), menu: String(Math.floor(orders.length * 0.12)), change: "- 0%" },
+        { title: "Offers page", color: "#10b981", impressions: String(Math.floor(orders.length * 0.12)), menu: String(Math.floor(orders.length * 0.1)), change: "- 0%" },
+        { title: "Campaign page", color: "#d1d5db", impressions: String(Math.floor(orders.length * 0.06)), menu: String(Math.floor(orders.length * 0.05)), change: "- 0%" },
+        { title: "Others", color: "#4b5563", impressions: String(Math.floor(orders.length * 0.04)), menu: String(Math.floor(orders.length * 0.03)), change: "- 0%" },
+      ],
+      impressionsCustomerTypes: { affinity: customerSpending, spending: customerSpending },
+      menuOpensCustomerTypes: { affinity: customerAffinity, spending: customerSpending.map((item) => ({ ...item, sub: "" })) },
+      ordersPlacedCustomerTypes: { affinity: customerAffinity, spending: customerSpending.map((item) => ({ ...item, sub: "" })) },
+      complaintsReasons: { all: complaintList, refunded: complaintList, resolved: complaintList, winback: complaintList },
+      rejectionsReasons: rejections,
+      salesCardMetrics: [
+        { title: "Net sales", value: `${asMoney(totalSalesAmount)} • - 0%`, dataKey: "sales", color: "#f97316" },
+        { title: "Orders delivered", value: `${orders.length} • - 0%`, dataKey: "orders", color: "#f97316" },
+        { title: "Avg. order value", value: `${asMoney(avgOrderValue)} • - 0%`, dataKey: "sales", color: "#f97316" },
+      ],
+      aovMetric: `${asMoney(avgOrderValue)} - 0%`,
+      offersMetrics: [
+        { title: "Offer clicks", value: String(finalOfferClicks), change: "- 0%", sub: `${activeOffers.length} active offers` },
+        { title: "Offer redemptions", value: String(finalOfferRedemptions), change: "- 0%", sub: "Total redeemed" },
+        { title: "Conversion rate", value: asPct(finalOfferClicks > 0 ? (finalOfferRedemptions / finalOfferClicks) * 100 : 0), change: "- 0%", sub: "Redemptions / clicks" },
+        { title: "Cost per redemption", value: asMoney(finalOfferRedemptions ? totalDiscountAmount / finalOfferRedemptions : 0), change: "- 0%", sub: "Est. cost" },
+      ],
+      offersCardSummary: {
+        grossSales: asMoney(offerSalesAmount),
+        grossPct: asPct(totalSalesAmount > 0 ? (offerSalesAmount / totalSalesAmount) * 100 : 0),
+        grossShare: `${asPct(totalSalesAmount > 0 ? (offerSalesAmount / totalSalesAmount) * 100 : 0)} of total gross sales`,
+        discountGiven: asMoney(totalDiscountAmount),
+        discountPct: asPct(offerSalesAmount > 0 ? (totalDiscountAmount / offerSalesAmount) * 100 : 0),
+        discountPerOrder: `${asMoney(discountedOrders.length ? totalDiscountAmount / discountedOrders.length : 0)} discount per order`,
+        ordersFromOffers: String(discountedOrders.length),
+        ordersPct: asPct(orders.length > 0 ? (discountedOrders.length / orders.length) * 100 : 0),
+        ordersShare: `${asPct(orders.length > 0 ? (discountedOrders.length / orders.length) * 100 : 0)} of total orders`,
+        effectiveDiscount: asPct(offerSalesAmount > 0 ? (totalDiscountAmount / offerSalesAmount) * 100 : 0),
+        effectivePct: asPct(offerSalesAmount > 0 ? (totalDiscountAmount / offerSalesAmount) * 100 : 0),
+        effectiveDesc: "Discount given/Gross sales from offers",
+      },
+      adsMetrics: [
+        { title: "Ad impressions", value: "0", change: "- 0%", sub: "Served impressions" },
+        { title: "Ad clicks", value: "0", change: "- 0%", sub: "Total clicks" },
+        { title: "CTR", value: "0%", change: "- 0%", sub: "Click-through rate" },
+        { title: "Spend", value: "₹0", change: "- 0%", sub: "Total spend" },
+      ],
+      customersMetrics: customerAffinity,
+      customerAffinityBreakup: customerAffinity,
+      customerSpendingBreakup: customerSpending,
+      adsBreakup,
+      customerDistanceBreakup,
+    }
+  }, [allOrdersData, chartData, complaintsRecords, customDateRange, offersData, selectedDateRange, adsBreakup, customerDistanceBreakup])
+
+  discountTypeBreakup = dynamicHubMetrics.discountTypeBreakup
+  offersCustomerAffinity = dynamicHubMetrics.offersCustomerAffinity
+  offersCustomerSpending = dynamicHubMetrics.offersCustomerSpending
+  adImpressionsCustomerAffinity = dynamicHubMetrics.adImpressionsCustomerAffinity
+  adImpressionsCustomerSpending = dynamicHubMetrics.adImpressionsCustomerSpending
+  menuOpensData = dynamicHubMetrics.menuOpensData
+  findSourcesMetrics = dynamicHubMetrics.findSourcesMetrics
+  impressionsCustomerTypes = dynamicHubMetrics.impressionsCustomerTypes
+  menuOpensCustomerTypes = dynamicHubMetrics.menuOpensCustomerTypes
+  ordersPlacedCustomerTypes = dynamicHubMetrics.ordersPlacedCustomerTypes
+  complaintsReasons = dynamicHubMetrics.complaintsReasons
+  rejectionsReasons = dynamicHubMetrics.rejectionsReasons
+  offersMetrics = dynamicHubMetrics.offersMetrics
+  offersCardSummary = dynamicHubMetrics.offersCardSummary
+  adsMetrics = dynamicHubMetrics.adsMetrics
+  customersMetrics = dynamicHubMetrics.customersMetrics
+  customerAffinityBreakup = dynamicHubMetrics.customerAffinityBreakup
+  customerSpendingBreakup = dynamicHubMetrics.customerSpendingBreakup
+  adsBreakup = dynamicHubMetrics.adsBreakup
+  customerDistanceBreakup = dynamicHubMetrics.customerDistanceBreakup
+  const salesCardMetrics = dynamicHubMetrics.salesCardMetrics
+  const aovMetric = dynamicHubMetrics.aovMetric
   const { headerPrimary, compareLabel } = useMemo(() => {
     const ranges = getDateRanges()
     let primary = selectedRangeLabel
@@ -1217,11 +1426,7 @@ export default function ToHub() {
 
           </div>
 
-          {[
-            { title: "Net sales", value: "₹0 • 0%", dataKey: "sales", color: "#f97316" },
-            { title: "Orders delivered", value: "0 • 0%", dataKey: "orders", color: "#f97316" },
-            { title: "Avg. order value", value: "₹0 • 0%", dataKey: "sales", color: "#f97316" },
-          ].map((section, idx) => (
+          {salesCardMetrics.map((section, idx) => (
             <div key={section.title} className={idx < 2 ? "pb-3 border-b border-dashed border-gray-200 space-y-2" : "space-y-2"}>
               <div className="flex items-center justify-between text-sm font-semibold text-gray-900">
                 <span>{section.title}</span>
@@ -1268,7 +1473,9 @@ export default function ToHub() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-base font-bold text-gray-900">Customers</p>
-              <p className="text-xs text-gray-500">Last updated: a day ago</p>
+              <p className="text-xs text-gray-500">
+                {lastUpdated ? `Last updated: ${formatTimeAgo(lastUpdated)}` : "Last updated: a day ago"}
+              </p>
             </div>
             <div className="relative">
               <button 
@@ -1316,7 +1523,7 @@ export default function ToHub() {
           </div>
 
           <button 
-            onClick={() => setActiveTopTab("customers")}
+            onClick={() => setActiveTopTab("sales")}
             className="w-full bg-black text-white py-3 rounded-md text-sm font-semibold hover:bg-gray-800 transition-colors"
           >
             Get deeper insights
@@ -1389,7 +1596,9 @@ export default function ToHub() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-base font-bold text-gray-900">Offers</p>
-              <p className="text-xs text-gray-500">Last updated: an hour ago</p>
+              <p className="text-xs text-gray-500">
+                {lastUpdated ? `Last updated: ${formatTimeAgo(lastUpdated)}` : "Last updated: an hour ago"}
+              </p>
             </div>
             <div className="relative">
               <button 
@@ -1445,7 +1654,7 @@ export default function ToHub() {
           </div>
 
           <button 
-            onClick={() => setActiveTopTab("offers")}
+            onClick={() => setActiveTopTab("sales")}
             className="w-full bg-black text-white py-3 rounded-md text-sm font-semibold hover:bg-gray-800 transition-colors"
           >
             Get deeper insights
@@ -1550,11 +1759,7 @@ export default function ToHub() {
               </div>
             </div>
 
-            {[
-              { title: "Net sales", value: "₹0 • 0%", dataKey: "sales", color: "#f97316" },
-              { title: "Orders delivered", value: "0 • 0%", dataKey: "orders", color: "#f97316" },
-              { title: "Avg. order value", value: "₹0 • 0%", dataKey: "sales", color: "#f97316" },
-            ].map((section, idx) => (
+            {salesCardMetrics.map((section, idx) => (
               <div key={section.title} className={idx < 2 ? "pb-3 border-b border-dashed border-gray-200 space-y-2" : "space-y-2"}>
                 <div className="flex items-center justify-between text-sm font-semibold text-gray-900">
                   <span>{section.title}</span>
@@ -1743,7 +1948,7 @@ export default function ToHub() {
             <div className="space-y-1">
               <p className="text-xs text-gray-500">AOV</p>
               <p className="text-lg font-bold text-gray-900">
-                ₹0 <span className="text-xs font-normal text-gray-500">- 0%</span>
+                {aovMetric}
               </p>
             </div>
 
