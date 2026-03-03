@@ -45,7 +45,7 @@ export default function PocketPage() {
     cashInHand: 0,
     deductions: 0,
     totalCashLimit: 750,
-    availableCashLimit: 750,
+    availableCashLimit: 0,
     totalWithdrawn: 0,
     totalEarned: 0,
     transactions: [],
@@ -367,16 +367,14 @@ export default function PocketPage() {
     })
     // Only depend on walletState and balances - totalBonus and weeklyEarnings are derived from these
   }, [pocketBalance, walletState, balances])
-  // Available cash limit = remaining limit (global limit - cash in hand)
+  // "Available cash limit" on this screen represents used COD limit:
+  // starts at 0 and increases with cashInHand collection.
   const totalCashLimit = Number.isFinite(Number(walletState?.totalCashLimit))
     ? Number(walletState.totalCashLimit)
     : 750
   const cashInHand = Math.max(0, Number(walletState?.cashInHand) || Number(balances.cashInHand) || 0)
   const deductions = Math.max(0, Number(walletState?.deductions) || 0)
-  const availableCashLimit =
-    Number.isFinite(Number(walletState?.availableCashLimit))
-      ? Number(walletState.availableCashLimit)
-      : (totalCashLimit - cashInHand - deductions)
+  const availableCashLimit = cashInHand
   const isCashLimitReached = totalCashLimit > 0 && cashInHand >= totalCashLimit
   const depositAmount = pocketBalance < 0 ? Math.abs(pocketBalance) : 0
 
@@ -970,7 +968,7 @@ export default function PocketPage() {
                 <span className="text-black text-sm font-medium">₹{totalCashLimit.toFixed(2)}</span>
               </div>
               <div className="rounded-lg p-3 text-xs font-medium bg-slate-50 text-slate-700">
-                Available cash limit: â‚¹{availableCashLimit.toFixed(2)}. Order assignment is controlled by cash-in-hand limit.
+                Available cash limit: {formatCurrency(availableCashLimit)}. Incoming COD + available cash limit must stay within {formatCurrency(totalCashLimit)}.
               </div>
 
               {isCashLimitReached && (

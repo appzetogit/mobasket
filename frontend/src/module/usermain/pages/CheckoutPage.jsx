@@ -649,7 +649,7 @@ export default function CheckoutPage() {
       try {
         setLoadingPricing(true);
         const previewItems = foodItems.map((item) => ({
-          itemId: String(item.id || item._id || item.itemId || ""),
+          itemId: String(item.itemId || item.id || item._id || ""),
           name: item.name,
           price: Number(item.price || 0),
           quantity: Number(item.quantity || 1),
@@ -749,7 +749,7 @@ export default function CheckoutPage() {
 
   const buildOrderItems = () =>
     foodItems.map((item) => ({
-      itemId: String(item.id || item._id || item.itemId || ""),
+      itemId: String(item.itemId || item.id || item._id || ""),
       restaurantId: String(item.restaurantId || restaurantId || ""),
       name: item.name,
       price: Number(item.price || 0),

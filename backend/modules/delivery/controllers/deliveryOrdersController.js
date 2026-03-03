@@ -522,6 +522,20 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     const deductions = Math.max(0, Number(wallet.deductions) || 0);
     const availableCashLimit = Number(totalCashLimit) - cashInHand - deductions;
 
+    // Resolve payment mode and projected COD collection for this order.
+    let paymentMethodForLimit = (order.payment?.method || '').toString().toLowerCase();
+    if (!paymentMethodForLimit || paymentMethodForLimit === 'razorpay') {
+      try {
+        const paymentRecord = await Payment.findOne({ orderId: order._id }).select('method').lean();
+        paymentMethodForLimit = (paymentRecord?.method || paymentMethodForLimit || '').toString().toLowerCase();
+      } catch (_) {
+        // Ignore payment lookup failure and continue with order.payment fallback.
+      }
+    }
+    const isIncomingCod = paymentMethodForLimit === 'cash' || paymentMethodForLimit === 'cod';
+    const incomingCodAmount = isIncomingCod ? Math.max(0, Number(order?.pricing?.total) || 0) : 0;
+    const projectedCashInHand = cashInHand + incomingCodAmount;
+
     if (cashInHand >= totalCashLimit) {
       return errorResponse(
         res,
@@ -529,6 +543,22 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         'Cash in hand limit reached. Please deposit your cash in hand to continue receiving orders.',
         {
           cashInHand,
+          deductions,
+          totalCashLimit,
+          availableCashLimit
+        }
+      );
+    }
+
+    if (totalCashLimit > 0 && projectedCashInHand > totalCashLimit) {
+      return errorResponse(
+        res,
+        400,
+        'This COD order exceeds your cash-in-hand limit. Please deposit collected cash before accepting new COD orders.',
+        {
+          cashInHand,
+          incomingCodAmount,
+          projectedCashInHand,
           deductions,
           totalCashLimit,
           availableCashLimit

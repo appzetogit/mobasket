@@ -23,7 +23,6 @@ const GroceryCartPage = () => {
   const { cart, updateQuantity, clearCart, isGroceryItem } = useCart();
   const { getDefaultAddress } = useProfile();
   const { location: liveLocation } = useUserLocation();
-  const { zoneId } = useZone(liveLocation, "mogrocery");
   const [feeSettings, setFeeSettings] = useState({
     deliveryFee: 25,
     freeDeliveryThreshold: 149,
@@ -126,6 +125,26 @@ const GroceryCartPage = () => {
 
     return null;
   }, [getDefaultAddress, liveLocation]);
+  const selectedAddressLocationForZone = useMemo(() => {
+    const coordinates = selectedAddress?.location?.coordinates;
+    const latitude = Number(
+      selectedAddress?.latitude ??
+        selectedAddress?.lat ??
+        (Array.isArray(coordinates) ? coordinates[1] : undefined),
+    );
+    const longitude = Number(
+      selectedAddress?.longitude ??
+        selectedAddress?.lng ??
+        (Array.isArray(coordinates) ? coordinates[0] : undefined),
+    );
+
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      return { latitude, longitude };
+    }
+
+    return liveLocation;
+  }, [liveLocation, selectedAddress]);
+  const { zoneId } = useZone(selectedAddressLocationForZone, "mogrocery");
   const selectedAddressKey = useMemo(() => {
     if (!selectedAddress) return "no-address";
     const coords = selectedAddress?.location?.coordinates;
@@ -233,15 +252,50 @@ const GroceryCartPage = () => {
   };
 
   const buildOrderItems = () =>
-    groceryItems.map((item) => ({
-      itemId: String(item.id || item._id || item.itemId || item.productId || ""),
-      name: item.name,
-      price: Number(item.price || 0),
-      quantity: Number(item.quantity || 1),
-      image: item.image || "",
-      description: item.description || "",
-      isVeg: item.isVeg !== false,
-    }));
+    groceryItems.reduce((acc, item) => {
+      const candidates = [
+        item?._id,
+        item?.itemId,
+        item?.productId,
+        item?.id,
+      ]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean);
+      const itemId = candidates.find((id) => /^[a-f\d]{24}$/i.test(id)) || "";
+      if (!itemId) return acc;
+
+      acc.push({
+        itemId,
+        storeId: String(
+          item?.storeId?._id ||
+            item?.storeId?.id ||
+            item?.storeId ||
+            item?.restaurantId?._id ||
+            item?.restaurantId?.id ||
+            item?.restaurantId ||
+            resolvedRestaurant?.restaurantId ||
+            "",
+        ).trim(),
+        restaurantId: String(
+          item?.restaurantId?._id ||
+            item?.restaurantId?.id ||
+            item?.restaurantId ||
+            item?.storeId?._id ||
+            item?.storeId?.id ||
+            item?.storeId ||
+            resolvedRestaurant?.restaurantId ||
+            "",
+        ).trim(),
+        name: item.name,
+        price: Number(item.price || 0),
+        quantity: Number(item.quantity || 1),
+        image: item.image || "",
+        description: item.description || "",
+        isVeg: item.isVeg !== false,
+      });
+
+      return acc;
+    }, []);
 
   useEffect(() => {
     const resolveRestaurantForPreview = async () => {
@@ -269,8 +323,14 @@ const GroceryCartPage = () => {
 
       try {
         setLoadingPricing(true);
+        const orderItems = buildOrderItems();
+        if (!orderItems.length) {
+          setCalculatedPricing(null);
+          setLoadingPricing(false);
+          return;
+        }
         const response = await orderAPI.calculateOrder({
-          items: buildOrderItems(),
+          items: orderItems,
           restaurantId: resolvedRestaurant.restaurantId,
           deliveryAddress: selectedAddress,
           deliveryFleet: "standard",
@@ -279,7 +339,11 @@ const GroceryCartPage = () => {
         });
         setCalculatedPricing(response?.data?.data?.pricing || null);
       } catch (error) {
-        console.error("Failed to calculate grocery cart pricing preview:", error);
+        console.error("Failed to calculate grocery cart pricing preview:", {
+          status: error?.response?.status,
+          message: error?.response?.data?.message || error?.message,
+          data: error?.response?.data,
+        });
         setCalculatedPricing(null);
       } finally {
         setLoadingPricing(false);

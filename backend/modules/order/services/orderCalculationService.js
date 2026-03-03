@@ -27,42 +27,68 @@ const isPointInPolygon = (lat, lng, coordinates) => {
   return inside;
 };
 
+const getLayerChargeForZone = (zone, lat, lng) => {
+  const coords = zone?.coordinates;
+  if (!Array.isArray(coords) || coords.length < 3) return null;
+  if (!isPointInPolygon(lat, lng, coords)) return null;
+
+  const layers = zone?.layers;
+  if (!Array.isArray(layers) || layers.length === 0) return null;
+
+  const outermostLayer = layers.find((l) => l.type === 'outermost');
+  const order = ['inner', 'outer'];
+
+  for (const layerType of order) {
+    const layer = layers.find((l) => l.type === layerType);
+    if (!layer || !Array.isArray(layer.coordinates) || layer.coordinates.length < 3) continue;
+    if (isPointInPolygon(lat, lng, layer.coordinates)) {
+      return {
+        deliveryCharge: Number(layer.deliveryCharge) || 0,
+        deliveryLayerType: layerType
+      };
+    }
+  }
+
+  if (outermostLayer) {
+    return {
+      deliveryCharge: Number(outermostLayer.deliveryCharge) || 0,
+      deliveryLayerType: 'outermost'
+    };
+  }
+
+  return null;
+};
+
 /**
  * Find zone containing (lat, lng) and return delivery charge + layer type.
  * Zones and layers are platform-scoped: mofood and mogrocery use separate zone/fee data.
  * @returns {{ deliveryCharge: number, deliveryLayerType: 'inner'|'outer'|'outermost' } | null}
  */
-const getZoneLayerDeliveryChargeAndType = async (lat, lng, platform) => {
+const getZoneLayerDeliveryChargeAndType = async (lat, lng, platform, preferredZoneId = null) => {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
   const platformFilter = platform === 'mogrocery'
     ? { platform: 'mogrocery' }
     : { $or: [{ platform: 'mofood' }, { platform: { $exists: false } }] };
-  const zones = await Zone.find({ isActive: true, ...platformFilter }).lean();
-  for (const zone of zones) {
-    const coords = zone?.coordinates;
-    if (!Array.isArray(coords) || coords.length < 3) continue;
-    if (!isPointInPolygon(lat, lng, coords)) continue;
-    const layers = zone?.layers;
-    if (!Array.isArray(layers) || layers.length === 0) return null;
-    const outermostLayer = layers.find((l) => l.type === 'outermost');
-    const order = ['inner', 'outer'];
-    for (const layerType of order) {
-      const layer = layers.find((l) => l.type === layerType);
-      if (!layer || !Array.isArray(layer.coordinates) || layer.coordinates.length < 3) continue;
-      if (isPointInPolygon(lat, lng, layer.coordinates)) {
-        return {
-          deliveryCharge: Number(layer.deliveryCharge) || 0,
-          deliveryLayerType: layerType
-        };
+
+  if (preferredZoneId && mongoose.Types.ObjectId.isValid(preferredZoneId)) {
+    const preferredZone = await Zone.findOne({
+      _id: new mongoose.Types.ObjectId(preferredZoneId),
+      isActive: true,
+      ...platformFilter
+    }).lean();
+
+    if (preferredZone) {
+      const preferredZoneResult = getLayerChargeForZone(preferredZone, lat, lng);
+      if (preferredZoneResult) {
+        return preferredZoneResult;
       }
     }
-    if (outermostLayer) {
-      return {
-        deliveryCharge: Number(outermostLayer.deliveryCharge) || 0,
-        deliveryLayerType: 'outermost'
-      };
-    }
-    return null;
+  }
+
+  const zones = await Zone.find({ isActive: true, ...platformFilter }).lean();
+  for (const zone of zones) {
+    const zoneResult = getLayerChargeForZone(zone, lat, lng);
+    if (zoneResult) return zoneResult;
   }
   return null;
 };
@@ -122,26 +148,36 @@ const getDeliveryCoordinates = (deliveryAddress) => {
 /**
  * Calculate delivery fee based on order value, zone layers (inner/outer/outermost), and restaurant settings
  */
-export const calculateDeliveryFee = async (orderValue, restaurant, deliveryAddress = null, platform = 'mofood') => {
-  const pricingPlatform = restaurant?.platform || platform || 'mofood';
+export const calculateDeliveryFee = async (
+  orderValue,
+  restaurant,
+  deliveryAddress = null,
+  platform = 'mofood',
+  zoneId = null
+) => {
+  const requestedPlatform = platform === 'mogrocery' ? 'mogrocery' : 'mofood';
+  const restaurantPlatform = restaurant?.platform === 'mogrocery' ? 'mogrocery' : 'mofood';
+  // Respect explicit grocery pricing requests even when restaurant/store platform in DB is stale.
+  const pricingPlatform = requestedPlatform === 'mogrocery' ? 'mogrocery' : restaurantPlatform;
   const feeSettings = await getFeeSettings(pricingPlatform);
 
-  // Free delivery by order value (checked first)
+  // Zone layers: delivery charge by layer (inner/outer/outermost) - platform-scoped.
+  // If a matching layer exists, layer charge takes precedence over generic threshold/range fees.
+  const { lat, lng } = getDeliveryCoordinates(deliveryAddress);
+  if (lat != null && lng != null) {
+    const zoneResult = await getZoneLayerDeliveryChargeAndType(lat, lng, pricingPlatform, zoneId);
+    if (zoneResult !== null) {
+      return zoneResult.deliveryCharge;
+    }
+  }
+
+  // Generic free delivery/range rules apply only when no layer-based zone charge matched.
   if (restaurant?.freeDeliveryAbove && orderValue >= restaurant.freeDeliveryAbove) {
     return 0;
   }
   const freeDeliveryThreshold = feeSettings.freeDeliveryThreshold || 149;
   if (orderValue >= freeDeliveryThreshold) {
     return 0;
-  }
-
-  // Zone layers: delivery charge by layer (inner/outer/outermost) - platform-scoped (mofood vs mogrocery)
-  const { lat, lng } = getDeliveryCoordinates(deliveryAddress);
-  if (lat != null && lng != null) {
-    const zoneResult = await getZoneLayerDeliveryChargeAndType(lat, lng, pricingPlatform);
-    if (zoneResult !== null) {
-      return zoneResult.deliveryCharge;
-    }
   }
 
   // If admin range-based delivery fees are configured, they take precedence over default fee
@@ -563,7 +599,8 @@ export const calculateOrderPricing = async ({
   couponCode = null,
   deliveryFleet = 'standard',
   userId = null,
-  platform = 'mofood'
+  platform = 'mofood',
+  zoneId = null
 }) => {
   try {
     // Calculate subtotal from items
@@ -711,7 +748,9 @@ export const calculateOrderPricing = async ({
       }
     }
     
-    const planBenefits = restaurant?.platform === 'mogrocery'
+    const pricingPlatform = restaurant?.platform === 'mogrocery' ? 'mogrocery' : (platform === 'mogrocery' ? 'mogrocery' : 'mofood');
+
+    const planBenefits = pricingPlatform === 'mogrocery'
       ? await getPlanBenefitAdjustment({
           userId,
           items,
@@ -722,13 +761,16 @@ export const calculateOrderPricing = async ({
     const planDiscount = Number(planBenefits?.discount || 0);
     const totalDiscount = Math.min(Math.round(subtotal), Math.max(0, Math.round(discount + planDiscount)));
 
-    const pricingPlatform = restaurant?.platform === 'mogrocery' ? 'mogrocery' : (platform === 'mogrocery' ? 'mogrocery' : 'mofood');
-
     // Delivery fee: use zone layer (inner/outer/outermost) when address has coordinates; platform-scoped (mofood vs mogrocery)
     let deliveryLayerType = null;
     const { lat: deliveryLat, lng: deliveryLng } = getDeliveryCoordinates(deliveryAddress);
     if (deliveryLat != null && deliveryLng != null) {
-      const zoneResult = await getZoneLayerDeliveryChargeAndType(deliveryLat, deliveryLng, pricingPlatform);
+      const zoneResult = await getZoneLayerDeliveryChargeAndType(
+        deliveryLat,
+        deliveryLng,
+        pricingPlatform,
+        zoneId
+      );
       if (zoneResult !== null) {
         deliveryLayerType = zoneResult.deliveryLayerType;
       }
@@ -737,7 +779,8 @@ export const calculateOrderPricing = async ({
       subtotal,
       restaurant,
       deliveryAddress,
-      pricingPlatform
+      pricingPlatform,
+      zoneId
     );
     
     // Apply free delivery from coupon or active plan.

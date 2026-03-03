@@ -4581,6 +4581,26 @@ export default function DeliveryHome() {
         return
       }
 
+      const paymentMethodRaw = String(
+        newOrder.paymentMethod ||
+        newOrder.payment?.method ||
+        newOrder.payment ||
+        "",
+      ).toLowerCase()
+      const isCodOrder = paymentMethodRaw === 'cash' || paymentMethodRaw === 'cod'
+      const incomingCodAmount = isCodOrder
+        ? Math.max(0, Number(newOrder.total || newOrder.pricing?.total || 0))
+        : 0
+      const projectedCashInHand = cashInHand + incomingCodAmount
+
+      if (totalCashLimit > 0 && projectedCashInHand > totalCashLimit) {
+        toast.error(
+          `COD limit exceeded. Current cash in hand ₹${cashInHand.toFixed(2)}, incoming COD ₹${incomingCodAmount.toFixed(2)}, limit ₹${totalCashLimit.toFixed(2)}. Deposit cash to receive this order.`,
+        )
+        clearNewOrder()
+        return
+      }
+
       const orderId = newOrder.orderMongoId || newOrder.orderId;
       
       // Check if this order has already been accepted
@@ -4702,6 +4722,7 @@ export default function DeliveryHome() {
   }, [
     newOrder,
     isCashInHandLimitReached,
+    cashInHand,
     totalCashLimit,
     calculateTimeAway,
     riderLocation,

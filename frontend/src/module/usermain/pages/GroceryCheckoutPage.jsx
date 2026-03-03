@@ -33,7 +33,6 @@ export default function GroceryCheckoutPage() {
   const { cart, clearCart, isGroceryItem } = useCart();
   const { getDefaultAddress, userProfile, addresses } = useProfile();
   const { location: liveLocation } = useUserLocation();
-  const { zoneId } = useZone(liveLocation, "mogrocery");
 
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("card");
@@ -123,6 +122,28 @@ export default function GroceryCheckoutPage() {
     return null;
   }, [addresses, getDefaultAddress]);
 
+  const selectedAddressLocationForZone = useMemo(() => {
+    const coordinates = selectedAddress?.location?.coordinates;
+    const latitude = Number(
+      selectedAddress?.latitude ??
+        selectedAddress?.lat ??
+        (Array.isArray(coordinates) ? coordinates[1] : undefined),
+    );
+    const longitude = Number(
+      selectedAddress?.longitude ??
+        selectedAddress?.lng ??
+        (Array.isArray(coordinates) ? coordinates[0] : undefined),
+    );
+
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      return { latitude, longitude };
+    }
+
+    return liveLocation;
+  }, [liveLocation, selectedAddress]);
+
+  const { zoneId } = useZone(selectedAddressLocationForZone, "mogrocery");
+
   const formattedDeliveryAddress = useMemo(() => {
     if (!selectedAddress) return deliveryAddress;
     if (selectedAddress.formattedAddress) return selectedAddress.formattedAddress;
@@ -140,14 +161,20 @@ export default function GroceryCheckoutPage() {
   const selectedAddressKey = useMemo(() => {
     if (!selectedAddress) return "none";
     const coords = selectedAddress?.location?.coordinates || [];
+    const latitude = Number(
+      selectedAddress?.latitude ?? selectedAddress?.lat ?? coords?.[1],
+    );
+    const longitude = Number(
+      selectedAddress?.longitude ?? selectedAddress?.lng ?? coords?.[0],
+    );
     return [
       selectedAddress.formattedAddress || "",
       selectedAddress.street || "",
       selectedAddress.city || "",
       selectedAddress.state || "",
       selectedAddress.zipCode || "",
-      coords[0] || "",
-      coords[1] || "",
+      Number.isFinite(longitude) ? String(longitude) : "",
+      Number.isFinite(latitude) ? String(latitude) : "",
     ].join("|");
   }, [selectedAddress]);
   const cartStoreIdentities = useMemo(() => {
@@ -257,17 +284,50 @@ export default function GroceryCheckoutPage() {
   }, [formatStoreAddress, resolvedRestaurant]);
 
   const buildOrderItems = () =>
-    groceryItems.map((item) => ({
-      itemId: String(item.id || item._id || item.itemId || item.productId || ""),
-      storeId: String(item.storeId || item.restaurantId || resolvedRestaurant?.restaurantId || ""),
-      restaurantId: String(item.restaurantId || item.storeId || resolvedRestaurant?.restaurantId || ""),
-      name: item.name,
-      price: Number(item.price || 0),
-      quantity: Number(item.quantity || 1),
-      image: item.image || "",
-      description: item.description || "",
-      isVeg: item.isVeg !== false,
-    }));
+    groceryItems.reduce((acc, item) => {
+      const candidates = [
+        item?._id,
+        item?.itemId,
+        item?.productId,
+        item?.id,
+      ]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean);
+      const itemId = candidates.find((id) => /^[a-f\d]{24}$/i.test(id)) || "";
+      if (!itemId) return acc;
+
+      acc.push({
+        itemId,
+        storeId: String(
+          item?.storeId?._id ||
+            item?.storeId?.id ||
+            item?.storeId ||
+            item?.restaurantId?._id ||
+            item?.restaurantId?.id ||
+            item?.restaurantId ||
+            resolvedRestaurant?.restaurantId ||
+            "",
+        ).trim(),
+        restaurantId: String(
+          item?.restaurantId?._id ||
+            item?.restaurantId?.id ||
+            item?.restaurantId ||
+            item?.storeId?._id ||
+            item?.storeId?.id ||
+            item?.storeId ||
+            resolvedRestaurant?.restaurantId ||
+            "",
+        ).trim(),
+        name: item.name,
+        price: Number(item.price || 0),
+        quantity: Number(item.quantity || 1),
+        image: item.image || "",
+        description: item.description || "",
+        isVeg: item.isVeg !== false,
+      });
+
+      return acc;
+    }, []);
 
   useEffect(() => {
     const resolveRestaurantForPreview = async () => {
@@ -336,8 +396,14 @@ export default function GroceryCheckoutPage() {
 
       try {
         setLoadingPricing(true);
+        const orderItems = buildOrderItems();
+        if (!orderItems.length) {
+          setLoadingPricing(false);
+          setCalculatedPricing(null);
+          return;
+        }
         const response = await orderAPI.calculateOrder({
-          items: buildOrderItems(),
+          items: orderItems,
           restaurantId: resolvedRestaurant.restaurantId,
           deliveryAddress: selectedAddress,
           couponCode: appliedCouponCode || undefined,
@@ -347,7 +413,11 @@ export default function GroceryCheckoutPage() {
         });
         setCalculatedPricing(response?.data?.data?.pricing || null);
       } catch (error) {
-        console.error("Failed to calculate grocery pricing preview:", error);
+        console.error("Failed to calculate grocery pricing preview:", {
+          status: error?.response?.status,
+          message: error?.response?.data?.message || error?.message,
+          data: error?.response?.data,
+        });
         setCalculatedPricing(null);
       } finally {
         setLoadingPricing(false);
@@ -369,7 +439,17 @@ export default function GroceryCheckoutPage() {
         const uniqueItemIds = Array.from(
           new Set(
             groceryItems
-              .map((item) => String(item.id || item._id || item.itemId || item.productId || "").trim())
+              .map((item) => {
+                const candidates = [
+                  item?._id,
+                  item?.itemId,
+                  item?.productId,
+                  item?.id,
+                ]
+                  .map((value) => String(value || "").trim())
+                  .filter(Boolean);
+                return candidates.find((id) => /^[a-f\d]{24}$/i.test(id)) || "";
+              })
               .filter(Boolean),
           ),
         );
@@ -728,6 +808,7 @@ export default function GroceryCheckoutPage() {
         address: selectedAddress,
         restaurantId,
         restaurantName,
+        platform: "mogrocery",
         pricing: calculatedPricing,
         deliveryFleet: "standard",
         note: `[MoGrocery] ${scheduleNote}`,

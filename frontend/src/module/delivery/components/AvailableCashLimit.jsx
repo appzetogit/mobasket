@@ -6,10 +6,7 @@ export default function AvailableCashLimit({ onClose, walletData = {} }) {
   const cashInHand = Number(walletData.cashInHand) || 0
   const deductions = Number(walletData.deductions) || 0
   const pocketWithdrawals = Number(walletData.pocketWithdrawals) || 0
-  const availableFromApi = Number(walletData.availableCashLimit)
-  const availableCashLimit = Number.isFinite(availableFromApi)
-    ? availableFromApi
-    : (totalCashLimit - cashInHand - deductions)
+  const availableCashLimit = cashInHand
 
   return (
     <div className="min-h-screen bg-white text-black flex flex-col">
@@ -32,6 +29,10 @@ export default function AvailableCashLimit({ onClose, walletData = {} }) {
         <div className="py-3 flex justify-between items-center border-b border-gray-200">
           <div className="text-sm font-medium">Available cash limit</div>
           <div className="text-sm font-semibold">{formatCurrency(availableCashLimit)}</div>
+        </div>
+
+        <div className="py-3 text-xs text-gray-600 border-b border-gray-200">
+          Incoming COD + available cash limit must be within {formatCurrency(totalCashLimit)}.
         </div>
 
         {cashInHand > totalCashLimit && (
