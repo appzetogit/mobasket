@@ -1,5 +1,5 @@
 import jwtService from '../../auth/services/jwtService.js';
-import GroceryStore from '../models/GroceryStore.js';
+import GroceryStore, { hydrateGroceryStoreByIdFromLegacy } from '../models/GroceryStore.js';
 import { errorResponse } from '../../../shared/utils/response.js';
 
 /**
@@ -20,7 +20,10 @@ export const authenticate = async (req, res, next) => {
     try {
       const decoded = jwtService.verifyAccessToken(token);
       
-      const store = await GroceryStore.findById(decoded.userId);
+      let store = await GroceryStore.findById(decoded.userId);
+      if (!store) {
+        store = await hydrateGroceryStoreByIdFromLegacy(decoded.userId);
+      }
 
       if (!store) {
         return errorResponse(res, 401, 'Store not found');
@@ -41,11 +44,9 @@ export const authenticate = async (req, res, next) => {
         reqPath === '/me' ||
         reqPath === '/owner/me' ||
         (baseUrl.includes('/auth') && reqPath === '/me');
-      const isReadOrdersRoute =
-        req.method === 'GET' &&
-        (reqPath === '/orders' || /^\/orders\/[^/]+$/.test(reqPath) || requestPath.includes('/store/orders'));
+      const isReadRequest = req.method === 'GET';
 
-      if (!store.isActive && !isOnboardingRoute && !isProfileRoute && !isReadOrdersRoute) {
+      if (!store.isActive && !isOnboardingRoute && !isProfileRoute && !isReadRequest) {
         return errorResponse(res, 403, 'Grocery store account is not active');
       }
 

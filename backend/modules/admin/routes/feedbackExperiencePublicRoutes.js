@@ -3,6 +3,7 @@ import { createFeedbackExperience } from '../controllers/feedbackExperienceContr
 import jwtService from '../../auth/services/jwtService.js';
 import User from '../../auth/models/User.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import { errorResponse } from '../../../shared/utils/response.js';
 
 const router = express.Router();
@@ -43,7 +44,10 @@ const authenticateFlexible = async (req, res, next) => {
 
     // Check if token is for restaurant
     if (decoded.role === 'restaurant') {
-      const restaurant = await Restaurant.findById(decoded.userId).select('-password');
+      let restaurant = await Restaurant.findById(decoded.userId).select('-password');
+      if (!restaurant) {
+        restaurant = await GroceryStore.findById(decoded.userId).select('-password');
+      }
       
       if (!restaurant) {
         return errorResponse(res, 401, 'Restaurant not found');

@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import Order from '../models/Order.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import GroceryProduct from '../../grocery/models/GroceryProduct.js';
 
 const resolveRestaurantPlatform = async (restaurantId) => {
@@ -10,6 +11,8 @@ const resolveRestaurantPlatform = async (restaurantId) => {
   if (mongoose.Types.ObjectId.isValid(normalized) && normalized.length === 24) {
     const byId = await Restaurant.findById(normalized).select('platform').lean();
     if (byId?.platform) return byId.platform;
+    const byGroceryId = await GroceryStore.findById(normalized).select('platform').lean();
+    if (byGroceryId?.platform) return byGroceryId.platform;
   }
 
   const byAltId = await Restaurant.findOne({
@@ -19,7 +22,16 @@ const resolveRestaurantPlatform = async (restaurantId) => {
     ]
   }).select('platform').lean();
 
-  return byAltId?.platform || null;
+  if (byAltId?.platform) return byAltId.platform;
+
+  const byGroceryAltId = await GroceryStore.findOne({
+    $or: [
+      { restaurantId: normalized },
+      { slug: normalized }
+    ]
+  }).select('platform').lean();
+
+  return byGroceryAltId?.platform || null;
 };
 
 const aggregateOrderItems = (orderItems = []) => {

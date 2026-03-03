@@ -4,7 +4,7 @@ const grocerySubcategoryRequestSchema = new mongoose.Schema(
   {
     storeId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Restaurant',
+      ref: 'GroceryStore',
       required: [true, 'Store ID is required'],
       index: true,
     },

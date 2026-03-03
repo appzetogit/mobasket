@@ -2,6 +2,7 @@ import Delivery from '../../delivery/models/Delivery.js';
 import Order from '../models/Order.js';
 import Zone from '../../admin/models/Zone.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import DeliveryWallet from '../../delivery/models/DeliveryWallet.js';
 import BusinessSettings from '../../admin/models/BusinessSettings.js';
 import mongoose from 'mongoose';
@@ -77,6 +78,11 @@ async function resolveRestaurantPlatformAndZone(restaurantId) {
       restaurant = await Restaurant.findById(restaurantIdString)
         .select('_id restaurantId platform slug location')
         .lean();
+      if (!restaurant) {
+        restaurant = await GroceryStore.findById(restaurantIdString)
+          .select('_id restaurantId platform slug location')
+          .lean();
+      }
     }
 
     if (!restaurant) {
@@ -85,6 +91,13 @@ async function resolveRestaurantPlatformAndZone(restaurantId) {
       })
         .select('_id restaurantId platform slug location')
         .lean();
+      if (!restaurant) {
+        restaurant = await GroceryStore.findOne({
+          $or: [{ restaurantId: restaurantIdString }, { slug: restaurantIdString }]
+        })
+          .select('_id restaurantId platform slug location')
+          .lean();
+      }
     }
   } catch {
     restaurant = null;

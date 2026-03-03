@@ -79,7 +79,7 @@ const groceryProductSchema = new mongoose.Schema(
     },
     storeId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Restaurant',
+      ref: 'GroceryStore',
       default: null,
       index: true,
     },
