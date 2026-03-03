@@ -256,9 +256,6 @@ export function useLocation() {
       }
       
       if (data.status === "ZERO_RESULTS") {
-        console.warn("⚠️⚠️⚠️ Google Maps API ZERO_RESULTS!");
-        console.warn("⚠️ No results found for these coordinates:", latitude, longitude);
-        console.warn("⚠️ This might mean the coordinates are invalid or in an unmapped area");
         throw new Error("No address found for these coordinates");
       }
       
@@ -325,7 +322,6 @@ export function useLocation() {
         // If no specific result found, use first India result
         if (!exactResult) {
           exactResult = indiaResults[0];
-          console.log("⚠️ No premise/establishment found, using first India result");
         }
       }
       
@@ -356,12 +352,6 @@ export function useLocation() {
       // If formattedAddress is incomplete (only 2 parts = city, state), log warning
       const addressPartsCount = formattedAddress.split(',').map(p => p.trim()).filter(p => p.length > 0).length;
       if (addressPartsCount <= 2 && !addressComponents.some(c => c.types.includes("point_of_interest") || c.types.includes("premise"))) {
-        console.warn("⚠️⚠️⚠️ Incomplete address detected - only city/state level");
-        console.warn("⚠️ Address parts count:", addressPartsCount);
-        console.warn("⚠️ This usually means:");
-        console.warn("   1. GPS coordinates are not accurate (network-based location instead of GPS)");
-        console.warn("   2. Location is on a road/street without specific building");
-        console.warn("   3. Solution: Use mobile device for better GPS accuracy (enableHighAccuracy: true)");
       }
       
       // Log ALL results to see what Google is returning
@@ -415,64 +405,53 @@ export function useLocation() {
         // Point of Interest (POI) - Cafe/Shop name (e.g., "Mama Loca Cafe")
         if (types.includes("point_of_interest") && !pointOfInterest) {
           pointOfInterest = longName;
-          console.log("✅ Found POI:", pointOfInterest);
         }
         
         // Premise - Building name (e.g., "Princess Center", "501 Princess Center")
         if (types.includes("premise") && !premise) {
           premise = longName;
-          console.log("✅ Found premise:", premise);
         }
         
         // Subpremise - Floor/Unit (e.g., "5th Floor", "G-2")
         if (types.includes("subpremise")) {
           floor = longName;
-          console.log("✅ Found floor/subpremise:", floor);
         }
         
         // Street number (e.g., "501")
         if (types.includes("street_number") && !streetNumber) {
           streetNumber = longName;
-          console.log("✅ Found street number:", streetNumber);
         }
         
         // Route/Street name
         if (types.includes("route") && !street) {
           street = longName;
-          console.log("✅ Found route:", street);
         }
         
         // Sublocality Level 1 - Area name (e.g., "New Palasia")
         if (types.includes("sublocality_level_1") && !sublocalityLevel1) {
           sublocalityLevel1 = longName;
-          console.log("✅ Found sublocality_level_1:", sublocalityLevel1);
         }
         
         // Sublocality Level 2 - Sub-area name
         if (types.includes("sublocality_level_2") && !sublocalityLevel2) {
           sublocalityLevel2 = longName;
-          console.log("✅ Found sublocality_level_2:", sublocalityLevel2);
         }
         
         // City (locality)
         if (types.includes("locality") && !city) {
           city = longName;
-          console.log("✅ Found city:", city);
         } else if (types.includes("administrative_area_level_2") && !city) {
           city = longName;
-          console.log("✅ Found city from admin_area_level_2:", city);
         }
         
         // State
         if (types.includes("administrative_area_level_1") && !state) {
           state = longName;
-          console.log("✅ Found state:", state);
         }
         
         // Postal Code (Pincode)
         if (types.includes("postal_code") && !postalCode) {
           postalCode = longName;
-          console.log("✅ Found postal code:", postalCode);
         }
       }
       
@@ -497,12 +476,10 @@ export function useLocation() {
         const apiKey = await getGoogleMapsApiKey();
         
         if (!apiKey) {
-          console.warn("⚠️ Google Maps API key not found, skipping Places API");
           return null;
         }
         
         // Step 1: Use Nearby Search to find the closest place
-        console.log("🔍 Using Google Places Nearby Search for detailed information...");
         const nearbySearchUrl = `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${latitude},${longitude}&radius=50&key=${apiKey}&language=en`;
         
         // Add timeout for Nearby Search
@@ -541,7 +518,6 @@ export function useLocation() {
           
           // Step 2: Get detailed place information using Place Details API
           if (placeId) {
-            console.log("🔍 Fetching detailed place information...");
             const placeDetailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,formatted_phone_number,website,rating,opening_hours,photos,address_components,geometry,types&key=${apiKey}&language=en`;
             
             // Add timeout for Place Details
@@ -595,7 +571,6 @@ export function useLocation() {
               
               // If Places API has better address components, use them
               if (placeDetails.address_components && placeDetails.address_components.length > addressComponents.length) {
-                console.log("✅ Using address components from Places API (more detailed)");
                 // Merge Places API address components with geocoding results
                 const placesComponents = placeDetails.address_components;
                 // Update missing components from Places API
@@ -626,7 +601,6 @@ export function useLocation() {
       // First priority: Use name from Places API (most accurate)
       if (placeName && placeName.trim() !== "") {
         mainTitle = placeName;
-        console.log("✅✅✅ ZOMATO-STYLE: Using Places API name:", mainTitle);
       } else {
         // Fallback to geocoding components
         const building = addressComponents.find(c => 
@@ -637,10 +611,8 @@ export function useLocation() {
         
         if (building) {
           mainTitle = building.long_name;
-          console.log("✅✅✅ ZOMATO-STYLE: Found exact building/cafe name from geocoding:", mainTitle);
         } else {
           mainTitle = "Location Found";
-          console.warn("⚠️ No building/cafe name found in address components");
         }
       }
       
@@ -650,7 +622,6 @@ export function useLocation() {
       // Set area from main location (Zomato priority order)
       if (mainLocation && mainLocation !== "Location Found") {
         area = mainLocation;
-        console.log("✅✅✅ ZOMATO-STYLE: Using mainTitle as area:", area);
       } else if (pointOfInterest) {
         area = pointOfInterest;
         mainLocation = pointOfInterest;
@@ -723,18 +694,11 @@ export function useLocation() {
       // Otherwise, try to build from components
       if (hasCompleteFormattedAddress) {
         completeFormattedAddress = formattedAddress;
-        console.log("✅✅✅ Using Google's formatted_address directly (complete - 4+ parts):", completeFormattedAddress);
       } else if (completeAddressParts.length > 0 && (pointOfInterest || premise)) {
         // Build from components if we have POI/premise
         completeFormattedAddress = completeAddressParts.join(', ');
-        console.log("✅ Using built address from components:", completeFormattedAddress);
       } else {
         // Google's formatted_address is incomplete - log warning
-        console.warn("⚠️⚠️⚠️ Google's formatted_address is incomplete (only 2-3 parts):", formattedAddress);
-        console.warn("⚠️ This usually means:");
-        console.warn("   1. GPS coordinates are not accurate (network-based location)");
-        console.warn("   2. Location is in a generic area without specific POI/premise");
-        console.warn("   3. Try on mobile device for better GPS accuracy");
         completeFormattedAddress = formattedAddress; // Use what we have
       }
       
@@ -746,15 +710,12 @@ export function useLocation() {
       // This is the exact Zomato approach - show "Mama Loca Cafe" as the main title
       if (mainLocation && mainLocation.trim() !== "" && mainLocation !== "Location Found") {
         displayAddressParts.push(mainLocation);
-        console.log("✅✅✅ ZOMATO-STYLE: Using mainTitle/mainLocation for display:", mainLocation);
       } else if (pointOfInterest && pointOfInterest.trim() !== "") {
         // Fallback to pointOfInterest if mainLocation not set
         displayAddressParts.push(pointOfInterest);
-        console.log("✅ Using pointOfInterest for display:", pointOfInterest);
       } else if (premise && premise.trim() !== "") {
         // Fallback to premise
         displayAddressParts.push(premise);
-        console.log("✅ Using premise for display:", premise);
       }
       
       // Add building details if not already included in mainLocation
@@ -781,7 +742,6 @@ export function useLocation() {
       // If we couldn't build from components, extract from formatted_address (ZOMATO-STYLE)
       // formatted_address from results[0] usually has: "Mama Loca Cafe, 501 Princess Center, 5th Floor, New Palasia, Indore, Madhya Pradesh 452001"
       if (displayAddressParts.length === 0 && formattedAddress) {
-        console.log("🔍 Extracting from formatted_address (fallback):", formattedAddress);
         const parts = formattedAddress.split(',').map(p => p.trim()).filter(p => p.length > 0);
         
         // Remove pincode, country, and city/state parts
@@ -796,7 +756,6 @@ export function useLocation() {
           return true;
         });
         
-        console.log("📋 Filtered parts from formatted_address:", filteredParts);
         
         // Find city index
         let cityIndex = -1;
@@ -813,20 +772,15 @@ export function useLocation() {
         // Extract locality parts (everything before city) - this includes POI, building, floor, area
         if (cityIndex > 0) {
           displayAddressParts = filteredParts.slice(0, cityIndex);
-          console.log("✅✅✅ Extracted locality from formatted_address (before city):", displayAddressParts);
         } else if (filteredParts.length >= 4) {
           // If city not found, take first 4 parts (usually POI, building, floor, area)
           displayAddressParts = filteredParts.slice(0, 4);
-          console.log("✅ Using first 4 parts from formatted_address:", displayAddressParts);
         } else if (filteredParts.length >= 3) {
           displayAddressParts = filteredParts.slice(0, 3);
-          console.log("✅ Using first 3 parts from formatted_address:", displayAddressParts);
         } else if (filteredParts.length >= 2) {
           displayAddressParts = filteredParts.slice(0, 2);
-          console.log("✅ Using first 2 parts from formatted_address:", displayAddressParts);
         } else if (filteredParts.length >= 1) {
           displayAddressParts = [filteredParts[0]];
-          console.log("✅ Using first part from formatted_address:", displayAddressParts);
         }
       }
       
@@ -835,7 +789,6 @@ export function useLocation() {
         ? displayAddressParts.join(', ')
         : (mainLocation || area || city || "Select location");
       
-      console.log("🎯🎯🎯 FINAL Display Address:", displayAddress);
       
       // Set area for backward compatibility
       if (!area) {
@@ -878,13 +831,7 @@ export function useLocation() {
       
       // Final validation: Ensure mainTitle/mainLocation is used properly
       if (mainTitle && mainTitle !== "Location Found") {
-        console.log("✅✅✅ ZOMATO-STYLE SUCCESS: Exact building/cafe name extracted:", mainTitle);
       } else {
-        console.warn("⚠️⚠️⚠️ ZOMATO-STYLE WARNING: Could not extract exact building/cafe name");
-        console.warn("⚠️ This might be due to:");
-        console.warn("   1. Location is not at a specific building/cafe (e.g., on a road)");
-        console.warn("   2. Google Maps doesn't have POI/premise data for this location");
-        console.warn("   3. GPS accuracy is low (try on mobile device)");
       }
       
       // Return location object with ZOMATO-STYLE exact location + Google Places API details
@@ -1615,7 +1562,6 @@ export function useLocation() {
           async (err) => {
             // If timeout and we haven't retried yet, try with lower accuracy
             if (err.code === 3 && retryCount === 0 && options.enableHighAccuracy) {
-              console.warn("⏱️ High accuracy timeout, retrying with lower accuracy...")
               // Retry with lower accuracy - faster response (uses network-based location)
               getPositionWithRetry({
                 enableHighAccuracy: false,
@@ -1831,12 +1777,10 @@ export function useLocation() {
               if (addressParts.length > 0) {
                 completeFormattedAddress = addressParts.join(', ');
                 displayAddress = addr.area || addr.city || "Select location";
-                console.log("✅ Built address from components:", completeFormattedAddress);
               } else {
                 // Final fallback - don't use coordinates
                 completeFormattedAddress = addr.city || "Select location";
                 displayAddress = addr.city || "Select location";
-                console.warn("⚠️ Using fallback address:", completeFormattedAddress);
               }
             }
             
@@ -1958,7 +1902,6 @@ export function useLocation() {
           // Network-based location won't give exact landmarks like "Mama Loca Cafe"
           if (err.code === 3 && retryCount < maxRetries) {
             retryCount++
-            console.log(`⏱️ GPS timeout, retrying with high accuracy GPS (attempt ${retryCount}/${maxRetries})...`)
             
             // Clear current watch
             if (watchIdRef.current) {

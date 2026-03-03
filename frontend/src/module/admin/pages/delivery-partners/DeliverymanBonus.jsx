@@ -141,22 +141,12 @@ export default function DeliverymanBonus() {
     setSubmitting(true)
     setError("")
     
-    // Log request details
-    console.log("Submitting bonus with data:", {
-      deliveryPartnerId: formData.deliveryPartnerId,
-      amount: formData.amount
-    })
-    
     try {
       const response = await adminAPI.addDeliveryPartnerBonus(
         formData.deliveryPartnerId,
         formData.amount,
         '' // No reference
       )
-      
-      console.log("Bonus response:", response)
-      console.log("Response data:", response.data)
-      console.log("Response status:", response.status)
       
       if (response?.data?.success || response?.data?.data) {
         // Refresh transactions

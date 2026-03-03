@@ -272,8 +272,6 @@ export default function OutletTimings() {
       return
     }
     
-    console.log(`🕐 Time changed for ${day} - ${timeType}: ${timeString}`)
-    
     setDays(prev => ({
       ...prev,
       [day]: {
@@ -374,13 +372,11 @@ export default function OutletTimings() {
                                   <MobileTimePicker
                                     value={stringToTime(dayData.openingTime)}
                                     onChange={(newValue) => {
-                                      console.log('🕐 Opening time picker onChange:', newValue)
                                       if (newValue) {
                                         handleTimeChange(day, "openingTime", newValue)
                                       }
                                     }}
                                     onAccept={(newValue) => {
-                                      console.log('✅ Opening time picker onAccept:', newValue)
                                       if (newValue) {
                                         handleTimeChange(day, "openingTime", newValue)
                                       }
@@ -430,13 +426,11 @@ export default function OutletTimings() {
                                   <MobileTimePicker
                                     value={stringToTime(dayData.closingTime)}
                                     onChange={(newValue) => {
-                                      console.log('🕐 Closing time picker onChange:', newValue)
                                       if (newValue) {
                                         handleTimeChange(day, "closingTime", newValue)
                                       }
                                     }}
                                     onAccept={(newValue) => {
-                                      console.log('✅ Closing time picker onAccept:', newValue)
                                       if (newValue) {
                                         handleTimeChange(day, "closingTime", newValue)
                                       }

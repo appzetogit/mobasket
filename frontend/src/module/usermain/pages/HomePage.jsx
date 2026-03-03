@@ -291,19 +291,7 @@ export default function HomePage() {
 
   // Debug: Log location data
   useEffect(() => {
-    console.log("📍 HomePage - Location state:", {
-      hasLocation: !!location,
-      hasStoredLocation: !!storedLocation,
-      location: location,
-      storedLocation: storedLocation,
-      currentLocation: currentLocation,
-      formattedAddress: currentLocation?.formattedAddress,
-      address: currentLocation?.address,
-      city: currentLocation?.city,
-      state: currentLocation?.state,
-      area: currentLocation?.area,
-      display: locationDisplay,
-    });
+    // Intentionally left empty after removing verbose console logging
   }, [location, storedLocation, currentLocation, locationDisplay]);
 
   // Show toast notification
@@ -867,7 +855,6 @@ export default function HomePage() {
               className="flex-shrink-0 w-[200px] bg-white rounded-xl overflow-visible shadow-sm hover:shadow-md transition-shadow cursor-pointer"
               onClick={() => {
                 // Navigate to restaurant page
-                console.log(`Navigate to restaurant: ${restaurant.name}`);
               }}
             >
               {/* Food Image - Large */}
@@ -1018,7 +1005,6 @@ export default function HomePage() {
               <Button
                 onClick={() => {
                   // Handle location click
-                  console.log("See Location clicked");
                 }}
                 className="bg-[#ff8100] hover:bg-[#e67300] text-white font-semibold px-4 py-2 md:px-8 md:py-3 rounded-lg text-sm md:text-base shadow-md transition-all hover:scale-105 whitespace-nowrap"
               >

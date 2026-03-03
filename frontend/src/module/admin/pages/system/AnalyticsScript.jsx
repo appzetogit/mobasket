@@ -76,12 +76,10 @@ export default function AnalyticsScript() {
   }
 
   const handleView = (id) => {
-    console.log("View tool:", id)
   }
 
   const handleHowItWorks = (e) => {
     e.preventDefault()
-    console.log("How it works clicked")
   }
 
   return (

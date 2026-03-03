@@ -196,16 +196,12 @@ export default function SearchResults() {
     const fetchRestaurants = async () => {
       try {
         setLoadingRestaurants(true);
-        console.log("🔄 Fetching restaurants from API...");
         // Optional: Add zoneId if available (for sorting/filtering, but show all restaurants)
         const params = {};
         if (zoneId) {
           params.zoneId = zoneId;
         }
         const response = await restaurantAPI.getRestaurants(params);
-
-        console.log("📦 Full API Response:", response);
-        console.log("📦 Response Data:", response?.data);
 
         if (
           response.data &&
@@ -214,19 +210,6 @@ export default function SearchResults() {
           response.data.data.restaurants
         ) {
           const restaurantsArray = response.data.data.restaurants;
-          console.log(`✅ Got ${restaurantsArray.length} restaurants from API`);
-
-          // Check if we have actual data or just defaults
-          if (restaurantsArray.length > 0) {
-            console.log("📋 First restaurant sample:", {
-              id: restaurantsArray[0]._id || restaurantsArray[0].restaurantId,
-              name: restaurantsArray[0].name,
-              rating: restaurantsArray[0].rating,
-              offer: restaurantsArray[0].offer,
-              featuredDish: restaurantsArray[0].featuredDish,
-              featuredPrice: restaurantsArray[0].featuredPrice,
-            });
-          }
 
           // Helper function to check if value is a default/mock value
           const isDefaultValue = (value, fieldName) => {
@@ -442,10 +425,6 @@ export default function SearchResults() {
 
           // Wait for all menu fetches to complete
           const transformedRestaurants = await Promise.all(menuPromises);
-
-          console.log(
-            `✅ Final transformed restaurants: ${transformedRestaurants.length}`,
-          );
           setRestaurantsData(transformedRestaurants);
         } else {
           console.warn(

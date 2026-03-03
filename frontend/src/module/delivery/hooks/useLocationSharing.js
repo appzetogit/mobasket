@@ -42,7 +42,6 @@ export const useLocationSharing = (orderId, enabled = false) => {
     }
 
     if (isSharingRef.current) {
-      console.log('Location sharing already active');
       return;
     }
 
@@ -56,12 +55,10 @@ export const useLocationSharing = (orderId, enabled = false) => {
       });
 
       socketRef.current.on('connect', () => {
-        console.log('✅ Socket connected for location sharing');
         socketRef.current.emit('join-delivery', orderId);
       });
 
       socketRef.current.on('disconnect', () => {
-        console.log('❌ Socket disconnected');
       });
     }
 
@@ -112,7 +109,6 @@ export const useLocationSharing = (orderId, enabled = false) => {
               timestamp: now
             });
 
-            console.log(`📍 Location sent (throttled):`, { lat: latitude, lng: longitude, heading, interval: LOCATION_UPDATE_INTERVAL });
           }
         },
         (error) => {
@@ -140,7 +136,6 @@ export const useLocationSharing = (orderId, enabled = false) => {
       );
 
       isSharingRef.current = true;
-      console.log('✅ Location sharing started');
     } else {
       console.error('Geolocation is not supported by this browser');
     }
@@ -151,7 +146,6 @@ export const useLocationSharing = (orderId, enabled = false) => {
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
-      console.log('📍 Geolocation watch stopped');
     }
 
     // Disconnect socket

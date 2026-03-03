@@ -8,7 +8,6 @@ export default function ReactSite() {
 
   const handleSave = (e) => {
     e.preventDefault()
-    console.log("Saving React Site:", { reactLicenseCode, reactDomain })
     alert("React Site settings saved successfully!")
   }
 

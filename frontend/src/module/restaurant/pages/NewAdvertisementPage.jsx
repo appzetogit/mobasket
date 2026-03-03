@@ -364,8 +364,6 @@ export default function NewAdvertisementPage() {
           </Button>
           <Button
             onClick={() => {
-              console.log("Create ad:", formData)
-              // Navigate to advertisements list after creation
               navigate("/restaurant/advertisements")
             }}
             className="flex-1 bg-[#ff8100] hover:bg-[#e67300] text-white font-semibold py-3 rounded-lg"

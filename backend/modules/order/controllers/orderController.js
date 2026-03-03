@@ -2074,7 +2074,8 @@ export const getUserOrders = async (req, res) => {
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    logger.info(`Fetching orders for user: ${userId}, query: ${JSON.stringify(query)}`);
+    // Downgraded to debug to avoid noisy per-request logs in production
+    logger.debug(`Fetching orders for user: ${userId}, query: ${JSON.stringify(query)}`);
 
     const orders = await Order.find(query)
       .sort({ createdAt: -1 })
@@ -2087,7 +2088,8 @@ export const getUserOrders = async (req, res) => {
 
     const total = await Order.countDocuments(query);
 
-    logger.info(`Found ${orders.length} orders for user ${userId} (total: ${total})`);
+    // Downgraded to debug to avoid noisy per-request logs in production
+    logger.debug(`Found ${orders.length} orders for user ${userId} (total: ${total})`);
     const ordersWithModificationWindow = orders.map(enrichOrderWithModificationWindow);
 
     res.json({

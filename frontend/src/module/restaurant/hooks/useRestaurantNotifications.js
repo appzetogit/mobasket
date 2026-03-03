@@ -214,7 +214,6 @@ export const useRestaurantNotifications = (options = {}) => {
         
         joinRoom();
       } else {
-        console.warn(`⚠️ Cannot join ${isGroceryStore ? 'grocery store' : 'restaurant'} room: restaurantId is missing`);
       }
     });
 
@@ -243,7 +242,6 @@ export const useRestaurantNotifications = (options = {}) => {
         }
       }
       if (error.message?.includes('CORS') || error.message?.includes('Not allowed')) {
-        console.warn('💡 Add frontend URL to CORS_ORIGIN in backend .env');
       }
       setIsConnected(false);
     });

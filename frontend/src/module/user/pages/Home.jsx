@@ -813,7 +813,6 @@ export default function Home() {
               `Backend health check failed: ${healthCheck.status}`,
             );
           }
-          console.log("✅ Backend connection successful");
         } catch (healthError) {
           // Backend connection error - handled silently, toast notifications shown via axios interceptor
           setRestaurantsData([]);
@@ -882,10 +881,8 @@ export default function Home() {
         // Strict zone filter: show only restaurants from the same detected zone.
         params.zoneId = zoneId;
         params.onlyZone = "true";
-
-        console.log("Fetching restaurants with params:", params);
+        
         const response = await restaurantAPI.getRestaurants(params);
-        console.log("Restaurants API response:", response.data);
 
         if (
           response.data &&
@@ -898,9 +895,6 @@ export default function Home() {
               const platform = String(restaurant?.platform || "").toLowerCase();
               return !platform || platform === "mofood";
             },
-          );
-          console.log(
-            `Fetched ${restaurantsArray.length} restaurants from API`,
           );
 
           if (restaurantsArray.length === 0) {
@@ -1078,11 +1072,6 @@ export default function Home() {
               return aDistance - bDistance;
             });
           }
-
-          console.log(
-            "Transformed and sorted restaurants:",
-            transformedRestaurants,
-          );
           setRestaurantsData(transformedRestaurants);
         } else {
           console.warn("Invalid API response structure:", response.data);
@@ -1096,10 +1085,6 @@ export default function Home() {
         setRestaurantsData([]);
       } finally {
         setLoadingRestaurants(false);
-        console.log(
-          "Restaurant loading completed. restaurantsData length:",
-          restaurantsData.length,
-        );
       }
     },
     [zoneId, zoneLoading],
@@ -1187,9 +1172,6 @@ export default function Home() {
     });
 
     setRestaurantsData(updatedRestaurants);
-    console.log(
-      "🔄 Recalculated distances for all restaurants based on user location",
-    );
   }, [location?.latitude, location?.longitude]);
 
   // When Veg Mode is ON, keep restaurants based on selected option:

@@ -35,9 +35,6 @@ export default function HubFinance() {
         const response = await restaurantAPI.getFinance()
         if (response.data?.success && response.data?.data) {
           setFinanceData(response.data.data)
-          console.log('✅ Finance data fetched:', response.data.data)
-          console.log('📦 Current cycle orders:', response.data.data?.currentCycle?.orders)
-          console.log('📊 Current cycle totalOrders:', response.data.data?.currentCycle?.totalOrders)
         }
       } catch (error) {
         // Suppress 401 errors as they're handled by axios interceptor (token refresh/redirect)
@@ -199,9 +196,6 @@ export default function HubFinance() {
       })
       if (response.data?.success && response.data?.data?.pastCycles) {
         setPastCyclesData(response.data.data.pastCycles)
-        console.log('✅ Past cycles data fetched:', response.data.data.pastCycles)
-        console.log('📦 Orders array:', response.data.data.pastCycles?.orders)
-        console.log('📊 Total orders:', response.data.data.pastCycles?.totalOrders)
       } else {
         setPastCyclesData(null)
       }
@@ -474,7 +468,6 @@ export default function HubFinance() {
     const reportData = getReportData()
     const htmlContent = generateHTMLContent(reportData)
     
-      console.log('📄 Generating PDF...')
       
       // Create a temporary hidden iframe to render HTML properly
       const iframe = document.createElement('iframe')
@@ -505,14 +498,11 @@ export default function HubFinance() {
       await new Promise(resolve => setTimeout(resolve, 500))
       
       // Import html2canvas and jsPDF dynamically
-      console.log('📦 Loading libraries...')
       const html2canvas = (await import('html2canvas')).default
       const { default: jsPDF } = await import('jspdf')
     
       // Get the body element from iframe
       const iframeBody = iframe.contentDocument.body
-      
-      console.log('🎨 Converting to canvas...')
       // Convert HTML to canvas
       const canvas = await html2canvas(iframeBody, {
         scale: 2,
@@ -524,8 +514,6 @@ export default function HubFinance() {
         height: iframeBody.scrollHeight
       })
       
-      console.log('✅ Canvas created:', canvas.width, 'x', canvas.height)
-      
       // Remove temporary iframe
       document.body.removeChild(iframe)
     
@@ -533,8 +521,6 @@ export default function HubFinance() {
       const imgWidth = 210 // A4 width in mm
       const pageHeight = 297 // A4 height in mm
       const imgHeight = (canvas.height * imgWidth) / canvas.width
-      
-      console.log('📐 PDF dimensions:', imgWidth, 'x', imgHeight, 'mm')
       
       // Create PDF
       const pdf = new jsPDF('p', 'mm', 'a4')
@@ -555,9 +541,7 @@ export default function HubFinance() {
       
       // Download PDF
       const fileName = `finance-report-${reportData.dateRange.replace(/\s+/g, '-').replace(/'/g, '')}_${new Date().toISOString().split("T")[0]}.pdf`
-      console.log('💾 Downloading PDF:', fileName)
       pdf.save(fileName)
-      console.log('✅ PDF downloaded successfully!')
     } catch (error) {
       console.error('❌ Error downloading PDF:', error)
       console.error('Error details:', error.stack)
