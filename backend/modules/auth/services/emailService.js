@@ -67,7 +67,8 @@ class EmailService {
       const smtpHost = smtpCreds.host;
       const smtpPort = smtpCreds.port || '587';
       const smtpUser = smtpCreds.user;
-      const smtpPass = smtpCreds.pass;
+      // Gmail App Passwords are often pasted with spaces; strip them
+      const smtpPass = (smtpCreds.pass || '').replace(/\s/g, '');
       
       this.transporter = nodemailer.createTransport({
         host: smtpHost,
@@ -208,13 +209,10 @@ Security Notice:
    */
   async sendOTP(email, otp, purpose = 'login') {
     try {
-      // Check if transporter is configured
+      // Always re-initialize so we use latest credentials from Admin ENV Setup
+      await this.initializeTransporter();
       if (!this.transporter) {
-        // Try to reinitialize if not configured
-        await this.initializeTransporter();
-        if (!this.transporter) {
-          throw new Error('Email transporter is not configured. Please set up SMTP credentials in Admin > ENV Setup');
-        }
+        throw new Error('Email transporter is not configured. Please set up SMTP credentials in Admin > ENV Setup');
       }
 
       // Get SMTP credentials for from email

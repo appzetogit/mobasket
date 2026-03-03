@@ -1,4 +1,5 @@
 import User from '../models/User.js';
+import Admin from '../../admin/models/Admin.js';
 import otpService from '../services/otpService.js';
 import jwtService from '../services/jwtService.js';
 import googleAuthService from '../services/googleAuthService.js';
@@ -21,9 +22,14 @@ const getSafeOtpErrorMessage = (error) => {
   const rawMessage = String(error?.message || "");
   const isProviderOrTlsError =
     /ssl|tls|alert number|routines|socket hang up|econnreset|ehostunreach|etimedout|enotfound/i.test(rawMessage);
+  const isGmailBadCredentials =
+    /535|BadCredentials|Username and Password not accepted|gsmtp/i.test(rawMessage);
 
   if (isProviderOrTlsError) {
     return "OTP service is temporarily unavailable. Please try again in a few minutes.";
+  }
+  if (isGmailBadCredentials) {
+    return "Email could not be sent: SMTP login failed. If using Gmail, use an App Password (not your regular password). Update SMTP_USER and SMTP_PASS in Admin > ENV Setup. See: https://support.google.com/accounts/answer/185833";
   }
 
   return rawMessage || "Failed to send OTP. Please try again.";
@@ -204,11 +210,15 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       });
     } else {
       // Login (with optional auto-registration)
-      // Find user by email/phone AND role to ensure correct module access
-      const findQuery = phone 
-        ? { phone, role: userRole } 
-        : { email, role: userRole };
-      user = await User.findOne(findQuery);
+      // Admin is in Admin collection; others are in User
+      if (userRole === 'admin' && email) {
+        user = await Admin.findOne({ email: email.toLowerCase() });
+      } else {
+        const findQuery = phone 
+          ? { phone, role: userRole } 
+          : { email, role: userRole };
+        user = await User.findOne(findQuery);
+      }
 
       if (!user && !name) {
         // OTP has NOT been verified yet in this flow.
@@ -539,13 +549,15 @@ export const resetPassword = asyncHandler(async (req, res) => {
     return errorResponse(res, 400, 'Password must be at least 6 characters long');
   }
 
-  // Find user by email and role (if role provided) to ensure correct module access
-  const findQuery = { email };
-  if (role) {
-    findQuery.role = role;
+  // Admin is in separate Admin collection; others (user, restaurant, delivery) are in User
+  let user;
+  if (role === 'admin') {
+    user = await Admin.findOne({ email: email.toLowerCase() }).select('+password');
+  } else {
+    const findQuery = { email };
+    if (role) findQuery.role = role;
+    user = await User.findOne(findQuery).select('+password');
   }
-  
-  const user = await User.findOne(findQuery).select('+password');
 
   if (!user) {
     return errorResponse(res, 404, role 
@@ -553,8 +565,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
       : 'User not found');
   }
   
-  // If role was provided but doesn't match, return error
-  if (role && user.role !== role) {
+  if (role && role !== 'admin' && user.role !== role) {
     return errorResponse(res, 404, `No ${role} account found with this email.`);
   }
 
@@ -566,11 +577,11 @@ export const resetPassword = asyncHandler(async (req, res) => {
     return errorResponse(res, 400, 'Invalid or expired OTP. Please request a new one.');
   }
 
-  // Update password
-  user.password = newPassword; // Will be hashed by pre-save hook
+  // Update password (both Admin and User have pre-save hooks for hashing)
+  user.password = newPassword;
   await user.save();
 
-  logger.info(`Password reset successful for user: ${user._id}`, { email, userId: user._id });
+  logger.info(`Password reset successful for ${role === 'admin' ? 'admin' : 'user'}: ${user._id}`, { email, userId: user._id });
 
   return successResponse(res, 200, 'Password reset successfully. Please login with your new password.');
 });
