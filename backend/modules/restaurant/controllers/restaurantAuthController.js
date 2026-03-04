@@ -85,9 +85,14 @@ const getSafeOtpErrorMessage = (error) => {
   const rawMessage = String(error?.message || "");
   const isProviderOrTlsError =
     /ssl|tls|alert number|routines|socket hang up|econnreset|ehostunreach|etimedout|enotfound/i.test(rawMessage);
+  const isGmailBadCredentials =
+    /535|BadCredentials|Username and Password not accepted|gsmtp/i.test(rawMessage);
 
   if (isProviderOrTlsError) {
     return "OTP service is temporarily unavailable. Please try again in a few minutes.";
+  }
+  if (isGmailBadCredentials) {
+    return "Email could not be sent: SMTP login failed. If using Gmail, use an App Password (not your regular password). Update SMTP_USER and SMTP_PASS in Admin > ENV Setup. See: https://support.google.com/accounts/answer/185833";
   }
 
   return rawMessage || "Failed to send OTP. Please try again.";

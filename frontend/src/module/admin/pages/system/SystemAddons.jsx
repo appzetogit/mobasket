@@ -244,6 +244,10 @@ export default function SystemAddons() {
               <InputField label="SMTP User" fieldKey="SMTP_USER" type="email" />
               <InputField label="SMTP Password" fieldKey="SMTP_PASS" type="password" />
             </div>
+            <p className="mt-2 text-sm text-slate-500">
+              For Gmail: use an App Password, not your regular password. Create one at{" "}
+              <a href="https://support.google.com/accounts/answer/185833" target="_blank" rel="noopener noreferrer" className="text-purple-600 hover:underline">support.google.com/accounts/answer/185833</a>
+            </p>
           </div>
 
           {/* SMS Hub India Section */}
