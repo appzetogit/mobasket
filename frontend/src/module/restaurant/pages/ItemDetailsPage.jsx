@@ -515,7 +515,11 @@ export default function ItemDetailsPage() {
             }
           } catch (uploadError) {
             console.error(`Error uploading image ${i + 1} (${file.name}):`, uploadError)
-            toast.error(`Failed to upload ${file.name}. Please try again.`)
+            const backendMessage =
+              uploadError?.response?.data?.message ||
+              uploadError?.response?.data?.error ||
+              uploadError?.message
+            toast.error(`Failed to upload ${file.name}: ${backendMessage || "Please try again."}`)
             setUploadingImages(false)
             return
           }
