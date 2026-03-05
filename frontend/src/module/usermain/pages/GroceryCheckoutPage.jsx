@@ -740,20 +740,25 @@ export default function GroceryCheckoutPage() {
           storeResponse?.data?.restaurant ||
           storeResponse?.data?.data ||
           {};
+        const storePlatform = String(
+          store?.platform || resolvedRestaurant?.platform || "mogrocery",
+        ).toLowerCase();
 
         // Grocery stores may not have restaurant outlet timings endpoint.
         // Fall back to store-level timing fields when timings fetch is unavailable.
         let outletTimings = [];
-        try {
-          const outletTimingsResponse = await api.get(
-            `/restaurant/${String(resolvedRestaurant.restaurantId)}/outlet-timings`,
-          );
-          outletTimings =
-            outletTimingsResponse?.data?.data?.outletTimings?.timings ||
-            outletTimingsResponse?.data?.outletTimings?.timings ||
-            [];
-        } catch {
-          outletTimings = [];
+        if (storePlatform !== "mogrocery") {
+          try {
+            const outletTimingsResponse = await api.get(
+              `/restaurant/${String(resolvedRestaurant.restaurantId)}/outlet-timings`,
+            );
+            outletTimings =
+              outletTimingsResponse?.data?.data?.outletTimings?.timings ||
+              outletTimingsResponse?.data?.outletTimings?.timings ||
+              [];
+          } catch {
+            outletTimings = [];
+          }
         }
 
         setStoreAvailability(

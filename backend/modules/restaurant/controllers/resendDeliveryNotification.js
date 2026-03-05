@@ -1,5 +1,6 @@
 import Order from '../../order/models/Order.js';
 import Restaurant from '../models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 import { findNearestDeliveryBoys } from '../../order/services/deliveryAssignmentService.js';
@@ -45,16 +46,41 @@ export const resendDeliveryNotification = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, `Cannot resend notification. Order status must be 'preparing' or 'ready'. Current status: ${order.status}`);
     }
 
-    // Get restaurant location
-    const restaurantDoc = await Restaurant.findById(restaurantId)
+    // Resolve location for both Restaurant and GroceryStore sources.
+    let entityDoc = await Restaurant.findById(restaurantId)
       .select('location')
       .lean();
 
-    if (!restaurantDoc || !restaurantDoc.location || !restaurantDoc.location.coordinates) {
-      return errorResponse(res, 400, 'Restaurant location not found. Please update restaurant location.');
+    if (!entityDoc && mongoose.Types.ObjectId.isValid(restaurantId)) {
+      entityDoc = await GroceryStore.findById(restaurantId).select('location').lean();
     }
 
-    const [restaurantLng, restaurantLat] = restaurantDoc.location.coordinates;
+    if (!entityDoc) {
+      entityDoc = await Restaurant.findOne({ restaurantId }).select('location').lean();
+    }
+    if (!entityDoc) {
+      entityDoc = await GroceryStore.findOne({ restaurantId }).select('location').lean();
+    }
+
+    const locationFromEntity = entityDoc?.location || {};
+    const locationFromAuth = restaurant?.location || {};
+    const locationFromOrder = order?.restaurantLocation || {};
+    const coordinates =
+      (Array.isArray(locationFromEntity?.coordinates) && locationFromEntity.coordinates.length >= 2
+        ? locationFromEntity.coordinates
+        : null) ||
+      (Array.isArray(locationFromAuth?.coordinates) && locationFromAuth.coordinates.length >= 2
+        ? locationFromAuth.coordinates
+        : null) ||
+      (Array.isArray(locationFromOrder?.coordinates) && locationFromOrder.coordinates.length >= 2
+        ? locationFromOrder.coordinates
+        : null);
+
+    if (!coordinates) {
+      return errorResponse(res, 400, 'Store location not found. Please update store location.');
+    }
+
+    const [restaurantLng, restaurantLat] = coordinates;
 
     // Find nearest delivery boys
     const requiredZoneId = order?.assignmentInfo?.zoneId ? String(order.assignmentInfo.zoneId) : null;

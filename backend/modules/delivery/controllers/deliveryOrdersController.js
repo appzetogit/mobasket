@@ -404,6 +404,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       const assignmentInfo = order.assignmentInfo || {};
       const priorityIds = assignmentInfo.priorityDeliveryPartnerIds || [];
       const expandedIds = assignmentInfo.expandedDeliveryPartnerIds || [];
+      const isInValidStatus = ['preparing', 'ready'].includes(String(order.status || '').toLowerCase());
       
       // Helper function to normalize ID for comparison
       const normalizeId = (id) => {
@@ -422,6 +423,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         currentDeliveryId: normalizedCurrentId,
         priorityIds: normalizedPriorityIds,
         expandedIds: normalizedExpandedIds,
+          isInValidStatus,
         orderStatus: order.status,
         assignmentInfo: JSON.stringify(assignmentInfo)
       });
@@ -429,7 +431,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       const wasNotified = normalizedPriorityIds.includes(normalizedCurrentId) || 
                          normalizedExpandedIds.includes(normalizedCurrentId);
       
-      if (!wasNotified) {
+      if (!wasNotified && !isInValidStatus) {
         console.error(`❌ Order ${order.orderId} is not assigned and delivery partner ${currentDeliveryId} was not notified`);
         console.error(`❌ Full order details:`, {
           orderId: order.orderId,
