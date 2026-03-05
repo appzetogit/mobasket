@@ -39,6 +39,9 @@ const PlansPage = () => {
   const [planOffers, setPlanOffers] = useState([]);
   const [offersLoading, setOffersLoading] = useState(false);
   const [selectedOfferIds, setSelectedOfferIds] = useState([]);
+  const [subcategoryProductBuckets, setSubcategoryProductBuckets] = useState([]);
+  const [selectedProductBySubcategory, setSelectedProductBySubcategory] = useState({});
+  const [expandedSubcategoryIds, setExpandedSubcategoryIds] = useState({});
   const [boughtPlans, setBoughtPlans] = useState([]);
   const [boughtPlansLoading, setBoughtPlansLoading] = useState(true);
   const [logoUrl, setLogoUrl] = useState(MOBASKETLogo);
@@ -198,6 +201,9 @@ const PlansPage = () => {
     setSelectedPlan(plan);
     setSelectedMealType("veg");
     setSelectedOfferIds([]);
+    setSubcategoryProductBuckets([]);
+    setSelectedProductBySubcategory({});
+    setExpandedSubcategoryIds({});
   };
 
   const selectedPlanOfferIdsKey = useMemo(() => {
@@ -257,6 +263,127 @@ const PlansPage = () => {
     fetchPlanOffers();
   }, [selectedPlan?.id, selectedPlanLinkedOffers, selectedPlanOfferIdsKey]);
 
+  const planLinkedSubcategories = useMemo(() => {
+    const subcategoryMap = new Map();
+    (Array.isArray(planOffers) ? planOffers : []).forEach((offer) => {
+      const subcategories = Array.isArray(offer?.subcategoryIds) ? offer.subcategoryIds : [];
+      subcategories.forEach((subcategory) => {
+        const subcategoryId = String(subcategory?._id || subcategory?.id || "");
+        if (!subcategoryId) return;
+        if (!subcategoryMap.has(subcategoryId)) {
+          subcategoryMap.set(subcategoryId, {
+            id: subcategoryId,
+            name: subcategory?.name || "Subcategory",
+          });
+        }
+      });
+    });
+    return Array.from(subcategoryMap.values());
+  }, [planOffers]);
+
+  useEffect(() => {
+    if (!selectedPlan?.id || planLinkedSubcategories.length === 0) {
+      setSubcategoryProductBuckets([]);
+      setSelectedProductBySubcategory({});
+      setExpandedSubcategoryIds({});
+      return;
+    }
+
+    const initialBuckets = planLinkedSubcategories.map((subcategory) => ({
+      subcategory,
+      products: null,
+      loading: false,
+      error: "",
+    }));
+
+    setSubcategoryProductBuckets(initialBuckets);
+    setExpandedSubcategoryIds({});
+    setSelectedProductBySubcategory((prev) => {
+      const next = {};
+      initialBuckets.forEach((bucket) => {
+        const subcategoryId = bucket.subcategory.id;
+        if (prev[subcategoryId]) {
+          next[subcategoryId] = prev[subcategoryId];
+        }
+      });
+      return next;
+    });
+  }, [selectedPlan?.id, planLinkedSubcategories, zoneId]);
+
+  const loadProductsForSubcategory = async (subcategoryId) => {
+    if (!subcategoryId) return;
+    const subcategoryKey = String(subcategoryId);
+
+    setSubcategoryProductBuckets((prev) =>
+      prev.map((bucket) =>
+        bucket.subcategory.id === subcategoryKey
+          ? { ...bucket, loading: true, error: "" }
+          : bucket
+      )
+    );
+
+    try {
+      const response = await api.get("/grocery/products", {
+        params: {
+          subcategoryId: subcategoryKey,
+          activeOnly: "true",
+          limit: 100,
+          ...(zoneId ? { zoneId } : {}),
+        },
+      });
+      const payload = Array.isArray(response?.data?.data) ? response.data.data : [];
+      const normalizedProducts = payload
+        .map((product) => ({
+          id: String(product?._id || product?.id || ""),
+          name: product?.name || "Product",
+          image:
+            (Array.isArray(product?.images) ? product.images[0] : "") ||
+            product?.image ||
+            "",
+          unit: String(product?.unit || "").trim() || "Unit",
+          price: Number(product?.price || 0),
+        }))
+        .filter((product) => Boolean(product.id));
+
+      setSubcategoryProductBuckets((prev) =>
+        prev.map((bucket) =>
+          bucket.subcategory.id === subcategoryKey
+            ? { ...bucket, products: normalizedProducts, loading: false, error: "" }
+            : bucket
+        )
+      );
+      setSelectedProductBySubcategory((prev) => {
+        const selectedProductId = prev[subcategoryKey];
+        if (!selectedProductId) return prev;
+        const stillExists = normalizedProducts.some((product) => product.id === selectedProductId);
+        if (stillExists) return prev;
+        const next = { ...prev };
+        delete next[subcategoryKey];
+        return next;
+      });
+    } catch (fetchError) {
+      setSubcategoryProductBuckets((prev) =>
+        prev.map((bucket) =>
+          bucket.subcategory.id === subcategoryKey
+            ? {
+              ...bucket,
+              products: [],
+              loading: false,
+              error:
+                fetchError?.response?.data?.message ||
+                "Failed to load products for this subcategory",
+            }
+            : bucket
+        )
+      );
+      setSelectedProductBySubcategory((prev) => {
+        const next = { ...prev };
+        delete next[subcategoryKey];
+        return next;
+      });
+    }
+  };
+
   const selectedPlanHasTypedProducts = useMemo(() => {
     if (!selectedPlan) return false;
     const vegProducts = Array.isArray(selectedPlan.vegProducts) ? selectedPlan.vegProducts : [];
@@ -313,6 +440,11 @@ const PlansPage = () => {
     }
     return selectedOfferProducts.length > 0 ? selectedOfferProducts : selectedPlanProducts;
   }, [selectedPlanHasTypedProducts, selectedOfferProducts, selectedPlanProducts]);
+
+  const selectedManualProductIds = useMemo(
+    () => Object.values(selectedProductBySubcategory).filter(Boolean),
+    [selectedProductBySubcategory]
+  );
 
   const getNamedItems = (items) => {
     if (!Array.isArray(items)) return [];
@@ -410,7 +542,6 @@ const PlansPage = () => {
       navigate("/profile/addresses");
       return;
     }
-
     setIsSubscribing(true);
     try {
       const { restaurantId, restaurantName } = await resolveGroceryRestaurant();
@@ -438,6 +569,7 @@ const PlansPage = () => {
         throw new Error("Failed to calculate plan price.");
       }
 
+      const selectedSubcategoryIds = Object.keys(selectedProductBySubcategory).filter(Boolean);
       const orderPayload = {
         items,
         address: selectedAddress,
@@ -454,6 +586,10 @@ const PlansPage = () => {
           planName: selectedPlan.name,
           durationDays: Number(selectedPlan.durationDays || 0),
           selectedOfferIds,
+          selectedSubcategoryId:
+            selectedSubcategoryIds.length > 0 ? selectedSubcategoryIds[0] : undefined,
+          selectedSubcategoryIds,
+          selectedProductIds: selectedManualProductIds,
         },
       };
 
@@ -520,6 +656,39 @@ const PlansPage = () => {
         ? prev.filter((id) => id !== normalizedOfferId)
         : [...prev, normalizedOfferId]
     );
+  };
+
+  const selectProductForSubcategory = (subcategoryId, productId) => {
+    if (!subcategoryId || !productId) return;
+    const subcategoryKey = String(subcategoryId);
+    const productKey = String(productId);
+    setSelectedProductBySubcategory((prev) => {
+      if (prev[subcategoryKey] === productKey) {
+        const next = { ...prev };
+        delete next[subcategoryKey];
+        return next;
+      }
+      return {
+        ...prev,
+        [subcategoryKey]: productKey,
+      };
+    });
+  };
+
+  const toggleSubcategoryExpanded = (subcategoryId) => {
+    if (!subcategoryId) return;
+    const subcategoryKey = String(subcategoryId);
+    const isExpanded = Boolean(expandedSubcategoryIds[subcategoryKey]);
+    const bucket = subcategoryProductBuckets.find((item) => item?.subcategory?.id === subcategoryKey);
+
+    setExpandedSubcategoryIds((prev) => ({
+      ...prev,
+      [subcategoryKey]: !prev[subcategoryKey],
+    }));
+
+    if (!isExpanded && bucket && bucket.products === null && !bucket.loading) {
+      loadProductsForSubcategory(subcategoryKey);
+    }
   };
 
   const formatDate = (dateValue) => {
@@ -843,6 +1012,108 @@ const PlansPage = () => {
                       <p className="text-sm text-slate-500 col-span-2">No products configured for this meal type.</p>
                     )}
                   </div>
+                </div>
+
+                <div className="mt-8 border-t border-slate-100 pt-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <LayoutGrid size={18} className="text-emerald-600" />
+                    <h3 className="font-bold text-slate-900 text-lg">Build Your Plan Box</h3>
+                  </div>
+                  {planLinkedSubcategories.length === 0 ? (
+                    <p className="text-sm text-slate-500">
+                      No subcategory-linked products configured in plan offers.
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-xs text-slate-500 mb-4">
+                        Optional: pick products by subcategory. You can skip and continue.
+                      </p>
+                      <div className="space-y-4">
+                        {subcategoryProductBuckets.map((bucket) => {
+                          const subcategoryId = bucket.subcategory.id;
+                          const selectedProductId = selectedProductBySubcategory[subcategoryId] || "";
+                          const isExpanded = Boolean(expandedSubcategoryIds[subcategoryId]);
+                          return (
+                            <div key={subcategoryId} className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-4">
+                              <button
+                                type="button"
+                                onClick={() => toggleSubcategoryExpanded(subcategoryId)}
+                                className="w-full flex items-center justify-between gap-3"
+                              >
+                                <h4 className="font-bold text-slate-900 text-sm text-left">{bucket.subcategory.name}</h4>
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <span
+                                    className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${selectedProductId
+                                      ? "bg-emerald-100 text-emerald-700"
+                                      : "bg-amber-100 text-amber-700"
+                                      }`}
+                                  >
+                                    {selectedProductId ? "1 selected" : "Select 1"}
+                                  </span>
+                                  <ChevronDown
+                                    size={16}
+                                    className={`text-slate-500 transition-transform ${isExpanded ? "rotate-180" : ""}`}
+                                  />
+                                </div>
+                              </button>
+
+                              {isExpanded ? (
+                                <div className="mt-3">
+                                  {bucket.loading ? (
+                                    <p className="text-sm text-slate-500">Loading products...</p>
+                                  ) : bucket.error ? (
+                                    <p className="text-sm text-rose-600">{bucket.error}</p>
+                                  ) : !Array.isArray(bucket.products) || bucket.products.length === 0 ? (
+                                    <p className="text-sm text-slate-500">No active products in this subcategory.</p>
+                                  ) : (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                      {bucket.products.map((product) => {
+                                        const isSelected = selectedProductId === product.id;
+                                        return (
+                                          <button
+                                            key={product.id}
+                                            type="button"
+                                            onClick={() => selectProductForSubcategory(subcategoryId, product.id)}
+                                            className={`text-left rounded-xl border p-2.5 transition ${isSelected
+                                              ? "border-emerald-400 bg-emerald-50 shadow-sm"
+                                              : "border-slate-200 bg-white hover:border-emerald-200"
+                                              }`}
+                                          >
+                                            <div className="flex items-center gap-2.5">
+                                              <div className="w-10 h-10 rounded-md bg-slate-100 overflow-hidden flex items-center justify-center shrink-0">
+                                                {product.image ? (
+                                                  <img src={product.image} alt={product.name} className="w-full h-full object-cover" loading="lazy" />
+                                                ) : (
+                                                  <Package size={16} className="text-slate-400" />
+                                                )}
+                                              </div>
+                                              <div className="min-w-0">
+                                                <p className="text-sm font-semibold text-slate-900 truncate">{product.name}</p>
+                                                <p className="text-[11px] text-slate-500">
+                                                  {product.unit}
+                                                  {product.price > 0 ? ` · Rs ${product.price}` : ""}
+                                                </p>
+                                              </div>
+                                            </div>
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <p className="text-xs text-slate-500 mt-2">Tap to view products</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <p className="text-xs text-slate-500 mt-3">
+                        Completed: {selectedManualProductIds.length}/{planLinkedSubcategories.length} subcategories
+                      </p>
+                    </>
+                  )}
                 </div>
 
                 <div className="mt-8 pt-4 border-t border-slate-100">
