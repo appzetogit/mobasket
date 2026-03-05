@@ -503,14 +503,17 @@ export async function calculateRouteProgress(orderId, currentLocation) {
   // Get next point on route (for animation)
   const nextIndex = Math.min(nearest.index + 1, route.points.length - 1);
   const nextPoint = route.points[nextIndex];
+  const remainingRoutePoints = route.points.slice(nearest.index);
   
   return {
     progress,
     nextPoint,
     currentPoint: nearest.point,
+    nearestIndex: nearest.index,
     distanceCovered,
     totalDistance: route.totalDistance,
-    remainingDistance: route.totalDistance - distanceCovered
+    remainingDistance: route.totalDistance - distanceCovered,
+    remainingRoutePoints
   };
 }
 
@@ -563,6 +566,9 @@ export async function processLocationUpdate(riderId, orderId, rawLocation, route
       progress: progress?.progress || 0,
       distanceCovered: progress?.distanceCovered || 0,
       remainingDistance: progress?.remainingDistance || 0,
+      remainingPolyline: progress?.remainingRoutePoints?.length
+        ? encodePolyline(progress.remainingRoutePoints)
+        : '',
       timestamp: Date.now(),
       snapped: true,
       onRoute: !!progress
