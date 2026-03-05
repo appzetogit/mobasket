@@ -14,6 +14,18 @@ export const sidebarMenuData = [
   },
   {
     type: "section",
+    label: "ADMIN MANAGEMENT",
+    items: [
+      {
+        type: "link",
+        label: "Manage Admin",
+        path: "/admin/manage-admin",
+        icon: "UserCog",
+      },
+    ],
+  },
+  {
+    type: "section",
     label: "FOOD MANAGEMENT",
     items: [
       {
@@ -328,6 +340,18 @@ export const mogroceryMenuData = [
     label: "Point of Sale",
     path: "/admin/point-of-sale",
     icon: "CreditCard",
+  },
+  {
+    type: "section",
+    label: "ADMIN MANAGEMENT",
+    items: [
+      {
+        type: "link",
+        label: "Manage Admin",
+        path: "/admin/manage-admin",
+        icon: "UserCog",
+      },
+    ],
   },
   {
     type: "section",

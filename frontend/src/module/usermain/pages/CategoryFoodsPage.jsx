@@ -117,20 +117,40 @@ export function CategoryFoodsContent({
     let mounted = true;
 
     const fetchProducts = async () => {
+      if (!zoneId) {
+        if (mounted) {
+          setProducts([]);
+          setIsProductsLoading(false);
+        }
+        return;
+      }
+
       try {
         setIsProductsLoading(true);
         const params = {
           page: 1,
           limit: 200,
-          ...(zoneId ? { zoneId } : {}),
+          zoneId,
           ...(selectedCategory && selectedCategory !== "all" ? { categoryId: selectedCategory } : {}),
           ...(selectedSubcategoryId ? { subcategoryId: selectedSubcategoryId } : {}),
         };
 
         const response = await api.get("/grocery/products", { params });
         const data = Array.isArray(response?.data?.data) ? response.data.data : [];
+        const zoneSafeData = data.filter((product) => {
+          const productZoneId = String(
+            product?.zoneId?._id ||
+              product?.zoneId?.id ||
+              product?.zoneId ||
+              product?.storeId?.zoneId?._id ||
+              product?.storeId?.zoneId?.id ||
+              product?.storeId?.zoneId ||
+              "",
+          ).trim();
+          return !productZoneId || productZoneId === String(zoneId);
+        });
         if (!mounted) return;
-        setProducts(data);
+        setProducts(zoneSafeData);
       } catch {
         if (!mounted) return;
         setProducts([]);

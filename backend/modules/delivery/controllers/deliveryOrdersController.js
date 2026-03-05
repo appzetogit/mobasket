@@ -4,14 +4,15 @@ import Delivery from '../models/Delivery.js';
 import Order from '../../order/models/Order.js';
 import Payment from '../../payment/models/Payment.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import Zone from '../../admin/models/Zone.js';
 import DeliveryWallet from '../models/DeliveryWallet.js';
 import RestaurantWallet from '../../restaurant/models/RestaurantWallet.js';
 import RestaurantCommission from '../../admin/models/RestaurantCommission.js';
 import AdminCommission from '../../admin/models/AdminCommission.js';
-import BusinessSettings from '../../admin/models/BusinessSettings.js';
 import { calculateRoute } from '../../order/services/routeCalculationService.js';
 import { calculateDriverEarning } from '../../order/services/deliveryEarningService.js';
+import { resolveCODLimitForDelivery } from '../services/codLimitService.js';
 import mongoose from 'mongoose';
 import winston from 'winston';
 
@@ -95,6 +96,47 @@ const getPlatformZoneQuery = (platform = 'mofood') => (
     ? { isActive: true, platform: 'mogrocery' }
     : { isActive: true, $or: [{ platform: 'mofood' }, { platform: { $exists: false } }] }
 );
+
+const resolveStoreEntityByIdentifier = async (storeIdentifier) => {
+  if (!storeIdentifier) return null;
+
+  const normalizedId = String(storeIdentifier?._id || storeIdentifier).trim();
+  if (!normalizedId) return null;
+
+  const projection = 'location platform restaurantId slug name';
+  let entity = null;
+  let source = null;
+
+  if (mongoose.Types.ObjectId.isValid(normalizedId)) {
+    entity = await Restaurant.findById(normalizedId).select(projection).lean();
+    source = entity ? 'restaurant' : null;
+    if (!entity) {
+      entity = await GroceryStore.findById(normalizedId).select(projection).lean();
+      source = entity ? 'groceryStore' : null;
+    }
+  }
+
+  if (!entity) {
+    entity = await Restaurant.findOne({
+      $or: [{ restaurantId: normalizedId }, { slug: normalizedId }]
+    }).select(projection).lean();
+    source = entity ? 'restaurant' : null;
+  }
+
+  if (!entity) {
+    entity = await GroceryStore.findOne({
+      $or: [{ restaurantId: normalizedId }, { slug: normalizedId }]
+    }).select(projection).lean();
+    source = entity ? 'groceryStore' : null;
+  }
+
+  if (!entity) return null;
+
+  const platform =
+    entity?.platform === 'mogrocery' || source === 'groceryStore' ? 'mogrocery' : 'mofood';
+
+  return { entity, source, platform };
+};
 
 const emitOrderClaimedToOtherPartners = async (orderLike, claimedByDeliveryId, assignmentInfo = {}) => {
   try {
@@ -404,6 +446,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       const assignmentInfo = order.assignmentInfo || {};
       const priorityIds = assignmentInfo.priorityDeliveryPartnerIds || [];
       const expandedIds = assignmentInfo.expandedDeliveryPartnerIds || [];
+      const isInValidStatus = ['preparing', 'ready'].includes(String(order.status || '').toLowerCase());
       
       // Helper function to normalize ID for comparison
       const normalizeId = (id) => {
@@ -422,6 +465,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         currentDeliveryId: normalizedCurrentId,
         priorityIds: normalizedPriorityIds,
         expandedIds: normalizedExpandedIds,
+          isInValidStatus,
         orderStatus: order.status,
         assignmentInfo: JSON.stringify(assignmentInfo)
       });
@@ -429,7 +473,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       const wasNotified = normalizedPriorityIds.includes(normalizedCurrentId) || 
                          normalizedExpandedIds.includes(normalizedCurrentId);
       
-      if (!wasNotified) {
+      if (!wasNotified && !isInValidStatus) {
         console.error(`❌ Order ${order.orderId} is not assigned and delivery partner ${currentDeliveryId} was not notified`);
         console.error(`❌ Full order details:`, {
           orderId: order.orderId,
@@ -507,16 +551,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     // Enforce cash-in-hand limit before accepting any order.
     // If delivery partner reaches the configured cash limit, they must deposit COD cash first.
     const wallet = await DeliveryWallet.findOrCreateByDeliveryId(delivery._id);
-    let totalCashLimit = 750;
-    try {
-      const settings = await BusinessSettings.getSettings();
-      const configuredLimit = Number(settings?.deliveryCashLimit);
-      if (Number.isFinite(configuredLimit) && configuredLimit >= 0) {
-        totalCashLimit = configuredLimit;
-      }
-    } catch (_) {
-      totalCashLimit = 750;
-    }
+    const totalCashLimit = await resolveCODLimitForDelivery(delivery._id);
 
     const cashInHand = Math.max(0, Number(wallet.cashInHand) || 0);
     const deductions = Math.max(0, Number(wallet.deductions) || 0);
@@ -536,7 +571,29 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     const incomingCodAmount = isIncomingCod ? Math.max(0, Number(order?.pricing?.total) || 0) : 0;
     const projectedCashInHand = cashInHand + incomingCodAmount;
 
+    const rollbackClaimIfNeeded = async () => {
+      if (!claimedDuringThisRequest) return;
+      try {
+        await Order.updateOne(
+          { _id: order._id, deliveryPartnerId: delivery._id },
+          {
+            $set: { deliveryPartnerId: null },
+            $unset: {
+              'assignmentInfo.deliveryPartnerId': '',
+              'assignmentInfo.assignedAt': '',
+              'assignmentInfo.assignedBy': '',
+              'assignmentInfo.acceptedFromNotification': '',
+              'assignmentInfo.notificationPhase': ''
+            }
+          }
+        );
+      } catch (rollbackError) {
+        logger.error(`Failed to rollback claimed order ${order.orderId}: ${rollbackError.message}`);
+      }
+    };
+
     if (cashInHand >= totalCashLimit) {
+      await rollbackClaimIfNeeded();
       return errorResponse(
         res,
         400,
@@ -551,6 +608,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     }
 
     if (totalCashLimit > 0 && projectedCashInHand > totalCashLimit) {
+      await rollbackClaimIfNeeded();
       return errorResponse(
         res,
         400,
@@ -567,20 +625,28 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     }
     // Get restaurant location
     let restaurantLat, restaurantLng;
+    let resolvedPlatform =
+      String(order?.restaurantPlatform || order?.platform || '').toLowerCase() === 'mogrocery'
+        ? 'mogrocery'
+        : 'mofood';
     try {
       if (order.restaurantId && order.restaurantId.location && order.restaurantId.location.coordinates) {
         [restaurantLng, restaurantLat] = order.restaurantId.location.coordinates;
         console.log(`📍 Restaurant location from populated order: lat=${restaurantLat}, lng=${restaurantLng}`);
       } else {
-        // Try to fetch restaurant from database
+        // Try to fetch store from database (Restaurant or GroceryStore)
         console.log(`⚠️ Restaurant location not in populated order, fetching from database...`);
         const restaurantId = order.restaurantId?._id || order.restaurantId;
         console.log(`🔍 Fetching restaurant with ID: ${restaurantId}`);
         
-        const restaurant = await Restaurant.findById(restaurantId);
+        const resolvedStore = await resolveStoreEntityByIdentifier(restaurantId);
+        const restaurant = resolvedStore?.entity || null;
+        if (resolvedStore?.platform) {
+          resolvedPlatform = resolvedStore.platform;
+        }
         if (restaurant && restaurant.location && restaurant.location.coordinates) {
           [restaurantLng, restaurantLat] = restaurant.location.coordinates;
-          console.log(`📍 Restaurant location from database: lat=${restaurantLat}, lng=${restaurantLng}`);
+          console.log(`📍 Store location from database: lat=${restaurantLat}, lng=${restaurantLng}`);
         } else {
           console.error(`❌ Restaurant location not found for restaurant ID: ${restaurantId}`);
           console.error(`❌ Restaurant data:`, {
@@ -633,12 +699,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
 
     // Enforce strict zone match between restaurant and delivery partner location.
     try {
-      const restaurantId = order.restaurantId?._id || order.restaurantId;
-      const restaurantMeta = restaurantId
-        ? await Restaurant.findById(restaurantId).select('platform').lean()
-        : null;
-      const platform = restaurantMeta?.platform === 'mogrocery' ? 'mogrocery' : 'mofood';
-      const activeZones = await Zone.find(getPlatformZoneQuery(platform)).select('_id coordinates').lean();
+      const activeZones = await Zone.find(getPlatformZoneQuery(resolvedPlatform)).select('_id coordinates').lean();
 
       const requiredZoneId = order?.assignmentInfo?.zoneId ? String(order.assignmentInfo.zoneId) : null;
       const requiredZone = requiredZoneId
@@ -1926,7 +1987,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
           try {
             const updateResult = await DeliveryWallet.updateOne(
               { deliveryId: delivery._id },
-              { $inc: { cashInHand: codAmount } }
+              { $inc: { cashInHand: codAmount, codCashCollected: codAmount } }
             );
             if (updateResult.modifiedCount > 0) {
               console.log(`✅ Cash collected ₹${codAmount.toFixed(2)} (COD) added to cashInHand for order ${orderIdForLog}`);

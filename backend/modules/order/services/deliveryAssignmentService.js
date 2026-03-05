@@ -4,7 +4,7 @@ import Zone from '../../admin/models/Zone.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import GroceryStore from '../../grocery/models/GroceryStore.js';
 import DeliveryWallet from '../../delivery/models/DeliveryWallet.js';
-import BusinessSettings from '../../admin/models/BusinessSettings.js';
+import { resolveGlobalCODLimit } from '../../delivery/services/codLimitService.js';
 import mongoose from 'mongoose';
 import { findNearestOnlineDeliveryPartnersFromFirebase } from '../../../shared/services/firebaseRealtimeService.js';
 
@@ -149,20 +149,7 @@ function calculateDistance(lat1, lng1, lat2, lng2) {
   return R * c; // Distance in kilometers
 }
 
-async function resolveDeliveryCashLimit() {
-  try {
-    const settings = await BusinessSettings.getSettings();
-    const configuredLimit = Number(settings?.deliveryCashLimit);
-    if (Number.isFinite(configuredLimit) && configuredLimit >= 0) {
-      return configuredLimit;
-    }
-  } catch (_) {
-    // Use fallback below.
-  }
-  return 750;
-}
-
-async function getCashLimitEligibleDeliveryPartnerIds(deliveryPartners = []) {
+async function getCashLimitEligibleDeliveryPartnerIds(deliveryPartners = [], incomingCodAmount = 0) {
   const deliveryIds = deliveryPartners
     .map((partner) => String(partner?._id || ''))
     .filter(Boolean);
@@ -171,7 +158,7 @@ async function getCashLimitEligibleDeliveryPartnerIds(deliveryPartners = []) {
     return { eligibleIds: new Set(), totalCashLimit: 750 };
   }
 
-  const totalCashLimit = await resolveDeliveryCashLimit();
+  const totalCashLimit = await resolveGlobalCODLimit();
   const validObjectIds = deliveryIds
     .filter((id) => mongoose.Types.ObjectId.isValid(id))
     .map((id) => new mongoose.Types.ObjectId(id));
@@ -185,13 +172,22 @@ async function getCashLimitEligibleDeliveryPartnerIds(deliveryPartners = []) {
   const cashInHandByDeliveryId = new Map(
     wallets.map((wallet) => [String(wallet.deliveryId), Math.max(0, Number(wallet.cashInHand) || 0)])
   );
+  const deliveryLimitById = new Map(
+    deliveryPartners.map((partner) => {
+      const override = Number(partner?.cod?.limitOverride);
+      const effectiveLimit = Number.isFinite(override) && override >= 0 ? override : totalCashLimit;
+      return [String(partner?._id || ''), effectiveLimit];
+    })
+  );
 
   const eligibleIds = new Set();
   let blockedCount = 0;
 
   for (const deliveryId of deliveryIds) {
     const cashInHand = cashInHandByDeliveryId.get(deliveryId) ?? 0;
-    if (cashInHand >= totalCashLimit) {
+    const riderCashLimit = deliveryLimitById.get(deliveryId) ?? totalCashLimit;
+    const projectedCashInHand = cashInHand + Math.max(0, Number(incomingCodAmount) || 0);
+    if (projectedCashInHand > riderCashLimit || cashInHand >= riderCashLimit) {
       blockedCount += 1;
       continue;
     }
@@ -231,6 +227,7 @@ export async function findNearestDeliveryBoys(restaurantLat, restaurantLng, rest
 
     const rawOptions = arguments.length >= 5 ? arguments[4] : null;
     const { requiredZoneId } = normalizeZoneOption(rawOptions);
+    const incomingCodAmount = Math.max(0, Number(rawOptions?.incomingCodAmount) || 0);
 
     const { zone: resolvedZone, activeZones } = await resolveRestaurantPlatformAndZone(restaurantId);
     zone = resolvedZone;
@@ -247,7 +244,7 @@ export async function findNearestDeliveryBoys(restaurantLat, restaurantLng, rest
     }
 
     const deliveryPartners = await Delivery.find(deliveryQuery)
-      .select('_id name phone availability.currentLocation availability.lastLocationUpdate availability.zones status isActive')
+      .select('_id name phone availability.currentLocation availability.lastLocationUpdate availability.zones status isActive cod.limitOverride')
       .lean();
 
     console.log(`📊 Found ${deliveryPartners?.length || 0} online delivery partners`);
@@ -256,7 +253,7 @@ export async function findNearestDeliveryBoys(restaurantLat, restaurantLng, rest
       return [];
     }
     const { eligibleIds: cashLimitEligibleIds } =
-      await getCashLimitEligibleDeliveryPartnerIds(deliveryPartners);
+      await getCashLimitEligibleDeliveryPartnerIds(deliveryPartners, incomingCodAmount);
 
     // Calculate distance and filter
     const deliveryPartnersWithDistance = deliveryPartners
@@ -358,6 +355,7 @@ export async function findNearestDeliveryBoy(
     };
 
     const { requiredZoneId } = normalizeZoneOption(options);
+    const incomingCodAmount = Math.max(0, Number(options?.incomingCodAmount) || 0);
     const { zone: resolvedZone, activeZones } = await resolveRestaurantPlatformAndZone(restaurantId);
     zone = resolvedZone;
     if (requiredZoneId) {
@@ -409,10 +407,10 @@ export async function findNearestDeliveryBoy(
               ...deliveryQuery,
               _id: { $in: firebaseIds }
             })
-              .select('_id name phone availability.currentLocation availability.lastLocationUpdate availability.zones status isActive')
+              .select('_id name phone availability.currentLocation availability.lastLocationUpdate availability.zones status isActive cod.limitOverride')
               .lean();
             const { eligibleIds: cashLimitEligibleIds } =
-              await getCashLimitEligibleDeliveryPartnerIds(deliveryPartners);
+              await getCashLimitEligibleDeliveryPartnerIds(deliveryPartners, incomingCodAmount);
 
             const deliveryById = new Map(
               deliveryPartners
@@ -468,7 +466,7 @@ export async function findNearestDeliveryBoy(
 
     // Find all online delivery partners (with zone filter if applicable)
     const deliveryPartners = await Delivery.find(deliveryQuery)
-      .select('_id name phone availability.currentLocation availability.lastLocationUpdate availability.zones status isActive')
+      .select('_id name phone availability.currentLocation availability.lastLocationUpdate availability.zones status isActive cod.limitOverride')
       .lean();
 
     console.log(`📊 Found ${deliveryPartners?.length || 0} online delivery partners in database`);
@@ -491,7 +489,7 @@ export async function findNearestDeliveryBoy(
     }
 
     const { eligibleIds: cashLimitEligibleIds } =
-      await getCashLimitEligibleDeliveryPartnerIds(deliveryPartners);
+      await getCashLimitEligibleDeliveryPartnerIds(deliveryPartners, incomingCodAmount);
     // Calculate distance for each delivery partner and filter by zone if applicable
     const deliveryPartnersWithDistance = deliveryPartners
       .map(partner => {
@@ -614,6 +612,11 @@ export async function assignOrderToDeliveryBoy(order, restaurantLat, restaurantL
 
     // Get restaurantId from order if not provided
     const orderRestaurantId = restaurantId || order.restaurantId;
+    const paymentMethod = String(order?.payment?.method || '').toLowerCase();
+    const incomingCodAmount =
+      paymentMethod === 'cash' || paymentMethod === 'cod'
+        ? Math.max(0, Number(order?.pricing?.total) || 0)
+        : 0;
     
     // Find nearest delivery boy (with zone-based filtering)
     const requiredZoneId = order?.assignmentInfo?.zoneId ? String(order.assignmentInfo.zoneId) : null;
@@ -623,7 +626,7 @@ export async function assignOrderToDeliveryBoy(order, restaurantLat, restaurantL
       orderRestaurantId,
       50,
       [],
-      { requiredZoneId }
+      { requiredZoneId, incomingCodAmount }
     );
 
     if (!nearestDeliveryBoy) {

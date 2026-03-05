@@ -769,8 +769,10 @@ export default function OrdersMain() {
         }
       } catch (error) {
         // Don't log 401 errors - axios interceptor handles token refresh/redirect
-        // Only log other errors (500, network errors, etc.)
-        if (error.response?.status !== 401) {
+        // Skip noisy logs for expected transient backend outages.
+        const status = Number(error?.response?.status || 0)
+        const isTransientBackendOutage = status === 503 || error?.code === 'ERR_NETWORK'
+        if (status !== 401 && !isTransientBackendOutage) {
           console.error('Error checking confirmed orders:', error)
         }
       }
@@ -2021,6 +2023,7 @@ function OrderCard({
   onCancel,
   onMarkReady,
   isMarkingReady,
+  orderAPI,
 }) {
   const normalizedStatus = String(status || "").toLowerCase()
   const isReady = normalizedStatus === "ready"
@@ -2433,6 +2436,7 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI }) {
                 onCancel={onCancel}
                 onMarkReady={handleMarkReady}
                 isMarkingReady={Boolean(markingReadyById[order.mongoId || order.orderId])}
+                orderAPI={orderAPI}
               />
             )
           })}
@@ -2551,6 +2555,7 @@ function ReadyOrders({ onSelectOrder, orderAPI }) {
               key={order.orderId || order.mongoId}
               {...order}
               onSelect={onSelectOrder}
+              orderAPI={orderAPI}
             />
           ))}
         </div>
@@ -2668,6 +2673,7 @@ const OutForDeliveryOrders = ({ onSelectOrder, orderAPI }) => {
               key={order.orderId || order.mongoId}
               {...order}
               onSelect={onSelectOrder}
+              orderAPI={orderAPI}
             />
           ))}
         </div>
@@ -2789,6 +2795,7 @@ function ScheduledOrders({ onSelectOrder, orderAPI }) {
               key={order.orderId || order.mongoId}
               {...order}
               onSelect={onSelectOrder}
+              orderAPI={orderAPI}
             />
           ))}
         </div>

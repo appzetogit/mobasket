@@ -460,12 +460,15 @@ export const acceptOrder = asyncHandler(async (req, res) => {
           } else {
             // Step 1: Find nearest delivery boys (within 5km priority distance)
             const requiredZoneId = freshOrder?.assignmentInfo?.zoneId ? String(freshOrder.assignmentInfo.zoneId) : null;
+            const incomingCodAmount = ['cash', 'cod'].includes(String(freshOrder?.payment?.method || '').toLowerCase())
+              ? Math.max(0, Number(freshOrder?.pricing?.total) || 0)
+              : 0;
             const priorityDeliveryBoys = await findNearestDeliveryBoys(
               restaurantLat,
               restaurantLng,
               restaurantId,
               5,
-              { requiredZoneId }
+              { requiredZoneId, incomingCodAmount }
             );
             
             if (priorityDeliveryBoys && priorityDeliveryBoys.length > 0) {
@@ -511,7 +514,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
                       restaurantLng, 
                       restaurantId, 
                       50, // Max distance 50km
-                      { requiredZoneId }
+                      { requiredZoneId, incomingCodAmount }
                     );
 
                     // Filter out priority delivery boys
@@ -559,7 +562,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
                 restaurantId,
                 50,
                 [],
-                { requiredZoneId }
+                { requiredZoneId, incomingCodAmount }
               );
               
               if (anyDeliveryBoy) {

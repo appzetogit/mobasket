@@ -12,6 +12,9 @@ const EMPTY_WALLET_STATE = {
   deductions: 0,
   totalCashLimit: 750,
   availableCashLimit: 750,
+  codLimit: 750,
+  cashCollected: 0,
+  remainingLimit: 750,
   totalWithdrawn: 0,
   totalEarned: 0,
   transactions: [],
@@ -59,13 +62,27 @@ export const fetchDeliveryWallet = async () => {
       
       const transformedTotalCashLimit = Number.isFinite(Number(walletData.totalCashLimit))
         ? Number(walletData.totalCashLimit)
-        : 750
-      const transformedCashInHand = Number(walletData.cashInHand ?? walletData.cash_in_hand) || 0
+        : (Number.isFinite(Number(walletData.codLimit)) ? Number(walletData.codLimit) : 750)
+      const transformedCashInHand = Number(
+        walletData.cashInHand ??
+        walletData.cash_in_hand ??
+        walletData.cashCollected ??
+        walletData.codCashCollected
+      ) || 0
       const transformedDeductions = Number(walletData.deductions) || 0
+      const transformedCashCollected = Number(
+        walletData.cashCollected ??
+        walletData.codCashCollected ??
+        walletData.cashInHand ??
+        walletData.cash_in_hand
+      ) || 0
+      const transformedRemainingLimit = Number.isFinite(Number(walletData.remainingLimit))
+        ? Number(walletData.remainingLimit)
+        : Math.max(0, transformedTotalCashLimit - transformedCashCollected)
       const transformedAvailableCashLimit =
         Number.isFinite(Number(walletData.availableCashLimit))
           ? Number(walletData.availableCashLimit)
-          : (transformedTotalCashLimit - transformedCashInHand - transformedDeductions)
+          : transformedRemainingLimit
 
       // Transform API response to match expected format (support both camelCase and snake_case)
       const transformedData = {
@@ -76,6 +93,9 @@ export const fetchDeliveryWallet = async () => {
         totalEarned: Number(walletData.totalEarned) || 0,
         totalCashLimit: transformedTotalCashLimit,
         availableCashLimit: transformedAvailableCashLimit,
+        codLimit: Number.isFinite(Number(walletData.codLimit)) ? Number(walletData.codLimit) : transformedTotalCashLimit,
+        cashCollected: transformedCashCollected,
+        remainingLimit: transformedRemainingLimit,
         deliveryWithdrawalLimit: Number(walletData.deliveryWithdrawalLimit ?? walletData.delivery_withdrawal_limit) || 100,
         deliveryMinimumWalletBalance: Number(walletData.deliveryMinimumWalletBalance ?? walletData.delivery_minimum_wallet_balance) || 0,
         // Pocket balance = total balance (includes bonus)

@@ -120,6 +120,13 @@ const deliveryWalletSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
+  // Alias for COD cash currently held by the delivery partner.
+  // Kept as an explicit field for API clarity; synchronized from cashInHand.
+  codCashCollected: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   deductions: {
     type: Number,
     default: 0,
@@ -164,6 +171,12 @@ deliveryWalletSchema.index({ 'transactions.status': 1 });
 deliveryWalletSchema.index({ 'transactions.type': 1 });
 deliveryWalletSchema.index({ 'transactions.createdAt': -1 });
 deliveryWalletSchema.index({ lastTransactionAt: -1 });
+
+// Keep codCashCollected in sync with cashInHand as the source of truth.
+deliveryWalletSchema.pre('save', function(next) {
+  this.codCashCollected = Math.max(0, Number(this.cashInHand) || 0);
+  next();
+});
 
 // Virtual for pocket balance.
 // Pocket balance should match totalBalance (cashInHand is tracked separately for COD limit).

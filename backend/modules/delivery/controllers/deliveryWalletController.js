@@ -180,11 +180,15 @@ export const getWallet = asyncHandler(async (req, res) => {
     const walletData = {
       totalBalance: pocketBalance,
       cashInHand: cashInHandForLimit,
+      codCashCollected: cashInHandForLimit,
       deductions,
       totalWithdrawn: wallet.totalWithdrawn || 0,
       totalEarned: wallet.totalEarned || 0,
       totalCashLimit: totalCashLimit,
       availableCashLimit,
+      codLimit: totalCashLimit,
+      cashCollected: cashInHandForLimit,
+      remainingLimit: Math.max(0, Number(totalCashLimit) - cashInHandForLimit),
       deliveryWithdrawalLimit: withdrawalLimit,
       deliveryMinimumWalletBalance: minimumWalletBalance,
       // Pocket balance = rider earnings (withdrawable).
@@ -774,6 +778,22 @@ export const createDepositOrder = asyncHandler(async (req, res) => {
     return errorResponse(res, 400, 'Maximum deposit amount is ₹5,00,000');
   }
 
+  const wallet = await DeliveryWallet.findOrCreateByDeliveryId(delivery._id);
+  const cashInHand = Number(wallet.cashInHand) || 0;
+  if (cashInHand <= 0) {
+    return errorResponse(
+      res,
+      400,
+      'No COD cash in hand available for deposit. Pocket balance/earnings cannot be deposited here.'
+    );
+  }
+  if (amount > cashInHand) {
+    return errorResponse(
+      res,
+      400,
+      `Insufficient cash in hand (Rs ${cashInHand.toFixed(2)}). Deposit amount cannot exceed cash in hand.`
+    );
+  }
   let credentials;
   try {
     credentials = await getRazorpayCredentials();
@@ -887,4 +907,6 @@ export const verifyDepositPayment = asyncHandler(async (req, res) => {
     availableCashLimit
   });
 });
+
+
 

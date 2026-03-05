@@ -1106,6 +1106,23 @@ export const adminAPI = {
     return apiClient.get(API_ENDPOINTS.ADMIN.AUTH.ME);
   },
 
+  // Admin Management (super admin)
+  getAdmins: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.ADMIN.ADMINS, { params });
+  },
+  getAdminById: (id) => {
+    return apiClient.get(API_ENDPOINTS.ADMIN.ADMIN_BY_ID.replace(':id', id));
+  },
+  createAdmin: (payload) => {
+    return apiClient.post(API_ENDPOINTS.ADMIN.ADMINS, payload);
+  },
+  updateAdmin: (id, payload) => {
+    return apiClient.put(API_ENDPOINTS.ADMIN.ADMIN_BY_ID.replace(':id', id), payload);
+  },
+  deleteAdmin: (id) => {
+    return apiClient.delete(API_ENDPOINTS.ADMIN.ADMIN_BY_ID.replace(':id', id));
+  },
+
   // Get admin profile
   getAdminProfile: () => {
     return apiClient.get(API_ENDPOINTS.ADMIN.PROFILE);

@@ -2934,7 +2934,7 @@ export default function DeliveryHome() {
                 id: order._id || order.orderId,
                 orderId: order.orderId, // Correct order ID from backend
                 name: restaurantName, // Restaurant name from backend (priority: restaurantName > restaurantId.name)
-                address: restaurantAddress, // Restaurant address from backend
+                address: normalizeAddressLabel(restaurantAddress, 'Restaurant address not available'), // Restaurant address from backend
                 lat: restaurantLat || selectedRestaurant?.lat,
                 lng: restaurantLng || selectedRestaurant?.lng,
                 distance: selectedRestaurant?.distance || '0 km',
@@ -4615,14 +4615,41 @@ export default function DeliveryHome() {
   }, [])
 
   // Helper function to calculate time away from distance
-  const calculateTimeAway = useCallback((distanceStr) => {
+  const calculateTimeAway = useCallback((distanceStr) => {
     if (!distanceStr) return '0 mins'
     const distance = parseFloat(distanceStr.replace(' km', ''))
     if (isNaN(distance)) return '0 mins'
     // Assume average speed of 30 km/h for delivery
     const minutes = Math.ceil((distance / 30) * 60)
     return `${minutes} mins`
-  }, [])
+  }, [])
+
+  const normalizeDistanceLabel = useCallback((distanceValue) => {
+    if (distanceValue == null) return null
+    const text = String(distanceValue).trim()
+    if (!text) return null
+    const lower = text.toLowerCase()
+    if (lower === "0 km" || lower === "calculating..." || lower === "distance not available") {
+      return null
+    }
+    return text
+  }, [])
+
+  const formatDistanceKm = useCallback((distanceKm) => {
+    const value = Number(distanceKm)
+    if (!Number.isFinite(value) || value <= 0) return null
+    return `${value.toFixed(2)} km`
+  }, [])
+
+  const normalizeAddressLabel = useCallback((addressValue, fallback = "Address not available") => {
+    const text = String(addressValue || "").trim()
+    if (!text) return fallback
+    const lower = text.toLowerCase()
+    if (lower === "address" || lower === "restaurant address" || lower === "restaurant address.") {
+      return fallback
+    }
+    return text
+  }, [])
 
   // Show new order popup when order is received from Socket.IO
   useEffect(() => {
@@ -4708,8 +4735,8 @@ export default function DeliveryHome() {
       });
 
       // Calculate pickup distance if not provided
-      let pickupDistance = newOrder.pickupDistance;
-      if (!pickupDistance || pickupDistance === '0 km') {
+      let pickupDistance = normalizeDistanceLabel(newOrder.pickupDistance);
+      if (!pickupDistance) {
         // Try to calculate from driver's current location to restaurant
         const currentLocation = riderLocation || lastLocationRef.current;
         const restaurantLat = newOrder.restaurantLocation?.latitude;
@@ -4731,26 +4758,26 @@ export default function DeliveryHome() {
       }
       
       // Default to 'Calculating...' if still no distance
-      if (!pickupDistance || pickupDistance === '0 km') {
-        pickupDistance = 'Calculating...';
+      if (!pickupDistance) {
+        pickupDistance = 'Distance not available';
       }
 
       const restaurantData = {
         id: newOrder.orderMongoId || newOrder.orderId,
         orderId: newOrder.orderId,
         name: newOrder.restaurantName,
-        address: restaurantAddress,
+        address: normalizeAddressLabel(restaurantAddress, 'Restaurant address not available'),
         lat: restaurantCoords?.lat,
         lng: restaurantCoords?.lng,
         distance: pickupDistance,
-        timeAway: pickupDistance !== 'Calculating...' ? calculateTimeAway(pickupDistance) : 'Calculating...',
-        dropDistance: newOrder.deliveryDistance || 'Calculating...',
+        timeAway: normalizeDistanceLabel(pickupDistance) ? calculateTimeAway(pickupDistance) : 'N/A',
+        dropDistance: normalizeDistanceLabel(newOrder?.deliveryDistance) || formatDistanceKm(newOrder?.deliveryDistanceRaw || newOrder?.assignmentInfo?.distance) || 'Distance not available',
         pickupDistance: pickupDistance,
         estimatedEarnings: effectiveEarnings,
         deliveryFee,
         amount: earnedValue > 0 ? earnedValue : (deliveryFee > 0 ? deliveryFee : 0),
         customerName: newOrder.customerName,
-        customerAddress: newOrder.customerLocation?.address || 'Customer address',
+        customerAddress: normalizeAddressLabel(newOrder.customerLocation?.address || newOrder.deliveryAddress, 'Customer address not available'),
         customerLat: newOrder.customerLocation?.latitude,
         customerLng: newOrder.customerLocation?.longitude,
         items: newOrder.items || [],
@@ -5078,7 +5105,7 @@ export default function DeliveryHome() {
           const restaurantAddress = resolveStoreAddressFromOrder(firstOrder, "Restaurant address")
           
           console.log('📍 Restaurant address extracted from assigned order:', {
-            address: restaurantAddress,
+            address: normalizeAddressLabel(restaurantAddress, 'Restaurant address not available'),
             hasRestaurantId: !!firstOrder.restaurantId,
             hasLocation: !!firstOrder.restaurantId?.location
           });
@@ -5109,8 +5136,8 @@ export default function DeliveryHome() {
           }
           
           // Default to 'Calculating...' if still no distance
-          if (!pickupDistance || pickupDistance === '0 km') {
-            pickupDistance = 'Calculating...';
+          if (!pickupDistance) {
+            pickupDistance = 'Distance not available';
           }
           
           const customerCoords = extractCustomerCoordsFromOrder(firstOrder)
@@ -5119,15 +5146,16 @@ export default function DeliveryHome() {
             id: firstOrder._id?.toString() || firstOrder.orderId,
             orderId: firstOrder.orderId,
             name: firstOrder.restaurantId?.name || 'Restaurant',
-            address: restaurantAddress,
+            address: normalizeAddressLabel(restaurantAddress, 'Restaurant address not available'),
             lat: firstOrder.restaurantId?.location?.coordinates?.[1],
             lng: firstOrder.restaurantId?.location?.coordinates?.[0],
-            distance: pickupDistance,
-            timeAway: pickupDistance !== 'Calculating...' ? calculateTimeAway(pickupDistance) : 'Calculating...',
-            dropDistance: firstOrder.address?.location?.coordinates 
-              ? 'Calculating...' 
-              : '0 km',
-            pickupDistance: pickupDistance,
+            distance: pickupDistance,
+            timeAway: normalizeDistanceLabel(pickupDistance) ? calculateTimeAway(pickupDistance) : 'N/A',
+            dropDistance:
+              formatDistanceKm(firstOrder?.assignmentInfo?.distance || firstOrder?.deliveryState?.routeToDelivery?.distance) ||
+              normalizeDistanceLabel(firstOrder?.dropDistance) ||
+              'Distance not available',
+            pickupDistance: pickupDistance,
             estimatedEarnings: firstOrder.pricing?.deliveryFee || 0,
             customerName: firstOrder.userId?.name || 'Customer',
             customerAddress: firstOrder.address?.formattedAddress || 
@@ -5142,10 +5170,11 @@ export default function DeliveryHome() {
             amount: firstOrder.pricing?.deliveryFee || 0
           }
           
-          setSelectedRestaurant(restaurantData)
-          setShowNewOrderPopup(true)
-          setCountdownSeconds(300) // Reset countdown to 5 minutes
-          console.log('✅ Showing pending order notification:', orderId)
+          void restaurantData
+          // Do not preload popup restaurant data from startup sync.
+          // Do not auto-open popup during startup sync.
+          // Keep existing popup state untouched during sync fetch.
+          console.log('Pending order found during sync; skipping auto-popup:', orderId)
         } else {
           console.log('ℹ️ No pending orders found')
         }
@@ -7305,7 +7334,7 @@ export default function DeliveryHome() {
         ...selectedRestaurant,
         orderId: order.orderId || orderReady.orderId || selectedRestaurant?.orderId,
         name: order.restaurantName || orderReady.restaurantName || order.restaurantId?.name || selectedRestaurant?.name,
-        address: restaurantAddress,
+        address: normalizeAddressLabel(restaurantAddress, 'Restaurant address not available'),
         lat: order.restaurantId?.location?.coordinates?.[1] || orderReady.restaurantLat || selectedRestaurant?.lat,
         lng: order.restaurantId?.location?.coordinates?.[0] || orderReady.restaurantLng || selectedRestaurant?.lng,
         orderStatus: 'ready'
@@ -10347,7 +10376,7 @@ export default function DeliveryHome() {
                       return null;
                     })()}
                     <p className="text-gray-400 text-xs">
-                      Pickup: {newOrder?.pickupDistance || selectedRestaurant?.pickupDistance || '0 km'} | Drop: {newOrder?.deliveryDistance || selectedRestaurant?.dropDistance || '0 km'}
+                      Pickup: {normalizeDistanceLabel(newOrder?.pickupDistance) || normalizeDistanceLabel(selectedRestaurant?.pickupDistance) || 'Distance not available'} | Drop: {normalizeDistanceLabel(newOrder?.deliveryDistance) || normalizeDistanceLabel(selectedRestaurant?.dropDistance) || 'Distance not available'}
                     </p>
                   </div>
 
@@ -10371,28 +10400,28 @@ export default function DeliveryHome() {
                       {newOrder?.restaurantName || selectedRestaurant?.name || 'Restaurant'}
                     </h3>
                     <p className="text-sm text-gray-600 mb-3 leading-relaxed">
-                      {newOrder?.restaurantLocation?.address || selectedRestaurant?.address || 'Address'}
+                      {normalizeAddressLabel(newOrder?.restaurantLocation?.address || selectedRestaurant?.address, 'Address not available')}
                     </p>
                     
                     <div className="flex items-center gap-1.5 text-gray-500 text-sm mb-2">
                       <Clock className="w-4 h-4" />
                       <span>
-                        {selectedRestaurant?.timeAway && selectedRestaurant.timeAway !== 'Calculating...' 
-                          ? `${selectedRestaurant.timeAway} away`
-                          : (newOrder?.pickupDistance && newOrder.pickupDistance !== '0 km' && newOrder.pickupDistance !== 'Calculating...'
-                            ? `${calculateTimeAway(newOrder.pickupDistance)} away`
-                            : 'Calculating...')}
+                        {selectedRestaurant?.timeAway && selectedRestaurant.timeAway !== 'Calculating...'
+                          ? `${selectedRestaurant.timeAway} away`
+                          : (normalizeDistanceLabel(newOrder?.pickupDistance)
+                            ? `${calculateTimeAway(newOrder.pickupDistance)} away`
+                            : 'N/A')}
                       </span>
                     </div>
                     
                     <div className="flex items-center gap-1.5 text-gray-500 text-sm">
                       <MapPin className="w-4 h-4" />
                       <span>
-                        {selectedRestaurant?.distance && selectedRestaurant.distance !== '0 km' && selectedRestaurant.distance !== 'Calculating...'
-                          ? `${selectedRestaurant.distance} away`
-                          : (newOrder?.pickupDistance && newOrder.pickupDistance !== '0 km' && newOrder.pickupDistance !== 'Calculating...'
-                            ? `${newOrder.pickupDistance} away`
-                            : 'Calculating...')}
+                        {normalizeDistanceLabel(selectedRestaurant?.distance)
+                          ? `${selectedRestaurant.distance} away`
+                          : (normalizeDistanceLabel(newOrder?.pickupDistance)
+                            ? `${newOrder.pickupDistance} away`
+                            : 'Distance not available')}
                       </span>
                     </div>
                   </div>
@@ -11597,3 +11626,4 @@ export default function DeliveryHome() {
     </div>
   )
 }
+

@@ -733,20 +733,33 @@ export default function GroceryCheckoutPage() {
       }
 
       try {
-        const [storeResponse, outletTimingsResponse] = await Promise.all([
-          restaurantAPI.getRestaurantById(String(resolvedRestaurant.restaurantId)),
-          api.get(`/restaurant/${String(resolvedRestaurant.restaurantId)}/outlet-timings`),
-        ]);
+        const storeResponse = await restaurantAPI.getRestaurantById(String(resolvedRestaurant.restaurantId));
 
         const store =
           storeResponse?.data?.data?.restaurant ||
           storeResponse?.data?.restaurant ||
           storeResponse?.data?.data ||
           {};
-        const outletTimings =
-          outletTimingsResponse?.data?.data?.outletTimings?.timings ||
-          outletTimingsResponse?.data?.outletTimings?.timings ||
-          [];
+        const storePlatform = String(
+          store?.platform || resolvedRestaurant?.platform || "mogrocery",
+        ).toLowerCase();
+
+        // Grocery stores may not have restaurant outlet timings endpoint.
+        // Fall back to store-level timing fields when timings fetch is unavailable.
+        let outletTimings = [];
+        if (storePlatform !== "mogrocery") {
+          try {
+            const outletTimingsResponse = await api.get(
+              `/restaurant/${String(resolvedRestaurant.restaurantId)}/outlet-timings`,
+            );
+            outletTimings =
+              outletTimingsResponse?.data?.data?.outletTimings?.timings ||
+              outletTimingsResponse?.data?.outletTimings?.timings ||
+              [];
+          } catch {
+            outletTimings = [];
+          }
+        }
 
         setStoreAvailability(
           evaluateStoreAvailability({
@@ -755,10 +768,13 @@ export default function GroceryCheckoutPage() {
             label: "Store",
           }),
         );
-      } catch {
+      } catch (error) {
+        console.error("Failed to verify store availability on checkout:", error);
+        // Don't hard-block checkout on transient availability API failures.
+        // Final validation still happens on order creation in backend.
         setStoreAvailability({
-          isAvailable: false,
-          reason: "Unable to verify store availability right now.",
+          isAvailable: true,
+          reason: "",
         });
       }
     };

@@ -11,6 +11,7 @@ export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
   const [processing, setProcessing] = useState(false)
 
   const cashInHandNum = Number(cashInHand) || 0
+  const hasCashInHand = cashInHandNum > 0
 
   const handleAmountChange = (e) => {
     const v = e.target.value.replace(/[^0-9.]/g, "")
@@ -19,6 +20,10 @@ export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
 
   const handleDeposit = async () => {
     const amt = parseFloat(amount)
+    if (!hasCashInHand) {
+      toast.error("No COD cash in hand available for deposit")
+      return
+    }
     if (!amount || isNaN(amt) || amt < 1) {
       toast.error("Enter a valid amount (minimum ₹1)")
       return
@@ -27,7 +32,7 @@ export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
       toast.error("Maximum deposit is ₹5,00,000")
       return
     }
-    if (cashInHandNum > 0 && amt > cashInHandNum) {
+    if (amt > cashInHandNum) {
       toast.error(`Deposit amount cannot exceed cash in hand (₹${cashInHandNum.toFixed(2)})`)
       return
     }
@@ -117,16 +122,20 @@ export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
             className="w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
           />
         </div>
-        {cashInHandNum > 0 && (
+        {cashInHandNum > 0 ? (
           <p className="text-xs text-slate-500 mt-1">
             Cash in hand: ₹{cashInHandNum.toFixed(2)}. Deposit cannot exceed this.
+          </p>
+        ) : (
+          <p className="text-xs text-amber-700 mt-1">
+            No COD cash in hand right now. Pocket balance/earnings cannot be deposited here.
           </p>
         )}
       </div>
       <button
         type="button"
         onClick={handleDeposit}
-        disabled={loading || processing || !amount || parseFloat(amount) < 1}
+        disabled={loading || processing || !hasCashInHand || !amount || parseFloat(amount) < 1}
         className="w-full py-2.5 rounded-lg bg-black text-white font-semibold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {loading || processing ? (
@@ -137,3 +146,4 @@ export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
     </div>
   )
 }
+

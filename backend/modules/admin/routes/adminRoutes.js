@@ -238,6 +238,8 @@ import {
   getTransactionReport,
   getRestaurantReport
 } from '../controllers/orderController.js';
+import { assignOrder } from '../../order/controllers/orderAssignmentController.js';
+import { validateOrderAssignmentPayload } from '../../order/middleware/codAssignmentValidation.js';
 import {
   getAllReviews,
   getReviewByOrderId,
@@ -256,7 +258,7 @@ import {
   createPushNotification,
 } from '../controllers/pushNotificationController.js';
 import zoneRoutes from './zoneRoutes.js';
-import { authenticateAdmin } from '../middleware/adminAuth.js';
+import { authenticateAdmin, authorizeAdmin } from '../middleware/adminAuth.js';
 import { uploadMiddleware } from '../../../shared/utils/cloudinaryService.js';
 
 const router = express.Router();
@@ -302,11 +304,11 @@ router.get('/delivery-boy-wallet', getDeliveryBoyWallets);
 router.post('/delivery-boy-wallet/adjustment', addWalletAdjustment);
 
 // Admin Management
-router.get('/admins', getAdmins);
-router.get('/admins/:id', getAdminById);
-router.post('/admins', createAdmin);
-router.put('/admins/:id', updateAdmin);
-router.delete('/admins/:id', deleteAdmin);
+router.get('/admins', authorizeAdmin('super_admin'), getAdmins);
+router.get('/admins/:id', authorizeAdmin('super_admin'), getAdminById);
+router.post('/admins', authorizeAdmin('super_admin'), createAdmin);
+router.put('/admins/:id', authorizeAdmin('super_admin'), updateAdmin);
+router.delete('/admins/:id', authorizeAdmin('super_admin'), deleteAdmin);
 
 // Profile Management
 router.get('/profile', getAdminProfile);
@@ -511,6 +513,7 @@ router.delete('/safety-emergency/:id', deleteSafetyEmergency);
 router.get('/orders', getOrders);
 router.post('/orders/:id/approve', approveOrderRequest);
 router.post('/orders/:id/reject', rejectOrderRequest);
+router.post('/orders/assign', validateOrderAssignmentPayload, assignOrder);
 router.post('/orders/:id/resend-rider-notification', resendRiderNotification);
 router.get('/orders/:id/rider-assignment', getRiderAssignmentDetails);
 router.get('/orders/searching-deliveryman', getSearchingDeliverymanOrders);

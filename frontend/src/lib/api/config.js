@@ -286,6 +286,8 @@ export const API_ENDPOINTS = {
     },
     PROFILE: '/admin/profile',
     CHANGE_PASSWORD: '/admin/settings/change-password',
+    ADMINS: '/admin/admins',
+    ADMIN_BY_ID: '/admin/admins/:id',
     USERS: '/admin/users',
     USER_BY_ID: '/admin/users/:id',
     USER_STATUS: '/admin/users/:id/status',

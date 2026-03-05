@@ -111,8 +111,16 @@ export const waitForDBConnection = async () => {
   return mongoose.connection;
 };
 
-export const requireDbConnection = (req, res, next) => {
+export const requireDbConnection = async (req, res, next) => {
   if (isDbConnected()) return next();
+
+  try {
+    await connectDB();
+    if (isDbConnected()) return next();
+  } catch (_) {
+    // Fall through to 503 response below.
+  }
+
   return res.status(503).json({
     success: false,
     message: 'Service temporarily unavailable: database not connected'
