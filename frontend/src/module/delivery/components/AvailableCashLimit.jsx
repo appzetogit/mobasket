@@ -3,10 +3,15 @@ import { formatCurrency } from "../../restaurant/utils/currency"
 export default function AvailableCashLimit({ onClose, walletData = {} }) {
   const rawLimit = Number(walletData.totalCashLimit)
   const totalCashLimit = Number.isFinite(rawLimit) && rawLimit >= 0 ? rawLimit : 0
-  const cashInHand = Number(walletData.cashInHand) || 0
+  const cashInHand = Number(walletData.cashCollected ?? walletData.cashInHand) || 0
   const deductions = Number(walletData.deductions) || 0
   const pocketWithdrawals = Number(walletData.pocketWithdrawals) || 0
-  const availableCashLimit = cashInHand
+  const availableCashLimit = Math.max(
+    0,
+    Number.isFinite(Number(walletData.availableCashLimit))
+      ? Number(walletData.availableCashLimit)
+      : (totalCashLimit - cashInHand)
+  )
 
   return (
     <div className="min-h-screen bg-white text-black flex flex-col">
@@ -22,7 +27,7 @@ export default function AvailableCashLimit({ onClose, walletData = {} }) {
           <div className="text-sm font-semibold">{formatCurrency(totalCashLimit)}</div>
         </div>
 
-        <DetailRow label="Cash in hand" value={formatCurrency(cashInHand)} />
+        <DetailRow label="Cash collected (COD)" value={formatCurrency(cashInHand)} />
         <DetailRow label="Deductions" value={formatCurrency(deductions)} />
         <DetailRow label="Pocket withdrawals" value={formatCurrency(pocketWithdrawals)} />
 
@@ -32,12 +37,12 @@ export default function AvailableCashLimit({ onClose, walletData = {} }) {
         </div>
 
         <div className="py-3 text-xs text-gray-600 border-b border-gray-200">
-          Incoming COD + available cash limit must be within {formatCurrency(totalCashLimit)}.
+          Assignment rule: cashCollected + orderCOD must be within {formatCurrency(totalCashLimit)}.
         </div>
 
-        {cashInHand > totalCashLimit && (
+        {availableCashLimit <= 0 && (
           <div className="py-3 text-xs text-amber-700">
-            Cash in hand is above total limit. Deposit to increase available limit.
+            COD limit exhausted. Deposit cash to increase remaining limit.
           </div>
         )}
       </div>

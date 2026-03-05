@@ -3,6 +3,7 @@ import { successResponse, errorResponse } from '../../../shared/utils/response.j
 import Delivery from '../models/Delivery.js';
 import DeliveryWallet from '../models/DeliveryWallet.js';
 import Order from '../../order/models/Order.js';
+import { resolveCODLimitForDelivery } from '../services/codLimitService.js';
 import winston from 'winston';
 
 const logger = winston.createLogger({
@@ -75,6 +76,9 @@ export const getDashboard = asyncHandler(async (req, res) => {
 
     // Calculate wallet balance (using new DeliveryWallet model)
     const walletBalance = wallet?.totalBalance || 0;
+    const cashCollected = Math.max(0, Number(wallet?.codCashCollected ?? wallet?.cashInHand ?? 0) || 0);
+    const codLimit = await resolveCODLimitForDelivery(delivery._id);
+    const remainingLimit = Math.max(0, Number(codLimit) - cashCollected);
     const totalEarned = wallet?.totalEarned || delivery.earnings?.totalEarned || 0;
     const currentBalance = wallet?.totalBalance || delivery.earnings?.currentBalance || 0;
     const pendingPayout = wallet?.transactions
@@ -152,6 +156,9 @@ export const getDashboard = asyncHandler(async (req, res) => {
       },
       wallet: {
         balance: walletBalance,
+        codLimit,
+        cashCollected,
+        remainingLimit,
         totalEarned: totalEarned,
         currentBalance: currentBalance,
         pendingPayout: pendingPayout,

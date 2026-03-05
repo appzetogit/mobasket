@@ -108,6 +108,22 @@ const earningsSchema = new mongoose.Schema({
   }
 }, { _id: false });
 
+const codSchema = new mongoose.Schema({
+  // Optional per-rider override; fallback is global admin deliveryCashLimit.
+  limitOverride: {
+    type: Number,
+    min: 0,
+    default: null
+  },
+  // Snapshot field for dashboard caching; source of truth remains DeliveryWallet.cashInHand.
+  cashCollected: {
+    type: Number,
+    min: 0,
+    default: 0
+  },
+  lastSettledAt: Date
+}, { _id: false });
+
 const metricsSchema = new mongoose.Schema({
   totalOrders: {
     type: Number,
@@ -228,6 +244,8 @@ const deliverySchema = new mongoose.Schema(
     availability: availabilitySchema,
     // Earnings
     earnings: earningsSchema,
+    // COD-specific config/snapshot
+    cod: codSchema,
     // Metrics
     metrics: metricsSchema,
     // Status

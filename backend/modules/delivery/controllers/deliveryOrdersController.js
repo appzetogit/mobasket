@@ -1928,7 +1928,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
           try {
             const updateResult = await DeliveryWallet.updateOne(
               { deliveryId: delivery._id },
-              { $inc: { cashInHand: codAmount } }
+              { $inc: { cashInHand: codAmount, codCashCollected: codAmount } }
             );
             if (updateResult.modifiedCount > 0) {
               console.log(`✅ Cash collected ₹${codAmount.toFixed(2)} (COD) added to cashInHand for order ${orderIdForLog}`);

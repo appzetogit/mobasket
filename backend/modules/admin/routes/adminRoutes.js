@@ -238,6 +238,8 @@ import {
   getTransactionReport,
   getRestaurantReport
 } from '../controllers/orderController.js';
+import { assignOrder } from '../../order/controllers/orderAssignmentController.js';
+import { validateOrderAssignmentPayload } from '../../order/middleware/codAssignmentValidation.js';
 import {
   getAllReviews,
   getReviewByOrderId,
@@ -511,6 +513,7 @@ router.delete('/safety-emergency/:id', deleteSafetyEmergency);
 router.get('/orders', getOrders);
 router.post('/orders/:id/approve', approveOrderRequest);
 router.post('/orders/:id/reject', rejectOrderRequest);
+router.post('/orders/assign', validateOrderAssignmentPayload, assignOrder);
 router.post('/orders/:id/resend-rider-notification', resendRiderNotification);
 router.get('/orders/:id/rider-assignment', getRiderAssignmentDetails);
 router.get('/orders/searching-deliveryman', getSearchingDeliverymanOrders);

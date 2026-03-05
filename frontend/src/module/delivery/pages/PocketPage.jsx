@@ -406,16 +406,27 @@ export default function PocketPage() {
     })
     // Only depend on walletState and balances - totalBonus and weeklyEarnings are derived from these
   }, [pocketBalance, walletState, balances])
-  // "Available cash limit" on this screen represents used COD limit:
-  // starts at 0 and increases with cashInHand collection.
-  const totalCashLimit = Number.isFinite(Number(walletState?.totalCashLimit))
-    ? Number(walletState.totalCashLimit)
-    : 750
-  const cashInHand = Math.max(0, Number(walletState?.cashInHand) || Number(balances.cashInHand) || 0)
+  // COD limit summary from backend:
+  // totalCashLimit = codLimit
+  // cashInHand/cashCollected = COD currently held by rider
+  // availableCashLimit = remaining COD headroom for new COD assignments
+  const totalCashLimit = Number.isFinite(Number(walletState?.codLimit))
+    ? Number(walletState.codLimit)
+    : Number.isFinite(Number(walletState?.totalCashLimit))
+      ? Number(walletState.totalCashLimit)
+      : 750
+  const cashCollected = Math.max(
+    0,
+    Number(walletState?.cashCollected ?? walletState?.cashInHand ?? balances.cashInHand) || 0
+  )
+  const backendRemainingLimit = Number(walletState?.remainingLimit)
+  const availableCashLimit = Number.isFinite(backendRemainingLimit)
+    ? Math.max(0, backendRemainingLimit)
+    : Math.max(0, totalCashLimit - cashCollected)
+  const cashInHand = cashCollected
   const deductions = Math.max(0, Number(walletState?.deductions) || 0)
-  const availableCashLimit = cashInHand
-  const isCashLimitReached = totalCashLimit > 0 && cashInHand >= totalCashLimit
-  const depositAmount = pocketBalance < 0 ? Math.abs(pocketBalance) : 0
+  const isCashLimitReached = totalCashLimit > 0 && availableCashLimit <= 0
+  const depositAmount = cashCollected > 0 ? cashCollected : 0
 
   // Customer tips balance - calculate from transactions
   const customerTipsBalance = walletState.transactions
@@ -1014,12 +1025,12 @@ export default function PocketPage() {
                 <span className="text-black text-sm font-medium">₹{totalCashLimit.toFixed(2)}</span>
               </div>
               <div className="rounded-lg p-3 text-xs font-medium bg-slate-50 text-slate-700">
-                Available cash limit: {formatCurrency(availableCashLimit)}. Incoming COD + available cash limit must stay within {formatCurrency(totalCashLimit)}.
+                Remaining COD limit: {formatCurrency(availableCashLimit)}. New COD order can be assigned only if {`cashCollected + orderCOD <= codLimit`}.
               </div>
 
               {isCashLimitReached && (
                 <div className="rounded-lg p-3 text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">
-                  Cash in hand is at or above your total cash limit. Deposit COD cash to improve available cash limit.
+                  COD limit exhausted. Deposit cash to start receiving new COD orders again.
                 </div>
               )}
 
@@ -1127,6 +1138,7 @@ export default function PocketPage() {
             totalCashLimit: totalCashLimit,
             availableCashLimit: availableCashLimit,
             cashInHand: cashInHand,
+            cashCollected: cashCollected,
             deductions: deductions,
             pocketWithdrawals: balances.totalWithdrawn ?? 0,
             settlementAdjustment: 0
