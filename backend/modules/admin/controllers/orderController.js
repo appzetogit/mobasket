@@ -124,8 +124,18 @@ export const getOrders = asyncHandler(async (req, res) => {
 
       // MoGrocery approval flow can move directly to "preparing",
       // so Accepted tab should include those records as well.
-      if (normalizedPlatform === 'mogrocery' && status === 'accepted') {
-        mappedStatus = ['confirmed', 'preparing'];
+      if (normalizedPlatform === 'mogrocery') {
+        if (status === 'accepted') {
+          mappedStatus = ['confirmed', 'preparing'];
+        }
+      } else if (normalizedPlatform === 'mofood' || !normalizedPlatform) {
+        if (status === 'pending') {
+          mappedStatus = ['pending', 'confirmed'];
+        } else if (status === 'accepted') {
+          mappedStatus = ['preparing'];
+        } else if (status === 'processing') {
+          mappedStatus = ['ready'];
+        }
       }
 
       if (mappedStatus) {

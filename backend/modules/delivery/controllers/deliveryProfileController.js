@@ -82,6 +82,22 @@ const updateProfileSchema = Joi.object({
       bankName: Joi.string().trim().min(2).max(100).pattern(/^[a-zA-Z\s'&-]+$/).messages({
         'string.pattern.base': 'Bank name can only contain letters, spaces, apostrophes, hyphens, and ampersands'
       }).optional().allow(null, '')
+    }).optional(),
+    aadhar: Joi.object({
+      number: Joi.string().trim().optional().allow(null, ''),
+      document: Joi.string().uri().optional().allow(null, ''),
+      verified: Joi.boolean().optional()
+    }).optional(),
+    pan: Joi.object({
+      number: Joi.string().trim().optional().allow(null, ''),
+      document: Joi.string().uri().optional().allow(null, ''),
+      verified: Joi.boolean().optional()
+    }).optional(),
+    drivingLicense: Joi.object({
+      number: Joi.string().trim().optional().allow(null, ''),
+      document: Joi.string().uri().optional().allow(null, ''),
+      expiryDate: Joi.date().optional().allow(null),
+      verified: Joi.boolean().optional()
     }).optional()
   }).optional()
 });
@@ -97,45 +113,103 @@ export const updateProfile = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, error.details[0].message);
     }
 
-    // Handle nested documents.bankDetails update properly
-    const setData = { ...updateData };
-    if (updateData.documents?.bankDetails) {
-      // Merge bankDetails with existing documents
-      setData['documents.bankDetails'] = {
-        ...delivery.documents?.bankDetails,
-        ...updateData.documents.bankDetails
-      };
-      // Remove the nested documents object to avoid conflicts
-      delete setData.documents;
-    }
-
-    // Update profile
-    const updatedDelivery = await Delivery.findByIdAndUpdate(
-      delivery._id,
-      { $set: setData },
-      { new: true, runValidators: true }
-    ).select('-password -refreshToken');
-
-    if (!updatedDelivery) {
+    // 1. Fetch fresh delivery document
+    const deliveryDoc = await Delivery.findById(delivery._id).select('+password');
+    if (!deliveryDoc) {
       return errorResponse(res, 404, 'Delivery partner not found');
     }
 
+    let documentUpdatedForStatus = false;
+
+    // 2. Handle Documents (Nested) - Explicitly use .set() for reliability
+    if (updateData.documents) {
+      const docs = updateData.documents;
+
+      // Ensure documents object exists in the Mongoose document
+      if (!deliveryDoc.documents) {
+        deliveryDoc.documents = {};
+      }
+
+      if (docs.aadhar) {
+        if (docs.aadhar.number) deliveryDoc.set('documents.aadhar.number', docs.aadhar.number);
+        if (docs.aadhar.document) {
+          deliveryDoc.set('documents.aadhar.document', docs.aadhar.document);
+          deliveryDoc.set('documents.aadhar.verified', false);
+          documentUpdatedForStatus = true;
+        }
+      }
+
+      if (docs.pan) {
+        if (docs.pan.number) deliveryDoc.set('documents.pan.number', docs.pan.number);
+        if (docs.pan.document) {
+          deliveryDoc.set('documents.pan.document', docs.pan.document);
+          deliveryDoc.set('documents.pan.verified', false);
+          documentUpdatedForStatus = true;
+        }
+      }
+
+      if (docs.drivingLicense) {
+        if (docs.drivingLicense.number) deliveryDoc.set('documents.drivingLicense.number', docs.drivingLicense.number);
+        if (docs.drivingLicense.document) {
+          deliveryDoc.set('documents.drivingLicense.document', docs.drivingLicense.document);
+          deliveryDoc.set('documents.drivingLicense.verified', false);
+          documentUpdatedForStatus = true;
+        }
+      }
+
+      if (docs.bankDetails) {
+        if (docs.bankDetails.accountHolderName) deliveryDoc.set('documents.bankDetails.accountHolderName', docs.bankDetails.accountHolderName);
+        if (docs.bankDetails.accountNumber) deliveryDoc.set('documents.bankDetails.accountNumber', docs.bankDetails.accountNumber);
+        if (docs.bankDetails.ifscCode) deliveryDoc.set('documents.bankDetails.ifscCode', docs.bankDetails.ifscCode);
+        if (docs.bankDetails.bankName) deliveryDoc.set('documents.bankDetails.bankName', docs.bankDetails.bankName);
+      }
+    }
+
+    // 3. Handle Other Fields
+    if (updateData.name) deliveryDoc.name = updateData.name;
+    if (updateData.email !== undefined) deliveryDoc.email = updateData.email;
+    if (updateData.dateOfBirth) deliveryDoc.dateOfBirth = updateData.dateOfBirth;
+    if (updateData.gender) deliveryDoc.gender = updateData.gender;
+
+    if (updateData.vehicle) {
+      if (updateData.vehicle.type) deliveryDoc.set('vehicle.type', updateData.vehicle.type);
+      if (updateData.vehicle.number) deliveryDoc.set('vehicle.number', updateData.vehicle.number);
+      if (updateData.vehicle.model) deliveryDoc.set('vehicle.model', updateData.vehicle.model);
+      if (updateData.vehicle.brand) deliveryDoc.set('vehicle.brand', updateData.vehicle.brand);
+    }
+
+    if (updateData.location) {
+      if (updateData.location.addressLine1) deliveryDoc.set('location.addressLine1', updateData.location.addressLine1);
+      if (updateData.location.city) deliveryDoc.set('location.city', updateData.location.city);
+      if (updateData.location.state) deliveryDoc.set('location.state', updateData.location.state);
+    }
+
+    if (updateData.profileImage) {
+      if (updateData.profileImage.url !== undefined) deliveryDoc.set('profileImage.url', updateData.profileImage.url);
+      if (updateData.profileImage.publicId !== undefined) deliveryDoc.set('profileImage.publicId', updateData.profileImage.publicId);
+    }
+
+    // 4. Update status if documents were updated
+    if (documentUpdatedForStatus) {
+      deliveryDoc.status = 'pending';
+    }
+
+    // 5. Save and return
+    const savedDelivery = await deliveryDoc.save();
+
+    const profileResponse = savedDelivery.toObject();
+    delete profileResponse.password;
+    delete profileResponse.refreshToken;
+
     logger.info('Profile updated successfully', {
-      deliveryId: updatedDelivery.deliveryId || updatedDelivery._id,
-      updatedFields: Object.keys(updateData)
+      deliveryId: savedDelivery.deliveryId || savedDelivery._id
     });
 
     return successResponse(res, 200, 'Profile updated successfully', {
-      profile: updatedDelivery
+      profile: profileResponse
     });
   } catch (error) {
     logger.error(`Error updating delivery profile: ${error.message}`);
-    
-    // Handle duplicate email error
-    if (error.code === 11000) {
-      return errorResponse(res, 400, 'Email already exists');
-    }
-    
     return errorResponse(res, 500, 'Failed to update profile');
   }
 });

@@ -26,6 +26,7 @@ export default function SignupStep2() {
     drivingLicensePhoto: false
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [drivingLicenseNumber, setDrivingLicenseNumber] = useState("")
 
   useEffect(() => {
     // Ensure this step always opens from the top.
@@ -72,12 +73,12 @@ export default function SignupStep2() {
 
       if (response?.data?.success && response?.data?.data) {
         const { url, publicId } = response.data.data
-        
+
         setDocuments(prev => ({
           ...prev,
           [docType]: file
         }))
-        
+
         setUploadedDocs(prev => ({
           ...prev,
           [docType]: { url, publicId }
@@ -108,8 +109,8 @@ export default function SignupStep2() {
     e.preventDefault()
 
     // Check if all required documents are uploaded
-    if (!uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !uploadedDocs.drivingLicensePhoto) {
-      toast.error("Please upload all required documents")
+    if (!uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !drivingLicenseNumber) {
+      toast.error("Please upload all required documents and enter license number")
       return
     }
 
@@ -120,7 +121,8 @@ export default function SignupStep2() {
         profilePhoto: uploadedDocs.profilePhoto,
         aadharPhoto: uploadedDocs.aadharPhoto,
         panPhoto: uploadedDocs.panPhoto,
-        drivingLicensePhoto: uploadedDocs.drivingLicensePhoto
+        drivingLicensePhoto: uploadedDocs.drivingLicensePhoto,
+        drivingLicenseNumber: drivingLicenseNumber
       })
 
       if (response?.data?.success) {
@@ -149,7 +151,7 @@ export default function SignupStep2() {
         <label className="block text-sm font-medium text-gray-700 mb-2">
           {label} {required && <span className="text-red-500">*</span>}
         </label>
-        
+
         {uploaded ? (
           <div className="relative">
             <img
@@ -227,17 +229,32 @@ export default function SignupStep2() {
           <DocumentUpload docType="profilePhoto" label="Profile Photo" required={true} />
           <DocumentUpload docType="aadharPhoto" label="Aadhar Card Photo" required={true} />
           <DocumentUpload docType="panPhoto" label="PAN Card Photo" required={true} />
-          <DocumentUpload docType="drivingLicensePhoto" label="Driving License Photo" required={true} />
+
+          {/* Driving License Number Input */}
+          <div className="bg-white rounded-lg p-4 border border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Driving License Number <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={drivingLicenseNumber}
+              onChange={(e) => setDrivingLicenseNumber(e.target.value)}
+              placeholder="Enter Driving License Number"
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#00B761] text-sm"
+              required
+            />
+          </div>
+
+          <DocumentUpload docType="drivingLicensePhoto" label="Driving License Photo (Optional)" required={false} />
 
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !uploadedDocs.drivingLicensePhoto}
-            className={`w-full py-4 rounded-lg font-bold text-white text-base transition-colors mt-6 ${
-              isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !uploadedDocs.drivingLicensePhoto
-                ? "bg-gray-400 cursor-not-allowed"
-                : "bg-[#00B761] hover:bg-[#00A055]"
-            }`}
+            disabled={isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !drivingLicenseNumber}
+            className={`w-full py-4 rounded-lg font-bold text-white text-base transition-colors mt-6 ${isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !drivingLicenseNumber
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-[#00B761] hover:bg-[#00A055]"
+              }`}
           >
             {isSubmitting ? "Submitting..." : "Complete Signup"}
           </button>

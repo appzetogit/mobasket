@@ -110,12 +110,12 @@ export const submitSignupDetails = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     logger.error(`Error saving signup details: ${error.message}`);
-    
+
     // Handle duplicate email error
     if (error.code === 11000) {
       return errorResponse(res, 400, 'Email already exists');
     }
-    
+
     return errorResponse(res, 500, 'Failed to save signup details');
   }
 });
@@ -140,7 +140,8 @@ const signupDocumentsSchema = Joi.object({
   drivingLicensePhoto: Joi.object({
     url: Joi.string().uri().required(),
     publicId: Joi.string().trim().required()
-  }).required()
+  }).optional().allow(null),
+  drivingLicenseNumber: Joi.string().trim().required()
 });
 
 export const submitSignupDocuments = asyncHandler(async (req, res) => {
@@ -150,7 +151,8 @@ export const submitSignupDocuments = asyncHandler(async (req, res) => {
       profilePhoto,
       aadharPhoto,
       panPhoto,
-      drivingLicensePhoto
+      drivingLicensePhoto,
+      drivingLicenseNumber
     } = req.body;
 
     // Validate input
@@ -160,17 +162,17 @@ export const submitSignupDocuments = asyncHandler(async (req, res) => {
     }
 
     // Validate that all required documents are provided
-    if (!profilePhoto || !aadharPhoto || !panPhoto || !drivingLicensePhoto) {
-      return errorResponse(res, 400, 'All documents are required');
+    if (!profilePhoto || !aadharPhoto || !panPhoto) {
+      return errorResponse(res, 400, 'Profile Photo, Aadhar Card and PAN Card are required');
     }
 
     // Log document URLs for debugging
     logger.info('Storing documents for delivery partner', {
       deliveryId: delivery.deliveryId || delivery._id,
-      profilePhoto: profilePhoto.url ? 'Uploaded' : 'Missing',
-      aadharPhoto: aadharPhoto.url ? 'Uploaded' : 'Missing',
-      panPhoto: panPhoto.url ? 'Uploaded' : 'Missing',
-      drivingLicensePhoto: drivingLicensePhoto.url ? 'Uploaded' : 'Missing'
+      profilePhoto: profilePhoto?.url ? 'Uploaded' : 'Missing',
+      aadharPhoto: aadharPhoto?.url ? 'Uploaded' : 'Missing',
+      panPhoto: panPhoto?.url ? 'Uploaded' : 'Missing',
+      drivingLicensePhoto: drivingLicensePhoto?.url ? 'Uploaded' : 'Missing'
     });
 
     // Update delivery profile with documents
@@ -200,7 +202,8 @@ export const submitSignupDocuments = asyncHandler(async (req, res) => {
         // Driving license document
         drivingLicense: {
           ...delivery.documents?.drivingLicense,
-          document: drivingLicensePhoto.url,
+          document: drivingLicensePhoto?.url || delivery.documents?.drivingLicense?.document,
+          number: drivingLicenseNumber?.trim() || delivery.documents?.drivingLicense?.number,
           verified: false // Will be verified by admin later
         }
       },

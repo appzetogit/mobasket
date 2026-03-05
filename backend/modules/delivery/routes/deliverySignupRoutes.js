@@ -56,7 +56,8 @@ router.post('/signup/documents', validate(Joi.object({
   drivingLicensePhoto: Joi.object({
     url: Joi.string().uri().required(),
     publicId: Joi.string().trim().required()
-  }).required()
+  }).optional().allow(null),
+  drivingLicenseNumber: Joi.string().trim().required()
 })), submitSignupDocuments);
 
 export default router;
