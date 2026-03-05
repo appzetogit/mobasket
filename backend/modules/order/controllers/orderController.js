@@ -21,6 +21,8 @@ import Menu from '../../restaurant/models/Menu.js';
 import User from '../../auth/models/User.js';
 import OutletTimings from '../../restaurant/models/OutletTimings.js';
 import GroceryProduct from '../../grocery/models/GroceryProduct.js';
+import GroceryPlan from '../../grocery/models/GroceryPlan.js';
+import GroceryPlanOffer from '../../grocery/models/GroceryPlanOffer.js';
 import { reduceGroceryStockForOrder, restoreGroceryStockForOrder } from '../services/groceryStockService.js';
 import {
   getDefaultPendingCartEdit,
@@ -861,14 +863,159 @@ export const createOrder = async (req, res) => {
             .filter(Boolean)
         )
       ).map((id) => new mongoose.Types.ObjectId(id));
+      const selectedSubcategoryId =
+        mongoose.Types.ObjectId.isValid(planSubscription.selectedSubcategoryId)
+          ? new mongoose.Types.ObjectId(planSubscription.selectedSubcategoryId)
+          : null;
+      const selectedSubcategoryIds = Array.from(
+        new Set(
+          (Array.isArray(planSubscription.selectedSubcategoryIds) ? planSubscription.selectedSubcategoryIds : [])
+            .map((value) => {
+              const normalized = typeof value === 'string' ? value : value?._id || value?.id || value;
+              return mongoose.Types.ObjectId.isValid(normalized) ? normalized.toString() : null;
+            })
+            .filter(Boolean)
+        )
+      ).map((id) => new mongoose.Types.ObjectId(id));
+      const selectedProductIds = Array.from(
+        new Set(
+          (Array.isArray(planSubscription.selectedProductIds) ? planSubscription.selectedProductIds : [])
+            .map((value) => {
+              const normalized = typeof value === 'string' ? value : value?._id || value?.id || value;
+              return mongoose.Types.ObjectId.isValid(normalized) ? normalized.toString() : null;
+            })
+            .filter(Boolean)
+        )
+      ).map((id) => new mongoose.Types.ObjectId(id));
       return {
         planId: new mongoose.Types.ObjectId(rawPlanId),
         planName: (planSubscription.planName || '').toString().trim(),
         durationDays: Number(planSubscription.durationDays || 0),
-        selectedOfferIds
+        selectedOfferIds,
+        selectedSubcategoryId,
+        selectedSubcategoryIds,
+        selectedProductIds
       };
     })();
     const isPlanSubscriptionOrder = Boolean(normalizedPlanSubscription?.planId);
+    if (isPlanSubscriptionOrder) {
+      const planIdString = normalizedPlanSubscription.planId.toString();
+      const selectedOfferIdStrings = (normalizedPlanSubscription.selectedOfferIds || []).map((id) => id.toString());
+      const selectedSubcategoryIdStrings = Array.from(
+        new Set([
+          ...(normalizedPlanSubscription.selectedSubcategoryId
+            ? [normalizedPlanSubscription.selectedSubcategoryId.toString()]
+            : []),
+          ...((normalizedPlanSubscription.selectedSubcategoryIds || []).map((id) => id.toString()))
+        ])
+      );
+      const selectedProductIdStrings = (normalizedPlanSubscription.selectedProductIds || []).map((id) => id.toString());
+
+      const planDoc = await GroceryPlan.findById(planIdString).select('offerIds productCount isActive').lean();
+      if (!planDoc || planDoc.isActive === false) {
+        return res.status(400).json({
+          success: false,
+          message: 'Selected plan is not available'
+        });
+      }
+
+      const linkedPlanOfferIds = new Set(
+        (Array.isArray(planDoc.offerIds) ? planDoc.offerIds : [])
+          .map((id) => (id ? id.toString() : null))
+          .filter(Boolean)
+      );
+
+      if (selectedOfferIdStrings.some((offerId) => !linkedPlanOfferIds.has(offerId))) {
+        return res.status(400).json({
+          success: false,
+          message: 'One or more selected offers are not linked to this plan'
+        });
+      }
+
+      const offerIdsForValidation = selectedOfferIdStrings.length > 0
+        ? selectedOfferIdStrings
+        : Array.from(linkedPlanOfferIds);
+      const offersForValidation = offerIdsForValidation.length > 0
+        ? await GroceryPlanOffer.find({ _id: { $in: offerIdsForValidation }, isActive: true })
+          .select('subcategoryIds')
+          .lean()
+        : [];
+
+      const allowedSubcategoryIds = new Set();
+      offersForValidation.forEach((offer) => {
+        (Array.isArray(offer?.subcategoryIds) ? offer.subcategoryIds : []).forEach((subcategoryId) => {
+          if (subcategoryId) allowedSubcategoryIds.add(subcategoryId.toString());
+        });
+      });
+
+      if (selectedSubcategoryIdStrings.some((subcategoryId) => !allowedSubcategoryIds.has(subcategoryId))) {
+        return res.status(400).json({
+          success: false,
+          message: 'One or more selected subcategories are not linked to the chosen plan offers'
+        });
+      }
+
+      if (selectedProductIdStrings.length > 0 && selectedSubcategoryIdStrings.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please select subcategories before selecting products'
+        });
+      }
+
+      if (
+        selectedSubcategoryIdStrings.length > 0 &&
+        selectedProductIdStrings.length !== selectedSubcategoryIdStrings.length
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'You must select exactly one product per selected subcategory'
+        });
+      }
+
+      if (
+        allowedSubcategoryIds.size === 0 &&
+        Number(planDoc.productCount || 0) > 0 &&
+        selectedProductIdStrings.length > Number(planDoc.productCount || 0)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: `You can select up to ${Number(planDoc.productCount || 0)} products for this plan`
+        });
+      }
+
+      if (selectedProductIdStrings.length > 0 && selectedSubcategoryIdStrings.length > 0) {
+        const matchedProducts = await GroceryProduct.find({
+          _id: { $in: selectedProductIdStrings },
+          isActive: true
+        })
+          .select('_id subcategory subcategories')
+          .lean();
+
+        if ((Array.isArray(matchedProducts) ? matchedProducts.length : 0) !== selectedProductIdStrings.length) {
+          return res.status(400).json({
+            success: false,
+            message: 'One or more selected products are invalid or inactive'
+          });
+        }
+
+        for (const subcategoryId of selectedSubcategoryIdStrings) {
+          const countForSubcategory = matchedProducts.filter((product) => {
+            const primarySubcategory = product?.subcategory ? String(product.subcategory) : '';
+            const extraSubcategories = Array.isArray(product?.subcategories)
+              ? product.subcategories.map((id) => String(id))
+              : [];
+            return primarySubcategory === subcategoryId || extraSubcategories.includes(subcategoryId);
+          }).length;
+
+          if (countForSubcategory !== 1) {
+            return res.status(400).json({
+              success: false,
+              message: 'Select exactly one product from each selected subcategory'
+            });
+          }
+        }
+      }
+    }
     let requiresAdminApproval = false;
 
     // Ensure user has mandatory profile details before placing order

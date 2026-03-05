@@ -287,6 +287,25 @@ const orderSchema = new mongoose.Schema({
         ref: 'GroceryPlanOffer'
       }],
       default: []
+    },
+    selectedSubcategoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'GrocerySubcategory',
+      default: null
+    },
+    selectedSubcategoryIds: {
+      type: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'GrocerySubcategory'
+      }],
+      default: []
+    },
+    selectedProductIds: {
+      type: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'GroceryProduct'
+      }],
+      default: []
     }
   },
   sendCutlery: {
