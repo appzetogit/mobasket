@@ -350,6 +350,7 @@ export default function Home() {
   const [loadingBanners, setLoadingBanners] = useState(true);
   const [landingCategories, setLandingCategories] = useState([]);
   const [landingExploreMore, setLandingExploreMore] = useState([]);
+  const [mofoodProductSections, setMofoodProductSections] = useState([]);
   const [exploreMoreHeading, setExploreMoreHeading] = useState("Explore More");
   const [loadingLandingConfig, setLoadingLandingConfig] = useState(true);
   const [restaurantsData, setRestaurantsData] = useState([]);
@@ -523,6 +524,9 @@ export default function Home() {
         if (response.data.success && response.data.data) {
           const apiCategories = response.data.data.categories || [];
           const apiExploreMore = response.data.data.exploreMore || [];
+          const apiMofoodProductSections = Array.isArray(response?.data?.data?.mofoodProductSections)
+            ? response.data.data.mofoodProductSections
+            : [];
 
           // Extra safety: only keep active items, filter out "all" categories, and ensure order ascending
           setLandingCategories(
@@ -542,6 +546,7 @@ export default function Home() {
               .filter((e) => e.isActive !== false)
               .sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
           );
+          setMofoodProductSections(apiMofoodProductSections);
           setExploreMoreHeading(
             response.data.data.settings?.exploreMoreHeading || "Explore More",
           );
@@ -551,6 +556,7 @@ export default function Home() {
         // Fallback to empty arrays and default heading
         setLandingCategories([]);
         setLandingExploreMore([]);
+        setMofoodProductSections([]);
         setExploreMoreHeading("Explore More");
       } finally {
         setLoadingLandingConfig(false);
@@ -2327,6 +2333,124 @@ export default function Home() {
             )}
           </div>
         </motion.section>
+
+        {!loadingLandingConfig && Array.isArray(mofoodProductSections) && mofoodProductSections.length > 0 && (
+          <motion.section
+            className="pt-2 sm:pt-3 lg:pt-4"
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-50px" }}
+            transition={{ duration: 0.5 }}
+          >
+            {mofoodProductSections.map((section, sectionIndex) => (
+              <div key={`mofood-section-${section.name}-${sectionIndex}`} className="mb-4 sm:mb-5">
+                <div className="flex items-center justify-between px-1 mb-2 sm:mb-3">
+                  <h3 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-gray-100 tracking-tight">
+                    {section.name}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/user/restaurants")}
+                    className="text-sm sm:text-base font-bold text-green-600 dark:text-green-400"
+                  >
+                    see all
+                  </button>
+                </div>
+
+                <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-2">
+                  {(Array.isArray(section.products) ? section.products : []).map((entry, itemIndex) => {
+                    const restaurant = entry?.restaurant || {};
+                    const product = entry?.product || {};
+                    const restaurantId = String(restaurant?._id || "");
+                    const menuItemId = String(product?.menuItemId || "");
+                    const cartItemId = `mf-${restaurantId}-${menuItemId}`;
+                    const image =
+                      product?.image ||
+                      restaurant?.profileImage?.url ||
+                      restaurant?.profileImage ||
+                      foodImages[(sectionIndex + itemIndex) % foodImages.length];
+                    const price = Number(product?.price || 0);
+                    const originalPrice = Number(product?.originalPrice || price || 0);
+                    const alreadyInCart = (Array.isArray(cart) ? cart : []).some((item) => {
+                      const currentId = String(item?.id || item?.itemId || "");
+                      return currentId === cartItemId;
+                    });
+                    const deliveryText = String(restaurant?.estimatedDeliveryTime || "8 MINS").toUpperCase();
+
+                    return (
+                      <div
+                        key={`mofood-item-${entry?._id || cartItemId || itemIndex}`}
+                        className="min-w-[168px] max-w-[168px] rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#111a28] p-2.5 shadow-sm"
+                      >
+                        <button
+                          type="button"
+                          className="w-full text-left"
+                          onClick={() => {
+                            if (restaurant?.slug) {
+                              navigate(`/user/restaurants/${restaurant.slug}`);
+                            }
+                          }}
+                        >
+                          <div className="w-full h-[98px] rounded-xl bg-slate-50 dark:bg-[#0d1624] overflow-hidden flex items-center justify-center mb-2">
+                            <OptimizedImage
+                              src={image}
+                              alt={product?.name || "Product"}
+                              className="w-full h-full"
+                              objectFit="contain"
+                              placeholder="blur"
+                            />
+                          </div>
+                          <p className="text-[10px] font-bold text-slate-500 dark:text-slate-300 mb-1">{deliveryText}</p>
+                          <p className="text-[17px] font-extrabold text-slate-900 dark:text-slate-100 leading-[1.05] line-clamp-2 min-h-[34px]">
+                            {product?.name || "Product"}
+                          </p>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
+                            {restaurant?.name || "Restaurant"}
+                          </p>
+                        </button>
+
+                        <div className="mt-2 flex items-end justify-between gap-2">
+                          <div>
+                            <p className="text-[30px] leading-[0.95] font-black text-slate-900 dark:text-slate-100">₹{price}</p>
+                            {originalPrice > price && (
+                              <p className="text-xs text-slate-400 dark:text-slate-500 line-through">₹{originalPrice}</p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.preventDefault();
+                              event.stopPropagation();
+                              if (alreadyInCart) return;
+                              addToCart({
+                                id: cartItemId,
+                                itemId: cartItemId,
+                                menuItemId,
+                                name: product?.name || "Product",
+                                price,
+                                mrp: originalPrice,
+                                image,
+                                restaurantId,
+                                restaurant: restaurant?.name || "Restaurant",
+                                platform: "mofood",
+                              });
+                            }}
+                            className={`h-8 px-3 rounded-lg text-xs font-[900] border ${alreadyInCart
+                              ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                              : "bg-white text-[#2f8d2f] border-[#79b879]"
+                              }`}
+                          >
+                            {alreadyInCart ? "ADDED" : "ADD"}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </motion.section>
+        )}
 
         {/* Featured Foods - Horizontal Scroll */}
 

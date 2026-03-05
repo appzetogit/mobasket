@@ -5,13 +5,17 @@ import { cloudinary, initializeCloudinary } from '../../config/cloudinary.js';
 // Use in‑memory storage; we stream to Cloudinary
 const storage = multer.memoryStorage();
 
-// Generic file filter for common image/video mime types
+// Generic file filter for common image/video mime types.
+// Some Android/WebView uploads may send generic MIME types (e.g. application/octet-stream)
+// for valid image files, so we also allow known extensions as a fallback.
 const fileFilter = (req, file, cb) => {
   const allowedMimeTypes = [
     // images
     'image/jpeg',
     'image/jpg',
+    'image/pjpeg',
     'image/png',
+    'image/x-png',
     'image/webp',
     'image/gif',
     'image/heic',
@@ -24,7 +28,28 @@ const fileFilter = (req, file, cb) => {
     'video/x-matroska'
   ];
 
-  if (allowedMimeTypes.includes(file.mimetype)) {
+  const allowedExtensions = [
+    '.jpg',
+    '.jpeg',
+    '.png',
+    '.webp',
+    '.gif',
+    '.heic',
+    '.heif',
+    '.svg',
+    '.mp4',
+    '.mov',
+    '.avi',
+    '.mkv'
+  ];
+
+  const mimeType = String(file?.mimetype || '').toLowerCase().trim();
+  const fileName = String(file?.originalname || '').toLowerCase().trim();
+  const hasAllowedMime = allowedMimeTypes.includes(mimeType);
+  const hasAllowedExtension = allowedExtensions.some((ext) => fileName.endsWith(ext));
+  const isGenericMime = mimeType === '' || mimeType === 'application/octet-stream';
+
+  if (hasAllowedMime || (isGenericMime && hasAllowedExtension)) {
     cb(null, true);
   } else {
     cb(new Error('Unsupported file type. Please upload an image or video.'));

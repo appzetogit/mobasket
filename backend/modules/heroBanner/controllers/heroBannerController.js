@@ -7,7 +7,9 @@ import DiningBanner from '../models/DiningBanner.js';
 import Top10Restaurant from '../models/Top10Restaurant.js';
 import GourmetRestaurant from '../models/GourmetRestaurant.js';
 import GroceryBestSeller from '../models/GroceryBestSeller.js';
+import MofoodProductSectionItem from '../models/MofoodProductSectionItem.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import Menu from '../../restaurant/models/Menu.js';
 import GroceryCategory from '../../grocery/models/GroceryCategory.js';
 import GrocerySubcategory from '../../grocery/models/GrocerySubcategory.js';
 import GroceryProduct from '../../grocery/models/GroceryProduct.js';
@@ -355,7 +357,7 @@ export const linkRestaurantsToBanner = async (req, res) => {
 export const getLandingConfig = async (req, res) => {
   try {
     const platform = getPlatformFromRequest(req);
-    const [categories, exploreMore, settings] = await Promise.all([
+    const [categories, exploreMore, settings, mofoodProductSectionItems] = await Promise.all([
       LandingPageCategory.find({ ...buildPlatformFilter(platform), isActive: true })
         .sort({ order: 1, createdAt: -1 })
         .select('label slug imageUrl order isActive')
@@ -365,11 +367,57 @@ export const getLandingConfig = async (req, res) => {
         .select('label link imageUrl order isActive')
         .lean(),
       LandingPageSettings.getSettings(platform),
+      platform === 'mofood'
+        ? MofoodProductSectionItem.find({ ...buildPlatformFilter(platform), isActive: true })
+            .populate('restaurantId', 'name slug profileImage estimatedDeliveryTime')
+            .sort({ sectionOrder: 1, sectionName: 1, order: 1, createdAt: -1 })
+            .lean()
+        : Promise.resolve([]),
     ]);
+
+    const rawSectionMap = new Map();
+    (Array.isArray(mofoodProductSectionItems) ? mofoodProductSectionItems : []).forEach((entry) => {
+      const sectionName = String(entry.sectionName || '').trim();
+      if (!sectionName || !entry.restaurantId) return;
+      const sectionOrder = Number(entry.sectionOrder || 0);
+      const key = `${sectionOrder}::${sectionName}`;
+      if (!rawSectionMap.has(key)) {
+        rawSectionMap.set(key, {
+          name: sectionName,
+          order: sectionOrder,
+          products: [],
+        });
+      }
+      rawSectionMap.get(key).products.push({
+        _id: entry._id,
+        order: Number(entry.order || 0),
+        restaurant: entry.restaurantId,
+        product: {
+          menuItemId: String(entry.menuItemId || ''),
+          name: String(entry.menuItemName || ''),
+          image: String(entry.menuItemImage || ''),
+          price: Number(entry.menuItemPrice || 0),
+          originalPrice: Number(entry.menuItemOriginalPrice || 0),
+        },
+      });
+    });
+
+    const mofoodProductSections = Array.from(rawSectionMap.values())
+      .map((section) => ({
+        ...section,
+        products: section.products.sort((a, b) => Number(a.order || 0) - Number(b.order || 0)),
+      }))
+      .sort((a, b) => {
+        if (Number(a.order || 0) !== Number(b.order || 0)) {
+          return Number(a.order || 0) - Number(b.order || 0);
+        }
+        return String(a.name || '').localeCompare(String(b.name || ''));
+      });
 
     return successResponse(res, 200, 'Landing config retrieved successfully', {
       categories,
       exploreMore,
+      mofoodProductSections,
       settings: {
         exploreMoreHeading: settings.exploreMoreHeading,
       },
@@ -377,6 +425,248 @@ export const getLandingConfig = async (req, res) => {
   } catch (error) {
     console.error('Error fetching landing config:', error);
     return errorResponse(res, 500, 'Failed to fetch landing config');
+  }
+};
+
+const flattenMenuItemsForSectionManagement = (menuDoc) => {
+  const sections = Array.isArray(menuDoc?.sections) ? menuDoc.sections : [];
+  const items = [];
+
+  sections.forEach((section) => {
+    const sectionItems = Array.isArray(section?.items) ? section.items : [];
+    sectionItems.forEach((item) => items.push(item));
+
+    const subsections = Array.isArray(section?.subsections) ? section.subsections : [];
+    subsections.forEach((subsection) => {
+      const subsectionItems = Array.isArray(subsection?.items) ? subsection.items : [];
+      subsectionItems.forEach((item) => items.push(item));
+    });
+  });
+
+  return items;
+};
+
+// ==================== MOFOOD PRODUCT SECTIONS ====================
+export const getMofoodProductSections = async (req, res) => {
+  try {
+    const platform = getPlatformFromRequest(req);
+    const items = await MofoodProductSectionItem.find({
+      ...buildPlatformFilter(platform),
+      isActive: true,
+    })
+      .populate('restaurantId', 'name slug profileImage estimatedDeliveryTime')
+      .sort({ sectionOrder: 1, sectionName: 1, order: 1, createdAt: -1 })
+      .lean();
+
+    const rawSectionMap = new Map();
+    items.forEach((entry) => {
+      if (!entry.restaurantId) return;
+      const sectionName = String(entry.sectionName || '').trim();
+      if (!sectionName) return;
+      const sectionOrder = Number(entry.sectionOrder || 0);
+      const key = `${sectionOrder}::${sectionName}`;
+      if (!rawSectionMap.has(key)) {
+        rawSectionMap.set(key, {
+          name: sectionName,
+          order: sectionOrder,
+          products: [],
+        });
+      }
+      rawSectionMap.get(key).products.push({
+        _id: entry._id,
+        order: Number(entry.order || 0),
+        isActive: !!entry.isActive,
+        restaurant: entry.restaurantId,
+        product: {
+          menuItemId: String(entry.menuItemId || ''),
+          name: String(entry.menuItemName || ''),
+          image: String(entry.menuItemImage || ''),
+          price: Number(entry.menuItemPrice || 0),
+          originalPrice: Number(entry.menuItemOriginalPrice || 0),
+        },
+      });
+    });
+
+    const sections = Array.from(rawSectionMap.values())
+      .map((section) => ({
+        ...section,
+        products: section.products.sort((a, b) => Number(a.order || 0) - Number(b.order || 0)),
+      }))
+      .sort((a, b) => {
+        if (Number(a.order || 0) !== Number(b.order || 0)) {
+          return Number(a.order || 0) - Number(b.order || 0);
+        }
+        return String(a.name || '').localeCompare(String(b.name || ''));
+      });
+
+    return successResponse(res, 200, 'Mofood product sections retrieved successfully', {
+      sections,
+    });
+  } catch (error) {
+    console.error('Error fetching mofood product sections:', error);
+    return errorResponse(res, 500, 'Failed to fetch mofood product sections');
+  }
+};
+
+export const getAllMofoodProductSections = async (req, res) => {
+  try {
+    const platform = getPlatformFromRequest(req);
+    const items = await MofoodProductSectionItem.find(buildPlatformFilter(platform))
+      .populate('restaurantId', 'name slug profileImage estimatedDeliveryTime')
+      .sort({ sectionOrder: 1, sectionName: 1, order: 1, createdAt: -1 })
+      .lean();
+
+    return successResponse(res, 200, 'Mofood product sections retrieved successfully', {
+      items: items.filter((item) => item.restaurantId),
+    });
+  } catch (error) {
+    console.error('Error fetching all mofood product sections:', error);
+    return errorResponse(res, 500, 'Failed to fetch mofood product sections');
+  }
+};
+
+export const createMofoodProductSectionItem = async (req, res) => {
+  try {
+    const platform = getPlatformFromRequest(req);
+    const { sectionName, sectionOrder, restaurantId, menuItemId } = req.body;
+
+    if (!sectionName || !restaurantId || !menuItemId) {
+      return errorResponse(res, 400, 'sectionName, restaurantId and menuItemId are required');
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+      return errorResponse(res, 400, 'Invalid restaurantId');
+    }
+
+    const restaurantExists = await Restaurant.findById(restaurantId).select('_id').lean();
+    if (!restaurantExists) {
+      return errorResponse(res, 404, 'Restaurant not found');
+    }
+
+    const menuDoc = await Menu.findOne({ restaurant: restaurantId, isActive: true }).select('sections').lean();
+    if (!menuDoc) {
+      return errorResponse(res, 404, 'Restaurant menu not found');
+    }
+
+    const menuItems = flattenMenuItemsForSectionManagement(menuDoc);
+    const matchedMenuItem =
+      menuItems.find((item) => String(item?.id || '').trim() === String(menuItemId).trim()) || null;
+    if (!matchedMenuItem) {
+      return errorResponse(res, 404, 'Selected menu item not found');
+    }
+
+    const duplicate = await MofoodProductSectionItem.findOne({
+      ...buildPlatformFilter(platform),
+      restaurantId,
+      menuItemId: String(menuItemId).trim(),
+    }).lean();
+    if (duplicate) {
+      return errorResponse(res, 400, 'Menu item is already added in sections');
+    }
+
+    const last = await MofoodProductSectionItem.findOne(buildPlatformFilter(platform))
+      .sort({ order: -1 })
+      .select('order')
+      .lean();
+    const order = last ? Number(last.order || 0) + 1 : 0;
+
+    const created = await MofoodProductSectionItem.create({
+      platform,
+      sectionName: String(sectionName).trim(),
+      sectionOrder: Number.isFinite(Number(sectionOrder)) ? Number(sectionOrder) : 0,
+      restaurantId,
+      menuItemId: String(menuItemId).trim(),
+      menuItemName: String(matchedMenuItem?.name || '').trim(),
+      menuItemImage:
+        String(matchedMenuItem?.image || '').trim() ||
+        (Array.isArray(matchedMenuItem?.images) ? String(matchedMenuItem.images[0] || '').trim() : ''),
+      menuItemPrice: Number(matchedMenuItem?.price || 0),
+      menuItemOriginalPrice: Number(matchedMenuItem?.originalPrice || matchedMenuItem?.price || 0),
+      order,
+      isActive: true,
+    });
+
+    const populated = await MofoodProductSectionItem.findById(created._id)
+      .populate('restaurantId', 'name slug profileImage estimatedDeliveryTime')
+      .lean();
+
+    return successResponse(res, 201, 'Mofood section item added successfully', {
+      item: populated,
+    });
+  } catch (error) {
+    console.error('Error creating mofood product section item:', error);
+    return errorResponse(res, 500, 'Failed to create mofood section item');
+  }
+};
+
+export const deleteMofoodProductSectionItem = async (req, res) => {
+  try {
+    const platform = getPlatformFromRequest(req);
+    const { id } = req.params;
+
+    const existing = await MofoodProductSectionItem.findOne({ _id: id, ...buildPlatformFilter(platform) });
+    if (!existing) {
+      return errorResponse(res, 404, 'Mofood section item not found');
+    }
+
+    await MofoodProductSectionItem.findByIdAndDelete(id);
+    return successResponse(res, 200, 'Mofood section item deleted successfully');
+  } catch (error) {
+    console.error('Error deleting mofood product section item:', error);
+    return errorResponse(res, 500, 'Failed to delete mofood section item');
+  }
+};
+
+export const updateMofoodProductSectionItemOrder = async (req, res) => {
+  try {
+    const platform = getPlatformFromRequest(req);
+    const { id } = req.params;
+    const { order } = req.body;
+
+    if (typeof order !== 'number') {
+      return errorResponse(res, 400, 'Order must be a number');
+    }
+
+    const updated = await MofoodProductSectionItem.findOneAndUpdate(
+      { _id: id, ...buildPlatformFilter(platform) },
+      { order, updatedAt: new Date() },
+      { new: true }
+    ).populate('restaurantId', 'name slug profileImage estimatedDeliveryTime');
+
+    if (!updated) {
+      return errorResponse(res, 404, 'Mofood section item not found');
+    }
+
+    return successResponse(res, 200, 'Mofood section item order updated successfully', {
+      item: updated,
+    });
+  } catch (error) {
+    console.error('Error updating mofood product section item order:', error);
+    return errorResponse(res, 500, 'Failed to update mofood section item order');
+  }
+};
+
+export const toggleMofoodProductSectionItemStatus = async (req, res) => {
+  try {
+    const platform = getPlatformFromRequest(req);
+    const { id } = req.params;
+
+    const item = await MofoodProductSectionItem.findOne({ _id: id, ...buildPlatformFilter(platform) });
+    if (!item) {
+      return errorResponse(res, 404, 'Mofood section item not found');
+    }
+
+    item.isActive = !item.isActive;
+    item.updatedAt = new Date();
+    await item.save();
+    await item.populate('restaurantId', 'name slug profileImage estimatedDeliveryTime');
+
+    return successResponse(res, 200, 'Mofood section item status updated successfully', {
+      item,
+    });
+  } catch (error) {
+    console.error('Error toggling mofood product section item status:', error);
+    return errorResponse(res, 500, 'Failed to update mofood section item status');
   }
 };
 
@@ -1738,6 +2028,8 @@ export const getGroceryBestSellers = async (req, res) => {
             ? (Array.isArray(item.itemId?.images) ? item.itemId.images[0] : '') || ''
             : item.itemId?.image || '',
         order: item.order,
+        sectionName: item.sectionName || '',
+        sectionOrder: Number.isFinite(Number(item.sectionOrder)) ? Number(item.sectionOrder) : 0,
         isActive: item.isActive,
         subcategories:
           item.itemType === 'product' && Array.isArray(item.itemId?.subcategories)
@@ -1745,8 +2037,36 @@ export const getGroceryBestSellers = async (req, res) => {
             : [],
       }));
 
+    const rawSectionsMap = new Map();
+    bestSellers
+      .filter((item) => item.itemType === 'product' && item.sectionName)
+      .forEach((item) => {
+        const key = `${item.sectionOrder}::${item.sectionName}`;
+        if (!rawSectionsMap.has(key)) {
+          rawSectionsMap.set(key, {
+            name: item.sectionName,
+            order: item.sectionOrder,
+            products: [],
+          });
+        }
+        rawSectionsMap.get(key).products.push(item);
+      });
+
+    const sections = Array.from(rawSectionsMap.values())
+      .map((section) => ({
+        ...section,
+        products: section.products.sort((a, b) => Number(a.order || 0) - Number(b.order || 0)),
+      }))
+      .sort((a, b) => {
+        if (Number(a.order || 0) !== Number(b.order || 0)) {
+          return Number(a.order || 0) - Number(b.order || 0);
+        }
+        return String(a.name || '').localeCompare(String(b.name || ''));
+      });
+
     return successResponse(res, 200, 'Grocery best sellers retrieved successfully', {
       items: bestSellers,
+      sections,
     });
   } catch (error) {
     console.error('Error fetching grocery best sellers:', error);
@@ -1780,7 +2100,7 @@ export const getAllGroceryBestSellers = async (req, res) => {
 export const createGroceryBestSeller = async (req, res) => {
   try {
     const platform = getPlatformFromRequest(req);
-    const { itemType, itemId } = req.body;
+    const { itemType, itemId, sectionName, sectionOrder } = req.body;
 
     if (!itemType || !itemId) {
       return errorResponse(res, 400, 'itemType and itemId are required');
@@ -1817,12 +2137,22 @@ export const createGroceryBestSeller = async (req, res) => {
 
     const order = last ? Number(last.order || 0) + 1 : 0;
 
+    const normalizedSectionName = itemType === 'product' && typeof sectionName === 'string'
+      ? sectionName.trim()
+      : '';
+    const normalizedSectionOrder =
+      itemType === 'product' && Number.isFinite(Number(sectionOrder))
+        ? Number(sectionOrder)
+        : 0;
+
     const created = await GroceryBestSeller.create({
       platform,
       itemType,
       itemModel,
       itemId,
       order,
+      sectionName: normalizedSectionName,
+      sectionOrder: normalizedSectionOrder,
       isActive: true,
     });
 

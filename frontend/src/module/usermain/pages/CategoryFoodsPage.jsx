@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import {
   X,
   Heart,
@@ -416,13 +416,13 @@ export function CategoryFoodsContent({
 
   return (
     <div
-      className={`bg-[#f4f6fb] flex flex-col font-sans ${isModal ? "h-full rounded-t-[20px] md:max-w-md md:mx-auto" : "min-h-screen h-full w-full"}`}
+      className={`bg-[#f4f6fb] flex flex-col min-h-0 font-sans ${isModal ? "h-full w-full" : "min-h-screen h-full w-full"}`}
     >
       <div
-        className={`flex flex-col h-full ${!isModal ? "md:max-w-7xl md:mx-auto w-full bg-white md:shadow-xl md:my-4 md:rounded-2xl md:overflow-hidden" : ""}`}
+        className={`flex flex-col h-full min-h-0 ${!isModal ? "md:max-w-7xl md:mx-auto w-full bg-white md:shadow-xl md:my-4 md:rounded-2xl md:overflow-hidden" : ""}`}
       >
         {/* Header */}
-        <div className="bg-white sticky top-0 z-50 px-4 py-3 flex items-center gap-3 border-b border-gray-100 shadow-sm rounded-t-[20px] relative">
+        <div className="bg-white sticky top-0 z-50 px-4 py-3 flex items-center gap-3 border-b border-gray-100 shadow-sm relative">
           <button
             onClick={onClose}
             className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors"
@@ -451,7 +451,7 @@ export function CategoryFoodsContent({
         </div>
 
         {/* Main Content Area: Vertical Layout (Horizontal Menu + Grid) */}
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
           {/* Horizontal Top Menu */}
           <div className="w-full bg-white overflow-x-auto no-scrollbar z-10 flex items-center px-2 shadow-sm border-b border-gray-50 flex-shrink-0">
             {sidebarCategories.map((cat) => (
@@ -497,7 +497,7 @@ export function CategoryFoodsContent({
           </div>
 
           {/* Right Grid Content */}
-          <div className="flex-1 bg-white h-full overflow-y-auto pb-24 px-3 pt-4">
+          <div data-sheet-scrollable="true" className="flex-1 min-h-0 bg-white h-full overflow-y-auto pb-24 px-3 pt-4 touch-auto [-webkit-overflow-scrolling:touch]">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {filteredProducts.map((item) => (
                 <div
@@ -635,11 +635,16 @@ export function CategoryFoodsContent({
 
 const CategoryFoodsPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
+  const isCategoriesRootPage = location?.pathname === "/grocery/categories";
+  const stateCategoryId = String(location?.state?.categoryId || "").trim();
+  const initialCategory = isCategoriesRootPage ? "all" : (id || stateCategoryId || "all");
+
   return (
     <CategoryFoodsContent
       onClose={() => navigate(-1)}
-      initialCategory={id || "all"}
+      initialCategory={initialCategory}
     />
   );
 };

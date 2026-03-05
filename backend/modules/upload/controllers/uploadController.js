@@ -29,8 +29,6 @@ export const uploadSingleMedia = async (req, res) => {
     const result = await uploadToCloudinary(req.file.buffer, {
       folder,
       resource_type: 'auto',
-      // Pass mimetype if available for better Cloudinary detection
-      ...(req.file.mimetype && { context: { alt: req.file.originalname, caption: req.file.originalname } })
     });
 
     if (!result || !result.secure_url) {
@@ -63,7 +61,11 @@ export const uploadSingleMedia = async (req, res) => {
     
     // Provide more detailed error message
     const errorMessage = error.message || 'Failed to upload file';
-    return errorResponse(res, 500, `File upload failed: ${errorMessage}`);
+    const cloudinaryStatus = Number(error?.http_code || 0);
+    const statusCode = Number.isInteger(cloudinaryStatus) && cloudinaryStatus >= 400
+      ? cloudinaryStatus
+      : 500;
+    return errorResponse(res, statusCode, `File upload failed: ${errorMessage}`);
   }
 };
 

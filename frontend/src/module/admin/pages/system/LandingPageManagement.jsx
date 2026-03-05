@@ -77,12 +77,25 @@ export default function LandingPageManagement({ forcedPlatform }) {
   const [gourmetDeleting, setGourmetDeleting] = useState(null)
   const [selectedRestaurantGourmet, setSelectedRestaurantGourmet] = useState("")
 
+  // Mofood Product Sections
+  const [mofoodSectionItems, setMofoodSectionItems] = useState([])
+  const [mofoodSectionsLoading, setMofoodSectionsLoading] = useState(true)
+  const [mofoodSectionsDeleting, setMofoodSectionsDeleting] = useState(null)
+  const [selectedMofoodSectionRestaurantId, setSelectedMofoodSectionRestaurantId] = useState("")
+  const [selectedMofoodSectionMenuItemId, setSelectedMofoodSectionMenuItemId] = useState("")
+  const [mofoodSectionName, setMofoodSectionName] = useState("")
+  const [mofoodSectionOrder, setMofoodSectionOrder] = useState(0)
+  const [mofoodMenuItems, setMofoodMenuItems] = useState([])
+  const [mofoodMenuItemsLoading, setMofoodMenuItemsLoading] = useState(false)
+
   // Grocery Best Sellers
   const [bestSellers, setBestSellers] = useState([])
   const [bestSellersLoading, setBestSellersLoading] = useState(true)
   const [bestSellersDeleting, setBestSellersDeleting] = useState(null)
   const [selectedBestSellerType, setSelectedBestSellerType] = useState("subcategory")
   const [selectedBestSellerItemId, setSelectedBestSellerItemId] = useState("")
+  const [bestSellerSectionName, setBestSellerSectionName] = useState("")
+  const [bestSellerSectionOrder, setBestSellerSectionOrder] = useState(0)
   const [groceryCategories, setGroceryCategories] = useState([])
   const [grocerySubcategories, setGrocerySubcategories] = useState([])
   const [groceryProducts, setGroceryProducts] = useState([])
@@ -180,6 +193,9 @@ export default function LandingPageManagement({ forcedPlatform }) {
     } else if (activeTab === 'best-sellers' && platform === 'mogrocery') {
       fetchGroceryCatalogData()
       fetchBestSellers()
+    } else if (activeTab === 'product-sections' && platform === 'mofood') {
+      fetchMofoodProductSections()
+      fetchAllRestaurants()
     }
   }, [activeTab, exploreMoreSubTab, platform])
 
@@ -1130,6 +1146,143 @@ export default function LandingPageManagement({ forcedPlatform }) {
     }
   }
 
+  // ==================== MOFOOD PRODUCT SECTIONS ====================
+  const fetchMofoodProductSections = async () => {
+    if (platform !== 'mofood') return
+    try {
+      setMofoodSectionsLoading(true)
+      setError(null)
+      const response = await api.get('/hero-banners/mofood-product-sections', getAuthConfig())
+      if (response.data.success) {
+        setMofoodSectionItems(response.data.data.items || [])
+      }
+    } catch (err) {
+      if (err.response?.status === 401 || err.response?.status === 404) {
+        setMofoodSectionItems([])
+        setError(null)
+      } else {
+        setErrorSafely(err.response?.data?.message || 'Failed to load mofood product sections.')
+      }
+    } finally {
+      setMofoodSectionsLoading(false)
+    }
+  }
+
+  const fetchMofoodRestaurantMenuItems = async (restaurantId) => {
+    if (!restaurantId) {
+      setMofoodMenuItems([])
+      setSelectedMofoodSectionMenuItemId("")
+      return
+    }
+    try {
+      setMofoodMenuItemsLoading(true)
+      setError(null)
+      const response = await adminAPI.getRestaurantMenu(restaurantId)
+      const menuSections = Array.isArray(response?.data?.data?.menu?.sections) ? response.data.data.menu.sections : []
+      const items = []
+      menuSections.forEach((section) => {
+        const sectionItems = Array.isArray(section?.items) ? section.items : []
+        sectionItems.forEach((item) => {
+          if (item?.id) items.push(item)
+        })
+        const subsections = Array.isArray(section?.subsections) ? section.subsections : []
+        subsections.forEach((subsection) => {
+          const subsectionItems = Array.isArray(subsection?.items) ? subsection.items : []
+          subsectionItems.forEach((item) => {
+            if (item?.id) items.push(item)
+          })
+        })
+      })
+      setMofoodMenuItems(items)
+      setSelectedMofoodSectionMenuItemId("")
+    } catch (err) {
+      setMofoodMenuItems([])
+      setSelectedMofoodSectionMenuItemId("")
+      setErrorSafely(err.response?.data?.message || 'Failed to load restaurant menu items.')
+    } finally {
+      setMofoodMenuItemsLoading(false)
+    }
+  }
+
+  const handleAddMofoodSectionItem = async () => {
+    if (!mofoodSectionName.trim() || !selectedMofoodSectionRestaurantId || !selectedMofoodSectionMenuItemId) {
+      setError('Please select restaurant, product and section name')
+      return
+    }
+    try {
+      setError(null)
+      setSuccess(null)
+      const response = await api.post('/hero-banners/mofood-product-sections', {
+        sectionName: mofoodSectionName.trim(),
+        sectionOrder: Number(mofoodSectionOrder || 0),
+        restaurantId: selectedMofoodSectionRestaurantId,
+        menuItemId: selectedMofoodSectionMenuItemId,
+      }, getAuthConfig())
+      if (response.data.success) {
+        setSuccess('Mofood section product added successfully!')
+        setSelectedMofoodSectionMenuItemId("")
+        await fetchMofoodProductSections()
+        setTimeout(() => setSuccess(null), 3000)
+      }
+    } catch (err) {
+      setErrorSafely(err.response?.data?.message || 'Failed to add section product.')
+    }
+  }
+
+  const handleDeleteMofoodSectionItem = async (id) => {
+    if (!window.confirm('Are you sure you want to remove this product from section?')) return
+    try {
+      setMofoodSectionsDeleting(id)
+      setError(null)
+      setSuccess(null)
+      const response = await api.delete(`/hero-banners/mofood-product-sections/${id}`, getAuthConfig())
+      if (response.data.success) {
+        setSuccess('Section product removed successfully!')
+        await fetchMofoodProductSections()
+        setTimeout(() => setSuccess(null), 3000)
+      }
+    } catch (err) {
+      setErrorSafely(err.response?.data?.message || 'Failed to remove section product.')
+    } finally {
+      setMofoodSectionsDeleting(null)
+    }
+  }
+
+  const handleMofoodSectionItemOrderChange = async (id, direction) => {
+    const ordered = [...mofoodSectionItems].sort((a, b) => Number(a.order || 0) - Number(b.order || 0))
+    const currentItem = ordered.find((item) => item._id === id)
+    if (!currentItem) return
+    const newOrder = direction === 'up' ? Number(currentItem.order || 0) - 1 : Number(currentItem.order || 0) + 1
+    const swapItem = ordered.find((item) => Number(item.order || 0) === newOrder && item._id !== id)
+    if (!swapItem && newOrder < 0) return
+
+    try {
+      setError(null)
+      await api.patch(`/hero-banners/mofood-product-sections/${id}/order`, { order: newOrder }, getAuthConfig())
+      if (swapItem) {
+        await api.patch(`/hero-banners/mofood-product-sections/${swapItem._id}/order`, { order: Number(currentItem.order || 0) }, getAuthConfig())
+      }
+      await fetchMofoodProductSections()
+    } catch (err) {
+      setErrorSafely('Failed to update section product order.')
+    }
+  }
+
+  const handleToggleMofoodSectionItemStatus = async (id, currentStatus) => {
+    try {
+      setError(null)
+      setSuccess(null)
+      const response = await api.patch(`/hero-banners/mofood-product-sections/${id}/status`, {}, getAuthConfig())
+      if (response.data.success) {
+        setSuccess(`Section product ${currentStatus ? 'deactivated' : 'activated'} successfully!`)
+        await fetchMofoodProductSections()
+        setTimeout(() => setSuccess(null), 3000)
+      }
+    } catch (err) {
+      setErrorSafely(err.response?.data?.message || 'Failed to update section product status.')
+    }
+  }
+
   // ==================== GROCERY BEST SELLERS ====================
   const fetchGroceryCatalogData = async () => {
     if (platform !== 'mogrocery') return
@@ -1198,16 +1351,25 @@ export default function LandingPageManagement({ forcedPlatform }) {
       setError('Please select type and item')
       return
     }
+    if (selectedBestSellerType === 'product' && !bestSellerSectionName.trim()) {
+      setError('Please enter section name for product')
+      return
+    }
     try {
       setError(null)
       setSuccess(null)
       const response = await api.post('/hero-banners/grocery-best-sellers', {
         itemType: selectedBestSellerType,
         itemId: selectedBestSellerItemId,
+        sectionName: selectedBestSellerType === 'product' ? bestSellerSectionName.trim() : '',
+        sectionOrder: selectedBestSellerType === 'product' ? Number(bestSellerSectionOrder || 0) : 0,
       }, getAuthConfig())
       if (response.data.success) {
         setSuccess('Best seller item added successfully!')
         setSelectedBestSellerItemId("")
+        if (selectedBestSellerType === 'product') {
+          setBestSellerSectionName("")
+        }
         await fetchBestSellers()
         setTimeout(() => setSuccess(null), 3000)
       }
@@ -1275,6 +1437,7 @@ export default function LandingPageManagement({ forcedPlatform }) {
     { id: 'banners', label: 'Hero Banners', icon: ImageIcon },
     ...(platform !== 'mogrocery' ? [{ id: 'under-250', label: '250 Banner', icon: Tag }] : []),
     ...(platform !== 'mogrocery' ? [{ id: 'explore-more', label: 'Explore More', icon: Layout }] : []),
+    ...(platform === 'mofood' ? [{ id: 'product-sections', label: 'Product Sections', icon: Megaphone }] : []),
     ...(platform === 'mogrocery' ? [{ id: 'best-sellers', label: 'Best Sellers', icon: Megaphone }] : []),
   ]
 
@@ -1283,6 +1446,15 @@ export default function LandingPageManagement({ forcedPlatform }) {
     ...(platform !== 'mogrocery' ? [{ id: 'gourmet', label: 'Gourmet', icon: ChefHat }] : []),
     ...(platform === 'mogrocery' ? [{ id: 'best-sellers', label: 'Best Sellers', icon: Megaphone }] : []),
   ]
+  const sortedBestSellers = [...bestSellers].sort((a, b) => {
+    const sectionOrderA = Number(a?.sectionOrder || 0)
+    const sectionOrderB = Number(b?.sectionOrder || 0)
+    if (sectionOrderA !== sectionOrderB) return sectionOrderA - sectionOrderB
+    const sectionNameA = String(a?.sectionName || '')
+    const sectionNameB = String(b?.sectionName || '')
+    if (sectionNameA !== sectionNameB) return sectionNameA.localeCompare(sectionNameB)
+    return Number(a?.order || 0) - Number(b?.order || 0)
+  })
 
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
@@ -1848,7 +2020,7 @@ export default function LandingPageManagement({ forcedPlatform }) {
               <>
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
                   <h2 className="text-lg font-bold text-slate-900 mb-4">Add Item to Best Sellers</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                     <div>
                       <Label htmlFor="best-seller-type">Item Type</Label>
                       <select
@@ -1857,6 +2029,10 @@ export default function LandingPageManagement({ forcedPlatform }) {
                         onChange={(e) => {
                           setSelectedBestSellerType(e.target.value)
                           setSelectedBestSellerItemId("")
+                          if (e.target.value !== 'product') {
+                            setBestSellerSectionName("")
+                            setBestSellerSectionOrder(0)
+                          }
                         }}
                         className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                       >
@@ -1882,6 +2058,31 @@ export default function LandingPageManagement({ forcedPlatform }) {
                         ))}
                       </select>
                     </div>
+                    {selectedBestSellerType === 'product' && (
+                      <>
+                        <div>
+                          <Label htmlFor="best-seller-section-name">Section Name</Label>
+                          <Input
+                            id="best-seller-section-name"
+                            value={bestSellerSectionName}
+                            onChange={(e) => setBestSellerSectionName(e.target.value)}
+                            placeholder="Hot deals"
+                            className="mt-1"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="best-seller-section-order">Section Sequence</Label>
+                          <Input
+                            id="best-seller-section-order"
+                            type="number"
+                            value={bestSellerSectionOrder}
+                            onChange={(e) => setBestSellerSectionOrder(Number(e.target.value || 0))}
+                            min={0}
+                            className="mt-1"
+                          />
+                        </div>
+                      </>
+                    )}
                   </div>
                   <div className="mt-4">
                     <Button
@@ -1907,8 +2108,7 @@ export default function LandingPageManagement({ forcedPlatform }) {
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {[...bestSellers]
-                        .sort((a, b) => a.order - b.order)
+                      {sortedBestSellers
                         .map((item, index) => {
                           const displayName = item.itemId?.name || 'N/A'
                           const displayImage =
@@ -1922,6 +2122,11 @@ export default function LandingPageManagement({ forcedPlatform }) {
                                 <div className="min-w-0">
                                   <h3 className="font-semibold text-slate-900 line-clamp-1">{displayName}</h3>
                                   <p className="text-xs text-slate-500 capitalize">{item.itemType}</p>
+                                  {item.itemType === 'product' && item.sectionName && (
+                                    <p className="text-xs text-blue-600">
+                                      Section: {item.sectionName} (Seq: {Number(item.sectionOrder || 0)})
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                               <div className="flex items-center gap-1">
@@ -1946,6 +2151,130 @@ export default function LandingPageManagement({ forcedPlatform }) {
                 </div>
               </>
             )}
+          </>
+        )}
+
+        {/* Mofood Product Sections */}
+        {platform === 'mofood' && activeTab === 'product-sections' && (
+          <>
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+              <h2 className="text-lg font-bold text-slate-900 mb-4">Add Product to Section</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="mofood-section-restaurant">Restaurant</Label>
+                  <select
+                    id="mofood-section-restaurant"
+                    value={selectedMofoodSectionRestaurantId}
+                    onChange={(e) => {
+                      const restaurantId = e.target.value
+                      setSelectedMofoodSectionRestaurantId(restaurantId)
+                      fetchMofoodRestaurantMenuItems(restaurantId)
+                    }}
+                    className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={restaurantsLoading}
+                  >
+                    <option value="">Select restaurant...</option>
+                    {allRestaurants.map((restaurant) => (
+                      <option key={restaurant._id} value={restaurant._id}>
+                        {restaurant.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="mofood-section-menu-item">Product</Label>
+                  <select
+                    id="mofood-section-menu-item"
+                    value={selectedMofoodSectionMenuItemId}
+                    onChange={(e) => setSelectedMofoodSectionMenuItemId(e.target.value)}
+                    className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    disabled={mofoodMenuItemsLoading || !selectedMofoodSectionRestaurantId}
+                  >
+                    <option value="">Select product...</option>
+                    {mofoodMenuItems.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label htmlFor="mofood-section-name">Section Name</Label>
+                  <Input
+                    id="mofood-section-name"
+                    value={mofoodSectionName}
+                    onChange={(e) => setMofoodSectionName(e.target.value)}
+                    placeholder="Snack it away"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="mofood-section-order">Section Sequence</Label>
+                  <Input
+                    id="mofood-section-order"
+                    type="number"
+                    value={mofoodSectionOrder}
+                    onChange={(e) => setMofoodSectionOrder(Number(e.target.value || 0))}
+                    min={0}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+              <div className="mt-4">
+                <Button
+                  onClick={handleAddMofoodSectionItem}
+                  disabled={!selectedMofoodSectionRestaurantId || !selectedMofoodSectionMenuItemId || !mofoodSectionName.trim()}
+                  className="bg-blue-500 hover:bg-blue-600 text-white"
+                >
+                  Add Product
+                </Button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <h2 className="text-lg font-bold text-slate-900 mb-4">Section Products ({mofoodSectionItems.length})</h2>
+              {mofoodSectionsLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+                </div>
+              ) : mofoodSectionItems.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">
+                  <Megaphone className="w-12 h-12 mx-auto mb-3 text-slate-400" />
+                  <p>No mofood section products added yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {[...mofoodSectionItems]
+                    .sort((a, b) => Number(a.sectionOrder || 0) - Number(b.sectionOrder || 0) || String(a.sectionName || '').localeCompare(String(b.sectionName || '')) || Number(a.order || 0) - Number(b.order || 0))
+                    .map((item, index) => (
+                      <div key={item._id} className="border border-slate-200 rounded-lg p-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <img src={item.menuItemImage || "https://via.placeholder.com/120"} alt={item.menuItemName || 'N/A'} className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
+                          <div className="min-w-0">
+                            <h3 className="font-semibold text-slate-900 line-clamp-1">{item.menuItemName || 'N/A'}</h3>
+                            <p className="text-xs text-slate-500">{item.restaurantId?.name || 'Restaurant'}</p>
+                            <p className="text-xs text-blue-600">Section: {item.sectionName} (Seq: {Number(item.sectionOrder || 0)})</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => handleMofoodSectionItemOrderChange(item._id, 'up')} disabled={index === 0} className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-50">
+                            <ArrowUp className="w-4 h-4 text-slate-600" />
+                          </button>
+                          <button onClick={() => handleMofoodSectionItemOrderChange(item._id, 'down')} disabled={index === mofoodSectionItems.length - 1} className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-50">
+                            <ArrowDown className="w-4 h-4 text-slate-600" />
+                          </button>
+                          <button onClick={() => handleToggleMofoodSectionItemStatus(item._id, item.isActive)} className={`px-3 py-1.5 rounded text-sm font-medium ${item.isActive ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
+                            {item.isActive ? 'Deactivate' : 'Activate'}
+                          </button>
+                          <button onClick={() => handleDeleteMofoodSectionItem(item._id)} disabled={mofoodSectionsDeleting === item._id} className="p-1.5 rounded hover:bg-red-100 text-red-600 disabled:opacity-50">
+                            {mofoodSectionsDeleting === item._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
           </>
         )}
 

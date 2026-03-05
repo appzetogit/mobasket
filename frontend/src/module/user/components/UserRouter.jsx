@@ -468,7 +468,7 @@ export default function UserRouter() {
           path="/grocery/categories"
           element={
             <ProtectedRoute requiredRole="user" loginPath="/user/auth/sign-in">
-              <GroceryPage />
+              <CategoryFoodsPage />
             </ProtectedRoute>
           }
         />
