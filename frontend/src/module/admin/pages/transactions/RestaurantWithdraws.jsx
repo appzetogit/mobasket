@@ -5,8 +5,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { exportTransactionsToExcel, exportTransactionsToPDF } from "../../components/transactions/transactionsExportUtils"
 import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
+import { usePlatform } from "../../context/PlatformContext"
 
 export default function RestaurantWithdraws() {
+  const { isMogrocery } = usePlatform()
+  const entityLabel = isMogrocery ? "Store" : "Restaurant"
   // default to 'All' instead of 'Pending' so initial view shows every request
   const [activeTab, setActiveTab] = useState("All")
   const [searchQuery, setSearchQuery] = useState("")
@@ -32,13 +35,17 @@ export default function RestaurantWithdraws() {
   // Fetch withdrawal requests
   useEffect(() => {
     fetchWithdrawals()
-  }, [activeTab])
+  }, [activeTab, isMogrocery])
 
   const fetchWithdrawals = async () => {
     try {
       setLoading(true)
       const status = activeTab === "All" ? undefined : activeTab
-      const response = await adminAPI.getWithdrawalRequests({ status, search: searchQuery || undefined })
+      const response = await adminAPI.getWithdrawalRequests({
+        status,
+        search: searchQuery || undefined,
+        platform: isMogrocery ? "mogrocery" : "mofood",
+      })
       if (response.data?.success) {
         setWithdraws(response.data.data?.requests || [])
       } else {
@@ -61,7 +68,7 @@ export default function RestaurantWithdraws() {
       }
     }, 500)
     return () => clearTimeout(timer)
-  }, [searchQuery])
+  }, [searchQuery, activeTab, isMogrocery])
 
   const filteredWithdraws = useMemo(() => {
     let result = [...withdraws]
@@ -176,8 +183,8 @@ export default function RestaurantWithdraws() {
     const headers = [
       { key: "sl", label: "SI" },
       { key: "amount", label: "Amount" },
-      { key: "restaurantName", label: "Restaurant Name" },
-      { key: "restaurantIdString", label: "Restaurant ID" },
+      { key: "restaurantName", label: `${entityLabel} Name` },
+      { key: "restaurantIdString", label: `${entityLabel} ID` },
       { key: "requestTime", label: "Request Time" },
       { key: "processedTime", label: "Approved/Rejected Time" },
       { key: "processedBy", label: "Processed By" },
@@ -200,7 +207,12 @@ export default function RestaurantWithdraws() {
         exportTransactionsToExcel(exportData, headers, "restaurant_withdraws_full_details")
         break
       case "pdf":
-        await exportTransactionsToPDF(exportData, headers, "restaurant_withdraws_full_details", "Restaurant Withdraws Report")
+        await exportTransactionsToPDF(
+          exportData,
+          headers,
+          `${entityLabel.toLowerCase()}_withdraws_full_details`,
+          `${entityLabel} Withdraws Report`
+        )
         break
       default: break
     }
@@ -230,7 +242,7 @@ export default function RestaurantWithdraws() {
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
           <div className="flex items-center gap-3">
             <Building className="w-5 h-5 text-blue-600" />
-            <h1 className="text-2xl font-bold text-slate-900">Restaurant Withdraw Transaction</h1>
+            <h1 className="text-2xl font-bold text-slate-900">{entityLabel} Withdraw Transaction</h1>
           </div>
         </div>
 
@@ -274,7 +286,7 @@ export default function RestaurantWithdraws() {
               <div className="relative flex-1 sm:flex-initial min-w-[200px]">
                 <input
                   type="text"
-                  placeholder="Ex: search by Restaurant name"
+                  placeholder={`Ex: search by ${entityLabel} name`}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 pr-4 py-2.5 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
@@ -321,8 +333,8 @@ export default function RestaurantWithdraws() {
                       </div>
                     </th>}
                     {visibleColumns.amount && <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Amount</th>}
-                    {visibleColumns.restaurant && <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Restaurant Name</th>}
-                    {visibleColumns.restaurantId && <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Restaurant ID</th>}
+                    {visibleColumns.restaurant && <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">{entityLabel} Name</th>}
+                    {visibleColumns.restaurantId && <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">{entityLabel} ID</th>}
                     {visibleColumns.requestTime && <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Request Time</th>}
                     {visibleColumns.status && <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Status</th>}
                     {visibleColumns.actions && <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-700 uppercase tracking-wider">Action</th>}
@@ -426,11 +438,11 @@ export default function RestaurantWithdraws() {
                   </p>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase">Restaurant Name</label>
+                  <label className="text-xs font-semibold text-slate-500 uppercase">{entityLabel} Name</label>
                   <p className="text-sm font-medium text-slate-900 mt-1">{selectedWithdraw.restaurantName || 'N/A'}</p>
                 </div>
                 <div>
-                  <label className="text-xs font-semibold text-slate-500 uppercase">Restaurant ID</label>
+                  <label className="text-xs font-semibold text-slate-500 uppercase">{entityLabel} ID</label>
                   <p className="text-sm font-medium text-slate-900 mt-1">{selectedWithdraw.restaurantIdString || 'N/A'}</p>
                 </div>
                 <div>

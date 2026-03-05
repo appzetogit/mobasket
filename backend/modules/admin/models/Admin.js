@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+let legacyAdminIndexCleanupPromise = null;
+
 const adminSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -116,6 +118,33 @@ adminSchema.methods.updateLastLogin = async function() {
   this.lastLogin = new Date();
   this.loginCount = (this.loginCount || 0) + 1;
   await this.save();
+};
+
+// One-time cleanup for stale indexes from older schemas (e.g., unique mobile index).
+adminSchema.statics.ensureLegacyIndexesCleaned = async function() {
+  if (legacyAdminIndexCleanupPromise) {
+    return legacyAdminIndexCleanupPromise;
+  }
+
+  legacyAdminIndexCleanupPromise = (async () => {
+    try {
+      const indexes = await this.collection.indexes();
+      const mobileUniqueIndexes = indexes.filter((idx) => {
+        const key = idx?.key || {};
+        return idx?.unique === true && (Object.prototype.hasOwnProperty.call(key, 'mobile') || String(idx?.name || '').includes('mobile'));
+      });
+
+      for (const idx of mobileUniqueIndexes) {
+        const indexName = idx?.name;
+        if (!indexName || indexName === '_id_') continue;
+        await this.collection.dropIndex(indexName);
+      }
+    } catch {
+      // Ignore cleanup errors; create/update handlers will still return DB errors if any remain.
+    }
+  })();
+
+  return legacyAdminIndexCleanupPromise;
 };
 
 const Admin = mongoose.model('Admin', adminSchema);

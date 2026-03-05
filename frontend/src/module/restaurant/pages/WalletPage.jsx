@@ -24,6 +24,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { 
   getWalletState, 
+  syncWalletState,
   calculateBalances, 
   createWithdrawRequest,
   setBalanceAdjusted,
@@ -95,17 +96,26 @@ export default function WalletPage() {
 
   // Refresh wallet state when it updates
   useEffect(() => {
-    const refreshWalletState = () => {
-      setWalletState(getWalletState())
+    const refreshWalletState = async () => {
+      try {
+        const latest = await syncWalletState()
+        setWalletState(latest)
+      } catch (error) {
+        console.error("Failed to sync wallet state:", error)
+        setWalletState(getWalletState())
+      }
     }
 
     refreshWalletState()
 
-    // Listen for wallet state updates
-    window.addEventListener('walletStateUpdated', refreshWalletState)
+    // Listen for local wallet state updates without triggering another API sync loop
+    const handleWalletStateUpdated = () => {
+      setWalletState(getWalletState())
+    }
+    window.addEventListener('walletStateUpdated', handleWalletStateUpdated)
 
     return () => {
-      window.removeEventListener('walletStateUpdated', refreshWalletState)
+      window.removeEventListener('walletStateUpdated', handleWalletStateUpdated)
     }
   }, [])
 
@@ -537,18 +547,19 @@ export default function WalletPage() {
               <div className="px-6 pb-6 pt-4 border-t border-gray-200">
                 <Button
                   className="w-full bg-[#ff8100] hover:bg-[#e67300] text-white font-semibold py-3 rounded-lg text-base md:text-lg"
-                  onClick={() => {
+                  onClick={async () => {
                     if (withdrawAmount && selectedPaymentMethod) {
                       const amount = parseFloat(withdrawAmount)
                       if (amount > 0 && amount <= balances.withdrawalBalance) {
-                        // Create withdraw request
-                        createWithdrawRequest(amount, selectedPaymentMethod)
-                        setShowWithdrawModal(false)
-                        // Reset form
-                        setWithdrawAmount("")
-                        setSelectedPaymentMethod("")
-                        // Refresh wallet state
-                        setWalletState(getWalletState())
+                        try {
+                          await createWithdrawRequest(amount)
+                          setShowWithdrawModal(false)
+                          setWithdrawAmount("")
+                          setSelectedPaymentMethod("")
+                          setWalletState(getWalletState())
+                        } catch (error) {
+                          alert(error?.response?.data?.message || "Failed to submit withdrawal request")
+                        }
                       }
                     }
                   }}

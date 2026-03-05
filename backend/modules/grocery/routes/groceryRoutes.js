@@ -40,6 +40,13 @@ import {
   deleteStoreNotification,
   clearStoreNotifications,
 } from '../controllers/groceryStoreNotificationController.js';
+import {
+  getWallet,
+  getWalletTransactions,
+  getWalletStats,
+  createWithdrawalRequest,
+  getWithdrawalRequests,
+} from '../controllers/groceryStoreWalletController.js';
 
 const router = express.Router();
 
@@ -114,5 +121,12 @@ router.get('/store/owner/me', authenticate, async (req, res) => {
 router.get('/store/notifications', authenticate, getStoreNotifications);
 router.delete('/store/notifications/:id', authenticate, deleteStoreNotification);
 router.delete('/store/notifications', authenticate, clearStoreNotifications);
+
+// Grocery Store Wallet (authenticated)
+router.get('/store/wallet', authenticate, getWallet);
+router.get('/store/wallet/transactions', authenticate, getWalletTransactions);
+router.get('/store/wallet/stats', authenticate, getWalletStats);
+router.post('/store/withdrawal/request', authenticate, createWithdrawalRequest);
+router.get('/store/withdrawal/requests', authenticate, getWithdrawalRequests);
 
 export default router;

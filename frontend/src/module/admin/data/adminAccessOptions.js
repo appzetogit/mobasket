@@ -4,14 +4,12 @@ const SUPER_ADMIN_ONLY_PATHS = new Set(["/admin/manage-admin"]);
 
 const flattenMenuAccess = (menu, platform) => {
   const groups = [];
+  const generalOptions = [];
 
   menu.forEach((entry) => {
     if (entry?.type === "link" && entry.path) {
       if (SUPER_ADMIN_ONLY_PATHS.has(entry.path)) return;
-      groups.push({
-        group: "General",
-        options: [{ label: entry.label || entry.path, path: entry.path, platform }],
-      });
+      generalOptions.push({ label: entry.label || entry.path, path: entry.path, platform });
       return;
     }
 
@@ -42,6 +40,10 @@ const flattenMenuAccess = (menu, platform) => {
       groups.push({ group: entry.label || "Section", options });
     }
   });
+
+  if (generalOptions.length > 0) {
+    groups.unshift({ group: "General", options: generalOptions });
+  }
 
   return groups;
 };

@@ -1,6 +1,7 @@
 import WithdrawalRequest from '../models/WithdrawalRequest.js';
 import RestaurantWallet from '../models/RestaurantWallet.js';
 import Restaurant from '../models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 import winston from 'winston';
@@ -23,6 +24,7 @@ export const createWithdrawalRequest = asyncHandler(async (req, res) => {
   try {
     const restaurant = req.restaurant;
     const { amount } = req.body;
+    const platform = restaurant?.platform === 'mogrocery' ? 'mogrocery' : 'mofood';
 
     if (!restaurant || !restaurant._id) {
       return errorResponse(res, 401, 'Restaurant authentication required');
@@ -52,11 +54,13 @@ export const createWithdrawalRequest = asyncHandler(async (req, res) => {
     }
 
     // Get restaurant details
-    const restaurantDetails = await Restaurant.findById(restaurant._id).select('name restaurantId');
+    const detailsModel = platform === 'mogrocery' ? GroceryStore : Restaurant;
+    const restaurantDetails = await detailsModel.findById(restaurant._id).select('name restaurantId location');
 
     // Create withdrawal request
     const withdrawalRequest = await WithdrawalRequest.create({
       restaurantId: restaurant._id,
+      platform,
       amount: parseFloat(amount),
       status: 'Pending',
       restaurantName: restaurantDetails?.name || restaurant.name || 'Unknown',
@@ -157,19 +161,34 @@ export const getRestaurantWithdrawalRequests = asyncHandler(async (req, res) => 
  */
 export const getAllWithdrawalRequests = asyncHandler(async (req, res) => {
   try {
-    const { status, page = 1, limit = 20, search } = req.query;
+    const { status, page = 1, limit = 20, search, platform } = req.query;
 
     const query = {};
+    const andConditions = [];
     if (status && ['Pending', 'Approved', 'Rejected', 'Processed'].includes(status)) {
       query.status = status;
+    }
+    if (platform === 'mogrocery') {
+      query.platform = 'mogrocery';
+    } else if (platform === 'mofood') {
+      // Backward compatibility: older records may not have platform persisted.
+      andConditions.push({
+        $or: [{ platform: 'mofood' }, { platform: { $exists: false } }]
+      });
     }
 
     // Search by restaurant name or ID
     if (search) {
-      query.$or = [
-        { restaurantName: { $regex: search, $options: 'i' } },
-        { restaurantIdString: { $regex: search, $options: 'i' } }
-      ];
+      andConditions.push({
+        $or: [
+          { restaurantName: { $regex: search, $options: 'i' } },
+          { restaurantIdString: { $regex: search, $options: 'i' } }
+        ]
+      });
+    }
+
+    if (andConditions.length > 0) {
+      query.$and = andConditions;
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -183,25 +202,47 @@ export const getAllWithdrawalRequests = asyncHandler(async (req, res) => {
 
     const total = await WithdrawalRequest.countDocuments(query);
 
+    const groceryIds = requests
+      .filter((row) => row.platform === 'mogrocery')
+      .map((row) => row.restaurantId?._id || row.restaurantId)
+      .filter(Boolean);
+    const groceryStores = groceryIds.length > 0
+      ? await GroceryStore.find({ _id: { $in: groceryIds } })
+          .select('_id name restaurantId location')
+          .lean()
+      : [];
+    const groceryStoreMap = new Map(groceryStores.map((store) => [String(store._id), store]));
+
     return successResponse(res, 200, 'Withdrawal requests retrieved successfully', {
-      requests: requests.map(req => ({
-        id: req._id,
-        restaurantId: req.restaurantId?._id || req.restaurantId,
-        restaurantName: req.restaurantName || req.restaurantId?.name || 'Unknown',
-        restaurantIdString: req.restaurantIdString || req.restaurantId?.restaurantId || 'N/A',
-        restaurantAddress: req.restaurantId?.address || 'N/A',
-        amount: req.amount,
-        status: req.status,
-        requestedAt: req.requestedAt,
-        processedAt: req.processedAt,
-        processedBy: req.processedBy ? {
-          name: req.processedBy.name,
-          email: req.processedBy.email
-        } : null,
-        rejectionReason: req.rejectionReason,
-        createdAt: req.createdAt,
-        updatedAt: req.updatedAt
-      })),
+      requests: requests.map(req => {
+        const entityId = req.restaurantId?._id || req.restaurantId;
+        const groceryStore = req.platform === 'mogrocery' ? groceryStoreMap.get(String(entityId)) : null;
+        const derivedAddress =
+          groceryStore?.location?.formattedAddress ||
+          groceryStore?.location?.address ||
+          req.restaurantId?.address ||
+          'N/A';
+
+        return {
+          id: req._id,
+          platform: req.platform || 'mofood',
+          restaurantId: entityId,
+          restaurantName: req.restaurantName || groceryStore?.name || req.restaurantId?.name || 'Unknown',
+          restaurantIdString: req.restaurantIdString || groceryStore?.restaurantId || req.restaurantId?.restaurantId || 'N/A',
+          restaurantAddress: derivedAddress,
+          amount: req.amount,
+          status: req.status,
+          requestedAt: req.requestedAt,
+          processedAt: req.processedAt,
+          processedBy: req.processedBy ? {
+            name: req.processedBy.name,
+            email: req.processedBy.email
+          } : null,
+          rejectionReason: req.rejectionReason,
+          createdAt: req.createdAt,
+          updatedAt: req.updatedAt
+        };
+      }),
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),

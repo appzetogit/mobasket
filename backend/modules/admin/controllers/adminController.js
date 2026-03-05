@@ -35,6 +35,34 @@ const normalizeSidebarAccess = (sidebarAccess) => {
   );
 };
 
+const resolveDuplicateAdminField = (error) => {
+  const fieldFromPattern = error?.keyPattern ? Object.keys(error.keyPattern)[0] : null;
+  if (fieldFromPattern) return fieldFromPattern;
+
+  const fieldFromValue = error?.keyValue ? Object.keys(error.keyValue)[0] : null;
+  if (fieldFromValue) return fieldFromValue;
+
+  const rawMessage = String(error?.message || "");
+  const fieldFromDupKey = rawMessage.match(/dup key:\s*\{\s*([^:}\s]+)\s*:/i)?.[1];
+  if (fieldFromDupKey) return fieldFromDupKey;
+
+  const indexName = rawMessage.match(/index:\s*([^\s]+)\s*dup key/i)?.[1] || "";
+  if (indexName.includes("email")) return "email";
+  if (indexName.includes("phone")) return "phone";
+  return "email";
+};
+
+const resolveDuplicateAdminValue = (error, field) => {
+  if (error?.keyValue && field && Object.prototype.hasOwnProperty.call(error.keyValue, field)) {
+    return error.keyValue[field];
+  }
+
+  const rawMessage = String(error?.message || "");
+  const valueFromDupKey = rawMessage.match(/dup key:\s*\{\s*[^:}\s]+\s*:\s*("?[^"}]*"?|null)\s*\}/i)?.[1];
+  if (!valueFromDupKey) return null;
+  return valueFromDupKey.replace(/^"|"$/g, "");
+};
+
 
 /**
  * Get Admin Dashboard Statistics
@@ -522,7 +550,11 @@ export const getAdminById = asyncHandler(async (req, res) => {
  */
 export const createAdmin = asyncHandler(async (req, res) => {
   try {
+    await Admin.ensureLegacyIndexesCleaned();
+
     const { name, email, password, phone, role, sidebarAccess } = req.body;
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+    const normalizedPhone = phone !== undefined ? String(phone || "").trim() : undefined;
 
     // Validation
     if (!name || !email || !password) {
@@ -534,15 +566,21 @@ export const createAdmin = asyncHandler(async (req, res) => {
     }
 
     // Check if admin already exists with this email
-    const existingAdmin = await Admin.findOne({ email: email.toLowerCase() });
+    const existingAdmin = await Admin.findOne({ email: normalizedEmail });
     if (existingAdmin) {
       return errorResponse(res, 400, 'Admin already exists with this email');
+    }
+    if (normalizedPhone) {
+      const existingPhoneAdmin = await Admin.findOne({ phone: normalizedPhone });
+      if (existingPhoneAdmin) {
+        return errorResponse(res, 400, 'Admin already exists with this phone number');
+      }
     }
 
     // Create new admin
     const adminData = {
       name,
-      email: email.toLowerCase(),
+      email: normalizedEmail,
       password,
       isActive: true,
       phoneVerified: false,
@@ -550,8 +588,8 @@ export const createAdmin = asyncHandler(async (req, res) => {
       sidebarAccess: normalizeSidebarAccess(sidebarAccess)
     };
 
-    if (phone) {
-      adminData.phone = phone;
+    if (normalizedPhone) {
+      adminData.phone = normalizedPhone;
     }
 
     const admin = await Admin.create(adminData);
@@ -569,7 +607,18 @@ export const createAdmin = asyncHandler(async (req, res) => {
     logger.error(`Error creating admin: ${error.message}`);
     
     if (error.code === 11000) {
-      return errorResponse(res, 400, 'Admin with this email already exists');
+      const duplicateField = resolveDuplicateAdminField(error);
+      const duplicateValue = resolveDuplicateAdminValue(error, duplicateField);
+      const suffix = duplicateValue !== null && duplicateValue !== undefined && String(duplicateValue) !== ""
+        ? ` (${duplicateValue})`
+        : "";
+      if (duplicateField === 'phone') {
+        return errorResponse(res, 400, `Admin with this phone number already exists${suffix}`);
+      }
+      if (duplicateField === 'email') {
+        return errorResponse(res, 400, `Admin with this email already exists${suffix}`);
+      }
+      return errorResponse(res, 400, `Admin with duplicate ${duplicateField} already exists${suffix}`);
     }
     
     return errorResponse(res, 500, 'Failed to create admin');
@@ -582,8 +631,12 @@ export const createAdmin = asyncHandler(async (req, res) => {
  */
 export const updateAdmin = asyncHandler(async (req, res) => {
   try {
+    await Admin.ensureLegacyIndexesCleaned();
+
     const { id } = req.params;
     const { name, email, phone, isActive, role, sidebarAccess } = req.body;
+    const normalizedEmail = email !== undefined ? String(email || '').trim().toLowerCase() : undefined;
+    const normalizedPhone = phone !== undefined ? String(phone || '').trim() : undefined;
 
     const admin = await Admin.findById(id);
 
@@ -598,8 +651,8 @@ export const updateAdmin = asyncHandler(async (req, res) => {
 
     // Update fields
     if (name) admin.name = name;
-    if (email) admin.email = email.toLowerCase();
-    if (phone !== undefined) admin.phone = phone;
+    if (normalizedEmail) admin.email = normalizedEmail;
+    if (phone !== undefined) admin.phone = normalizedPhone || undefined;
     if (isActive !== undefined) admin.isActive = isActive;
     if (role && ['super_admin', 'admin', 'moderator'].includes(role)) {
       admin.role = role;
@@ -622,7 +675,18 @@ export const updateAdmin = asyncHandler(async (req, res) => {
     logger.error(`Error updating admin: ${error.message}`);
     
     if (error.code === 11000) {
-      return errorResponse(res, 400, 'Admin with this email already exists');
+      const duplicateField = resolveDuplicateAdminField(error);
+      const duplicateValue = resolveDuplicateAdminValue(error, duplicateField);
+      const suffix = duplicateValue !== null && duplicateValue !== undefined && String(duplicateValue) !== ""
+        ? ` (${duplicateValue})`
+        : "";
+      if (duplicateField === 'phone') {
+        return errorResponse(res, 400, `Admin with this phone number already exists${suffix}`);
+      }
+      if (duplicateField === 'email') {
+        return errorResponse(res, 400, `Admin with this email already exists${suffix}`);
+      }
+      return errorResponse(res, 400, `Admin with duplicate ${duplicateField} already exists${suffix}`);
     }
     
     return errorResponse(res, 500, 'Failed to update admin');

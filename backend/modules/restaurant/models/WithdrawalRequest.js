@@ -7,6 +7,12 @@ const withdrawalRequestSchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  platform: {
+    type: String,
+    enum: ['mofood', 'mogrocery'],
+    default: 'mofood',
+    index: true
+  },
   amount: {
     type: Number,
     required: true,

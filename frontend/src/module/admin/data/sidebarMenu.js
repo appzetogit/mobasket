@@ -418,7 +418,8 @@ export const mogroceryMenuData = [
         subItems: [
           { label: "Stores List", path: "/admin/grocery-stores" },
           { label: "Store Commission", path: "/admin/grocery-stores/commission" },
-          { label: "New Joining Request", path: "/admin/grocery-stores/joining-request" }
+          { label: "New Joining Request", path: "/admin/grocery-stores/joining-request" },
+          { label: "Store Withdraws", path: "/admin/restaurant-withdraws" }
           // { label: "Store Complaints", path: "/admin/grocery-stores/complaints" },
         ],
       },
