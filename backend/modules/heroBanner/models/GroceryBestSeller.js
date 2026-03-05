@@ -27,6 +27,15 @@ const groceryBestSellerSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    sectionName: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    sectionOrder: {
+      type: Number,
+      default: 0,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -38,6 +47,7 @@ const groceryBestSellerSchema = new mongoose.Schema(
 );
 
 groceryBestSellerSchema.index({ platform: 1, order: 1, isActive: 1 });
+groceryBestSellerSchema.index({ platform: 1, sectionOrder: 1, sectionName: 1, order: 1, isActive: 1 });
 groceryBestSellerSchema.index({ platform: 1, itemType: 1, itemId: 1 }, { unique: true });
 
 export default mongoose.model('GroceryBestSeller', groceryBestSellerSchema);

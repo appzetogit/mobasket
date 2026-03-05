@@ -1738,6 +1738,8 @@ export const getGroceryBestSellers = async (req, res) => {
             ? (Array.isArray(item.itemId?.images) ? item.itemId.images[0] : '') || ''
             : item.itemId?.image || '',
         order: item.order,
+        sectionName: item.sectionName || '',
+        sectionOrder: Number.isFinite(Number(item.sectionOrder)) ? Number(item.sectionOrder) : 0,
         isActive: item.isActive,
         subcategories:
           item.itemType === 'product' && Array.isArray(item.itemId?.subcategories)
@@ -1745,8 +1747,36 @@ export const getGroceryBestSellers = async (req, res) => {
             : [],
       }));
 
+    const rawSectionsMap = new Map();
+    bestSellers
+      .filter((item) => item.itemType === 'product' && item.sectionName)
+      .forEach((item) => {
+        const key = `${item.sectionOrder}::${item.sectionName}`;
+        if (!rawSectionsMap.has(key)) {
+          rawSectionsMap.set(key, {
+            name: item.sectionName,
+            order: item.sectionOrder,
+            products: [],
+          });
+        }
+        rawSectionsMap.get(key).products.push(item);
+      });
+
+    const sections = Array.from(rawSectionsMap.values())
+      .map((section) => ({
+        ...section,
+        products: section.products.sort((a, b) => Number(a.order || 0) - Number(b.order || 0)),
+      }))
+      .sort((a, b) => {
+        if (Number(a.order || 0) !== Number(b.order || 0)) {
+          return Number(a.order || 0) - Number(b.order || 0);
+        }
+        return String(a.name || '').localeCompare(String(b.name || ''));
+      });
+
     return successResponse(res, 200, 'Grocery best sellers retrieved successfully', {
       items: bestSellers,
+      sections,
     });
   } catch (error) {
     console.error('Error fetching grocery best sellers:', error);
@@ -1780,7 +1810,7 @@ export const getAllGroceryBestSellers = async (req, res) => {
 export const createGroceryBestSeller = async (req, res) => {
   try {
     const platform = getPlatformFromRequest(req);
-    const { itemType, itemId } = req.body;
+    const { itemType, itemId, sectionName, sectionOrder } = req.body;
 
     if (!itemType || !itemId) {
       return errorResponse(res, 400, 'itemType and itemId are required');
@@ -1817,12 +1847,22 @@ export const createGroceryBestSeller = async (req, res) => {
 
     const order = last ? Number(last.order || 0) + 1 : 0;
 
+    const normalizedSectionName = itemType === 'product' && typeof sectionName === 'string'
+      ? sectionName.trim()
+      : '';
+    const normalizedSectionOrder =
+      itemType === 'product' && Number.isFinite(Number(sectionOrder))
+        ? Number(sectionOrder)
+        : 0;
+
     const created = await GroceryBestSeller.create({
       platform,
       itemType,
       itemModel,
       itemId,
       order,
+      sectionName: normalizedSectionName,
+      sectionOrder: normalizedSectionOrder,
       isActive: true,
     });
 

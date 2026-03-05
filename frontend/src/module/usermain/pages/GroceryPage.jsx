@@ -67,6 +67,7 @@ const GroceryPage = () => {
   const [showSnow, setShowSnow] = useState(false);
   const [homepageCategories, setHomepageCategories] = useState([]);
   const [bestSellerItems, setBestSellerItems] = useState([]);
+  const [bestSellerSections, setBestSellerSections] = useState([]);
   const [rawProducts, setRawProducts] = useState([]);
   const [allProducts, setAllProducts] = useState([]);
   const [groceryStores, setGroceryStores] = useState([]);
@@ -76,28 +77,28 @@ const GroceryPage = () => {
   const hasSeededOrderSnapshotRef = useRef(false);
   const zoneRecoveryAttemptedRef = useRef(false);
   const isAnySheetOpen = showCategorySheet || showCollectionSheet || showWishlistSheet;
+  const collectionHandleStartYRef = useRef(null);
+  const wishlistHandleStartYRef = useRef(null);
 
   useEffect(() => {
     if (!isAnySheetOpen) return undefined;
 
     const body = document.body;
     const html = document.documentElement;
-    const scrollY = window.scrollY || window.pageYOffset || 0;
-    const previousBodyStyle = body.getAttribute("style") || "";
-    const previousHtmlStyle = html.getAttribute("style") || "";
+    const previousBodyCssText = body.style.cssText;
+    const previousHtmlCssText = html.style.cssText;
 
-    body.style.position = "fixed";
-    body.style.top = `-${scrollY}px`;
-    body.style.left = "0";
-    body.style.right = "0";
-    body.style.width = "100%";
     body.style.overflow = "hidden";
+    body.style.overscrollBehavior = "none";
+    body.style.height = "100%";
+
     html.style.overflow = "hidden";
+    html.style.overscrollBehavior = "none";
+    html.style.height = "100%";
 
     return () => {
-      body.setAttribute("style", previousBodyStyle);
-      html.setAttribute("style", previousHtmlStyle);
-      window.scrollTo(0, scrollY);
+      body.style.cssText = previousBodyCssText;
+      html.style.cssText = previousHtmlCssText;
     };
   }, [isAnySheetOpen]);
 
@@ -392,13 +393,13 @@ const GroceryPage = () => {
   };
 
   const openCategorySheet = (categoryId = "all") => {
-    // If categoryId is an object (event), default to 'all' or ignore
-    if (typeof categoryId === "object" && categoryId !== null) {
-      setSelectedCategoryId("all");
-    } else {
-      setSelectedCategoryId(categoryId);
-    }
-    setShowCategorySheet(true);
+    const normalizedCategoryId =
+      typeof categoryId === "object" && categoryId !== null ? "all" : String(categoryId || "all");
+    navigate("/grocery/categories", {
+      state: {
+        categoryId: normalizedCategoryId,
+      },
+    });
   };
 
   // Load dynamic grocery banners
@@ -455,9 +456,12 @@ const GroceryPage = () => {
           params: { platform: "mogrocery" },
         });
         const items = Array.isArray(response?.data?.data?.items) ? response.data.data.items : [];
+        const sections = Array.isArray(response?.data?.data?.sections) ? response.data.data.sections : [];
         setBestSellerItems(items);
+        setBestSellerSections(sections);
       } catch {
         setBestSellerItems([]);
+        setBestSellerSections([]);
       } finally {
         setIsBestSellersLoading(false);
       }
@@ -737,15 +741,18 @@ const GroceryPage = () => {
     );
   };
 
-  const openCollectionSheet = ({ categoryId, title = "" }) => {
+  const openCollectionSheet = ({ categoryId, subcategoryId = "", title = "" }) => {
     const category = findCategoryById(categoryId);
     const resolvedCategoryId = category
       ? String(category?._id || category?.slug || category?.name || "all")
       : "all";
-
-    setCollectionCategoryId(resolvedCategoryId);
-    setCollectionTitle(title || category?.name || "Products");
-    setShowCollectionSheet(true);
+    navigate("/grocery/categories", {
+      state: {
+        categoryId: resolvedCategoryId,
+        subcategoryId: subcategoryId ? String(subcategoryId) : "all-subcategories",
+        title: title || category?.name || "Products",
+      },
+    });
     return true;
   };
 
@@ -1128,6 +1135,61 @@ const GroceryPage = () => {
       }));
   }, [allProducts, bestSellerItems, searchQuery]);
 
+  const orderedBestSellerProductSections = useMemo(() => {
+    const productMap = new Map(
+      (Array.isArray(allProducts) ? allProducts : []).map((product) => [
+        String(product?._id || product?.id || ""),
+        product,
+      ])
+    );
+
+    const fallbackSectionsMap = new Map();
+    if (!Array.isArray(bestSellerSections) || bestSellerSections.length === 0) {
+      bestSellerItems
+        .filter((item) => item?.itemType === "product" && item?.sectionName)
+        .forEach((item) => {
+          const key = `${Number(item?.sectionOrder || 0)}::${String(item?.sectionName || "").trim()}`;
+          if (!fallbackSectionsMap.has(key)) {
+            fallbackSectionsMap.set(key, {
+              name: String(item?.sectionName || "").trim(),
+              order: Number(item?.sectionOrder || 0),
+              products: [],
+            });
+          }
+          fallbackSectionsMap.get(key).products.push(item);
+        });
+    }
+
+    const sectionsToUse =
+      Array.isArray(bestSellerSections) && bestSellerSections.length > 0
+        ? bestSellerSections
+        : Array.from(fallbackSectionsMap.values());
+
+    return sectionsToUse
+      .map((section, index) => {
+        const name = String(section?.name || section?.sectionName || "").trim();
+        const order = Number(section?.order || section?.sectionOrder || index || 0);
+        const sectionProducts = (Array.isArray(section?.products) ? section.products : [])
+          .map((entry) => {
+            const itemId = String(entry?.itemId?._id || entry?.itemId || "");
+            return productMap.get(itemId) || null;
+          })
+          .filter(Boolean);
+
+        return {
+          id: `${order}-${name}-${index}`,
+          name,
+          order,
+          products: sectionProducts,
+        };
+      })
+      .filter((section) => section.name && section.products.length > 0)
+      .sort((a, b) => {
+        if (a.order !== b.order) return a.order - b.order;
+        return a.name.localeCompare(b.name);
+      });
+  }, [allProducts, bestSellerItems, bestSellerSections]);
+
   useEffect(() => {
     setActiveSubcategoryId("all-subcategories");
   }, [activeCategoryId]);
@@ -1136,22 +1198,44 @@ const GroceryPage = () => {
     if (!isGroceryCategoriesRoute) return;
 
     setSearchQuery("");
-    setActiveSubcategoryId("all-subcategories");
 
-    const firstCategory = homepageCategories?.[0];
-    if (firstCategory) {
-      const categoryId = String(firstCategory?._id || firstCategory?.slug || firstCategory?.name || "all");
-      setActiveTab(firstCategory?.name || "All");
-      setActiveCategoryId(categoryId);
+    const stateCategoryId = String(routerLocation?.state?.categoryId || "");
+    const stateSubcategoryId = String(routerLocation?.state?.subcategoryId || "");
+    const hasStateCategory = stateCategoryId && stateCategoryId !== "all";
+
+    if (hasStateCategory) {
+      const matchedCategory =
+        homepageCategories.find(
+          (category) =>
+            String(category?._id || "") === stateCategoryId ||
+            String(category?.slug || "") === stateCategoryId ||
+            String(category?.name || "") === stateCategoryId
+        ) || null;
+
+      const resolvedCategoryId = matchedCategory
+        ? String(matchedCategory?._id || matchedCategory?.slug || matchedCategory?.name || "all")
+        : stateCategoryId;
+
+      setActiveCategoryId(resolvedCategoryId);
+      setActiveTab(matchedCategory?.name || "All");
+      setActiveSubcategoryId(stateSubcategoryId || "all-subcategories");
     } else {
-      setActiveTab("All");
-      setActiveCategoryId("all");
+      setActiveSubcategoryId("all-subcategories");
+      const firstCategory = homepageCategories?.[0];
+      if (firstCategory) {
+        const categoryId = String(firstCategory?._id || firstCategory?.slug || firstCategory?.name || "all");
+        setActiveTab(firstCategory?.name || "All");
+        setActiveCategoryId(categoryId);
+      } else {
+        setActiveTab("All");
+        setActiveCategoryId("all");
+      }
     }
 
     if (typeof window !== "undefined") {
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
-  }, [homepageCategories, isGroceryCategoriesRoute]);
+  }, [homepageCategories, isGroceryCategoriesRoute, routerLocation.state]);
 
   const hasAnySearchMatch = useMemo(() => {
     if (!hasActiveSearch) return true;
@@ -1978,7 +2062,7 @@ const GroceryPage = () => {
       {!shouldShowShimmer && !hasActiveSearch && activeCategoryId === "all" && homepageCategoryDisplaySections.map((category, sectionIndex) => (
         <div
           key={category._id || category.slug || category.name}
-          className={`px-4 relative z-10 md:max-w-6xl md:mx-auto ${sectionIndex === homepageCategoryDisplaySections.length - 1 ? "pb-24" : "pb-6"
+          className={`px-4 relative z-10 md:max-w-6xl md:mx-auto ${sectionIndex === homepageCategoryDisplaySections.length - 1 ? "pb-8" : "pb-6"
             }`}
         >
           <h3 className="text-lg font-[800] text-[#3e2723] dark:text-slate-100 mb-4">{category.name}</h3>
@@ -2043,6 +2127,64 @@ const GroceryPage = () => {
           </div>
         </div>
       ))}
+
+      {!shouldShowShimmer && !hasActiveSearch && activeCategoryId === "all" && orderedBestSellerProductSections.length > 0 && (
+        <div className="px-4 pb-24 relative z-10 md:max-w-6xl md:mx-auto space-y-6">
+          {orderedBestSellerProductSections.map((section) => (
+            <div key={section.id}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-xl font-[800] text-[#1a1a1a] dark:text-slate-100">{section.name}</h3>
+                <span className="text-sm font-bold text-[#2f8d2f] dark:text-emerald-300">see all</span>
+              </div>
+              <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
+                {section.products.map((product) => {
+                  const productId = String(product?._id || product?.id || "");
+                  const alreadyInCart = productId ? isInCart(productId) : false;
+                  return (
+                    <div
+                      key={`best-section-product-${section.id}-${productId}`}
+                      className="min-w-[160px] max-w-[160px] rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#111a28] p-2.5 shadow-sm dark:shadow-black/20 cursor-pointer"
+                      onClick={() => handleProductCardClick(product)}
+                    >
+                      <div className="w-full h-[96px] rounded-xl bg-slate-50 dark:bg-[#0d1624] overflow-hidden flex items-center justify-center mb-2">
+                        <img
+                          src={getProductImage(product)}
+                          alt={product?.name || "Product"}
+                          className="w-full h-full object-contain"
+                        />
+                      </div>
+                      <p className="text-[10px] font-bold text-slate-500 dark:text-slate-300 mb-1">{deliveryEtaMinutes} MINS</p>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 line-clamp-2 min-h-[36px]">
+                        {product?.name || "Product"}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{product?.unit || "1 unit"}</p>
+                      <div className="mt-2 flex items-end justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-bold text-slate-900 dark:text-slate-100">Rs {Number(product?.sellingPrice || 0)}</p>
+                          <p className="text-xs text-slate-400 dark:text-slate-500 line-through">Rs {Number(product?.mrp || 0)}</p>
+                        </div>
+                        <button
+                          type="button"
+                          className={`h-8 px-3 rounded-lg text-xs font-[900] border ${alreadyInCart
+                            ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-400/40"
+                            : "bg-white dark:bg-[#0f1b2c] text-[#2f8d2f] dark:text-emerald-300 border-[#79b879] dark:border-emerald-400/70"
+                            }`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (!alreadyInCart) handleAddProductToCart(product, event);
+                          }}
+                        >
+                          {alreadyInCart ? "ADDED" : "ADD"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* --- 8. BOTTOM FLOATING OFFER --- */}
       {activeGroceryOrder && activeOrderMeta && !isMoGroceryPlanOrder(activeGroceryOrder) && (
@@ -2163,15 +2305,7 @@ const GroceryPage = () => {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 24, stiffness: 280 }}
-              drag="y"
-              dragConstraints={{ top: 0 }}
-              dragElastic={0.2}
-              onDragEnd={(_, info) => {
-                if (info.offset.y > 110) {
-                  setShowCollectionSheet(false);
-                }
-              }}
-              className="fixed bottom-0 left-0 right-0 h-[92vh] z-[80] w-full overscroll-contain touch-pan-y"
+              className="fixed bottom-0 left-0 right-0 h-[92vh] z-[80] w-full overscroll-contain touch-pan-y pointer-events-auto"
             >
               <button
                 onClick={() => setShowCollectionSheet(false)}
@@ -2180,9 +2314,25 @@ const GroceryPage = () => {
                 <X size={22} className="text-white" strokeWidth={2.5} />
               </button>
 
-              <div className="h-full bg-[#f4f5f7] dark:bg-[#0d1422] rounded-t-[22px] overflow-hidden shadow-2xl flex flex-col">
+              <div className="h-full min-h-0 bg-[#f4f5f7] dark:bg-[#0d1422] rounded-t-[22px] overflow-hidden shadow-2xl flex flex-col">
                 <div className="w-full flex justify-center pt-3 pb-1">
-                  <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full" />
+                  <button
+                    type="button"
+                    aria-label="Drag to close"
+                    onTouchStart={(event) => {
+                      collectionHandleStartYRef.current = event.touches?.[0]?.clientY ?? null;
+                    }}
+                    onTouchEnd={(event) => {
+                      const startY = collectionHandleStartYRef.current;
+                      const endY = event.changedTouches?.[0]?.clientY ?? null;
+                      collectionHandleStartYRef.current = null;
+                      if (startY == null || endY == null) return;
+                      if (endY - startY > 70) setShowCollectionSheet(false);
+                    }}
+                    className="w-16 h-5 flex items-center justify-center touch-none"
+                  >
+                    <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full" />
+                  </button>
                 </div>
 
                 <div className="px-3 pb-2 bg-white dark:bg-[#121b2b] border-b border-slate-200 dark:border-slate-700">
@@ -2238,7 +2388,7 @@ const GroceryPage = () => {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto overflow-x-hidden overscroll-contain p-3">
+                <div data-sheet-scrollable="true" className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain p-3 touch-auto [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch]">
                   {collectionVisibleProducts.length === 0 ? (
                     <p className="text-sm text-slate-500 dark:text-slate-400 p-3 md:max-w-6xl md:mx-auto">No products available.</p>
                   ) : (
@@ -2332,17 +2482,27 @@ const GroceryPage = () => {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 24, stiffness: 280 }}
-              drag="y"
-              dragConstraints={{ top: 0 }}
-              dragElastic={0.2}
-              onDragEnd={(_, info) => {
-                if (info.offset.y > 110) setShowWishlistSheet(false);
-              }}
-              className="fixed bottom-0 left-0 right-0 h-[88vh] z-[85] w-full overscroll-contain touch-pan-y"
+              className="fixed bottom-0 left-0 right-0 h-[88vh] z-[85] w-full overscroll-contain touch-pan-y pointer-events-auto"
             >
-              <div className="h-full bg-[#f4f5f7] dark:bg-[#0d1422] rounded-t-[22px] overflow-hidden shadow-2xl flex flex-col">
+              <div className="h-full min-h-0 bg-[#f4f5f7] dark:bg-[#0d1422] rounded-t-[22px] overflow-hidden shadow-2xl flex flex-col">
                 <div className="w-full flex justify-center pt-3 pb-1">
-                  <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full" />
+                  <button
+                    type="button"
+                    aria-label="Drag to close"
+                    onTouchStart={(event) => {
+                      wishlistHandleStartYRef.current = event.touches?.[0]?.clientY ?? null;
+                    }}
+                    onTouchEnd={(event) => {
+                      const startY = wishlistHandleStartYRef.current;
+                      const endY = event.changedTouches?.[0]?.clientY ?? null;
+                      wishlistHandleStartYRef.current = null;
+                      if (startY == null || endY == null) return;
+                      if (endY - startY > 70) setShowWishlistSheet(false);
+                    }}
+                    className="w-16 h-5 flex items-center justify-center touch-none"
+                  >
+                    <div className="w-12 h-1.5 bg-slate-300 dark:bg-slate-600 rounded-full" />
+                  </button>
                 </div>
 
                 <div className="px-3 pb-2 bg-white dark:bg-[#121b2b] border-b border-slate-200 dark:border-slate-700">
@@ -2361,7 +2521,7 @@ const GroceryPage = () => {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto overscroll-contain p-3">
+                <div data-sheet-scrollable="true" className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 touch-auto [scrollbar-gutter:stable] [-webkit-overflow-scrolling:touch]">
                   {groceryWishlistedProducts.length === 0 ? (
                     <p className="text-sm text-slate-500 dark:text-slate-400 p-3 md:max-w-6xl md:mx-auto">No wishlisted products yet.</p>
                   ) : (
@@ -2495,32 +2655,11 @@ const GroceryPage = () => {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              drag="y"
-              dragConstraints={{ top: 0 }}
-              dragElastic={0.2}
-              onDragEnd={(_, info) => {
-                if (info.offset.y > 100) {
-                  setShowCategorySheet(false);
-                }
-              }}
-              className="fixed bottom-0 left-0 right-0 h-[92vh] z-[60] w-full overscroll-contain touch-pan-y"
+              className="fixed inset-0 h-[100dvh] z-[60] w-full overscroll-contain touch-pan-y pointer-events-auto"
             >
-              {/* Floating Close Button */}
-              <button
-                onClick={() => setShowCategorySheet(false)}
-                className="absolute -top-14 left-1/2 -translate-x-1/2 bg-[#1a1a1a] p-2.5 rounded-full shadow-lg border border-white/20 active:scale-95 transition-transform z-[80] flex items-center justify-center cursor-pointer"
-              >
-                <X size={22} className="text-white" strokeWidth={2.5} />
-              </button>
-
               {/* Actual Sheet Content */}
-              <div className="h-full bg-white rounded-t-[20px] overflow-hidden relative shadow-2xl">
-                {/* Drag Handle */}
-                <div className="w-full flex justify-center pt-3 pb-1 absolute top-0 left-0 z-[70] pointer-events-none">
-                  <div className="w-12 h-1.5 bg-slate-200 rounded-full" />
-                </div>
-
-                <div className="h-full pt-2">
+              <div className="h-full min-h-0 bg-white overflow-hidden relative shadow-2xl">
+                <div className="h-full min-h-0">
                   <CategoryFoodsContent
                     onClose={() => setShowCategorySheet(false)}
                     isModal={true}
