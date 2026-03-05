@@ -10,10 +10,12 @@ import {
 } from "lucide-react";
 import api, { restaurantAPI } from "@/lib/api";
 import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
+import { useZone } from "../../user/hooks/useZone";
 
 export default function CategoryDirectoryPage() {
   const navigate = useNavigate();
   const { location: userLocation } = useUserLocation();
+  const { zoneId } = useZone(userLocation, "mogrocery");
   const [categories, setCategories] = useState([]);
   const [groceryStores, setGroceryStores] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,44 +56,110 @@ export default function CategoryDirectoryPage() {
   };
 
   useEffect(() => {
-    const loadCategories = async () => {
+    const loadCategoryDirectory = async () => {
       try {
         setIsLoading(true);
         setError("");
-        const response = await api.get("/grocery/categories", {
-          params: {
-            includeSubcategories: true,
-          },
+
+        const [categoriesResponse, storesResponse, productsResponse] = await Promise.all([
+          api.get("/grocery/categories", {
+            params: {
+              includeSubcategories: true,
+            },
+          }),
+          restaurantAPI.getRestaurants({
+            limit: 200,
+            platform: "mogrocery",
+            onlyZone: "true",
+            ...(zoneId ? { zoneId } : {}),
+          }),
+          zoneId
+            ? api.get("/grocery/products", {
+                params: { page: 1, limit: 2000, zoneId },
+              })
+            : Promise.resolve({ data: { data: [] } }),
+        ]);
+
+        const categoryPayload = Array.isArray(categoriesResponse?.data?.data)
+          ? categoriesResponse.data.data
+          : [];
+
+        const restaurants = Array.isArray(storesResponse?.data?.data?.restaurants)
+          ? storesResponse.data.data.restaurants
+          : [];
+        const stores = restaurants.filter((restaurant) => restaurant?.platform === "mogrocery" && restaurant?.isActive);
+        setGroceryStores(stores);
+
+        const rawProducts = Array.isArray(productsResponse?.data?.data)
+          ? productsResponse.data.data
+          : Array.isArray(productsResponse?.data?.data?.products)
+            ? productsResponse.data.data.products
+            : [];
+
+        const allowedStoreIds = new Set(
+          stores
+            .map((store) => String(store?._id || store?.id || store?.restaurantId || "").trim())
+            .filter(Boolean)
+        );
+
+        const zoneScopedProducts = rawProducts.filter((product) => {
+          const productStoreId = String(
+            product?.storeId?._id ||
+              product?.storeId?.id ||
+              product?.storeId ||
+              product?.restaurantId?._id ||
+              product?.restaurantId?.id ||
+              product?.restaurantId ||
+              ""
+          ).trim();
+
+          if (allowedStoreIds.size === 0) return false;
+          return productStoreId && allowedStoreIds.has(productStoreId);
         });
-        const payload = Array.isArray(response?.data?.data) ? response.data.data : [];
-        setCategories(payload);
+
+        const availableCategoryIds = new Set();
+        const availableSubcategoryIds = new Set();
+
+        zoneScopedProducts.forEach((product) => {
+          const categoryId = String(
+            product?.category?._id || product?.category?.id || product?.category || ""
+          ).trim();
+          const subcategoryId = String(
+            product?.subcategory?._id || product?.subcategory?.id || product?.subcategory || ""
+          ).trim();
+          if (categoryId) availableCategoryIds.add(categoryId);
+          if (subcategoryId) availableSubcategoryIds.add(subcategoryId);
+        });
+
+        const filteredCategories = categoryPayload
+          .map((category) => {
+            const categoryId = String(category?._id || "").trim();
+            const subcategories = Array.isArray(category?.subcategories) ? category.subcategories : [];
+            const filteredSubcategories = subcategories.filter((subcategory) =>
+              availableSubcategoryIds.has(String(subcategory?._id || "").trim())
+            );
+
+            return {
+              ...category,
+              subcategories: filteredSubcategories,
+              __hasDirectProducts: availableCategoryIds.has(categoryId),
+            };
+          })
+          .filter((category) => category.subcategories.length > 0 || category.__hasDirectProducts)
+          .map(({ __hasDirectProducts, ...category }) => category);
+
+        setCategories(filteredCategories);
       } catch (err) {
         setCategories([]);
+        setGroceryStores([]);
         setError(err?.response?.data?.message || "Failed to load categories.");
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadCategories();
-  }, []);
-
-  useEffect(() => {
-    const fetchGroceryStores = async () => {
-      try {
-        const response = await restaurantAPI.getRestaurants({ limit: 200 });
-        const restaurants = Array.isArray(response?.data?.data?.restaurants)
-          ? response.data.data.restaurants
-          : [];
-        const stores = restaurants.filter((restaurant) => restaurant?.platform === "mogrocery" && restaurant?.isActive);
-        setGroceryStores(stores);
-      } catch {
-        setGroceryStores([]);
-      }
-    };
-
-    fetchGroceryStores();
-  }, []);
+    loadCategoryDirectory();
+  }, [zoneId]);
 
   const nearestStoreDistanceKm = useMemo(() => {
     const userLat = Number(userLocation?.latitude);

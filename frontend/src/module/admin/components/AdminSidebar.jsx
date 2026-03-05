@@ -109,7 +109,10 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
       "/admin/hero-banner-management": "/admin/grocery-hero-banner-management",
       "/admin/grocery-hero-banner-management": "/admin/hero-banner-management",
     }
-    const nextPath = pathMapping[location.pathname] || location.pathname
+    const nextPath =
+      location.pathname === "/admin/product-sections-management"
+        ? (nextPlatform === "mogrocery" ? "/admin/product-sections-management" : "/admin/hero-banner-management")
+        : (pathMapping[location.pathname] || location.pathname)
     switchPlatform(nextPlatform)
     navigate(nextPath, {
       replace: true,
