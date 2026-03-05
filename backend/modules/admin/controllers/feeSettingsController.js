@@ -77,7 +77,18 @@ export const getFeeSettings = asyncHandler(async (req, res) => {
 export const createOrUpdateFeeSettings = asyncHandler(async (req, res) => {
   try {
     const platform = resolvePlatform(req);
-    const { deliveryFee, deliveryFeeRanges, freeDeliveryThreshold, platformFee, gstRate, isActive } = req.body;
+    const {
+      deliveryFee,
+      deliveryFeeRanges,
+      freeDeliveryThreshold,
+      platformFee,
+      gstRate,
+      driverEarningRangeStartKm,
+      driverEarningRangeEndKm,
+      driverEarningBaseAmount,
+      driverEarningExtraPerKm,
+      isActive
+    } = req.body;
 
     // Validate platform fee
     if (platformFee === undefined || platformFee < 0) {
@@ -86,6 +97,30 @@ export const createOrUpdateFeeSettings = asyncHandler(async (req, res) => {
 
     if (gstRate === undefined || gstRate < 0 || gstRate > 100) {
       return errorResponse(res, 400, 'GST rate must be between 0 and 100');
+    }
+
+    const normalizedRangeStartKm =
+      driverEarningRangeStartKm !== undefined ? Number(driverEarningRangeStartKm) : 0;
+    const normalizedRangeEndKm =
+      driverEarningRangeEndKm !== undefined ? Number(driverEarningRangeEndKm) : 2;
+    const normalizedBaseAmount =
+      driverEarningBaseAmount !== undefined ? Number(driverEarningBaseAmount) : 20;
+    const normalizedExtraPerKm =
+      driverEarningExtraPerKm !== undefined ? Number(driverEarningExtraPerKm) : 5;
+
+    if (
+      !Number.isFinite(normalizedRangeStartKm) ||
+      !Number.isFinite(normalizedRangeEndKm) ||
+      normalizedRangeStartKm < 0 ||
+      normalizedRangeEndKm <= normalizedRangeStartKm
+    ) {
+      return errorResponse(res, 400, 'Driver earning KM range is invalid. Ensure start >= 0 and end > start.');
+    }
+    if (!Number.isFinite(normalizedBaseAmount) || normalizedBaseAmount < 0) {
+      return errorResponse(res, 400, 'Driver base earning amount must be a positive number');
+    }
+    if (!Number.isFinite(normalizedExtraPerKm) || normalizedExtraPerKm < 0) {
+      return errorResponse(res, 400, 'Driver extra per km fee must be a positive number');
     }
 
     // Validate delivery fee ranges if provided
@@ -121,6 +156,10 @@ export const createOrUpdateFeeSettings = asyncHandler(async (req, res) => {
       freeDeliveryThreshold: freeDeliveryThreshold ? Number(freeDeliveryThreshold) : 149,
       platformFee: Number(platformFee),
       gstRate: Number(gstRate),
+      driverEarningRangeStartKm: normalizedRangeStartKm,
+      driverEarningRangeEndKm: normalizedRangeEndKm,
+      driverEarningBaseAmount: normalizedBaseAmount,
+      driverEarningExtraPerKm: normalizedExtraPerKm,
       isActive: isActive !== false,
       createdBy: req.admin?._id || null,
       updatedBy: req.admin?._id || null,
@@ -156,7 +195,18 @@ export const updateFeeSettings = asyncHandler(async (req, res) => {
   try {
     const platform = resolvePlatform(req);
     const { id } = req.params;
-    const { deliveryFee, deliveryFeeRanges, freeDeliveryThreshold, platformFee, gstRate, isActive } = req.body;
+    const {
+      deliveryFee,
+      deliveryFeeRanges,
+      freeDeliveryThreshold,
+      platformFee,
+      gstRate,
+      driverEarningRangeStartKm,
+      driverEarningRangeEndKm,
+      driverEarningBaseAmount,
+      driverEarningExtraPerKm,
+      isActive
+    } = req.body;
 
     const feeSettings = await FeeSettings.findById(id);
 
@@ -221,6 +271,44 @@ export const updateFeeSettings = asyncHandler(async (req, res) => {
       feeSettings.gstRate = Number(gstRate);
     }
 
+    if (driverEarningRangeStartKm !== undefined) {
+      const value = Number(driverEarningRangeStartKm);
+      if (!Number.isFinite(value) || value < 0) {
+        return errorResponse(res, 400, 'Driver earning range start must be a positive number');
+      }
+      feeSettings.driverEarningRangeStartKm = value;
+    }
+
+    if (driverEarningRangeEndKm !== undefined) {
+      const value = Number(driverEarningRangeEndKm);
+      if (!Number.isFinite(value) || value < 0) {
+        return errorResponse(res, 400, 'Driver earning range end must be a positive number');
+      }
+      feeSettings.driverEarningRangeEndKm = value;
+    }
+
+    if (
+      Number(feeSettings.driverEarningRangeEndKm || 0) <= Number(feeSettings.driverEarningRangeStartKm || 0)
+    ) {
+      return errorResponse(res, 400, 'Driver earning KM range is invalid. Ensure end > start.');
+    }
+
+    if (driverEarningBaseAmount !== undefined) {
+      const value = Number(driverEarningBaseAmount);
+      if (!Number.isFinite(value) || value < 0) {
+        return errorResponse(res, 400, 'Driver base earning amount must be a positive number');
+      }
+      feeSettings.driverEarningBaseAmount = value;
+    }
+
+    if (driverEarningExtraPerKm !== undefined) {
+      const value = Number(driverEarningExtraPerKm);
+      if (!Number.isFinite(value) || value < 0) {
+        return errorResponse(res, 400, 'Driver extra per km fee must be a positive number');
+      }
+      feeSettings.driverEarningExtraPerKm = value;
+    }
+
     if (isActive !== undefined) {
       feeSettings.isActive = isActive;
     }
@@ -282,7 +370,7 @@ export const getPublicFeeSettings = asyncHandler(async (req, res) => {
       isActive: true
     })
       .sort({ createdAt: -1 })
-      .select('platform deliveryFee deliveryFeeRanges freeDeliveryThreshold platformFee gstRate')
+      .select('platform deliveryFee deliveryFeeRanges freeDeliveryThreshold platformFee gstRate driverEarningRangeStartKm driverEarningRangeEndKm driverEarningBaseAmount driverEarningExtraPerKm')
       .lean();
 
     // If no active settings, return default values
@@ -295,6 +383,10 @@ export const getPublicFeeSettings = asyncHandler(async (req, res) => {
           freeDeliveryThreshold: 149,
           platformFee: 5,
           gstRate: 5,
+          driverEarningRangeStartKm: 0,
+          driverEarningRangeEndKm: 2,
+          driverEarningBaseAmount: 20,
+          driverEarningExtraPerKm: 5,
         },
       });
     }

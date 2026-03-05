@@ -57,6 +57,30 @@ const feeSettingsSchema = new mongoose.Schema(
       max: 100,
       comment: 'GST rate in percentage (e.g., 5 for 5%)'
     },
+    driverEarningRangeStartKm: {
+      type: Number,
+      default: 0,
+      min: 0,
+      comment: 'Start of base earning distance slab in KM'
+    },
+    driverEarningRangeEndKm: {
+      type: Number,
+      default: 2,
+      min: 0,
+      comment: 'End of base earning distance slab in KM'
+    },
+    driverEarningBaseAmount: {
+      type: Number,
+      default: 20,
+      min: 0,
+      comment: 'Fixed earning for distance within configured slab'
+    },
+    driverEarningExtraPerKm: {
+      type: Number,
+      default: 5,
+      min: 0,
+      comment: 'Extra earning per KM beyond slab end'
+    },
     isActive: {
       type: Boolean,
       default: true,

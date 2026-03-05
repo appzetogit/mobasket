@@ -6,12 +6,12 @@ import Payment from '../../payment/models/Payment.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import Zone from '../../admin/models/Zone.js';
 import DeliveryWallet from '../models/DeliveryWallet.js';
-import DeliveryBoyCommission from '../../admin/models/DeliveryBoyCommission.js';
 import RestaurantWallet from '../../restaurant/models/RestaurantWallet.js';
 import RestaurantCommission from '../../admin/models/RestaurantCommission.js';
 import AdminCommission from '../../admin/models/AdminCommission.js';
 import BusinessSettings from '../../admin/models/BusinessSettings.js';
 import { calculateRoute } from '../../order/services/routeCalculationService.js';
+import { calculateDriverEarning } from '../../order/services/deliveryEarningService.js';
 import mongoose from 'mongoose';
 import winston from 'winston';
 
@@ -866,33 +866,24 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     // Calculate estimated earnings based on delivery distance
     let estimatedEarnings = null;
     try {
-      const DeliveryBoyCommission = (await import('../../admin/models/DeliveryBoyCommission.js')).default;
-      const commissionResult = await DeliveryBoyCommission.calculateCommission(deliveryDistance);
-      
-      // Validate commission result
-      if (!commissionResult || 
-          !commissionResult.breakdown || 
-          typeof commissionResult.commission !== 'number' ||
-          isNaN(commissionResult.commission)) {
-        throw new Error('Invalid commission result structure');
-      }
-      
-      const breakdown = commissionResult.breakdown || {};
-      const rule = commissionResult.rule || { minDistance: 4 };
-      
+      const earningResult = await calculateDriverEarning(deliveryDistance, updatedOrder?.platform || order?.platform || 'mofood');
       estimatedEarnings = {
-        basePayout: Math.round((breakdown.basePayout || 10) * 100) / 100,
-        distance: Math.round(deliveryDistance * 100) / 100,
-        commissionPerKm: Math.round((breakdown.commissionPerKm || 5) * 100) / 100,
-        distanceCommission: Math.round((breakdown.distanceCommission || 0) * 100) / 100,
-        totalEarning: Math.round(commissionResult.commission * 100) / 100,
+        basePayout: Number(earningResult.baseAmount || 0),
+        distance: Number(earningResult.distanceKm || 0),
+        commissionPerKm: Number(earningResult.extraPerKmFee || 0),
+        distanceCommission: Number(earningResult.extraDistanceKm || 0) * Number(earningResult.extraPerKmFee || 0),
+        totalEarning: Number(earningResult.totalEarning || 0),
         breakdown: {
-          basePayout: breakdown.basePayout || 10,
-          distance: deliveryDistance,
-          commissionPerKm: breakdown.commissionPerKm || 5,
-          distanceCommission: breakdown.distanceCommission || 0,
-          minDistance: rule.minDistance || 4
-        }
+          basePayout: Number(earningResult.baseAmount || 0),
+          distance: Number(earningResult.distanceKm || 0),
+          commissionPerKm: Number(earningResult.extraPerKmFee || 0),
+          distanceCommission: Number(earningResult.extraDistanceKm || 0) * Number(earningResult.extraPerKmFee || 0),
+          minDistance: Number(earningResult.rangeStartKm || 0),
+          maxDistance: Number(earningResult.rangeEndKm || 0),
+          extraDistanceKm: Number(earningResult.extraDistanceKm || 0),
+          formula: earningResult.breakdownText || ''
+        },
+        source: earningResult.source || 'fee_settings'
       };
       
       console.log(`💰 Estimated earnings calculated: ₹${estimatedEarnings.totalEarning} for ${deliveryDistance.toFixed(2)} km`);
@@ -901,17 +892,17 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       console.error('❌ Earnings error stack:', earningsError.stack);
       // Fallback to default
       estimatedEarnings = {
-        basePayout: 10,
+        basePayout: 20,
         distance: Math.round(deliveryDistance * 100) / 100,
         commissionPerKm: 5,
-        distanceCommission: deliveryDistance > 4 ? Math.round(deliveryDistance * 5 * 100) / 100 : 0,
-        totalEarning: 10 + (deliveryDistance > 4 ? Math.round(deliveryDistance * 5 * 100) / 100 : 0),
+        distanceCommission: deliveryDistance > 2 ? Math.round((deliveryDistance - 2) * 5 * 100) / 100 : 0,
+        totalEarning: 20 + (deliveryDistance > 2 ? Math.round((deliveryDistance - 2) * 5 * 100) / 100 : 0),
         breakdown: {
-          basePayout: 10,
+          basePayout: 20,
           distance: deliveryDistance,
           commissionPerKm: 5,
-          distanceCommission: deliveryDistance > 4 ? deliveryDistance * 5 : 0,
-          minDistance: 4
+          distanceCommission: deliveryDistance > 2 ? (deliveryDistance - 2) * 5 : 0,
+          minDistance: 2
         }
       };
     }
@@ -1702,7 +1693,7 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       let earnings = null;
       try {
         // Check if earnings were already calculated
-        const wallet = await DeliveryWallet.findOne({ deliveryPartnerId: delivery._id });
+        const wallet = await DeliveryWallet.findOne({ deliveryId: delivery._id });
         const orderIdForTransaction = order._id?.toString ? order._id.toString() : order._id;
         const existingTransaction = wallet?.transactions?.find(
           t => t.orderId && t.orderId.toString() === orderIdForTransaction && t.type === 'payment'
@@ -1722,13 +1713,18 @@ export const completeDelivery = asyncHandler(async (req, res) => {
             deliveryDistance = order.assignmentInfo.distance;
           }
           
-          if (deliveryDistance > 0) {
-            const commissionResult = await DeliveryBoyCommission.calculateCommission(deliveryDistance);
-            earnings = {
-              amount: commissionResult.commission,
-              breakdown: commissionResult.breakdown
-            };
-          }
+          const earningResult = await calculateDriverEarning(deliveryDistance, order?.platform || 'mofood');
+          earnings = {
+            amount: Number(earningResult.totalEarning || 0),
+            breakdown: {
+              baseAmount: Number(earningResult.baseAmount || 0),
+              rangeStartKm: Number(earningResult.rangeStartKm || 0),
+              rangeEndKm: Number(earningResult.rangeEndKm || 0),
+              extraDistanceKm: Number(earningResult.extraDistanceKm || 0),
+              extraPerKmFee: Number(earningResult.extraPerKmFee || 0),
+              formula: earningResult.breakdownText || ''
+            }
+          };
         }
       } catch (earningsError) {
         console.error('⚠️ Error calculating earnings for already delivered order:', earningsError.message);
@@ -1867,18 +1863,24 @@ export const completeDelivery = asyncHandler(async (req, res) => {
     let commissionBreakdown = null;
     
     try {
-      // Use DeliveryBoyCommission model to calculate commission based on distance
-      const commissionResult = await DeliveryBoyCommission.calculateCommission(deliveryDistance);
-      totalEarning = commissionResult.commission;
-      commissionBreakdown = commissionResult.breakdown;
+      const earningResult = await calculateDriverEarning(deliveryDistance, order?.platform || 'mofood');
+      totalEarning = Number(earningResult.totalEarning || 0);
+      commissionBreakdown = {
+        baseAmount: Number(earningResult.baseAmount || 0),
+        rangeStartKm: Number(earningResult.rangeStartKm || 0),
+        rangeEndKm: Number(earningResult.rangeEndKm || 0),
+        extraDistanceKm: Number(earningResult.extraDistanceKm || 0),
+        extraPerKmFee: Number(earningResult.extraPerKmFee || 0),
+        formula: earningResult.breakdownText || ''
+      };
       
       console.log(`💰 Delivery earnings calculated using commission rules: ₹${totalEarning.toFixed(2)} for order ${orderIdForLog}`);
       console.log(`📊 Commission breakdown:`, {
-        rule: commissionResult.rule.name,
-        basePayout: commissionResult.breakdown.basePayout,
-        distance: commissionResult.breakdown.distance,
-        commissionPerKm: commissionResult.breakdown.commissionPerKm,
-        distanceCommission: commissionResult.breakdown.distanceCommission,
+        baseAmount: commissionBreakdown.baseAmount,
+        rangeStartKm: commissionBreakdown.rangeStartKm,
+        rangeEndKm: commissionBreakdown.rangeEndKm,
+        extraDistanceKm: commissionBreakdown.extraDistanceKm,
+        extraPerKmFee: commissionBreakdown.extraPerKmFee,
         total: totalEarning
       });
     } catch (commissionError) {

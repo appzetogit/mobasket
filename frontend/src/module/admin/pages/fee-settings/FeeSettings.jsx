@@ -12,6 +12,10 @@ export default function FeeSettings() {
     freeDeliveryThreshold: 149,
     platformFee: 5,
     gstRate: 5,
+    driverEarningRangeStartKm: 0,
+    driverEarningRangeEndKm: 2,
+    driverEarningBaseAmount: 20,
+    driverEarningExtraPerKm: 5,
   })
   const [loadingFeeSettings, setLoadingFeeSettings] = useState(false)
   const [savingFeeSettings, setSavingFeeSettings] = useState(false)
@@ -30,6 +34,10 @@ export default function FeeSettings() {
           freeDeliveryThreshold: response.data.data.feeSettings.freeDeliveryThreshold || 149,
           platformFee: response.data.data.feeSettings.platformFee || 5,
           gstRate: response.data.data.feeSettings.gstRate || 5,
+          driverEarningRangeStartKm: Number(response.data.data.feeSettings.driverEarningRangeStartKm ?? 0),
+          driverEarningRangeEndKm: Number(response.data.data.feeSettings.driverEarningRangeEndKm ?? 2),
+          driverEarningBaseAmount: Number(response.data.data.feeSettings.driverEarningBaseAmount ?? 20),
+          driverEarningExtraPerKm: Number(response.data.data.feeSettings.driverEarningExtraPerKm ?? 5),
         })
       }
     } catch (error) {
@@ -47,6 +55,19 @@ export default function FeeSettings() {
 
   // Save fee settings
   const handleSaveFeeSettings = async () => {
+    if (Number(feeSettings.driverEarningRangeStartKm) < 0) {
+      toast.error('Range start KM must be 0 or greater')
+      return
+    }
+    if (Number(feeSettings.driverEarningRangeEndKm) <= Number(feeSettings.driverEarningRangeStartKm)) {
+      toast.error('Range end KM must be greater than range start KM')
+      return
+    }
+    if (Number(feeSettings.driverEarningBaseAmount) < 0 || Number(feeSettings.driverEarningExtraPerKm) < 0) {
+      toast.error('Driver earning values must be positive numbers')
+      return
+    }
+
     try {
       setSavingFeeSettings(true)
       const response = await adminAPI.createOrUpdateFeeSettings({
@@ -55,6 +76,10 @@ export default function FeeSettings() {
         freeDeliveryThreshold: Number(feeSettings.freeDeliveryThreshold),
         platformFee: Number(feeSettings.platformFee),
         gstRate: Number(feeSettings.gstRate),
+        driverEarningRangeStartKm: Number(feeSettings.driverEarningRangeStartKm),
+        driverEarningRangeEndKm: Number(feeSettings.driverEarningRangeEndKm),
+        driverEarningBaseAmount: Number(feeSettings.driverEarningBaseAmount),
+        driverEarningExtraPerKm: Number(feeSettings.driverEarningExtraPerKm),
         isActive: true,
       })
 
@@ -233,9 +258,9 @@ export default function FeeSettings() {
               <div className="mb-8">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 className="text-lg font-semibold text-slate-900">Delivery Fee by Order Value Range</h3>
+                    <h3 className="text-lg font-semibold text-slate-900">Customer Delivery Fee by Order Value Range</h3>
                     <p className="text-sm text-slate-500 mt-1">
-                      Set different delivery fees based on order value ranges
+                      Cart pricing only. This does not control delivery partner earning.
                     </p>
                   </div>
                 </div>
@@ -360,6 +385,62 @@ export default function FeeSettings() {
                     Example: If order value is ₹50-₹150, delivery fee will be ₹25
                   </p>
                 </div>
+              </div>
+
+              <div className="mb-8 border-t border-slate-200 pt-6">
+                <h3 className="text-lg font-semibold text-slate-900">Delivery Partner Earning Formula</h3>
+                <p className="text-sm text-slate-500 mt-1 mb-4">
+                  Driver earning = Base amount for range + (Extra distance × Extra per km fee)
+                </p>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Range Start (KM)</label>
+                    <input
+                      type="number"
+                      value={feeSettings.driverEarningRangeStartKm}
+                      onChange={(e) => setFeeSettings({ ...feeSettings, driverEarningRangeStartKm: e.target.value })}
+                      min="0"
+                      step="0.1"
+                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Range End (KM)</label>
+                    <input
+                      type="number"
+                      value={feeSettings.driverEarningRangeEndKm}
+                      onChange={(e) => setFeeSettings({ ...feeSettings, driverEarningRangeEndKm: e.target.value })}
+                      min="0"
+                      step="0.1"
+                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Base Amount (₹)</label>
+                    <input
+                      type="number"
+                      value={feeSettings.driverEarningBaseAmount}
+                      onChange={(e) => setFeeSettings({ ...feeSettings, driverEarningBaseAmount: e.target.value })}
+                      min="0"
+                      step="0.01"
+                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-600 mb-1">Extra Per KM Fee (₹)</label>
+                    <input
+                      type="number"
+                      value={feeSettings.driverEarningExtraPerKm}
+                      onChange={(e) => setFeeSettings({ ...feeSettings, driverEarningExtraPerKm: e.target.value })}
+                      min="0"
+                      step="0.01"
+                      className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-slate-500 mt-3">
+                  Example: 0-2 km base ₹20 and extra ₹5/km. For 4.5 km, earning = ₹20 + (2.5 × ₹5) = ₹32.5
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6 border-t border-slate-200 pt-6 mt-6">

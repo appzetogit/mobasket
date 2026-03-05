@@ -3,6 +3,7 @@ import Delivery from '../../delivery/models/Delivery.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import GroceryStore from '../../grocery/models/GroceryStore.js';
 import mongoose from 'mongoose';
+import { calculateDriverEarning } from './deliveryEarningService.js';
 
 // Dynamic import to avoid circular dependency
 let getIO = null;
@@ -172,7 +173,7 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
 
     // Calculate estimated earnings; use order's delivery fee as fallback when 0 or distance missing
     const deliveryFeeFromOrder = order.pricing?.deliveryFee ?? 0;
-    let estimatedEarnings = await calculateEstimatedEarnings(deliveryDistance || 0);
+    let estimatedEarnings = await calculateEstimatedEarnings(deliveryDistance || 0, orderWithUser?.platform || order?.platform || 'mofood');
     const earnedValue = typeof estimatedEarnings === 'object' ? (estimatedEarnings.totalEarning ?? 0) : (Number(estimatedEarnings) || 0);
     if (earnedValue <= 0 && deliveryFeeFromOrder > 0) {
       estimatedEarnings = typeof estimatedEarnings === 'object'
@@ -449,7 +450,7 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
     const deliveryFeeFromOrder = orderWithUser.pricing?.deliveryFee ?? 0;
     
     try {
-      estimatedEarnings = await calculateEstimatedEarnings(deliveryDistance);
+      estimatedEarnings = await calculateEstimatedEarnings(deliveryDistance, orderWithUser?.platform || 'mofood');
       const earnedValue = typeof estimatedEarnings === 'object' ? (estimatedEarnings.totalEarning ?? 0) : (Number(estimatedEarnings) || 0);
       
       console.log(`💰 Earnings calculation result:`, {
@@ -678,69 +679,33 @@ function calculateDistance(lat1, lng1, lat2, lng2) {
 }
 
 /**
- * Calculate estimated earnings for delivery boy based on admin commission rules
- * Uses DeliveryBoyCommission model to calculate: Base Payout + (Distance × Per Km) if distance > minDistance
+ * Calculate estimated earnings for delivery partner using fee settings slab formula.
+ * Formula: base slab amount + (extra distance beyond slab end * extra per-km fee)
  */
-async function calculateEstimatedEarnings(deliveryDistance) {
+async function calculateEstimatedEarnings(deliveryDistance, platform = 'mofood') {
   try {
-    const DeliveryBoyCommission = (await import('../../admin/models/DeliveryBoyCommission.js')).default;
-    
-    // Always use calculateCommission method which handles all cases including distance = 0
-    // It will return base payout even if distance is 0
-    const deliveryDistanceForCalc = deliveryDistance || 0;
-    const commissionResult = await DeliveryBoyCommission.calculateCommission(deliveryDistanceForCalc);
-    
-    // If distance is 0 or not provided, still return base payout
-    if (!deliveryDistance || deliveryDistance <= 0) {
-      console.log(`💰 Distance is 0 or missing, returning base payout only: ₹${commissionResult.breakdown.basePayout}`);
-      return {
-        basePayout: commissionResult.breakdown.basePayout,
-        distance: 0,
-        commissionPerKm: commissionResult.breakdown.commissionPerKm,
-        distanceCommission: 0,
-        totalEarning: commissionResult.breakdown.basePayout, // Base payout only when distance is 0
-        breakdown: `Base payout: ₹${commissionResult.breakdown.basePayout}`,
-        minDistance: commissionResult.rule.minDistance,
-        maxDistance: commissionResult.rule.maxDistance
-      };
-    }
-
-    // Use the already calculated commissionResult for distance > 0
-    
-    const basePayout = commissionResult.breakdown.basePayout;
-    const distance = deliveryDistance;
-    const commissionPerKm = commissionResult.breakdown.commissionPerKm;
-    const distanceCommission = commissionResult.breakdown.distanceCommission;
-    const totalEarning = commissionResult.commission;
-
-    // Create breakdown text
-    let breakdown = `Base payout: ₹${basePayout}`;
-    if (distance > commissionResult.rule.minDistance) {
-      breakdown += ` + Distance (${distance.toFixed(1)} km × ₹${commissionPerKm}/km) = ₹${distanceCommission.toFixed(0)}`;
-    } else {
-      breakdown += ` (Distance ${distance.toFixed(1)} km ≤ ${commissionResult.rule.minDistance} km, per km not applicable)`;
-    }
-    breakdown += ` = ₹${totalEarning.toFixed(0)}`;
-
+    const earning = await calculateDriverEarning(deliveryDistance || 0, platform);
     return {
-      basePayout: Math.round(basePayout * 100) / 100,
-      distance: Math.round(distance * 100) / 100,
-      commissionPerKm: Math.round(commissionPerKm * 100) / 100,
-      distanceCommission: Math.round(distanceCommission * 100) / 100,
-      totalEarning: Math.round(totalEarning * 100) / 100,
-      breakdown: breakdown,
-      minDistance: commissionResult.rule.minDistance,
-      maxDistance: commissionResult.rule.maxDistance
+      basePayout: Number(earning.baseAmount || 0),
+      distance: Number(earning.distanceKm || 0),
+      commissionPerKm: Number(earning.extraPerKmFee || 0),
+      distanceCommission: Number(earning.extraDistanceKm || 0) * Number(earning.extraPerKmFee || 0),
+      totalEarning: Number(earning.totalEarning || 0),
+      breakdown: earning.breakdownText,
+      minDistance: Number(earning.rangeStartKm || 0),
+      maxDistance: Number(earning.rangeEndKm || 0),
+      extraDistanceKm: Number(earning.extraDistanceKm || 0),
+      source: earning.source
     };
   } catch (error) {
     console.error('Error calculating estimated earnings:', error);
     // Fallback to default calculation
     return {
-      basePayout: 10,
+      basePayout: 20,
       distance: deliveryDistance || 0,
       commissionPerKm: 5,
-      distanceCommission: deliveryDistance && deliveryDistance > 4 ? deliveryDistance * 5 : 0,
-      totalEarning: 10 + (deliveryDistance && deliveryDistance > 4 ? deliveryDistance * 5 : 0),
+      distanceCommission: deliveryDistance && deliveryDistance > 2 ? (deliveryDistance - 2) * 5 : 0,
+      totalEarning: 20 + (deliveryDistance && deliveryDistance > 2 ? (deliveryDistance - 2) * 5 : 0),
       breakdown: 'Default calculation'
     };
   }
