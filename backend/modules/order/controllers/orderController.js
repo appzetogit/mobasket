@@ -351,6 +351,7 @@ const buildMenuItemsMap = (menu) => {
   const map = new Map();
   const sections = Array.isArray(menu?.sections) ? menu.sections : [];
 
+  // Core menu items (sections + subsections)
   sections.forEach((section) => {
     const sectionItems = Array.isArray(section?.items) ? section.items : [];
     sectionItems.forEach((item) => {
@@ -391,6 +392,35 @@ const buildMenuItemsMap = (menu) => {
           isVeg: item?.foodType === 'Veg'
         });
       });
+    });
+  });
+
+  // Restaurant add-ons (menu.addons) should also be treated as valid
+  // menu items so that "Complete your meal" add-ons can be added to cart.
+  const addons = Array.isArray(menu?.addons) ? menu.addons : [];
+  addons.forEach((addon) => {
+    // Support both legacy addons that only have Mongo _id
+    // and newer ones that have a custom string id field.
+    const rawId = addon?.id || addon?._id;
+    const itemId = String(rawId || '').trim();
+    if (!itemId) return;
+
+    const isAvailable = addon?.isAvailable !== false;
+    // For add-ons, allow all records that are marked available,
+    // regardless of approvalStatus. This keeps add-on ordering
+    // aligned with what the public add-ons API returns.
+    if (!isAvailable) return;
+
+    map.set(itemId, {
+      itemId,
+      name: addon?.name || 'Item',
+      price: getMenuItemFinalPrice(addon),
+      image:
+        addon?.image ||
+        (Array.isArray(addon?.images) ? addon.images[0] : '') ||
+        '',
+      description: addon?.description || '',
+      isVeg: addon?.foodType === 'Veg'
     });
   });
 
@@ -553,19 +583,29 @@ const validateSingleSourceOrderItems = async ({
     };
   }
 
-  const menu = await Menu.findOne({
-    restaurant: expectedRestaurantObjectId,
-    isActive: true
+  // For restaurant (mofood) orders, validate against ALL menus for this restaurant.
+  // This avoids mismatches where add-ons exist on a non-active menu document.
+  const menus = await Menu.find({
+    restaurant: expectedRestaurantObjectId
   }).lean();
 
-  if (!menu) {
+  if (!menus || menus.length === 0) {
     return {
       valid: false,
       message: 'Restaurant menu is unavailable. Please try again.'
     };
   }
 
-  const menuItemsMap = buildMenuItemsMap(menu);
+  const menuItemsMap = new Map();
+  menus.forEach((menuDoc) => {
+    const mapForMenu = buildMenuItemsMap(menuDoc);
+    mapForMenu.forEach((value, key) => {
+      if (!menuItemsMap.has(key)) {
+        menuItemsMap.set(key, value);
+      }
+    });
+  });
+
   const invalidMenuItems = uniqueItemIds.filter((itemId) => !menuItemsMap.has(itemId));
   if (invalidMenuItems.length > 0) {
     return {

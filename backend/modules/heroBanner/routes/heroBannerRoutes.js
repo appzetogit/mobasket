@@ -50,6 +50,12 @@ import {
   deleteGourmetRestaurant,
   updateGourmetRestaurantOrder,
   toggleGourmetRestaurantStatus,
+  getMofoodProductSections,
+  getAllMofoodProductSections,
+  createMofoodProductSectionItem,
+  deleteMofoodProductSectionItem,
+  updateMofoodProductSectionItemOrder,
+  toggleMofoodProductSectionItemStatus,
   getGroceryBestSellers,
   getAllGroceryBestSellers,
   createGroceryBestSeller,
@@ -69,6 +75,7 @@ router.get('/dining/public', getDiningBanners);
 router.get('/top-10/public', getTop10Restaurants);
 router.get('/gourmet/public', getGourmetRestaurants);
 router.get('/grocery-best-sellers/public', getGroceryBestSellers);
+router.get('/mofood-product-sections/public', getMofoodProductSections);
 
 // Admin routes - Hero Banners
 router.get('/', authenticateAdmin, getAllHeroBanners);
@@ -169,6 +176,13 @@ router.post('/gourmet', authenticateAdmin, createGourmetRestaurant);
 router.delete('/gourmet/:id', authenticateAdmin, deleteGourmetRestaurant);
 router.patch('/gourmet/:id/order', authenticateAdmin, updateGourmetRestaurantOrder);
 router.patch('/gourmet/:id/status', authenticateAdmin, toggleGourmetRestaurantStatus);
+
+// Admin routes - Mofood Product Sections
+router.get('/mofood-product-sections', authenticateAdmin, getAllMofoodProductSections);
+router.post('/mofood-product-sections', authenticateAdmin, createMofoodProductSectionItem);
+router.delete('/mofood-product-sections/:id', authenticateAdmin, deleteMofoodProductSectionItem);
+router.patch('/mofood-product-sections/:id/order', authenticateAdmin, updateMofoodProductSectionItemOrder);
+router.patch('/mofood-product-sections/:id/status', authenticateAdmin, toggleMofoodProductSectionItemStatus);
 
 // Admin routes - Grocery Best Sellers
 router.get('/grocery-best-sellers', authenticateAdmin, getAllGroceryBestSellers);
