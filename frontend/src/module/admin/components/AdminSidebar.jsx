@@ -101,6 +101,14 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
   const [searchQuery, setSearchQuery] = useState("")
   const [logoUrl, setLogoUrl] = useState(null)
   const [companyName, setCompanyName] = useState(null)
+  const [adminUser] = useState(() => {
+    try {
+      const raw = localStorage.getItem("admin_user")
+      return raw ? JSON.parse(raw) : null
+    } catch {
+      return null
+    }
+  })
   const { platform, switchPlatform } = usePlatform()
 
   const handlePlatformSwitch = (nextPlatform) => {
@@ -123,7 +131,52 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
   // Get menu data based on platform
   const rawMenuData = platform === "mogrocery" ? mogroceryMenuData : sidebarMenuData
   const menuData = useMemo(() => {
-    return rawMenuData.map((entry) => {
+    const role = String(adminUser?.role || "").toLowerCase()
+    const isSuperAdmin = role === "super_admin"
+    const allowedPaths = new Set(
+      Array.isArray(adminUser?.sidebarAccess) ? adminUser.sidebarAccess.map((entry) => String(entry || "").trim()) : []
+    )
+    const hasCustomAccess = allowedPaths.size > 0
+
+    const canAccessPath = (path) => {
+      const normalized = String(path || "").trim()
+      if (!normalized) return false
+      if (normalized === "/admin/manage-admin") return isSuperAdmin
+      if (normalized === "/admin" || normalized === "/admin/profile") return true
+      if (isSuperAdmin) return true
+      if (!hasCustomAccess) return true
+      return allowedPaths.has(normalized)
+    }
+
+    const filteredByAccess = rawMenuData.reduce((acc, entry) => {
+      if (entry?.type === "link") {
+        if (canAccessPath(entry.path)) acc.push(entry)
+        return acc
+      }
+
+      if (entry?.type !== "section" || !Array.isArray(entry.items)) return acc
+
+      const items = entry.items
+        .map((item) => {
+          if (item?.type === "link") {
+            return canAccessPath(item.path) ? item : null
+          }
+          if (item?.type === "expandable" && Array.isArray(item.subItems)) {
+            const subItems = item.subItems.filter((subItem) => canAccessPath(subItem?.path))
+            if (subItems.length === 0) return null
+            return { ...item, subItems }
+          }
+          return null
+        })
+        .filter(Boolean)
+
+      if (items.length > 0) {
+        acc.push({ ...entry, items })
+      }
+      return acc
+    }, [])
+
+    return filteredByAccess.map((entry) => {
       if (entry.type !== "section" || !Array.isArray(entry.items)) {
         return entry
       }
@@ -154,7 +207,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
 
       return { ...entry, items }
     })
-  }, [rawMenuData])
+  }, [adminUser, rawMenuData])
 
   // Load business settings logo
   useEffect(() => {

@@ -46,6 +46,16 @@ const adminSchema = new mongoose.Schema({
     ],
     default: ['dashboard_view'] // Default permission
   },
+  sidebarAccess: {
+    type: [String],
+    default: [],
+    validate: {
+      validator: function (value) {
+        return Array.isArray(value) && value.every((entry) => typeof entry === 'string');
+      },
+      message: 'sidebarAccess must be an array of strings'
+    }
+  },
   role: {
     type: String,
     enum: ['super_admin', 'admin', 'moderator'],

@@ -24,6 +24,17 @@ const logger = winston.createLogger({
   ]
 });
 
+const normalizeSidebarAccess = (sidebarAccess) => {
+  if (!Array.isArray(sidebarAccess)) return [];
+  return Array.from(
+    new Set(
+      sidebarAccess
+        .map((entry) => String(entry || '').trim())
+        .filter((entry) => entry.startsWith('/admin'))
+    )
+  );
+};
+
 
 /**
  * Get Admin Dashboard Statistics
@@ -511,7 +522,7 @@ export const getAdminById = asyncHandler(async (req, res) => {
  */
 export const createAdmin = asyncHandler(async (req, res) => {
   try {
-    const { name, email, password, phone } = req.body;
+    const { name, email, password, phone, role, sidebarAccess } = req.body;
 
     // Validation
     if (!name || !email || !password) {
@@ -534,7 +545,9 @@ export const createAdmin = asyncHandler(async (req, res) => {
       email: email.toLowerCase(),
       password,
       isActive: true,
-      phoneVerified: false
+      phoneVerified: false,
+      role: role === 'super_admin' ? 'super_admin' : (role === 'moderator' ? 'moderator' : 'admin'),
+      sidebarAccess: normalizeSidebarAccess(sidebarAccess)
     };
 
     if (phone) {
@@ -570,7 +583,7 @@ export const createAdmin = asyncHandler(async (req, res) => {
 export const updateAdmin = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, email, phone, isActive } = req.body;
+    const { name, email, phone, isActive, role, sidebarAccess } = req.body;
 
     const admin = await Admin.findById(id);
 
@@ -588,6 +601,12 @@ export const updateAdmin = asyncHandler(async (req, res) => {
     if (email) admin.email = email.toLowerCase();
     if (phone !== undefined) admin.phone = phone;
     if (isActive !== undefined) admin.isActive = isActive;
+    if (role && ['super_admin', 'admin', 'moderator'].includes(role)) {
+      admin.role = role;
+    }
+    if (sidebarAccess !== undefined) {
+      admin.sidebarAccess = normalizeSidebarAccess(sidebarAccess);
+    }
 
     await admin.save();
 

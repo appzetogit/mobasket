@@ -733,20 +733,28 @@ export default function GroceryCheckoutPage() {
       }
 
       try {
-        const [storeResponse, outletTimingsResponse] = await Promise.all([
-          restaurantAPI.getRestaurantById(String(resolvedRestaurant.restaurantId)),
-          api.get(`/restaurant/${String(resolvedRestaurant.restaurantId)}/outlet-timings`),
-        ]);
+        const storeResponse = await restaurantAPI.getRestaurantById(String(resolvedRestaurant.restaurantId));
 
         const store =
           storeResponse?.data?.data?.restaurant ||
           storeResponse?.data?.restaurant ||
           storeResponse?.data?.data ||
           {};
-        const outletTimings =
-          outletTimingsResponse?.data?.data?.outletTimings?.timings ||
-          outletTimingsResponse?.data?.outletTimings?.timings ||
-          [];
+
+        // Grocery stores may not have restaurant outlet timings endpoint.
+        // Fall back to store-level timing fields when timings fetch is unavailable.
+        let outletTimings = [];
+        try {
+          const outletTimingsResponse = await api.get(
+            `/restaurant/${String(resolvedRestaurant.restaurantId)}/outlet-timings`,
+          );
+          outletTimings =
+            outletTimingsResponse?.data?.data?.outletTimings?.timings ||
+            outletTimingsResponse?.data?.outletTimings?.timings ||
+            [];
+        } catch {
+          outletTimings = [];
+        }
 
         setStoreAvailability(
           evaluateStoreAvailability({

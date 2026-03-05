@@ -6,6 +6,7 @@ import AdminHome from "../pages/AdminHome";
 import PointOfSale from "../pages/PointOfSale";
 import AdminProfile from "../pages/AdminProfile";
 import AdminSettings from "../pages/AdminSettings";
+import ManageAdmin from "../pages/ManageAdmin";
 import NewRefundRequests from "../pages/refunds/NewRefundRequests";
 import FoodApproval from "../pages/restaurant/FoodApproval";
 import GroceryApproval from "../pages/grocery/GroceryApproval";
@@ -149,6 +150,7 @@ export default function AdminRouter() {
 
         {/* Profile */}
         <Route path="/profile" element={<AdminProfile />} />
+        <Route path="/manage-admin" element={<ManageAdmin />} />
 
         {/* Settings */}
         <Route path="/settings" element={<AdminSettings />} />
