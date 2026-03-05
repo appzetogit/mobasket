@@ -182,6 +182,9 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
     }
 
     // Prepare order notification data
+    const resolvedDeliveryDistance =
+      Number(deliveryDistance || order?.assignmentInfo?.distance || order?.deliveryState?.routeToDelivery?.distance || 0);
+
     const orderNotification = {
       orderId: order.orderId,
       orderMongoId: order._id.toString(),
@@ -211,8 +214,8 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
       estimatedDeliveryTime: order.estimatedDeliveryTime || 30,
       note: order.note || '',
       pickupDistance: pickupDistance ? `${pickupDistance.toFixed(2)} km` : 'Distance not available',
-      deliveryDistance: deliveryDistance ? `${deliveryDistance.toFixed(2)} km` : 'Calculating...',
-      deliveryDistanceRaw: deliveryDistance || 0, // Raw distance number for calculations
+      deliveryDistance: resolvedDeliveryDistance > 0 ? `${resolvedDeliveryDistance.toFixed(2)} km` : 'Distance not available',
+      deliveryDistanceRaw: resolvedDeliveryDistance, // Raw distance number for calculations
       estimatedEarnings
     };
 
@@ -485,6 +488,9 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
     }
 
     // Prepare notification payload
+    const resolvedDeliveryDistance =
+      Number(deliveryDistance || orderWithUser?.assignmentInfo?.distance || orderWithUser?.deliveryState?.routeToDelivery?.distance || 0);
+
     const orderNotification = {
       orderId: orderWithUser.orderId || orderWithUser._id,
       mongoId: orderWithUser._id?.toString(),
@@ -509,7 +515,7 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
       totalAmount: orderWithUser.pricing?.total || 0,
       deliveryFee: deliveryFeeFromOrder,
       estimatedEarnings: estimatedEarnings, // Include calculated earnings
-      deliveryDistance: deliveryDistance > 0 ? `${deliveryDistance.toFixed(2)} km` : 'Calculating...',
+      deliveryDistance: resolvedDeliveryDistance > 0 ? `${resolvedDeliveryDistance.toFixed(2)} km` : 'Distance not available',
       paymentMethod: orderWithUser.payment?.method || 'cash',
       message: `New order available: ${orderWithUser.orderId || orderWithUser._id}`,
       timestamp: new Date().toISOString(),

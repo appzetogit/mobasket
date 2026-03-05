@@ -30,6 +30,7 @@ import { useLocationSelector } from "../../user/components/UserLayout";
 import { CategoryFoodsContent } from "./CategoryFoodsPage";
 import AddToCartAnimation from "../../user/components/AddToCartAnimation";
 import api, { restaurantAPI, userAPI } from "@/lib/api";
+import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
 
 // Icons
 import imgBag3D from "@/assets/icons/shopping-bag_18008822.png";
@@ -531,6 +532,15 @@ const GroceryPage = () => {
     }
 
     const zoneScopedProducts = (Array.isArray(rawProducts) ? rawProducts : []).filter((product) => {
+      const productZoneId = String(
+        product?.zoneId?._id ||
+          product?.zoneId?.id ||
+          product?.zoneId ||
+          product?.storeId?.zoneId?._id ||
+          product?.storeId?.zoneId?.id ||
+          product?.storeId?.zoneId ||
+          "",
+      ).trim();
       const productStoreId = String(
         product?.storeId?._id ||
           product?.storeId?.id ||
@@ -540,6 +550,7 @@ const GroceryPage = () => {
           product?.restaurantId ||
           "",
       ).trim();
+      if (zoneId && productZoneId && productZoneId !== String(zoneId)) return false;
       return productStoreId && allowedStoreIds.has(productStoreId);
     });
 
@@ -548,6 +559,10 @@ const GroceryPage = () => {
 
   useEffect(() => {
     const fetchGroceryStores = async () => {
+      setIsStoresLoading(true);
+      setGroceryStores([]);
+      setHasActiveGroceryStore(false);
+
       try {
         const response = await restaurantAPI.getRestaurants({
           limit: 200,
@@ -558,11 +573,32 @@ const GroceryPage = () => {
         const restaurants = Array.isArray(response?.data?.data?.restaurants)
           ? response.data.data.restaurants
           : [];
-        const moGroceryStores = restaurants.filter((restaurant) => restaurant?.platform === "mogrocery");
-        // Keep all returned grocery stores for listing/browsing context.
-        // Availability is enforced later during cart/checkout.
-        setGroceryStores(moGroceryStores);
-        setHasActiveGroceryStore(moGroceryStores.length > 0);
+        const availableMoGroceryStores = restaurants.filter((restaurant) => {
+          if (String(restaurant?.platform || "").toLowerCase() !== "mogrocery") return false;
+
+          const storeZoneId = String(
+            restaurant?.zoneId?._id ||
+              restaurant?.zoneId?.id ||
+              restaurant?.zoneId ||
+              restaurant?.zone?._id ||
+              restaurant?.zone?.id ||
+              restaurant?.zone ||
+              "",
+          ).trim();
+          if (zoneId && storeZoneId && storeZoneId !== String(zoneId)) return false;
+
+          if (restaurant?.isActive === false) return false;
+          if (restaurant?.isOnline === false) return false;
+          if (restaurant?.isAcceptingOrders === false) return false;
+
+          return evaluateStoreAvailability({
+            store: restaurant,
+            label: "Store",
+          }).isAvailable;
+        });
+
+        setGroceryStores(availableMoGroceryStores);
+        setHasActiveGroceryStore(availableMoGroceryStores.length > 0);
       } catch {
         setGroceryStores([]);
         setHasActiveGroceryStore(false);
@@ -1049,6 +1085,8 @@ const GroceryPage = () => {
   }, [allProducts, wishlistItems]);
 
   const visibleBestSellers = useMemo(() => {
+    if (!hasActiveGroceryStore) return [];
+
     const query = searchQuery.toLowerCase().trim();
 
     const getPreviewImagesForItem = (item) => {
@@ -1146,7 +1184,7 @@ const GroceryPage = () => {
         itemId: item.itemId,
         subcategories: Array.isArray(item.subcategories) ? item.subcategories : [],
       }));
-  }, [allProducts, bestSellerItems, searchQuery]);
+  }, [allProducts, bestSellerItems, hasActiveGroceryStore, searchQuery]);
 
   const orderedBestSellerProductSections = useMemo(() => {
     const productMap = new Map(
