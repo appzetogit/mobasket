@@ -746,13 +746,26 @@ const GroceryPage = () => {
     const resolvedCategoryId = category
       ? String(category?._id || category?.slug || category?.name || "all")
       : "all";
-    navigate("/grocery/categories", {
-      state: {
-        categoryId: resolvedCategoryId,
-        subcategoryId: subcategoryId ? String(subcategoryId) : "all-subcategories",
-        title: title || category?.name || "Products",
-      },
-    });
+    const resolvedSubcategoryId = subcategoryId ? String(subcategoryId).trim() : "";
+
+    if (resolvedSubcategoryId) {
+      navigate(`/grocery/subcategory/${resolvedSubcategoryId}`, {
+        state: {
+          categoryId: resolvedCategoryId,
+          title: title || category?.name || "Products",
+        },
+      });
+      return true;
+    }
+
+    if (resolvedCategoryId && resolvedCategoryId !== "all") {
+      navigate(`/grocery/best-seller/category/${resolvedCategoryId}`, {
+        state: { title: title || category?.name || "Products" },
+      });
+      return true;
+    }
+
+    navigate("/grocery/categories");
     return true;
   };
 
@@ -1318,6 +1331,7 @@ const GroceryPage = () => {
         if (
           openCollectionSheet({
             categoryId: parentCategory?._id || parentCategory?.slug || parentCategory?.name,
+            subcategoryId: item.itemId,
             title: item?.name || parentCategory?.name || "Products",
           })
         ) {
@@ -1328,8 +1342,11 @@ const GroceryPage = () => {
 
     if (item.itemType === "product" && item.itemId) {
       const product = allProducts.find((prod) => String(prod?._id || prod?.id || "") === String(item.itemId));
-      const categoryId = product?.category?._id || product?.category?.id || product?.category;
-      if (categoryId && openCollectionSheet({ categoryId, title: item?.name || "Products" })) {
+      const productId = String(product?._id || product?.id || item.itemId || "").trim();
+      if (productId) {
+        navigate(`/food/${productId}`, {
+          state: product ? { item: buildProductDetailState(product) } : undefined,
+        });
         return;
       }
     }

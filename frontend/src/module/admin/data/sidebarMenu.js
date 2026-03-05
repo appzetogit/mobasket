@@ -607,6 +607,12 @@ export const mogroceryMenuData = [
         path: "/admin/grocery-hero-banner-management",
         icon: "Image",
       },
+      {
+        type: "link",
+        label: "Best Sellers",
+        path: "/admin/product-sections-management",
+        icon: "Megaphone",
+      },
     ],
   },
   {

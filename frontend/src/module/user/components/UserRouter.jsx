@@ -91,9 +91,9 @@ import GrocerySubcategoryProductsPage from "@/module/usermain/pages/GrocerySubca
 import GroceryBestSellerProductsPage from "@/module/usermain/pages/GroceryBestSellerProductsPage";
 import PlansPage from "@/module/usermain/pages/PlansPage";
 import CategoryDirectoryPage from "@/module/usermain/pages/CategoryDirectoryPage";
+import CategoryFoodsPage from "@/module/usermain/pages/CategoryFoodsPage";
 import WishlistPage from "@/module/usermain/pages/WishlistPage";
 import FoodDetailPage from "@/module/usermain/pages/FoodDetailPage";
-import CategoryFoodsPage from "@/module/usermain/pages/CategoryFoodsPage";
 import WelcomeSelectionPage from "@/module/user/pages/WelcomeSelectionPage";
 
 export default function UserRouter() {
@@ -499,7 +499,7 @@ export default function UserRouter() {
         <Route path="/plans" element={<PlansPage />} />
         <Route path="/categories" element={<CategoryDirectoryPage />} />
         <Route path="/wishlist" element={<WishlistPage />} />
-        <Route path="/grocery/category/:id" element={<CategoryFoodsPage />} />
+        <Route path="/grocery/category/:id" element={<Navigate to="/grocery/categories" replace />} />
         <Route path="/grocery/subcategory/:subcategoryId" element={<GrocerySubcategoryProductsPage />} />
         <Route path="/grocery/best-seller/:itemType/:itemId" element={<GroceryBestSellerProductsPage />} />
         <Route path="/food/:id" element={<FoodDetailPage />} />

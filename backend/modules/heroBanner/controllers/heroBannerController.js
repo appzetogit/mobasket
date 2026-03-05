@@ -2101,6 +2101,13 @@ export const createGroceryBestSeller = async (req, res) => {
   try {
     const platform = getPlatformFromRequest(req);
     const { itemType, itemId, sectionName, sectionOrder } = req.body;
+    const normalizedSectionName = itemType === 'product' && typeof sectionName === 'string'
+      ? sectionName.trim()
+      : '';
+    const normalizedSectionOrder =
+      itemType === 'product' && Number.isFinite(Number(sectionOrder))
+        ? Number(sectionOrder)
+        : 0;
 
     if (!itemType || !itemId) {
       return errorResponse(res, 400, 'itemType and itemId are required');
@@ -2125,8 +2132,29 @@ export const createGroceryBestSeller = async (req, res) => {
       ...buildPlatformFilter(platform),
       itemType,
       itemId,
-    }).lean();
+    });
     if (duplicate) {
+      if (itemType === 'product') {
+        const shouldMoveToSection =
+          normalizedSectionName &&
+          (
+            String(duplicate.sectionName || '').trim() !== normalizedSectionName ||
+            Number(duplicate.sectionOrder || 0) !== normalizedSectionOrder
+          );
+
+        if (shouldMoveToSection) {
+          duplicate.sectionName = normalizedSectionName;
+          duplicate.sectionOrder = normalizedSectionOrder;
+          duplicate.isActive = true;
+          await duplicate.save();
+          await duplicate.populate('itemId');
+
+          return successResponse(res, 200, 'Best seller item moved to section successfully', {
+            item: duplicate,
+            moved: true,
+          });
+        }
+      }
       return errorResponse(res, 400, 'Item is already added in Best Sellers');
     }
 
@@ -2136,14 +2164,6 @@ export const createGroceryBestSeller = async (req, res) => {
       .lean();
 
     const order = last ? Number(last.order || 0) + 1 : 0;
-
-    const normalizedSectionName = itemType === 'product' && typeof sectionName === 'string'
-      ? sectionName.trim()
-      : '';
-    const normalizedSectionOrder =
-      itemType === 'product' && Number.isFinite(Number(sectionOrder))
-        ? Number(sectionOrder)
-        : 0;
 
     const created = await GroceryBestSeller.create({
       platform,

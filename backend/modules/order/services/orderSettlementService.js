@@ -1,12 +1,11 @@
 import Order from '../models/Order.js';
 import OrderSettlement from '../models/OrderSettlement.js';
 import RestaurantCommission from '../../admin/models/RestaurantCommission.js';
-import DeliveryBoyCommission from '../../admin/models/DeliveryBoyCommission.js';
 import FeeSettings from '../../admin/models/FeeSettings.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import GroceryStore from '../../grocery/models/GroceryStore.js';
 import mongoose from 'mongoose';
-import { calculateDistance } from './orderCalculationService.js';
+import { calculateDriverEarning } from './deliveryEarningService.js';
 
 /**
  * Calculate comprehensive order settlement breakdown
@@ -20,7 +19,11 @@ export const calculateOrderSettlement = async (orderId) => {
     }
 
     // Get fee settings
-    const feeSettings = await FeeSettings.findOne({ isActive: true })
+    const platformFilter =
+      order?.platform === 'mogrocery'
+        ? { platform: 'mogrocery' }
+        : { $or: [{ platform: 'mofood' }, { platform: { $exists: false } }] };
+    const feeSettings = await FeeSettings.findOne({ isActive: true, ...platformFilter })
       .sort({ createdAt: -1 })
       .lean();
     
@@ -102,18 +105,18 @@ export const calculateOrderSettlement = async (orderId) => {
 
     if (order.deliveryPartnerId && order.assignmentInfo?.distance) {
       const distance = order.assignmentInfo.distance;
-      const deliveryCommission = await DeliveryBoyCommission.calculateCommission(distance);
+      const driverEarning = await calculateDriverEarning(distance, order?.platform || 'mofood');
       
       // Get surge multiplier (can be configured in order or settings)
       const surgeMultiplier = order.assignmentInfo?.surgeMultiplier || 1;
-      const baseEarning = deliveryCommission.commission;
+      const baseEarning = Number(driverEarning?.totalEarning || 0);
       const surgeAmount = baseEarning * (surgeMultiplier - 1);
 
       deliveryPartnerEarning = {
-        basePayout: deliveryCommission.breakdown.basePayout,
+        basePayout: Number(driverEarning?.baseAmount || 0),
         distance: distance,
-        commissionPerKm: deliveryCommission.breakdown.commissionPerKm,
-        distanceCommission: deliveryCommission.breakdown.distanceCommission,
+        commissionPerKm: Number(driverEarning?.extraPerKmFee || 0),
+        distanceCommission: Number(driverEarning?.extraDistanceKm || 0) * Number(driverEarning?.extraPerKmFee || 0),
         surgeMultiplier: surgeMultiplier,
         surgeAmount: surgeAmount,
         totalEarning: baseEarning + surgeAmount,
