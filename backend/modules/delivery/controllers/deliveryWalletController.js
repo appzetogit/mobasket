@@ -52,11 +52,16 @@ export const getWallet = asyncHandler(async (req, res) => {
       .filter(t => t.type === 'withdrawal' && t.status === 'Pending')
       .reduce((sum, t) => sum + t.amount, 0);
 
-    // Withdrawal settings
+    // Admin/global cash limit + withdrawal settings
+    let adminCashLimit = 750;
     let withdrawalLimit = 100;
     let minimumWalletBalance = 0;
     try {
       const settings = await BusinessSettings.getSettings();
+      const configured = Number(settings?.deliveryCashLimit);
+      if (Number.isFinite(configured) && configured >= 0) {
+        adminCashLimit = configured;
+      }
       const wl = Number(settings?.deliveryWithdrawalLimit);
       if (Number.isFinite(wl) && wl >= 0) {
         withdrawalLimit = wl;
@@ -171,7 +176,7 @@ export const getWallet = asyncHandler(async (req, res) => {
     const pocketBalance = Math.max(0, Number(wallet.totalBalance) || 0);
     const deductions = Math.max(0, Number(wallet.deductions) || 0);
     const availableCashLimit = codSummary.remainingLimit;
-    const totalCashLimit = codSummary.codLimit;
+    const totalCashLimit = adminCashLimit;
     const cashCollected = codSummary.cashCollected;
 
     const walletData = {
