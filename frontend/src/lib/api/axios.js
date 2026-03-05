@@ -52,12 +52,38 @@ if (import.meta.env.DEV) {
  */
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000, // 30 seconds
+  timeout: 60000, // 60 seconds default; uploads get a higher timeout below
   headers: {
     "Content-Type": "application/json",
   },
   withCredentials: true, // Include cookies for refresh token
 });
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 60000;
+const MEDIA_UPLOAD_TIMEOUT_MS = 180000;
+
+function isLikelyMediaUploadRequest(config = {}) {
+  try {
+    const data = config?.data;
+    const headers = config?.headers || {};
+    const contentType = String(
+      headers["Content-Type"] || headers["content-type"] || "",
+    ).toLowerCase();
+    const url = String(config?.url || "").toLowerCase();
+
+    const isFormData =
+      typeof FormData !== "undefined" && data instanceof FormData;
+    const isMultipartHeader = contentType.includes("multipart/form-data");
+    const isUploadEndpoint =
+      url.includes("/upload/") ||
+      url.includes("upload-media") ||
+      url.includes("image");
+
+    return isFormData || isMultipartHeader || isUploadEndpoint;
+  } catch {
+    return false;
+  }
+}
 
 // Prevent parallel refresh races that can cause false logout flows.
 let refreshRequestPromise = null;
@@ -140,6 +166,14 @@ function getTokenForCurrentRoute() {
  */
 apiClient.interceptors.request.use(
   async (config) => {
+    // Apply a sane default timeout and relax it for media uploads.
+    if (!Number.isFinite(Number(config.timeout)) || Number(config.timeout) <= 0) {
+      config.timeout = DEFAULT_REQUEST_TIMEOUT_MS;
+    }
+    if (isLikelyMediaUploadRequest(config)) {
+      config.timeout = Math.max(Number(config.timeout) || 0, MEDIA_UPLOAD_TIMEOUT_MS);
+    }
+
     const currentPath = window.location.pathname;
     const currentModule = getModuleFromPath(currentPath);
     const requestModule = getModuleFromRequestUrl(config.url, currentModule);
