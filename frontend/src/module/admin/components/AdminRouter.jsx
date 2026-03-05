@@ -349,6 +349,10 @@ export default function AdminRouter() {
         <Route path="system-addons" element={<Navigate to="/admin/env-setup" replace />} />
         {/* HERO BANNER MANAGEMENT */}
         <Route path="hero-banner-management" element={<LandingPageManagement forcedPlatform="mofood" />} />
+        <Route
+          path="product-sections-management"
+          element={<LandingPageManagement forcedPlatform="mogrocery" initialTab="best-sellers" />}
+        />
         <Route path="grocery-hero-banner-management" element={<LandingPageManagement forcedPlatform="mogrocery" />} />
       </Route>
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react"
-import { Upload, Trash2, Image as ImageIcon, Loader2, AlertCircle, CheckCircle2, ArrowUp, ArrowDown, Layout, Tag, Trophy, ChefHat, Megaphone, Search } from "lucide-react"
+import { Upload, Trash2, Image as ImageIcon, Loader2, AlertCircle, CheckCircle2, ArrowUp, ArrowDown, Layout, Tag, Trophy, ChefHat, Megaphone, Search, Plus } from "lucide-react"
 import api from "@/lib/api"
 import { adminAPI } from "@/lib/api"
 import { getModuleToken } from "@/lib/utils/auth"
@@ -10,7 +10,21 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Checkbox } from "@/components/ui/checkbox"
 import { usePlatform } from "@/module/admin/context/PlatformContext"
 
-export default function LandingPageManagement({ forcedPlatform }) {
+const getValidInitialTab = (requestedTab, platform) => {
+  if (platform === 'mogrocery' && requestedTab === 'product-sections') {
+    return 'best-sellers'
+  }
+  const allowedTabs = ['banners']
+  if (platform !== 'mogrocery') {
+    allowedTabs.push('under-250', 'explore-more')
+  }
+  if (platform === 'mogrocery') {
+    allowedTabs.push('best-sellers')
+  }
+  return allowedTabs.includes(requestedTab) ? requestedTab : 'banners'
+}
+
+export default function LandingPageManagement({ forcedPlatform, initialTab = 'banners', managementMode = 'default' }) {
   const { platform: contextPlatform } = usePlatform()
   const platform =
     forcedPlatform === "mofood" || forcedPlatform === "mogrocery"
@@ -18,7 +32,8 @@ export default function LandingPageManagement({ forcedPlatform }) {
       : contextPlatform === "mogrocery"
         ? "mogrocery"
         : "mofood"
-  const [activeTab, setActiveTab] = useState('banners')
+  const isGroceryProductSectionsMode = platform === 'mogrocery' && managementMode === 'product-sections'
+  const [activeTab, setActiveTab] = useState(() => getValidInitialTab(initialTab, platform))
   const [exploreMoreSubTab, setExploreMoreSubTab] = useState(
     platform === 'mogrocery' ? 'best-sellers' : 'top-10'
   )
@@ -92,10 +107,15 @@ export default function LandingPageManagement({ forcedPlatform }) {
   const [bestSellers, setBestSellers] = useState([])
   const [bestSellersLoading, setBestSellersLoading] = useState(true)
   const [bestSellersDeleting, setBestSellersDeleting] = useState(null)
-  const [selectedBestSellerType, setSelectedBestSellerType] = useState("subcategory")
+  const [selectedBestSellerType, setSelectedBestSellerType] = useState(
+    isGroceryProductSectionsMode ? "product" : "subcategory"
+  )
   const [selectedBestSellerItemId, setSelectedBestSellerItemId] = useState("")
+  const [bestSellerProductSearch, setBestSellerProductSearch] = useState("")
+  const [bestSellerSectionSelection, setBestSellerSectionSelection] = useState("__custom__")
   const [bestSellerSectionName, setBestSellerSectionName] = useState("")
   const [bestSellerSectionOrder, setBestSellerSectionOrder] = useState(0)
+  const [savedBestSellerSection, setSavedBestSellerSection] = useState({ name: "", order: 0 })
   const [groceryCategories, setGroceryCategories] = useState([])
   const [grocerySubcategories, setGrocerySubcategories] = useState([])
   const [groceryProducts, setGroceryProducts] = useState([])
@@ -193,17 +213,27 @@ export default function LandingPageManagement({ forcedPlatform }) {
     } else if (activeTab === 'best-sellers' && platform === 'mogrocery') {
       fetchGroceryCatalogData()
       fetchBestSellers()
-    } else if (activeTab === 'product-sections' && platform === 'mofood') {
-      fetchMofoodProductSections()
-      fetchAllRestaurants()
     }
   }, [activeTab, exploreMoreSubTab, platform])
 
   useEffect(() => {
-    if (platform === 'mogrocery' && (activeTab === 'under-250' || activeTab === 'explore-more')) {
+    if (
+      platform === 'mogrocery' &&
+      (activeTab === 'under-250' || activeTab === 'explore-more' || activeTab === 'product-sections')
+    ) {
       setActiveTab('banners')
     }
   }, [platform, activeTab])
+
+  useEffect(() => {
+    if (!isGroceryProductSectionsMode) return
+    if (activeTab !== 'best-sellers') {
+      setActiveTab('best-sellers')
+    }
+    if (selectedBestSellerType !== 'product') {
+      setSelectedBestSellerType('product')
+    }
+  }, [activeTab, isGroceryProductSectionsMode, selectedBestSellerType])
 
   // ==================== HERO BANNERS ====================
   const fetchBanners = async () => {
@@ -922,17 +952,23 @@ export default function LandingPageManagement({ forcedPlatform }) {
     try {
       setRestaurantsLoading(true)
       setError(null)
-      const response = await adminAPI.getRestaurants({ limit: 1000 })
+      const response =
+        platform === 'mogrocery'
+          ? await adminAPI.getGroceryStores({ limit: 1000 })
+          : await adminAPI.getRestaurants({ limit: 1000 })
+
       if (response.data && response.data.success && response.data.data) {
-        const restaurants = response.data.data.restaurants || response.data.data || []
-        setAllRestaurants(restaurants)
+        const entities = platform === 'mogrocery'
+          ? (response.data.data.stores || response.data.data || [])
+          : (response.data.data.restaurants || response.data.data || [])
+        setAllRestaurants(entities)
       }
     } catch (err) {
       if (err.response?.status === 401 || err.response?.status === 404) {
         setAllRestaurants([])
         setError(null)
       } else {
-        const errorMessage = err.response?.data?.message || 'Failed to load restaurants'
+        const errorMessage = err.response?.data?.message || (platform === 'mogrocery' ? 'Failed to load stores' : 'Failed to load restaurants')
         setErrorSafely(errorMessage)
       }
     } finally {
@@ -1329,16 +1365,18 @@ export default function LandingPageManagement({ forcedPlatform }) {
     }
   }
 
+  const effectiveBestSellerType = isGroceryProductSectionsMode ? 'product' : selectedBestSellerType
+
   const availableBestSellerItems =
-    selectedBestSellerType === 'category'
+    effectiveBestSellerType === 'category'
       ? groceryCategories
-      : selectedBestSellerType === 'subcategory'
+      : effectiveBestSellerType === 'subcategory'
         ? grocerySubcategories
         : groceryProducts
 
   const selectedBestSellerTypeIds = new Set(
     bestSellers
-      .filter((item) => item.itemType === selectedBestSellerType)
+      .filter((item) => item.itemType === effectiveBestSellerType)
       .map((item) => String(item.itemId?._id || item.itemId || ""))
   )
 
@@ -1346,28 +1384,60 @@ export default function LandingPageManagement({ forcedPlatform }) {
     (item) => !selectedBestSellerTypeIds.has(String(item?._id || ""))
   )
 
-  const handleAddBestSeller = async () => {
-    if (!selectedBestSellerType || !selectedBestSellerItemId) {
+  const addedProductItemIds = new Set(
+    bestSellers
+      .filter((item) => item.itemType === 'product')
+      .map((item) => String(item.itemId?._id || item.itemId || ""))
+      .filter(Boolean)
+  )
+  const normalizedActiveSectionName = String(savedBestSellerSection?.name || '').trim().toLowerCase()
+  const addedProductItemIdsInActiveSection = new Set(
+    bestSellers
+      .filter((item) => {
+        if (item?.itemType !== 'product') return false
+        return String(item?.sectionName || '').trim().toLowerCase() === normalizedActiveSectionName
+      })
+      .map((item) => String(item.itemId?._id || item.itemId || ""))
+      .filter(Boolean)
+  )
+
+  const filteredProductSectionItems = (Array.isArray(groceryProducts) ? groceryProducts : [])
+    .filter((item) => {
+      const query = String(bestSellerProductSearch || '').trim().toLowerCase()
+      if (!query) return true
+      return String(item?.name || '').toLowerCase().includes(query)
+    })
+
+  const handleAddBestSeller = async (itemIdOverride = "") => {
+    const resolvedItemId = String(itemIdOverride || selectedBestSellerItemId || "")
+    const sectionNameToUse = isGroceryProductSectionsMode
+      ? String(savedBestSellerSection?.name || "").trim()
+      : String(bestSellerSectionName || "").trim()
+    const sectionOrderToUse = isGroceryProductSectionsMode
+      ? Number(savedBestSellerSection?.order || 0)
+      : Number(bestSellerSectionOrder || 0)
+    if (!effectiveBestSellerType || !resolvedItemId) {
       setError('Please select type and item')
       return
     }
-    if (selectedBestSellerType === 'product' && !bestSellerSectionName.trim()) {
-      setError('Please enter section name for product')
+    if (effectiveBestSellerType === 'product' && !sectionNameToUse) {
+      setError(isGroceryProductSectionsMode ? 'Please save section first' : 'Please enter section name for product')
       return
     }
     try {
       setError(null)
       setSuccess(null)
       const response = await api.post('/hero-banners/grocery-best-sellers', {
-        itemType: selectedBestSellerType,
-        itemId: selectedBestSellerItemId,
-        sectionName: selectedBestSellerType === 'product' ? bestSellerSectionName.trim() : '',
-        sectionOrder: selectedBestSellerType === 'product' ? Number(bestSellerSectionOrder || 0) : 0,
+        itemType: effectiveBestSellerType,
+        itemId: resolvedItemId,
+        sectionName: effectiveBestSellerType === 'product' ? sectionNameToUse : '',
+        sectionOrder: effectiveBestSellerType === 'product' ? sectionOrderToUse : 0,
       }, getAuthConfig())
       if (response.data.success) {
-        setSuccess('Best seller item added successfully!')
+        setSuccess(response.data?.message || 'Best seller item added successfully!')
         setSelectedBestSellerItemId("")
-        if (selectedBestSellerType === 'product') {
+        if (effectiveBestSellerType === 'product' && !isGroceryProductSectionsMode) {
+          setBestSellerSectionSelection("__custom__")
           setBestSellerSectionName("")
         }
         await fetchBestSellers()
@@ -1376,6 +1446,21 @@ export default function LandingPageManagement({ forcedPlatform }) {
     } catch (err) {
       setErrorSafely(err.response?.data?.message || 'Failed to add best seller item.')
     }
+  }
+
+  const handleSaveBestSellerSection = () => {
+    const name = String(bestSellerSectionName || "").trim()
+    if (!name) {
+      setError('Please enter section name')
+      return
+    }
+    setSavedBestSellerSection({
+      name,
+      order: Number(bestSellerSectionOrder || 0),
+    })
+    setError(null)
+    setSuccess(`Section "${name}" saved.`)
+    setTimeout(() => setSuccess(null), 2500)
   }
 
   const handleDeleteBestSeller = async (id) => {
@@ -1433,13 +1518,14 @@ export default function LandingPageManagement({ forcedPlatform }) {
   }
 
   // ==================== RENDER ====================
-  const tabs = [
-    { id: 'banners', label: 'Hero Banners', icon: ImageIcon },
-    ...(platform !== 'mogrocery' ? [{ id: 'under-250', label: '250 Banner', icon: Tag }] : []),
-    ...(platform !== 'mogrocery' ? [{ id: 'explore-more', label: 'Explore More', icon: Layout }] : []),
-    ...(platform === 'mofood' ? [{ id: 'product-sections', label: 'Product Sections', icon: Megaphone }] : []),
-    ...(platform === 'mogrocery' ? [{ id: 'best-sellers', label: 'Best Sellers', icon: Megaphone }] : []),
-  ]
+  const tabs = isGroceryProductSectionsMode
+    ? [{ id: 'best-sellers', label: 'Product Sections', icon: Megaphone }]
+    : [
+      { id: 'banners', label: 'Hero Banners', icon: ImageIcon },
+      ...(platform !== 'mogrocery' ? [{ id: 'under-250', label: '250 Banner', icon: Tag }] : []),
+      ...(platform !== 'mogrocery' ? [{ id: 'explore-more', label: 'Explore More', icon: Layout }] : []),
+      ...(platform === 'mogrocery' ? [{ id: 'best-sellers', label: 'Best Sellers', icon: Megaphone }] : []),
+    ]
 
   const exploreMoreTabs = [
     ...(platform !== 'mogrocery' ? [{ id: 'top-10', label: 'Top 10', icon: Trophy }] : []),
@@ -1455,6 +1541,39 @@ export default function LandingPageManagement({ forcedPlatform }) {
     if (sectionNameA !== sectionNameB) return sectionNameA.localeCompare(sectionNameB)
     return Number(a?.order || 0) - Number(b?.order || 0)
   })
+  const visibleBestSellers = isGroceryProductSectionsMode
+    ? sortedBestSellers.filter((item) => item?.itemType === 'product' && String(item?.sectionName || '').trim())
+    : sortedBestSellers
+  const availableSectionOptions = Object.values(
+    bestSellers.reduce((acc, item) => {
+      if (item?.itemType !== 'product') return acc
+      const name = String(item?.sectionName || '').trim()
+      if (!name) return acc
+      const order = Number(item?.sectionOrder || 0)
+      if (!acc[name] || Number(acc[name].order) > order) {
+        acc[name] = { name, order }
+      }
+      return acc
+    }, {})
+  ).sort((a, b) => {
+    if (Number(a.order || 0) !== Number(b.order || 0)) return Number(a.order || 0) - Number(b.order || 0)
+    return String(a.name || '').localeCompare(String(b.name || ''))
+  })
+  const sectionPreviewGroups = visibleBestSellers.reduce((acc, item) => {
+    const sectionName = String(item?.sectionName || '').trim()
+    const sectionOrder = Number(item?.sectionOrder || 0)
+    if (!sectionName) return acc
+    const key = `${sectionOrder}::${sectionName}`
+    if (!acc[key]) {
+      acc[key] = { key, name: sectionName, order: sectionOrder, items: [] }
+    }
+    acc[key].items.push(item)
+    return acc
+  }, {})
+  const orderedSectionPreviews = Object.values(sectionPreviewGroups).sort((a, b) => {
+    if (Number(a.order || 0) !== Number(b.order || 0)) return Number(a.order || 0) - Number(b.order || 0)
+    return String(a.name || '').localeCompare(String(b.name || ''))
+  })
 
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
@@ -1466,8 +1585,12 @@ export default function LandingPageManagement({ forcedPlatform }) {
               <Layout className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">Landing Page Management</h1>
-              <p className="text-sm text-slate-600 mt-1">Manage hero banners</p>
+              <h1 className="text-2xl font-bold text-slate-900">
+                {isGroceryProductSectionsMode ? 'Product Sections Management' : 'Landing Page Management'}
+              </h1>
+              <p className="text-sm text-slate-600 mt-1">
+                {isGroceryProductSectionsMode ? 'Create and manage named product sections' : 'Manage hero banners'}
+              </p>
             </div>
           </div>
         </div>
@@ -2019,8 +2142,11 @@ export default function LandingPageManagement({ forcedPlatform }) {
             {platform === 'mogrocery' && (activeTab === 'best-sellers' || (activeTab === 'explore-more' && exploreMoreSubTab === 'best-sellers')) && (
               <>
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
-                  <h2 className="text-lg font-bold text-slate-900 mb-4">Add Item to Best Sellers</h2>
+                  <h2 className="text-lg font-bold text-slate-900 mb-4">
+                    {isGroceryProductSectionsMode ? 'Create Product Section Item' : 'Add Item to Best Sellers'}
+                  </h2>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    {!isGroceryProductSectionsMode && (
                     <div>
                       <Label htmlFor="best-seller-type">Item Type</Label>
                       <select
@@ -2041,6 +2167,7 @@ export default function LandingPageManagement({ forcedPlatform }) {
                         <option value="product">Product</option>
                       </select>
                     </div>
+                    )}
                     <div className="md:col-span-2">
                       <Label htmlFor="best-seller-item">Select Item</Label>
                       <select
@@ -2058,17 +2185,53 @@ export default function LandingPageManagement({ forcedPlatform }) {
                         ))}
                       </select>
                     </div>
-                    {selectedBestSellerType === 'product' && (
+                    {effectiveBestSellerType === 'product' && (
                       <>
                         <div>
                           <Label htmlFor="best-seller-section-name">Section Name</Label>
-                          <Input
-                            id="best-seller-section-name"
-                            value={bestSellerSectionName}
-                            onChange={(e) => setBestSellerSectionName(e.target.value)}
-                            placeholder="Hot deals"
-                            className="mt-1"
-                          />
+                          <select
+                            id="best-seller-section-name-select"
+                            value={bestSellerSectionSelection}
+                            onChange={(e) => {
+                              const value = e.target.value
+                              setBestSellerSectionSelection(value)
+                              if (value === "__custom__") {
+                                setBestSellerSectionName("")
+                                setSavedBestSellerSection({ name: "", order: 0 })
+                                return
+                              }
+                              const selected = availableSectionOptions.find((option) => option.name === value)
+                              setBestSellerSectionName(value)
+                              if (selected) {
+                                const resolvedOrder = Number(selected.order || 0)
+                                setBestSellerSectionOrder(resolvedOrder)
+                                // Existing dropdown section should become active immediately.
+                                setSavedBestSellerSection({ name: value, order: resolvedOrder })
+                                setError(null)
+                              }
+                            }}
+                            className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="__custom__">+ Create new section</option>
+                            {availableSectionOptions.map((option) => (
+                              <option key={`section-name-${option.name}`} value={option.name}>
+                                {option.name} (Priority: {Number(option.order || 0)})
+                              </option>
+                            ))}
+                          </select>
+                          {bestSellerSectionSelection === "__custom__" && (
+                            <Input
+                              id="best-seller-section-name"
+                              value={bestSellerSectionName}
+                              onChange={(e) => {
+                                setBestSellerSectionSelection("__custom__")
+                                setBestSellerSectionName(e.target.value)
+                                setSavedBestSellerSection({ name: "", order: 0 })
+                              }}
+                              placeholder="Hot deals"
+                              className="mt-1"
+                            />
+                          )}
                         </div>
                         <div>
                           <Label htmlFor="best-seller-section-order">Section Sequence</Label>
@@ -2076,7 +2239,10 @@ export default function LandingPageManagement({ forcedPlatform }) {
                             id="best-seller-section-order"
                             type="number"
                             value={bestSellerSectionOrder}
-                            onChange={(e) => setBestSellerSectionOrder(Number(e.target.value || 0))}
+                            onChange={(e) => {
+                              setBestSellerSectionOrder(Number(e.target.value || 0))
+                              setSavedBestSellerSection({ name: "", order: 0 })
+                            }}
                             min={0}
                             className="mt-1"
                           />
@@ -2085,30 +2251,118 @@ export default function LandingPageManagement({ forcedPlatform }) {
                     )}
                   </div>
                   <div className="mt-4">
-                    <Button
-                      onClick={handleAddBestSeller}
-                      disabled={!selectedBestSellerType || !selectedBestSellerItemId}
-                      className="bg-blue-500 hover:bg-blue-600 text-white"
-                    >
-                      Add to Best Sellers
-                    </Button>
+                    {isGroceryProductSectionsMode ? (
+                      <Button
+                        onClick={handleSaveBestSellerSection}
+                        disabled={bestSellerSectionSelection !== "__custom__" || !bestSellerSectionName.trim()}
+                        className="bg-blue-500 hover:bg-blue-600 text-white"
+                      >
+                        Save New Section
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={handleAddBestSeller}
+                        disabled={!effectiveBestSellerType || !selectedBestSellerItemId}
+                        className="bg-blue-500 hover:bg-blue-600 text-white"
+                      >
+                        Add to Best Sellers
+                      </Button>
+                    )}
+                    {isGroceryProductSectionsMode && savedBestSellerSection?.name ? (
+                      <p className="text-xs text-emerald-700 mt-2">
+                        Active section: {savedBestSellerSection.name} (Priority: {Number(savedBestSellerSection.order || 0)})
+                      </p>
+                    ) : null}
+                    {isGroceryProductSectionsMode && bestSellerSectionSelection !== "__custom__" ? (
+                      <p className="text-xs text-slate-500 mt-1">
+                        Selected existing section is auto-active. Use `+` to add products directly.
+                      </p>
+                    ) : null}
                   </div>
                 </div>
 
+                {isGroceryProductSectionsMode && (
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+                    <div className="flex items-center justify-between gap-3 mb-4">
+                      <h2 className="text-lg font-bold text-slate-900">All Products</h2>
+                      <Input
+                        value={bestSellerProductSearch}
+                        onChange={(e) => setBestSellerProductSearch(e.target.value)}
+                        placeholder="Search product..."
+                        className="w-full max-w-xs"
+                      />
+                    </div>
+                    {!bestSellerSectionName.trim() ? (
+                      <div className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+                        Enter Section Name and Section Sequence first, then click `+` to add products.
+                      </div>
+                    ) : null}
+                    {groceryCatalogLoading ? (
+                      <div className="flex items-center justify-center py-10">
+                        <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                      </div>
+                    ) : filteredProductSectionItems.length === 0 ? (
+                      <div className="text-sm text-slate-500 py-6">No products found.</div>
+                    ) : (
+                      <div className="max-h-[560px] overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+                        {filteredProductSectionItems.map((item) => {
+                          const itemId = String(item?._id || "")
+                          const image = (Array.isArray(item?.images) ? item.images[0] : '') || "https://via.placeholder.com/80"
+                          const isInActiveSection = addedProductItemIdsInActiveSection.has(itemId)
+                          const isAddedInAnotherSection = addedProductItemIds.has(itemId) && !isInActiveSection
+                          return (
+                            <div key={itemId} className="flex items-center justify-between gap-3 p-3">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <img src={image} alt={item?.name || 'Product'} className="w-12 h-12 rounded-lg object-cover border border-slate-200" />
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-slate-900 line-clamp-1">{item?.name || 'N/A'}</p>
+                                  <p className="text-xs text-slate-500">Rs {Number(item?.sellingPrice || 0)} {item?.unit ? `• ${item.unit}` : ''}</p>
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleAddBestSeller(itemId)}
+                                disabled={isInActiveSection || !String(savedBestSellerSection?.name || "").trim()}
+                                className={`w-8 h-8 rounded-full flex items-center justify-center border ${isInActiveSection
+                                  ? 'bg-emerald-100 text-emerald-700 border-emerald-200'
+                                  : isAddedInAnotherSection
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100'
+                                  : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                                  } disabled:opacity-60`}
+                                title={
+                                  isInActiveSection
+                                    ? 'Already added in active section'
+                                    : isAddedInAnotherSection
+                                      ? 'Move to active section'
+                                      : 'Add to section'
+                                }
+                              >
+                                <Plus className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-                  <h2 className="text-lg font-bold text-slate-900 mb-4">Best Sellers ({bestSellers.length})</h2>
+                  <h2 className="text-lg font-bold text-slate-900 mb-4">
+                    {isGroceryProductSectionsMode ? `Product Section Items (${visibleBestSellers.length})` : `Best Sellers (${visibleBestSellers.length})`}
+                  </h2>
                   {bestSellersLoading ? (
                     <div className="flex items-center justify-center py-12">
                       <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
                     </div>
-                  ) : bestSellers.length === 0 ? (
+                  ) : visibleBestSellers.length === 0 ? (
                     <div className="text-center py-12 text-slate-500">
                       <Megaphone className="w-12 h-12 mx-auto mb-3 text-slate-400" />
-                      <p>No items added to Best Sellers yet.</p>
+                      <p>{isGroceryProductSectionsMode ? 'No section products added yet.' : 'No items added to Best Sellers yet.'}</p>
                     </div>
                   ) : (
                     <div className="space-y-3">
-                      {sortedBestSellers
+                      {visibleBestSellers
                         .map((item, index) => {
                           const displayName = item.itemId?.name || 'N/A'
                           const displayImage =
@@ -2133,7 +2387,7 @@ export default function LandingPageManagement({ forcedPlatform }) {
                                 <button onClick={() => handleBestSellerOrderChange(item._id, 'up')} disabled={index === 0} className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-50">
                                   <ArrowUp className="w-4 h-4 text-slate-600" />
                                 </button>
-                                <button onClick={() => handleBestSellerOrderChange(item._id, 'down')} disabled={index === bestSellers.length - 1} className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-50">
+                                <button onClick={() => handleBestSellerOrderChange(item._id, 'down')} disabled={index === visibleBestSellers.length - 1} className="p-1.5 rounded hover:bg-slate-100 disabled:opacity-50">
                                   <ArrowDown className="w-4 h-4 text-slate-600" />
                                 </button>
                                 <button onClick={() => handleToggleBestSellerStatus(item._id, item.isActive)} className={`px-3 py-1.5 rounded text-sm font-medium ${item.isActive ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
@@ -2149,6 +2403,34 @@ export default function LandingPageManagement({ forcedPlatform }) {
                     </div>
                   )}
                 </div>
+                {isGroceryProductSectionsMode && orderedSectionPreviews.length > 0 && (
+                  <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mt-6">
+                    <h2 className="text-lg font-bold text-slate-900 mb-4">Section Preview</h2>
+                    <div className="space-y-5">
+                      {orderedSectionPreviews.map((section) => (
+                        <div key={section.key}>
+                          <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-base font-semibold text-slate-900">{section.name}</h3>
+                            <span className="text-xs text-slate-500">Priority: {Number(section.order || 0)}</span>
+                          </div>
+                          <div className="flex gap-3 overflow-x-auto pb-1">
+                            {section.items.map((item) => {
+                              const product = item?.itemId || {}
+                              const image = (Array.isArray(product?.images) ? product.images[0] : '') || "https://via.placeholder.com/120"
+                              return (
+                                <div key={item._id} className="min-w-[165px] max-w-[165px] rounded-xl border border-slate-200 p-2.5 bg-white">
+                                  <img src={image} alt={product?.name || 'Product'} className="w-full h-24 rounded-lg object-cover border border-slate-100 mb-2" />
+                                  <p className="text-sm font-semibold text-slate-900 line-clamp-2">{product?.name || 'N/A'}</p>
+                                  <p className="text-xs text-slate-500 mt-1">Rs {Number(product?.sellingPrice || 0)}</p>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </>

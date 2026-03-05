@@ -17,6 +17,8 @@ const extractId = (value) => {
   return "";
 };
 
+const isValidObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || "").trim());
+
 const normalizeProduct = (item = {}, fallbackId = "") => {
   const id = item?.id || item?._id || fallbackId;
   const price = Number(item?.price ?? item?.sellingPrice ?? 0);
@@ -128,6 +130,10 @@ export default function FoodDetailPage() {
         }
       }
 
+      if (!isValidObjectId(id)) {
+        return;
+      }
+
       try {
         setIsLoading(true);
         const response = await api.get(`/grocery/products/${id}`, {
@@ -146,12 +152,12 @@ export default function FoodDetailPage() {
     };
 
     loadProduct();
-  }, [id, location.state]);
+  }, [id, location.state, zoneId]);
 
   useEffect(() => {
     const fetchSimilar = async () => {
       const categoryId = product?.categoryId;
-      if (!categoryId) return;
+      if (!isValidObjectId(categoryId)) return;
       try {
         const response = await api.get("/grocery/products", {
           params: { categoryId, limit: 12, ...(zoneId ? { zoneId } : {}) },
