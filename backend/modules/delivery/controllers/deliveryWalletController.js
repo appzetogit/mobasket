@@ -30,6 +30,7 @@ const logger = winston.createLogger({
 export const getWallet = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
+    const codSummary = await getDeliveryCODSummary(delivery._id);
 
     // Find or create wallet for this delivery partner
     let wallet = await DeliveryWallet.findOne({ deliveryId: delivery._id });
@@ -51,16 +52,11 @@ export const getWallet = asyncHandler(async (req, res) => {
       .filter(t => t.type === 'withdrawal' && t.status === 'Pending')
       .reduce((sum, t) => sum + t.amount, 0);
 
-    // Global cash limit and withdrawal settings (same for all delivery partners)
-    let totalCashLimit = 750;
+    // Withdrawal settings
     let withdrawalLimit = 100;
     let minimumWalletBalance = 0;
     try {
       const settings = await BusinessSettings.getSettings();
-      const configured = Number(settings?.deliveryCashLimit);
-      if (Number.isFinite(configured) && configured >= 0) {
-        totalCashLimit = configured;
-      }
       const wl = Number(settings?.deliveryWithdrawalLimit);
       if (Number.isFinite(wl) && wl >= 0) {
         withdrawalLimit = wl;
@@ -69,9 +65,7 @@ export const getWallet = asyncHandler(async (req, res) => {
       if (Number.isFinite(mwb) && mwb >= 0) {
         minimumWalletBalance = mwb;
       }
-    } catch (e) {
-      totalCashLimit = 750;
-    }
+    } catch (e) {}
 
     // ANYHOW FIX (end-to-end): compute COD cash collected from Orders so "Cash in hand" shows real amount.
     // Robust against legacy data (ObjectId vs string IDs, method casing, status stored in deliveryState).
@@ -176,7 +170,9 @@ export const getWallet = asyncHandler(async (req, res) => {
     
     const pocketBalance = Math.max(0, Number(wallet.totalBalance) || 0);
     const deductions = Math.max(0, Number(wallet.deductions) || 0);
-    const availableCashLimit = Math.max(0, Number(totalCashLimit) - cashInHandForLimit);
+    const availableCashLimit = codSummary.remainingLimit;
+    const totalCashLimit = codSummary.codLimit;
+    const cashCollected = codSummary.cashCollected;
 
     const walletData = {
       totalBalance: pocketBalance,
@@ -188,9 +184,9 @@ export const getWallet = asyncHandler(async (req, res) => {
       totalCashLimit: totalCashLimit,
       availableCashLimit,
       codLimit: totalCashLimit,
-      cashCollected: cashInHandForLimit,
-      remainingLimit: Math.max(0, Number(totalCashLimit) - cashInHandForLimit),
-      canDeposit: cashInHandForLimit > 0,
+      cashCollected,
+      remainingLimit: codSummary.remainingLimit,
+      canDeposit: codSummary.canDeposit,
       deliveryWithdrawalLimit: withdrawalLimit,
       deliveryMinimumWalletBalance: minimumWalletBalance,
       // Pocket balance = rider earnings (withdrawable).

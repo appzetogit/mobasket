@@ -61,7 +61,7 @@ export default function SignupStep1() {
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    
+
     // Validation for Full Name - only letters and spaces
     if (name === "name") {
       const nameRegex = /^[a-zA-Z\s]*$/;
@@ -81,9 +81,9 @@ export default function SignupStep1() {
       return;
     }
 
-    // Validation for City - only letters and spaces
+    // Validation for City - only letters, no spaces
     if (name === "city") {
-      const cityRegex = /^[a-zA-Z\s]*$/;
+      const cityRegex = /^[a-zA-Z]*$/;
       if (value === "" || cityRegex.test(value)) {
         setFormData(prev => ({
           ...prev,
@@ -100,9 +100,9 @@ export default function SignupStep1() {
       return;
     }
 
-    // Validation for State - only letters and spaces
+    // Validation for State - only letters, no spaces
     if (name === "state") {
-      const stateRegex = /^[a-zA-Z\s]*$/;
+      const stateRegex = /^[a-zA-Z]*$/;
       if (value === "" || stateRegex.test(value)) {
         setFormData(prev => ({
           ...prev,
@@ -175,18 +175,18 @@ export default function SignupStep1() {
       newErrors.address = "Address is required"
     }
 
-    // Validate City - only letters and spaces
+    // Validate City - only letters, no spaces
     if (!formData.city.trim()) {
       newErrors.city = "City is required"
-    } else if (!/^[a-zA-Z\s]+$/.test(formData.city.trim())) {
-      newErrors.city = "City should only contain letters and spaces"
+    } else if (!/^[a-zA-Z]+$/.test(formData.city.trim())) {
+      newErrors.city = "City should only contain letters (no spaces)"
     }
 
-    // Validate State - only letters and spaces
+    // Validate State - only letters, no spaces
     if (!formData.state.trim()) {
       newErrors.state = "State is required"
-    } else if (!/^[a-zA-Z\s]+$/.test(formData.state.trim())) {
-      newErrors.state = "State should only contain letters and spaces"
+    } else if (!/^[a-zA-Z]+$/.test(formData.state.trim())) {
+      newErrors.state = "State should only contain letters (no spaces)"
     }
 
     // Validate Vehicle Name - mandatory
@@ -263,7 +263,7 @@ export default function SignupStep1() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-100 overflow-x-hidden">
       {/* Header */}
       <div className="bg-white px-4 py-3 flex items-center gap-4 border-b border-gray-200">
         <button
@@ -293,10 +293,9 @@ export default function SignupStep1() {
               name="name"
               value={formData.name}
               onChange={handleChange}
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                errors.name ? "border-red-500" : "border-gray-300"
-              }`}
-              placeholder="Enter your full name"
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.name ? "border-red-500" : "border-gray-300"
+                }`}
+              placeholder="E.g., RajeshKumar"
               pattern="[a-zA-Z\s]+"
               title="Name should only contain letters and spaces"
             />
@@ -316,10 +315,9 @@ export default function SignupStep1() {
               name="email"
               value={formData.email}
               onChange={handleChange}
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                errors.email ? "border-red-500" : "border-gray-300"
-              }`}
-              placeholder="Enter your email"
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.email ? "border-red-500" : "border-gray-300"
+                }`}
+              placeholder="E.g., rajesh@gmail.com"
             />
             {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email}</p>}
           </div>
@@ -334,10 +332,9 @@ export default function SignupStep1() {
               value={formData.address}
               onChange={handleChange}
               rows={3}
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                errors.address ? "border-red-500" : "border-gray-300"
-              }`}
-              placeholder="Enter your address"
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.address ? "border-red-500" : "border-gray-300"
+                }`}
+              placeholder="E.g., 123 MG Road, Indore"
             />
             {errors.address && <p className="text-red-500 text-sm mt-1">{errors.address}</p>}
           </div>
@@ -353,16 +350,15 @@ export default function SignupStep1() {
                 name="city"
                 value={formData.city}
                 onChange={handleChange}
-                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                  errors.city ? "border-red-500" : "border-gray-300"
-                }`}
-                placeholder="City"
-                pattern="[a-zA-Z\s]+"
-                title="City should only contain letters and spaces"
+                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.city ? "border-red-500" : "border-gray-300"
+                  }`}
+                placeholder="E.g., Indore"
+                pattern="[a-zA-Z]+"
+                title="City should only contain letters (no spaces)"
               />
               {errors.city && <p className="text-red-500 text-sm mt-1">{errors.city}</p>}
               {!errors.city && formData.city && (
-                <p className="text-xs text-gray-500 mt-1">Only letters and spaces are allowed</p>
+                <p className="text-xs text-gray-500 mt-1">Only letters are allowed (no spaces)</p>
               )}
             </div>
             <div>
@@ -374,16 +370,15 @@ export default function SignupStep1() {
                 name="state"
                 value={formData.state}
                 onChange={handleChange}
-                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                  errors.state ? "border-red-500" : "border-gray-300"
-                }`}
-                placeholder="State"
-                pattern="[a-zA-Z\s]+"
-                title="State should only contain letters and spaces"
+                className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.state ? "border-red-500" : "border-gray-300"
+                  }`}
+                placeholder="E.g., MadhyaPradesh"
+                pattern="[a-zA-Z]+"
+                title="State should only contain letters (no spaces)"
               />
               {errors.state && <p className="text-red-500 text-sm mt-1">{errors.state}</p>}
               {!errors.state && formData.state && (
-                <p className="text-xs text-gray-500 mt-1">Only letters and spaces are allowed</p>
+                <p className="text-xs text-gray-500 mt-1">Only letters are allowed (no spaces)</p>
               )}
             </div>
           </div>
@@ -416,10 +411,9 @@ export default function SignupStep1() {
               name="vehicleName"
               value={formData.vehicleName}
               onChange={handleChange}
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                errors.vehicleName ? "border-red-500" : "border-gray-300"
-              }`}
-              placeholder="e.g., Honda Activa"
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.vehicleName ? "border-red-500" : "border-gray-300"
+                }`}
+              placeholder="E.g., HondaActiva"
             />
             {errors.vehicleName && <p className="text-red-500 text-sm mt-1">{errors.vehicleName}</p>}
           </div>
@@ -434,10 +428,9 @@ export default function SignupStep1() {
               name="vehicleNumber"
               value={formData.vehicleNumber}
               onChange={handleChange}
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 uppercase ${
-                errors.vehicleNumber ? "border-red-500" : "border-gray-300"
-              }`}
-              placeholder="e.g., MH12AB1234"
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 uppercase ${errors.vehicleNumber ? "border-red-500" : "border-gray-300"
+                }`}
+              placeholder="E.g., MH12AB1234"
               maxLength={10}
               pattern="[A-Z]{2}[0-9]{1,2}[A-Z]{1,2}[0-9]{4}"
               title="Vehicle number format: XX##XX#### (e.g., MH12AB1234)"
@@ -459,10 +452,9 @@ export default function SignupStep1() {
               value={formData.panNumber}
               onChange={handleChange}
               maxLength={10}
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 uppercase ${
-                errors.panNumber ? "border-red-500" : "border-gray-300"
-              }`}
-              placeholder="ABCDE1234F"
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 uppercase ${errors.panNumber ? "border-red-500" : "border-gray-300"
+                }`}
+              placeholder="E.g., ABCDE1234F"
             />
             {errors.panNumber && <p className="text-red-500 text-sm mt-1">{errors.panNumber}</p>}
           </div>
@@ -478,10 +470,9 @@ export default function SignupStep1() {
               value={formData.aadharNumber}
               onChange={handleChange}
               maxLength={12}
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                errors.aadharNumber ? "border-red-500" : "border-gray-300"
-              }`}
-              placeholder="1234 5678 9012"
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.aadharNumber ? "border-red-500" : "border-gray-300"
+                }`}
+              placeholder="E.g., 123456789012"
             />
             {errors.aadharNumber && <p className="text-red-500 text-sm mt-1">{errors.aadharNumber}</p>}
           </div>
@@ -490,11 +481,10 @@ export default function SignupStep1() {
           <button
             type="submit"
             disabled={isSubmitting}
-            className={`w-full py-4 rounded-lg font-bold text-white text-base transition-colors mt-6 ${
-              isSubmitting
-                ? "bg-gray-400 cursor-not-allowed"
-                : "bg-[#00B761] hover:bg-[#00A055]"
-            }`}
+            className={`w-full py-4 rounded-lg font-bold text-white text-base transition-colors mt-6 ${isSubmitting
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-[#00B761] hover:bg-[#00A055]"
+              }`}
           >
             {isSubmitting ? "Saving..." : "Continue"}
           </button>

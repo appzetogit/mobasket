@@ -7,7 +7,43 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog"
 
-const getStatusColor = (orderStatus) => {
+const getGroceryStatusLabel = (orderStatus) => {
+  const map = {
+    "Pending": "Order Placed",
+    "Scheduled": "Scheduled",
+    "Accepted": "Store Accepted",
+    "Processing": "Packing",
+    "Food On The Way": "Out for Delivery",
+    "Grocery On The Way": "Out for Delivery",
+    "Delivered": "Delivered",
+    "Cancelled by Restaurant": "Cancelled by Store",
+    "Cancelled by User": "Cancelled by User",
+    "Canceled": "Canceled",
+    "Payment Failed": "Payment Failed",
+    "Refunded": "Refunded",
+    "Offline Payments": "Offline Payments",
+  }
+  return map[orderStatus] || orderStatus
+}
+
+const getStatusColor = (orderStatus, isGrocery = false) => {
+  if (isGrocery) {
+    const groceryColors = {
+      "Order Placed": "bg-blue-100 text-blue-700",
+      "Store Accepted": "bg-green-100 text-green-700",
+      "Packing": "bg-orange-100 text-orange-700",
+      "Out for Delivery": "bg-yellow-100 text-yellow-700",
+      "Delivered": "bg-emerald-100 text-emerald-700",
+      "Cancelled by Store": "bg-red-100 text-red-700",
+      "Cancelled by User": "bg-orange-100 text-orange-700",
+      "Payment Failed": "bg-red-100 text-red-700",
+      "Refunded": "bg-sky-100 text-sky-700",
+      "Scheduled": "bg-blue-100 text-blue-700",
+      "Canceled": "bg-rose-100 text-rose-700",
+    }
+    const mapped = getGroceryStatusLabel(orderStatus)
+    return groceryColors[mapped] || "bg-slate-100 text-slate-700"
+  }
   const colors = {
     "Delivered": "bg-emerald-100 text-emerald-700",
     "Pending": "bg-blue-100 text-blue-700",
@@ -33,7 +69,7 @@ const getPaymentStatusColor = (paymentStatus) => {
   return "text-slate-600"
 }
 
-export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
+export default function ViewOrderDialog({ isOpen, onOpenChange, order, isGrocery = false }) {
   if (!order) return null
 
   // Debug: Log order data to check billImageUrl
@@ -50,7 +86,7 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
   // Format address for display
   const formatAddress = (address) => {
     if (!address) return "N/A"
-    
+
     const parts = []
     if (address.label) parts.push(address.label)
     if (address.street) parts.push(address.street)
@@ -62,7 +98,7 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
       if (address.state) parts.push(address.state)
       if (address.zipCode) parts.push(address.zipCode)
     }
-    
+
     return parts.length > 0 ? parts.join(", ") : "Address not available"
   }
 
@@ -135,9 +171,9 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
                     Delivered At
                   </p>
                   <p className="text-sm font-medium text-slate-900">
-                    {new Date(order.deliveredAt).toLocaleString('en-GB', { 
-                      day: '2-digit', 
-                      month: 'short', 
+                    {new Date(order.deliveredAt).toLocaleString('en-GB', {
+                      day: '2-digit',
+                      month: 'short',
                       year: 'numeric',
                       hour: '2-digit',
                       minute: '2-digit'
@@ -151,23 +187,23 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
               {order.orderStatus && (
                 <div className="space-y-1">
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Order Status</p>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.orderStatus)}`}>
-                    {order.orderStatus}
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.orderStatus, isGrocery)}`}>
+                    {isGrocery ? getGroceryStatusLabel(order.orderStatus) : order.orderStatus}
                   </span>
                   {order.cancellationReason && (
                     <p className="text-xs text-red-600 mt-1">
                       <span className="font-medium">
-                        {order.cancelledBy === 'user' ? 'Cancelled by User - ' : 
-                         order.cancelledBy === 'restaurant' ? 'Cancelled by Restaurant - ' : 
-                         'Cancellation '}Reason:
+                        {order.cancelledBy === 'user' ? 'Cancelled by User - ' :
+                          order.cancelledBy === 'restaurant' ? (isGrocery ? 'Cancelled by Store - ' : 'Cancelled by Restaurant - ') :
+                            'Cancellation '}Reason:
                       </span> {order.cancellationReason}
                     </p>
                   )}
                   {order.cancelledAt && (
                     <p className="text-xs text-slate-500 mt-1">
-                      Cancelled: {new Date(order.cancelledAt).toLocaleString('en-GB', { 
-                        day: '2-digit', 
-                        month: 'short', 
+                      Cancelled: {new Date(order.cancelledAt).toLocaleString('en-GB', {
+                        day: '2-digit',
+                        month: 'short',
                         year: 'numeric',
                         hour: '2-digit',
                         minute: '2-digit'
@@ -255,12 +291,12 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
             </div>
           </div>
 
-          {/* Restaurant Information */}
+          {/* Restaurant / Store Information */}
           {order.restaurant && (
             <div className="border-t border-slate-200 pt-4">
-              <h3 className="text-sm font-semibold text-slate-700 mb-4">Restaurant Information</h3>
+              <h3 className="text-sm font-semibold text-slate-700 mb-4">{isGrocery ? "Store Information" : "Restaurant Information"}</h3>
               <div className="space-y-1">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Restaurant Name</p>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{isGrocery ? "Store Name" : "Restaurant Name"}</p>
                 <p className="text-sm font-medium text-slate-900">{order.restaurant}</p>
               </div>
             </div>
@@ -433,8 +469,8 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order }) {
               <div className="flex justify-between text-sm">
                 <span className="text-slate-600">Platform Fee</span>
                 <span className="font-medium text-slate-900">
-                  {order.platformFee !== undefined && order.platformFee > 0 
-                    ? `₹${order.platformFee.toFixed(2)}` 
+                  {order.platformFee !== undefined && order.platformFee > 0
+                    ? `₹${order.platformFee.toFixed(2)}`
                     : <span className="text-slate-400">₹0.00</span>}
                 </span>
               </div>

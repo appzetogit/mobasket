@@ -1,7 +1,27 @@
 import { useState, useEffect, useMemo } from "react"
 import { Eye, Printer, ArrowUpDown, ArrowUp, ArrowDown, Loader2, CheckCircle2, XCircle, BellRing, Info } from "lucide-react"
 
-const getStatusColor = (orderStatus) => {
+const getStatusColor = (orderStatus, isGrocery = false) => {
+  // Grocery (Blinkit-style) status colors
+  if (isGrocery) {
+    const groceryColors = {
+      "Order Placed": "bg-blue-100 text-blue-700",
+      "Store Accepted": "bg-green-100 text-green-700",
+      "Packing": "bg-orange-100 text-orange-700",
+      "Out for Delivery": "bg-yellow-100 text-yellow-700",
+      "Delivered": "bg-emerald-100 text-emerald-700",
+      "Cancelled by Store": "bg-red-100 text-red-700",
+      "Cancelled by User": "bg-orange-100 text-orange-700",
+      "Payment Failed": "bg-red-100 text-red-700",
+      "Refunded": "bg-sky-100 text-sky-700",
+      "Scheduled": "bg-blue-100 text-blue-700",
+      "Canceled": "bg-rose-100 text-rose-700",
+      "Offline Payments": "bg-slate-100 text-slate-700",
+    }
+    // Map backend status to grocery labels for color lookup
+    const mapped = getGroceryStatusLabel(orderStatus)
+    return groceryColors[mapped] || "bg-slate-100 text-slate-700"
+  }
   const colors = {
     "Delivered": "bg-emerald-100 text-emerald-700",
     "Pending": "bg-blue-100 text-blue-700",
@@ -18,6 +38,26 @@ const getStatusColor = (orderStatus) => {
     "Offline Payments": "bg-slate-100 text-slate-700",
   }
   return colors[orderStatus] || "bg-slate-100 text-slate-700"
+}
+
+// Map food-style order status to Blinkit-style grocery labels
+const getGroceryStatusLabel = (orderStatus) => {
+  const map = {
+    "Pending": "Order Placed",
+    "Scheduled": "Scheduled",
+    "Accepted": "Store Accepted",
+    "Processing": "Packing",
+    "Food On The Way": "Out for Delivery",
+    "Grocery On The Way": "Out for Delivery",
+    "Delivered": "Delivered",
+    "Cancelled by Restaurant": "Cancelled by Store",
+    "Cancelled by User": "Cancelled by User",
+    "Canceled": "Canceled",
+    "Payment Failed": "Payment Failed",
+    "Refunded": "Refunded",
+    "Offline Payments": "Offline Payments",
+  }
+  return map[orderStatus] || orderStatus
 }
 
 const getPaymentStatusColor = (paymentStatus) => {
@@ -44,24 +84,25 @@ export default function OrdersTable({
   onResendRiderNotification,
   onShowRiderDetails,
   onCancelOrder,
+  isGrocery = false,
 }) {
   const [currentPage, setCurrentPage] = useState(1)
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
   const itemsPerPage = 10
   const totalPages = Math.ceil(orders.length / itemsPerPage)
-  
+
   // Reset to page 1 when orders change
   useEffect(() => {
     setCurrentPage(1)
   }, [orders.length])
-  
+
   // Sort orders based on sortConfig
   const sortedOrders = useMemo(() => {
     if (!sortConfig.key) return orders
-    
+
     const sorted = [...orders].sort((a, b) => {
       let aValue, bValue
-      
+
       switch (sortConfig.key) {
         case 'si':
           // Sort by index (already sorted by default)
@@ -116,21 +157,21 @@ export default function OrdersTable({
         default:
           return 0
       }
-      
+
       if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1
       if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1
       return 0
     })
-    
+
     return sorted
   }, [orders, sortConfig])
-  
+
   const paginatedOrders = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage
     const end = start + itemsPerPage
     return sortedOrders.slice(start, end)
   }, [sortedOrders, currentPage])
-  
+
   const handleSort = (key) => {
     setSortConfig(prevConfig => {
       if (prevConfig.key === key) {
@@ -145,7 +186,7 @@ export default function OrdersTable({
     })
     setCurrentPage(1) // Reset to first page when sorting
   }
-  
+
   const getSortIcon = (columnKey) => {
     if (sortConfig.key !== columnKey) {
       return <ArrowUpDown className="w-4 h-4 text-slate-400 cursor-pointer hover:text-slate-600" />
@@ -226,7 +267,7 @@ export default function OrdersTable({
               {visibleColumns.restaurant && (
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
-                    <span>Restaurant</span>
+                    <span>{isGrocery ? "Store" : "Restaurant"}</span>
                     <button onClick={() => handleSort('restaurant')} className="flex items-center">
                       {getSortIcon('restaurant')}
                     </button>
@@ -236,7 +277,7 @@ export default function OrdersTable({
               {visibleColumns.foodItems && (
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider min-w-[200px]">
                   <div className="flex items-center gap-2">
-                    <span>Food Items</span>
+                    <span>{isGrocery ? "Items" : "Food Items"}</span>
                     <ArrowUpDown className="w-4 h-4 text-slate-400 opacity-50" />
                   </div>
                 </th>
@@ -290,8 +331,8 @@ export default function OrdersTable({
           </thead>
           <tbody className="bg-white divide-y divide-slate-100">
             {paginatedOrders.map((order, index) => (
-              <tr 
-                key={order.orderId} 
+              <tr
+                key={order.orderId}
                 className="hover:bg-slate-50 transition-colors"
               >
                 {visibleColumns.si && (
@@ -372,7 +413,7 @@ export default function OrdersTable({
                     {(() => {
                       // Determine payment type display
                       let paymentTypeDisplay = order.paymentType;
-                      
+
                       if (!paymentTypeDisplay) {
                         const paymentMethod = order.payment?.method || order.paymentMethod;
                         if (paymentMethod === 'cash' || paymentMethod === 'cod') {
@@ -383,22 +424,21 @@ export default function OrdersTable({
                           paymentTypeDisplay = 'Online';
                         }
                       }
-                      
+
                       // Override if payment method is wallet but paymentType is not set correctly
                       const paymentMethod = order.payment?.method || order.paymentMethod;
                       if (paymentMethod === 'wallet' && paymentTypeDisplay !== 'Wallet') {
                         paymentTypeDisplay = 'Wallet';
                       }
-                      
+
                       const isCod = paymentTypeDisplay === 'Cash on Delivery';
                       const isWallet = paymentTypeDisplay === 'Wallet';
-                      
+
                       return (
-                        <span className={`text-sm font-medium ${
-                          isCod ? 'text-amber-600' : 
-                          isWallet ? 'text-purple-600' : 
-                          'text-emerald-600'
-                        }`}>
+                        <span className={`text-sm font-medium ${isCod ? 'text-amber-600' :
+                            isWallet ? 'text-purple-600' :
+                              'text-emerald-600'
+                          }`}>
                           {paymentTypeDisplay}
                         </span>
                       );
@@ -422,8 +462,8 @@ export default function OrdersTable({
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex flex-col gap-1">
                       <div className="flex items-center gap-2">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.orderStatus)}`}>
-                          {order.orderStatus}
+                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.orderStatus, isGrocery)}`}>
+                          {isGrocery ? getGroceryStatusLabel(order.orderStatus) : order.orderStatus}
                         </span>
                         <span className="text-xs text-slate-500">{order.deliveryType}</span>
                       </div>
@@ -435,9 +475,9 @@ export default function OrdersTable({
                       {order.cancellationReason && (
                         <div className="text-xs text-red-600 mt-1">
                           <span className="font-medium">
-                            {order.cancelledBy === 'user' ? 'Cancelled by User - ' : 
-                             order.cancelledBy === 'restaurant' ? 'Cancelled by Restaurant - ' : 
-                             'Reason: '}
+                            {order.cancelledBy === 'user' ? 'Cancelled by User - ' :
+                              order.cancelledBy === 'restaurant' ? (isGrocery ? 'Cancelled by Store - ' : 'Cancelled by Restaurant - ') :
+                                'Reason: '}
                           </span>
                           {order.cancellationReason}
                         </div>
@@ -448,14 +488,14 @@ export default function OrdersTable({
                 {visibleColumns.actions && (
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <div className="flex items-center justify-center gap-2">
-                      <button 
+                      <button
                         onClick={() => onViewOrder(order)}
                         className="p-1.5 rounded text-orange-600 hover:bg-orange-50 transition-colors"
                         title="View Details"
                       >
                         <Eye className="w-4 h-4" />
                       </button>
-                      <button 
+                      <button
                         onClick={() => onPrintOrder(order)}
                         className="p-1.5 rounded text-blue-600 hover:bg-blue-50 transition-colors"
                         title="Print Order"
@@ -526,11 +566,12 @@ export default function OrdersTable({
                       {/* Show Refund button or Refunded status for cancelled orders with Online/Wallet payment (restaurant or user cancelled) */}
                       {(() => {
                         // Check if order is cancelled by restaurant or user
-                        const isCancelled = order.orderStatus === "Cancelled by Restaurant" || 
-                                          order.orderStatus === "Cancelled" || 
-                                          order.orderStatus === "Cancelled by User" ||
-                                          (order.status === "cancelled" && (order.cancelledBy === "user" || order.cancelledBy === "restaurant"));
-                        
+                        const isCancelled = order.orderStatus === "Cancelled by Restaurant" ||
+                          order.orderStatus === "Cancelled by Store" ||
+                          order.orderStatus === "Cancelled" ||
+                          order.orderStatus === "Cancelled by User" ||
+                          (order.status === "cancelled" && (order.cancelledBy === "user" || order.cancelledBy === "restaurant"));
+
                         // Show refund only for non-COD/cash payments.
                         const paymentType = String(order.paymentType || "").toLowerCase();
                         const paymentMethod = String(order.payment?.method || order.paymentMethod || "").toLowerCase();
@@ -546,35 +587,33 @@ export default function OrdersTable({
 
                         return isCancelled && !isCodPayment;
                       })() && (
-                        <>
-                          {order.refundStatus === 'processed' || order.refundStatus === 'initiated' ? (
-                            <span className={`px-3 py-1.5 rounded-md text-xs font-medium ${
-                              order.paymentType === "Wallet" || order.payment?.method === "wallet"
-                                ? "bg-purple-100 text-purple-700"
-                                : "bg-emerald-100 text-emerald-700"
-                            }`}>
-                              {order.paymentType === "Wallet" || order.payment?.method === "wallet" 
-                                ? "Wallet Refunded" 
-                                : "Refunded"}
-                            </span>
-                          ) : onRefund ? (
-                            <button 
-                              onClick={() => onRefund(order)}
-                              className={`px-3 py-1.5 rounded-md text-white text-xs font-medium hover:opacity-90 transition-colors shadow-sm flex items-center gap-1.5 ${
-                                order.paymentType === "Wallet" || order.payment?.method === "wallet"
-                                  ? "bg-purple-600 hover:bg-purple-700"
-                                  : "bg-blue-600 hover:bg-blue-700"
-                              }`}
-                              title={order.paymentType === "Wallet" || order.payment?.method === "wallet"
-                                ? "Process Wallet Refund (Add to user wallet)"
-                                : "Process Refund via Razorpay"}
-                            >
-                              <span className="text-sm">₹</span>
-                              <span>Refund</span>
-                            </button>
-                          ) : null}
-                        </>
-                      )}
+                          <>
+                            {order.refundStatus === 'processed' || order.refundStatus === 'initiated' ? (
+                              <span className={`px-3 py-1.5 rounded-md text-xs font-medium ${order.paymentType === "Wallet" || order.payment?.method === "wallet"
+                                  ? "bg-purple-100 text-purple-700"
+                                  : "bg-emerald-100 text-emerald-700"
+                                }`}>
+                                {order.paymentType === "Wallet" || order.payment?.method === "wallet"
+                                  ? "Wallet Refunded"
+                                  : "Refunded"}
+                              </span>
+                            ) : onRefund ? (
+                              <button
+                                onClick={() => onRefund(order)}
+                                className={`px-3 py-1.5 rounded-md text-white text-xs font-medium hover:opacity-90 transition-colors shadow-sm flex items-center gap-1.5 ${order.paymentType === "Wallet" || order.payment?.method === "wallet"
+                                    ? "bg-purple-600 hover:bg-purple-700"
+                                    : "bg-blue-600 hover:bg-blue-700"
+                                  }`}
+                                title={order.paymentType === "Wallet" || order.payment?.method === "wallet"
+                                  ? "Process Wallet Refund (Add to user wallet)"
+                                  : "Process Refund via Razorpay"}
+                              >
+                                <span className="text-sm">₹</span>
+                                <span>Refund</span>
+                              </button>
+                            ) : null}
+                          </>
+                        )}
                     </div>
                   </td>
                 )}
@@ -583,7 +622,7 @@ export default function OrdersTable({
           </tbody>
         </table>
       </div>
-      
+
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
@@ -616,11 +655,10 @@ export default function OrdersTable({
                   <button
                     key={pageNum}
                     onClick={() => setCurrentPage(pageNum)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${
-                      currentPage === pageNum
+                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${currentPage === pageNum
                         ? "bg-emerald-500 text-white shadow-md"
                         : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                    }`}
+                      }`}
                   >
                     {pageNum}
                   </button>

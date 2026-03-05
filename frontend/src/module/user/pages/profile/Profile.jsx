@@ -536,10 +536,18 @@ export default function Profile() {
                     Not available
                   </p>
                 )}
-                {/* <Link to="/user/profile/activity" className="flex items-center gap-1 text-green-600 text-sm font-medium">
-                  View activity
-                  <ChevronRight className="h-4 w-4" />
-                </Link> */}
+                {/* Edit Profile Button */}
+                <Link to="/profile/edit">
+                  <motion.button
+                    whileHover={{ scale: 1.04 }}
+                    whileTap={{ scale: 0.97 }}
+                    transition={{ duration: 0.18, type: "spring", stiffness: 300 }}
+                    className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#EF4F5F]/10 text-[#EF4F5F] border border-[#EF4F5F]/30 text-sm font-medium hover:bg-[#EF4F5F]/20 transition-colors"
+                  >
+                    <PenSquare className="h-3.5 w-3.5" />
+                    Edit Profile
+                  </motion.button>
+                </Link>
               </div>
             </div>
           </CardContent>
