@@ -5170,10 +5170,11 @@ export default function DeliveryHome() {
             amount: firstOrder.pricing?.deliveryFee || 0
           }
           
-          setSelectedRestaurant(restaurantData)
-          setShowNewOrderPopup(true)
-          setCountdownSeconds(300) // Reset countdown to 5 minutes
-          console.log('✅ Showing pending order notification:', orderId)
+          void restaurantData
+          // Do not preload popup restaurant data from startup sync.
+          // Do not auto-open popup during startup sync.
+          // Keep existing popup state untouched during sync fetch.
+          console.log('Pending order found during sync; skipping auto-popup:', orderId)
         } else {
           console.log('ℹ️ No pending orders found')
         }

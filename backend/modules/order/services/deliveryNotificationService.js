@@ -5,6 +5,69 @@ import GroceryStore from '../../grocery/models/GroceryStore.js';
 import mongoose from 'mongoose';
 import { calculateDriverEarning } from './deliveryEarningService.js';
 
+const normalizeStoreIdentifier = (value) => {
+  if (!value) return '';
+  if (typeof value === 'string') return value.trim();
+  if (typeof value === 'object') {
+    return String(value?._id || value?.restaurantId || value?.id || '').trim();
+  }
+  return String(value).trim();
+};
+
+const hasValidCoords = (entity) =>
+  Array.isArray(entity?.location?.coordinates) &&
+  entity.location.coordinates.length >= 2 &&
+  Number.isFinite(Number(entity.location.coordinates[0])) &&
+  Number.isFinite(Number(entity.location.coordinates[1]));
+
+const hasAddressDetails = (entity) =>
+  Boolean(
+    String(
+      entity?.location?.formattedAddress ||
+      entity?.location?.address ||
+      entity?.address ||
+      ''
+    ).trim()
+  );
+
+const pickBestStoreDetails = (...candidates) =>
+  candidates
+    .filter(Boolean)
+    .sort((a, b) => {
+      const score = (entity) =>
+        (hasValidCoords(entity) ? 2 : 0) +
+        (hasAddressDetails(entity) ? 1 : 0) +
+        (entity?.name ? 1 : 0);
+      return score(b) - score(a);
+    })[0] || null;
+
+const fetchStoreByIdentifier = async (identifier) => {
+  if (!identifier) return null;
+
+  const byId = mongoose.Types.ObjectId.isValid(identifier)
+    ? [
+        Restaurant.findById(identifier).lean(),
+        GroceryStore.findById(identifier).lean()
+      ]
+    : [Promise.resolve(null), Promise.resolve(null)];
+
+  const [restaurantById, groceryById] = await Promise.all(byId);
+  if (restaurantById || groceryById) {
+    return pickBestStoreDetails(groceryById, restaurantById);
+  }
+
+  const [restaurantByAlt, groceryByAlt] = await Promise.all([
+    Restaurant.findOne({
+      $or: [{ restaurantId: identifier }, { slug: identifier }]
+    }).lean(),
+    GroceryStore.findOne({
+      $or: [{ restaurantId: identifier }, { slug: identifier }]
+    }).lean()
+  ]);
+
+  return pickBestStoreDetails(groceryByAlt, restaurantByAlt);
+};
+
 // Dynamic import to avoid circular dependency
 let getIO = null;
 
@@ -130,38 +193,30 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
       console.log(`✅ Delivery partner ${deliveryPartnerId} is connected via socket in room: ${connectionStatus.room}`);
     }
 
-    // Get restaurant details for pickup location
-    let restaurant = null;
-    if (mongoose.Types.ObjectId.isValid(order.restaurantId)) {
-      restaurant = await Restaurant.findById(order.restaurantId).lean();
-      if (!restaurant) {
-        restaurant = await GroceryStore.findById(order.restaurantId).lean();
-      }
-    }
-    if (!restaurant) {
-      restaurant = await Restaurant.findOne({
-        $or: [
-          { restaurantId: order.restaurantId },
-          { _id: order.restaurantId }
-        ]
-      }).lean();
-      if (!restaurant) {
-        restaurant = await GroceryStore.findOne({
-          $or: [
-            { restaurantId: order.restaurantId },
-            { _id: order.restaurantId }
-          ]
-        }).lean();
-      }
-    }
+    // Get best-available store details (Restaurant/GroceryStore/populated fallback)
+    const populatedStore =
+      order?.restaurantId && typeof order.restaurantId === 'object' ? order.restaurantId : null;
+    const normalizedStoreIdentifier = normalizeStoreIdentifier(order?.restaurantId);
+    const fetchedStore = await fetchStoreByIdentifier(normalizedStoreIdentifier);
+    const restaurant = pickBestStoreDetails(populatedStore, fetchedStore);
+    const restaurantLocation = restaurant?.location || null;
+    const resolvedRestaurantName =
+      order?.restaurantName ||
+      restaurant?.name ||
+      'Store';
+    const resolvedRestaurantAddress =
+      restaurantLocation?.formattedAddress ||
+      restaurantLocation?.address ||
+      restaurant?.address ||
+      'Restaurant address';
 
     // Calculate distances
     let pickupDistance = null;
     let deliveryDistance = null;
     
-    if (deliveryPartner.availability?.currentLocation?.coordinates && restaurant?.location?.coordinates) {
+    if (deliveryPartner.availability?.currentLocation?.coordinates && hasValidCoords(restaurant)) {
       const [deliveryLng, deliveryLat] = deliveryPartner.availability.currentLocation.coordinates;
-      const [restaurantLng, restaurantLat] = restaurant.location.coordinates;
+      const [restaurantLng, restaurantLat] = restaurantLocation.coordinates;
       const [customerLng, customerLat] = order.address.location.coordinates;
 
       // Calculate pickup distance (delivery boy to restaurant)
@@ -189,11 +244,12 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
       orderId: order.orderId,
       orderMongoId: order._id.toString(),
       restaurantId: order.restaurantId,
-      restaurantName: order.restaurantName,
-      restaurantLocation: restaurant?.location ? {
-        latitude: restaurant.location.coordinates[1],
-        longitude: restaurant.location.coordinates[0],
-        address: restaurant.location.formattedAddress || restaurant.address || 'Restaurant address'
+      restaurantName: resolvedRestaurantName,
+      restaurantAddress: resolvedRestaurantAddress,
+      restaurantLocation: hasValidCoords(restaurant) ? {
+        latitude: Number(restaurantLocation.coordinates[1]),
+        longitude: Number(restaurantLocation.coordinates[0]),
+        address: resolvedRestaurantAddress
       } : null,
       customerLocation: {
         latitude: order.address.location.coordinates[1],
@@ -375,41 +431,30 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
         .lean();
     }
 
-    // Get restaurant details for complete address
+    // Get restaurant/store details for complete address
     let restaurantAddress = 'Restaurant address';
     let restaurantLocation = null;
+    let resolvedRestaurantName = orderWithUser.restaurantName || '';
     
     if (orderWithUser.restaurantId) {
-      // If restaurantId is populated, use it directly
-      if (typeof orderWithUser.restaurantId === 'object') {
-        restaurantAddress = orderWithUser.restaurantId.address || 
-                          orderWithUser.restaurantId.location?.formattedAddress ||
-                          orderWithUser.restaurantId.location?.address ||
-                          'Restaurant address';
-        restaurantLocation = orderWithUser.restaurantId.location;
-      } else {
-        // If restaurantId is just an ID, fetch restaurant details
-        try {
-          const RestaurantModel = await import('../../restaurant/models/Restaurant.js');
-          const GroceryStoreModel = await import('../../grocery/models/GroceryStore.js');
-          let restaurant = await RestaurantModel.default.findById(orderWithUser.restaurantId)
-            .select('name address location')
-            .lean();
-          if (!restaurant) {
-            restaurant = await GroceryStoreModel.default.findById(orderWithUser.restaurantId)
-              .select('name address location')
-              .lean();
-          }
-          if (restaurant) {
-            restaurantAddress = restaurant.address || 
-                              restaurant.location?.formattedAddress ||
-                              restaurant.location?.address ||
-                              'Restaurant address';
-            restaurantLocation = restaurant.location;
-          }
-        } catch (e) {
-          console.warn('⚠️ Could not fetch restaurant details for notification:', e.message);
+      try {
+        const populatedStore =
+          typeof orderWithUser.restaurantId === 'object' ? orderWithUser.restaurantId : null;
+        const identifier = normalizeStoreIdentifier(orderWithUser.restaurantId);
+        const fetchedStore = await fetchStoreByIdentifier(identifier);
+        const resolvedStore = pickBestStoreDetails(populatedStore, fetchedStore);
+
+        if (resolvedStore) {
+          resolvedRestaurantName = resolvedRestaurantName || resolvedStore.name || '';
+          restaurantAddress =
+            resolvedStore.address ||
+            resolvedStore.location?.formattedAddress ||
+            resolvedStore.location?.address ||
+            'Restaurant address';
+          restaurantLocation = resolvedStore.location || null;
         }
+      } catch (e) {
+        console.warn('Could not fetch restaurant details for notification:', e.message);
       }
     }
 
@@ -496,7 +541,7 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
       mongoId: orderWithUser._id?.toString(),
       orderMongoId: orderWithUser._id?.toString(), // Also include orderMongoId for compatibility
       status: orderWithUser.status || 'preparing',
-      restaurantName: orderWithUser.restaurantName || orderWithUser.restaurantId?.name,
+      restaurantName: resolvedRestaurantName || orderWithUser.restaurantId?.name || 'Store',
       restaurantAddress: restaurantAddress,
       restaurantLocation: restaurantLocation ? {
         latitude: restaurantLocation.coordinates?.[1],

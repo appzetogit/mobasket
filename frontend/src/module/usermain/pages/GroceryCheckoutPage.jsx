@@ -768,10 +768,13 @@ export default function GroceryCheckoutPage() {
             label: "Store",
           }),
         );
-      } catch {
+      } catch (error) {
+        console.error("Failed to verify store availability on checkout:", error);
+        // Don't hard-block checkout on transient availability API failures.
+        // Final validation still happens on order creation in backend.
         setStoreAvailability({
-          isAvailable: false,
-          reason: "Unable to verify store availability right now.",
+          isAvailable: true,
+          reason: "",
         });
       }
     };
