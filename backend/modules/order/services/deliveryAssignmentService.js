@@ -4,7 +4,7 @@ import Zone from '../../admin/models/Zone.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import GroceryStore from '../../grocery/models/GroceryStore.js';
 import DeliveryWallet from '../../delivery/models/DeliveryWallet.js';
-import { resolveGlobalCODLimit } from '../../delivery/services/codLimitService.js';
+import { resolveGlobalCODLimit, resolveOrderCODAmount } from '../../delivery/services/codLimitService.js';
 import mongoose from 'mongoose';
 import { findNearestOnlineDeliveryPartnersFromFirebase } from '../../../shared/services/firebaseRealtimeService.js';
 
@@ -165,12 +165,18 @@ async function getCashLimitEligibleDeliveryPartnerIds(deliveryPartners = [], inc
 
   const wallets = validObjectIds.length > 0
     ? await DeliveryWallet.find({ deliveryId: { $in: validObjectIds } })
-        .select('deliveryId cashInHand')
+        .select('deliveryId cashInHand codCashCollected')
         .lean()
     : [];
 
   const cashInHandByDeliveryId = new Map(
-    wallets.map((wallet) => [String(wallet.deliveryId), Math.max(0, Number(wallet.cashInHand) || 0)])
+    wallets.map((wallet) => {
+      const cashCollected = Math.max(
+        0,
+        Number(wallet?.codCashCollected ?? wallet?.cashInHand ?? 0) || 0
+      );
+      return [String(wallet.deliveryId), cashCollected];
+    })
   );
   const deliveryLimitById = new Map(
     deliveryPartners.map((partner) => {
@@ -612,11 +618,7 @@ export async function assignOrderToDeliveryBoy(order, restaurantLat, restaurantL
 
     // Get restaurantId from order if not provided
     const orderRestaurantId = restaurantId || order.restaurantId;
-    const paymentMethod = String(order?.payment?.method || '').toLowerCase();
-    const incomingCodAmount =
-      paymentMethod === 'cash' || paymentMethod === 'cod'
-        ? Math.max(0, Number(order?.pricing?.total) || 0)
-        : 0;
+    const incomingCodAmount = await resolveOrderCODAmount(order);
     
     // Find nearest delivery boy (with zone-based filtering)
     const requiredZoneId = order?.assignmentInfo?.zoneId ? String(order.assignmentInfo.zoneId) : null;

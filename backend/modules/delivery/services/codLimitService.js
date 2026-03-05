@@ -54,6 +54,7 @@ export const getDeliveryCODSummary = async (deliveryId) => {
     codLimit: Number(codLimit),
     cashCollected,
     remainingLimit,
+    canDeposit: cashCollected > 0,
   };
 };
 
