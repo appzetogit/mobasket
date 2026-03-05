@@ -62,7 +62,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
       (order.adminApprovalStatus === "pending" || !order.adminApprovalStatus)
     ).length
   }
-  
+
   const fetchOrders = async ({ showLoader = true } = {}) => {
     try {
       if (showLoader) setIsLoading(true)
@@ -70,7 +70,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         page: 1,
         limit: 1000,
         status: statusKey === "all" ? undefined :
-               statusKey === "restaurant-cancelled" ? "cancelled" : statusKey,
+          statusKey === "restaurant-cancelled" ? "cancelled" : statusKey,
         cancelledBy: statusKey === "restaurant-cancelled" ? "restaurant" : undefined,
         platform: activePlatform,
       }
@@ -105,7 +105,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
       if (showLoader) setIsLoading(false)
     }
   }
-  
+
   // Fetch orders from backend API
   useEffect(() => {
     fetchOrders({ showLoader: true })
@@ -278,7 +278,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
   // Handle refund button click - show modal for wallet payments, confirm dialog for others
   const handleRefund = (order) => {
     const isWalletPayment = order.paymentType === "Wallet" || order.payment?.method === "wallet";
-    
+
     if (isWalletPayment) {
       // Show modal for wallet refunds
       setSelectedOrderForRefund(order)
@@ -286,11 +286,11 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
     } else {
       // For non-wallet payments, use the old confirm dialog flow
       const confirmMessage = `Are you sure you want to process refund for order ${order.orderId}?\n\nThis will initiate a Razorpay refund to the customer's original payment method.`;
-      
+
       if (!confirm(confirmMessage)) {
         return
       }
-      
+
       processRefund(order, null) // null amount means use default
     }
   }
@@ -301,13 +301,13 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
     // Backend accepts either MongoDB ObjectId (24 chars) or orderId string
     // Using MongoDB _id is more reliable for route matching (no dashes/special chars)
     const orderIdToUse = order.id || order._id || order.orderId
-    
+
     if (!orderIdToUse) {
       console.error('❌ No orderId found in order object:', order)
       toast.error('Order ID not found. Please refresh the page and try again.')
       return
     }
-    
+
     console.log('🔍 Order details for refund:', {
       orderIdString: order.orderId,
       mongoId: order.id,
@@ -318,7 +318,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
 
     try {
       setProcessingRefund(orderIdToUse)
-      
+
       console.log('🔍 Processing refund for order:', {
         orderId: order.orderId,
         id: order.id,
@@ -327,20 +327,20 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         refundAmount,
         url: `/api/admin/orders/${orderIdToUse}/refund`
       })
-      
+
       // Include refundAmount in request body if provided (ensure it's a number)
       const requestData = refundAmount !== null ? { refundAmount: parseFloat(refundAmount) } : {}
       console.log('📤 Request data being sent:', requestData)
       const response = await adminAPI.processRefund(orderIdToUse, requestData)
-      
+
       if (response.data?.success) {
         const isWalletPayment = order.paymentType === "Wallet" || order.payment?.method === "wallet";
-        toast.success(response.data?.message || (isWalletPayment 
+        toast.success(response.data?.message || (isWalletPayment
           ? `Wallet refund of ₹${refundAmount || order.totalAmount} processed successfully for order ${order.orderId}`
           : `Refund initiated successfully for order ${order.orderId}`))
         // Update the order in the local state immediately to show "Refunded" status
-        setOrders(prevOrders => 
-          prevOrders.map(o => 
+        setOrders(prevOrders =>
+          prevOrders.map(o =>
             (o.id === order.id || o.orderId === order.orderId)
               ? { ...o, refundStatus: 'processed' } // Wallet refunds are instant, so mark as processed
               : o
@@ -350,8 +350,8 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         const params = {
           page: 1,
           limit: 1000,
-          status: statusKey === "all" ? undefined : 
-                 statusKey === "restaurant-cancelled" ? "cancelled" : statusKey,
+          status: statusKey === "all" ? undefined :
+            statusKey === "restaurant-cancelled" ? "cancelled" : statusKey,
           cancelledBy: statusKey === "restaurant-cancelled" ? "restaurant" : undefined,
           platform: activePlatform,
         }
@@ -365,7 +365,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
       }
     } catch (error) {
       console.error("❌ Error processing refund:", error)
-      
+
       // Log full error details for debugging
       const errorDetails = {
         message: error.message,
@@ -385,10 +385,10 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         stack: error.stack
       }
       console.error("❌ Error details:", JSON.stringify(errorDetails, null, 2))
-      
+
       // Show more specific error message
       let errorMessage = "Failed to process refund"
-      
+
       if (error.response) {
         // Server responded with error
         if (error.response.status === 404) {
@@ -409,7 +409,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         // Error in setting up the request
         errorMessage = error.message || "Failed to process refund"
       }
-      
+
       console.error("❌ Final error message:", errorMessage)
       toast.error(errorMessage)
     } finally {
@@ -475,9 +475,9 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
 
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen w-full max-w-full overflow-x-hidden">
-      <OrdersTopbar 
-        title={config.title} 
-        count={count} 
+      <OrdersTopbar
+        title={config.title}
+        count={count}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         onFilterClick={() => setIsFilterOpen(true)}
@@ -514,6 +514,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         isOpen={isViewOrderOpen}
         onOpenChange={setIsViewOrderOpen}
         order={selectedOrder}
+        isGrocery={activePlatform === "mogrocery"}
       />
       <RefundModal
         isOpen={refundModalOpen}
@@ -522,8 +523,8 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         onConfirm={handleRefundConfirm}
         isProcessing={processingRefund !== null}
       />
-      <OrdersTable 
-        orders={filteredOrders} 
+      <OrdersTable
+        orders={filteredOrders}
         visibleColumns={visibleColumns}
         onViewOrder={handleViewOrder}
         onPrintOrder={handlePrintOrder}
@@ -535,6 +536,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         onResendRiderNotification={handleResendRiderNotification}
         onShowRiderDetails={handleShowRiderDetails}
         onCancelOrder={handleCancelApprovedOrder}
+        isGrocery={activePlatform === "mogrocery"}
       />
     </div>
   )

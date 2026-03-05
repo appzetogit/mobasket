@@ -50,7 +50,7 @@ export default function ProfileDetails() {
         }
       } catch (error) {
         console.error("Error fetching profile:", error)
-        
+
         // More detailed error handling
         if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
           toast.error("Cannot connect to server. Please check if backend is running.")
@@ -97,51 +97,48 @@ export default function ProfileDetails() {
       </div>
 
       {/* Profile Picture Area */}
-      <div className="relative w-full bg-gray-200 overflow-hidden flex items-center justify-center">
-        {loading ? (
-          <div className="w-full h-72 bg-gray-200" />
-        ) : profileImageUrl ? (
-          <img
-            src={profileImageUrl}
-            alt="Profile"
-            className="w-full h-auto max-h-96 object-contain"
-          />
-        ) : (
-          <div className="w-full h-72 bg-gray-200" />
-        )}
-        {imagePreview || profile?.profileImage?.url || profile?.documents?.photo ? (
-          <div className="relative w-full group">
-            <img
-              src={imagePreview || profile?.profileImage?.url || profile?.documents?.photo}
-              alt="Profile"
-              className="w-full h-auto max-h-96 object-contain"
-            />
-            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploadingProfilePhoto}
-                className="bg-white text-black px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors flex items-center gap-2"
-              >
-                <Camera className="w-4 h-4" />
-                {isUploadingProfilePhoto ? "Uploading..." : "Change Photo"}
-              </button>
-            </div>
+      <div className="bg-white px-4 py-6 flex flex-col items-center gap-3 border-b border-gray-100">
+        {/* Circle Avatar */}
+        <div className="relative">
+          <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-200 border-2 border-gray-300 flex items-center justify-center">
+            {loading ? (
+              <div className="w-full h-full bg-gray-200 animate-pulse" />
+            ) : (imagePreview || profileImageUrl) ? (
+              <img
+                src={imagePreview || profileImageUrl}
+                alt="Profile"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <Camera className="w-10 h-10 text-gray-400" />
+            )}
           </div>
-        ) : (
-          <div className="w-full py-16 flex flex-col items-center justify-center">
-            <div className="w-32 h-32 rounded-full bg-gray-300 flex items-center justify-center mb-4">
-              <Camera className="w-12 h-12 text-gray-500" />
-            </div>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={isUploadingProfilePhoto}
-              className="bg-[#00B761] text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-[#00A055] transition-colors flex items-center gap-2"
-            >
-              <Upload className="w-4 h-4" />
-              {isUploadingProfilePhoto ? "Uploading..." : "Upload Profile Photo"}
-            </button>
-          </div>
+
+          {/* Camera button overlay */}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploadingProfilePhoto}
+            className="absolute bottom-0 right-0 bg-[#00B761] text-white rounded-full p-1.5 shadow-md hover:bg-[#00A055] transition-colors"
+            title="Change photo"
+          >
+            <Camera className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
+        {/* Name */}
+        <div className="text-center">
+          <p className="text-base font-semibold text-gray-900">
+            {loading ? "Loading..." : profile?.name || "Rider"}
+          </p>
+          {profile?.deliveryId && (
+            <p className="text-xs text-gray-500 mt-0.5">{profile.deliveryId}</p>
+          )}
+        </div>
+
+        {isUploadingProfilePhoto && (
+          <p className="text-xs text-gray-500">Uploading photo...</p>
         )}
+
         <input
           ref={fileInputRef}
           type="file"
@@ -151,21 +148,18 @@ export default function ProfileDetails() {
             const file = e.target.files?.[0]
             if (!file) return
 
-            // Validate file type
             const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
             if (!allowedTypes.includes(file.type)) {
               toast.error("Invalid file type. Please upload PNG, JPG, JPEG, or WEBP.")
               return
             }
 
-            // Validate file size (max 5MB)
-            const maxSize = 5 * 1024 * 1024 // 5MB
+            const maxSize = 5 * 1024 * 1024
             if (file.size > maxSize) {
               toast.error("File size exceeds 5MB limit.")
               return
             }
 
-            // Create preview
             const reader = new FileReader()
             reader.onloadend = () => {
               setImagePreview(reader.result)
@@ -174,19 +168,17 @@ export default function ProfileDetails() {
 
             setIsUploadingProfilePhoto(true)
             try {
-              // Upload image
               const uploadResponse = await uploadAPI.uploadMedia(file, {
                 folder: 'delivery-profiles'
               })
-              
+
               const imageUrl = uploadResponse?.data?.data?.url || uploadResponse?.data?.url
               const publicId = uploadResponse?.data?.data?.publicId || uploadResponse?.data?.publicId
-              
+
               if (!imageUrl) {
                 throw new Error("Failed to get uploaded image URL")
               }
 
-              // Update profile with uploaded image
               await deliveryAPI.updateProfile({
                 profileImage: {
                   url: imageUrl,
@@ -195,13 +187,12 @@ export default function ProfileDetails() {
               })
 
               toast.success("Profile photo updated successfully")
-              
-              // Refetch profile
+
               const response = await deliveryAPI.getProfile()
               if (response?.data?.success && response?.data?.data?.profile) {
                 setProfile(response.data.data.profile)
               }
-              
+
               setImagePreview(null)
             } catch (error) {
               console.error("Error uploading profile photo:", error)
@@ -229,25 +220,25 @@ export default function ProfileDetails() {
               </p>
             </div>
             <div className="divide-y divide-gray-200">
-            <div className="p-2 px-3 flex items-center justify-between">
+              <div className="p-2 px-3 flex items-center justify-between">
                 <p className="text-sm text-gray-900">Zone</p>
                 <p className="text-base text-gray-900">
                   {profile?.availability?.zones?.length > 0 ? "Assigned" : "Not assigned"}
                 </p>
               </div>
-            <div className="p-2 px-3 flex items-center justify-between">
+              <div className="p-2 px-3 flex items-center justify-between">
                 <p className="text-sm text-gray-900">City</p>
                 <p className="text-base text-gray-900">
                   {profile?.location?.city || "N/A"}
                 </p>
               </div>
-            <div className="p-2 px-3 flex items-center justify-between">
+              <div className="p-2 px-3 flex items-center justify-between">
                 <p className="text-sm text-gray-900">Vehicle type</p>
                 <p className="text-base text-gray-900 capitalize">
                   {profile?.vehicle?.type || "N/A"}
                 </p>
               </div>
-            <div className="p-2 px-3 flex items-center justify-between">
+              <div className="p-2 px-3 flex items-center justify-between">
                 <p className="text-sm text-gray-900">Vehicle number</p>
                 {vehicleNumber ? (
                   <div className="flex items-center gap-2">
@@ -444,7 +435,7 @@ export default function ProfileDetails() {
               <div className="w-full align-center flex content-center justify-between">
                 <p className="text-sm text-gray-900 mb-1">Account Number</p>
                 <p className="text-base text-gray-900">
-                  {profile?.documents?.bankDetails?.accountNumber 
+                  {profile?.documents?.bankDetails?.accountNumber
                     ? `****${profile.documents.bankDetails.accountNumber.slice(-4)}`
                     : "-"}
                 </p>
@@ -532,36 +523,38 @@ export default function ProfileDetails() {
       </BottomPopup>
 
       {/* Document Image Modal */}
-      {showDocumentModal && selectedDocument && (
-        <div className="fixed inset-0 z-50 bg-black bg-opacity-75 flex items-center justify-center p-4">
-          <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-auto relative">
-            {/* Close Button */}
-            <button
-              onClick={() => {
-                setShowDocumentModal(false)
-                setSelectedDocument(null)
-              }}
-              className="absolute top-4 right-4 z-10 bg-white rounded-full p-2 shadow-lg hover:bg-gray-100 transition-colors"
-            >
-              <X className="w-5 h-5 text-gray-600" />
-            </button>
-            
-            {/* Document Title */}
-            <div className="p-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">{selectedDocument.name}</h3>
-            </div>
-            
-            {/* Document Image */}
-            <div className="p-4">
-              <img
-                src={selectedDocument.url}
-                alt={selectedDocument.name}
-                className="w-full h-auto rounded-lg"
-              />
+      {
+        showDocumentModal && selectedDocument && (
+          <div className="fixed inset-0 z-50 bg-black bg-opacity-75 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-auto relative">
+              {/* Close Button */}
+              <button
+                onClick={() => {
+                  setShowDocumentModal(false)
+                  setSelectedDocument(null)
+                }}
+                className="absolute top-4 right-4 z-10 bg-white rounded-full p-2 shadow-lg hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-600" />
+              </button>
+
+              {/* Document Title */}
+              <div className="p-4 border-b border-gray-200">
+                <h3 className="text-lg font-semibold text-gray-900">{selectedDocument.name}</h3>
+              </div>
+
+              {/* Document Image */}
+              <div className="p-4">
+                <img
+                  src={selectedDocument.url}
+                  alt={selectedDocument.name}
+                  className="w-full h-auto rounded-lg"
+                />
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Bank Details Edit Popup */}
       <BottomPopup
@@ -594,9 +587,8 @@ export default function ProfileDetails() {
                 }
               }}
               placeholder="Enter account holder name"
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                bankDetailsErrors.accountHolderName ? "border-red-500" : "border-gray-300"
-              }`}
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${bankDetailsErrors.accountHolderName ? "border-red-500" : "border-gray-300"
+                }`}
               pattern="[a-zA-Z\s'-]+"
               title="Account holder name can only contain letters, spaces, apostrophes, and hyphens"
             />
@@ -626,9 +618,8 @@ export default function ProfileDetails() {
               }}
               placeholder="Enter account number (9-18 digits)"
               maxLength={18}
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                bankDetailsErrors.accountNumber ? "border-red-500" : "border-gray-300"
-              }`}
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${bankDetailsErrors.accountNumber ? "border-red-500" : "border-gray-300"
+                }`}
               pattern="[0-9]{9,18}"
               title="Account number must be between 9 and 18 digits"
             />
@@ -662,9 +653,8 @@ export default function ProfileDetails() {
               }}
               placeholder="Enter IFSC code (e.g., HDFC0001234)"
               maxLength={11}
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 uppercase ${
-                bankDetailsErrors.ifscCode ? "border-red-500" : "border-gray-300"
-              }`}
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 uppercase ${bankDetailsErrors.ifscCode ? "border-red-500" : "border-gray-300"
+                }`}
               pattern="[A-Z]{4}0[A-Z0-9]{6}"
               title="IFSC code format: AAAA0####0 (4 letters, 1 zero, 6 alphanumeric)"
             />
@@ -697,9 +687,8 @@ export default function ProfileDetails() {
                 }
               }}
               placeholder="Enter bank name"
-              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${
-                bankDetailsErrors.bankName ? "border-red-500" : "border-gray-300"
-              }`}
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${bankDetailsErrors.bankName ? "border-red-500" : "border-gray-300"
+                }`}
               pattern="[a-zA-Z\s'&-]+"
               title="Bank name can only contain letters, spaces, apostrophes, hyphens, and ampersands"
             />
@@ -716,7 +705,7 @@ export default function ProfileDetails() {
             onClick={async () => {
               // Validate
               const errors = {}
-              
+
               // Account Holder Name validation
               if (!bankDetails.accountHolderName.trim()) {
                 errors.accountHolderName = "Account holder name is required"
@@ -728,7 +717,7 @@ export default function ProfileDetails() {
                   errors.accountHolderName = "Account holder name must be at least 2 characters"
                 }
               }
-              
+
               // Account Number validation
               if (!bankDetails.accountNumber.trim()) {
                 errors.accountNumber = "Account number is required"
@@ -738,7 +727,7 @@ export default function ProfileDetails() {
                   errors.accountNumber = "Account number must be between 9 and 18 digits"
                 }
               }
-              
+
               // IFSC Code validation
               if (!bankDetails.ifscCode.trim()) {
                 errors.ifscCode = "IFSC code is required"
@@ -748,7 +737,7 @@ export default function ProfileDetails() {
                   errors.ifscCode = "Invalid IFSC code format. Format: AAAA0####0 (e.g., HDFC0001234)"
                 }
               }
-              
+
               // Bank Name validation
               if (!bankDetails.bankName.trim()) {
                 errors.bankName = "Bank name is required"
@@ -795,18 +784,17 @@ export default function ProfileDetails() {
               }
             }}
             disabled={isUpdatingBankDetails}
-            className={`w-full py-3 rounded-lg font-medium text-white transition-colors ${
-              isUpdatingBankDetails
-                ? "bg-gray-400 cursor-not-allowed"
-                : "bg-[#00B761] hover:bg-[#00A055]"
-            }`}
+            className={`w-full py-3 rounded-lg font-medium text-white transition-colors ${isUpdatingBankDetails
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-[#00B761] hover:bg-[#00A055]"
+              }`}
           >
             {isUpdatingBankDetails ? "Updating..." : "Save Bank Details"}
           </button>
         </div>
       </BottomPopup>
 
-    </div>
+    </div >
   )
 }
 
