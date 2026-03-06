@@ -1039,33 +1039,44 @@ export const markOrderReady = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, `Order cannot be marked as ready. Current status: ${order.status}`);
     }
 
-    // Update order status and tracking
     const now = new Date();
-    order.status = 'ready';
-    if (!order.tracking) {
-      order.tracking = {};
+    const updatedOrderDoc = await Order.findOneAndUpdate(
+      {
+        _id: order._id,
+        restaurantId,
+        status: 'preparing'
+      },
+      {
+        $set: {
+          status: 'ready',
+          'tracking.ready': {
+            status: true,
+            timestamp: now
+          }
+        }
+      },
+      { new: true }
+    );
+
+    if (!updatedOrderDoc) {
+      return errorResponse(res, 409, 'Order was already updated to ready by another process');
     }
-    order.tracking.ready = {
-      status: true,
-      timestamp: now
-    };
-    await order.save();
 
     // Populate order for notifications
-    const populatedOrder = await Order.findById(order._id)
+    const populatedOrder = await Order.findById(updatedOrderDoc._id)
       .populate('restaurantId', 'name location address phone')
       .populate('userId', 'name phone')
       .populate('deliveryPartnerId', 'name phone')
       .lean();
 
     try {
-      await notifyRestaurantOrderUpdate(order._id.toString(), 'ready');
+      await notifyRestaurantOrderUpdate(updatedOrderDoc._id.toString(), 'ready');
     } catch (notifError) {
       console.error('Error sending restaurant notification:', notifError);
     }
 
     try {
-      await emitOrderTrackingUpdate(order, {
+      await emitOrderTrackingUpdate(updatedOrderDoc, {
         status: 'ready',
         message: 'Your food is ready'
       });

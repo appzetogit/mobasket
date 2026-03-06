@@ -4,11 +4,29 @@ import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { HelpCircle, ArrowRight, Phone, Ambulance, AlertTriangle, Shield, ShieldCheck, User } from "lucide-react";
 import { toast } from "sonner";
-import { deliveryAPI } from "@/lib/api";
+import { deliveryAPI } from "@/lib/api";
+import { fetchDeliveryWallet } from "../utils/deliveryWalletState";
 import { useCompanyName } from "@/lib/hooks/useCompanyName";
 
 const LS_KEY = "app:isOnline";
-const TOAST_ID_KEY = "feedNavbar-onlineStatus";
+const TOAST_ID_KEY = "feedNavbar-onlineStatus";
+const CASH_LIMIT_TOAST_ID = "feedNavbar-cashLimit";
+
+const getAvailableCashLimit = (walletState) => {
+  const totalCashLimit = Number(walletState?.totalCashLimit) || 0;
+  const cashInHand =
+    Number(walletState?.cashCollected ?? walletState?.cashInHand) || 0;
+  const deductions = Number(walletState?.deductions) || 0;
+
+  if (Number.isFinite(Number(walletState?.availableCashLimit))) {
+    return Math.max(0, Number(walletState.availableCashLimit));
+  }
+
+  return Math.max(0, totalCashLimit - cashInHand - deductions);
+};
+
+const isCashLimitReached = (walletState) =>
+  getAvailableCashLimit(walletState) <= 0;
 
 /** Minimal bottom-sheet popup (self-contained) */
 function BottomPopup({
@@ -58,14 +76,18 @@ export default function FeedNavbar({ className = "" }) {
   const navigate = useNavigate();
 
   // 1) Init from localStorage (no toast on mount)
-  const [isOnline, setIsOnline] = useState(() => {
+  const [isOnline, setIsOnline] = useState(() => {
     try {
       const raw = localStorage.getItem(LS_KEY);
       return raw ? JSON.parse(raw) === true : false;
     } catch {
       return false;
     }
-  });
+  });
+  const [walletState, setWalletState] = useState(null);
+  const [walletLoaded, setWalletLoaded] = useState(false);
+  const [showDepositCashPopup, setShowDepositCashPopup] = useState(false);
+  const cashLimitPromptShownRef = useRef(false);
 
   // 2) Persist to localStorage whenever it changes and notify other components
   useEffect(() => {
@@ -107,13 +129,82 @@ export default function FeedNavbar({ className = "" }) {
     }
   };
 
-  const handleProfileClick = () => navigate("/delivery/profile");
+  const handleProfileClick = () => navigate("/delivery/profile");
+
+  const promptCashDeposit = () => {
+    setShowDepositCashPopup(true);
+    toast.dismiss(CASH_LIMIT_TOAST_ID);
+    toast.error("Available cash limit is 0. Deposit cash to continue taking orders.", {
+      id: CASH_LIMIT_TOAST_ID,
+      style: { marginTop: "80px" }
+    });
+  };
+
+  const goToDepositCash = () => {
+    setShowDepositCashPopup(false);
+    navigate("/delivery/limit-settlement");
+  };
 
-  const handleToggle = async (e) => {
+  useEffect(() => {
+    const loadWallet = async () => {
+      try {
+        const nextWalletState = await fetchDeliveryWallet();
+        setWalletState(nextWalletState);
+      } catch (error) {
+        console.error("Error fetching delivery wallet for navbar:", error);
+      } finally {
+        setWalletLoaded(true);
+      }
+    };
+
+    loadWallet();
+
+    const handleWalletUpdate = () => {
+      loadWallet();
+    };
+
+    window.addEventListener("deliveryWalletStateUpdated", handleWalletUpdate);
+
+    return () => {
+      window.removeEventListener("deliveryWalletStateUpdated", handleWalletUpdate);
+    };
+  }, []);
+
+  const cashLimitReached =
+    walletLoaded && walletState != null && isCashLimitReached(walletState);
+
+  useEffect(() => {
+    if (!walletLoaded) return;
+
+    if (!cashLimitReached) {
+      cashLimitPromptShownRef.current = false;
+      return;
+    }
+
+    if (!cashLimitPromptShownRef.current) {
+      cashLimitPromptShownRef.current = true;
+      promptCashDeposit();
+    }
+
+    if (!isOnline) return;
+
+    setIsOnline(false);
+    deliveryAPI.updateOnlineStatus(false).catch((error) => {
+      console.error("Error forcing rider offline after COD limit exhaustion:", error);
+    });
+  }, [cashLimitReached, isOnline, walletLoaded]);
+
+  const handleToggle = async (e) => {
     e?.preventDefault?.();
     e?.stopPropagation?.();
 
-    const next = !isOnline;
+    const next = !isOnline;
+
+    if (next && cashLimitReached) {
+      setIsOnline(false);
+      promptCashDeposit();
+      return;
+    }
     
     // Update state immediately for better UX
     setIsOnline(next);
@@ -542,6 +633,28 @@ export default function FeedNavbar({ className = "" }) {
           ))}
         </div>
       </BottomPopup>
-    </>
+      <BottomPopup
+        isOpen={showDepositCashPopup}
+        onClose={() => setShowDepositCashPopup(false)}
+        title="Deposit cash to continue"
+        showCloseButton={true}
+        closeOnBackdropClick={true}
+        maxHeight="45vh"
+      >
+        <div className="space-y-4 pb-2">
+          <p className="text-sm text-gray-700">
+            Your available cash limit is exhausted. Deposit collected cash before going online again.
+          </p>
+          <button
+            type="button"
+            onClick={goToDepositCash}
+            className="w-full rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white"
+          >
+            Deposit cash
+          </button>
+        </div>
+      </BottomPopup>
+
+    </>
   );
 }
