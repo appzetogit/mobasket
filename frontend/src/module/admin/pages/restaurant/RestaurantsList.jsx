@@ -720,7 +720,7 @@ export default function RestaurantsList() {
       try {
         await adminAPI.deleteRestaurant(restaurantId)
         
-        // Remove from local state on success
+        // Remove from local state on success.
         setRestaurants(prevRestaurants => 
           prevRestaurants.filter(r => 
             r.id !== restaurant.id && r._id !== restaurant._id
@@ -832,6 +832,17 @@ export default function RestaurantsList() {
                 <Plus className="w-4 h-4" />
                 <span>Add {entityLabel}</span>
               </button>
+              <select
+                value={filters.all}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, all: e.target.value }))
+                }
+                className="px-3 py-2.5 text-sm rounded-lg border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="All">All Status</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
               <div className="relative flex-1 sm:flex-initial min-w-[250px]">
                 <input
                   type="text"

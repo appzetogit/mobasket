@@ -201,6 +201,17 @@ const applyPlatformGuard = function applyPlatformGuard() {
   this.setQuery(withGroceryPlatform(current));
 };
 
+const canHardDeleteBusinessEntities = () => process.env.ALLOW_HARD_DELETE_BUSINESS_ENTITIES === 'true';
+
+const blockGroceryStoreHardDelete = function blockGroceryStoreHardDelete(next) {
+  if (canHardDeleteBusinessEntities()) return next();
+  const error = new Error(
+    'Hard delete blocked for GroceryStore. Use soft delete (isActive=false) or set ALLOW_HARD_DELETE_BUSINESS_ENTITIES=true explicitly.'
+  );
+  error.code = 'GROCERY_STORE_HARD_DELETE_BLOCKED';
+  return next(error);
+};
+
 groceryStoreSchema.pre('find', applyPlatformGuard);
 groceryStoreSchema.pre('findOne', applyPlatformGuard);
 groceryStoreSchema.pre('findOneAndUpdate', applyPlatformGuard);
@@ -209,6 +220,14 @@ groceryStoreSchema.pre('countDocuments', applyPlatformGuard);
 groceryStoreSchema.pre('exists', applyPlatformGuard);
 groceryStoreSchema.pre('updateOne', applyPlatformGuard);
 groceryStoreSchema.pre('updateMany', applyPlatformGuard);
+groceryStoreSchema.pre('deleteOne', applyPlatformGuard);
+groceryStoreSchema.pre('deleteMany', applyPlatformGuard);
+
+groceryStoreSchema.pre('deleteOne', { document: true, query: false }, blockGroceryStoreHardDelete);
+groceryStoreSchema.pre('deleteOne', { document: false, query: true }, blockGroceryStoreHardDelete);
+groceryStoreSchema.pre('deleteMany', blockGroceryStoreHardDelete);
+groceryStoreSchema.pre('findOneAndDelete', blockGroceryStoreHardDelete);
+groceryStoreSchema.pre('findByIdAndDelete', blockGroceryStoreHardDelete);
 
 groceryStoreSchema.pre('save', async function onSave(next) {
   if (!this.restaurantId) {

@@ -108,6 +108,7 @@ const restaurantSchema = new mongoose.Schema(
       type: String,
       enum: ['mofood', 'mogrocery'],
       default: 'mofood',
+      immutable: true,
       index: true
     },
     slug: {
@@ -392,6 +393,72 @@ restaurantSchema.methods.comparePassword = async function(candidatePassword) {
   }
   return await bcrypt.compare(candidatePassword, this.password);
 };
+
+const canHardDeleteBusinessEntities = () => process.env.ALLOW_HARD_DELETE_BUSINESS_ENTITIES === 'true';
+const canMutateRestaurantPlatform = () => process.env.ALLOW_RESTAURANT_PLATFORM_MUTATION === 'true';
+
+const blockRestaurantHardDelete = function(next) {
+  if (canHardDeleteBusinessEntities()) return next();
+  const error = new Error(
+    'Hard delete blocked for Restaurant. Use soft delete (isActive=false) or set ALLOW_HARD_DELETE_BUSINESS_ENTITIES=true explicitly.'
+  );
+  error.code = 'RESTAURANT_HARD_DELETE_BLOCKED';
+  return next(error);
+};
+
+const hasPlatformInUpdate = (update = {}) => {
+  if (!update || typeof update !== 'object') return false;
+  if (Object.prototype.hasOwnProperty.call(update, 'platform')) return true;
+
+  const operatorKeys = ['$set', '$setOnInsert', '$unset', '$replaceRoot', '$replaceWith'];
+  for (const key of operatorKeys) {
+    const payload = update[key];
+    if (payload && typeof payload === 'object' && Object.prototype.hasOwnProperty.call(payload, 'platform')) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+const blockRestaurantPlatformMutation = function(next) {
+  if (canMutateRestaurantPlatform()) return next();
+
+  // Document save flow
+  if (this && this.constructor && this.constructor.modelName === 'Restaurant') {
+    if (!this.isNew && this.isModified && this.isModified('platform')) {
+      const error = new Error(
+        'Restaurant platform mutation is blocked. Create the correct entity type instead of changing platform.'
+      );
+      error.code = 'RESTAURANT_PLATFORM_MUTATION_BLOCKED';
+      return next(error);
+    }
+    return next();
+  }
+
+  // Query update flow
+  const update = this?.getUpdate ? this.getUpdate() : null;
+  if (hasPlatformInUpdate(update)) {
+    const error = new Error(
+      'Restaurant platform mutation is blocked. Create the correct entity type instead of changing platform.'
+    );
+    error.code = 'RESTAURANT_PLATFORM_MUTATION_BLOCKED';
+    return next(error);
+  }
+
+  return next();
+};
+
+restaurantSchema.pre('save', blockRestaurantPlatformMutation);
+restaurantSchema.pre('updateOne', blockRestaurantPlatformMutation);
+restaurantSchema.pre('updateMany', blockRestaurantPlatformMutation);
+restaurantSchema.pre('findOneAndUpdate', blockRestaurantPlatformMutation);
+
+restaurantSchema.pre('deleteOne', { document: true, query: false }, blockRestaurantHardDelete);
+restaurantSchema.pre('deleteOne', { document: false, query: true }, blockRestaurantHardDelete);
+restaurantSchema.pre('deleteMany', blockRestaurantHardDelete);
+restaurantSchema.pre('findOneAndDelete', blockRestaurantHardDelete);
+restaurantSchema.pre('findByIdAndDelete', blockRestaurantHardDelete);
 
 export default mongoose.model('Restaurant', restaurantSchema);
 

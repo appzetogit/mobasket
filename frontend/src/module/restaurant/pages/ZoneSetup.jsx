@@ -6,6 +6,35 @@ import { restaurantAPI, groceryStoreAPI, zoneAPI } from "@/lib/api"
 import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey"
 import { Loader } from "@googlemaps/js-api-loader"
 
+const parseAddressComponents = (components = []) => {
+  const byType = (type) => components.find((component) => component.types?.includes(type))
+  const streetNumber = byType("street_number")?.long_name || ""
+  const route = byType("route")?.long_name || ""
+  const sublocality =
+    byType("sublocality_level_1")?.long_name ||
+    byType("sublocality")?.long_name ||
+    byType("neighborhood")?.long_name ||
+    ""
+  const city =
+    byType("locality")?.long_name ||
+    byType("administrative_area_level_2")?.long_name ||
+    byType("administrative_area_level_3")?.long_name ||
+    ""
+  const state = byType("administrative_area_level_1")?.long_name || ""
+  const zipCode = byType("postal_code")?.long_name || ""
+  const landmark = byType("point_of_interest")?.long_name || ""
+
+  return {
+    addressLine1: [streetNumber, route].filter(Boolean).join(" ").trim(),
+    addressLine2: "",
+    area: sublocality || city,
+    city,
+    state,
+    landmark,
+    zipCode,
+  }
+}
+
 export default function ZoneSetup() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -25,6 +54,35 @@ export default function ZoneSetup() {
   const [selectedLocation, setSelectedLocation] = useState(null)
   const [selectedAddress, setSelectedAddress] = useState("")
   const [availableZones, setAvailableZones] = useState([])
+
+  const updateSelectedLocation = (lat, lng, address, components = []) => {
+    const parsedAddress = parseAddressComponents(components)
+    const normalizedLat = Number(Number(lat).toFixed(6))
+    const normalizedLng = Number(Number(lng).toFixed(6))
+    const resolvedAddress = String(address || "").trim() || `${normalizedLat}, ${normalizedLng}`
+
+    setLocationSearch(resolvedAddress)
+    setSelectedAddress(resolvedAddress)
+    setSelectedLocation({
+      lat: normalizedLat,
+      lng: normalizedLng,
+      address: resolvedAddress,
+      formattedAddress: resolvedAddress,
+      addressLine1: parsedAddress.addressLine1 || restaurantData?.location?.addressLine1 || "",
+      addressLine2: parsedAddress.addressLine2 || restaurantData?.location?.addressLine2 || "",
+      area: parsedAddress.area || restaurantData?.location?.area || "",
+      city: parsedAddress.city || restaurantData?.location?.city || "",
+      state: parsedAddress.state || restaurantData?.location?.state || "",
+      landmark: parsedAddress.landmark || restaurantData?.location?.landmark || "",
+      zipCode:
+        parsedAddress.zipCode ||
+        restaurantData?.location?.zipCode ||
+        restaurantData?.location?.pincode ||
+        "",
+    })
+
+    updateMarker(normalizedLat, normalizedLng, resolvedAddress)
+  }
 
   useEffect(() => {
     fetchRestaurantData()
@@ -56,24 +114,15 @@ export default function ZoneSetup() {
       autocomplete.addListener('place_changed', () => {
         const place = autocomplete.getPlace()
         if (place.geometry && place.geometry.location && mapInstanceRef.current) {
-          const location = place.geometry.location
-          const lat = location.lat()
-          const lng = location.lng()
+          const placeLocation = place.geometry.location
+          const lat = placeLocation.lat()
+          const lng = placeLocation.lng()
           
           // Center map on selected location
-          mapInstanceRef.current.setCenter(location)
+          mapInstanceRef.current.setCenter(placeLocation)
           mapInstanceRef.current.setZoom(17) // Zoom in when location is selected
-          
-          // Set the search input value
-          const address = place.formatted_address || place.name || ""
-          setLocationSearch(address)
-          setSelectedAddress(address)
-          
-          // Update marker position
-          updateMarker(lat, lng, address)
-          
-          // Set selected location
-          setSelectedLocation({ lat, lng, address })
+
+          updateSelectedLocation(lat, lng, place.formatted_address || place.name || "", place.address_components || [])
         }
       })
       
@@ -103,11 +152,7 @@ export default function ZoneSetup() {
         mapInstanceRef.current.setZoom(17)
         
         const address = location.formattedAddress || location.address || formatAddress(location) || ""
-        setLocationSearch(address)
-        setSelectedAddress(address)
-        setSelectedLocation({ lat, lng, address })
-        
-        updateMarker(lat, lng, address)
+        updateSelectedLocation(lat, lng, address)
       }
     }
   }, [restaurantData, mapLoading])
@@ -321,18 +366,11 @@ export default function ZoneSetup() {
         const geocoder = new google.maps.Geocoder()
         geocoder.geocode({ location: { lat, lng } }, (results, status) => {
           if (status === 'OK' && results && results.length > 0) {
-            const address = results[0].formatted_address
-            setLocationSearch(address)
-            setSelectedAddress(address)
-            setSelectedLocation({ lat, lng, address })
-            updateMarker(lat, lng, address)
+            updateSelectedLocation(lat, lng, results[0].formatted_address, results[0].address_components || [])
           } else {
             // If geocoding fails, still allow pinning
             const address = `${lat.toFixed(6)}, ${lng.toFixed(6)}`
-            setLocationSearch(address)
-            setSelectedAddress(address)
-            setSelectedLocation({ lat, lng, address })
-            updateMarker(lat, lng, address)
+            updateSelectedLocation(lat, lng, address)
           }
         })
       })
@@ -386,15 +424,10 @@ export default function ZoneSetup() {
       const geocoder = new window.google.maps.Geocoder()
       geocoder.geocode({ location: { lat: newLat, lng: newLng } }, (results, status) => {
         if (status === 'OK' && results && results.length > 0) {
-          const newAddress = results[0].formatted_address
-          setLocationSearch(newAddress)
-          setSelectedAddress(newAddress)
-          setSelectedLocation({ lat: newLat, lng: newLng, address: newAddress })
+          updateSelectedLocation(newLat, newLng, results[0].formatted_address, results[0].address_components || [])
         } else {
           const newAddress = `${newLat.toFixed(6)}, ${newLng.toFixed(6)}`
-          setLocationSearch(newAddress)
-          setSelectedAddress(newAddress)
-          setSelectedLocation({ lat: newLat, lng: newLng, address: newAddress })
+          updateSelectedLocation(newLat, newLng, newAddress)
         }
       })
     })
@@ -433,18 +466,29 @@ export default function ZoneSetup() {
     try {
       setSaving(true)
       
-      const { lat, lng, address } = selectedLocation
+      const { lat, lng, address, addressLine1, addressLine2, area, city, state, landmark, zipCode } = selectedLocation
+      const locationPayload = {
+        ...(restaurantData?.location || {}),
+        latitude: lat,
+        longitude: lng,
+        coordinates: [lng, lat],
+        formattedAddress: address,
+        address,
+        addressLine1: addressLine1 || restaurantData?.location?.addressLine1 || "",
+        addressLine2: addressLine2 || restaurantData?.location?.addressLine2 || "",
+        area: area || restaurantData?.location?.area || "",
+        city: city || restaurantData?.location?.city || "",
+        state: state || restaurantData?.location?.state || "",
+        landmark: landmark || restaurantData?.location?.landmark || "",
+        zipCode: zipCode || restaurantData?.location?.zipCode || restaurantData?.location?.pincode || "",
+        pincode: zipCode || restaurantData?.location?.pincode || restaurantData?.location?.zipCode || "",
+        postalCode: zipCode || restaurantData?.location?.postalCode || restaurantData?.location?.zipCode || "",
+      }
       
       // Update store/restaurant location
-      const response = await restaurantAPI.updateProfile({
-        location: {
-          ...(restaurantData?.location || {}),
-          latitude: lat,
-          longitude: lng,
-          coordinates: [lng, lat], // GeoJSON format: [longitude, latitude]
-          formattedAddress: address
-        }
-      })
+      const response = isGroceryStore
+        ? await groceryStoreAPI.updateProfile({ location: locationPayload })
+        : await restaurantAPI.updateProfile({ location: locationPayload })
 
       const updatedEntity =
         response?.data?.data?.restaurant ||
@@ -454,10 +498,27 @@ export default function ZoneSetup() {
 
       if (updatedEntity) {
         setRestaurantData(updatedEntity)
+        try {
+          const storageKey = isGroceryStore ? "grocery-store_user" : "restaurant_user"
+          const cachedRaw = localStorage.getItem(storageKey)
+          const cachedValue = cachedRaw ? JSON.parse(cachedRaw) : {}
+          localStorage.setItem(
+            storageKey,
+            JSON.stringify({
+              ...cachedValue,
+              ...updatedEntity,
+              location: updatedEntity.location || locationPayload,
+            }),
+          )
+          window.dispatchEvent(new Event(isGroceryStore ? "groceryStoreAuthChanged" : "restaurantAuthChanged"))
+          if (!isGroceryStore) {
+            window.dispatchEvent(new Event("restaurantProfileRefresh"))
+          }
+        } catch (storageError) {
+          console.error("Failed to sync updated profile cache:", storageError)
+        }
+
         alert("Location saved successfully!")
-        
-        // Refresh the page to update navbar
-        window.location.reload()
       } else {
         throw new Error("Failed to save location")
       }

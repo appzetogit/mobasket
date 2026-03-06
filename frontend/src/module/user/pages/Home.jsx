@@ -383,6 +383,17 @@ export default function Home() {
     return foodImages[hash % foodImages.length] || foodImages[0];
   };
 
+  const fallbackImageGalleryBySeed = (seed, size = 3) => {
+    const str = String(seed || "");
+    const hash = str.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+    const total = Math.max(1, foodImages.length);
+    const gallery = [];
+    for (let i = 0; i < size; i += 1) {
+      gallery.push(foodImages[(hash + i * 7) % total] || foodImages[0]);
+    }
+    return gallery;
+  };
+
   const sanitizeImageSrc = (src, seed = "") =>
     isLikelyImageUrl(src) ? src : fallbackImageBySeed(seed);
 
@@ -390,6 +401,78 @@ export default function Home() {
     const src = String(value || "").toLowerCase();
     if (!src) return false;
     return /(cover|banner|store|restaurant|profile|logo|outlet|shop)/.test(src);
+  };
+
+  const extractImageUrl = (value) => {
+    if (!value) return "";
+    if (typeof value === "string") {
+      return isLikelyImageUrl(value) ? value : "";
+    }
+    if (typeof value !== "object") return "";
+
+    const candidates = [
+      value.url,
+      value.imageUrl,
+      value.image,
+      value.src,
+      value.secure_url,
+      value.publicUrl,
+      value.path,
+      value.profileImage?.url,
+      value.profileImage,
+    ];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && isLikelyImageUrl(candidate)) {
+        return candidate;
+      }
+    }
+    return "";
+  };
+
+  const extractRestaurantImages = (restaurant = {}) => {
+    const pushIfValid = (list, value) => {
+      const url = extractImageUrl(value);
+      if (url) list.push(url);
+    };
+
+    const storefront = [];
+    const all = [];
+
+    (restaurant.coverImages || []).forEach((entry) => {
+      const url = extractImageUrl(entry);
+      if (!url) return;
+      all.push(url);
+      if (isStorefrontLikeImage(url)) storefront.push(url);
+    });
+
+    (restaurant.menuImages || []).forEach((entry) => {
+      const url = extractImageUrl(entry);
+      if (!url) return;
+      all.push(url);
+    });
+
+    (restaurant.onboarding?.step2?.menuImageUrls || []).forEach((entry) => {
+      const url = extractImageUrl(entry);
+      if (!url) return;
+      all.push(url);
+    });
+
+    pushIfValid(storefront, restaurant.profileImage?.url);
+    pushIfValid(storefront, restaurant.profileImage);
+    pushIfValid(storefront, restaurant.onboarding?.step2?.profileImageUrl?.url);
+    pushIfValid(storefront, restaurant.imageUrl);
+    pushIfValid(storefront, restaurant.image);
+    pushIfValid(storefront, restaurant.logo);
+    pushIfValid(storefront, restaurant.thumbnail);
+
+    storefront.forEach((url) => all.push(url));
+
+    const dedupe = (arr) => Array.from(new Set(arr.filter(Boolean)));
+    return {
+      storefront: dedupe(storefront),
+      all: dedupe(all),
+    };
   };
 
   // Swipe functionality for hero banner carousel
@@ -810,12 +893,9 @@ export default function Home() {
       try {
         setLoadingRestaurants(true);
 
-        // Enforce strict same-zone listing on Home.
+        // Prefer strict same-zone listing on Home.
+        // If zone detection is unavailable, gracefully fall back to non-zone listing.
         if (zoneLoading) {
-          return;
-        }
-        if (!zoneId) {
-          setRestaurantsData([]);
           return;
         }
 
@@ -894,11 +974,41 @@ export default function Home() {
         // Home page is MoFood-only.
         params.platform = "mofood";
 
-        // Strict zone filter: show only restaurants from the same detected zone.
-        params.zoneId = zoneId;
-        params.onlyZone = "true";
+        // Strict zone filter: show only restaurants from the same detected zone when available.
+        const hasResolvedZone = Boolean(zoneId);
+        if (hasResolvedZone) {
+          params.zoneId = zoneId;
+          params.onlyZone = "true";
+        }
 
-        const response = await restaurantAPI.getRestaurants(params);
+        let response;
+        let restaurantsArrayRaw = [];
+        try {
+          response = await restaurantAPI.getRestaurants(params);
+          restaurantsArrayRaw = response?.data?.data?.restaurants || [];
+        } catch (zoneScopedFetchError) {
+          if (!hasResolvedZone) {
+            throw zoneScopedFetchError;
+          }
+          const fallbackParams = { ...params };
+          delete fallbackParams.zoneId;
+          delete fallbackParams.onlyZone;
+          response = await restaurantAPI.getRestaurants(fallbackParams);
+          restaurantsArrayRaw = response?.data?.data?.restaurants || [];
+        }
+
+        // If strict zone query returns empty, retry once without zone restriction.
+        if (
+          hasResolvedZone &&
+          Array.isArray(restaurantsArrayRaw) &&
+          restaurantsArrayRaw.length === 0
+        ) {
+          const fallbackParams = { ...params };
+          delete fallbackParams.zoneId;
+          delete fallbackParams.onlyZone;
+          response = await restaurantAPI.getRestaurants(fallbackParams);
+          restaurantsArrayRaw = response?.data?.data?.restaurants || [];
+        }
 
         if (
           response.data &&
@@ -906,7 +1016,7 @@ export default function Home() {
           response.data.data &&
           response.data.data.restaurants
         ) {
-          const restaurantsArray = (response.data.data.restaurants || []).filter(
+          const restaurantsArray = (restaurantsArrayRaw || []).filter(
             (restaurant) => {
               const platform = String(restaurant?.platform || "").toLowerCase();
               return !platform || platform === "mofood";
@@ -997,34 +1107,18 @@ export default function Home() {
                   ? restaurant.cuisines[0]
                   : "Multi-cuisine";
 
-              // Get cover images (separate from menu images) for carousel
-              const coverImages =
-                restaurant.coverImages && restaurant.coverImages.length > 0
-                  ? restaurant.coverImages.map((img) => img.url || img)
-                  : [];
-
-              // Fallback to menuImages only if coverImages don't exist (for backward compatibility)
-              const fallbackImages =
-                restaurant.menuImages && restaurant.menuImages.length > 0
-                  ? restaurant.menuImages
-                    .map((img) => img?.url || img)
-                    .filter((img) => isLikelyImageUrl(img))
-                  : [];
-
-              // Use cover images first, then fallback to menu images, then profile image
+              const extractedImages = extractRestaurantImages(restaurant);
+              const coverImages = extractedImages.storefront;
+              const fallbackImages = extractedImages.all;
               const allImages =
                 coverImages.length > 0
                   ? coverImages
                   : fallbackImages.length > 0
                     ? fallbackImages
-                    : restaurant.profileImage?.url
-                      ? [restaurant.profileImage.url]
-                      : [
-                        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop",
-                      ];
+                    : [];
 
               // Keep single image for backward compatibility
-              const image = allImages[0];
+              const image = allImages[0] || "";
               const rawRating =
                 restaurant?.rating ??
                 restaurant?.averageRating ??
@@ -1205,7 +1299,7 @@ export default function Home() {
           restaurantsData.map(async (restaurant) => {
             const restaurantId = restaurant?.restaurantId || restaurant?.id;
             if (!restaurantId) {
-              return [String(restaurant?.id || Math.random()), false];
+              return [String(restaurant?.id || Math.random()), null];
             }
 
             try {
@@ -1248,7 +1342,8 @@ export default function Home() {
                 return [String(restaurantId), hasAnyVeg];
               }
             } catch {
-              return [String(restaurantId), false];
+              // Keep unknown when menu fetch fails; don't hide whole list.
+              return [String(restaurantId), null];
             }
           }),
         );
@@ -1270,7 +1365,10 @@ export default function Home() {
     if (vegMode) {
       filtered = filtered.filter((restaurant) => {
         const restaurantId = String(restaurant?.restaurantId || restaurant?.id || "");
-        return Boolean(vegEligibilityByRestaurant[restaurantId]);
+        const eligibility = vegEligibilityByRestaurant[restaurantId];
+        if (eligibility === false) return false;
+        // true or unknown (null/undefined) should stay visible.
+        return true;
       });
     }
 
@@ -1399,7 +1497,9 @@ export default function Home() {
     if (!vegMode) return restaurantsData;
     return restaurantsData.filter((restaurant) => {
       const restaurantId = String(restaurant?.restaurantId || restaurant?.id || "");
-      return Boolean(vegEligibilityByRestaurant[restaurantId]);
+      const eligibility = vegEligibilityByRestaurant[restaurantId];
+      if (eligibility === false) return false;
+      return true;
     });
   }, [vegMode, restaurantsData, vegEligibilityByRestaurant]);
 
@@ -1469,8 +1569,7 @@ export default function Home() {
             restaurant?.image,
             restaurant?.slug || restaurant?.id || restaurant?.name,
           ),
-        }))
-        .slice(0, 10),
+        })),
     [restaurantsForVegMode],
   );
 
@@ -2076,16 +2175,22 @@ export default function Home() {
                       to={`/restaurants/${restaurant.slug || restaurant.id}`}
                     >
                       <div className="flex flex-col items-center gap-2 w-[74px] sm:w-[92px] md:w-[104px]">
-                        <div className="w-14 h-14 sm:w-[72px] sm:h-[72px] md:w-20 md:h-20 rounded-full overflow-hidden shadow-sm transition-all border border-gray-100 dark:border-gray-800 bg-white">
-                          <img
-                            src={sanitizeImageSrc(restaurant.image, restaurant.slug || restaurant.id || restaurant.name)}
-                            alt={restaurant.name}
-                            className="w-full h-full bg-white rounded-full object-cover"
-                            onError={(e) => {
-                              e.currentTarget.src = fallbackImageBySeed(restaurant.slug || restaurant.id || restaurant.name);
-                            }}
-                            loading="lazy"
-                          />
+                        <div className="relative w-14 h-14 sm:w-[72px] sm:h-[72px] md:w-20 md:h-20 rounded-full overflow-hidden shadow-sm transition-all border border-gray-100 dark:border-gray-800 bg-white">
+                          <div className="w-full h-full rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 flex items-center justify-center">
+                            <Store className="w-5 h-5 sm:w-6 sm:h-6" />
+                          </div>
+                          {isLikelyImageUrl(restaurant.image) ? (
+                            <img
+                              src={restaurant.image}
+                              alt={restaurant.name}
+                              className="absolute inset-0 w-full h-full bg-white rounded-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                              }}
+                              loading={index < 4 ? "eager" : "lazy"}
+                              decoding="async"
+                            />
+                          ) : null}
                         </div>
                         <span className="text-xs sm:text-sm font-semibold text-gray-800 dark:text-gray-200 text-center leading-tight line-clamp-1 w-full px-1">
                           {restaurant.name}

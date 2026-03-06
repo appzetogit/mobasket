@@ -27,12 +27,74 @@ export const getOnboarding = asyncHandler(async (req, res) => {
     }
 
     const onboarding = store.onboarding || {};
+    const normalizedStep1 = {
+      storeName: onboarding.step1?.storeName || store.name || '',
+      ownerName: onboarding.step1?.ownerName || store.ownerName || '',
+      ownerEmail: onboarding.step1?.ownerEmail || store.ownerEmail || store.email || '',
+      ownerPhone: onboarding.step1?.ownerPhone || store.ownerPhone || store.phone || '',
+      primaryContactNumber:
+        onboarding.step1?.primaryContactNumber ||
+        store.primaryContactNumber ||
+        store.phone ||
+        '',
+      location: {
+        ...(onboarding.step1?.location || {}),
+        formattedAddress:
+          onboarding.step1?.location?.formattedAddress ||
+          store.location?.formattedAddress ||
+          '',
+        address:
+          onboarding.step1?.location?.address ||
+          store.location?.address ||
+          '',
+        addressLine1:
+          onboarding.step1?.location?.addressLine1 ||
+          store.location?.addressLine1 ||
+          '',
+        addressLine2:
+          onboarding.step1?.location?.addressLine2 ||
+          store.location?.addressLine2 ||
+          '',
+        area:
+          onboarding.step1?.location?.area ||
+          store.location?.area ||
+          '',
+        city:
+          onboarding.step1?.location?.city ||
+          store.location?.city ||
+          '',
+        state:
+          onboarding.step1?.location?.state ||
+          store.location?.state ||
+          '',
+        landmark:
+          onboarding.step1?.location?.landmark ||
+          store.location?.landmark ||
+          '',
+        zipCode:
+          onboarding.step1?.location?.zipCode ||
+          store.location?.zipCode ||
+          store.location?.postalCode ||
+          store.location?.pincode ||
+          '',
+      },
+    };
 
     return successResponse(res, 200, 'Onboarding data retrieved successfully', {
-      onboarding,
+      onboarding: {
+        ...onboarding,
+        step1: normalizedStep1,
+      },
       store: {
         _id: store._id,
         name: store.name,
+        ownerName: store.ownerName,
+        ownerEmail: store.ownerEmail,
+        ownerPhone: store.ownerPhone,
+        primaryContactNumber: store.primaryContactNumber,
+        location: store.location,
+        profileImage: store.profileImage,
+        menuImages: store.menuImages,
         isActive: store.isActive,
       }
     });
@@ -49,20 +111,63 @@ export const getOnboarding = asyncHandler(async (req, res) => {
 export const updateOnboarding = asyncHandler(async (req, res) => {
   try {
     const storeId = req.store._id;
-    const { storeImage, additionalImages, completedSteps } = req.body;
+    const { step1, storeImage, additionalImages, completedSteps } = req.body;
+
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'platform')) {
+      const requestedPlatform = String(req.body.platform || '').trim().toLowerCase();
+      if (requestedPlatform && requestedPlatform !== 'mogrocery') {
+        return errorResponse(res, 400, 'Platform cannot be changed from grocery store onboarding.');
+      }
+    }
 
     const update = {};
 
+    if (step1 && typeof step1 === 'object') {
+      update['onboarding.step1'] = step1;
+
+      if (step1.storeName !== undefined) {
+        update.name = String(step1.storeName || '').trim();
+      }
+      if (step1.ownerName !== undefined) {
+        update.ownerName = String(step1.ownerName || '').trim();
+      }
+      if (step1.ownerEmail !== undefined) {
+        update.ownerEmail = String(step1.ownerEmail || '').trim().toLowerCase();
+      }
+      if (step1.ownerPhone !== undefined) {
+        update.ownerPhone = String(step1.ownerPhone || '').trim();
+      }
+      if (step1.primaryContactNumber !== undefined) {
+        update.primaryContactNumber = String(step1.primaryContactNumber || '').trim();
+      }
+      if (step1.location !== undefined) {
+        update.location = {
+          ...(req.store.location || {}),
+          ...(step1.location || {}),
+        };
+      }
+    }
+
     if (storeImage !== undefined) {
       update['onboarding.storeImage'] = storeImage;
+      update.profileImage = storeImage;
     }
 
     if (additionalImages !== undefined) {
       update['onboarding.additionalImages'] = additionalImages;
+      update.menuImages = additionalImages;
     }
 
-    if (typeof completedSteps === 'number') {
-      update['onboarding.completedSteps'] = completedSteps;
+    const normalizedCompletedSteps = Number(completedSteps);
+    if (Number.isFinite(normalizedCompletedSteps)) {
+      update['onboarding.completedSteps'] = normalizedCompletedSteps;
+    }
+
+    if (!update.name) {
+      update.name = req.store.name;
+    }
+    if (!update.ownerName) {
+      update.ownerName = req.store.ownerName;
     }
 
     const store = await GroceryStore.findByIdAndUpdate(
@@ -80,6 +185,13 @@ export const updateOnboarding = asyncHandler(async (req, res) => {
       store: {
         _id: store._id,
         name: store.name,
+        ownerName: store.ownerName,
+        ownerEmail: store.ownerEmail,
+        ownerPhone: store.ownerPhone,
+        primaryContactNumber: store.primaryContactNumber,
+        location: store.location,
+        profileImage: store.profileImage,
+        menuImages: store.menuImages,
         isActive: store.isActive,
       }
     });

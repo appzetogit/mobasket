@@ -17,6 +17,7 @@ import { firebaseAuth, googleProvider } from "@/lib/firebase"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 import { loadBusinessSettings } from "@/lib/utils/businessSettings"
 import PolicyModal from "@/components/legal/PolicyModal"
+import { redirectGroceryStoreAfterAuth } from "../../utils/onboardingUtils"
 
 // Common country codes
 const countryCodes = [
@@ -73,6 +74,14 @@ export default function GroceryStoreLogin() {
     content: "",
     fallbackUrl: "",
   })
+
+  useEffect(() => {
+    const hasAccessToken = localStorage.getItem("grocery-store_accessToken")
+    const hasRefreshToken = localStorage.getItem("grocery-store_refreshToken")
+    if (hasAccessToken || hasRefreshToken) {
+      redirectGroceryStoreAfterAuth(navigate, { replace: true })
+    }
+  }, [navigate])
 
   useEffect(() => {
     const loadPolicyUrls = async () => {
@@ -154,6 +163,31 @@ export default function GroceryStoreLogin() {
 
       navigate("/store/otp")
     } catch (error) {
+      if (Number(error?.response?.status || 0) === 404) {
+        try {
+          await groceryStoreAPI.sendOTP(fullPhone, "register")
+
+          const authData = {
+            method: "phone",
+            phone: fullPhone,
+            name: `Grocery Store ${formData.phone.slice(-4) || "Partner"}`,
+            isSignUp: true,
+            module: "grocery-store",
+          }
+          sessionStorage.setItem("groceryStoreAuthData", JSON.stringify(authData))
+
+          navigate("/store/otp")
+          return
+        } catch (registerError) {
+          const registerMessage =
+            registerError?.response?.data?.message ||
+            registerError?.response?.data?.error ||
+            "Failed to start onboarding. Please try again."
+          setApiError(registerMessage)
+          return
+        }
+      }
+
       const message =
         error?.response?.data?.message ||
         error?.response?.data?.error ||
@@ -228,6 +262,31 @@ export default function GroceryStoreLogin() {
 
       navigate("/store/otp")
     } catch (error) {
+      if (Number(error?.response?.status || 0) === 404) {
+        try {
+          await groceryStoreAPI.sendOTP(null, "register", formData.email.trim())
+
+          const authData = {
+            method: "email",
+            email: formData.email.trim(),
+            name: `Grocery Store ${formData.email.trim().split("@")[0] || "Partner"}`,
+            isSignUp: true,
+            module: "grocery-store",
+          }
+          sessionStorage.setItem("groceryStoreAuthData", JSON.stringify(authData))
+
+          navigate("/store/otp")
+          return
+        } catch (registerError) {
+          const registerMessage =
+            registerError?.response?.data?.message ||
+            registerError?.response?.data?.error ||
+            "Failed to start onboarding. Please try again."
+          setApiError(registerMessage)
+          return
+        }
+      }
+
       const message =
         error?.response?.data?.message ||
         error?.response?.data?.error ||
@@ -262,7 +321,7 @@ export default function GroceryStoreLogin() {
       setAuthData("grocery-store", accessToken, store, refreshToken)
       window.dispatchEvent(new Event("groceryStoreAuthChanged"))
 
-      navigate("/store")
+      await redirectGroceryStoreAfterAuth(navigate, { replace: true })
     } catch (error) {
       console.error("Firebase Google login error:", error)
       const message =
@@ -399,12 +458,12 @@ export default function GroceryStoreLogin() {
       <div className="flex-1 flex flex-col px-6 overflow-y-auto">
         <div className="w-full max-w-md mx-auto space-y-6 py-4">
           <div className="text-center">
-            <p className="text-base text-gray-700 leading-relaxed">
-              {loginMethod === "email"
-                ? "Enter your email to continue. We'll send you a one-time code."
-                : "Enter your phone number to continue. New? We'll create your store account."
-              }
-            </p>
+              <p className="text-base text-gray-700 leading-relaxed">
+                {loginMethod === "email"
+                  ? "Enter your email to continue. We'll send you a one-time code."
+                  : "Enter your phone number to continue. New stores will continue into onboarding automatically."
+                }
+              </p>
           </div>
 
           {loginMethod === "phone" && (

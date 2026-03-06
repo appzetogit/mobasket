@@ -20,7 +20,30 @@ export const getOnboarding = async (req, res) => {
     }
 
     const onboarding = restaurant.onboarding || {};
+    const step1 = onboarding.step1 || {};
     const step2 = onboarding.step2 || {};
+
+    // Fallback to restaurant profile fields when onboarding.step1 is missing/incomplete.
+    const normalizedStep1 = {
+      ...step1,
+      restaurantName: step1.restaurantName || req.restaurant?.name || '',
+      ownerName: step1.ownerName || req.restaurant?.ownerName || '',
+      ownerEmail: step1.ownerEmail || req.restaurant?.ownerEmail || req.restaurant?.email || '',
+      ownerPhone: step1.ownerPhone || req.restaurant?.ownerPhone || req.restaurant?.phone || '',
+      primaryContactNumber:
+        step1.primaryContactNumber ||
+        req.restaurant?.primaryContactNumber ||
+        req.restaurant?.phone ||
+        '',
+      location: {
+        ...(step1.location || {}),
+        area: step1.location?.area || req.restaurant?.location?.area || '',
+        city: step1.location?.city || req.restaurant?.location?.city || '',
+        addressLine1: step1.location?.addressLine1 || req.restaurant?.location?.addressLine1 || '',
+        addressLine2: step1.location?.addressLine2 || req.restaurant?.location?.addressLine2 || '',
+        landmark: step1.location?.landmark || req.restaurant?.location?.landmark || ''
+      }
+    };
 
     // Fallback to restaurant profile fields when onboarding.step2 is missing/incomplete.
     const normalizedStep2 = {
@@ -56,6 +79,7 @@ export const getOnboarding = async (req, res) => {
     return successResponse(res, 200, 'Onboarding data retrieved', {
       onboarding: {
         ...onboarding,
+        step1: normalizedStep1,
         step2: normalizedStep2,
       },
     });
@@ -69,11 +93,11 @@ export const getOnboarding = async (req, res) => {
 export const upsertOnboarding = async (req, res) => {
   try {
     const restaurantId = req.restaurant._id;
-    const { step1, step2, step3, step4, completedSteps, platform } = req.body;
+    const { step1, step2, step3, step4, completedSteps } = req.body;
 
-    // Set store type (grocery vs restaurant) when chosen at onboarding start
-    if (platform === 'mogrocery' || platform === 'mofood') {
-      await Restaurant.findByIdAndUpdate(restaurantId, { $set: { platform } });
+    // Keep model boundaries strict: restaurant onboarding cannot switch platform.
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'platform')) {
+      return errorResponse(res, 400, 'Platform cannot be changed from restaurant onboarding.');
     }
 
     // Get existing restaurant data to merge if needed

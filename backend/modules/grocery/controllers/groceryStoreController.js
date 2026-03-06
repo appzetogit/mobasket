@@ -1,5 +1,7 @@
 import GroceryStore from '../models/GroceryStore.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import Order from '../../order/models/Order.js';
+import GroceryProduct from '../models/GroceryProduct.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
@@ -22,9 +24,20 @@ const buildStoreSearchOr = (search = '') => ([
   { email: { $regex: search, $options: 'i' } }
 ]);
 
+let lastLegacyHydrationAt = 0;
+const LEGACY_HYDRATION_COOLDOWN_MS = 60 * 1000;
+
 const hydrateMissingLegacyGroceryStores = async ({ search, status }) => {
   try {
-    const legacyQuery = { platform: 'mogrocery' };
+    const now = Date.now();
+    const shouldThrottleHydration = !search && !status && (now - lastLegacyHydrationAt) < LEGACY_HYDRATION_COOLDOWN_MS;
+    if (shouldThrottleHydration) {
+      return;
+    }
+
+    const legacyQuery = {
+      platform: { $in: ['mogrocery', 'grocery'] }
+    };
 
     if (status === 'inactive') {
       legacyQuery.isActive = false;
@@ -40,15 +53,84 @@ const hydrateMissingLegacyGroceryStores = async ({ search, status }) => {
       .select('+password')
       .lean();
 
-    if (!legacyStores.length) return;
+    // Some legacy grocery orders were created against restaurants marked as `mofood`.
+    // Include those restaurant IDs as grocery candidates too.
+    const orderLinkedRestaurantIds = await Order.distinct('restaurantId', {
+      $or: [
+        { restaurantPlatform: 'mogrocery' },
+        { platform: 'mogrocery' }
+      ]
+    });
 
-    const legacyIds = legacyStores.map((store) => store._id);
+    const normalizedOrderIds = orderLinkedRestaurantIds
+      .map((id) => String(id || '').trim())
+      .filter((id) => /^[a-fA-F0-9]{24}$/.test(id));
+
+    // Also include restaurant IDs linked to grocery products.
+    // This catches legacy stores that were accidentally saved with `platform: mofood`.
+    const productLinkedRestaurantIds = await GroceryProduct.distinct('restaurant', {});
+    const normalizedProductIds = productLinkedRestaurantIds
+      .map((id) => String(id || '').trim())
+      .filter((id) => /^[a-fA-F0-9]{24}$/.test(id));
+
+    let orderLinkedStores = [];
+    if (normalizedOrderIds.length > 0) {
+      const orderLinkedQuery = {
+        _id: { $in: normalizedOrderIds }
+      };
+
+      if (status === 'inactive') {
+        orderLinkedQuery.isActive = false;
+      } else if (status === 'active') {
+        orderLinkedQuery.isActive = true;
+      }
+
+      if (search) {
+        orderLinkedQuery.$or = buildStoreSearchOr(search);
+      }
+
+      orderLinkedStores = await Restaurant.find(orderLinkedQuery)
+        .select('+password')
+        .lean();
+    }
+
+    let productLinkedStores = [];
+    if (normalizedProductIds.length > 0) {
+      const productLinkedQuery = {
+        _id: { $in: normalizedProductIds }
+      };
+
+      if (status === 'inactive') {
+        productLinkedQuery.isActive = false;
+      } else if (status === 'active') {
+        productLinkedQuery.isActive = true;
+      }
+
+      if (search) {
+        productLinkedQuery.$or = buildStoreSearchOr(search);
+      }
+
+      productLinkedStores = await Restaurant.find(productLinkedQuery)
+        .select('+password')
+        .lean();
+    }
+
+    const legacyStoreMap = new Map();
+    [...legacyStores, ...orderLinkedStores, ...productLinkedStores].forEach((store) => {
+      if (!store?._id) return;
+      legacyStoreMap.set(String(store._id), store);
+    });
+    const allLegacyStores = [...legacyStoreMap.values()];
+
+    if (!allLegacyStores.length) return;
+
+    const legacyIds = allLegacyStores.map((store) => store._id);
     const existingStores = await GroceryStore.find({ _id: { $in: legacyIds } })
       .select('_id')
       .lean();
     const existingIds = new Set(existingStores.map((store) => store._id.toString()));
 
-    const missingLegacyStores = legacyStores.filter(
+    const missingLegacyStores = allLegacyStores.filter(
       (store) => !existingIds.has(store._id.toString())
     );
     if (!missingLegacyStores.length) return;
@@ -68,6 +150,7 @@ const hydrateMissingLegacyGroceryStores = async ({ search, status }) => {
     });
 
     await GroceryStore.bulkWrite(bulkOps, { ordered: false });
+    lastLegacyHydrationAt = now;
     logger.info(`Hydrated ${missingLegacyStores.length} legacy mogrocery stores into GroceryStore collection`);
   } catch (error) {
     logger.warn(`Legacy grocery store hydration skipped: ${error.message}`);
@@ -227,18 +310,38 @@ export const updateGroceryStoreStatus = asyncHandler(async (req, res) => {
  */
 export const deleteGroceryStore = asyncHandler(async (req, res) => {
   try {
-    const store = await GroceryStore.findOneAndDelete({ _id: req.params.id });
-    const legacyDeleteResult = await Restaurant.deleteOne({
-      _id: req.params.id,
-      platform: 'mogrocery'
-    });
+    const store = await GroceryStore.findOneAndUpdate(
+      { _id: req.params.id },
+      {
+        $set: {
+          isActive: false,
+          isAcceptingOrders: false,
+          rejectionReason: 'Archived',
+          rejectedAt: new Date()
+        }
+      },
+      { new: true }
+    );
 
-    if (!store && !legacyDeleteResult?.deletedCount) {
+    const legacyStore = await Restaurant.findOneAndUpdate(
+      { _id: req.params.id, platform: 'mogrocery' },
+      {
+        $set: {
+          isActive: false,
+          isAcceptingOrders: false,
+          rejectionReason: 'Archived',
+          rejectedAt: new Date()
+        }
+      },
+      { new: true }
+    );
+
+    if (!store && !legacyStore) {
       return errorResponse(res, 404, 'Grocery store not found');
     }
 
-    return successResponse(res, 200, 'Grocery store deleted successfully');
+    return successResponse(res, 200, 'Grocery store removed successfully');
   } catch (error) {
-    return errorResponse(res, 500, 'Failed to delete grocery store');
+    return errorResponse(res, 500, 'Failed to remove grocery store');
   }
 });

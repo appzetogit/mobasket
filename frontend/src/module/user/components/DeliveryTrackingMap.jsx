@@ -74,8 +74,17 @@ const DeliveryTrackingMap = ({
     ) {
       return firebaseCustomerCoords;
     }
+
+    if (
+      customerCoords &&
+      typeof customerCoords.lat === 'number' &&
+      typeof customerCoords.lng === 'number'
+    ) {
+      return customerCoords;
+    }
+
     return null;
-  }, [firebaseCustomerCoords]);
+  }, [firebaseCustomerCoords, customerCoords]);
 
   const renderPolylinePath = useCallback((points, isCustomerLeg = false) => {
     if (!mapInstance.current || !window.google?.maps || !Array.isArray(points) || points.length === 0) {
@@ -403,6 +412,36 @@ const DeliveryTrackingMap = ({
     // Fallback: no route (prevents incorrect line from default/invalid store coords)
     return { start: null, end: null };
   }, [order, deliveryBoyLocation, currentLocation, restaurantCoords, effectiveCustomerCoords, hasDeliveryPartner]);
+
+  const getOrderStoredRoutePoints = useCallback(() => {
+    const routePhase = order?.deliveryState?.currentPhase;
+    const routeStatus = order?.deliveryState?.status;
+    const isCustomerLeg =
+      routePhase === 'en_route_to_delivery' ||
+      routeStatus === 'order_confirmed' ||
+      routeStatus === 'en_route_to_delivery' ||
+      order?.status === 'out_for_delivery';
+
+    const routeCoordinates = isCustomerLeg
+      ? order?.deliveryState?.routeToDelivery?.coordinates
+      : order?.deliveryState?.routeToPickup?.coordinates;
+
+    if (!Array.isArray(routeCoordinates) || routeCoordinates.length < 2) {
+      return null;
+    }
+
+    const points = routeCoordinates
+      .map((pair) => {
+        if (!Array.isArray(pair) || pair.length < 2) return null;
+        const lat = Number(pair[0]);
+        const lng = Number(pair[1]);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+        return { lat, lng };
+      })
+      .filter(Boolean);
+
+    return points.length > 1 ? { points, isCustomerLeg } : null;
+  }, [order]);
 
   // Move bike smoothly with rotation
   const moveBikeSmoothly = useCallback((lat, lng, heading) => {
@@ -892,6 +931,8 @@ const DeliveryTrackingMap = ({
 
         const customerLat = Number(value.customer_lat ?? value.user_lat);
         const customerLng = Number(value.customer_lng ?? value.user_lng);
+        const restaurantLat = Number(value.restaurant_lat);
+        const restaurantLng = Number(value.restaurant_lng);
         if (Number.isFinite(customerLat) && Number.isFinite(customerLng)) {
           setFirebaseCustomerCoords({ lat: customerLat, lng: customerLng });
         }
@@ -920,30 +961,49 @@ const DeliveryTrackingMap = ({
           ? points.map(normalizePoint).filter(Boolean)
           : [];
 
-        const firebaseDestination =
+        const firebaseRestaurantCoords =
+          Number.isFinite(restaurantLat) && Number.isFinite(restaurantLng)
+            ? { lat: restaurantLat, lng: restaurantLng }
+            : null;
+        const firebaseCustomerCoordsValue =
           Number.isFinite(customerLat) && Number.isFinite(customerLng)
             ? { lat: customerLat, lng: customerLng }
             : null;
-        const expectedDestination = firebaseDestination || effectiveCustomerCoords || null;
+        const expectedDestination = isCustomerLeg
+          ? (firebaseCustomerCoordsValue || effectiveCustomerCoords || null)
+          : (firebaseRestaurantCoords || restaurantCoords || null);
 
-        let canUseFirebaseRoute = normalizedPoints.length > 1;
+        let pointsToRender = normalizedPoints;
+        let canUseFirebaseRoute = pointsToRender.length > 1;
         if (canUseFirebaseRoute && expectedDestination) {
-          const routeEnd = normalizedPoints[normalizedPoints.length - 1];
-          const destinationGap = calculateHaversineDistance(
+          const routeStart = pointsToRender[0];
+          const routeEnd = pointsToRender[pointsToRender.length - 1];
+          const endGap = calculateHaversineDistance(
             routeEnd.lat,
             routeEnd.lng,
             expectedDestination.lat,
             expectedDestination.lng
           );
-          const maxEndpointGapMeters = 150;
-          canUseFirebaseRoute = destinationGap <= maxEndpointGapMeters;
+          const startGap = calculateHaversineDistance(
+            routeStart.lat,
+            routeStart.lng,
+            expectedDestination.lat,
+            expectedDestination.lng
+          );
+          const maxEndpointGapMeters = 500;
+          if (startGap < endGap && startGap <= maxEndpointGapMeters) {
+            pointsToRender = [...pointsToRender].reverse();
+            canUseFirebaseRoute = true;
+          } else {
+            canUseFirebaseRoute = endGap <= maxEndpointGapMeters;
+          }
         }
 
         if (canUseFirebaseRoute) {
           hasFirebaseRouteRef.current = true;
           setHasFirebaseRoute(true);
           if (isMapLoaded) {
-            renderPolylinePath(normalizedPoints, isCustomerLeg);
+            renderPolylinePath(pointsToRender, isCustomerLeg);
           }
         } else {
           hasFirebaseRouteRef.current = false;
@@ -986,6 +1046,8 @@ const DeliveryTrackingMap = ({
     order?.deliveryState?.currentPhase,
     effectiveCustomerCoords?.lat,
     effectiveCustomerCoords?.lng,
+    restaurantCoords?.lat,
+    restaurantCoords?.lng,
     isMapLoaded,
     moveBikeSmoothly,
     renderPolylinePath
@@ -1344,6 +1406,15 @@ const DeliveryTrackingMap = ({
       return; // Skip if updated less than 10 seconds ago
     }
     
+    // Prefer route geometry already stored in order payload before interpolation fallback.
+    if (!hasFirebaseRouteRef.current && !hasFirebaseRoute) {
+      const orderStoredRoute = getOrderStoredRoutePoints();
+      if (orderStoredRoute?.points?.length > 1) {
+        renderPolylinePath(orderStoredRoute.points, orderStoredRoute.isCustomerLeg);
+        return;
+      }
+    }
+
     // Draw route when route endpoints are valid for the current phase.
     // Skip Google Directions if Firebase already has route polyline for this order.
     if (hasFirebaseRouteRef.current || hasFirebaseRoute) {
@@ -1410,7 +1481,7 @@ const DeliveryTrackingMap = ({
         }
       }
     }
-  }, [isMapLoaded, deliveryBoyLat, deliveryBoyLng, currentLat, currentLng, order?.deliveryState?.currentPhase, order?.deliveryState?.status, restaurantLat, restaurantLng, effectiveCustomerCoords?.lat, effectiveCustomerCoords?.lng, moveBikeSmoothly, getRouteToShow, drawRoute, hasDeliveryPartner, hasFirebaseRoute]);
+  }, [isMapLoaded, deliveryBoyLat, deliveryBoyLng, currentLat, currentLng, order?.deliveryState?.currentPhase, order?.deliveryState?.status, restaurantLat, restaurantLng, effectiveCustomerCoords?.lat, effectiveCustomerCoords?.lng, moveBikeSmoothly, getRouteToShow, drawRoute, hasDeliveryPartner, hasFirebaseRoute, getOrderStoredRoutePoints, renderPolylinePath]);
 
   // Update bike when REAL location changes (from socket)
   useEffect(() => {

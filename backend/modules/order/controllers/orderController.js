@@ -1583,6 +1583,13 @@ export const createOrder = async (req, res) => {
         });
       } catch (walletError) {
         logger.error('❌ Error processing wallet payment:', walletError);
+        if (Number.isInteger(walletError?.statusCode) && walletError.statusCode >= 400 && walletError.statusCode < 500) {
+          return res.status(walletError.statusCode).json({
+            success: false,
+            message: walletError.message || 'Invalid order request',
+            error: process.env.NODE_ENV === 'development' ? walletError.message : undefined
+          });
+        }
         return res.status(500).json({
           success: false,
           message: 'Failed to process wallet payment',
@@ -1748,6 +1755,14 @@ export const createOrder = async (req, res) => {
       error: error.message,
       stack: error.stack
     });
+
+    if (Number.isInteger(error?.statusCode) && error.statusCode >= 400 && error.statusCode < 500) {
+      return res.status(error.statusCode).json({
+        success: false,
+        message: error.message || 'Invalid order request',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
 
     if (error?.name === 'ValidationError') {
       const firstValidationError = Object.values(error.errors || {})[0];

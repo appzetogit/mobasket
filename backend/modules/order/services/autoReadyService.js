@@ -40,8 +40,11 @@ export async function processAutoReadyOrders() {
       if (elapsedMinutes >= estimatedTime) {
         try {
           // Update order status to ready
-          const updatedOrder = await Order.findByIdAndUpdate(
-            order._id,
+          const updatedOrder = await Order.findOneAndUpdate(
+            {
+              _id: order._id,
+              status: 'preparing'
+            },
             {
               $set: {
                 status: 'ready',
@@ -73,6 +76,8 @@ export async function processAutoReadyOrders() {
                 console.error(`❌ Error notifying delivery boy about order ${order.orderId}:`, notifError);
               }
             }
+          } else {
+            console.log(`Auto-ready skipped for ${order.orderId}; another process already moved it out of preparing.`);
           }
         } catch (updateError) {
           console.error(`❌ Error updating order ${order.orderId} to ready:`, updateError);

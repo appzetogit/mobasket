@@ -174,6 +174,8 @@ export default function RestaurantOnboarding() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const requestedStepParam = searchParams.get("step")
+  const isFreshStepOne = requestedStepParam === "1"
   const [step, setStep] = useState(1)
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -235,12 +237,17 @@ export default function RestaurantOnboarding() {
   // Load from localStorage on mount and check URL parameter
   useEffect(() => {
     // Check if step is specified in URL (from OTP login redirect)
-    const stepParam = searchParams.get("step")
+    const stepParam = requestedStepParam
     if (stepParam) {
       const stepNum = parseInt(stepParam, 10)
-      if (stepNum >= 1 && stepNum <= 3) {
+      if (stepNum >= 1 && stepNum <= 4) {
         setStep(stepNum)
       }
+    }
+
+    if (isFreshStepOne) {
+      clearOnboardingFromLocalStorage()
+      return
     }
 
     const localData = loadOnboardingFromLocalStorage()
@@ -304,7 +311,7 @@ export default function RestaurantOnboarding() {
         setStep(localData.currentStep)
       }
     }
-  }, [searchParams])
+  }, [isFreshStepOne, requestedStepParam, searchParams])
 
   // Save to localStorage whenever step data changes
   useEffect(() => {
@@ -313,6 +320,11 @@ export default function RestaurantOnboarding() {
 
   useEffect(() => {
     const fetchData = async () => {
+      if (isFreshStepOne) {
+        setLoading(false)
+        return
+      }
+
       try {
         setLoading(true)
         const res = await api.get("/restaurant/onboarding")
@@ -397,9 +409,14 @@ export default function RestaurantOnboarding() {
       }
     }
     fetchData()
-  }, [])
+  }, [isFreshStepOne])
 
   useEffect(() => {
+    if (isFreshStepOne) {
+      setSignedInPhone("")
+      return
+    }
+
     const resolveSignedInPhone = async () => {
       try {
         const cachedRaw = localStorage.getItem("restaurant_user")
@@ -432,10 +449,10 @@ export default function RestaurantOnboarding() {
     }
 
     resolveSignedInPhone()
-  }, [])
+  }, [isFreshStepOne])
 
   useEffect(() => {
-    if (!signedInPhone) return
+    if (isFreshStepOne || !signedInPhone) return
     setStep1((prev) => {
       const next = { ...prev }
       let changed = false
@@ -449,7 +466,7 @@ export default function RestaurantOnboarding() {
       }
       return changed ? next : prev
     })
-  }, [signedInPhone])
+  }, [isFreshStepOne, signedInPhone])
 
   const handleUpload = async (file, folder) => {
     try {
@@ -828,6 +845,30 @@ const payload = {
         // Verify response is successful
         if (!response || !response.data) {
           throw new Error('Invalid response from server')
+        }
+
+        try {
+          const cachedRaw = localStorage.getItem("restaurant_user")
+          const cachedRestaurant = cachedRaw ? JSON.parse(cachedRaw) : {}
+          const responseRestaurant = response?.data?.data?.restaurant || {}
+          const responseOnboarding = response?.data?.data?.onboarding || {}
+
+          localStorage.setItem(
+            "restaurant_user",
+            JSON.stringify({
+              ...cachedRestaurant,
+              ...responseRestaurant,
+              onboarding: {
+                ...(cachedRestaurant?.onboarding || {}),
+                ...responseOnboarding,
+                completedSteps: 4,
+              },
+            }),
+          )
+          window.dispatchEvent(new Event("restaurantAuthChanged"))
+          window.dispatchEvent(new Event("restaurantProfileRefresh"))
+        } catch (storageError) {
+          console.error("Failed to update cached restaurant after onboarding:", storageError)
         }
 
         // Clear localStorage when onboarding is complete

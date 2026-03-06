@@ -227,6 +227,7 @@ import {
 import {
   getOrders,
   getOrderById,
+  deleteOrderPermanently,
   approveOrderRequest,
   rejectOrderRequest,
   resendRiderNotification,
@@ -513,6 +514,7 @@ router.delete('/safety-emergency/:id', deleteSafetyEmergency);
 router.get('/orders', getOrders);
 router.post('/orders/:id/approve', approveOrderRequest);
 router.post('/orders/:id/reject', rejectOrderRequest);
+router.delete('/orders/:id', deleteOrderPermanently);
 router.post('/orders/assign', validateOrderAssignmentPayload, assignOrder);
 router.post('/orders/:id/resend-rider-notification', resendRiderNotification);
 router.get('/orders/:id/rider-assignment', getRiderAssignmentDetails);

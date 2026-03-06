@@ -79,7 +79,21 @@ const findStoreWithLegacyFallback = async (filter, projection = null) => {
   return store;
 };
 
+const getRequestedPlatform = (body = {}) => String(body?.platform || '').trim().toLowerCase();
+
+const rejectIfRestaurantPlatformRequest = (req, res) => {
+  if (!getRequestedPlatform(req?.body)) return false;
+  if (getRequestedPlatform(req?.body) === 'mogrocery') return false;
+  errorResponse(
+    res,
+    400,
+    'Use restaurant auth endpoints for mofood accounts (/api/restaurant/auth/*).'
+  );
+  return true;
+};
+
 export const sendOTP = asyncHandler(async (req, res) => {
+  if (rejectIfRestaurantPlatformRequest(req, res)) return;
   const { phone, email, purpose = 'login' } = req.body;
 
   if (!phone && !email) {
@@ -87,6 +101,26 @@ export const sendOTP = asyncHandler(async (req, res) => {
   }
 
   try {
+    const normalizedPhone = phone ? normalizePhoneNumber(phone) : null;
+    if (phone && !normalizedPhone) {
+      return errorResponse(res, 400, 'Invalid phone number format');
+    }
+
+    // Strict login flow: only existing store accounts can request login OTP.
+    if (purpose === 'login') {
+      const findQuery = normalizedPhone
+        ? { ...buildPhoneQuery(normalizedPhone), platform: 'mogrocery' }
+        : { email: email?.toLowerCase().trim(), platform: 'mogrocery' };
+      const existingStore = await findStoreWithLegacyFallback(findQuery);
+      if (!existingStore) {
+        return errorResponse(
+          res,
+          404,
+          'No grocery store account found with this phone/email. Please sign up first.'
+        );
+      }
+    }
+
     const result = await otpService.generateAndSendOTP(phone || null, purpose, email || null);
     return successResponse(res, 200, result.message, {
       expiresIn: result.expiresIn,
@@ -99,6 +133,7 @@ export const sendOTP = asyncHandler(async (req, res) => {
 });
 
 export const verifyOTP = asyncHandler(async (req, res) => {
+  if (rejectIfRestaurantPlatformRequest(req, res)) return;
   const { phone, email, otp, purpose = 'login', name, password } = req.body;
   const fcmPatch = getFcmPatchFromBody(req.body);
 
@@ -167,35 +202,11 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       await otpService.verifyOTP(phone || null, otp, purpose, email || null);
 
       if (!store) {
-        // New account: auto-create pending store so onboarding can continue.
-        const fallbackName = normalizedPhone
-          ? `Grocery Store ${normalizedPhone.slice(-4)}`
-          : ((email?.split('@')?.[0] || 'Grocery Store')
-            .replace(/[._-]+/g, ' ')
-            .trim()
-            .slice(0, 60) || 'Grocery Store');
-
-        const storeData = {
-          name: fallbackName,
-          signupMethod: normalizedPhone ? 'phone' : 'email',
-          platform: 'mogrocery',
-          role: 'restaurant',
-          isActive: false,
-          ownerName: fallbackName,
-          ...fcmPatch
-        };
-
-        if (normalizedPhone) {
-          storeData.phone = normalizedPhone;
-          storeData.ownerPhone = normalizedPhone;
-        }
-        if (email) {
-          storeData.email = email.toLowerCase().trim();
-          storeData.ownerEmail = email.toLowerCase().trim();
-        }
-
-        store = await GroceryStore.create(storeData);
-        isNewlyRegistered = true;
+        return errorResponse(
+          res,
+          404,
+          `No grocery store account found with this ${identifierType}. Please sign up first.`
+        );
       }
 
       if (fcmPatch.fcmTokenWeb) store.fcmTokenWeb = fcmPatch.fcmTokenWeb;
@@ -240,6 +251,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 });
 
 export const register = asyncHandler(async (req, res) => {
+  if (rejectIfRestaurantPlatformRequest(req, res)) return;
   const { name, email, password, phone, ownerName, ownerEmail, ownerPhone } = req.body;
   const fcmPatch = getFcmPatchFromBody(req.body);
 
@@ -305,6 +317,7 @@ export const register = asyncHandler(async (req, res) => {
 });
 
 export const login = asyncHandler(async (req, res) => {
+  if (rejectIfRestaurantPlatformRequest(req, res)) return;
   const { email, password } = req.body;
   const fcmPatch = getFcmPatchFromBody(req.body);
 
@@ -365,6 +378,7 @@ export const login = asyncHandler(async (req, res) => {
 });
 
 export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
+  if (rejectIfRestaurantPlatformRequest(req, res)) return;
   const { idToken } = req.body;
   const fcmPatch = getFcmPatchFromBody(req.body);
 
@@ -486,6 +500,82 @@ export const getCurrentStore = asyncHandler(async (req, res) => {
   delete storeResponse.password;
   return successResponse(res, 200, 'Store retrieved successfully', {
     store: storeResponse
+  });
+});
+
+export const updateStoreProfile = asyncHandler(async (req, res) => {
+  const store = req.store;
+  const { name, ownerName, ownerEmail, ownerPhone, primaryContactNumber, location, profileImage } = req.body || {};
+
+  if (name !== undefined) {
+    store.name = String(name || '').trim();
+  }
+  if (ownerName !== undefined) {
+    store.ownerName = String(ownerName || '').trim();
+  }
+  if (ownerEmail !== undefined) {
+    store.ownerEmail = String(ownerEmail || '').trim().toLowerCase();
+  }
+  if (ownerPhone !== undefined) {
+    store.ownerPhone = String(ownerPhone || '').trim();
+  }
+  if (primaryContactNumber !== undefined) {
+    store.primaryContactNumber = String(primaryContactNumber || '').trim();
+  }
+  if (profileImage !== undefined) {
+    store.profileImage = profileImage;
+  }
+
+  if (location && typeof location === 'object') {
+    const nextLocation = {
+      ...(store.location?.toObject ? store.location.toObject() : store.location || {}),
+      ...location,
+    };
+
+    if (
+      Number.isFinite(Number(nextLocation.latitude)) &&
+      Number.isFinite(Number(nextLocation.longitude)) &&
+      (!Array.isArray(nextLocation.coordinates) || nextLocation.coordinates.length < 2)
+    ) {
+      nextLocation.coordinates = [Number(nextLocation.longitude), Number(nextLocation.latitude)];
+    }
+
+    if (
+      Array.isArray(nextLocation.coordinates) &&
+      nextLocation.coordinates.length >= 2
+    ) {
+      if (!Number.isFinite(Number(nextLocation.longitude))) {
+        nextLocation.longitude = Number(nextLocation.coordinates[0]);
+      }
+      if (!Number.isFinite(Number(nextLocation.latitude))) {
+        nextLocation.latitude = Number(nextLocation.coordinates[1]);
+      }
+    }
+
+    if (!nextLocation.address && nextLocation.formattedAddress) {
+      nextLocation.address = nextLocation.formattedAddress;
+    }
+
+    store.location = nextLocation;
+
+    if (store.onboarding?.step1 && typeof store.onboarding.step1 === 'object') {
+      store.onboarding.step1 = {
+        ...store.onboarding.step1,
+        location: {
+          ...(store.onboarding.step1.location || {}),
+          ...nextLocation,
+        },
+      };
+    }
+  }
+
+  await store.save();
+
+  const storeResponse = store.toObject();
+  delete storeResponse.password;
+
+  return successResponse(res, 200, 'Store profile updated successfully', {
+    store: storeResponse,
   });
 });
 

@@ -13,6 +13,7 @@ import AdminCommission from '../../admin/models/AdminCommission.js';
 import { calculateRoute } from '../../order/services/routeCalculationService.js';
 import { calculateDriverEarning } from '../../order/services/deliveryEarningService.js';
 import { validateCODLimitBeforeAssignment } from '../services/codLimitService.js';
+import { upsertActiveOrderTracking } from '../../../shared/services/firebaseRealtimeService.js';
 import mongoose from 'mongoose';
 import winston from 'winston';
 
@@ -96,6 +97,19 @@ const getPlatformZoneQuery = (platform = 'mofood') => (
     ? { isActive: true, platform: 'mogrocery' }
     : { isActive: true, $or: [{ platform: 'mofood' }, { platform: { $exists: false } }] }
 );
+
+const normalizeRouteCoordinatesToPoints = (coordinates = []) => {
+  if (!Array.isArray(coordinates)) return [];
+  return coordinates
+    .map((pair) => {
+      if (!Array.isArray(pair) || pair.length < 2) return null;
+      const lat = Number(pair[0]);
+      const lng = Number(pair[1]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+      return { lat, lng };
+    })
+    .filter(Boolean);
+};
 
 const resolveStoreEntityByIdentifier = async (storeIdentifier) => {
   if (!storeIdentifier) return null;
@@ -527,7 +541,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       await emitOrderClaimedToOtherPartners(order, currentDeliveryId, order.assignmentInfo || {});
     } else if (orderDeliveryPartnerId !== currentDeliveryId) {
       console.error(`❌ Order ${order.orderId} is assigned to ${orderDeliveryPartnerId}, but current delivery partner is ${currentDeliveryId}`);
-      return errorResponse(res, 403, 'Order is assigned to another delivery partner');
+      return errorResponse(res, 409, 'Order was accepted by another delivery partner.');
     } else {
       console.log(`✅ Order ${order.orderId} is already assigned to current delivery partner`);
     }
@@ -844,6 +858,9 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         orderMongoId,
         {
           $set: {
+            'assignmentInfo.deliveryPartnerId': String(delivery._id),
+            'assignmentInfo.assignedBy': 'delivery_accept',
+            'assignmentInfo.assignedAt': new Date(),
             'deliveryState.status': 'accepted',
             'deliveryState.acceptedAt': new Date(),
             'deliveryState.currentPhase': 'en_route_to_pickup',
@@ -874,6 +891,29 @@ export const acceptOrder = asyncHandler(async (req, res) => {
 
     console.log(`✅ Order ${order.orderId} accepted by delivery partner ${delivery._id}`);
     console.log(`📍 Route calculated: ${routeData.distance.toFixed(2)} km, ${routeData.duration.toFixed(1)} mins`);
+
+    try {
+      const customerCoords = Array.isArray(updatedOrder?.address?.location?.coordinates)
+        ? updatedOrder.address.location.coordinates
+        : [];
+      const customerLng = Number(customerCoords[0]);
+      const customerLat = Number(customerCoords[1]);
+      await upsertActiveOrderTracking(String(updatedOrder.orderId || order.orderId), {
+        boy_id: String(delivery._id),
+        boy_lat: Number.isFinite(deliveryLat) ? deliveryLat : undefined,
+        boy_lng: Number.isFinite(deliveryLng) ? deliveryLng : undefined,
+        restaurant_lat: Number.isFinite(restaurantLat) ? restaurantLat : undefined,
+        restaurant_lng: Number.isFinite(restaurantLng) ? restaurantLng : undefined,
+        customer_lat: Number.isFinite(customerLat) ? customerLat : undefined,
+        customer_lng: Number.isFinite(customerLng) ? customerLng : undefined,
+        status: 'en_route_to_pickup',
+        distance: Number(routeData.distance || 0),
+        duration: Number(routeData.duration || 0),
+        points: normalizeRouteCoordinatesToPoints(routeData.coordinates)
+      });
+    } catch (firebaseErr) {
+      logger.warn(`Firebase sync failed after acceptOrder for ${order.orderId}: ${firebaseErr.message}`);
+    }
 
     // Calculate delivery distance (restaurant to customer) for earnings calculation
     let deliveryDistance = 0;
@@ -1426,6 +1466,29 @@ export const confirmOrderId = asyncHandler(async (req, res) => {
 
     console.log(`✅ Order ID confirmed for order ${order.orderId}`);
     console.log(`📍 Route to delivery calculated: ${routeData.distance.toFixed(2)} km, ${routeData.duration.toFixed(1)} mins`);
+
+    try {
+      const restaurantCoords = Array.isArray(updatedOrder?.restaurantId?.location?.coordinates)
+        ? updatedOrder.restaurantId.location.coordinates
+        : [];
+      const restaurantLng = Number(restaurantCoords[0]);
+      const restaurantLat = Number(restaurantCoords[1]);
+      await upsertActiveOrderTracking(String(updatedOrder.orderId || order.orderId), {
+        boy_id: String(delivery._id),
+        boy_lat: Number.isFinite(deliveryLat) ? deliveryLat : undefined,
+        boy_lng: Number.isFinite(deliveryLng) ? deliveryLng : undefined,
+        restaurant_lat: Number.isFinite(restaurantLat) ? restaurantLat : undefined,
+        restaurant_lng: Number.isFinite(restaurantLng) ? restaurantLng : undefined,
+        customer_lat: Number.isFinite(customerLat) ? customerLat : undefined,
+        customer_lng: Number.isFinite(customerLng) ? customerLng : undefined,
+        status: 'en_route_to_delivery',
+        distance: Number(routeData.distance || 0),
+        duration: Number(routeData.duration || 0),
+        points: normalizeRouteCoordinatesToPoints(routeData.coordinates)
+      });
+    } catch (firebaseErr) {
+      logger.warn(`Firebase sync failed after confirmOrderId for ${order.orderId}: ${firebaseErr.message}`);
+    }
 
     // Send response first, then handle socket notification asynchronously
     const responseData = {

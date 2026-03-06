@@ -45,20 +45,47 @@ const OptimizedImage = ({
     if (!supportsOptimization(imageSrc)) return undefined
 
     // Generate different sizes for responsive images
-    const sizes = [400, 600, 800, 1200, 1600]
-    return sizes
-      .map(size => `${imageSrc}?w=${size}&q=80 ${size}w`)
-      .join(', ')
+    const widths = [400, 600, 800, 1200, 1600]
+
+    try {
+      const url = new URL(imageSrc)
+      return widths
+        .map((width) => {
+          const sizedUrl = new URL(url.toString())
+          sizedUrl.searchParams.set('w', String(width))
+          if (!sizedUrl.searchParams.has('q')) {
+            sizedUrl.searchParams.set('q', '80')
+          }
+          return `${sizedUrl.toString()} ${width}w`
+        })
+        .join(', ')
+    } catch {
+      return undefined
+    }
   }
 
   // Generate WebP srcset
   const generateWebPSrcSet = (imageSrc) => {
     if (!supportsOptimization(imageSrc)) return undefined
-    
-    const sizes = [400, 600, 800, 1200, 1600]
-    return sizes
-      .map(size => `${imageSrc}?w=${size}&q=80&format=webp ${size}w`)
-      .join(', ')
+
+    const widths = [400, 600, 800, 1200, 1600]
+
+    try {
+      const url = new URL(imageSrc)
+      return widths
+        .map((width) => {
+          const sizedUrl = new URL(url.toString())
+          sizedUrl.searchParams.set('w', String(width))
+          if (!sizedUrl.searchParams.has('q')) {
+            sizedUrl.searchParams.set('q', '80')
+          }
+          sizedUrl.searchParams.set('format', 'webp')
+          return `${sizedUrl.toString()} ${width}w`
+        })
+        .join(', ')
+    } catch {
+      return undefined
+    }
   }
 
   // Intersection Observer for lazy loading

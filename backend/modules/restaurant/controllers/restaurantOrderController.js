@@ -1,6 +1,7 @@
 import Order from '../../order/models/Order.js';
 import Payment from '../../payment/models/Payment.js';
 import Restaurant from '../models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 import { notifyRestaurantOrderUpdate } from '../../order/services/restaurantNotificationService.js';
@@ -34,6 +35,46 @@ const emitOrderTrackingUpdate = async (orderLike, payload = {}) => {
   } catch (emitError) {
     console.warn(`Failed to emit order tracking update: ${emitError.message}`);
   }
+};
+
+const hasValidStoreCoordinates = (store) =>
+  Boolean(
+    store?.location?.coordinates &&
+    store.location.coordinates.length >= 2 &&
+    Number.isFinite(Number(store.location.coordinates[0])) &&
+    Number.isFinite(Number(store.location.coordinates[1])) &&
+    !(Number(store.location.coordinates[0]) === 0 && Number(store.location.coordinates[1]) === 0)
+  );
+
+const resolveStoreForAssignment = async (storeIdentifier) => {
+  const normalized = String(storeIdentifier || '').trim();
+  if (!normalized) return null;
+
+  const projection = 'name location restaurantId slug';
+
+  if (mongoose.Types.ObjectId.isValid(normalized)) {
+    const byRestaurantId = await Restaurant.findById(normalized).select(projection).lean();
+    if (byRestaurantId) return byRestaurantId;
+
+    const byGroceryStoreId = await GroceryStore.findById(normalized).select(projection).lean();
+    if (byGroceryStoreId) return byGroceryStoreId;
+  }
+
+  const byRestaurantIdentifier = await Restaurant.findOne({
+    $or: [{ restaurantId: normalized }, { slug: normalized }]
+  })
+    .select(projection)
+    .lean();
+  if (byRestaurantIdentifier) return byRestaurantIdentifier;
+
+  const byGroceryIdentifier = await GroceryStore.findOne({
+    $or: [{ restaurantId: normalized }, { slug: normalized }]
+  })
+    .select(projection)
+    .lean();
+  if (byGroceryIdentifier) return byGroceryIdentifier;
+
+  return null;
 };
 
 /**
@@ -377,24 +418,8 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     // This restores the expected behavior where accepting from /restaurant immediately pushes to a delivery partner.
     if (!order.deliveryPartnerId) {
       try {
-        let restaurantDoc = null;
-        if (mongoose.Types.ObjectId.isValid(restaurantId)) {
-          restaurantDoc = await Restaurant.findById(restaurantId).lean();
-        }
-        if (!restaurantDoc) {
-          restaurantDoc = await Restaurant.findOne({
-            $or: [
-              { restaurantId: restaurantId },
-              { _id: restaurantId }
-            ]
-          }).lean();
-        }
-
-        const hasValidRestaurantCoords = Boolean(
-          restaurantDoc?.location?.coordinates &&
-          restaurantDoc.location.coordinates.length >= 2 &&
-          !(restaurantDoc.location.coordinates[0] === 0 && restaurantDoc.location.coordinates[1] === 0)
-        );
+        const restaurantDoc = await resolveStoreForAssignment(restaurantId);
+        const hasValidRestaurantCoords = hasValidStoreCoordinates(restaurantDoc);
 
         if (hasValidRestaurantCoords) {
           const [restaurantLng, restaurantLat] = restaurantDoc.location.coordinates;
@@ -429,17 +454,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
 
         // Get restaurant location
         let restaurantDoc = null;
-        if (mongoose.Types.ObjectId.isValid(restaurantId)) {
-          restaurantDoc = await Restaurant.findById(restaurantId).lean();
-        }
-        if (!restaurantDoc) {
-          restaurantDoc = await Restaurant.findOne({
-            $or: [
-              { restaurantId: restaurantId },
-              { _id: restaurantId }
-            ]
-          }).lean();
-        }
+        restaurantDoc = await resolveStoreForAssignment(restaurantId);
 
         if (!restaurantDoc) {
           console.error(`❌ Restaurant not found for restaurantId: ${restaurantId}`);
@@ -1024,33 +1039,44 @@ export const markOrderReady = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, `Order cannot be marked as ready. Current status: ${order.status}`);
     }
 
-    // Update order status and tracking
     const now = new Date();
-    order.status = 'ready';
-    if (!order.tracking) {
-      order.tracking = {};
+    const updatedOrderDoc = await Order.findOneAndUpdate(
+      {
+        _id: order._id,
+        restaurantId,
+        status: 'preparing'
+      },
+      {
+        $set: {
+          status: 'ready',
+          'tracking.ready': {
+            status: true,
+            timestamp: now
+          }
+        }
+      },
+      { new: true }
+    );
+
+    if (!updatedOrderDoc) {
+      return errorResponse(res, 409, 'Order was already updated to ready by another process');
     }
-    order.tracking.ready = {
-      status: true,
-      timestamp: now
-    };
-    await order.save();
 
     // Populate order for notifications
-    const populatedOrder = await Order.findById(order._id)
+    const populatedOrder = await Order.findById(updatedOrderDoc._id)
       .populate('restaurantId', 'name location address phone')
       .populate('userId', 'name phone')
       .populate('deliveryPartnerId', 'name phone')
       .lean();
 
     try {
-      await notifyRestaurantOrderUpdate(order._id.toString(), 'ready');
+      await notifyRestaurantOrderUpdate(updatedOrderDoc._id.toString(), 'ready');
     } catch (notifError) {
       console.error('Error sending restaurant notification:', notifError);
     }
 
     try {
-      await emitOrderTrackingUpdate(order, {
+      await emitOrderTrackingUpdate(updatedOrderDoc, {
         status: 'ready',
         message: 'Your food is ready'
       });

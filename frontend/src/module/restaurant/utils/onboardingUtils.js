@@ -86,16 +86,56 @@ export const determineStepToShow = (data) => {
   return null
 }
 
+const hasProvisionedRestaurantProfile = (restaurant) => {
+  if (!restaurant || typeof restaurant !== "object") return false
+  if (restaurant.isActive === true) return true
+
+  const hasBasicInfo = Boolean(
+    restaurant.name &&
+      restaurant.ownerName &&
+      restaurant.ownerEmail &&
+      (restaurant.ownerPhone || restaurant.phone || restaurant.primaryContactNumber),
+  )
+  const hasLocation = Boolean(restaurant.location?.area || restaurant.location?.city)
+  const hasCatalogSignals = Boolean(
+    (Array.isArray(restaurant.cuisines) && restaurant.cuisines.length > 0) ||
+      (Array.isArray(restaurant.menuImages) && restaurant.menuImages.length > 0) ||
+      restaurant.profileImage,
+  )
+
+  return hasBasicInfo && hasLocation && hasCatalogSignals
+}
+
 // Check onboarding status from API and return the step to navigate to
 export const checkOnboardingStatus = async () => {
   try {
-    const res = await api.get("/restaurant/onboarding")
-    const data = res?.data?.data?.onboarding
-    if (data) {
-      const stepToShow = determineStepToShow(data)
+    const [onboardingResult, profileResult] = await Promise.allSettled([
+      api.get("/restaurant/onboarding"),
+      api.get("/restaurant/auth/me"),
+    ])
+
+    const onboardingData =
+      onboardingResult.status === "fulfilled"
+        ? onboardingResult.value?.data?.data?.onboarding
+        : null
+    const restaurantProfile =
+      profileResult.status === "fulfilled"
+        ? profileResult.value?.data?.data?.restaurant || profileResult.value?.data?.restaurant
+        : null
+
+    if (onboardingData) {
+      const stepToShow = determineStepToShow(onboardingData)
+      if (stepToShow && hasProvisionedRestaurantProfile(restaurantProfile)) {
+        return null
+      }
       return stepToShow
     }
-    // No onboarding data, start from step 1
+
+    if (hasProvisionedRestaurantProfile(restaurantProfile)) {
+      return null
+    }
+
+    // No onboarding/profile data, start from step 1
     return 1
   } catch (err) {
     // If API call fails, check localStorage

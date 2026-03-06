@@ -98,11 +98,24 @@ const getSafeOtpErrorMessage = (error) => {
   return rawMessage || "Failed to send OTP. Please try again.";
 };
 
+const getRequestedPlatform = (body = {}) => String(body?.platform || '').trim().toLowerCase();
+
+const rejectIfGroceryPlatformRequest = (req, res) => {
+  if (getRequestedPlatform(req?.body) !== 'mogrocery') return false;
+  errorResponse(
+    res,
+    400,
+    'Use grocery store auth endpoints for mogrocery accounts (/api/grocery/store/auth/*).'
+  );
+  return true;
+};
+
 /**
  * Send OTP for restaurant phone number or email
  * POST /api/restaurant/auth/send-otp
  */
 export const sendOTP = asyncHandler(async (req, res) => {
+  if (rejectIfGroceryPlatformRequest(req, res)) return;
   const { phone, email, purpose = 'login' } = req.body;
 
   // Validate that either phone or email is provided
@@ -143,6 +156,7 @@ export const sendOTP = asyncHandler(async (req, res) => {
  * POST /api/restaurant/auth/verify-otp
  */
 export const verifyOTP = asyncHandler(async (req, res) => {
+  if (rejectIfGroceryPlatformRequest(req, res)) return;
   const { phone, email, otp, purpose = 'login', name, password } = req.body;
   const fcmPatch = getFcmPatchFromBody(req.body);
 
@@ -618,6 +632,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
  * POST /api/restaurant/auth/register
  */
 export const register = asyncHandler(async (req, res) => {
+  if (rejectIfGroceryPlatformRequest(req, res)) return;
   const { name, email, password, phone, ownerName, ownerEmail, ownerPhone } = req.body;
   const fcmPatch = getFcmPatchFromBody(req.body);
 
@@ -707,6 +722,7 @@ export const register = asyncHandler(async (req, res) => {
  * POST /api/restaurant/auth/login
  */
 export const login = asyncHandler(async (req, res) => {
+  if (rejectIfGroceryPlatformRequest(req, res)) return;
   const { email, password } = req.body;
   const fcmPatch = getFcmPatchFromBody(req.body);
 
@@ -990,6 +1006,7 @@ export const reverifyRestaurant = asyncHandler(async (req, res) => {
  * POST /api/restaurant/auth/firebase/google-login
  */
 export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
+  if (rejectIfGroceryPlatformRequest(req, res)) return;
   const { idToken } = req.body;
   const fcmPatch = getFcmPatchFromBody(req.body);
 

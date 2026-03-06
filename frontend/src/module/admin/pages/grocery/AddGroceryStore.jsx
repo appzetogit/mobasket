@@ -66,10 +66,11 @@ const parseAddressComponents = (components = []) => {
 
   return {
     addressLine1: [streetNumber, route].filter(Boolean).join(" ").trim(),
+    addressLine2: "",
     area: sublocality || city,
     city,
     state,
-    pincode,
+    zipCode: pincode,
     landmark,
   }
 }
@@ -112,8 +113,10 @@ export default function AddGroceryStore({ embedded = false, onCreated = null, on
       area: "",
       city: "",
       state: "",
-      pincode: "",
+      zipCode: "",
       landmark: "",
+      address: "",
+      formattedAddress: "",
       latitude: null,
       longitude: null,
       coordinates: [],
@@ -419,10 +422,11 @@ export default function AddGroceryStore({ embedded = false, onCreated = null, on
       location: {
         ...prev.location,
         addressLine1: parsed.addressLine1 || prev.location.addressLine1 || "",
+        addressLine2: parsed.addressLine2 || prev.location.addressLine2 || "",
         area: parsed.area || prev.location.area || "",
         city: parsed.city || prev.location.city || "",
         state: parsed.state || prev.location.state || "",
-        pincode: parsed.pincode || prev.location.pincode || "",
+        zipCode: parsed.zipCode || prev.location.zipCode || prev.location.pincode || "",
         landmark: parsed.landmark || prev.location.landmark || "",
         address: formattedAddress || prev.location.address || "",
         formattedAddress: formattedAddress || prev.location.formattedAddress || "",
@@ -483,8 +487,12 @@ export default function AddGroceryStore({ embedded = false, onCreated = null, on
     if (!step1.ownerName?.trim()) errors.push("Owner name is required")
     if (!step1.ownerEmail?.trim()) errors.push("Owner email is required")
     if (!step1.ownerPhone?.trim()) errors.push("Owner phone is required")
+    if (!step1.primaryContactNumber?.trim()) errors.push("Primary contact number is required")
+    if (!step1.location?.addressLine1?.trim()) errors.push("Address line 1 is required")
     if (!step1.location?.area?.trim()) errors.push("Area is required from map")
     if (!step1.location?.city?.trim()) errors.push("City is required from map")
+    if (!step1.location?.state?.trim()) errors.push("State is required from map")
+    if (!step1.location?.zipCode?.trim()) errors.push("ZIP / postal code is required from map")
     if (!Number.isFinite(step1.location?.latitude) || !Number.isFinite(step1.location?.longitude)) {
       errors.push("Please set store location on the map")
     }
@@ -528,7 +536,36 @@ export default function AddGroceryStore({ embedded = false, onCreated = null, on
         ownerPhone: (step1.ownerPhone || loginPhone || "").trim(),
         phone: loginPhone || null,
         primaryContactNumber: step1.primaryContactNumber,
-        location: step1.location,
+        location: {
+          ...step1.location,
+          zipCode: step1.location.zipCode,
+          pincode: step1.location.zipCode,
+          postalCode: step1.location.zipCode,
+          address:
+            step1.location.address ||
+            [
+              step1.location.addressLine1,
+              step1.location.addressLine2,
+              step1.location.area,
+              step1.location.city,
+              step1.location.state,
+              step1.location.zipCode,
+            ]
+              .filter(Boolean)
+              .join(", "),
+          formattedAddress:
+            step1.location.formattedAddress ||
+            [
+              step1.location.addressLine1,
+              step1.location.addressLine2,
+              step1.location.area,
+              step1.location.city,
+              step1.location.state,
+              step1.location.zipCode,
+            ]
+              .filter(Boolean)
+              .join(", "),
+        },
         zoneId: selectedZoneId,
         profileImage: profileImageData,
         cuisines: step2.cuisines,
@@ -647,7 +684,76 @@ export default function AddGroceryStore({ embedded = false, onCreated = null, on
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <Input value={step1.location.state || ""} readOnly placeholder="State (auto from map)" />
-                <Input value={step1.location.pincode || ""} readOnly placeholder="Pincode (auto from map)" />
+                <Input value={step1.location.zipCode || ""} readOnly placeholder="ZIP / postal code (auto from map)" />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Address Line 1*</Label>
+                  <Input
+                    value={step1.location.addressLine1 || ""}
+                    onChange={(e) =>
+                      setStep1((prev) => ({
+                        ...prev,
+                        location: {
+                          ...prev.location,
+                          addressLine1: e.target.value,
+                        },
+                      }))
+                    }
+                    placeholder="Street address"
+                  />
+                </div>
+                <div>
+                  <Label>Address Line 2</Label>
+                  <Input
+                    value={step1.location.addressLine2 || ""}
+                    onChange={(e) =>
+                      setStep1((prev) => ({
+                        ...prev,
+                        location: {
+                          ...prev.location,
+                          addressLine2: e.target.value,
+                        },
+                      }))
+                    }
+                    placeholder="Apartment, suite, floor"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Landmark</Label>
+                  <Input
+                    value={step1.location.landmark || ""}
+                    onChange={(e) =>
+                      setStep1((prev) => ({
+                        ...prev,
+                        location: {
+                          ...prev.location,
+                          landmark: e.target.value,
+                        },
+                      }))
+                    }
+                    placeholder="Nearby landmark"
+                  />
+                </div>
+                <div>
+                  <Label>Formatted Address</Label>
+                  <Input
+                    value={step1.location.formattedAddress || ""}
+                    onChange={(e) =>
+                      setStep1((prev) => ({
+                        ...prev,
+                        location: {
+                          ...prev.location,
+                          formattedAddress: e.target.value,
+                          address: e.target.value,
+                        },
+                      }))
+                    }
+                    placeholder="Full delivery address"
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>Search place in selected zone</Label>
