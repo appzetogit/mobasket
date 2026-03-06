@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
@@ -7,19 +7,60 @@ import { useCart } from "../../user/context/CartContext";
 import AddToCartAnimation from "../../user/components/AddToCartAnimation";
 import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
+import { CategoryFoodsContent } from "./CategoryFoodsPage";
 
 export default function GroceryBestSellerProductsPage() {
   const navigate = useNavigate();
   const { itemType, itemId } = useParams();
+
+  if (itemType === "category" || itemType === "subcategory") {
+    return (
+      <CategoryFoodsContent
+        onClose={() => navigate("/grocery")}
+        initialCategory={itemType === "category" ? String(itemId || "").trim() : "all"}
+        initialSubcategoryId={itemType === "subcategory" ? String(itemId || "").trim() : ""}
+      />
+    );
+  }
+
   const { addToCart, isInCart } = useCart();
-  const { location } = useUserLocation();
-  const { zoneId } = useZone(location, "mogrocery");
+  const { location, loading: locationLoading } = useUserLocation();
+  const { zoneId, refreshZone, loading: zoneLoading } = useZone(location, "mogrocery");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [title, setTitle] = useState("Products");
   const [products, setProducts] = useState([]);
+  const zoneRecoveryAttemptedRef = useRef(false);
+  const cachedZoneId =
+    typeof window !== "undefined" ? localStorage.getItem("userZoneId:mogrocery") : "";
+  const effectiveZoneId = String(zoneId || cachedZoneId || "").trim();
+
+  const extractProducts = (response) => {
+    const data = response?.data?.data;
+    if (Array.isArray(data)) return data;
+    if (Array.isArray(data?.products)) return data.products;
+    return [];
+  };
+
+  const matchesCategory = (product, categoryId) =>
+    String(product?.category?._id || product?.category?.id || product?.category || "") === String(categoryId || "");
+
+  const matchesSubcategory = (product, subcategoryId) => {
+    const productSubcategoryIds = [
+      ...(Array.isArray(product?.subcategories) ? product.subcategories : []),
+      product?.subcategory,
+    ]
+      .map((subcategory) => String(subcategory?._id || subcategory?.id || subcategory || ""))
+      .filter(Boolean);
+
+    return productSubcategoryIds.includes(String(subcategoryId || ""));
+  };
 
   useEffect(() => {
+    if ((locationLoading || zoneLoading) && !effectiveZoneId) {
+      return undefined;
+    }
+
     const fetchData = async () => {
       try {
         setLoading(true);
@@ -32,20 +73,42 @@ export default function GroceryBestSellerProductsPage() {
         if (itemType === "category") {
           const [categoryRes, productsRes] = await Promise.all([
             api.get(`/grocery/categories/${itemId}`),
-            api.get("/grocery/products", { params: { categoryId: itemId, ...(zoneId ? { zoneId } : {}) } }),
+            api.get("/grocery/products", {
+              params: { categoryId: itemId, ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}) },
+            }),
           ]);
           setTitle(categoryRes?.data?.data?.name || "Category Products");
-          setProducts(Array.isArray(productsRes?.data?.data) ? productsRes.data.data : []);
+          let resolvedProducts = extractProducts(productsRes);
+
+          if (resolvedProducts.length === 0) {
+            const fallbackRes = await api.get("/grocery/products", {
+              params: { ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}), limit: 1000 },
+            });
+            resolvedProducts = extractProducts(fallbackRes).filter((product) => matchesCategory(product, itemId));
+          }
+
+          setProducts(resolvedProducts);
         } else if (itemType === "subcategory") {
           const [subcategoryRes, productsRes] = await Promise.all([
             api.get(`/grocery/subcategories/${itemId}`),
-            api.get("/grocery/products", { params: { subcategoryId: itemId, ...(zoneId ? { zoneId } : {}) } }),
+            api.get("/grocery/products", {
+              params: { subcategoryId: itemId, ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}) },
+            }),
           ]);
           setTitle(subcategoryRes?.data?.data?.name || "Subcategory Products");
-          setProducts(Array.isArray(productsRes?.data?.data) ? productsRes.data.data : []);
+          let resolvedProducts = extractProducts(productsRes);
+
+          if (resolvedProducts.length === 0) {
+            const fallbackRes = await api.get("/grocery/products", {
+              params: { ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}), limit: 1000 },
+            });
+            resolvedProducts = extractProducts(fallbackRes).filter((product) => matchesSubcategory(product, itemId));
+          }
+
+          setProducts(resolvedProducts);
         } else if (itemType === "product") {
           const productRes = await api.get(`/grocery/products/${itemId}`, {
-            params: zoneId ? { zoneId } : {}
+            params: effectiveZoneId ? { zoneId: effectiveZoneId } : {}
           });
           const product = productRes?.data?.data;
           setTitle(product?.name || "Product");
@@ -53,8 +116,27 @@ export default function GroceryBestSellerProductsPage() {
         } else {
           throw new Error("Unsupported item type");
         }
-      } catch {
-        setError("Failed to load products.");
+        zoneRecoveryAttemptedRef.current = false;
+      } catch (fetchError) {
+        const statusCode = Number(fetchError?.response?.status || 0);
+        const message = String(fetchError?.response?.data?.message || "").toLowerCase();
+        const isZoneValidationError =
+          statusCode === 400 && (message.includes("zone") || message.includes("inactive"));
+
+        if (isZoneValidationError && !zoneRecoveryAttemptedRef.current) {
+          zoneRecoveryAttemptedRef.current = true;
+          localStorage.removeItem("userZoneId:mogrocery");
+          localStorage.removeItem("userZone:mogrocery");
+          if (typeof refreshZone === "function") {
+            refreshZone();
+          }
+        }
+
+        setError(
+          fetchError?.response?.data?.message ||
+          fetchError?.message ||
+          "Failed to load products."
+        );
         setProducts([]);
       } finally {
         setLoading(false);
@@ -62,7 +144,7 @@ export default function GroceryBestSellerProductsPage() {
     };
 
     fetchData();
-  }, [itemId, itemType, zoneId]);
+  }, [effectiveZoneId, itemId, itemType, locationLoading, refreshZone, zoneLoading]);
 
   const headerTitle = useMemo(() => title || "Products", [title]);
 

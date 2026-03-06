@@ -62,8 +62,11 @@ export function CategoryFoodsContent({
 }) {
   const navigate = useNavigate();
   const { addToCart, isInCart } = useCart();
-  const { location: userLocation } = useUserLocation();
-  const { zoneId } = useZone(userLocation, "mogrocery");
+  const { location: userLocation, loading: locationLoading } = useUserLocation();
+  const { zoneId, loading: zoneLoading } = useZone(userLocation, "mogrocery");
+  const cachedZoneId =
+    typeof window !== "undefined" ? localStorage.getItem("userZoneId:mogrocery") : "";
+  const effectiveZoneId = String(zoneId || cachedZoneId || "").trim();
 
   const [selectedCategory, setSelectedCategory] = useState(initialCategory || "all");
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState(initialSubcategoryId || "");
@@ -117,11 +120,7 @@ export function CategoryFoodsContent({
     let mounted = true;
 
     const fetchProducts = async () => {
-      if (!zoneId) {
-        if (mounted) {
-          setProducts([]);
-          setIsProductsLoading(false);
-        }
+      if ((locationLoading || zoneLoading) && !effectiveZoneId) {
         return;
       }
 
@@ -130,14 +129,15 @@ export function CategoryFoodsContent({
         const params = {
           page: 1,
           limit: 200,
-          zoneId,
+          ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
           ...(selectedCategory && selectedCategory !== "all" ? { categoryId: selectedCategory } : {}),
           ...(selectedSubcategoryId ? { subcategoryId: selectedSubcategoryId } : {}),
         };
 
         const response = await api.get("/grocery/products", { params });
         const data = Array.isArray(response?.data?.data) ? response.data.data : [];
-        const zoneSafeData = data.filter((product) => {
+        let zoneSafeData = data.filter((product) => {
+          if (!effectiveZoneId) return true;
           const productZoneId = String(
             product?.zoneId?._id ||
               product?.zoneId?.id ||
@@ -147,8 +147,38 @@ export function CategoryFoodsContent({
               product?.storeId?.zoneId ||
               "",
           ).trim();
-          return !productZoneId || productZoneId === String(zoneId);
+          return !productZoneId || productZoneId === String(effectiveZoneId);
         });
+
+        if (zoneSafeData.length === 0) {
+          const fallbackResponse = await api.get("/grocery/products", {
+            params: {
+              limit: 1000,
+              ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
+            },
+          });
+          const fallbackData = Array.isArray(fallbackResponse?.data?.data) ? fallbackResponse.data.data : [];
+          zoneSafeData = fallbackData.filter((product) => {
+            const productCategoryId = extractId(product?.category);
+            const productSubcategoryIds = [
+              ...(Array.isArray(product?.subcategories) ? product.subcategories : []),
+              product?.subcategory,
+            ]
+              .map((subcategory) => extractId(subcategory))
+              .filter(Boolean);
+
+            const categoryMatch =
+              !selectedCategory ||
+              selectedCategory === "all" ||
+              productCategoryId === String(selectedCategory);
+            const subcategoryMatch =
+              !selectedSubcategoryId ||
+              productSubcategoryIds.includes(String(selectedSubcategoryId));
+
+            return categoryMatch && subcategoryMatch;
+          });
+        }
+
         if (!mounted) return;
         setProducts(zoneSafeData);
       } catch {
@@ -164,7 +194,7 @@ export function CategoryFoodsContent({
     return () => {
       mounted = false;
     };
-  }, [selectedCategory, selectedSubcategoryId, zoneId]);
+  }, [effectiveZoneId, locationLoading, selectedCategory, selectedSubcategoryId, zoneLoading]);
 
   const sidebarCategories = useMemo(() => {
     const dynamic = categories.map((category) => ({
