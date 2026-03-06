@@ -419,14 +419,18 @@ export default function PocketPage() {
     0,
     Number(walletState?.cashCollected ?? walletState?.cashInHand ?? balances.cashInHand) || 0
   )
+  const depositableCashInHand = Math.max(
+    0,
+    Number(walletState?.cashInHand ?? walletState?.codCashCollected ?? balances.cashInHand) || 0
+  )
   const backendRemainingLimit = Number(walletState?.remainingLimit)
   const availableCashLimit = Number.isFinite(backendRemainingLimit)
     ? Math.max(0, backendRemainingLimit)
     : Math.max(0, totalCashLimit - cashCollected)
-  const cashInHand = cashCollected
+  const cashInHand = depositableCashInHand
   const deductions = Math.max(0, Number(walletState?.deductions) || 0)
   const isCashLimitReached = totalCashLimit > 0 && availableCashLimit <= 0
-  const depositAmount = cashCollected > 0 ? cashCollected : 0
+  const depositAmount = cashInHand > 0 ? cashInHand : 0
 
   // Customer tips balance - calculate from transactions
   const customerTipsBalance = walletState.transactions
@@ -1045,7 +1049,7 @@ export default function PocketPage() {
               </div> */}
 
               {/* Action Buttons */}
-              {cashCollected > 0 && (
+              {depositAmount > 0 && (
                 <div className="flex gap-3 pt-2">
                   <Button
                     onClick={() => setShowDepositPopup(true)}

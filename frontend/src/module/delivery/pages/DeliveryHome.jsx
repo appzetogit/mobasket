@@ -1340,12 +1340,11 @@ export default function DeliveryHome() {
     ? Number(walletState.totalCashLimit)
     : 750
   const cashInHand = Math.max(0, Number(walletState?.cashInHand) || 0)
-  const deductions = Math.max(0, Number(walletState?.deductions) || 0)
-  const availableCashLimit =
-    Number.isFinite(Number(walletState?.availableCashLimit))
-      ? Number(walletState.availableCashLimit)
-      : (totalCashLimit - cashInHand - deductions)
-  const isCashInHandLimitReached = cashInHand >= totalCashLimit
+  const availableCashLimit =
+    Number.isFinite(Number(walletState?.availableCashLimit))
+      ? Number(walletState.availableCashLimit)
+      : Math.max(0, totalCashLimit - cashInHand)
+  const isCashInHandLimitReached = cashInHand >= totalCashLimit
   const isMapLockedForOrderEligibility = isCashInHandLimitReached
 
   // State for active earning addon

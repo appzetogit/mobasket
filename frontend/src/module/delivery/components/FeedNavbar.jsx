@@ -6,27 +6,41 @@ import { HelpCircle, ArrowRight, Phone, Ambulance, AlertTriangle, Shield, Shield
 import { toast } from "sonner";
 import { deliveryAPI } from "@/lib/api";
 import { fetchDeliveryWallet } from "../utils/deliveryWalletState";
-import { useCompanyName } from "@/lib/hooks/useCompanyName";
+import DepositPopup from "./DepositPopup";
+import { useCompanyName } from "@/lib/hooks/useCompanyName";
 
 const LS_KEY = "app:isOnline";
 const TOAST_ID_KEY = "feedNavbar-onlineStatus";
 const CASH_LIMIT_TOAST_ID = "feedNavbar-cashLimit";
 
 const getAvailableCashLimit = (walletState) => {
-  const totalCashLimit = Number(walletState?.totalCashLimit) || 0;
+  const totalCashLimit =
+    Number(walletState?.codLimit ?? walletState?.totalCashLimit) || 0;
   const cashInHand =
-    Number(walletState?.cashCollected ?? walletState?.cashInHand) || 0;
-  const deductions = Number(walletState?.deductions) || 0;
+    Number(walletState?.cashInHand ?? walletState?.codCashCollected ?? walletState?.cashCollected) || 0;
 
   if (Number.isFinite(Number(walletState?.availableCashLimit))) {
     return Math.max(0, Number(walletState.availableCashLimit));
   }
 
-  return Math.max(0, totalCashLimit - cashInHand - deductions);
+  return Math.max(0, totalCashLimit - cashInHand);
 };
 
 const isCashLimitReached = (walletState) =>
   getAvailableCashLimit(walletState) <= 0;
+
+const getDepositEligibleCashInHand = (walletState) => {
+  const totalCashLimit = Number(walletState?.totalCashLimit ?? walletState?.codLimit) || 0;
+  const availableCashLimit = getAvailableCashLimit(walletState);
+
+  return Math.max(
+    0,
+    Number(walletState?.cashInHand) || 0,
+    Number(walletState?.codCashCollected) || 0,
+    Number(walletState?.cashCollected) || 0,
+    totalCashLimit > 0 ? totalCashLimit - availableCashLimit : 0,
+  );
+};
 
 /** Minimal bottom-sheet popup (self-contained) */
 function BottomPopup({
@@ -140,10 +154,8 @@ export default function FeedNavbar({ className = "" }) {
     });
   };
 
-  const goToDepositCash = () => {
-    setShowDepositCashPopup(false);
-    navigate("/delivery/limit-settlement");
-  };
+  const cashInHandForDeposit =
+    getDepositEligibleCashInHand(walletState);
 
   useEffect(() => {
     const loadWallet = async () => {
@@ -639,20 +651,22 @@ export default function FeedNavbar({ className = "" }) {
         title="Deposit cash to continue"
         showCloseButton={true}
         closeOnBackdropClick={true}
-        maxHeight="45vh"
+        maxHeight="55vh"
       >
-        <div className="space-y-4 pb-2">
-          <p className="text-sm text-gray-700">
-            Your available cash limit is exhausted. Deposit collected cash before going online again.
-          </p>
-          <button
-            type="button"
-            onClick={goToDepositCash}
-            className="w-full rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white"
-          >
-            Deposit cash
-          </button>
-        </div>
+        <DepositPopup
+          cashInHand={cashInHandForDeposit}
+          fallbackAmount={cashInHandForDeposit}
+          hideEmptyStateMessage={true}
+          onSuccess={async () => {
+            setShowDepositCashPopup(false);
+            try {
+              const nextWalletState = await fetchDeliveryWallet();
+              setWalletState(nextWalletState);
+            } catch (_) {
+              // Wallet listeners will refresh state if this fetch fails.
+            }
+          }}
+        />
       </BottomPopup>
 
     </>

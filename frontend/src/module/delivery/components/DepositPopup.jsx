@@ -5,12 +5,17 @@ import { initRazorpayPayment } from "@/lib/utils/razorpay"
 import { toast } from "sonner"
 import { getCompanyNameAsync } from "@/lib/utils/businessSettings"
 
-export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
+export default function DepositPopup({
+  onSuccess,
+  cashInHand = 0,
+  fallbackAmount = 0,
+  hideEmptyStateMessage = false
+}) {
   const [amount, setAmount] = useState("")
   const [loading, setLoading] = useState(false)
   const [processing, setProcessing] = useState(false)
 
-  const cashInHandNum = Number(cashInHand) || 0
+  const cashInHandNum = Math.max(Number(cashInHand) || 0, Number(fallbackAmount) || 0)
   const hasCashInHand = cashInHandNum > 0
 
   useEffect(() => {
@@ -125,11 +130,11 @@ export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
           <p className="text-xs text-slate-500 mt-1">
             Cash in hand: Rs {cashInHandNum.toFixed(2)}. Full amount will be deposited.
           </p>
-        ) : (
+        ) : !hideEmptyStateMessage ? (
           <p className="text-xs text-amber-700 mt-1">
             No COD cash in hand right now. Pocket balance/earnings cannot be deposited here.
           </p>
-        )}
+        ) : null}
       </div>
       <button
         type="button"
