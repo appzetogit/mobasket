@@ -43,6 +43,20 @@ function isPointInZoneBoundary(lat, lng, zoneCoordinates = []) {
   return inside;
 }
 
+function normalizeDeliveryPartnerZoneIds(rawZones = []) {
+  if (!Array.isArray(rawZones)) return [];
+  return rawZones
+    .map((zoneValue) => {
+      if (!zoneValue) return null;
+      if (typeof zoneValue === 'string') return zoneValue.trim();
+      if (typeof zoneValue === 'object') {
+        return String(zoneValue._id || zoneValue.id || '').trim();
+      }
+      return String(zoneValue).trim();
+    })
+    .filter(Boolean);
+}
+
 function normalizeZoneOption(rawOptions = null) {
   // Backward compatibility: some legacy callers pass a 5th numeric arg (top-N hint).
   if (!rawOptions || typeof rawOptions === 'number') {
@@ -280,9 +294,7 @@ export async function findNearestDeliveryBoys(restaurantLat, restaurantLng, rest
 
         // Zone filtering (same as findNearestDeliveryBoy)
         if (zone) {
-          const partnerZoneIds = Array.isArray(partner.availability?.zones)
-            ? partner.availability.zones.map((z) => String(z))
-            : [];
+          const partnerZoneIds = normalizeDeliveryPartnerZoneIds(partner.availability?.zones);
           if (partnerZoneIds.length > 0 && !partnerZoneIds.includes(String(zone._id))) {
             return null;
           }
@@ -303,9 +315,7 @@ export async function findNearestDeliveryBoys(restaurantLat, restaurantLng, rest
           distance,
           latitude: lat,
           longitude: lng,
-          zoneId: Array.isArray(partner.availability?.zones) && partner.availability.zones.length > 0
-            ? String(partner.availability.zones[0])
-            : null
+          zoneId: normalizeDeliveryPartnerZoneIds(partner.availability?.zones)[0] || null
         };
       })
       .filter(partner => partner !== null && partner.distance <= priorityDistance)
@@ -433,9 +443,7 @@ export async function findNearestDeliveryBoy(
               if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
 
               if (zone) {
-                const partnerZoneIds = Array.isArray(partner.availability?.zones)
-                  ? partner.availability.zones.map((z) => String(z))
-                  : [];
+                const partnerZoneIds = normalizeDeliveryPartnerZoneIds(partner.availability?.zones);
                 if (partnerZoneIds.length > 0 && !partnerZoneIds.includes(String(zone._id))) {
                   continue;
                 }
@@ -517,9 +525,7 @@ export async function findNearestDeliveryBoy(
 
         // Filter by zone if zone exists
         if (zone) {
-          const partnerZoneIds = Array.isArray(partner.availability?.zones)
-            ? partner.availability.zones.map((z) => String(z))
-            : [];
+          const partnerZoneIds = normalizeDeliveryPartnerZoneIds(partner.availability?.zones);
 
           if (partnerZoneIds.length > 0 && !partnerZoneIds.includes(String(zone._id))) {
             console.log(`⚠️ Delivery partner ${partner._id} not in zone ${zone.name} (partner zones: ${partnerZoneIds.join(',')}, required zone: ${zone._id})`);
@@ -550,9 +556,7 @@ export async function findNearestDeliveryBoy(
           distance,
           latitude: lat,
           longitude: lng,
-          zoneId: Array.isArray(partner.availability?.zones) && partner.availability.zones.length > 0
-            ? String(partner.availability.zones[0])
-            : null
+          zoneId: normalizeDeliveryPartnerZoneIds(partner.availability?.zones)[0] || null
         };
       })
       .filter(partner => partner !== null && partner.distance <= maxDistance)

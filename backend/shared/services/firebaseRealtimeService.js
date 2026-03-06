@@ -211,6 +211,20 @@ export async function upsertDeliveryPartnerPresence({
     last_updated: now
   };
 
+  const normalizedZones = Array.isArray(zones)
+    ? zones
+        .map((zoneValue) => {
+          if (!zoneValue) return null;
+          if (typeof zoneValue === 'string') return zoneValue.trim();
+          if (typeof zoneValue === 'object') return String(zoneValue._id || zoneValue.id || '').trim();
+          return String(zoneValue).trim();
+        })
+        .filter(Boolean)
+    : [];
+  if (normalizedZones.length > 0) {
+    payload.zones = normalizedZones;
+  }
+
   if (hasCoords) {
     payload.lat = lat;
     payload.lng = lng;
