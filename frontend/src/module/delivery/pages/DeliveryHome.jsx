@@ -13849,6 +13849,4622 @@ export default function DeliveryHome() {
   // Helper function to calculate time away from distance
 
 
+import { useEffect, useState, useRef, useMemo, useCallback } from "react"
+import { useNavigate, useLocation } from "react-router-dom"
+import { motion, AnimatePresence } from "framer-motion"
+import Lenis from "lenis"
+import { toast } from "sonner"
+import {
+  Lightbulb,
+  HelpCircle,
+  Calendar,
+  Clock,
+  Lock,
+  ArrowRight,
+  ChevronUp,
+  ChevronDown,
+  UtensilsCrossed,
+  Wallet,
+  TrendingUp,
+  CheckCircle,
+  Bell,
+  MapPin,
+  ChefHat,
+  Phone,
+  X,
+  TargetIcon,
+  Play,
+  Pause,
+  IndianRupee,
+  Loader2,
+  Camera,
+  AlertCircle,
+} from "lucide-react"
+import BottomPopup from "../components/BottomPopup"
+import FeedNavbar from "../components/FeedNavbar"
+import { Card, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { useGigStore } from "../store/gigStore"
+import { useProgressStore } from "../store/progressStore"
+import { formatTimeDisplay, calculateTotalHours } from "../utils/gigUtils"
+import {
+  fetchDeliveryWallet,
+  calculatePeriodEarnings
+} from "../utils/deliveryWalletState"
+import { formatCurrency } from "../../restaurant/utils/currency"
+import { getAllDeliveryOrders } from "../utils/deliveryOrderStatus"
+import { getUnreadDeliveryNotificationCount } from "../utils/deliveryNotifications"
+import { deliveryAPI, restaurantAPI, uploadAPI } from "@/lib/api"
+import { useDeliveryNotifications } from "../hooks/useDeliveryNotifications"
+import { useCompanyName } from "@/lib/hooks/useCompanyName"
+import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey"
+import {
+  decodePolyline,
+  extractPolylineFromDirections,
+  findNearestPointOnPolyline,
+  trimPolylineBehindRider,
+  calculateBearing,
+  animateMarker,
+  calculateDistance
+} from "../utils/liveTrackingPolyline"
+import referralBonusBg from "../../../assets/referralbonuscardbg.png"
+// import dropLocationBanner from "../../../assets/droplocationbanner.png" // File not found - commented out
+import alertSound from "../../../assets/audio/alert.mp3"
+import originalSound from "../../../assets/audio/original.mp3"
+import bikeLogo from "../../../assets/bikelogo.png"
+
+// Ola Maps API Key removed
+
+// Mock restaurants data
+const mockRestaurants = [
+  {
+    id: 1,
+    name: "Hotel Pankaj",
+    address: "Opposite Midway, Behror Locality, Behror",
+    lat: 28.2849,
+    lng: 76.1209,
+    distance: "3.56 km",
+    timeAway: "4 mins",
+    orders: 2,
+    estimatedEarnings: 76.62, // Consistent payment amount
+    pickupDistance: "3.56 km",
+    dropDistance: "12.2 km",
+    payment: "COD",
+    amount: 76.62, // Payment amount (consistent with estimatedEarnings)
+    items: 2,
+    phone: "+911234567890",
+    orderId: "ORD1234567890",
+    customerName: "Rajesh Kumar",
+    customerAddress: "401, 4th Floor, Pushparatna Solitare Building, Janjeerwala Square, New Palasia, Indore",
+    customerPhone: "+919876543210",
+    tripTime: "38 mins",
+    tripDistance: "8.8 kms"
+  },
+  {
+    id: 2,
+    name: "Haldi",
+    address: "B 2, Narnor-Alwar Rd, Indus Valley, Behror",
+    lat: 28.2780,
+    lng: 76.1150,
+    distance: "4.2 km",
+    timeAway: "4 mins",
+    orders: 1,
+    estimatedEarnings: 76.62,
+    pickupDistance: "4.2 km",
+    dropDistance: "8.5 km",
+    payment: "COD",
+    amount: 76.62,
+    items: 3,
+    phone: "+911234567891",
+    orderId: "ORD1234567891",
+    customerName: "Priya Sharma",
+    customerAddress: "Flat 302, Green Valley Apartments, MG Road, Indore",
+    customerPhone: "+919876543211",
+    tripTime: "35 mins",
+    tripDistance: "7.5 kms"
+  },
+  {
+    id: 3,
+    name: "Pandit Ji Samose Wale",
+    address: "Near Govt. Senior Secondary School, Behror Locality, Behror",
+    lat: 28.2870,
+    lng: 76.1250,
+    distance: "5.04 km",
+    timeAway: "6 mins",
+    orders: 1,
+    estimatedEarnings: 76.62,
+    pickupDistance: "5.04 km",
+    dropDistance: "7.8 km",
+    payment: "COD",
+    amount: 76.62,
+    items: 1,
+    phone: "+911234567892",
+    orderId: "ORD1234567892",
+    customerName: "Amit Patel",
+    customerAddress: "House No. 45, Sector 5, Vijay Nagar, Indore",
+    customerPhone: "+919876543212",
+    tripTime: "32 mins",
+    tripDistance: "6.9 kms"
+  }
+]
+
+// ============================================
+// STABLE TRACKING SYSTEM - RAPIDO/UBER STYLE
+// ============================================
+
+/**
+ * Calculate distance between two coordinates using Haversine formula
+ * @param {number} lat1 
+ * @param {number} lng1 
+ * @param {number} lat2 
+ * @param {number} lng2 
+ * @returns {number} Distance in meters
+ */
+function haversineDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371000 // Earth radius in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2)
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+  return R * c
+}
+
+const MAX_REASONABLE_BOUNDS_DIAGONAL_METERS = 60000 // 60 km
+const MAX_REASONABLE_MARKER_JUMP_METERS = 2500 // 2.5 km
+
+function isBoundsReasonable(bounds) {
+  try {
+    if (!bounds || typeof bounds.getNorthEast !== "function" || typeof bounds.getSouthWest !== "function") {
+      return false
+    }
+    const ne = bounds.getNorthEast()
+    const sw = bounds.getSouthWest()
+    if (!ne || !sw) return false
+
+    const diagonal = haversineDistance(ne.lat(), ne.lng(), sw.lat(), sw.lng())
+    if (!Number.isFinite(diagonal) || diagonal <= 0) return false
+    return diagonal <= MAX_REASONABLE_BOUNDS_DIAGONAL_METERS
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Filter GPS location based on accuracy, distance jump, and speed
+ * @param {Object} position - GPS position object
+ * @param {Array} lastValidLocation - [lat, lng] of last valid location
+ * @param {number} lastLocationTime - Timestamp of last location
+ * @returns {boolean} true if location should be accepted
+ */
+function shouldAcceptLocation(position, lastValidLocation, lastLocationTime) {
+  const accuracy = position.coords.accuracy || 0
+  const latitude = position.coords.latitude
+  const longitude = position.coords.longitude
+  
+  // CRITICAL: Always accept first location (no previous location) to ensure admin map shows delivery boy
+  // Even if accuracy is poor, we need at least one location update
+  const isFirstLocation = !lastValidLocation || !lastLocationTime
+  
+  if (isFirstLocation) {
+    // For first location, accept if accuracy < 1000m (very lenient)
+    if (accuracy > 1000) {
+      console.log('🚫 First location rejected: accuracy extremely poor', { accuracy: accuracy.toFixed(2) + 'm' })
+      return false
+    }
+    console.log('✅ Accepting first location (will be used for admin map):', { 
+      accuracy: accuracy.toFixed(2) + 'm',
+      lat: latitude,
+      lng: longitude
+    })
+    return true
+  }
+  
+  // Filter 1: For subsequent locations, use relaxed accuracy threshold (200m instead of 30m)
+  // This allows GPS to work even in areas with poor signal
+  if (accuracy > 200) {
+    console.log('🚫 Location rejected: accuracy too poor', { accuracy: accuracy.toFixed(2) + 'm' })
+    return false
+  }
+  
+  // Filter 2: Check distance jump and speed if we have previous location
+  if (lastValidLocation && lastLocationTime) {
+    const [prevLat, prevLng] = lastValidLocation
+    const distance = haversineDistance(prevLat, prevLng, latitude, longitude)
+    const timeDiff = (Date.now() - lastLocationTime) / 1000 // seconds
+    
+    // Filter 2a: Ignore if distance jump > 50 meters within 2 seconds
+    if (distance > 50 && timeDiff < 2) {
+      console.log('🚫 Location rejected: distance jump too large', { 
+        distance: distance.toFixed(2) + 'm', 
+        timeDiff: timeDiff.toFixed(2) + 's' 
+      })
+      return false
+    }
+    
+    // Filter 2b: Ignore if calculated speed > 60 km/h (bike speed limit)
+    if (timeDiff > 0) {
+      const speedKmh = (distance / timeDiff) * 3.6 // Convert m/s to km/h
+      if (speedKmh > 60) {
+        console.log('🚫 Location rejected: speed too high', { 
+          speed: speedKmh.toFixed(2) + ' km/h' 
+        })
+        return false
+      }
+    }
+  }
+  
+  return true
+}
+
+/**
+ * Apply moving average smoothing on location history
+ * @param {Array} locationHistory - Array of [lat, lng] coordinates
+ * @returns {Array|null} Smoothed [lat, lng] or null if not enough points
+ */
+function smoothLocation(locationHistory) {
+  if (locationHistory.length < 2) {
+    return locationHistory.length === 1 ? locationHistory[0] : null
+  }
+  
+  // Use last 5 points for moving average
+  const pointsToUse = locationHistory.slice(-5)
+  
+  // Calculate average latitude and longitude
+  const avgLat = pointsToUse.reduce((sum, point) => sum + point[0], 0) / pointsToUse.length
+  const avgLng = pointsToUse.reduce((sum, point) => sum + point[1], 0) / pointsToUse.length
+  
+  return [avgLat, avgLng]
+}
+
+function isPointInsideZoneBoundary(lat, lng, zoneCoordinates = []) {
+  if (!Array.isArray(zoneCoordinates) || zoneCoordinates.length < 3) return false
+  let inside = false
+
+  for (let i = 0, j = zoneCoordinates.length - 1; i < zoneCoordinates.length; j = i++) {
+    const xi = Number(zoneCoordinates[i]?.longitude ?? zoneCoordinates[i]?.lng)
+    const yi = Number(zoneCoordinates[i]?.latitude ?? zoneCoordinates[i]?.lat)
+    const xj = Number(zoneCoordinates[j]?.longitude ?? zoneCoordinates[j]?.lng)
+    const yj = Number(zoneCoordinates[j]?.latitude ?? zoneCoordinates[j]?.lat)
+
+    if (![xi, yi, xj, yj].every(Number.isFinite)) continue
+
+    const intersect =
+      ((yi > lat) !== (yj > lat)) &&
+      (lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi)
+
+    if (intersect) inside = !inside
+  }
+
+  return inside
+}
+
+function extractCustomerCoordsFromOrder(order) {
+  if (!order || typeof order !== "object") return null
+
+  const toFinite = (value) => {
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
+  const fromGeoJson = (coordinates) => {
+    if (!Array.isArray(coordinates) || coordinates.length < 2) return null
+    const lng = toFinite(coordinates[0])
+    const lat = toFinite(coordinates[1])
+    if (lat == null || lng == null) return null
+    return { lat, lng }
+  }
+
+  const fromLatLng = (obj) => {
+    if (!obj || typeof obj !== "object") return null
+    const lat = toFinite(obj.lat ?? obj.latitude)
+    const lng = toFinite(obj.lng ?? obj.longitude)
+    if (lat == null || lng == null) return null
+    return { lat, lng }
+  }
+
+  return (
+    fromGeoJson(order?.address?.location?.coordinates) ||
+    fromGeoJson(order?.address?.coordinates) ||
+    fromLatLng(order?.address) ||
+    fromLatLng(order?.address?.location) ||
+    fromLatLng(order?.customerLocation) ||
+    null
+  )
+}
+
+function buildAddressFromLocation(location) {
+  if (!location || typeof location !== "object") return ""
+  const parts = [
+    location?.addressLine1 || location?.street,
+    location?.addressLine2,
+    location?.area,
+    location?.city,
+    location?.state,
+    location?.pincode || location?.zipCode || location?.postalCode
+  ]
+    .map((part) => (typeof part === "string" ? part.trim() : ""))
+    .filter(Boolean)
+
+  return parts.join(", ")
+}
+
+function resolveStoreAddressFromOrder(order, fallback = "Restaurant address") {
+  const store = order?.restaurantId && typeof order?.restaurantId === "object" ? order.restaurantId : null
+  const storeLocation = store?.location || {}
+  const altStore = order?.restaurant && typeof order?.restaurant === "object" ? order.restaurant : null
+  const altStoreLocation = altStore?.location || {}
+  const orderRestaurantLocation = order?.restaurantLocation || {}
+
+  const directCandidates = [
+    storeLocation?.formattedAddress,
+    storeLocation?.address,
+    buildAddressFromLocation(storeLocation),
+    store?.address,
+    altStoreLocation?.formattedAddress,
+    altStoreLocation?.address,
+    buildAddressFromLocation(altStoreLocation),
+    altStore?.address,
+    orderRestaurantLocation?.formattedAddress,
+    orderRestaurantLocation?.address,
+    buildAddressFromLocation(orderRestaurantLocation),
+    order?.restaurantAddress
+  ]
+
+  for (const candidate of directCandidates) {
+    if (typeof candidate === "string" && candidate.trim()) {
+      return candidate.trim()
+    }
+  }
+
+  return fallback
+}
+
+function resolveStoreCoordsFromOrder(order) {
+  const store = order?.restaurantId && typeof order?.restaurantId === "object" ? order.restaurantId : null
+  const storeLocation = store?.location || {}
+  const orderRestaurantLocation = order?.restaurantLocation || {}
+
+  if (Array.isArray(storeLocation?.coordinates) && storeLocation.coordinates.length >= 2) {
+    const lat = Number(storeLocation.coordinates[1])
+    const lng = Number(storeLocation.coordinates[0])
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng }
+  }
+
+  if (Number.isFinite(Number(storeLocation?.latitude)) && Number.isFinite(Number(storeLocation?.longitude))) {
+    return { lat: Number(storeLocation.latitude), lng: Number(storeLocation.longitude) }
+  }
+
+  if (Array.isArray(orderRestaurantLocation?.coordinates) && orderRestaurantLocation.coordinates.length >= 2) {
+    const lat = Number(orderRestaurantLocation.coordinates[1])
+    const lng = Number(orderRestaurantLocation.coordinates[0])
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng }
+  }
+
+  if (
+    Number.isFinite(Number(orderRestaurantLocation?.latitude)) &&
+    Number.isFinite(Number(orderRestaurantLocation?.longitude))
+  ) {
+    return {
+      lat: Number(orderRestaurantLocation.latitude),
+      lng: Number(orderRestaurantLocation.longitude)
+    }
+  }
+
+  return null
+}
+
+/**
+ * Animate marker smoothly from current position to new position
+ * @param {Object} marker - Google Maps Marker instance
+ * @param {Object} newPosition - {lat, lng} new position
+ * @param {number} duration - Animation duration in milliseconds (default 1500ms)
+ * @param {React.RefObject} animationRef - Ref to store animation frame ID (from component)
+ */
+function animateMarkerSmoothly(marker, newPosition, duration = 1500, animationRef) {
+  if (!marker || !newPosition) return
+  
+  const currentPosition = marker.getPosition()
+  if (!currentPosition) {
+    // If no current position, set directly
+    marker.setPosition(newPosition)
+    return
+  }
+  
+  const startLat = currentPosition.lat()
+  const startLng = currentPosition.lng()
+  const endLat = newPosition.lat
+  const endLng = newPosition.lng
+  
+  // Cancel any ongoing animation (use ref if passed)
+  if (animationRef?.current) {
+    cancelAnimationFrame(animationRef.current)
+  }
+  
+  const startTime = Date.now()
+  const startPos = { lat: startLat, lng: startLng }
+  const endPos = { lat: endLat, lng: endLng }
+  
+  function animate() {
+    const elapsed = Date.now() - startTime
+    const progress = Math.min(elapsed / duration, 1)
+    
+    // Linear easing
+    const currentLat = startPos.lat + (endPos.lat - startPos.lat) * progress
+    const currentLng = startPos.lng + (endPos.lng - startPos.lng) * progress
+    
+    marker.setPosition({ lat: currentLat, lng: currentLng })
+    
+    if (progress < 1) {
+      if (animationRef) animationRef.current = requestAnimationFrame(animate)
+    } else {
+      if (animationRef) animationRef.current = null
+    }
+  }
+  
+  if (animationRef) animationRef.current = requestAnimationFrame(animate)
+}
+
+export default function DeliveryHome() {
+  const companyName = useCompanyName()
+  const navigate = useNavigate()
+  const location = useLocation()
+  const [animationKey, setAnimationKey] = useState(0)
+
+  // Helper function to safely call preventDefault (handles passive event listeners)
+  // React's synthetic touch events are passive by default, so we check cancelable first
+  const safePreventDefault = (e) => {
+    if (!e) return;
+    
+    // Early return if event is not cancelable (passive listener)
+    // This prevents the browser warning about calling preventDefault on passive listeners
+    if (e.cancelable === false) {
+      return; // Event listener is passive, cannot and should not call preventDefault
+    }
+    
+    // For touch events, check if CSS touch-action is handling it
+    // If touch-action is set, we don't need preventDefault
+    const eventType = e.type || '';
+    if (eventType.includes('touch')) {
+      const target = e.target || e.currentTarget;
+      if (target) {
+        try {
+          const computedStyle = window.getComputedStyle(target);
+          const touchAction = computedStyle.touchAction;
+          // If touch-action is set (not 'auto'), CSS is handling it, skip preventDefault
+          if (touchAction && touchAction !== 'auto' && touchAction !== '') {
+            return; // CSS touch-action is handling scrolling prevention
+          }
+        } catch (styleError) {
+          // If getComputedStyle fails, continue with preventDefault check
+        }
+      }
+    }
+    
+    // For React synthetic events, check the native event's cancelable property
+    // React synthetic events may have cancelable: true but the underlying listener is passive
+    const nativeEvent = e.nativeEvent;
+    if (nativeEvent) {
+      // Check native event's cancelable property - this is the most reliable check
+      if (nativeEvent.cancelable === false) {
+        return; // Native event listener is passive
+      }
+      
+      // Additional check: if defaultPrevented is already true, no need to call again
+      if (nativeEvent.defaultPrevented === true) {
+        return;
+      }
+    }
+    
+    // Only call preventDefault if event is cancelable AND we have a function
+    // Wrap in try-catch to completely suppress passive listener errors
+    if (e.cancelable !== false && typeof e.preventDefault === 'function') {
+      try {
+        // Final check: ensure native event is still cancelable
+        if (nativeEvent && nativeEvent.cancelable === false) {
+          return;
+        }
+        // Suppress console errors temporarily while calling preventDefault
+        const originalError = console.error;
+        console.error = () => {}; // Temporarily suppress console.error
+        try {
+          e.preventDefault();
+        } finally {
+          console.error = originalError; // Restore console.error
+        }
+      } catch (err) {
+        // Silently ignore - this shouldn't happen if cancelable is true
+        // But some browsers may still throw if the listener is passive
+        // Don't log the error to avoid console spam
+        return;
+      }
+    }
+  }
+
+  const LOCATION_CACHE_TTL_MS = 10 * 60 * 1000
+  const saveCachedDeliveryLocation = (coords) => {
+    if (!Array.isArray(coords) || coords.length !== 2) return
+    const lat = Number(coords[0])
+    const lng = Number(coords[1])
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return
+    try {
+      localStorage.setItem('deliveryBoyLastLocation', JSON.stringify([lat, lng]))
+      localStorage.setItem('deliveryBoyLastLocationTs', String(Date.now()))
+    } catch {}
+  }
+
+  const readCachedDeliveryLocation = ({ allowStale = false } = {}) => {
+    try {
+      const raw = localStorage.getItem('deliveryBoyLastLocation')
+      if (!raw) return null
+
+      const tsRaw = localStorage.getItem('deliveryBoyLastLocationTs')
+      const ts = Number(tsRaw)
+      const isFresh = Number.isFinite(ts) && (Date.now() - ts) <= LOCATION_CACHE_TTL_MS
+      if (!allowStale && !isFresh) return null
+
+      const parsed = JSON.parse(raw)
+      if (!Array.isArray(parsed) || parsed.length !== 2) return null
+      let lat = Number(parsed[0])
+      let lng = Number(parsed[1])
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null
+
+      const mightBeSwapped = (lat >= 68 && lat <= 98 && lng >= 8 && lng <= 38)
+      if (mightBeSwapped) {
+        [lat, lng] = [lng, lat]
+      }
+
+      return [lat, lng]
+    } catch {
+      return null
+    }
+  }
+  const [walletState, setWalletState] = useState({
+    totalBalance: 0,
+    cashInHand: 0,
+    deductions: 0,
+    totalCashLimit: 0,
+    availableCashLimit: 0,
+    totalWithdrawn: 0,
+    totalEarned: 0,
+    transactions: [],
+    joiningBonusClaimed: false
+  })
+  const [activeOrder, setActiveOrder] = useState(() => {
+    const stored = localStorage.getItem('activeOrder')
+    return stored ? JSON.parse(stored) : null
+  })
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(() => getUnreadDeliveryNotificationCount())
+  
+  // Delivery notifications hook
+  const { newOrder, clearNewOrder, orderReady, clearOrderReady, isConnected } = useDeliveryNotifications()
+  
+  // Default location - will be set from saved location or GPS, not hardcoded
+  const [riderLocation, setRiderLocation] = useState(null) // Will be set from GPS or saved location
+  const [locationPermissionState, setLocationPermissionState] = useState('unknown') // unknown | granted | prompt | denied | unsupported
+  const [isRefreshingLocation, setIsRefreshingLocation] = useState(false)
+  const [bankDetailsFilled, setBankDetailsFilled] = useState(false)
+  const [deliveryStatus, setDeliveryStatus] = useState(null) // Store delivery partner status
+  const [rejectionReason, setRejectionReason] = useState(null) // Store rejection reason
+  const [isReverifying, setIsReverifying] = useState(false) // Loading state for reverify
+  
+  // Map refs and state (Ola Maps removed)
+  const mapContainerRef = useRef(null)
+  const directionsMapContainerRef = useRef(null)
+  const watchPositionIdRef = useRef(null) // Store watchPosition ID for cleanup
+  const lastLocationRef = useRef(null) // Store last location for heading calculation
+  const bikeMarkerRef = useRef(null) // Store bike marker instance
+  const isUserPanningRef = useRef(false) // Track if user manually panned the map
+  const routePolylineRef = useRef(null) // Store route polyline instance (legacy - for fallback)
+  const routeHistoryRef = useRef([]) // Store route history for traveled path
+  const isOnlineRef = useRef(false) // Store online status for use in callbacks
+  
+  // Stable tracking system - Rapido/Uber style
+  const locationHistoryRef = useRef([]) // Store last 5 valid GPS points for smoothing
+  const lastValidLocationRef = useRef(null) // Last valid smoothed location
+  const lastLocationTimeRef = useRef(null) // Timestamp of last location update
+  const smoothedLocationRef = useRef(null) // Current smoothed location
+  const markerAnimationRef = useRef(null) // Track ongoing marker animation
+  const zonesPolygonsRef = useRef([]) // Store zone polygons
+  // Google Maps renderer refs (route path is built locally from coordinates)
+  const directionsRendererRef = useRef(null) // Directions Renderer instance
+  const directionsMapInstanceRef = useRef(null) // Directions map instance
+  const restaurantMarkerRef = useRef(null) // Restaurant marker on directions map
+  const customerMarkerRef = useRef(null) // Customer marker on main map
+  const directionsBikeMarkerRef = useRef(null) // Bike marker on directions map
+  const lastRouteRecalculationRef = useRef(null) // Track last route recalculation time (API cost optimization)
+  const lastBikePositionRef = useRef(null) // Track last bike position for deviation detection
+  const acceptedOrderIdsRef = useRef(new Set()) // Track accepted order IDs to prevent duplicate notifications
+  const normalizeOrderId = useCallback((value) => {
+    if (!value) return null
+    return String(value)
+  }, [])
+  const markOrderAsAccepted = useCallback((...ids) => {
+    ids
+      .map((id) => normalizeOrderId(id))
+      .filter(Boolean)
+      .forEach((id) => acceptedOrderIdsRef.current.add(id))
+  }, [normalizeOrderId])
+  const isOrderAlreadyAccepted = useCallback((...ids) => {
+    return ids
+      .map((id) => normalizeOrderId(id))
+      .filter(Boolean)
+      .some((id) => acceptedOrderIdsRef.current.has(id))
+  }, [normalizeOrderId])
+  // Live tracking polyline refs
+  const liveTrackingPolylineRef = useRef(null) // Google Maps Polyline instance for live tracking
+  const liveTrackingPolylineShadowRef = useRef(null) // Shadow/outline polyline for better visibility (Zomato/Rapido style)
+  const fullRoutePolylineRef = useRef([]) // Store full decoded polyline from Directions API
+  const lastRiderPositionRef = useRef(null) // Last rider position for smooth animation
+  const markerAnimationCancelRef = useRef(null) // Cancel function for marker animation
+  const directionsResponseRef = useRef(null) // Store directions response for use in callbacks
+  const directionsRouteCacheRef = useRef(new Map()) // Cache directions responses by rounded origin/destination
+  const fetchedOrderDetailsForDropRef = useRef(null) // Prevent re-fetching order details for Reached Drop customer coords
+  const [zones, setZones] = useState([]) // Store nearby zones
+  const [isOutOfZone, setIsOutOfZone] = useState(false)
+  const [zoneCheckReady, setZoneCheckReady] = useState(false)
+  const [mapLoading, setMapLoading] = useState(false)
+  const [directionsMapLoading, setDirectionsMapLoading] = useState(false)
+  const isInitializingMapRef = useRef(false)
+  const ensureGoogleMapsConstructors = useCallback(async () => {
+    if (!window.google?.maps) return false
+    if (typeof window.google.maps.Map === "function") return true
+
+    if (typeof window.google.maps.importLibrary === "function") {
+      try {
+        const mapsLib = await window.google.maps.importLibrary("maps")
+        if (mapsLib?.Map && typeof window.google.maps.Map !== "function") {
+          window.google.maps.Map = mapsLib.Map
+        }
+        if (mapsLib?.MapTypeId && !window.google.maps.MapTypeId) {
+          window.google.maps.MapTypeId = mapsLib.MapTypeId
+        }
+      } catch (error) {
+        console.warn("⚠️ Failed to import Google Maps 'maps' library:", error)
+      }
+    }
+
+    return typeof window.google?.maps?.Map === "function"
+  }, [])
+
+  const handleLocationPermissionDenied = useCallback(() => {
+    setLocationPermissionState('denied')
+    toast.error('Location permission is disabled. Please allow location access for live tracking.')
+  }, [])
+
+  const requestLocationPermission = useCallback(() => {
+    if (!navigator.geolocation) {
+      setLocationPermissionState('unsupported')
+      toast.error('Location services are not available in this browser/device.')
+      return
+    }
+
+    setIsRefreshingLocation(true)
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const latitude = position.coords.latitude
+        const longitude = position.coords.longitude
+
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+          setIsRefreshingLocation(false)
+          toast.error('Invalid location detected. Please try again.')
+          return
+        }
+
+        const nextLocation = [latitude, longitude]
+        setRiderLocation(nextLocation)
+        lastLocationRef.current = nextLocation
+        lastValidLocationRef.current = nextLocation
+        smoothedLocationRef.current = nextLocation
+        saveCachedDeliveryLocation(nextLocation)
+        setLocationPermissionState('granted')
+        setIsRefreshingLocation(false)
+      },
+      (error) => {
+        setIsRefreshingLocation(false)
+        if (error?.code === 1) {
+          handleLocationPermissionDenied()
+          return
+        }
+        toast.error('Unable to fetch location. Please ensure GPS is enabled and try again.')
+      },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+    )
+  }, [handleLocationPermissionDenied])
+
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocationPermissionState('unsupported')
+      return
+    }
+
+    if (!navigator.permissions || typeof navigator.permissions.query !== 'function') {
+      setLocationPermissionState('unknown')
+      return
+    }
+
+    let isMounted = true
+    let permissionStatus = null
+
+    navigator.permissions
+      .query({ name: 'geolocation' })
+      .then((status) => {
+        if (!isMounted) return
+        permissionStatus = status
+        setLocationPermissionState(status.state || 'unknown')
+        status.onchange = () => {
+          setLocationPermissionState(status.state || 'unknown')
+        }
+      })
+      .catch(() => {
+        if (isMounted) setLocationPermissionState('unknown')
+      })
+
+    return () => {
+      isMounted = false
+      if (permissionStatus) {
+        permissionStatus.onchange = null
+      }
+    }
+  }, [])
+
+  // Safety timeout: hide "Loading map..." overlay after max 2 seconds
+  useEffect(() => {
+    if (!mapLoading) return
+    const timer = setTimeout(() => {
+      setMapLoading(false)
+    }, 2000)
+    return () => clearTimeout(timer)
+  }, [mapLoading])
+
+  // Seeded random number generator for consistent hotspots
+  const createSeededRandom = (seed) => {
+    let currentSeed = seed
+    return () => {
+      currentSeed = (currentSeed * 9301 + 49297) % 233280
+      return currentSeed / 233280
+    }
+  }
+
+  // Generate irregular polygon from random nearby points (using seeded random)
+  const createIrregularPolygon = (center, numPoints, spread, seedOffset) => {
+    const [lat, lng] = center
+    const vertices = []
+    const seededRandom = createSeededRandom(seedOffset)
+    
+    // Generate random points around the center
+    for (let i = 0; i < numPoints; i++) {
+      // Seeded random angle
+      const angle = seededRandom() * 2 * Math.PI
+      // Seeded random distance (varying spread for irregularity)
+      const distance = spread * (0.5 + seededRandom() * 0.5)
+      
+      const vertexLat = lat + distance * Math.cos(angle)
+      const vertexLng = lng + distance * Math.sin(angle)
+      vertices.push([vertexLat, vertexLng])
+    }
+    
+    // Sort vertices by angle to create a proper polygon (prevents self-intersection)
+    const centerLat = vertices.reduce((sum, v) => sum + v[0], 0) / vertices.length
+    const centerLng = vertices.reduce((sum, v) => sum + v[1], 0) / vertices.length
+    
+    vertices.sort((a, b) => {
+      const angleA = Math.atan2(a[0] - centerLat, a[1] - centerLng)
+      const angleB = Math.atan2(b[0] - centerLat, b[1] - centerLng)
+      return angleA - angleB
+    })
+    
+    return vertices
+  }
+
+  // Generate nearby hotspot locations with irregular shapes from 3-5 points
+  // Using useState with lazy initializer to generate hotspots once and keep them fixed
+  const [hotspots] = useState(() => {
+    // Use default location if riderLocation is not available yet
+    const defaultLocation = [23.2599, 77.4126] // Bhopal center as fallback
+    const [lat, lng] = riderLocation || defaultLocation
+    const hotspots = []
+    const baseSpread = 0.004 // Base spread for points in degrees
+    
+    // Hotspot 1 - Northeast, 3 points
+    hotspots.push({
+      type: 'polygon',
+      center: [lat + 0.008, lng + 0.006],
+      vertices: createIrregularPolygon([lat + 0.008, lng + 0.006], 3, baseSpread * 1.2, 1000),
+      opacity: 0.25
+    })
+    
+    // Hotspot 2 - Northwest, 4 points
+    hotspots.push({
+      type: 'polygon',
+      center: [lat + 0.005, lng - 0.007],
+      vertices: createIrregularPolygon([lat + 0.005, lng - 0.007], 4, baseSpread * 1.0, 2000),
+      opacity: 0.3
+    })
+    
+    // Hotspot 3 - Southeast, 5 points
+    hotspots.push({
+      type: 'polygon',
+      center: [lat - 0.006, lng + 0.009],
+      vertices: createIrregularPolygon([lat - 0.006, lng + 0.009], 5, baseSpread * 0.9, 3000),
+      opacity: 0.2
+    })
+    
+    // Hotspot 4 - Southwest, 3 points
+    hotspots.push({
+      type: 'polygon',
+      center: [lat - 0.004, lng - 0.005],
+      vertices: createIrregularPolygon([lat - 0.004, lng - 0.005], 3, baseSpread * 1.1, 4000),
+      opacity: 0.28
+    })
+    
+    // Hotspot 5 - North, 4 points
+    hotspots.push({
+      type: 'polygon',
+      center: [lat + 0.011, lng + 0.001],
+      vertices: createIrregularPolygon([lat + 0.011, lng + 0.001], 4, baseSpread * 0.7, 5000),
+      opacity: 0.22
+    })
+    
+    // Hotspot 6 - East, 5 points
+    hotspots.push({
+      type: 'polygon',
+      center: [lat + 0.002, lng + 0.012],
+      vertices: createIrregularPolygon([lat + 0.002, lng + 0.012], 5, baseSpread * 1.1, 6000),
+      opacity: 0.32
+    })
+    
+    // Hotspot 7 - South, 3 points
+    hotspots.push({
+      type: 'polygon',
+      center: [lat - 0.009, lng - 0.002],
+      vertices: createIrregularPolygon([lat - 0.009, lng - 0.002], 3, baseSpread * 1.0, 7000),
+      opacity: 0.26
+    })
+    
+    // Hotspot 8 - West, 4 points
+    hotspots.push({
+      type: 'polygon',
+      center: [lat - 0.001, lng - 0.010],
+      vertices: createIrregularPolygon([lat - 0.001, lng - 0.010], 4, baseSpread * 0.85, 8000),
+      opacity: 0.24
+    })
+    
+    // Hotspot 9 - Northeast (further), 5 points
+    hotspots.push({
+      type: 'polygon',
+      center: [lat + 0.006, lng + 0.008],
+      vertices: createIrregularPolygon([lat + 0.006, lng + 0.008], 5, baseSpread * 0.6, 9000),
+      opacity: 0.23
+    })
+    
+    // Hotspot 10 - Southwest (further), 3 points
+    hotspots.push({
+      type: 'polygon',
+      center: [lat - 0.007, lng - 0.008],
+      vertices: createIrregularPolygon([lat - 0.007, lng - 0.008], 3, baseSpread * 0.9, 10000),
+      opacity: 0.27
+    })
+    
+    return hotspots
+  })
+  const [selectedRestaurant, setSelectedRestaurant] = useState(null)
+  const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false)
+  const [acceptButtonProgress, setAcceptButtonProgress] = useState(0)
+  const [isAnimatingToComplete, setIsAnimatingToComplete] = useState(false)
+  const [hasAutoShown, setHasAutoShown] = useState(false)
+  const [showNewOrderPopup, setShowNewOrderPopup] = useState(false)
+  const [countdownSeconds, setCountdownSeconds] = useState(300)
+  const countdownTimerRef = useRef(null)
+  const [showRejectPopup, setShowRejectPopup] = useState(false)
+  const [rejectReason, setRejectReason] = useState("")
+  const alertAudioRef = useRef(null)
+  const userInteractedRef = useRef(false) // Track user interaction for autoplay policy
+  const newOrderAcceptButtonRef = useRef(null)
+  const newOrderAcceptButtonSwipeStartX = useRef(0)
+  const newOrderAcceptButtonSwipeStartY = useRef(0)
+  const newOrderAcceptButtonIsSwiping = useRef(false)
+  const [newOrderAcceptButtonProgress, setNewOrderAcceptButtonProgress] = useState(0)
+  const [newOrderIsAnimatingToComplete, setNewOrderIsAnimatingToComplete] = useState(false)
+  const popupOrderId =
+    selectedRestaurant?.orderId ||
+    selectedRestaurant?.id ||
+    newOrder?.orderMongoId ||
+    newOrder?.orderId ||
+    null
+  const newOrderPopupRef = useRef(null)
+  const newOrderSwipeStartY = useRef(0)
+  const newOrderIsSwiping = useRef(false)
+  const [newOrderDragY, setNewOrderDragY] = useState(0)
+  const [isDraggingNewOrderPopup, setIsDraggingNewOrderPopup] = useState(false)
+  const [isNewOrderPopupMinimized, setIsNewOrderPopupMinimized] = useState(false)
+  const [showDirectionsMap, setShowDirectionsMap] = useState(false)
+  const [navigationMode, setNavigationMode] = useState('restaurant') // 'restaurant' or 'customer'
+  const [showreachedPickupPopup, setShowreachedPickupPopup] = useState(false)
+  const [showOrderIdConfirmationPopup, setShowOrderIdConfirmationPopup] = useState(false)
+  const [showReachedDropPopup, setShowReachedDropPopup] = useState(false)
+  const [showOrderDeliveredAnimation, setShowOrderDeliveredAnimation] = useState(false)
+  const [showCustomerReviewPopup, setShowCustomerReviewPopup] = useState(false)
+  const [showPaymentPage, setShowPaymentPage] = useState(false)
+  const [customerRating, setCustomerRating] = useState(0)
+  const [customerReviewText, setCustomerReviewText] = useState("")
+  const [orderEarnings, setOrderEarnings] = useState(0) // Store earnings from completed order
+  const [routePolyline, setRoutePolyline] = useState([])
+   const [showRoutePath, setShowRoutePath] = useState(false) // Toggle to show/hide route path - disabled by default
+   const [directionsResponse, setDirectionsResponse] = useState(null) // Directions API response for road-based routing
+  const selectedRestaurantRef = useRef(null)
+  const [reachedPickupButtonProgress, setreachedPickupButtonProgress] = useState(0)
+  const [reachedPickupIsAnimatingToComplete, setreachedPickupIsAnimatingToComplete] = useState(false)
+  const reachedPickupButtonRef = useRef(null)
+  const reachedPickupSwipeStartX = useRef(0)
+  const reachedPickupSwipeStartY = useRef(0)
+  const reachedPickupIsSwiping = useRef(false)
+  const [reachedDropButtonProgress, setReachedDropButtonProgress] = useState(0)
+  const [reachedDropIsAnimatingToComplete, setReachedDropIsAnimatingToComplete] = useState(false)
+  const reachedDropButtonRef = useRef(null)
+  const reachedDropSwipeStartX = useRef(0)
+  const reachedDropSwipeStartY = useRef(0)
+  const reachedDropIsSwiping = useRef(false)
+  const [orderIdConfirmButtonProgress, setOrderIdConfirmButtonProgress] = useState(0)
+  const [orderIdConfirmIsAnimatingToComplete, setOrderIdConfirmIsAnimatingToComplete] = useState(false)
+  const orderIdConfirmButtonRef = useRef(null)
+  const orderIdConfirmSwipeStartX = useRef(0)
+  const orderIdConfirmSwipeStartY = useRef(0)
+  const orderIdConfirmIsSwiping = useRef(false)
+  // Bill image upload state
+  const [billImageUrl, setBillImageUrl] = useState(null)
+  const [isUploadingBill, setIsUploadingBill] = useState(false)
+  const [billImageUploaded, setBillImageUploaded] = useState(false)
+  const fileInputRef = useRef(null)
+  const cameraInputRef = useRef(null)
+  const [orderDeliveredButtonProgress, setOrderDeliveredButtonProgress] = useState(0)
+  const [orderDeliveredIsAnimatingToComplete, setOrderDeliveredIsAnimatingToComplete] = useState(false)
+  const orderDeliveredButtonRef = useRef(null)
+  // Trip distance and time from Google Maps API
+  const [tripDistance, setTripDistance] = useState(null) // in meters
+  const [tripTime, setTripTime] = useState(null) // in seconds
+  const pickupRouteDistanceRef = useRef(0) // Distance to pickup in meters
+  const pickupRouteTimeRef = useRef(0) // Time to pickup in seconds
+  const deliveryRouteDistanceRef = useRef(0) // Distance to delivery in meters
+  const deliveryRouteTimeRef = useRef(0) // Time to delivery in seconds
+  const orderDeliveredSwipeStartX = useRef(0)
+  const orderDeliveredSwipeStartY = useRef(0)
+  const orderDeliveredIsSwiping = useRef(false)
+  const [earningsGuaranteeIsPlaying, setEarningsGuaranteeIsPlaying] = useState(true)
+  const [earningsGuaranteeAudioTime, setEarningsGuaranteeAudioTime] = useState("00:00")
+  const earningsGuaranteeAudioRef = useRef(null)
+  const bottomSheetRef = useRef(null)
+  const handleRef = useRef(null)
+  const acceptButtonRef = useRef(null)
+  const swipeStartY = useRef(0)
+  const isSwiping = useRef(false)
+  const acceptButtonSwipeStartX = useRef(0)
+  const acceptButtonSwipeStartY = useRef(0)
+  const acceptButtonIsSwiping = useRef(false)
+  const autoShowTimerRef = useRef(null)
+
+  const stopNewOrderAlertSound = useCallback((reason = "unknown") => {
+    if (!alertAudioRef.current) return
+    try {
+      alertAudioRef.current.onplaying = null
+      alertAudioRef.current.onended = null
+      alertAudioRef.current.onerror = null
+      alertAudioRef.current.loop = false
+      alertAudioRef.current.pause()
+      alertAudioRef.current.currentTime = 0
+      alertAudioRef.current.removeAttribute("src")
+      alertAudioRef.current.load()
+      alertAudioRef.current = null
+      console.log(`[NewOrder] Audio stopped (${reason})`)
+    } catch (error) {
+      console.warn("[NewOrder] Failed to stop audio:", error)
+    }
+  }, [])
+
+  const isOrderCancelledState = useCallback((order) => {
+    if (!order) return false
+    const statusValues = [
+      order?.orderStatus,
+      order?.status,
+      order?.deliveryState?.status,
+      order?.deliveryPhase,
+      order?.deliveryState?.currentPhase
+    ]
+      .filter(Boolean)
+      .map((value) => String(value).toLowerCase())
+
+    return statusValues.some((value) => value.includes('cancel'))
+  }, [])
+
+  const shouldStopAlertForOrderState = useCallback((order) => {
+    if (!order) return false
+    const statusValues = [
+      order?.orderStatus,
+      order?.status,
+      order?.deliveryState?.status,
+      order?.deliveryPhase,
+      order?.deliveryState?.currentPhase
+    ]
+      .filter(Boolean)
+      .map((value) => String(value).toLowerCase())
+
+    return statusValues.some((value) =>
+      value.includes("accept") ||
+      value.includes("picked") ||
+      value.includes("out_for_delivery") ||
+      value.includes("en_route") ||
+      value.includes("deliver") ||
+      value.includes("complete") ||
+      value.includes("reject") ||
+      value.includes("cancel")
+    )
+  }, [])
+
+  const isActiveOrderCancelled = useMemo(() => {
+    return isOrderCancelledState(selectedRestaurant) || isOrderCancelledState(newOrder)
+  }, [isOrderCancelledState, selectedRestaurant, newOrder])
+
+  const isCancelledConflictError = useCallback((error) => {
+    const status = error?.response?.status
+    const message = String(
+      error?.response?.data?.message ||
+      error?.message ||
+      ''
+    ).toLowerCase()
+    return status === 409 && (message.includes('cancel') || message.includes('terminal'))
+  }, [])
+
+  const handleCancelledOrderConflict = useCallback((error, fallbackMessage) => {
+    const backendMessage = error?.response?.data?.message
+    const message = backendMessage || fallbackMessage || 'Order was cancelled by user.'
+    toast.error(message)
+
+    localStorage.removeItem('deliveryActiveOrder')
+    stopNewOrderAlertSound('order cancelled conflict')
+
+    setShowreachedPickupPopup(false)
+    setShowOrderIdConfirmationPopup(false)
+    setShowReachedDropPopup(false)
+    setShowOrderDeliveredAnimation(false)
+    setShowCustomerReviewPopup(false)
+    setShowPaymentPage(false)
+    setShowNewOrderPopup(false)
+
+    clearNewOrder()
+    clearOrderReady()
+    acceptedOrderIdsRef.current.clear()
+
+    if (routePolylineRef.current) {
+      routePolylineRef.current.setMap(null)
+    }
+    if (directionsRendererRef.current) {
+      directionsRendererRef.current.setMap(null)
+    }
+
+    setDirectionsResponse(null)
+    directionsResponseRef.current = null
+    setRoutePolyline([])
+    setShowRoutePath(false)
+    setSelectedRestaurant(null)
+  }, [clearNewOrder, clearOrderReady, stopNewOrderAlertSound])
+
+  const {
+    bookedGigs,
+    currentGig,
+    goOnline,
+    goOffline,
+    getSelectedDropLocation
+  } = useGigStore()
+
+  // Use same localStorage key as FeedNavbar for online status
+  const LS_KEY = "app:isOnline"
+  
+  // Initialize online status from localStorage (same as FeedNavbar)
+  const [isOnline, setIsOnline] = useState(() => {
+    try {
+      const raw = localStorage.getItem(LS_KEY)
+      const value = raw ? JSON.parse(raw) === true : false
+      isOnlineRef.current = value // Initialize ref
+      return value
+    } catch {
+      isOnlineRef.current = false
+      return false
+    }
+  })
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    isOnlineRef.current = isOnline
+  }, [isOnline])
+
+  // Keep selected order ref in sync for geolocation callbacks
+  useEffect(() => {
+    selectedRestaurantRef.current = selectedRestaurant
+  }, [selectedRestaurant])
+
+  const toCoordNumber = useCallback((coord) => {
+    if (coord == null) return null
+    if (typeof coord === 'function') {
+      const value = coord()
+      return Number.isFinite(value) ? value : null
+    }
+    const value = Number(coord)
+    return Number.isFinite(value) ? value : null
+  }, [])
+
+  const isDirectionsRouteToLocation = useCallback((directionsResult, targetLat, targetLng, tolerance = 0.0005) => {
+    if (!directionsResult?.routes?.length) return false
+    const endLocation = directionsResult.routes?.[0]?.legs?.[0]?.end_location
+    const endLat = toCoordNumber(endLocation?.lat)
+    const endLng = toCoordNumber(endLocation?.lng)
+    const normalizedTargetLat = Number(targetLat)
+    const normalizedTargetLng = Number(targetLng)
+
+    if (
+      endLat == null ||
+      endLng == null ||
+      !Number.isFinite(normalizedTargetLat) ||
+      !Number.isFinite(normalizedTargetLng)
+    ) {
+      return false
+    }
+
+    return (
+      Math.abs(endLat - normalizedTargetLat) < tolerance &&
+      Math.abs(endLng - normalizedTargetLng) < tolerance
+    )
+  }, [toCoordNumber])
+
+  // Sync online status with localStorage changes (from FeedNavbar or other tabs)
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === LS_KEY && e.newValue != null) {
+        const next = JSON.parse(e.newValue) === true
+        console.log('[DeliveryHome] Storage event - online status changed:', next)
+        setIsOnline(prev => {
+          // Only update if different to avoid unnecessary re-renders
+          if (prev !== next) {
+            console.log('[DeliveryHome] Updating isOnline state:', prev, '->', next)
+            return next
+          }
+          return prev
+        })
+      }
+    }
+
+    // Listen for storage events (cross-tab sync)
+    window.addEventListener('storage', handleStorageChange)
+    
+    // Also listen for custom events (same-tab sync from FeedNavbar)
+    const handleCustomStorageChange = () => {
+      try {
+        const raw = localStorage.getItem(LS_KEY)
+        const next = raw ? JSON.parse(raw) === true : false
+        console.log('[DeliveryHome] Custom event - online status changed:', next)
+        setIsOnline(prev => {
+          if (prev !== next) {
+            console.log('[DeliveryHome] Updating isOnline state from custom event:', prev, '->', next)
+            return next
+          }
+          return prev
+        })
+      } catch (error) {
+        console.error('[DeliveryHome] Error reading online status:', error)
+      }
+    }
+    
+    window.addEventListener('onlineStatusChanged', handleCustomStorageChange)
+
+    // Also poll localStorage periodically to catch any missed updates (fallback)
+    const pollInterval = setInterval(() => {
+      try {
+        const raw = localStorage.getItem(LS_KEY)
+        const next = raw ? JSON.parse(raw) === true : false
+        setIsOnline(prev => {
+          if (prev !== next) {
+            console.log('[DeliveryHome] Polling detected change:', prev, '->', next)
+            return next
+          }
+          return prev
+        })
+      } catch {}
+    }, 1000) // Check every second
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('onlineStatusChanged', handleCustomStorageChange)
+      clearInterval(pollInterval)
+    }
+  }, [])
+
+  // Calculate today's stats
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const todayDateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+
+  // Get today's gig (prioritize active, then booked)
+  const todayGig = bookedGigs.find(gig => gig.date === todayDateKey && gig.status === 'active') ||
+    bookedGigs.find(gig => gig.date === todayDateKey && gig.status === 'booked')
+
+  // Calculate login hours based on when gig started
+  const calculateLoginHours = () => {
+    if (!todayGig || todayGig.status !== 'active') return 0
+
+    const now = new Date()
+    let startTime = now
+
+    // Use startedAt if available, otherwise use gig start time
+    if (todayGig.startedAt) {
+      startTime = new Date(todayGig.startedAt)
+    } else if (todayGig.startTime) {
+      const [hours, minutes] = todayGig.startTime.split(':').map(Number)
+      startTime = new Date()
+      startTime.setHours(hours, minutes, 0, 0)
+      // If start time is in the future, use current time
+      if (startTime > now) {
+        startTime = now
+      }
+    }
+
+    const diffMs = now - startTime
+    const diffHours = diffMs / (1000 * 60 * 60)
+    return Math.max(0, diffHours)
+  }
+
+  const loginHours = calculateLoginHours()
+  const minimumHours = 2.67 // 2 hrs 40 mins = 2.67 hours
+  const progressPercentage = Math.min((loginHours / minimumHours) * 100, 100)
+
+  // Get today's progress from store
+  const { getTodayProgress, getDateData, hasDateData, updateTodayProgress } = useProgressStore()
+  const todayProgress = getTodayProgress()
+  
+  // Check if store has data for today
+  const hasStoreDataForToday = hasDateData(today)
+  const todayData = hasStoreDataForToday ? getDateData(today) : null
+
+  // Calculate today's earnings (prefer store, then calculated; default to 0 so UI is not empty)
+  const calculatedEarnings = calculatePeriodEarnings(walletState, 'today') || 0
+  const todayEarnings = hasStoreDataForToday && todayData
+    ? (todayData.earnings ?? calculatedEarnings)
+    : calculatedEarnings
+
+  // Calculate today's trips (prefer store, then calculated; default to 0)
+  const allOrders = getAllDeliveryOrders()
+  const calculatedTrips = allOrders.filter(order => {
+    const orderId = order.orderId || order.id
+    const orderDateKey = `delivery_order_date_${orderId}`
+    const orderDateStr = localStorage.getItem(orderDateKey)
+    if (!orderDateStr) return false
+    const orderDate = new Date(orderDateStr)
+    orderDate.setHours(0, 0, 0, 0)
+    return orderDate.getTime() === today.getTime()
+  }).length
+  const todayTrips = hasStoreDataForToday && todayData
+    ? (todayData.trips ?? calculatedTrips)
+    : calculatedTrips
+
+  // Calculate today's gigs count
+  const todayGigsCount = bookedGigs.filter(gig => gig.date === todayDateKey).length
+
+  // Calculate weekly earnings from wallet transactions (payment + earning_addon bonus)
+  // Include both payment and earning_addon transactions in weekly earnings
+  const weeklyEarnings = walletState?.transactions
+    ?.filter(t => {
+      // Include both payment and earning_addon transactions
+      if ((t.type !== 'payment' && t.type !== 'earning_addon') || t.status !== 'Completed') return false
+      const now = new Date()
+      const startOfWeek = new Date(now)
+      startOfWeek.setDate(now.getDate() - now.getDay())
+      startOfWeek.setHours(0, 0, 0, 0)
+      const transactionDate = t.date ? new Date(t.date) : (t.createdAt ? new Date(t.createdAt) : null)
+      if (!transactionDate) return false
+      return transactionDate >= startOfWeek && transactionDate <= now
+    })
+    .reduce((sum, t) => sum + (t.amount || 0), 0) || 0
+
+  // Calculate weekly orders count from transactions
+  const calculateWeeklyOrders = () => {
+    if (!walletState || !walletState.transactions || !Array.isArray(walletState.transactions)) {
+      return 0
+    }
+
+    const now = new Date()
+    const startOfWeek = new Date(now)
+    startOfWeek.setDate(now.getDate() - now.getDay()) // Start of week (Sunday)
+    startOfWeek.setHours(0, 0, 0, 0)
+
+    return walletState.transactions.filter(t => {
+      // Count payment transactions (completed orders)
+      if (t.type !== 'payment' || t.status !== 'Completed') return false
+      const transactionDate = t.date ? new Date(t.date) : (t.createdAt ? new Date(t.createdAt) : null)
+      if (!transactionDate) return false
+      return transactionDate >= startOfWeek && transactionDate <= now
+    }).length
+  }
+
+  const weeklyOrders = calculateWeeklyOrders()
+  const totalCashLimit = Number.isFinite(Number(walletState?.totalCashLimit))
+    ? Number(walletState.totalCashLimit)
+    : 750
+  const cashInHand = Math.max(0, Number(walletState?.cashInHand) || 0)
+  const availableCashLimit =
+    Number.isFinite(Number(walletState?.availableCashLimit))
+      ? Number(walletState.availableCashLimit)
+      : Math.max(0, totalCashLimit - cashInHand)
+  const isCashInHandLimitReached = cashInHand >= totalCashLimit
+  const isMapLockedForOrderEligibility = isCashInHandLimitReached
+
+  // State for active earning addon
+  const [activeEarningAddon, setActiveEarningAddon] = useState(null)
+
+  // Fetch active earning addon offers
+  useEffect(() => {
+    const fetchActiveEarningAddons = async () => {
+      try {
+        const response = await deliveryAPI.getActiveEarningAddons()
+        console.log('Active earning addons response:', response?.data)
+        
+        if (response?.data?.success && response?.data?.data?.activeOffers) {
+          const offers = response.data.data.activeOffers
+          console.log('Active offers found:', offers)
+          
+          // Get the first valid active offer (prioritize isValid, then isUpcoming, then any active status)
+          const activeOffer = offers.find(offer => offer.isValid) || 
+                             offers.find(offer => offer.isUpcoming) ||
+                             offers.find(offer => offer.status === 'active') || 
+                             offers[0] || 
+                             null
+          
+          console.log('Selected active offer:', activeOffer)
+          setActiveEarningAddon(activeOffer)
+        } else {
+          console.log('No active offers found in response')
+          setActiveEarningAddon(null)
+        }
+      } catch (error) {
+        // Suppress network errors - backend might be down or endpoint not available
+        if (error.code === 'ERR_NETWORK') {
+          // Silently handle network errors - backend might not be running
+          setActiveEarningAddon(null)
+          return
+        }
+        
+        // Skip logging timeout errors (handled by axios interceptor)
+        if (error.code !== 'ECONNABORTED' && !error.message?.includes('timeout')) {
+          // Only log non-network errors
+          if (error.response) {
+            console.error('Error fetching active earning addons:', error.response?.data || error.message)
+          }
+        }
+        setActiveEarningAddon(null)
+      }
+    }
+
+    // Fetch immediately on mount
+    fetchActiveEarningAddons()
+
+    // Refresh every 5 seconds to get latest offers
+    const refreshInterval = setInterval(() => {
+      fetchActiveEarningAddons()
+    }, 5000)
+
+    // Refresh when page becomes visible
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchActiveEarningAddons()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    // Also listen for focus events for instant refresh
+    const handleFocus = () => {
+      fetchActiveEarningAddons()
+    }
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      clearInterval(refreshInterval)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [])
+
+  // Calculate bonus earnings from earning_addon transactions (only for active offer)
+  const calculateBonusEarnings = () => {
+    if (!activeEarningAddon || !walletState?.transactions) return 0
+    
+    const now = new Date()
+    const startDate = activeEarningAddon.startDate ? new Date(activeEarningAddon.startDate) : null
+    const endDate = activeEarningAddon.endDate ? new Date(activeEarningAddon.endDate) : null
+    
+    return walletState.transactions
+      .filter(t => {
+        // Only count earning_addon type transactions
+        if (t.type !== 'earning_addon' || t.status !== 'Completed') return false
+        
+        // Filter by date range if offer has dates
+        if (startDate || endDate) {
+          const transactionDate = t.date ? new Date(t.date) : (t.createdAt ? new Date(t.createdAt) : null)
+          if (!transactionDate) return false
+          
+          if (startDate && transactionDate < startDate) return false
+          if (endDate && transactionDate > endDate) return false
+        }
+        
+        // Check if transaction is related to current offer
+        if (t.metadata?.earningAddonId) {
+          return t.metadata.earningAddonId === activeEarningAddon._id?.toString() || 
+                 t.metadata.earningAddonId === activeEarningAddon.id?.toString()
+        }
+        
+        // If no metadata, include all earning_addon transactions in date range
+        return true
+      })
+      .reduce((sum, t) => sum + (t.amount || 0), 0)
+  }
+
+  // Earnings Guarantee - Use active earning addon if available, otherwise show 0
+  // When no offer is active, show 0 of 0 and ₹0
+  const earningsGuaranteeTarget = activeEarningAddon?.earningAmount || 0
+  const earningsGuaranteeOrdersTarget = activeEarningAddon?.requiredOrders || 0
+  // Only show current orders/earnings if there's an active offer
+  const earningsGuaranteeCurrentOrders = activeEarningAddon
+    ? (activeEarningAddon.currentOrders ?? weeklyOrders)
+    : weeklyOrders
+  // Show only bonus earnings from the offer, not total weekly earnings
+  const earningsGuaranteeCurrentEarnings = activeEarningAddon
+    ? calculateBonusEarnings()
+    : weeklyEarnings
+  const ordersProgress = earningsGuaranteeOrdersTarget > 0 
+    ? Math.min(earningsGuaranteeCurrentOrders / earningsGuaranteeOrdersTarget, 1) 
+    : 0
+  const earningsProgress = earningsGuaranteeTarget > 0 
+    ? Math.min(earningsGuaranteeCurrentEarnings / earningsGuaranteeTarget, 1) 
+    : 0
+
+  // Get week end date for valid till - use offer end date if available
+  const getWeekEndDate = () => {
+    if (activeEarningAddon?.endDate) {
+      const endDate = new Date(activeEarningAddon.endDate)
+      const day = endDate.getDate()
+      const month = endDate.toLocaleString('en-US', { month: 'short' })
+      return `${day} ${month}`
+    }
+    const now = new Date()
+    const endOfWeek = new Date(now)
+    endOfWeek.setDate(now.getDate() - now.getDay() + 6) // End of week (Saturday)
+    const day = endOfWeek.getDate()
+    const month = endOfWeek.toLocaleString('en-US', { month: 'short' })
+    return `${day} ${month}`
+  }
+
+  const weekEndDate = getWeekEndDate()
+  // Offer is live if it's valid (started) or upcoming (not started yet but active)
+  const isOfferLive = activeEarningAddon?.isValid || activeEarningAddon?.isUpcoming || false
+  const hasActiveOffer = !!activeEarningAddon
+
+  // Calculate total hours worked today (prefer store, then calculated; default to 0)
+  const calculatedHours = bookedGigs
+    .filter(gig => gig.date === todayDateKey)
+    .reduce((total, gig) => total + (gig.totalHours || 0), 0)
+  const todayHoursWorked = hasStoreDataForToday && todayData
+    ? (todayData.timeOnOrders ?? calculatedHours)
+    : calculatedHours
+
+  // Track last updated values to prevent infinite loops
+  const lastUpdatedRef = useRef({ earnings: null, trips: null, hours: null })
+
+  // Update progress store with calculated values when data changes (with debounce)
+  useEffect(() => {
+    // Only update if values have actually changed
+    if (
+      calculatedEarnings !== undefined && 
+      calculatedTrips !== undefined && 
+      calculatedHours !== undefined &&
+      (
+        lastUpdatedRef.current.earnings !== calculatedEarnings ||
+        lastUpdatedRef.current.trips !== calculatedTrips ||
+        lastUpdatedRef.current.hours !== calculatedHours
+      )
+    ) {
+      lastUpdatedRef.current = {
+        earnings: calculatedEarnings,
+        trips: calculatedTrips,
+        hours: calculatedHours
+      }
+      
+      updateTodayProgress({
+        earnings: calculatedEarnings,
+        trips: calculatedTrips,
+        timeOnOrders: calculatedHours
+      })
+    }
+  }, [calculatedEarnings, calculatedTrips, calculatedHours, updateTodayProgress])
+
+  // Listen for progress data updates from other components
+  useEffect(() => {
+    const handleProgressUpdate = () => {
+      // Force re-render to show updated progress
+      setAnimationKey(prev => prev + 1)
+    }
+    
+    window.addEventListener('progressDataUpdated', handleProgressUpdate)
+    return () => {
+      window.removeEventListener('progressDataUpdated', handleProgressUpdate)
+    }
+  }, []) // Empty dependency array - only set up listener once
+
+  const formatHours = (hours) => {
+    const h = Math.floor(hours)
+    const m = Math.floor((hours - h) * 60)
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+  }
+
+
+  // Listen for progress data updates
+  useEffect(() => {
+    const handleProgressUpdate = () => {
+      // Force re-render to show updated progress
+      setAnimationKey(prev => prev + 1)
+    }
+
+    window.addEventListener('progressDataUpdated', handleProgressUpdate)
+    window.addEventListener('storage', handleProgressUpdate)
+
+    return () => {
+      window.removeEventListener('progressDataUpdated', handleProgressUpdate)
+      window.removeEventListener('storage', handleProgressUpdate)
+    }
+  }, [])
+
+  // Initialize Lenis
+  useEffect(() => {
+    const lenis = new Lenis({
+      duration: 1.2,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      smoothWheel: true,
+    })
+
+    function raf(time) {
+      lenis.raf(time)
+      requestAnimationFrame(raf)
+    }
+
+    requestAnimationFrame(raf)
+
+    return () => {
+      lenis.destroy()
+    }
+  }, [location.pathname, animationKey])
+
+  // Track user interaction for autoplay policy
+  useEffect(() => {
+    const handleUserInteraction = () => {
+      userInteractedRef.current = true
+      // Remove listeners after first interaction
+      document.removeEventListener('click', handleUserInteraction)
+      document.removeEventListener('touchstart', handleUserInteraction)
+      document.removeEventListener('keydown', handleUserInteraction)
+    }
+    
+    // Listen for user interaction
+    document.addEventListener('click', handleUserInteraction, { once: true })
+    document.addEventListener('touchstart', handleUserInteraction, { once: true })
+    document.addEventListener('keydown', handleUserInteraction, { once: true })
+    
+    return () => {
+      document.removeEventListener('click', handleUserInteraction)
+      document.removeEventListener('touchstart', handleUserInteraction)
+      document.removeEventListener('keydown', handleUserInteraction)
+    }
+  }, [])
+
+  // Play alert sound function - plays until countdown ends (30 seconds)
+  const playAlertSound = async () => {
+    // Only play if user has interacted with the page (browser autoplay policy)
+    if (!userInteractedRef.current) {
+      console.log('🔇 Audio playback skipped - user has not interacted with page yet')
+      return null
+    }
+    
+    try {
+      // Get selected alert sound preference from localStorage
+      const selectedSound = localStorage.getItem('delivery_alert_sound') || 'zomato_tone'
+      const soundFile = selectedSound === 'original' ? originalSound : alertSound
+      
+      console.log('🔊 Playing alert sound:', {
+        selectedSound,
+        soundType: selectedSound === 'original' ? 'Original' : 'Zomato Tone',
+        soundFile,
+        originalSoundPath: originalSound,
+        alertSoundPath: alertSound
+      })
+      
+      // Verify sound file exists
+      if (!soundFile) {
+        console.error('❌ Sound file is undefined!', { selectedSound, soundFile })
+        return null
+      }
+      
+      // Use selected sound file from assets
+      const audio = new Audio(soundFile)
+      
+      // Add load event listener to verify file loads
+      audio.addEventListener('loadeddata', () => {
+        console.log('✅ Audio file loaded successfully:', soundFile)
+      })
+      
+      audio.addEventListener('canplay', () => {
+        console.log('✅ Audio can play:', soundFile)
+      })
+      
+      audio.volume = 1
+      audio.loop = true // Loop the sound
+      
+      // Set up error handler
+      audio.addEventListener('error', (e) => {
+        console.error('Audio error:', e)
+        console.error('Audio error details:', {
+          code: audio.error?.code,
+          message: audio.error?.message
+        })
+      })
+      
+      // Preload audio before playing
+      audio.preload = 'auto'
+      
+      // Play the sound and wait for it to start
+      try {
+        // Wait for audio to be ready
+        await new Promise((resolve, reject) => {
+          audio.addEventListener('canplaythrough', resolve, { once: true })
+          audio.addEventListener('error', reject, { once: true })
+          audio.load()
+          // Timeout after 3 seconds
+          setTimeout(() => reject(new Error('Audio load timeout')), 3000)
+        })
+        
+        const playPromise = audio.play()
+        if (playPromise !== undefined) {
+          await playPromise
+        }
+        console.log('✅ Alert sound started playing successfully', {
+          src: audio.src,
+          volume: audio.volume,
+          loop: audio.loop,
+          readyState: audio.readyState
+        })
+        return audio
+      } catch (playError) {
+        console.error('❌ Audio play error:', {
+          error: playError,
+          message: playError.message,
+          name: playError.name,
+          soundFile,
+          selectedSound,
+          audioReadyState: audio.readyState,
+          audioSrc: audio.src
+        })
+        
+        // Don't log autoplay policy errors as they're expected before user interaction
+        if (!playError.message?.includes('user didn\'t interact') && 
+            !playError.name?.includes('NotAllowedError') &&
+            !playError.message?.includes('timeout')) {
+          console.error('❌ Could not play alert sound:', playError)
+        }
+        
+        // Try to load and play again
+        try {
+          audio.load()
+          await new Promise((resolve) => setTimeout(resolve, 100)) // Small delay
+          const playPromise = audio.play()
+          if (playPromise !== undefined) {
+            await playPromise
+          }
+          console.log('✅ Alert sound started playing after retry')
+          return audio
+        } catch (retryError) {
+          // Don't log autoplay policy errors
+          if (!retryError.message?.includes('user didn\'t interact') && 
+              !retryError.name?.includes('NotAllowedError')) {
+            console.error('❌ Could not play alert sound after retry:', retryError)
+          }
+          return null
+        }
+      }
+    } catch (error) {
+      console.error('❌ Could not create audio:', error)
+      return null
+    }
+  }
+
+  // Auto-show disabled - Only real orders from Socket.IO will show
+  // Removed mock restaurant auto-show logic
+
+  // Countdown timer for new order popup
+  useEffect(() => {
+    if (showNewOrderPopup && countdownSeconds > 0) {
+      countdownTimerRef.current = setInterval(() => {
+        setCountdownSeconds((prev) => {
+          if (prev <= 1) {
+            // Stop audio when countdown reaches 0
+            stopNewOrderAlertSound("countdown ended")
+            // Auto-close when countdown reaches 0
+            setShowNewOrderPopup(false)
+            return 0
+          }
+          return prev - 1
+        })
+      }, 1000)
+    } else {
+      if (countdownTimerRef.current) {
+        clearInterval(countdownTimerRef.current)
+        countdownTimerRef.current = null
+      }
+    }
+
+    return () => {
+      // Only clear the timer, don't stop audio here
+      // Audio will be stopped by the popup close useEffect
+      if (countdownTimerRef.current) {
+        clearInterval(countdownTimerRef.current)
+        countdownTimerRef.current = null
+      }
+    }
+  }, [showNewOrderPopup, countdownSeconds, stopNewOrderAlertSound])
+
+  // Play audio when New Order popup appears (only for real orders from Socket.IO)
+  useEffect(() => {
+    if (showNewOrderPopup && popupOrderId) {
+      // Stop any existing audio first
+      stopNewOrderAlertSound("restarting popup sound")
+
+      // Play alert sound when popup appears
+      const playAudio = async () => {
+        try {
+          // Check localStorage preference
+          const currentPreference = localStorage.getItem('delivery_alert_sound') || 'zomato_tone'
+          console.log('[NewOrder] 🎵 Attempting to play audio...', {
+            preference: currentPreference,
+            willUse: currentPreference === 'original' ? 'original.mp3' : 'alert.mp3'
+          })
+          const audio = await playAlertSound()
+          if (audio) {
+            alertAudioRef.current = audio
+            console.log('[NewOrder] 🔊 Audio started playing, looping:', audio.loop)
+            
+            // Verify audio is actually playing and ensure it loops
+            audio.onplaying = () => {
+              console.log('[NewOrder] ✅ Audio is now playing')
+            }
+            
+            // Keep ended handler non-restarting to avoid stale closure loops.
+            audio.onended = () => {
+              console.log('[NewOrder] ℹ️ Audio ended')
+            }
+
+            audio.onerror = (e) => {
+              console.error('[NewOrder] ❌ Audio error:', e)
+            }
+            
+            // Double-check loop is enabled
+            if (!audio.loop) {
+              audio.loop = true
+              console.log('[NewOrder] 🔧 Loop was false, enabled it')
+            }
+          } else {
+            console.log('[NewOrder] ⚠️ playAlertSound returned null')
+          }
+        } catch (error) {
+          console.error('[NewOrder] ⚠️ Audio failed to play:', error)
+        }
+      }
+      
+      // Small delay to ensure popup is fully rendered
+      const timeoutId = setTimeout(() => {
+        playAudio()
+      }, 100)
+      
+      return () => {
+        clearTimeout(timeoutId)
+      }
+    } else {
+      // Stop audio when popup closes
+      stopNewOrderAlertSound("popup closed")
+    }
+  }, [showNewOrderPopup, popupOrderId, stopNewOrderAlertSound])
+
+  // Global watchdog: sound must stop unless order is in active new-order stage.
+  useEffect(() => {
+    const shouldForceStop =
+      !showNewOrderPopup ||
+      !isOnline ||
+      isActiveOrderCancelled ||
+      shouldStopAlertForOrderState(newOrder) ||
+      shouldStopAlertForOrderState(selectedRestaurant)
+
+    if (shouldForceStop) {
+      stopNewOrderAlertSound("watchdog force stop")
+      if (showNewOrderPopup && (isActiveOrderCancelled || shouldStopAlertForOrderState(newOrder) || shouldStopAlertForOrderState(selectedRestaurant))) {
+        setShowNewOrderPopup(false)
+      }
+    }
+  }, [
+    showNewOrderPopup,
+    isOnline,
+    isActiveOrderCancelled,
+    newOrder,
+    selectedRestaurant,
+    shouldStopAlertForOrderState,
+    stopNewOrderAlertSound
+  ])
+
+  // Reset countdown when popup closes
+  useEffect(() => {
+    if (!showNewOrderPopup) {
+      setCountdownSeconds(300)
+    }
+  }, [showNewOrderPopup])
+
+  // Hard-stop alert sound once order is accepted by delivery partner.
+  // This guarantees buzzer doesn't continue due any race/retry path.
+  useEffect(() => {
+    const deliveryStatus = selectedRestaurant?.deliveryState?.status
+    const deliveryPhase = selectedRestaurant?.deliveryState?.currentPhase || selectedRestaurant?.deliveryPhase
+    const orderStatus = selectedRestaurant?.orderStatus || selectedRestaurant?.status
+
+    const isAcceptedByDelivery =
+      deliveryStatus === "accepted" ||
+      deliveryPhase === "en_route_to_pickup" ||
+      deliveryPhase === "at_pickup" ||
+      deliveryPhase === "en_route_to_delivery" ||
+      orderStatus === "out_for_delivery"
+
+    if (isAcceptedByDelivery) {
+      stopNewOrderAlertSound("order accepted by delivery")
+      if (showNewOrderPopup) {
+        setShowNewOrderPopup(false)
+      }
+    }
+  }, [
+    selectedRestaurant?.deliveryState?.status,
+    selectedRestaurant?.deliveryState?.currentPhase,
+    selectedRestaurant?.deliveryPhase,
+    selectedRestaurant?.orderStatus,
+    selectedRestaurant?.status,
+    showNewOrderPopup,
+    stopNewOrderAlertSound
+  ])
+
+  // Immediately hide any order slider/popup if the active order is cancelled.
+  useEffect(() => {
+    if (!isActiveOrderCancelled) return
+    handleCancelledOrderConflict(null, 'Order was cancelled by user.')
+  }, [isActiveOrderCancelled, handleCancelledOrderConflict])
+
+  // Simulate audio playback for Earnings Guarantee
+  useEffect(() => {
+    if (earningsGuaranteeIsPlaying) {
+      // Simulate audio time progression
+      let time = 0
+      const interval = setInterval(() => {
+        time += 1
+        const minutes = Math.floor(time / 60)
+        const seconds = time % 60
+        setEarningsGuaranteeAudioTime(`${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`)
+        
+        // Stop after 10 seconds (simulating audio length)
+        if (time >= 10) {
+          setEarningsGuaranteeIsPlaying(false)
+          clearInterval(interval)
+        }
+      }, 1000)
+
+      return () => clearInterval(interval)
+    }
+  }, [earningsGuaranteeIsPlaying])
+
+  const toggleEarningsGuaranteeAudio = () => {
+    setEarningsGuaranteeIsPlaying(!earningsGuaranteeIsPlaying)
+  }
+
+  // Reject reasons for order cancellation
+  const rejectReasons = [
+    "Too far from current location",
+    "Vehicle issue",
+    "Personal emergency",
+    "Weather conditions",
+    "Already have too many orders",
+    "Other reason"
+  ]
+
+  // Handle reject order
+  const handleRejectClick = () => {
+    setShowRejectPopup(true)
+  }
+
+  const handleRejectConfirm = () => {    
+    stopNewOrderAlertSound("order rejected")
+    setShowRejectPopup(false)
+    setShowNewOrderPopup(false)
+    setIsNewOrderPopupMinimized(false) // Reset minimized state
+    setNewOrderDragY(0) // Reset drag position
+    setRejectReason("")
+    setCountdownSeconds(300)
+    // Here you would typically send the rejection to your backend
+    console.log("Order rejected with reason:", rejectReason)
+  }
+
+  const handleRejectCancel = () => {
+    setShowRejectPopup(false)
+    setRejectReason("")
+  }
+
+  // Reset popup state on page load/refresh - ensure no popup shows on refresh
+  useEffect(() => {
+    // Clear any popup state on mount
+    setShowNewOrderPopup(false)
+    setSelectedRestaurant(null)
+    setHasAutoShown(false)
+    setCountdownSeconds(300)
+    
+    // Clear any timers
+    if (autoShowTimerRef.current) {
+      clearTimeout(autoShowTimerRef.current)
+      autoShowTimerRef.current = null
+    }
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current)
+      countdownTimerRef.current = null
+    }
+    
+    // Stop and cleanup audio
+    if (alertAudioRef.current) {
+      alertAudioRef.current.pause()
+      alertAudioRef.current.currentTime = 0
+      alertAudioRef.current = null
+    }
+  }, []) // Only run on mount
+
+  // Get rider location - App open होते ही location fetch करें
+  useEffect(() => {
+    // First, check if we have saved location in localStorage (for refresh handling)
+    const cachedLocation = readCachedDeliveryLocation()
+    if (cachedLocation) {
+      setRiderLocation(cachedLocation)
+      lastLocationRef.current = cachedLocation
+      routeHistoryRef.current = [{
+        lat: cachedLocation[0],
+        lng: cachedLocation[1]
+      }]
+      console.log('📍 Restored recent cached location:', cachedLocation)
+    }
+
+    if (navigator.geolocation) {
+      // Get current position first - App open होते ही location लें
+      console.log('📍 Fetching current location on app open...')
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          // Validate coordinates
+          const latitude = position.coords.latitude
+          const longitude = position.coords.longitude
+          const accuracy = position.coords.accuracy || 0
+          
+          // Validate coordinates are valid numbers
+          if (typeof latitude !== 'number' || typeof longitude !== 'number' || 
+              isNaN(latitude) || isNaN(longitude) ||
+              latitude < -90 || latitude > 90 || 
+              longitude < -180 || longitude > 180) {
+            console.warn("⚠️ Invalid coordinates received:", { latitude, longitude })
+            // Don't use default location - keep trying or use saved location
+            // Retry after a delay
+            setTimeout(() => {
+              if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                  (pos) => {
+                    const lat = pos.coords.latitude
+                    const lng = pos.coords.longitude
+                    if (typeof lat === 'number' && typeof lng === 'number' && 
+                        !isNaN(lat) && !isNaN(lng) &&
+                        lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                      setRiderLocation([lat, lng])
+                      lastLocationRef.current = [lat, lng]
+                    }
+                  },
+                  (err) => console.warn("⚠️ Retry failed:", err),
+                  { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                )
+              }
+            }, 2000)
+            return
+          }
+          
+          // Check for coordinate swap (common issue: lat/lng swapped)
+          // India coordinates: lat ~8-37, lng ~68-97
+          if ((latitude > 90 || latitude < -90) || (longitude > 180 || longitude < -180)) {
+            console.error("❌ Coordinates out of valid range - possible swap:", { latitude, longitude })
+            // Don't use default location - retry
+            setTimeout(() => {
+              if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                  (pos) => {
+                    const lat = pos.coords.latitude
+                    const lng = pos.coords.longitude
+                    if (typeof lat === 'number' && typeof lng === 'number' && 
+                        !isNaN(lat) && !isNaN(lng) &&
+                        lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                      setRiderLocation([lat, lng])
+                      lastLocationRef.current = [lat, lng]
+                    }
+                  },
+                  (err) => console.warn("⚠️ Retry failed:", err),
+                  { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+                )
+              }
+            }, 2000)
+            return
+          }
+          
+          // Validate coordinates are reasonable for India (basic sanity check)
+          // India: Latitude 8.4° to 37.6°, Longitude 68.7° to 97.25°
+          const isInIndiaRange = latitude >= 8 && latitude <= 38 && longitude >= 68 && longitude <= 98
+          if (!isInIndiaRange) {
+            console.warn("⚠️ Coordinates outside India range - might be incorrect:", { 
+              latitude, 
+              longitude,
+              note: "India range: lat 8-38, lng 68-98"
+            })
+            // Still use the location but log warning
+          }
+          
+          // Apply stable tracking filter
+          const shouldAccept = shouldAcceptLocation(
+            position,
+            lastValidLocationRef.current,
+            lastLocationTimeRef.current
+          )
+          
+          if (!shouldAccept) {
+            console.log('🚫 Initial location rejected by filter, will wait for better GPS signal')
+            return
+          }
+          
+          const rawLocation = [latitude, longitude]
+          
+          // Initialize location history with first valid point
+          locationHistoryRef.current = [rawLocation]
+          const smoothedLocation = rawLocation // First point, no smoothing needed yet
+          
+          // Update refs
+          lastValidLocationRef.current = smoothedLocation
+          lastLocationTimeRef.current = Date.now()
+          smoothedLocationRef.current = smoothedLocation
+          
+          let heading = position.coords.heading !== null && position.coords.heading !== undefined 
+            ? position.coords.heading 
+            : null
+          
+          // Initialize route history
+          routeHistoryRef.current = [{
+            lat: smoothedLocation[0],
+            lng: smoothedLocation[1]
+          }]
+          
+          // Save location to localStorage
+          saveCachedDeliveryLocation(smoothedLocation)
+          
+          setRiderLocation(smoothedLocation)
+          lastLocationRef.current = smoothedLocation
+          
+          // Initialize map if not already initialized (will use this location)
+          if (!window.deliveryMapInstance && window.google && window.google.maps && mapContainerRef.current) {
+            console.log('📍 Map not initialized yet, will initialize with GPS location')
+            // Map will be initialized in the map initialization useEffect with this location
+          } else if (window.deliveryMapInstance) {
+            // Map already initialized - keep route context for active order, else rider-centric view.
+            const fitted = selectedRestaurantRef.current
+              ? fitMapToActiveRoute(window.deliveryMapInstance)
+              : false
+            if (!fitted) {
+              window.deliveryMapInstance.setCenter({ lat: smoothedLocation[0], lng: smoothedLocation[1] })
+              window.deliveryMapInstance.setZoom(18)
+            }
+            createOrUpdateBikeMarker(smoothedLocation[0], smoothedLocation[1], heading, !isUserPanningRef.current)
+            updateRoutePolyline()
+            console.log('📍 Map recentered to GPS location')
+          }
+          
+          console.log("📍 Current location obtained on app open (filtered):", { 
+            raw: { lat: latitude, lng: longitude },
+            smoothed: { lat: smoothedLocation[0], lng: smoothedLocation[1] },
+            heading,
+            accuracy: `${accuracy.toFixed(0)}m`,
+            isOnline: isOnlineRef.current,
+            timestamp: new Date().toISOString()
+          })
+        },
+        (error) => {
+          console.warn("⚠️ Error getting current location:", error)
+          if (error?.code === 1) {
+            handleLocationPermissionDenied()
+          }
+          // Don't use default location - retry after delay
+          // Check if we have saved location from localStorage
+          const cachedLocation = readCachedDeliveryLocation()
+          if (!cachedLocation) {
+            // No saved location, retry after 3 seconds
+            setTimeout(() => {
+              if (navigator.geolocation) {
+                console.log('🔄 Retrying location fetch...')
+                navigator.geolocation.getCurrentPosition(
+                  (position) => {
+                    const lat = position.coords.latitude
+                    const lng = position.coords.longitude
+                    if (typeof lat === 'number' && typeof lng === 'number' && 
+                        !isNaN(lat) && !isNaN(lng) &&
+                        lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                      const newLocation = [lat, lng]
+                      setRiderLocation(newLocation)
+                      lastLocationRef.current = newLocation
+                      smoothedLocationRef.current = newLocation
+                      lastValidLocationRef.current = newLocation
+                      locationHistoryRef.current = [newLocation]
+                      saveCachedDeliveryLocation(newLocation)
+                      console.log('✅ Location obtained on retry:', newLocation)
+                      
+                      // Recenter map if already initialized, otherwise it will initialize when location is set
+                      if (window.deliveryMapInstance) {
+                        const fitted = selectedRestaurantRef.current
+                          ? fitMapToActiveRoute(window.deliveryMapInstance)
+                          : false
+                        if (!fitted) {
+                          window.deliveryMapInstance.setCenter({ lat, lng })
+                          window.deliveryMapInstance.setZoom(18)
+                        }
+                        console.log('📍 Recentered map to GPS location')
+                        
+                        // Update bike marker
+                        if (bikeMarkerRef.current) {
+                          bikeMarkerRef.current.setPosition({ lat, lng })
+                        } else if (window.deliveryMapInstance) {
+                          createOrUpdateBikeMarker(lat, lng, null, true)
+                        }
+                      }
+                    }
+                  },
+                  (err) => {
+                    console.warn("⚠️ Retry also failed:", err)
+                    // Show toast to user to enable location
+                    toast.error('Location access required. Please enable location permissions.')
+                  },
+                  { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+                )
+              }
+            }, 3000)
+          } else {
+            console.log('📍 Using saved location from previous session')
+          }
+        },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+      )
+
+      // NOTE: watchPosition will be started/stopped based on isOnline status
+      // This is handled in a separate useEffect that depends on isOnline
+    } else {
+      // Geolocation not available - show error
+      console.error('❌ Geolocation API not available in this browser')
+      toast.error('Location services not available. Please use a device with GPS.')
+    }
+  }, []) // Run only on mount - get initial location
+
+  // Watch position updates - ONLY when online (Production Level Implementation)
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      return
+    }
+
+    // Clear any existing watch before starting new one
+    if (watchPositionIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchPositionIdRef.current)
+      watchPositionIdRef.current = null
+    }
+
+    // Keep location tracking running even when offline (bike should always show on map)
+    // But only send location to backend when online (for order assignment)
+    console.log('📍 Starting live location tracking (offline/online)')
+
+    // Watch position updates for live tracking with STABLE TRACKING SYSTEM
+    const watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          // Validate coordinates first
+          const latitude = position.coords.latitude
+          const longitude = position.coords.longitude
+          const accuracy = position.coords.accuracy || 0
+          
+          // Basic validation
+          if (typeof latitude !== 'number' || typeof longitude !== 'number' || 
+              isNaN(latitude) || isNaN(longitude) ||
+              latitude < -90 || latitude > 90 || 
+              longitude < -180 || longitude > 180) {
+            console.warn("⚠️ Invalid coordinates received:", { latitude, longitude })
+            return
+          }
+          
+          // ============================================
+          // STABLE TRACKING FILTERING (RAPIDO STYLE)
+          // ============================================
+          
+          // Apply filtering: accuracy, distance jump, speed checks
+          const shouldAccept = shouldAcceptLocation(
+            position, 
+            lastValidLocationRef.current, 
+            lastLocationTimeRef.current
+          )
+          
+          if (!shouldAccept) {
+            // Location rejected by filter - but send to backend if it's been > 30 seconds since last update
+            // This ensures admin map always shows delivery boy even with poor GPS
+            if (isOnlineRef.current && lastValidLocationRef.current) {
+              const now = Date.now();
+              const lastSentTime = window.lastLocationSentTime || 0;
+              const timeSinceLastSend = now - lastSentTime;
+              
+              // Fallback: Send last valid location every 30 seconds even if new location is rejected
+              if (timeSinceLastSend >= 30000) {
+                const [lat, lng] = lastValidLocationRef.current;
+                if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                  console.log('📤 Sending fallback location to backend (filter rejected new location):', { 
+                    lat, 
+                    lng,
+                    accuracy: accuracy.toFixed(2) + 'm',
+                    timeSinceLastSend: (timeSinceLastSend / 1000).toFixed(0) + 's'
+                  });
+                  deliveryAPI.updateLocation(lat, lng, true)
+                    .then(() => {
+                      window.lastLocationSentTime = now;
+                    })
+                    .catch(error => {
+                      if (error.code !== 'ERR_NETWORK' && error.message !== 'Network Error') {
+                        console.error('❌ Error sending fallback location:', error);
+                      }
+                    });
+                }
+              }
+            }
+            // Keep using last valid location
+            return
+          }
+          
+          // Location passed filter - add to history
+          const rawLocation = [latitude, longitude]
+          locationHistoryRef.current.push(rawLocation)
+          
+          // Keep only last 5 points for moving average
+          if (locationHistoryRef.current.length > 5) {
+            locationHistoryRef.current.shift()
+          }
+          
+          // Apply moving average smoothing
+          const smoothedLocation = smoothLocation(locationHistoryRef.current)
+          
+          if (!smoothedLocation) {
+            // Not enough points yet, use raw location
+            const newLocation = rawLocation
+            lastValidLocationRef.current = newLocation
+            lastLocationTimeRef.current = Date.now()
+            smoothedLocationRef.current = newLocation
+            
+            // Initialize if first location
+            if (!lastLocationRef.current) {
+              setRiderLocation(newLocation)
+              lastLocationRef.current = newLocation
+              routeHistoryRef.current = [{
+                lat: newLocation[0],
+                lng: newLocation[1]
+              }]
+              
+              // Save to localStorage
+          saveCachedDeliveryLocation(newLocation)
+              
+              // Update marker with correct location
+              if (window.deliveryMapInstance) {
+                const [lat, lng] = newLocation
+                console.log('📍 Updating bike marker with first location:', { lat, lng })
+                
+                // Validate coordinates
+                if (typeof lat === 'number' && typeof lng === 'number' &&
+                    !isNaN(lat) && !isNaN(lng) &&
+                    lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                  if (bikeMarkerRef.current) {
+                    bikeMarkerRef.current.setPosition({ lat, lng })
+                    console.log('✅ Bike marker position updated to first location')
+                  } else {
+                    // Create marker if it doesn't exist
+                    createOrUpdateBikeMarker(lat, lng, null, true)
+                    console.log('✅ Bike marker created with first location')
+                  }
+                } else {
+                  console.error('❌ Invalid coordinates for bike marker:', { lat, lng })
+                }
+              }
+            }
+            
+            // Send raw location to backend even if not smoothed yet
+            if (isOnlineRef.current) {
+              const [lat, lng] = newLocation
+              const now = Date.now();
+              const lastSentTime = window.lastLocationSentTime || 0;
+              const timeSinceLastSend = now - lastSentTime;
+              
+              // Send location every 5 seconds even if not smoothed
+              if (timeSinceLastSend >= 5000) {
+                if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                  console.log('📤 Sending raw location to backend (not smoothed yet):', { lat, lng })
+                  deliveryAPI.updateLocation(lat, lng, true)
+                    .then(() => {
+                      window.lastLocationSentTime = now;
+                      window.lastSentLocation = newLocation;
+                      console.log('✅ Raw location sent to backend successfully')
+                    })
+                    .catch(error => {
+                      if (error.code !== 'ERR_NETWORK' && error.message !== 'Network Error') {
+                        console.error('❌ Error sending raw location to backend:', error);
+                      }
+                    });
+                }
+              }
+            }
+            
+            return
+          }
+          
+          // ============================================
+          // SMOOTH MARKER ANIMATION (NO INSTANT JUMPS)
+          // ============================================
+          
+          const [smoothedLat, smoothedLng] = smoothedLocation
+          const newSmoothedLocation = { lat: smoothedLat, lng: smoothedLng }
+          
+          // Calculate heading
+          let heading = position.coords.heading !== null && position.coords.heading !== undefined 
+            ? position.coords.heading 
+            : null
+          
+          if (heading === null && smoothedLocationRef.current) {
+            const [prevLat, prevLng] = smoothedLocationRef.current
+            heading = calculateHeading(prevLat, prevLng, smoothedLat, smoothedLng)
+          }
+          
+          // Update refs
+          lastValidLocationRef.current = smoothedLocation
+          lastLocationTimeRef.current = Date.now()
+          smoothedLocationRef.current = smoothedLocation
+          
+          // Update route history with smoothed location
+          routeHistoryRef.current.push({
+            lat: smoothedLat,
+            lng: smoothedLng
+          })
+          if (routeHistoryRef.current.length > 1000) {
+            routeHistoryRef.current.shift()
+          }
+          
+          // Save smoothed location to localStorage
+          saveCachedDeliveryLocation(smoothedLocation)
+          
+          // Update live tracking polyline for any active route (pickup or delivery)
+          const currentDirectionsResponse = directionsResponseRef.current;
+          const activeOrder = selectedRestaurantRef.current;
+          const orderStatus = activeOrder?.orderStatus || activeOrder?.status || '';
+          const deliveryPhase = activeOrder?.deliveryPhase || activeOrder?.deliveryState?.currentPhase || '';
+          const deliveryStateStatus = activeOrder?.deliveryState?.status || '';
+          const isPickedUpPhase =
+            orderStatus === 'out_for_delivery' ||
+            orderStatus === 'picked_up' ||
+            deliveryPhase === 'en_route_to_delivery' ||
+            deliveryPhase === 'picked_up' ||
+            deliveryStateStatus === 'order_confirmed' ||
+            deliveryStateStatus === 'en_route_to_delivery';
+
+          const hasCustomerLocation =
+            activeOrder?.customerLat != null &&
+            activeOrder?.customerLng != null &&
+            Number.isFinite(Number(activeOrder.customerLat)) &&
+            Number.isFinite(Number(activeOrder.customerLng)) &&
+            !(Number(activeOrder.customerLat) === 0 && Number(activeOrder.customerLng) === 0);
+
+          const isRouteToCustomer =
+            hasCustomerLocation &&
+            isDirectionsRouteToLocation(
+              currentDirectionsResponse,
+              activeOrder?.customerLat,
+              activeOrder?.customerLng
+            );
+
+          if (isPickedUpPhase && hasCustomerLocation && !isRouteToCustomer) {
+            if (liveTrackingPolylineRef.current) {
+              liveTrackingPolylineRef.current.setMap(null);
+              liveTrackingPolylineRef.current = null;
+            }
+            if (liveTrackingPolylineShadowRef.current) {
+              liveTrackingPolylineShadowRef.current.setMap(null);
+              liveTrackingPolylineShadowRef.current = null;
+            }
+            directionsResponseRef.current = null;
+          } else if (currentDirectionsResponse && currentDirectionsResponse.routes && currentDirectionsResponse.routes.length > 0) {
+            updateLiveTrackingPolyline(currentDirectionsResponse, smoothedLocation);
+          }
+          
+          // ============================================
+          // SMOOTH MARKER ANIMATION (1-2 seconds)
+          // ============================================
+          
+          // Update state with smoothed location FIRST
+          setRiderLocation(smoothedLocation)
+          lastLocationRef.current = smoothedLocation
+          
+          // Always update bike marker with latest smoothed location
+          if (window.deliveryMapInstance) {
+            if (bikeMarkerRef.current) {
+              // Marker exists - animate smoothly to new position
+              animateMarkerSmoothly(bikeMarkerRef.current, newSmoothedLocation, 1500, markerAnimationRef)
+            } else {
+              // Marker doesn't exist yet, create it immediately with correct location
+              console.log('📍 Creating bike marker with smoothed location:', { lat: smoothedLat, lng: smoothedLng })
+              createOrUpdateBikeMarker(smoothedLat, smoothedLng, heading, !isUserPanningRef.current)
+            }
+          }
+          
+          // Update route polyline
+          updateRoutePolyline()
+          
+          console.log("📍 Live location updated (smoothed):", { 
+            raw: { lat: latitude, lng: longitude },
+            smoothed: { lat: smoothedLat, lng: smoothedLng },
+            heading,
+            accuracy: `${accuracy.toFixed(0)}m`,
+            isOnline: isOnlineRef.current,
+            timestamp: new Date().toISOString()
+          })
+          
+          // Send SMOOTHED location to backend if user is online (throttle to every 5 seconds)
+          if (isOnlineRef.current && smoothedLocation) {
+            const now = Date.now();
+            const lastSentTime = window.lastLocationSentTime || 0;
+            const timeSinceLastSend = now - lastSentTime;
+            
+            // Use smoothed location for backend (not raw GPS) - already declared above
+            
+            // Simple distance check using Haversine formula
+            const calculateDistance = (lat1, lng1, lat2, lng2) => {
+              const R = 6371; // Earth's radius in km
+              const dLat = (lat2 - lat1) * Math.PI / 180;
+              const dLng = (lng2 - lng1) * Math.PI / 180;
+              const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                Math.sin(dLng / 2) * Math.sin(dLng / 2);
+              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+              return R * c;
+            };
+            
+            // Get last sent location for distance check
+            const lastSentLocation = window.lastSentLocation || null;
+            
+            // Send location every 5 seconds OR if location changed significantly (>50m)
+            const shouldSend = timeSinceLastSend >= 5000 || 
+              (lastSentLocation && 
+               calculateDistance(lastSentLocation[0], lastSentLocation[1], smoothedLat, smoothedLng) > 0.05);
+            
+            if (shouldSend) {
+              // Final validation before sending to backend
+              // Ensure coordinates are in correct format [lat, lng] and within valid ranges
+              if (smoothedLat >= -90 && smoothedLat <= 90 && smoothedLng >= -180 && smoothedLng <= 180) {
+                console.log('📤 Sending smoothed location to backend:', { 
+                  smoothed: { lat: smoothedLat, lng: smoothedLng },
+                  raw: { lat: latitude, lng: longitude },
+                  accuracy: `${accuracy.toFixed(0)}m`,
+                  timeSinceLastSend: `${(timeSinceLastSend / 1000).toFixed(1)}s`
+                });
+                
+                deliveryAPI.updateLocation(smoothedLat, smoothedLng, true)
+                  .then(() => {
+                    window.lastLocationSentTime = now;
+                    window.lastSentLocation = smoothedLocation; // Store last sent location
+                    console.log('✅ Smoothed location sent to backend successfully:', { 
+                      latitude: smoothedLat, 
+                      longitude: smoothedLng,
+                      format: "lat, lng (correct order)",
+                      accuracy: `${accuracy.toFixed(0)}m`
+                    });
+                  })
+                  .catch(error => {
+                    // Only log non-network errors (backend might be down, which is expected in dev)
+                    if (error.code !== 'ERR_NETWORK' && error.message !== 'Network Error') {
+                      console.error('❌ Error sending location to backend:', error);
+                    } else {
+                      // Silently handle network errors - backend might not be running
+                      // Socket.IO will handle reconnection automatically
+                    }
+                  });
+              } else {
+                console.error('❌ Invalid smoothed coordinates - not sending to backend:', { 
+                  smoothedLat, 
+                  smoothedLng,
+                  raw: { latitude, longitude }
+                });
+              }
+            }
+          }
+        },
+        (error) => {
+          console.warn("⚠️ Error watching location:", error)
+          if (error?.code === 1) {
+            handleLocationPermissionDenied()
+          }
+        },
+        { 
+          enableHighAccuracy: true, 
+          maximumAge: 0, // Always use fresh location
+          timeout: 10000
+        }
+      )
+
+      watchPositionIdRef.current = watchId
+
+      // Show bike marker immediately if we have last known location and map is ready
+      if (window.deliveryMapInstance && lastLocationRef.current && lastLocationRef.current.length === 2) {
+        const [lat, lng] = lastLocationRef.current
+        // Get heading from route history if available
+        let heading = null
+        if (routeHistoryRef.current.length > 1) {
+          const prev = routeHistoryRef.current[routeHistoryRef.current.length - 2]
+          heading = calculateHeading(prev.lat, prev.lng, lat, lng)
+        }
+        createOrUpdateBikeMarker(lat, lng, heading, !isUserPanningRef.current)
+      }
+
+      return () => {
+        if (watchPositionIdRef.current !== null) {
+          navigator.geolocation.clearWatch(watchPositionIdRef.current)
+          watchPositionIdRef.current = null
+        }
+      }
+  }, [isOnline, isDirectionsRouteToLocation, handleLocationPermissionDenied]) // Re-run when online status changes - this controls start/stop of tracking
+
+  // Handle new order popup accept button swipe
+  const handleNewOrderAcceptTouchStart = (e) => {
+    newOrderAcceptButtonSwipeStartX.current = e.touches[0].clientX
+    newOrderAcceptButtonSwipeStartY.current = e.touches[0].clientY
+    newOrderAcceptButtonIsSwiping.current = false
+    setNewOrderIsAnimatingToComplete(false)
+    setNewOrderAcceptButtonProgress(0)
+  }
+
+  const handleNewOrderAcceptTouchMove = (e) => {
+    const deltaX = e.touches[0].clientX - newOrderAcceptButtonSwipeStartX.current
+    const deltaY = e.touches[0].clientY - newOrderAcceptButtonSwipeStartY.current
+
+    // Only handle horizontal swipes (swipe right)
+    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+      newOrderAcceptButtonIsSwiping.current = true
+      // Don't call preventDefault - CSS touch-action handles scrolling prevention
+      // safePreventDefault(e) // Removed to avoid passive listener error
+
+      // Calculate max swipe distance
+      const buttonWidth = newOrderAcceptButtonRef.current?.offsetWidth || 300
+      const circleWidth = 56 // w-14 = 56px
+      const padding = 16 // px-4 = 16px
+      const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+
+      const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
+      setNewOrderAcceptButtonProgress(progress)
+    }
+  }
+
+  const handleNewOrderAcceptTouchEnd = (e) => {
+    if (!newOrderAcceptButtonIsSwiping.current) {
+      setNewOrderAcceptButtonProgress(0)
+      return
+    }
+
+    const deltaX = e.changedTouches[0].clientX - newOrderAcceptButtonSwipeStartX.current
+    const buttonWidth = newOrderAcceptButtonRef.current?.offsetWidth || 300
+    const circleWidth = 56
+    const padding = 16
+    const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+    const threshold = maxSwipe * 0.7 // 70% of max swipe
+
+    if (deltaX > threshold) {
+      // Stop audio immediately when user accepts
+      stopNewOrderAlertSound("order accept swipe")
+
+      // Animate to completion
+      setNewOrderIsAnimatingToComplete(true)
+      setNewOrderAcceptButtonProgress(1)
+
+      // Accept order via backend API and get route
+      const acceptOrderAndShowRoute = async () => {
+        // Get order ID from selectedRestaurant or newOrder (define outside try-catch for error handling)
+        const orderId = selectedRestaurant?.id || newOrder?.orderMongoId || newOrder?.orderId
+        
+        console.log('🔍 Order ID lookup:', {
+          selectedRestaurantId: selectedRestaurant?.id,
+          newOrderMongoId: newOrder?.orderMongoId,
+          newOrderId: newOrder?.orderId,
+          finalOrderId: orderId
+        })
+        
+        if (!orderId) {
+          console.error('❌ No order ID found to accept')
+          toast.error('Order ID not found. Please try again.')
+          return
+        }
+
+        // Declare currentLocation in outer scope so it's accessible in catch block
+        let currentLocation = null
+        
+        try {
+          // Get current LIVE location (prioritize riderLocation which is updated in real-time)
+          currentLocation = riderLocation
+          
+          // If riderLocation is not available, try to get from lastLocationRef
+          if (!currentLocation || currentLocation.length !== 2) {
+            currentLocation = lastLocationRef.current
+          }
+          
+          // If still not available, try to get current position
+          if (!currentLocation || currentLocation.length !== 2) {
+            try {
+              const position = await new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(
+                  (pos) => resolve([pos.coords.latitude, pos.coords.longitude]),
+                  reject,
+                  { timeout: 5000, enableHighAccuracy: true }
+                )
+              })
+              currentLocation = position
+              console.log('📍 Got fresh location from geolocation API')
+            } catch (geoError) {
+              console.error('❌ Could not get current location:', geoError)
+              toast.error('Location not available. Please enable location services.')
+              // Ensure currentLocation is set to null before returning
+              currentLocation = null
+              return
+            }
+          }
+          
+          // Validate currentLocation before proceeding
+          if (!currentLocation || currentLocation.length !== 2) {
+            console.error('❌ No valid location available')
+            toast.error('Location not available. Please enable location services.')
+            return
+          }
+
+          console.log('📦 Accepting order:', orderId)
+          console.log('📍 Current LIVE location:', currentLocation)
+          console.log('📋 Order details:', {
+            orderId: orderId,
+            restaurantName: selectedRestaurant?.name || newOrder?.restaurantName,
+            orderStatus: newOrder?.status
+          })
+
+          // Call backend API to accept order
+          // Backend expects currentLat and currentLng
+          const response = await deliveryAPI.acceptOrder(orderId, {
+            lat: currentLocation[0], // latitude
+            lng: currentLocation[1]  // longitude
+          })
+          
+          console.log('📡 API Response:', response.data)
+
+          if (response.data?.success && response.data.data) {
+            // Stop audio immediately when order is successfully accepted
+            stopNewOrderAlertSound("order accepted successfully")
+            
+            const orderData = response.data.data
+            const order = orderData.order || orderData // Backend returns { order, route }
+            const routeData = response.data.data.route
+
+            console.log('✅ Order accepted successfully')
+            console.log('📍 Route data:', routeData)
+            console.log('📋 Full order data from backend:', JSON.stringify(order, null, 2))
+            console.log('🏪 Restaurant name from backend:', {
+              restaurantName: order.restaurantName,
+              restaurantIdName: order.restaurantId?.name,
+              restaurantIdType: typeof order.restaurantId,
+              restaurantId: order.restaurantId
+            })
+
+            // Update selectedRestaurant with correct data from backend
+            let restaurantInfo = null;
+            if (order) {
+              // Extract restaurant location with robust fallbacks
+              // Priority: GeoJSON coordinates -> latitude/longitude fields
+              const restaurantCoords = order.restaurantId?.location?.coordinates || []
+              const restaurantLatFromCoords = restaurantCoords[1] // Latitude is second element in GeoJSON
+              const restaurantLngFromCoords = restaurantCoords[0] // Longitude is first element in GeoJSON
+              const restaurantLatFromFields = order.restaurantId?.location?.latitude
+              const restaurantLngFromFields = order.restaurantId?.location?.longitude
+              const restaurantLat = Number.isFinite(Number(restaurantLatFromCoords))
+                ? Number(restaurantLatFromCoords)
+                : (Number.isFinite(Number(restaurantLatFromFields)) ? Number(restaurantLatFromFields) : null)
+              const restaurantLng = Number.isFinite(Number(restaurantLngFromCoords))
+                ? Number(restaurantLngFromCoords)
+                : (Number.isFinite(Number(restaurantLngFromFields)) ? Number(restaurantLngFromFields) : null)
+              
+              // Format restaurant address - check multiple possible locations
+              let restaurantAddress = 'Restaurant Address'
+              const restaurantLocation = order.restaurantId?.location
+              
+              // Debug: Log order structure to understand data format
+              console.log('🔍 Order structure for address extraction:', {
+                hasRestaurantId: !!order.restaurantId,
+                restaurantIdType: typeof order.restaurantId,
+                restaurantIdKeys: order.restaurantId ? Object.keys(order.restaurantId) : [],
+                hasLocation: !!restaurantLocation,
+                locationKeys: restaurantLocation ? Object.keys(restaurantLocation) : [],
+                restaurantIdAddress: order.restaurantId?.address,
+                locationFormattedAddress: restaurantLocation?.formattedAddress,
+                locationAddress: restaurantLocation?.address,
+                locationStreet: restaurantLocation?.street,
+                orderRestaurantAddress: order.restaurantAddress
+              })
+              
+              // Priority 1: location.formattedAddress from store saved location
+              if (restaurantLocation?.formattedAddress) {
+                restaurantAddress = restaurantLocation.formattedAddress
+                console.log('✅ Using location.formattedAddress:', restaurantAddress)
+              }
+              // Priority 2: address from location
+              else if (restaurantLocation?.address) {
+                restaurantAddress = restaurantLocation.address
+                console.log('✅ Using location.address:', restaurantAddress)
+              }
+              // Priority 3: Build from addressLine1 (with zone and pin code)
+              else if (restaurantLocation?.addressLine1) {
+                const addressParts = [
+                  restaurantLocation.addressLine1,
+                  restaurantLocation.addressLine2,
+                  restaurantLocation.area, // Zone
+                  restaurantLocation.city,
+                  restaurantLocation.state,
+                  restaurantLocation.pincode || restaurantLocation.zipCode || restaurantLocation.postalCode
+                ].filter(Boolean)
+                restaurantAddress = addressParts.join(', ')
+                console.log('✅ Built address from addressLine1 with zone and pin:', restaurantAddress)
+              }
+              // Priority 4: Build from street components (with zone and pin code)
+              else if (restaurantLocation?.street) {
+                const addressParts = [
+                  restaurantLocation.street,
+                  restaurantLocation.area, // Zone
+                  restaurantLocation.city,
+                  restaurantLocation.state,
+                  restaurantLocation.pincode || restaurantLocation.zipCode || restaurantLocation.postalCode
+                ].filter(Boolean)
+                restaurantAddress = addressParts.join(', ')
+                console.log('✅ Built address from street components with zone and pin:', restaurantAddress)
+              }
+              // Priority 5: Check restaurantId directly for address fields
+              else if (order.restaurantId?.address) {
+                restaurantAddress = order.restaurantId.address
+                console.log('✅ Using restaurantId.address:', restaurantAddress)
+              }
+              // Priority 6: Check restaurantId directly for address fields
+              else if (order.restaurantId?.street || order.restaurantId?.city) {
+                const addressParts = [
+                  order.restaurantId.street,
+                  order.restaurantId.area,
+                  order.restaurantId.city,
+                  order.restaurantId.state,
+                  order.restaurantId.zipCode || order.restaurantId.pincode || order.restaurantId.postalCode
+                ].filter(Boolean)
+                restaurantAddress = addressParts.join(', ')
+                console.log('✅ Built address from restaurantId fields:', restaurantAddress)
+              }
+              // Priority 7: Check order.restaurantAddress (if exists)
+              else if (order.restaurantAddress) {
+                restaurantAddress = order.restaurantAddress
+                console.log('✅ Using order.restaurantAddress:', restaurantAddress)
+              }
+              // Priority 8: Use coordinates if address not available
+              else if (restaurantLat && restaurantLng) {
+                restaurantAddress = `${restaurantLat}, ${restaurantLng}`
+                console.log('⚠️ Using coordinates as address:', restaurantAddress)
+              } else {
+                console.warn('⚠️ Restaurant address not found in order, will try to fetch from restaurant API')
+                // Try to fetch restaurant address by ID if available
+                const restaurantId = order.restaurantId
+                if (restaurantId) {
+                  // Handle both string and object restaurantId
+                  const restaurantIdString = typeof restaurantId === 'string' 
+                    ? restaurantId 
+                    : (restaurantId._id || restaurantId.id || restaurantId.toString())
+                  
+                  if (restaurantIdString) {
+                    try {
+                      console.log('🔄 Fetching restaurant address by ID:', restaurantIdString)
+                      const restaurantResponse = await restaurantAPI.getRestaurantById(restaurantIdString)
+                      if (restaurantResponse.data?.success && restaurantResponse.data.data) {
+                        const restaurant = restaurantResponse.data.data.restaurant || restaurantResponse.data.data
+                        const restLocation = restaurant.location
+                        console.log('✅ Fetched restaurant data:', { restaurant, restLocation })
+                        
+                        // Priority: location.formattedAddress (this is what user wants)
+                        if (restLocation?.formattedAddress) {
+                          restaurantAddress = restLocation.formattedAddress
+                          console.log('✅ Fetched restaurant.location.formattedAddress:', restaurantAddress)
+                        } else if (restLocation?.address) {
+                          restaurantAddress = restLocation.address
+                          console.log('✅ Fetched restaurant.location.address:', restaurantAddress)
+                        } else if (restaurant.address) {
+                          restaurantAddress = restaurant.address
+                          console.log('✅ Fetched restaurant.address:', restaurantAddress)
+                        } else if (restLocation?.addressLine1) {
+                          const addressParts = [
+                            restLocation.addressLine1,
+                            restLocation.addressLine2,
+                            restLocation.area, // Zone
+                            restLocation.city,
+                            restLocation.state,
+                            restLocation.pincode || restLocation.zipCode || restLocation.postalCode
+                          ].filter(Boolean)
+                          restaurantAddress = addressParts.join(', ')
+                          console.log('✅ Built address from restaurant location addressLine1 with zone and pin:', restaurantAddress)
+                        } else if (restLocation?.street) {
+                          const addressParts = [
+                            restLocation.street,
+                            restLocation.area, // Zone
+                            restLocation.city,
+                            restLocation.state,
+                            restLocation.pincode || restLocation.zipCode || restLocation.postalCode
+                          ].filter(Boolean)
+                          restaurantAddress = addressParts.join(', ')
+                          console.log('✅ Built address from restaurant location components with zone and pin:', restaurantAddress)
+                        }
+                      }
+                    } catch (restaurantError) {
+                      console.error('❌ Error fetching restaurant address:', restaurantError)
+                    }
+                  }
+                }
+                
+                if (restaurantAddress === 'Restaurant Address') {
+                  console.warn('⚠️ Restaurant address not found in any location, using default')
+                }
+              }
+              
+              // Extract restaurant name - priority: restaurantName field > restaurantId.name > fallback
+              // Backend returns restaurantName as a direct field on order, and restaurantId is populated with name
+              let restaurantName = null
+              
+              // Priority 1: Direct restaurantName field from order (stored in Order model)
+              if (order.restaurantName && typeof order.restaurantName === 'string' && order.restaurantName.trim()) {
+                restaurantName = order.restaurantName.trim()
+                console.log('✅ Using restaurantName from order:', restaurantName)
+              } 
+              // Priority 2: Name from populated restaurantId object
+              else if (order.restaurantId && typeof order.restaurantId === 'object' && order.restaurantId.name) {
+                restaurantName = order.restaurantId.name.trim()
+                console.log('✅ Using restaurantId.name:', restaurantName)
+              }
+              // Priority 3: Fallback to existing selectedRestaurant name
+              else if (selectedRestaurant?.name) {
+                restaurantName = selectedRestaurant.name
+                console.warn('⚠️ Restaurant name not found in order, using selectedRestaurant.name:', restaurantName)
+              }
+              // Final fallback
+              else {
+                restaurantName = 'Restaurant'
+                console.error('❌ Restaurant name not found anywhere, using default:', restaurantName)
+              }
+              
+              console.log('🏪 Final extracted restaurant name:', restaurantName)
+              
+              // Extract earnings from backend response
+              const backendEarnings = orderData.estimatedEarnings || response.data.data.estimatedEarnings;
+              const earningsValue = backendEarnings 
+                ? (typeof backendEarnings === 'object' ? backendEarnings.totalEarning : backendEarnings)
+                : (selectedRestaurant?.estimatedEarnings || 0);
+              
+              console.log('💰 Earnings from backend:', {
+                backendEarnings,
+                earningsValue,
+                orderDataEarnings: orderData.estimatedEarnings,
+                responseEarnings: response.data.data.estimatedEarnings
+              });
+
+              const customerCoords = extractCustomerCoordsFromOrder(order)
+
+              restaurantInfo = {
+                id: order._id || order.orderId,
+                orderId: order.orderId, // Correct order ID from backend
+                name: restaurantName, // Restaurant name from backend (priority: restaurantName > restaurantId.name)
+                address: normalizeAddressLabel(restaurantAddress, 'Restaurant address not available'), // Restaurant address from backend
+                lat: restaurantLat || selectedRestaurant?.lat,
+                lng: restaurantLng || selectedRestaurant?.lng,
+                distance: selectedRestaurant?.distance || '0 km',
+                timeAway: selectedRestaurant?.timeAway || '0 mins',
+                dropDistance: selectedRestaurant?.dropDistance || '0 km',
+                pickupDistance: selectedRestaurant?.pickupDistance || '0 km',
+                estimatedEarnings: backendEarnings || selectedRestaurant?.estimatedEarnings || 0,
+                amount: earningsValue, // Also set amount for compatibility
+                customerName: order.userId?.name || selectedRestaurant?.customerName,
+                customerAddress: order.address?.formattedAddress || 
+                                (order.address?.street ? `${order.address.street}, ${order.address.city || ''}, ${order.address.state || ''}`.trim() : '') ||
+                                selectedRestaurant?.customerAddress,
+                customerLat: customerCoords?.lat ?? selectedRestaurant?.customerLat,
+                customerLng: customerCoords?.lng ?? selectedRestaurant?.customerLng,
+                items: order.items || [],
+                total: order.pricing?.total || 0,
+                paymentMethod: order.paymentMethod ?? order.payment?.method ?? 'razorpay', // backend-resolved first (COD vs Online)
+                phone: order.restaurantId?.phone || order.restaurantId?.ownerPhone || null, // Restaurant phone number (prefer phone, fallback to ownerPhone)
+                ownerPhone: order.restaurantId?.ownerPhone || null, // Owner phone number (separate field for direct access)
+                orderStatus: order.status || 'preparing', // Store order status (pending, preparing, ready, out_for_delivery, delivered)
+                deliveryState: {
+                  ...(order.deliveryState || {}),
+                  currentPhase: 'en_route_to_pickup', // CRITICAL: Set to en_route_to_pickup after order acceptance
+                  status: 'accepted' // Set status to accepted
+                }, // Store delivery state (currentPhase, status, etc.)
+                deliveryPhase: 'en_route_to_pickup' // CRITICAL: Set to en_route_to_pickup after order acceptance so Reached Pickup popup can show
+              }
+              
+              console.log('🏪 Updated restaurant info from backend:', restaurantInfo)
+              // Update state immediately
+              setSelectedRestaurant(restaurantInfo)
+            }
+
+            // Ensure we have restaurantInfo before proceeding
+            if (!restaurantInfo) {
+              console.error('❌ Restaurant info not available, cannot proceed');
+              return;
+            }
+
+            let routeCoordinates = null;
+            let directionsResultForMap = null; // Store directions result for main map rendering
+
+            // Use route from backend if available (for fallback/polyline)
+            if (routeData && routeData.coordinates && routeData.coordinates.length > 0) {
+              // Backend returns coordinates as [[lat, lng], ...]
+              routeCoordinates = routeData.coordinates;
+              setRoutePolyline(routeCoordinates);
+            }
+            
+            // Calculate route using Google Maps Directions API (Zomato-style road-based routing)
+            // Use LIVE location from delivery boy to restaurant
+            // Use restaurantInfo directly (not selectedRestaurant) since state update is async
+            if (restaurantInfo && restaurantInfo.lat && restaurantInfo.lng && currentLocation) {
+              console.log('🗺️ Calculating route with Google Maps Directions API...');
+              
+              try {
+                // Calculate route immediately with current live location
+                const directionsResult = await calculateRouteWithDirectionsAPI(
+                  currentLocation, // Delivery boy's current live location
+                  { lat: restaurantInfo.lat, lng: restaurantInfo.lng } // Restaurant location
+                );
+                
+                if (directionsResult) {
+                  
+                  // Store pickup route distance and time
+                  const pickupDistance = directionsResult.routes[0]?.legs[0]?.distance?.value || 0; // in meters
+                  const pickupDuration = directionsResult.routes[0]?.legs[0]?.duration?.value || 0; // in seconds
+                  pickupRouteDistanceRef.current = pickupDistance;
+                  pickupRouteTimeRef.current = pickupDuration;
+                  
+                  // Store directions result for rendering on main map
+                  setDirectionsResponse(directionsResult);
+                  directionsResponseRef.current = directionsResult; // Store in ref for callbacks
+                  directionsResultForMap = directionsResult; // Store for use in setTimeout
+                  
+                  // Initialize live tracking polyline with full route (Delivery Boy → Restaurant)
+                  if (currentLocation) {
+                    // Ensure map is ready before updating polyline
+                    if (window.deliveryMapInstance) {
+                      updateLiveTrackingPolyline(directionsResult, currentLocation);
+                    } else {
+                      // Wait for map to be ready
+                      setTimeout(() => {
+                        if (window.deliveryMapInstance && currentLocation) {
+                          updateLiveTrackingPolyline(directionsResult, currentLocation);
+                        }
+                      }, 500);
+                    }
+                  }
+                  
+                } else {
+                  // Fallback: Use backend route or OSRM
+                  if (!routeCoordinates || routeCoordinates.length === 0) {
+                    try {
+                      const url = `https://router.project-osrm.org/route/v1/driving/${currentLocation[1]},${currentLocation[0]};${restaurantInfo.lng},${restaurantInfo.lat}?overview=full&geometries=geojson`;
+                      const osrmResponse = await fetch(url);
+                      const osrmData = await osrmResponse.json();
+                      
+                      if (osrmData.code === 'Ok' && osrmData.routes && osrmData.routes.length > 0) {
+                        routeCoordinates = osrmData.routes[0].geometry.coordinates.map((coord) => [coord[1], coord[0]]);
+                        setRoutePolyline(routeCoordinates);
+                      } else {
+                        setRoutePolyline([]);
+                      }
+                    } catch (osrmError) {
+                      console.error('❌ Error calculating route with OSRM:', osrmError);
+                      setRoutePolyline([]);
+                    }
+                  }
+                }
+              } catch (directionsError) {
+                // Handle REQUEST_DENIED gracefully (billing/API key issue)
+                if (directionsError.message?.includes('REQUEST_DENIED') || directionsError.message?.includes('not available')) {
+                  console.warn('⚠️ Google Maps Directions API not available (billing/API key issue). Using fallback route.');
+                } else {
+                  console.error('❌ Error calculating route with Directions API:', directionsError);
+                }
+                
+                // Fallback to OSRM only (do not draw direct straight line)
+                if (!routeCoordinates || routeCoordinates.length === 0) {
+                  try {
+                    // Try OSRM first
+                    const url = `https://router.project-osrm.org/route/v1/driving/${currentLocation[1]},${currentLocation[0]};${restaurantInfo.lng},${restaurantInfo.lat}?overview=full&geometries=geojson`;
+                    const osrmResponse = await fetch(url);
+                    const osrmData = await osrmResponse.json();
+                    
+                    if (osrmData.code === 'Ok' && osrmData.routes && osrmData.routes.length > 0) {
+                      routeCoordinates = osrmData.routes[0].geometry.coordinates.map((coord) => [coord[1], coord[0]]);
+                      setRoutePolyline(routeCoordinates);
+                      console.log('✅ Route calculated with OSRM fallback:', routeCoordinates.length, 'points');
+                    } else {
+                      console.warn('⚠️ OSRM fallback returned no route, skipping straight-line fallback');
+                      setRoutePolyline([]);
+                    }
+                  } catch (osrmError) {
+                    console.warn('⚠️ OSRM fallback failed, skipping straight-line fallback');
+                    setRoutePolyline([]);
+                  }
+                }
+              }
+            } else {
+              console.error('❌ Cannot calculate route: missing restaurant info or location', {
+                restaurantInfo: !!restaurantInfo,
+                restaurantLat: restaurantInfo?.lat,
+                restaurantLng: restaurantInfo?.lng,
+                currentLocation: !!currentLocation
+              });
+            }
+
+            // Close popup and show route on main map (not full-screen directions map)
+            setShowNewOrderPopup(false);
+            // CRITICAL: Clear newOrder notification immediately to prevent duplicate notifications
+            markOrderAsAccepted(
+              restaurantInfo?.id,
+              restaurantInfo?.orderId,
+              newOrder?.orderMongoId,
+              newOrder?.orderId,
+            );
+            console.log('✅ Added order to accepted list:', {
+              ids: [restaurantInfo?.id, restaurantInfo?.orderId, newOrder?.orderMongoId, newOrder?.orderId].filter(Boolean),
+            });
+            clearNewOrder();
+            
+            // Ensure route path is visible
+            setShowRoutePath(true);
+            
+            // Show Reached Pickup popup immediately after order acceptance (no distance check)
+            // But only if order is not already past pickup phase
+            setTimeout(() => {
+              const currentOrderStatus = selectedRestaurant?.orderStatus || selectedRestaurant?.status || '';
+              const currentDeliveryPhase = selectedRestaurant?.deliveryPhase || selectedRestaurant?.deliveryState?.currentPhase || '';
+              const isAlreadyPastPickup = currentOrderStatus === 'out_for_delivery' || 
+                                         currentDeliveryPhase === 'en_route_to_delivery' ||
+                                         currentDeliveryPhase === 'en_route_to_drop' ||
+                                         currentDeliveryPhase === 'picked_up';
+              
+              if (!isAlreadyPastPickup) {
+                setShowreachedPickupPopup(true);
+                // Close directions map if open
+                setShowDirectionsMap(false);
+              } else {
+              }
+            }, 500); // Wait 500ms for state to update
+            
+            // Show route on main map instead of opening full-screen directions map
+            setTimeout(() => {
+              
+              // Show route on main map using DirectionsRenderer or polyline
+              if (window.deliveryMapInstance && restaurantInfo) {
+                // Use DirectionsRenderer on main map if we have directions result
+                // Use directionsResponse state (which was set above) instead of local variable
+                const directionsResult = directionsResultForMap || (directionsResponse && directionsResponse.routes && directionsResponse.routes.length > 0 ? directionsResponse : null);
+                
+                if (directionsResult && directionsResult.routes && directionsResult.routes.length > 0) {
+                  
+                  // Initialize DirectionsRenderer for main map if not exists
+                  // Don't create DirectionsRenderer - it adds dots
+                  // We'll extract route path and use custom polyline instead
+                  if (!directionsRendererRef.current) {
+                    // Create DirectionsRenderer but don't set it on map (only for extracting route data)
+                    directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
+                      suppressMarkers: true,
+                      suppressInfoWindows: false,
+                      polylineOptions: {
+                        strokeColor: '#4285F4',
+                        strokeWeight: 0,
+                        strokeOpacity: 0,
+                        zIndex: -1,
+                        icons: []
+                      },
+                      preserveViewport: true
+                    });
+                    // Explicitly don't set map - we use custom polyline instead
+                  }
+                  
+                  // Extract route path directly from directionsResult (don't use DirectionsRenderer - it adds dots)
+                  try {
+                    // Validate directionsResult is a valid DirectionsResult object
+                    if (!directionsResult || typeof directionsResult !== 'object' || !directionsResult.routes || !Array.isArray(directionsResult.routes) || directionsResult.routes.length === 0) {
+                      console.error('❌ Invalid directionsResult:', directionsResult);
+                      return;
+                    }
+
+                    // Validate it's a Google Maps DirectionsResult (has request and legs)
+                    if (!directionsResult.request || !directionsResult.routes[0]?.legs || !Array.isArray(directionsResult.routes[0].legs)) {
+                      console.error('❌ directionsResult is not a valid Google Maps DirectionsResult');
+                      return;
+                    }
+
+                    console.log('📍 Route details:', {
+                      routes: directionsResult.routes?.length || 0,
+                      legs: directionsResult.routes?.[0]?.legs?.length || 0,
+                      distance: directionsResult.routes?.[0]?.legs?.[0]?.distance?.text,
+                      duration: directionsResult.routes?.[0]?.legs?.[0]?.duration?.text
+                    });
+                    
+                    // Don't create main route polyline - only live tracking polyline will be shown
+                    // Remove old custom polyline if exists (cleanup)
+                    try {
+                      if (routePolylineRef.current) {
+                        routePolylineRef.current.setMap(null);
+                        routePolylineRef.current = null;
+                      }
+                      
+                      // Completely remove DirectionsRenderer from map to prevent any dots/icons
+                      if (directionsRendererRef.current) {
+                        directionsRendererRef.current.setMap(null);
+                      }
+                    } catch (e) {
+                      console.warn('⚠️ Error cleaning up polyline:', e);
+                    }
+                    
+                    // Fit bounds to show entire route - but preserve zoom if user has zoomed in
+                    const bounds = directionsResult.routes[0].bounds;
+                    if (bounds) {
+                      const currentZoom = window.deliveryMapInstance.getZoom();
+                      if (isBoundsReasonable(bounds)) {
+                      window.deliveryMapInstance.fitBounds(bounds, { padding: 100 });
+                    } else {
+                      console.warn("Skipping unsafe fitBounds on delivery map", bounds);
+                    }
+                      // Restore zoom if user had zoomed in more than fitBounds would set
+                      setTimeout(() => {
+                        const newZoom = window.deliveryMapInstance.getZoom();
+                        if (currentZoom > newZoom && currentZoom >= 18) {
+                          window.deliveryMapInstance.setZoom(currentZoom);
+                        }
+                      }, 100);
+                    }
+                    
+                  } catch (error) {
+                    console.error('❌ Error extracting route path:', error);
+                    console.error('❌ directionsResult type:', typeof directionsResult);
+                    console.error('❌ directionsResult:', directionsResult);
+                  }
+                } else if (routeCoordinates && routeCoordinates.length > 0) {
+                  // Fallback: Use polyline if Directions API result not available
+                  // setRoutePolyline will trigger useEffect that calls updateRoutePolyline
+                  setRoutePolyline(routeCoordinates);
+                } else {
+                }
+                
+                // Add restaurant marker to main map
+                if (restaurantInfo.lat && restaurantInfo.lng) {
+                  const restaurantLocation = {
+                    lat: restaurantInfo.lat,
+                    lng: restaurantInfo.lng
+                  };
+                  
+                  // Remove old restaurant marker if exists
+                  if (restaurantMarkerRef.current) {
+                    restaurantMarkerRef.current.setMap(null);
+                  }
+                  
+                  // Create restaurant marker on main map with kitchen icon
+                  restaurantMarkerRef.current = new window.google.maps.Marker({
+                    position: restaurantLocation,
+                    map: window.deliveryMapInstance,
+                    icon: {
+                      url: 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24">
+                          <circle cx="12" cy="12" r="11" fill="#FF6B35" stroke="#FFFFFF" stroke-width="2"/>
+                          <path d="M8 10c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v6H8v-6z" fill="#FFFFFF"/>
+                          <path d="M7 16h10M10 12h4M9 14h6" stroke="#FF6B35" stroke-width="1.5" stroke-linecap="round"/>
+                          <path d="M10 8h4v2h-4z" fill="#FFFFFF" opacity="0.7"/>
+                        </svg>
+                      `),
+                      scaledSize: new window.google.maps.Size(48, 48),
+                      anchor: new window.google.maps.Point(24, 48)
+                    },
+                    title: restaurantInfo.name || 'Kitchen',
+                    animation: window.google.maps.Animation.DROP,
+                    zIndex: 10
+                  });
+                  
+                }
+              } else {
+              }
+              
+              // Save accepted order to localStorage for refresh handling
+              try {
+                const activeOrderData = {
+                  orderId: restaurantInfo.id || restaurantInfo.orderId,
+                  restaurantInfo: restaurantInfo,
+                  // Don't save directionsResponse - Google Maps objects can't be serialized to JSON
+                  // Route will be recalculated on restore using Directions API
+                  routeCoordinates: routeCoordinates, // Save coordinates for fallback polyline
+                  acceptedAt: new Date().toISOString(),
+                  hasDirectionsAPI: !!directionsResultForMap // Flag to indicate we should recalculate with Directions API
+                };
+                localStorage.setItem('deliveryActiveOrder', JSON.stringify(activeOrderData));
+              } catch (storageError) {
+                console.error('❌ Error saving active order to localStorage:', storageError);
+              }
+              
+              // Don't show Reached Pickup popup here - it will be shown when order becomes ready via WebSocket
+              // The popup will be triggered by orderReady event from backend
+            }, 300); // Wait for popup close animation
+
+          } else {
+            console.error('❌ Failed to accept order:', response.data)
+            // Show error message to user
+            toast.error(response.data?.message || 'Failed to accept order. Please try again.')
+            // Still close popup
+            setShowNewOrderPopup(false)
+            setIsNewOrderPopupMinimized(false) // Reset minimized state
+            setNewOrderDragY(0) // Reset drag position
+          }
+        } catch (error) {
+          console.error('❌ Error accepting order:', error)
+          console.error('❌ Error details:', {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status,
+            orderId: orderId || 'unknown',
+            code: error.code,
+            isNetworkError: error.code === 'ERR_NETWORK',
+            currentLocation: currentLocation && currentLocation.length === 2 ? 'available' : 'not available'
+          })
+          if (isCancelledConflictError(error)) {
+            handleCancelledOrderConflict(error, 'Order was cancelled before it could be accepted.')
+            return
+          }
+          
+          // Log full error response for debugging
+          if (error.response?.data) {
+            console.error('❌ Backend error response:', JSON.stringify(error.response.data, null, 2))
+          }
+          
+          // Show user-friendly error message
+          let errorMessage = 'Failed to accept order. Please try again.'
+          if (error.code === 'ERR_NETWORK') {
+            errorMessage = 'Network error. Please check your internet connection and try again.'
+          } else if (error.response?.data?.message) {
+            errorMessage = error.response.data.message
+            // Also log the full error if available
+            if (error.response.data.error) {
+              console.error('❌ Backend error details:', error.response.data.error)
+            }
+          } else if (error.message) {
+            errorMessage = error.message
+          }
+          
+          toast.error(errorMessage)
+          
+          // Close popup even on error
+          setShowNewOrderPopup(false)
+          setIsNewOrderPopupMinimized(false) // Reset minimized state
+          setNewOrderDragY(0) // Reset drag position
+        } finally {
+          // Reset after animation
+          setTimeout(() => {
+            setNewOrderAcceptButtonProgress(0)
+            setNewOrderIsAnimatingToComplete(false)
+          }, 500)
+        }
+      }
+
+      // Start accepting order
+      acceptOrderAndShowRoute()
+    } else {
+      // Reset smoothly
+      setNewOrderAcceptButtonProgress(0)
+    }
+
+    newOrderAcceptButtonSwipeStartX.current = 0
+    newOrderAcceptButtonSwipeStartY.current = 0
+    newOrderAcceptButtonIsSwiping.current = false
+  }
+
+  // Handle new order popup swipe down to minimize (not close)
+  // Popup should stay visible until accept/reject is clicked
+  const handleNewOrderPopupTouchStart = (e) => {
+    // Allow touch start from anywhere when minimized (for swipe up from handle)
+    if (isNewOrderPopupMinimized) {
+      e.stopPropagation()
+      newOrderSwipeStartY.current = e.touches[0].clientY
+      newOrderIsSwiping.current = true
+      setIsDraggingNewOrderPopup(true)
+      return
+    }
+
+    // When visible, only allow swipe from top handle area
+    const target = e.target
+    const rect = newOrderPopupRef.current?.getBoundingClientRect()
+    if (!rect) return
+
+    const touchY = e.touches[0].clientY
+    const handleArea = rect.top + 100 // Top 100px is swipeable area
+
+    if (touchY <= handleArea) {
+      e.stopPropagation()
+      newOrderSwipeStartY.current = touchY
+      newOrderIsSwiping.current = true
+      setIsDraggingNewOrderPopup(true)
+    }
+  }
+
+  const handleNewOrderPopupTouchMove = (e) => {
+    if (!newOrderIsSwiping.current) return
+
+    const currentY = e.touches[0].clientY
+    const deltaY = currentY - newOrderSwipeStartY.current
+    const popupHeight = newOrderPopupRef.current?.offsetHeight || 600
+
+    e.stopPropagation()
+
+    if (isNewOrderPopupMinimized) {
+      // Currently minimized - swiping up (negative deltaY) should restore
+      if (deltaY < 0) {
+        // Calculate new position: start from popupHeight, subtract the upward swipe distance
+        const newPosition = popupHeight + deltaY // deltaY is negative, so this reduces the position
+        setNewOrderDragY(Math.max(0, newPosition)) // Don't go above 0 (fully visible)
+      }
+    } else {
+      // Currently visible - swiping down (positive deltaY) should minimize
+      if (deltaY > 0) {
+        setNewOrderDragY(deltaY) // Direct deltaY, will be clamped to popupHeight in touchEnd
+      }
+    }
+  }
+
+  const handleNewOrderPopupTouchEnd = (e) => {
+    if (!newOrderIsSwiping.current) {
+      newOrderIsSwiping.current = false
+      setIsDraggingNewOrderPopup(false)
+      return
+    }
+
+    e.stopPropagation()
+
+    const deltaY = e.changedTouches[0].clientY - newOrderSwipeStartY.current
+    const threshold = 100
+    const popupHeight = newOrderPopupRef.current?.offsetHeight || 600
+
+    if (isNewOrderPopupMinimized) {
+      // Currently minimized - check if swiping up enough to restore
+      if (deltaY < -threshold) {
+        // Swipe up enough - restore popup
+        setIsNewOrderPopupMinimized(false)
+        setNewOrderDragY(0)
+      } else {
+        // Not enough swipe - keep minimized
+        setIsNewOrderPopupMinimized(true)
+        setNewOrderDragY(popupHeight)
+        // Delay stopping drag to allow position to be set
+        setTimeout(() => {
+          setIsDraggingNewOrderPopup(false)
+        }, 10)
+      }
+    } else {
+      // Currently visible - check if swiping down enough to minimize
+      if (deltaY > threshold) {
+        // Swipe down enough - minimize popup (but don't close)
+        // Set dragY first to current position
+        setNewOrderDragY(deltaY)
+        // Then set minimized state and update dragY to full height
+        setIsNewOrderPopupMinimized(true)
+        // Use requestAnimationFrame to ensure state updates are batched
+        requestAnimationFrame(() => {
+          setNewOrderDragY(popupHeight)
+          // Stop dragging after state is set
+          setTimeout(() => {
+            setIsDraggingNewOrderPopup(false)
+          }, 50)
+        })
+      } else {
+        // Not enough swipe - restore to visible (snap back)
+        setIsNewOrderPopupMinimized(false)
+        setNewOrderDragY(0)
+        setIsDraggingNewOrderPopup(false)
+      }
+    }
+
+    newOrderIsSwiping.current = false
+    newOrderSwipeStartY.current = 0
+  }
+
+  // Handle Reached Pickup button swipe
+  const handlereachedPickupTouchStart = (e) => {
+    if (isOrderCancelledState(selectedRestaurant)) {
+      handleCancelledOrderConflict(null, 'Order was cancelled by user.')
+      return
+    }
+    reachedPickupSwipeStartX.current = e.touches[0].clientX
+    reachedPickupSwipeStartY.current = e.touches[0].clientY
+    reachedPickupIsSwiping.current = false
+    setreachedPickupIsAnimatingToComplete(false)
+    setreachedPickupButtonProgress(0)
+  }
+
+  const handlereachedPickupTouchMove = (e) => {
+    const deltaX = e.touches[0].clientX - reachedPickupSwipeStartX.current
+    const deltaY = e.touches[0].clientY - reachedPickupSwipeStartY.current
+
+    // Only handle horizontal swipes (swipe right)
+    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+      reachedPickupIsSwiping.current = true
+      // Don't call preventDefault - CSS touch-action handles scrolling prevention
+      // safePreventDefault(e) // Removed to avoid passive listener error
+
+      // Calculate max swipe distance
+      const buttonWidth = reachedPickupButtonRef.current?.offsetWidth || 300
+      const circleWidth = 56 // w-14 = 56px
+      const padding = 16 // px-4 = 16px
+      const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+
+      const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
+      setreachedPickupButtonProgress(progress)
+    }
+  }
+
+  const handlereachedPickupTouchEnd = (e) => {
+    if (isOrderCancelledState(selectedRestaurant)) {
+      setreachedPickupButtonProgress(0)
+      handleCancelledOrderConflict(null, 'Order was cancelled by user.')
+      return
+    }
+
+    if (!reachedPickupIsSwiping.current) {
+      setreachedPickupButtonProgress(0)
+      return
+    }
+
+    const deltaX = e.changedTouches[0].clientX - reachedPickupSwipeStartX.current
+    const buttonWidth = reachedPickupButtonRef.current?.offsetWidth || 300
+    const circleWidth = 56
+    const padding = 16
+    const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+    const threshold = maxSwipe * 0.7 // 70% of max swipe
+
+    if (deltaX > threshold) {
+      // Animate to completion
+      setreachedPickupIsAnimatingToComplete(true)
+      setreachedPickupButtonProgress(1)
+
+      // Close popup after animation, confirm reached pickup, then show order ID confirmation popup
+      setTimeout(async () => {
+        setShowreachedPickupPopup(false)
+        
+        // Get order ID - prioritize orderId (string) over id (MongoDB _id) for better compatibility
+        // Backend accepts both _id and orderId, but orderId is more reliable
+        const orderId = selectedRestaurant?.orderId || selectedRestaurant?.id || newOrder?.orderId || newOrder?.orderMongoId
+        
+        console.log('🔍 Order ID lookup for reached pickup:', {
+          selectedRestaurantId: selectedRestaurant?.id,
+          selectedRestaurantOrderId: selectedRestaurant?.orderId,
+          newOrderMongoId: newOrder?.orderMongoId,
+          newOrderId: newOrder?.orderId,
+          finalOrderId: orderId
+        })
+        
+        // CRITICAL: Check if order is already delivered/completed - don't call API
+        const orderStatus = selectedRestaurant?.orderStatus || selectedRestaurant?.status || ''
+        const deliveryPhase = selectedRestaurant?.deliveryPhase || selectedRestaurant?.deliveryState?.currentPhase || ''
+        const deliveryStateStatus = selectedRestaurant?.deliveryState?.status || ''
+        
+        const isDelivered = orderStatus === 'delivered' || 
+                            deliveryPhase === 'completed' || 
+                            deliveryPhase === 'delivered' ||
+                            deliveryStateStatus === 'delivered'
+        
+        if (isDelivered) {
+          console.warn('⚠️ Order is already delivered, skipping reached pickup confirmation')
+          toast.error('Order is already delivered. Cannot confirm reached pickup.')
+          setShowreachedPickupPopup(false)
+          return
+        }
+        
+        // CRITICAL: Check if order is already past pickup phase (order ID confirmed or out for delivery)
+        const isPastPickupPhase = orderStatus === 'out_for_delivery' ||
+                                  deliveryPhase === 'en_route_to_delivery' ||
+                                  deliveryPhase === 'picked_up' ||
+                                  deliveryStateStatus === 'order_confirmed' ||
+                                  deliveryStateStatus === 'reached_pickup' ||
+                                  deliveryPhase === 'at_pickup'
+        
+        if (isPastPickupPhase) {
+          console.warn('⚠️ Order is already past pickup phase, skipping reached pickup confirmation:', {
+            orderStatus,
+            deliveryPhase,
+            deliveryStateStatus
+          })
+          // If already at pickup or order ID confirmed, just show order ID popup after delay
+          if (deliveryPhase === 'at_pickup' || deliveryStateStatus === 'reached_pickup') {
+            // Ensure reached pickup popup is closed first
+            setShowreachedPickupPopup(false)
+            setTimeout(() => {
+              setShowOrderIdConfirmationPopup(true)
+            }, 300) // Delay to ensure reached pickup popup closes first
+            toast.info('Order is already at pickup. Showing order ID confirmation.')
+          } else {
+            toast.info('Order is already out for delivery.')
+          }
+          return
+        }
+        
+        if (orderId) {
+          try {
+            // Call backend API to confirm reached pickup and save status in database
+            console.log('📦 Confirming reached pickup for order:', orderId)
+            console.log('📦 API endpoint: /delivery/orders/:orderId/reached-pickup')
+            const riderPos = (riderLocation && riderLocation.length === 2)
+              ? riderLocation
+              : (lastLocationRef.current && lastLocationRef.current.length === 2 ? lastLocationRef.current : null)
+
+            const response = await deliveryAPI.confirmReachedPickup(orderId, riderPos ? {
+              lat: riderPos[0],
+              lng: riderPos[1]
+            } : {})
+            
+            console.log('📦 Reached pickup API response:', response.data)
+            
+            if (response.data?.success) {
+              console.log('✅ Reached pickup confirmed and status saved in database')
+              toast.success('Reached pickup confirmed!')
+              
+              // Update local state to reflect the new status
+              if (selectedRestaurant) {
+                setSelectedRestaurant(prev => ({
+                  ...prev,
+                  deliveryState: {
+                    ...(prev?.deliveryState || {}),
+                    currentPhase: 'at_pickup',
+                    status: 'reached_pickup'
+                  }
+                }))
+              }
+              
+              // Ensure reached pickup popup is closed first
+              setShowreachedPickupPopup(false)
+              // Wait for reached pickup popup to close, then show order ID confirmation popup
+              setTimeout(() => {
+                setShowOrderIdConfirmationPopup(true)
+                console.log('✅ Showing Order ID confirmation popup')
+              }, 300) // 300ms delay for smooth transition
+            } else {
+              console.error('❌ Failed to confirm reached pickup:', response.data)
+              toast.error(response.data?.message || 'Failed to confirm reached pickup. Please try again.')
+              // Ensure reached pickup popup is closed
+              setShowreachedPickupPopup(false)
+              // Still show order ID popup even if API call fails, after delay
+              setTimeout(() => {
+                setShowOrderIdConfirmationPopup(true)
+                console.log('⚠️ Showing Order ID confirmation popup despite API failure')
+              }, 300)
+            }
+          } catch (error) {
+            console.error('❌ Error confirming reached pickup:', error)
+            console.error('❌ Error details:', {
+              message: error.message,
+              response: error.response?.data,
+              status: error.response?.status,
+              orderId: orderId || 'unknown',
+              selectedRestaurant: selectedRestaurant
+            })
+
+            if (isCancelledConflictError(error)) {
+              setreachedPickupButtonProgress(0)
+              setreachedPickupIsAnimatingToComplete(false)
+              handleCancelledOrderConflict(error, 'Order was cancelled before pickup confirmation.')
+              return
+            }
+            
+            // Show specific error message
+            const errorMessage = error.response?.data?.message || 
+                               (error.response?.status === 404 ? 'Order not found. Please refresh and try again.' : 'Failed to confirm reached pickup. Please try again.')
+            toast.error(errorMessage)
+            
+            // Ensure reached pickup popup is closed
+            setShowreachedPickupPopup(false)
+            // Still show order ID popup even if API call fails, after delay
+            setTimeout(() => {
+              setShowOrderIdConfirmationPopup(true)
+              console.log('⚠️ Showing Order ID confirmation popup despite error')
+            }, 300)
+          }
+        } else {
+          console.error('❌ No order ID found for reached pickup confirmation')
+          toast.error('Order ID not found. Please refresh and try again.')
+          // Ensure reached pickup popup is closed
+          setShowreachedPickupPopup(false)
+          // Show order ID popup even if no order ID (fallback), after delay
+          setTimeout(() => {
+            setShowOrderIdConfirmationPopup(true)
+            console.log('⚠️ Showing Order ID confirmation popup without order ID (fallback)')
+          }, 300)
+        }
+        
+        // DO NOT show reached drop here - it will only show after order ID is confirmed
+        
+        // Reset after animation
+        setTimeout(() => {
+          setreachedPickupButtonProgress(0)
+          setreachedPickupIsAnimatingToComplete(false)
+        }, 500)
+      }, 200)
+    } else {
+      // Reset smoothly
+      setreachedPickupButtonProgress(0)
+    }
+
+    reachedPickupSwipeStartX.current = 0
+    reachedPickupSwipeStartY.current = 0
+    reachedPickupIsSwiping.current = false
+  }
+
+  // Handle Reached Drop button swipe
+  const handleReachedDropTouchStart = (e) => {
+    if (isOrderCancelledState(selectedRestaurant)) {
+      handleCancelledOrderConflict(null, 'Order was cancelled by user.')
+      return
+    }
+    reachedDropSwipeStartX.current = e.touches[0].clientX
+    reachedDropSwipeStartY.current = e.touches[0].clientY
+    reachedDropIsSwiping.current = false
+    setReachedDropIsAnimatingToComplete(false)
+    setReachedDropButtonProgress(0)
+  }
+
+  const handleReachedDropTouchMove = (e) => {
+    const deltaX = e.touches[0].clientX - reachedDropSwipeStartX.current
+    const deltaY = e.touches[0].clientY - reachedDropSwipeStartY.current
+
+    // Only handle horizontal swipes (swipe right)
+    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+      reachedDropIsSwiping.current = true
+      // Don't call preventDefault - CSS touch-action handles scrolling prevention
+      // safePreventDefault(e) // Removed to avoid passive listener error
+
+      // Calculate max swipe distance
+      const buttonWidth = reachedDropButtonRef.current?.offsetWidth || 300
+      const circleWidth = 56 // w-14 = 56px
+      const padding = 16 // px-4 = 16px
+      const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+
+      const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
+      setReachedDropButtonProgress(progress)
+    }
+  }
+
+  const handleReachedDropTouchEnd = (e) => {
+    if (isOrderCancelledState(selectedRestaurant)) {
+      setReachedDropButtonProgress(0)
+      handleCancelledOrderConflict(null, 'Order was cancelled by user.')
+      return
+    }
+
+    if (!reachedDropIsSwiping.current) {
+      setReachedDropButtonProgress(0)
+      return
+    }
+
+    const deltaX = e.changedTouches[0].clientX - reachedDropSwipeStartX.current
+    const buttonWidth = reachedDropButtonRef.current?.offsetWidth || 300
+    const circleWidth = 56
+    const padding = 16
+    const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+    const threshold = maxSwipe * 0.7 // 70% of max swipe
+
+    if (deltaX > threshold) {
+      // Animate to completion
+      setReachedDropIsAnimatingToComplete(true)
+      setReachedDropButtonProgress(1)
+
+      // Close popup, confirm reached drop, and show order delivered animation instantly (no delay)
+      // Close reached drop popup first
+      setShowReachedDropPopup(false)
+      
+      // Show Order Delivered popup instantly after Reached Drop is confirmed
+      console.log('✅ Showing Order Delivered popup instantly after Reached Drop confirmation')
+      setShowOrderDeliveredAnimation(true)
+      
+      // API call in background (async, doesn't block popup)
+      ;(async () => {
+        // Get order ID - prioritize MongoDB _id over orderId string for API call
+        // Backend expects _id (MongoDB ObjectId) in the URL parameter
+        // Use _id (MongoDB ObjectId) if available, otherwise fallback to orderId string
+        const orderIdForApi = selectedRestaurant?.id || 
+                             newOrder?.orderMongoId || 
+                             newOrder?._id ||
+                             selectedRestaurant?.orderId || 
+                             newOrder?.orderId
+        
+        console.log('🔍 Order ID lookup for reached drop:', {
+          selectedRestaurantId: selectedRestaurant?.id,
+          selectedRestaurantOrderId: selectedRestaurant?.orderId,
+          newOrderMongoId: newOrder?.orderMongoId,
+          newOrderId: newOrder?.orderId,
+          finalOrderIdForApi: orderIdForApi
+        })
+        
+        if (orderIdForApi) {
+          try {
+            // Call backend API to confirm reached drop (in background, don't block popup)
+            // Use MongoDB _id for API call to avoid ObjectId casting errors
+            console.log('📦 Confirming reached drop for order:', orderIdForApi)
+            const response = await deliveryAPI.confirmReachedDrop(orderIdForApi)
+            
+            if (response.data?.success) {
+              console.log('✅ Reached drop confirmed')
+            } else {
+              console.error('❌ Failed to confirm reached drop:', response.data)
+              toast.error(response.data?.message || 'Failed to confirm reached drop. Please try again.')
+            }
+          } catch (error) {
+            const status = error.response?.status
+
+            if (isCancelledConflictError(error)) {
+              setReachedDropButtonProgress(0)
+              setReachedDropIsAnimatingToComplete(false)
+              handleCancelledOrderConflict(error, 'Order was cancelled before drop confirmation.')
+              return
+            }
+            
+            // Handle 500 errors gracefully (server-side issue, popup already shown)
+            if (status === 500) {
+              // For 500 errors, just log warning - popup is already shown, backend will sync later
+              console.warn('⚠️ Server error confirming reached drop (500), but popup is shown. Backend will sync status automatically.', {
+                orderIdForApi: orderIdForApi || 'unknown',
+                message: error.response?.data?.message || error.message
+              })
+              // Don't show error toast or log as error - it's a server issue, not user action
+              return
+            }
+            
+            // For other errors, log and show error message
+            console.error('❌ Error confirming reached drop:', error)
+            console.error('❌ Error details:', {
+              message: error.message,
+              response: error.response?.data,
+              status: status,
+              orderIdForApi: orderIdForApi || 'unknown',
+              selectedRestaurant: selectedRestaurant,
+              newOrder: newOrder
+            })
+            
+            // Show specific error message based on status code
+            let errorMessage = 'Failed to confirm reached drop. Please try again.'
+            if (status === 404) {
+              errorMessage = 'Order not found. Please refresh and try again.'
+            } else if (error.response?.data?.message) {
+              errorMessage = error.response.data.message
+            }
+            
+            toast.error(errorMessage)
+          }
+        }
+      })()
+    } else {
+      // Reset smoothly
+      setReachedDropButtonProgress(0)
+    }
+
+    reachedDropSwipeStartX.current = 0
+    reachedDropSwipeStartY.current = 0
+    reachedDropIsSwiping.current = false
+  }
+
+  // Handle Order ID Confirmation button swipe
+  const handleOrderIdConfirmTouchStart = (e) => {
+    if (isOrderCancelledState(selectedRestaurant)) {
+      handleCancelledOrderConflict(null, 'Order was cancelled by user.')
+      return
+    }
+    orderIdConfirmSwipeStartX.current = e.touches[0].clientX
+    orderIdConfirmSwipeStartY.current = e.touches[0].clientY
+    orderIdConfirmIsSwiping.current = false
+    setOrderIdConfirmIsAnimatingToComplete(false)
+    setOrderIdConfirmButtonProgress(0)
+  }
+
+  const handleOrderIdConfirmTouchMove = (e) => {
+    const deltaX = e.touches[0].clientX - orderIdConfirmSwipeStartX.current
+    const deltaY = e.touches[0].clientY - orderIdConfirmSwipeStartY.current
+
+    // Only handle horizontal swipes (swipe right)
+    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+      orderIdConfirmIsSwiping.current = true
+      // Don't call preventDefault - CSS touch-action handles scrolling prevention
+      // safePreventDefault(e) // Removed to avoid passive listener error
+
+      // Calculate max swipe distance
+      const buttonWidth = orderIdConfirmButtonRef.current?.offsetWidth || 300
+      const circleWidth = 56 // w-14 = 56px
+      const padding = 16 // px-4 = 16px
+      const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+
+      const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
+      setOrderIdConfirmButtonProgress(progress)
+    }
+  }
+
+  /**
+   * Handle camera capture for bill image - Flutter InAppWebView compatible
+   * 
+   * Flutter Handler Requirements:
+   * Handler name: 'openCamera'
+   * Expected response format:
+   * {
+   *   success: true,
+   *   file?: File,              // Preferred: JavaScript File object
+   *   base64?: string,          // Alternative: Base64 encoded image (with or without data:image/jpeg;base64, prefix)
+   *   mimeType?: string,        // MIME type (e.g., 'image/jpeg', 'image/png')
+   *   fileName?: string,        // File name (e.g., 'bill-image.jpg')
+   *   filePath?: string         // Not recommended: File path (requires additional handler to read)
+   * }
+   * 
+   * If user cancels:
+   * { success: false } or null
+   */
+  const handleCameraCapture = async () => {
+    try {
+      // Check if Flutter InAppWebView handler is available
+      if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === 'function') {
+        console.log('📸 Using Flutter InAppWebView camera handler')
+        
+        // Call Flutter handler to open camera
+        const result = await window.flutter_inappwebview.callHandler('openCamera', {
+          source: 'camera', // 'camera' for camera, 'gallery' for file picker
+          accept: 'image/*',
+          multiple: false,
+          quality: 0.8 // Image quality (0.0 to 1.0)
+        })
+        
+        console.log('📸 Flutter handler response:', result)
+        
+        if (result && result.success) {
+          // Handle the result - could be base64, file path, or file object
+          let file = null
+          
+          if (result.file) {
+            // If Flutter returns a File object (preferred method)
+            file = result.file
+            console.log('✅ Received File object from Flutter')
+          } else if (result.base64) {
+            // If Flutter returns base64, convert to File
+            console.log('📸 Converting base64 to File object')
+            let base64Data = result.base64
+            
+            // Remove data URL prefix if present
+            if (base64Data.includes(',')) {
+              base64Data = base64Data.split(',')[1]
+            }
+            
+            try {
+              const byteCharacters = atob(base64Data)
+              const byteNumbers = new Array(byteCharacters.length)
+              for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i)
+              }
+              const byteArray = new Uint8Array(byteNumbers)
+              const mimeType = result.mimeType || 'image/jpeg'
+              const blob = new Blob([byteArray], { type: mimeType })
+              file = new File([blob], result.fileName || `bill-image-${Date.now()}.jpg`, { type: mimeType })
+              console.log('✅ Converted base64 to File:', { name: file.name, size: file.size, type: file.type })
+            } catch (base64Error) {
+              console.error('❌ Error converting base64 to File:', base64Error)
+              toast.error('Failed to process image. Please try again.')
+              return
+            }
+          } else if (result.filePath) {
+            // If Flutter returns file path, we need to fetch it
+            // This would require additional Flutter handler to read file
+            console.warn('⚠️ File path returned, but file reading not implemented')
+            toast.error('File path handling not implemented. Please use base64 or File object.')
+            return
+          }
+          
+          if (file) {
+            // Process the file the same way as handleBillImageSelect
+            await processBillImageFile(file)
+          } else {
+            console.error('❌ No file data in Flutter response:', result)
+            toast.error('Failed to get image from camera')
+          }
+        } else {
+          console.log('ℹ️ Camera cancelled by user or failed')
+        }
+      } else {
+        // Fallback to standard file input for web browsers
+        console.log('📸 Flutter handler not available, using standard file input')
+        if (cameraInputRef.current) {
+          cameraInputRef.current.click()
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error opening camera:', error)
+      toast.error('Failed to open camera. Please try again.')
+      
+      // Fallback to standard file input
+      if (cameraInputRef.current) {
+        cameraInputRef.current.click()
+      }
+    }
+  }
+
+  // Process bill image file (extracted from handleBillImageSelect for reuse)
+  const processBillImageFile = async (file) => {
+    if (!file) return
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file')
+      return
+    }
+
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Image size should be less than 5MB')
+      return
+    }
+
+    setIsUploadingBill(true)
+
+    try {
+      console.log('📸 Uploading bill image to Cloudinary...')
+      
+      // Upload to Cloudinary via backend
+      const uploadResponse = await uploadAPI.uploadMedia(file, {
+        folder: 'mobasket/delivery/bills'
+      })
+
+      if (uploadResponse?.data?.success && uploadResponse?.data?.data) {
+        const imageUrl = uploadResponse.data.data.url || uploadResponse.data.data.secure_url
+        const publicId = uploadResponse.data.data.publicId || uploadResponse.data.data.public_id
+
+        if (imageUrl) {
+          console.log('✅ Bill image uploaded to Cloudinary:', imageUrl)
+          setBillImageUrl(imageUrl)
+          
+          // Bill image is uploaded to Cloudinary, now enable the button
+          // The bill image URL will be sent when confirming order ID
+          console.log('✅ Bill image uploaded to Cloudinary, ready to save to database')
+          setBillImageUploaded(true)
+          toast.success('Bill image uploaded! You can now confirm order ID.')
+        } else {
+          throw new Error('Failed to get image URL from upload response')
+        }
+      } else {
+        throw new Error('Upload failed')
+      }
+    } catch (error) {
+      console.error('❌ Error uploading bill image:', error)
+      toast.error('Failed to upload bill image. Please try again.')
+      setBillImageUrl(null)
+      setBillImageUploaded(false)
+    } finally {
+      setIsUploadingBill(false)
+      // Reset file input
+      if (cameraInputRef.current) {
+        cameraInputRef.current.value = ''
+      }
+    }
+  }
+
+  // Handle bill image file selection and upload (fallback for web browsers)
+  const handleBillImageSelect = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    await processBillImageFile(file)
+  }
+
+  const handleOrderIdConfirmTouchEnd = (e) => {
+    if (isOrderCancelledState(selectedRestaurant)) {
+      setOrderIdConfirmButtonProgress(0)
+      handleCancelledOrderConflict(null, 'Order was cancelled by user.')
+      return
+    }
+
+    // Disable swipe if bill image is not uploaded
+    if (!billImageUploaded) {
+      toast.error('Please upload bill image first')
+      setOrderIdConfirmButtonProgress(0)
+      return
+    }
+
+    if (!orderIdConfirmIsSwiping.current) {
+      setOrderIdConfirmButtonProgress(0)
+      return
+    }
+
+    const deltaX = e.changedTouches[0].clientX - orderIdConfirmSwipeStartX.current
+    const buttonWidth = orderIdConfirmButtonRef.current?.offsetWidth || 300
+    const circleWidth = 56
+    const padding = 16
+    const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+    const threshold = maxSwipe * 0.7 // 70% of max swipe
+
+    if (deltaX > threshold) {
+      // Animate to completion
+      setOrderIdConfirmIsAnimatingToComplete(true)
+      setOrderIdConfirmButtonProgress(1)
+
+      // Close popup after animation, then confirm order ID and show polyline to customer
+      setTimeout(async () => {
+        setShowOrderIdConfirmationPopup(false)
+        
+        // Get order ID from selectedRestaurant
+        const orderId = selectedRestaurant?.id || selectedRestaurant?.orderId
+        const confirmedOrderId = selectedRestaurant?.orderId
+        
+        // CRITICAL: Check if order is already delivered/completed - don't call API
+        const orderStatus = selectedRestaurant?.orderStatus || selectedRestaurant?.status || ''
+        const deliveryPhase = selectedRestaurant?.deliveryPhase || selectedRestaurant?.deliveryState?.currentPhase || ''
+        const deliveryStateStatus = selectedRestaurant?.deliveryState?.status || ''
+        
+        const isDelivered = orderStatus === 'delivered' || 
+                            deliveryPhase === 'completed' || 
+                            deliveryPhase === 'delivered' ||
+                            deliveryStateStatus === 'delivered'
+        
+        if (isDelivered) {
+          console.warn('⚠️ Order is already delivered, skipping order ID confirmation')
+          toast.error('Order is already delivered. Cannot confirm order ID.')
+          setShowOrderIdConfirmationPopup(false)
+          return
+        }
+        
+        // CRITICAL: Check if order ID is already confirmed - don't call API again
+        const isOrderIdAlreadyConfirmed = orderStatus === 'out_for_delivery' ||
+                                          deliveryPhase === 'en_route_to_delivery' ||
+                                          deliveryPhase === 'picked_up' ||
+                                          deliveryStateStatus === 'order_confirmed' ||
+                                          selectedRestaurant?.deliveryState?.orderIdConfirmedAt
+        
+        if (isOrderIdAlreadyConfirmed) {
+          console.warn('⚠️ Order ID is already confirmed, skipping confirmation:', {
+            orderStatus,
+            deliveryPhase,
+            deliveryStateStatus,
+            orderIdConfirmedAt: selectedRestaurant?.deliveryState?.orderIdConfirmedAt
+          })
+          // Don't show error, just update the UI state and close popup
+          setSelectedRestaurant(prev => ({
+            ...prev,
+            orderStatus: 'out_for_delivery',
+            status: 'out_for_delivery',
+            deliveryPhase: 'en_route_to_delivery',
+            deliveryState: {
+              ...prev.deliveryState,
+              currentPhase: 'en_route_to_delivery',
+              status: 'order_confirmed'
+            }
+          }))
+          setShowOrderIdConfirmationPopup(false)
+          toast.info('Order ID is already confirmed. Order is out for delivery.')
+          return
+        }
+        
+        if (!orderId) {
+          console.error('❌ No order ID found to confirm')
+          toast.error('Order ID not found. Please try again.')
+          return
+        }
+
+        // Get current LIVE location
+        let currentLocation = riderLocation
+        if (!currentLocation || currentLocation.length !== 2) {
+          currentLocation = lastLocationRef.current
+        }
+        
+        if (!currentLocation || currentLocation.length !== 2) {
+          try {
+            const position = await new Promise((resolve, reject) => {
+              navigator.geolocation.getCurrentPosition(
+                (pos) => resolve([pos.coords.latitude, pos.coords.longitude]),
+                reject,
+                { timeout: 5000, enableHighAccuracy: true }
+              )
+            })
+            currentLocation = position
+          } catch (geoError) {
+            console.error('❌ Could not get current location:', geoError)
+            toast.error('Location not available. Please enable location services.')
+            return
+          }
+        }
+
+        try {
+          // Prefer string orderId (ORD-xxx) for URL; backend accepts both _id and orderId
+          const orderIdForApi = selectedRestaurant?.orderId || selectedRestaurant?.id
+          const confirmedOrderIdForApi = selectedRestaurant?.orderId || (orderIdForApi && String(orderIdForApi).startsWith('ORD-') ? orderIdForApi : undefined)
+
+          // Call backend API to confirm order ID with bill image
+          console.log('📦 Confirming order ID:', { 
+            orderIdForApi, 
+            confirmedOrderIdForApi, 
+            lat: currentLocation[0], 
+            lng: currentLocation[1],
+            billImageUrl 
+          })
+          
+          // Update API call to include bill image URL
+          const response = await deliveryAPI.confirmOrderId(orderIdForApi, confirmedOrderIdForApi, {
+            lat: currentLocation[0],
+            lng: currentLocation[1]
+          }, {
+            billImageUrl: billImageUrl
+          })
+          
+          console.log('✅ Order ID confirmed, response:', response.data)
+          
+          if (response.data?.success && response.data.data) {
+            const orderData = response.data.data
+            const order = orderData.order || orderData
+            const routeData = orderData.route || order.deliveryState?.routeToDelivery
+            
+            // Update selectedRestaurant with customer address
+            if (order && selectedRestaurant) {
+              const customerCoords = order.address?.location?.coordinates
+              const customerLat = customerCoords?.[1]
+              const customerLng = customerCoords?.[0]
+              
+              if (customerLat && customerLng) {
+                const updatedRestaurant = {
+                  ...selectedRestaurant,
+                  customerName: order.userId?.name || selectedRestaurant.customerName,
+                  customerAddress: order.address?.formattedAddress ||
+                                  (order.address?.street ? `${order.address.street}, ${order.address.city || ''}, ${order.address.state || ''}`.trim() : '') ||
+                                  selectedRestaurant.customerAddress,
+                  customerLat,
+                  customerLng
+                }
+                setSelectedRestaurant(updatedRestaurant)
+
+                // Calculate route from delivery boy's live location to customer using Directions API
+                console.log('🗺️ Calculating route to customer using Directions API...')
+                console.log('📍 From (Delivery Boy Live Location):', currentLocation)
+                console.log('📍 To (Customer):', { lat: customerLat, lng: customerLng })
+
+                try {
+                  const directionsResult = await calculateRouteWithDirectionsAPI(
+                    currentLocation,
+                    { lat: customerLat, lng: customerLng }
+                  )
+
+                  if (directionsResult) {
+                    console.log('✅ Route to customer calculated with Directions API')
+                    
+                    // Store delivery route distance and time
+                    const deliveryDistance = directionsResult.routes[0]?.legs[0]?.distance?.value || 0; // in meters
+                    const deliveryDuration = directionsResult.routes[0]?.legs[0]?.duration?.value || 0; // in seconds
+                    deliveryRouteDistanceRef.current = deliveryDistance;
+                    deliveryRouteTimeRef.current = deliveryDuration;
+                    
+                    // Calculate total trip distance and time
+                    const totalDistance = pickupRouteDistanceRef.current + deliveryDistance;
+                    const totalTime = pickupRouteTimeRef.current + deliveryDuration;
+                    setTripDistance(totalDistance);
+                    setTripTime(totalTime);
+                    console.log('📊 Total trip calculated:', { 
+                      totalDistance: totalDistance, 
+                      totalTime: totalTime,
+                      pickupDistance: pickupRouteDistanceRef.current,
+                      pickupTime: pickupRouteTimeRef.current,
+                      deliveryDistance: deliveryDistance,
+                      deliveryTime: deliveryDuration
+                    });
+                    
+                    setDirectionsResponse(directionsResult)
+                    directionsResponseRef.current = directionsResult
+
+                    // Initialize / update live tracking polyline for customer delivery route
+                    updateLiveTrackingPolyline(directionsResult, currentLocation)
+                    console.log('✅ Live tracking polyline initialized for customer delivery route')
+
+                    // Show route polyline on main Feed map
+                    if (window.deliveryMapInstance && window.google?.maps) {
+                      if (!directionsRendererRef.current) {
+                        directionsRendererRef.current = new window.google.maps.DirectionsRenderer({
+                          suppressMarkers: true,
+                          polylineOptions: { strokeColor: '#4285F4', strokeWeight: 0, strokeOpacity: 0, icons: [], zIndex: -1 },
+                          preserveViewport: true
+                        })
+                      }
+                      // Don't create main route polyline - only live tracking polyline will be shown
+                      // Remove old custom polyline if exists (cleanup)
+                      try {
+                        if (routePolylineRef.current) {
+                          routePolylineRef.current.setMap(null);
+                          routePolylineRef.current = null;
+                        }
+                        
+                        // Remove DirectionsRenderer from map
+                        if (directionsRendererRef.current) {
+                          directionsRendererRef.current.setMap(null);
+                        }
+                      } catch (e) {
+                        console.warn('⚠️ Error cleaning up polyline:', e);
+                      }
+                      
+                      const bounds = directionsResult.routes?.[0]?.bounds
+                      if (bounds) {
+                        const currentZoomBeforeFit = window.deliveryMapInstance.getZoom();
+                        if (isBoundsReasonable(bounds)) {
+                      window.deliveryMapInstance.fitBounds(bounds, { padding: 100 });
+                    } else {
+                      console.warn("Skipping unsafe fitBounds on delivery map", bounds);
+                    }
+                        // Preserve zoom if user had zoomed in
+                        setTimeout(() => {
+                          const newZoom = window.deliveryMapInstance.getZoom();
+                          if (currentZoomBeforeFit > newZoom && currentZoomBeforeFit >= 18) {
+                            window.deliveryMapInstance.setZoom(currentZoomBeforeFit);
+                          }
+                        }, 100);
+                      }
+                    }
+                    setShowRoutePath(true)
+                  } else if (routeData?.coordinates?.length > 0) {
+                    setRoutePolyline(routeData.coordinates)
+                    updateRoutePolyline(routeData.coordinates)
+                    setShowRoutePath(true)
+                  }
+                } catch (routeError) {
+                  if (routeError.message?.includes('REQUEST_DENIED') || routeError.message?.includes('not available')) {
+                    console.log('⚠️ Directions API not available, using backend route fallback')
+                  } else {
+                    console.error('❌ Error calculating route to customer:', routeError)
+                  }
+                  if (routeData?.coordinates?.length > 0) {
+                    setRoutePolyline(routeData.coordinates)
+                    updateRoutePolyline(routeData.coordinates)
+                    setShowRoutePath(true)
+                  }
+                }
+              }
+            }
+
+            // Update status to out_for_delivery (merge if customer block didn't run)
+            setSelectedRestaurant(prev => ({
+              ...prev,
+              orderStatus: 'out_for_delivery',
+              status: 'out_for_delivery',
+              deliveryPhase: 'en_route_to_delivery',
+              deliveryState: {
+                ...prev.deliveryState,
+                currentPhase: 'en_route_to_delivery',
+                status: 'order_confirmed'
+              }
+            }))
+
+            // CRITICAL: Close Reached Pickup popup if it's still showing (shouldn't happen, but defensive)
+            setShowreachedPickupPopup(false)
+            
+            // Close Order ID confirmation popup
+            setShowOrderIdConfirmationPopup(false)
+
+            toast.success('Order is out for delivery. Route to customer is on the map.', { duration: 4000 })
+            
+            // Show Reached Drop popup instantly after Order Picked Up is confirmed
+            // Use setTimeout to ensure state updates are processed and useEffect doesn't block it
+            console.log('✅ Showing Reached Drop popup instantly after Order Picked Up confirmation')
+            setTimeout(() => {
+              setShowReachedDropPopup(true)
+              console.log('✅ Reached Drop popup state set to true')
+            }, 100) // Small delay to ensure showOrderIdConfirmationPopup state is updated
+            
+          } else {
+            console.error('❌ Failed to confirm order ID:', response.data)
+            toast.error(response.data?.message || 'Failed to confirm order ID. Please try again.')
+          }
+        } catch (error) {
+          const status = error.response?.status
+          const msg = error.response?.data?.message || error.message || ''
+          console.error('❌ Error confirming order ID:', { status, message: msg, data: error.response?.data })
+          if (isCancelledConflictError(error)) {
+            setOrderIdConfirmButtonProgress(0)
+            setOrderIdConfirmIsAnimatingToComplete(false)
+            handleCancelledOrderConflict(error, 'Order was cancelled before order ID confirmation.')
+            return
+          }
+          toast.error(msg || 'Failed to confirm order ID. Please try again.')
+        }
+        
+        // Reset after animation
+        setTimeout(() => {
+          setOrderIdConfirmButtonProgress(0)
+          setOrderIdConfirmIsAnimatingToComplete(false)
+        }, 500)
+      }, 200)
+    } else {
+      // Reset smoothly
+      setOrderIdConfirmButtonProgress(0)
+    }
+
+    orderIdConfirmSwipeStartX.current = 0
+    orderIdConfirmSwipeStartY.current = 0
+    orderIdConfirmIsSwiping.current = false
+  }
+
+  // Handle Order Delivered button swipe
+  const handleOrderDeliveredTouchStart = (e) => {
+    orderDeliveredSwipeStartX.current = e.touches[0].clientX
+    orderDeliveredSwipeStartY.current = e.touches[0].clientY
+    orderDeliveredIsSwiping.current = false
+    setOrderDeliveredIsAnimatingToComplete(false)
+    setOrderDeliveredButtonProgress(0)
+  }
+
+  const handleOrderDeliveredTouchMove = (e) => {
+    const deltaX = e.touches[0].clientX - orderDeliveredSwipeStartX.current
+    const deltaY = e.touches[0].clientY - orderDeliveredSwipeStartY.current
+
+    // Only handle horizontal swipes (swipe right)
+    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+      orderDeliveredIsSwiping.current = true
+      // Don't call preventDefault - CSS touch-action handles scrolling prevention
+      // safePreventDefault(e) // Removed to avoid passive listener error
+
+      // Calculate max swipe distance
+      const buttonWidth = orderDeliveredButtonRef.current?.offsetWidth || 300
+      const circleWidth = 56 // w-14 = 56px
+      const padding = 16 // px-4 = 16px
+      const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+
+      const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
+      setOrderDeliveredButtonProgress(progress)
+    }
+  }
+
+  const handleOrderDeliveredTouchEnd = (e) => {
+    if (!orderDeliveredIsSwiping.current) {
+      setOrderDeliveredButtonProgress(0)
+      return
+    }
+
+    const deltaX = e.changedTouches[0].clientX - orderDeliveredSwipeStartX.current
+    const buttonWidth = orderDeliveredButtonRef.current?.offsetWidth || 300
+    const circleWidth = 56
+    const padding = 16
+    const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+    const threshold = maxSwipe * 0.7 // 70% of max swipe
+
+    if (deltaX > threshold) {
+      // Animate to completion
+      setOrderDeliveredIsAnimatingToComplete(true)
+      setOrderDeliveredButtonProgress(1)
+
+      // Close popup after animation and show customer review (delivery will be completed when review is submitted)
+      setTimeout(() => {
+        setShowOrderDeliveredAnimation(false)
+        
+        // CRITICAL: Clear all pickup/delivery related popups
+        setShowReachedDropPopup(false)
+        setShowreachedPickupPopup(false)
+        setShowOrderIdConfirmationPopup(false)
+        
+        // Show customer review popup instantly
+        setShowCustomerReviewPopup(true)
+        
+        // Reset after animation
+        setTimeout(() => {
+          setOrderDeliveredButtonProgress(0)
+          setOrderDeliveredIsAnimatingToComplete(false)
+        }, 500)
+      }, 200)
+    } else {
+      // Reset smoothly
+      setOrderDeliveredButtonProgress(0)
+    }
+
+    orderDeliveredSwipeStartX.current = 0
+    orderDeliveredSwipeStartY.current = 0
+    orderDeliveredIsSwiping.current = false
+  }
+
+  // Handle accept orders button swipe
+  const handleAcceptOrdersTouchStart = (e) => {
+    acceptButtonSwipeStartX.current = e.touches[0].clientX
+    acceptButtonSwipeStartY.current = e.touches[0].clientY
+    acceptButtonIsSwiping.current = false
+    setIsAnimatingToComplete(false)
+    setAcceptButtonProgress(0)
+  }
+
+  const handleAcceptOrdersTouchMove = (e) => {
+    const deltaX = e.touches[0].clientX - acceptButtonSwipeStartX.current
+    const deltaY = e.touches[0].clientY - acceptButtonSwipeStartY.current
+
+    // Only handle horizontal swipes (swipe right)
+    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+      acceptButtonIsSwiping.current = true
+      // Don't call preventDefault - CSS touch-action handles scrolling prevention
+      // safePreventDefault(e) // Removed to avoid passive listener error
+
+      // Calculate max swipe distance
+      const buttonWidth = acceptButtonRef.current?.offsetWidth || 300
+      const circleWidth = 56 // w-14 = 56px
+      const padding = 16 // px-4 = 16px
+      const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+
+      const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
+      setAcceptButtonProgress(progress)
+    }
+  }
+
+  const handleAcceptOrdersTouchEnd = (e) => {
+    if (!acceptButtonIsSwiping.current) {
+      setAcceptButtonProgress(0)
+      return
+    }
+
+    const deltaX = e.changedTouches[0].clientX - acceptButtonSwipeStartX.current
+    const buttonWidth = acceptButtonRef.current?.offsetWidth || 300
+    const circleWidth = 56
+    const padding = 16
+    const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+    const threshold = maxSwipe * 0.7 // 70% of max swipe
+
+    if (deltaX > threshold) {
+      // Animate to completion
+      setIsAnimatingToComplete(true)
+      setAcceptButtonProgress(1)
+
+      // Navigate to pickup directions page after animation
+      setTimeout(() => {
+        navigate("/delivery/pickup-directions", {
+          state: { restaurants: mockRestaurants },
+          replace: false
+        })
+
+        // Reset after navigation
+        setTimeout(() => {
+          setAcceptButtonProgress(0)
+          setIsAnimatingToComplete(false)
+        }, 500)
+      }, 200)
+    } else {
+      // Reset smoothly
+      setAcceptButtonProgress(0)
+    }
+
+    acceptButtonSwipeStartX.current = 0
+    acceptButtonSwipeStartY.current = 0
+    acceptButtonIsSwiping.current = false
+  }
+
+  // Handle bottom sheet swipe
+  const handleBottomSheetTouchStart = (e) => {
+    const target = e.target
+    const isHandle = handleRef.current?.contains(target)
+
+    // Check if touch is in handle area or top 15% of bottom sheet
+    const rect = bottomSheetRef.current?.getBoundingClientRect()
+    if (!rect) return
+
+    const touchY = e.touches[0].clientY
+    const handleArea = rect.top + 60 // Top 60px is handle area
+
+    // Allow swipe if touching handle or top area
+    if (isHandle || touchY <= handleArea) {
+      e.stopPropagation()
+      swipeStartY.current = touchY
+      isSwiping.current = true
+    }
+  }
+
+  const handleBottomSheetTouchMove = (e) => {
+    if (!isSwiping.current) return
+
+    const deltaY = swipeStartY.current - e.touches[0].clientY
+
+    if (Math.abs(deltaY) > 5) {
+      e.stopPropagation()
+
+      // Swipe up to expand
+      if (deltaY > 0 && !bottomSheetExpanded && bottomSheetRef.current) {
+        // Don't call preventDefault - CSS touch-action handles scrolling prevention
+        // safePreventDefault(e) // Removed to avoid passive listener error
+        bottomSheetRef.current.style.transform = `translateY(${-deltaY}px)`
+      }
+      // Swipe down to collapse
+      else if (deltaY < 0 && bottomSheetExpanded && bottomSheetRef.current) {
+        // Don't call preventDefault - CSS touch-action handles scrolling prevention
+        // safePreventDefault(e) // Removed to avoid passive listener error
+        bottomSheetRef.current.style.transform = `translateY(${-deltaY}px)`
+      }
+    }
+  }
+
+  const handleBottomSheetTouchEnd = (e) => {
+    if (!isSwiping.current) {
+      isSwiping.current = false
+      return
+    }
+
+    e.stopPropagation()
+
+    const deltaY = swipeStartY.current - e.changedTouches[0].clientY
+    const threshold = 50
+
+    if (bottomSheetRef.current) {
+      if (deltaY > threshold && !bottomSheetExpanded) {
+        setBottomSheetExpanded(true)
+      } else if (deltaY < -threshold && bottomSheetExpanded) {
+        setBottomSheetExpanded(false)
+      }
+      // Reset transform
+      bottomSheetRef.current.style.transform = ''
+    }
+
+    isSwiping.current = false
+    swipeStartY.current = 0
+  }
+
+  // Listen for refresh events
+  useEffect(() => {
+    const handleRefresh = () => {
+      setAnimationKey(prev => prev + 1)
+    }
+
+    const handleActiveOrderUpdate = () => {
+      const stored = localStorage.getItem('activeOrder')
+      setActiveOrder(stored ? JSON.parse(stored) : null)
+    }
+
+    const handleNotificationUpdate = () => {
+      setUnreadNotificationCount(getUnreadDeliveryNotificationCount())
+    }
+
+    window.addEventListener('deliveryHomeRefresh', handleRefresh)
+    window.addEventListener('gigStateUpdated', handleRefresh)
+    window.addEventListener('deliveryOrderStatusUpdated', handleRefresh)
+    window.addEventListener('activeOrderUpdated', handleActiveOrderUpdate)
+    window.addEventListener('storage', handleActiveOrderUpdate)
+    window.addEventListener('deliveryNotificationsUpdated', handleNotificationUpdate)
+
+    return () => {
+      window.removeEventListener('deliveryHomeRefresh', handleRefresh)
+      window.removeEventListener('gigStateUpdated', handleRefresh)
+      window.removeEventListener('deliveryOrderStatusUpdated', handleRefresh)
+      window.removeEventListener('activeOrderUpdated', handleActiveOrderUpdate)
+      window.removeEventListener('storage', handleActiveOrderUpdate)
+      window.removeEventListener('deliveryNotificationsUpdated', handleNotificationUpdate)
+    }
+  }, [])
+
+  // Helper function to calculate time away from distance
   const calculateTimeAway = useCallback((distanceStr) => {
     if (!distanceStr) return '0 mins'
 

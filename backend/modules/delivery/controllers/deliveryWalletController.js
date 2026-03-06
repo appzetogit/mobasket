@@ -22,6 +22,13 @@ const logger = winston.createLogger({
   ]
 });
 
+const getDepositEligibleCashInHand = (wallet) =>
+  Math.max(
+    0,
+    Number(wallet?.cashInHand ?? 0) || 0,
+    Number(wallet?.codCashCollected ?? 0) || 0,
+  );
+
 /**
  * Get Wallet Balance
  * GET /api/delivery/wallet
@@ -142,7 +149,7 @@ export const getWallet = asyncHandler(async (req, res) => {
 
     // Use wallet.cashInHand for cash-in-hand and available limit so deposit correctly
     // reduces cash in hand and increases available limit. Do not override with COD.
-    const cashInHandForLimit = Math.max(0, Number(wallet.cashInHand) || 0);
+    const cashInHandForLimit = getDepositEligibleCashInHand(wallet);
 
     // Get all transactions (sorted by date, newest first)
     // Frontend needs all transactions to calculate weekly earnings and orders
@@ -782,7 +789,7 @@ export const createDepositOrder = asyncHandler(async (req, res) => {
   }
 
   const wallet = await DeliveryWallet.findOrCreateByDeliveryId(delivery._id);
-  const cashInHand = Number(wallet.cashInHand) || 0;
+  const cashInHand = getDepositEligibleCashInHand(wallet);
   if (cashInHand <= 0) {
     return errorResponse(
       res,
@@ -872,7 +879,7 @@ export const verifyDepositPayment = asyncHandler(async (req, res) => {
   }
 
   const wallet = await DeliveryWallet.findOrCreateByDeliveryId(delivery._id);
-  const cashInHand = Number(wallet.cashInHand) || 0;
+  const cashInHand = getDepositEligibleCashInHand(wallet);
   if (cashInHand < amt) {
     return errorResponse(
       res,
@@ -912,7 +919,7 @@ export const verifyDepositPayment = asyncHandler(async (req, res) => {
   wallet.markModified('transactions');
   await wallet.save();
 
-  const cashInHandNow = Math.max(0, Number(wallet.cashInHand) || 0);
+  const cashInHandNow = getDepositEligibleCashInHand(wallet);
   const codSummary = await getDeliveryCODSummary(delivery._id);
 
   return successResponse(res, 200, 'Deposit successful', {
