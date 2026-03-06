@@ -2166,26 +2166,22 @@ export default function Home() {
                       to={`/restaurants/${restaurant.slug || restaurant.id}`}
                     >
                       <div className="flex flex-col items-center gap-2 w-[74px] sm:w-[92px] md:w-[104px]">
-                        <div className="w-14 h-14 sm:w-[72px] sm:h-[72px] md:w-20 md:h-20 rounded-full overflow-hidden shadow-sm transition-all border border-gray-100 dark:border-gray-800 bg-white">
+                        <div className="relative w-14 h-14 sm:w-[72px] sm:h-[72px] md:w-20 md:h-20 rounded-full overflow-hidden shadow-sm transition-all border border-gray-100 dark:border-gray-800 bg-white">
+                          <div className="w-full h-full rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 flex items-center justify-center">
+                            <Store className="w-5 h-5 sm:w-6 sm:h-6" />
+                          </div>
                           {isLikelyImageUrl(restaurant.image) ? (
                             <img
                               src={restaurant.image}
                               alt={restaurant.name}
-                              className="w-full h-full bg-white rounded-full object-cover"
+                              className="absolute inset-0 w-full h-full bg-white rounded-full object-cover"
                               onError={(e) => {
                                 e.currentTarget.style.display = "none";
-                                const fallbackEl = e.currentTarget.nextElementSibling;
-                                if (fallbackEl) fallbackEl.style.display = "flex";
                               }}
-                              loading="lazy"
+                              loading={index < 4 ? "eager" : "lazy"}
+                              decoding="async"
                             />
                           ) : null}
-                          <div
-                            className="w-full h-full rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 items-center justify-center"
-                            style={{ display: isLikelyImageUrl(restaurant.image) ? "none" : "flex" }}
-                          >
-                            <Store className="w-5 h-5 sm:w-6 sm:h-6" />
-                          </div>
                         </div>
                         <span className="text-xs sm:text-sm font-semibold text-gray-800 dark:text-gray-200 text-center leading-tight line-clamp-1 w-full px-1">
                           {restaurant.name}
