@@ -40,9 +40,12 @@ const GroceryPage = () => {
   const navigate = useNavigate();
   const routerLocation = useRouterLocation();
   const { getGroceryCartCount, addToCart, isInCart } = useCart();
-  const { location: userLocation } = useUserLocation();
+  const { location: userLocation, loading: locationLoading } = useUserLocation();
   const { openLocationSelector } = useLocationSelector();
-  const { zoneId, refreshZone } = useZone(userLocation, "mogrocery");
+  const { zoneId, refreshZone, loading: zoneLoading } = useZone(userLocation, "mogrocery");
+  const cachedZoneId =
+    typeof window !== "undefined" ? localStorage.getItem("userZoneId:mogrocery") : "";
+  const effectiveZoneId = String(zoneId || cachedZoneId || "").trim();
   const isGroceryCategoriesRoute = routerLocation.pathname === "/grocery/categories";
   const itemCount = getGroceryCartCount();
   const [activeTab, setActiveTab] = useState("All");
@@ -478,8 +481,12 @@ const GroceryPage = () => {
 
   useEffect(() => {
     const fetchProducts = async () => {
-      // Strict zone scoping: show products only when user's grocery zone is resolved.
-      if (!zoneId) {
+      // Wait for location/zone resolution, but use cached grocery zone immediately on first load.
+      if ((locationLoading || zoneLoading) && !effectiveZoneId) {
+        return;
+      }
+
+      if (!effectiveZoneId) {
         setRawProducts([]);
         setAllProducts([]);
         setIsProductsLoading(false);
@@ -488,7 +495,7 @@ const GroceryPage = () => {
 
       try {
         const response = await api.get("/grocery/products", {
-          params: { page: 1, limit: 1000, zoneId },
+          params: { page: 1, limit: 1000, zoneId: effectiveZoneId },
         });
         const products = Array.isArray(response?.data?.data) ? response.data.data : [];
         setRawProducts(products);
@@ -517,10 +524,10 @@ const GroceryPage = () => {
 
     setIsProductsLoading(true);
     fetchProducts();
-  }, [zoneId, refreshZone]);
+  }, [effectiveZoneId, locationLoading, refreshZone, zoneLoading]);
 
   useEffect(() => {
-    if (!zoneId) {
+    if (!effectiveZoneId) {
       setAllProducts([]);
       return;
     }
@@ -555,15 +562,20 @@ const GroceryPage = () => {
           product?.restaurantId ||
           "",
       ).trim();
-      if (zoneId && productZoneId && productZoneId !== String(zoneId)) return false;
+      if (effectiveZoneId && productZoneId && productZoneId !== String(effectiveZoneId)) return false;
       return productStoreId && allowedStoreIds.has(productStoreId);
     });
 
     setAllProducts(zoneScopedProducts);
-  }, [zoneId, rawProducts, groceryStores]);
+  }, [effectiveZoneId, rawProducts, groceryStores]);
 
   useEffect(() => {
     const fetchGroceryStores = async () => {
+      if ((locationLoading || zoneLoading) && !effectiveZoneId) {
+        setIsStoresLoading(true);
+        return;
+      }
+
       setIsStoresLoading(true);
       setGroceryStores([]);
       setHasActiveGroceryStore(false);
@@ -573,7 +585,7 @@ const GroceryPage = () => {
           limit: 200,
           platform: "mogrocery",
           onlyZone: "true",
-          ...(zoneId ? { zoneId } : {}),
+          ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
         });
         const restaurants = Array.isArray(response?.data?.data?.restaurants)
           ? response.data.data.restaurants
@@ -590,7 +602,7 @@ const GroceryPage = () => {
               restaurant?.zone ||
               "",
           ).trim();
-          if (zoneId && storeZoneId && storeZoneId !== String(zoneId)) return false;
+          if (effectiveZoneId && storeZoneId && storeZoneId !== String(effectiveZoneId)) return false;
 
           if (restaurant?.isActive === false) return false;
           if (restaurant?.isOnline === false) return false;
@@ -604,7 +616,21 @@ const GroceryPage = () => {
 
         setGroceryStores(availableMoGroceryStores);
         setHasActiveGroceryStore(availableMoGroceryStores.length > 0);
-      } catch {
+      } catch (error) {
+        const statusCode = Number(error?.response?.status || 0);
+        const message = String(error?.response?.data?.message || "").toLowerCase();
+        const isZoneValidationError =
+          statusCode === 400 && (message.includes("zone") || message.includes("inactive"));
+
+        if (isZoneValidationError && !zoneRecoveryAttemptedRef.current) {
+          zoneRecoveryAttemptedRef.current = true;
+          localStorage.removeItem("userZoneId:mogrocery");
+          localStorage.removeItem("userZone:mogrocery");
+          if (typeof refreshZone === "function") {
+            refreshZone();
+          }
+        }
+
         setGroceryStores([]);
         setHasActiveGroceryStore(false);
       } finally {
@@ -613,7 +639,7 @@ const GroceryPage = () => {
     };
 
     fetchGroceryStores();
-  }, [zoneId]);
+  }, [effectiveZoneId, locationLoading, refreshZone, zoneLoading]);
 
   useEffect(() => {
     let timer = null;
@@ -701,7 +727,8 @@ const GroceryPage = () => {
     };
   }, []);
 
-  const isGroceryUnavailable = !hasActiveGroceryStore;
+  const canResolveStoreAvailability = Boolean(effectiveZoneId) || (!locationLoading && !zoneLoading);
+  const isGroceryUnavailable = canResolveStoreAvailability && !hasActiveGroceryStore;
   const shouldShowShimmer =
     !hasActiveSearch &&
     (isCategoriesLoading || isProductsLoading || isBestSellersLoading || isBannersLoading || isStoresLoading);
