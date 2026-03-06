@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { checkOnboardingStatus } from "../utils/onboardingUtils"
 import { motion, AnimatePresence } from "framer-motion"
@@ -467,7 +467,47 @@ export default function OrdersMain() {
   
   // Determine if we're on grocery store route and use appropriate API
   const isGroceryStore = location.pathname.startsWith('/store')
-  const orderAPI = isGroceryStore ? groceryStoreAPI : restaurantAPI
+  const [authFailed, setAuthFailed] = useState(false)
+  const orderAPI = useMemo(() => {
+    const baseOrderAPI = isGroceryStore ? groceryStoreAPI : restaurantAPI
+    const accessTokenKey = isGroceryStore ? "grocery-store_accessToken" : "restaurant_accessToken"
+    const refreshTokenKey = isGroceryStore ? "grocery-store_refreshToken" : "restaurant_refreshToken"
+
+    const createAuthError = () => {
+      const authError = new Error("Authentication required")
+      authError.response = {
+        status: 401,
+        data: { message: "Authentication required" },
+      }
+      return authError
+    }
+
+    return {
+      ...baseOrderAPI,
+      getOrders: async (params = {}) => {
+        if (authFailed) {
+          throw createAuthError()
+        }
+
+        const accessToken = localStorage.getItem(accessTokenKey)
+        const refreshToken = localStorage.getItem(refreshTokenKey)
+
+        if (!accessToken && !refreshToken) {
+          setAuthFailed(true)
+          throw createAuthError()
+        }
+
+        try {
+          return await baseOrderAPI.getOrders(params)
+        } catch (error) {
+          if (Number(error?.response?.status || 0) === 401) {
+            setAuthFailed(true)
+          }
+          throw error
+        }
+      },
+    }
+  }, [authFailed, isGroceryStore])
   const entityLabel = isGroceryStore ? "store" : "restaurant"
   const EntityLabel = isGroceryStore ? "Store" : "Restaurant"
   
@@ -513,6 +553,11 @@ export default function OrdersMain() {
     isLoading: true
   })
   const [isReverifying, setIsReverifying] = useState(false)
+
+  useEffect(() => {
+    if (!authFailed) return
+    navigate(isGroceryStore ? "/store/login" : "/restaurant/login", { replace: true })
+  }, [authFailed, isGroceryStore, navigate])
 
   useEffect(() => {
     const isAnyModalOpen =

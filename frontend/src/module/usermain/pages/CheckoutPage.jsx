@@ -165,7 +165,7 @@ export default function CheckoutPage() {
     }
 
     setSelectedAddress(null);
-  }, [addresses, getDefaultAddress]);
+  }, [addresses, getDefaultAddress, selectedAddress]);
 
   const resetNewAddressForm = () => {
     setNewAddress({
@@ -777,7 +777,9 @@ export default function CheckoutPage() {
       tax,
       total,
       deliveryAddress:
-        selectedAddress?.formattedAddress || "Select delivery address",
+        selectedAddress?.formattedAddress ||
+        formatAddressLine(selectedAddress) ||
+        "Select delivery address",
       estimatedTime: "30-40 min",
     };
   }, [calculatedPricing, feeSettings, foodItems, selectedAddress]);
