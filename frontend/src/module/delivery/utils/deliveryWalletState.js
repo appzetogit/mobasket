@@ -15,6 +15,7 @@ const EMPTY_WALLET_STATE = {
   codLimit: 750,
   cashCollected: 0,
   remainingLimit: 750,
+  canDeposit: false,
   totalWithdrawn: 0,
   totalEarned: 0,
   transactions: [],
@@ -96,6 +97,7 @@ export const fetchDeliveryWallet = async () => {
         codLimit: Number.isFinite(Number(walletData.codLimit)) ? Number(walletData.codLimit) : transformedTotalCashLimit,
         cashCollected: transformedCashCollected,
         remainingLimit: transformedRemainingLimit,
+        canDeposit: Boolean(walletData.canDeposit ?? (transformedCashCollected > 0)),
         deliveryWithdrawalLimit: Number(walletData.deliveryWithdrawalLimit ?? walletData.delivery_withdrawal_limit) || 100,
         deliveryMinimumWalletBalance: Number(walletData.deliveryMinimumWalletBalance ?? walletData.delivery_minimum_wallet_balance) || 0,
         // Pocket balance = total balance (includes bonus)

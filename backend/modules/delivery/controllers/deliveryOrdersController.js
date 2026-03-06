@@ -12,7 +12,7 @@ import RestaurantCommission from '../../admin/models/RestaurantCommission.js';
 import AdminCommission from '../../admin/models/AdminCommission.js';
 import { calculateRoute } from '../../order/services/routeCalculationService.js';
 import { calculateDriverEarning } from '../../order/services/deliveryEarningService.js';
-import { resolveCODLimitForDelivery } from '../services/codLimitService.js';
+import { validateCODLimitBeforeAssignment } from '../services/codLimitService.js';
 import mongoose from 'mongoose';
 import winston from 'winston';
 
@@ -548,28 +548,12 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, `Order cannot be accepted. Current status: ${order.status}. Order must be in 'preparing' or 'ready' status.`);
     }
 
-    // Enforce cash-in-hand limit before accepting any order.
-    // If delivery partner reaches the configured cash limit, they must deposit COD cash first.
-    const wallet = await DeliveryWallet.findOrCreateByDeliveryId(delivery._id);
-    const totalCashLimit = await resolveCODLimitForDelivery(delivery._id);
-
-    const cashInHand = Math.max(0, Number(wallet.cashInHand) || 0);
-    const deductions = Math.max(0, Number(wallet.deductions) || 0);
-    const availableCashLimit = Number(totalCashLimit) - cashInHand - deductions;
-
-    // Resolve payment mode and projected COD collection for this order.
-    let paymentMethodForLimit = (order.payment?.method || '').toString().toLowerCase();
-    if (!paymentMethodForLimit || paymentMethodForLimit === 'razorpay') {
-      try {
-        const paymentRecord = await Payment.findOne({ orderId: order._id }).select('method').lean();
-        paymentMethodForLimit = (paymentRecord?.method || paymentMethodForLimit || '').toString().toLowerCase();
-      } catch (_) {
-        // Ignore payment lookup failure and continue with order.payment fallback.
-      }
-    }
-    const isIncomingCod = paymentMethodForLimit === 'cash' || paymentMethodForLimit === 'cod';
-    const incomingCodAmount = isIncomingCod ? Math.max(0, Number(order?.pricing?.total) || 0) : 0;
-    const projectedCashInHand = cashInHand + incomingCodAmount;
+    // Enforce COD assignment rule:
+    // cashCollected + orderCODAmount <= codLimit
+    const codValidation = await validateCODLimitBeforeAssignment({
+      deliveryId: delivery._id,
+      order,
+    });
 
     const rollbackClaimIfNeeded = async () => {
       if (!claimedDuringThisRequest) return;
@@ -592,34 +576,18 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       }
     };
 
-    if (cashInHand >= totalCashLimit) {
+    if (!codValidation.isAllowed) {
       await rollbackClaimIfNeeded();
       return errorResponse(
         res,
         400,
-        'Cash in hand limit reached. Please deposit your cash in hand to continue receiving orders.',
+        'This COD order exceeds your COD limit. Please deposit collected cash before accepting new COD orders.',
         {
-          cashInHand,
-          deductions,
-          totalCashLimit,
-          availableCashLimit
-        }
-      );
-    }
-
-    if (totalCashLimit > 0 && projectedCashInHand > totalCashLimit) {
-      await rollbackClaimIfNeeded();
-      return errorResponse(
-        res,
-        400,
-        'This COD order exceeds your cash-in-hand limit. Please deposit collected cash before accepting new COD orders.',
-        {
-          cashInHand,
-          incomingCodAmount,
-          projectedCashInHand,
-          deductions,
-          totalCashLimit,
-          availableCashLimit
+          codLimit: codValidation.codLimit,
+          cashCollected: codValidation.cashCollected,
+          remainingLimit: codValidation.remainingLimit,
+          orderCODAmount: codValidation.orderCODAmount,
+          projectedCashCollected: codValidation.projectedCashCollected,
         }
       );
     }

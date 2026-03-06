@@ -265,6 +265,8 @@ export async function updateActiveOrderLocation(orderId, location = {}) {
   if (isFiniteNumber(location.bearing)) payload.bearing = location.bearing;
   if (isFiniteNumber(location.speed)) payload.speed = location.speed;
   if (isFiniteNumber(location.progress)) payload.progress = location.progress;
+  if (isFiniteNumber(location.remainingDistance)) payload.remaining_distance = location.remainingDistance;
+  if (typeof location.polyline === 'string') payload.polyline = location.polyline.trim();
   if (location.phase) payload.status = location.phase;
   if (location.boy_id) payload.boy_id = String(location.boy_id);
 
@@ -285,10 +287,12 @@ export async function updateActiveOrderLocation(orderId, location = {}) {
     const headingChanged = isFiniteNumber(payload.bearing) && Math.abs((payload.bearing ?? 0) - (previous.bearing ?? 0)) >= 12;
     const speedChanged = isFiniteNumber(payload.speed) && Math.abs((payload.speed ?? 0) - (previous.speed ?? 0)) >= 2;
     const progressChanged = isFiniteNumber(payload.progress) && Math.abs((payload.progress ?? 0) - (previous.progress ?? 0)) >= 0.01;
+    const remainingDistanceChanged = isFiniteNumber(payload.remaining_distance) && Math.abs((payload.remaining_distance ?? 0) - (previous.remaining_distance ?? 0)) >= 10;
     const statusChanged = typeof payload.status === 'string' && payload.status !== previous.status;
     const riderChanged = typeof payload.boy_id === 'string' && payload.boy_id !== previous.boy_id;
+    const polylineChanged = typeof payload.polyline === 'string' && payload.polyline !== (previous.polyline || '');
 
-    if (withinInterval && !movedEnough && !headingChanged && !speedChanged && !progressChanged && !statusChanged && !riderChanged) {
+    if (withinInterval && !movedEnough && !headingChanged && !speedChanged && !progressChanged && !remainingDistanceChanged && !statusChanged && !riderChanged && !polylineChanged) {
       return true;
     }
   }
@@ -301,6 +305,8 @@ export async function updateActiveOrderLocation(orderId, location = {}) {
     bearing: isFiniteNumber(payload.bearing) ? payload.bearing : previous?.bearing ?? null,
     speed: isFiniteNumber(payload.speed) ? payload.speed : previous?.speed ?? null,
     progress: isFiniteNumber(payload.progress) ? payload.progress : previous?.progress ?? null,
+    remaining_distance: isFiniteNumber(payload.remaining_distance) ? payload.remaining_distance : previous?.remaining_distance ?? null,
+    polyline: typeof payload.polyline === 'string' ? payload.polyline : previous?.polyline ?? '',
     status: payload.status || previous?.status || null,
     boy_id: payload.boy_id || previous?.boy_id || null
   });

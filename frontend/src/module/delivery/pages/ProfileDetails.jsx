@@ -89,6 +89,118 @@ export default function ProfileDetails() {
 
   const profileImageUrl = profile?.profileImage?.url || ""
 
+  const handleProfileImageFile = async (file) => {
+    if (!file) return
+
+    const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Invalid file type. Please upload PNG, JPG, JPEG, or WEBP.")
+      return
+    }
+
+    const maxSize = 5 * 1024 * 1024
+    if (file.size > maxSize) {
+      toast.error("File size exceeds 5MB limit.")
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      setImagePreview(reader.result)
+    }
+    reader.readAsDataURL(file)
+
+    setIsUploadingProfilePhoto(true)
+    try {
+      const uploadResponse = await uploadAPI.uploadMedia(file, {
+        folder: 'delivery-profiles'
+      })
+
+      const imageUrl = uploadResponse?.data?.data?.url || uploadResponse?.data?.url
+      const publicId = uploadResponse?.data?.data?.publicId || uploadResponse?.data?.publicId
+
+      if (!imageUrl) {
+        throw new Error("Failed to get uploaded image URL")
+      }
+
+      await deliveryAPI.updateProfile({
+        profileImage: {
+          url: imageUrl,
+          publicId: publicId || null
+        }
+      })
+
+      toast.success("Profile photo updated successfully")
+
+      const response = await deliveryAPI.getProfile()
+      if (response?.data?.success && response?.data?.data?.profile) {
+        setProfile(response.data.data.profile)
+      }
+
+      setImagePreview(null)
+    } catch (error) {
+      console.error("Error uploading profile photo:", error)
+      toast.error(error?.response?.data?.message || "Failed to upload profile photo")
+      setImagePreview(null)
+    } finally {
+      setIsUploadingProfilePhoto(false)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+    }
+  }
+
+  const handleProfileCameraClick = async () => {
+    // If Flutter InAppWebView is available, use native camera handler
+    if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === 'function') {
+      try {
+        const result = await window.flutter_inappwebview.callHandler('openCamera', {
+          source: 'camera',
+          accept: 'image/*',
+          multiple: false,
+          quality: 0.8
+        })
+
+        if (result && result.success && result.base64) {
+          let base64Data = result.base64
+          if (base64Data.includes(',')) {
+            base64Data = base64Data.split(',')[1]
+          }
+
+          try {
+            const byteCharacters = atob(base64Data)
+            const byteNumbers = new Array(byteCharacters.length)
+            for (let i = 0; i < byteCharacters.length; i++) {
+              byteNumbers[i] = byteCharacters.charCodeAt(i)
+            }
+            const byteArray = new Uint8Array(byteNumbers)
+            const mimeType = result.mimeType || 'image/jpeg'
+            const blob = new Blob([byteArray], { type: mimeType })
+            const file = new File(
+              [blob],
+              result.fileName || `delivery-profile-${Date.now()}.jpg`,
+              { type: mimeType }
+            )
+            await handleProfileImageFile(file)
+            return
+          } catch (convertError) {
+            console.error('Error converting base64 camera image:', convertError)
+            toast.error('Failed to process image from camera. Please try again.')
+          }
+        }
+        // If user cancelled or result invalid, just fall back to file input
+      } catch (error) {
+        console.error('Error calling Flutter camera handler:', error)
+        // fall through to web file input
+      }
+    }
+
+    // Web / fallback: open file picker
+    if (fileInputRef.current) {
+      fileInputRef.current.click()
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
@@ -135,7 +247,7 @@ export default function ProfileDetails() {
 
           {/* Camera button - always visible */}
           <button
-            onClick={() => fileInputRef.current?.click()}
+            onClick={handleProfileCameraClick}
             disabled={isUploadingProfilePhoto || isDeletingProfilePhoto}
             className="absolute bottom-0 right-0 bg-[#00B761] text-white rounded-full p-1.5 shadow-md hover:bg-[#00A055] transition-colors disabled:opacity-50"
             title="Change photo"
@@ -197,63 +309,7 @@ export default function ProfileDetails() {
           onChange={async (e) => {
             const file = e.target.files?.[0]
             if (!file) return
-
-            const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
-            if (!allowedTypes.includes(file.type)) {
-              toast.error("Invalid file type. Please upload PNG, JPG, JPEG, or WEBP.")
-              return
-            }
-
-            const maxSize = 5 * 1024 * 1024
-            if (file.size > maxSize) {
-              toast.error("File size exceeds 5MB limit.")
-              return
-            }
-
-            const reader = new FileReader()
-            reader.onloadend = () => {
-              setImagePreview(reader.result)
-            }
-            reader.readAsDataURL(file)
-
-            setIsUploadingProfilePhoto(true)
-            try {
-              const uploadResponse = await uploadAPI.uploadMedia(file, {
-                folder: 'delivery-profiles'
-              })
-
-              const imageUrl = uploadResponse?.data?.data?.url || uploadResponse?.data?.url
-              const publicId = uploadResponse?.data?.data?.publicId || uploadResponse?.data?.publicId
-
-              if (!imageUrl) {
-                throw new Error("Failed to get uploaded image URL")
-              }
-
-              await deliveryAPI.updateProfile({
-                profileImage: {
-                  url: imageUrl,
-                  publicId: publicId || null
-                }
-              })
-
-              toast.success("Profile photo updated successfully")
-
-              const response = await deliveryAPI.getProfile()
-              if (response?.data?.success && response?.data?.data?.profile) {
-                setProfile(response.data.data.profile)
-              }
-
-              setImagePreview(null)
-            } catch (error) {
-              console.error("Error uploading profile photo:", error)
-              toast.error(error?.response?.data?.message || "Failed to upload profile photo")
-              setImagePreview(null)
-            } finally {
-              setIsUploadingProfilePhoto(false)
-              if (fileInputRef.current) {
-                fileInputRef.current.value = ""
-              }
-            }
+            await handleProfileImageFile(file)
           }}
         />
         <input

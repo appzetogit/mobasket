@@ -10,6 +10,7 @@ import winston from 'winston';
 import { createOrder as createRazorpayOrder } from '../../payment/services/razorpayService.js';
 import { verifyPayment } from '../../payment/services/razorpayService.js';
 import { getRazorpayCredentials } from '../../../shared/utils/envService.js';
+import { getDeliveryCODSummary } from '../services/codLimitService.js';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -29,6 +30,7 @@ const logger = winston.createLogger({
 export const getWallet = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
+    const codSummary = await getDeliveryCODSummary(delivery._id);
 
     // Find or create wallet for this delivery partner
     let wallet = await DeliveryWallet.findOne({ deliveryId: delivery._id });
@@ -50,15 +52,15 @@ export const getWallet = asyncHandler(async (req, res) => {
       .filter(t => t.type === 'withdrawal' && t.status === 'Pending')
       .reduce((sum, t) => sum + t.amount, 0);
 
-    // Global cash limit and withdrawal settings (same for all delivery partners)
-    let totalCashLimit = 750;
+    // Admin/global cash limit + withdrawal settings
+    let adminCashLimit = 750;
     let withdrawalLimit = 100;
     let minimumWalletBalance = 0;
     try {
       const settings = await BusinessSettings.getSettings();
       const configured = Number(settings?.deliveryCashLimit);
       if (Number.isFinite(configured) && configured >= 0) {
-        totalCashLimit = configured;
+        adminCashLimit = configured;
       }
       const wl = Number(settings?.deliveryWithdrawalLimit);
       if (Number.isFinite(wl) && wl >= 0) {
@@ -68,9 +70,7 @@ export const getWallet = asyncHandler(async (req, res) => {
       if (Number.isFinite(mwb) && mwb >= 0) {
         minimumWalletBalance = mwb;
       }
-    } catch (e) {
-      totalCashLimit = 750;
-    }
+    } catch (e) {}
 
     // ANYHOW FIX (end-to-end): compute COD cash collected from Orders so "Cash in hand" shows real amount.
     // Robust against legacy data (ObjectId vs string IDs, method casing, status stored in deliveryState).
@@ -175,7 +175,9 @@ export const getWallet = asyncHandler(async (req, res) => {
     
     const pocketBalance = Math.max(0, Number(wallet.totalBalance) || 0);
     const deductions = Math.max(0, Number(wallet.deductions) || 0);
-    const availableCashLimit = Number(totalCashLimit) - cashInHandForLimit - deductions;
+    const availableCashLimit = codSummary.remainingLimit;
+    const totalCashLimit = adminCashLimit;
+    const cashCollected = codSummary.cashCollected;
 
     const walletData = {
       totalBalance: pocketBalance,
@@ -187,8 +189,9 @@ export const getWallet = asyncHandler(async (req, res) => {
       totalCashLimit: totalCashLimit,
       availableCashLimit,
       codLimit: totalCashLimit,
-      cashCollected: cashInHandForLimit,
-      remainingLimit: Math.max(0, Number(totalCashLimit) - cashInHandForLimit),
+      cashCollected,
+      remainingLimit: codSummary.remainingLimit,
+      canDeposit: codSummary.canDeposit,
       deliveryWithdrawalLimit: withdrawalLimit,
       deliveryMinimumWalletBalance: minimumWalletBalance,
       // Pocket balance = rider earnings (withdrawable).
@@ -794,6 +797,13 @@ export const createDepositOrder = asyncHandler(async (req, res) => {
       `Insufficient cash in hand (Rs ${cashInHand.toFixed(2)}). Deposit amount cannot exceed cash in hand.`
     );
   }
+  if (Math.abs(amount - cashInHand) > 0.01) {
+    return errorResponse(
+      res,
+      400,
+      `Deposit amount must match your full cash collected amount (Rs ${cashInHand.toFixed(2)}).`,
+    );
+  }
   let credentials;
   try {
     credentials = await getRazorpayCredentials();
@@ -864,7 +874,18 @@ export const verifyDepositPayment = asyncHandler(async (req, res) => {
   const wallet = await DeliveryWallet.findOrCreateByDeliveryId(delivery._id);
   const cashInHand = Number(wallet.cashInHand) || 0;
   if (cashInHand < amt) {
-    return errorResponse(res, 400, `Insufficient cash in hand (₹${cashInHand.toFixed(2)}). Deposit amount cannot exceed cash in hand.`);
+    return errorResponse(
+      res,
+      400,
+      `Insufficient cash in hand (Rs ${cashInHand.toFixed(2)}). Deposit amount cannot exceed cash in hand.`,
+    );
+  }
+  if (Math.abs(amt - cashInHand) > 0.01) {
+    return errorResponse(
+      res,
+      400,
+      `Deposit amount must match your full cash collected amount (Rs ${cashInHand.toFixed(2)}).`,
+    );
   }
 
   const pid = (t) => (t.metadata?.get ? t.metadata.get('razorpayPaymentId') : t.metadata?.razorpayPaymentId);
@@ -891,20 +912,16 @@ export const verifyDepositPayment = asyncHandler(async (req, res) => {
   wallet.markModified('transactions');
   await wallet.save();
 
-  let limit = 750;
-  try {
-    const settings = await BusinessSettings.getSettings();
-    limit = Number(settings?.deliveryCashLimit) || 750;
-  } catch (_) {}
   const cashInHandNow = Math.max(0, Number(wallet.cashInHand) || 0);
-  const deductions = Math.max(0, Number(wallet.deductions) || 0);
-  const availableCashLimit = Number(limit) - cashInHandNow - deductions;
+  const codSummary = await getDeliveryCODSummary(delivery._id);
 
   return successResponse(res, 200, 'Deposit successful', {
     amount: amt,
     cashInHand: cashInHandNow,
-    deductions,
-    availableCashLimit
+    codLimit: codSummary.codLimit,
+    cashCollected: codSummary.cashCollected,
+    remainingLimit: codSummary.remainingLimit,
+    canDeposit: codSummary.canDeposit,
   });
 });
 

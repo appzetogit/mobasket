@@ -53,6 +53,22 @@ router.put('/profile', validate(Joi.object({
       bankName: Joi.string().trim().min(2).max(100).pattern(/^[a-zA-Z\s'&-]+$/).messages({
         'string.pattern.base': 'Bank name can only contain letters, spaces, apostrophes, hyphens, and ampersands'
       }).optional().allow(null, '')
+    }).optional(),
+    aadhar: Joi.object({
+      number: Joi.string().trim().optional().allow(null, ''),
+      document: Joi.string().uri().optional().allow(null, ''),
+      verified: Joi.boolean().optional()
+    }).optional(),
+    pan: Joi.object({
+      number: Joi.string().trim().optional().allow(null, ''),
+      document: Joi.string().uri().optional().allow(null, ''),
+      verified: Joi.boolean().optional()
+    }).optional(),
+    drivingLicense: Joi.object({
+      number: Joi.string().trim().optional().allow(null, ''),
+      document: Joi.string().uri().optional().allow(null, ''),
+      expiryDate: Joi.date().optional().allow(null),
+      verified: Joi.boolean().optional()
     }).optional()
   }).optional()
 })), updateProfile);

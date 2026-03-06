@@ -109,6 +109,8 @@ export const receiveLocationUpdate = asyncHandler(async (req, res) => {
         bearing: processedLocation.bearing,
         speed: processedLocation.speed,
         progress: processedLocation.progress,
+        remainingDistance: processedLocation.remainingDistance,
+        polyline: processedLocation.remainingPolyline,
         boy_id: String(deliveryBoyId || '')
       });
     } catch (firebaseErr) {

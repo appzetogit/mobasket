@@ -159,6 +159,7 @@ export const getDashboard = asyncHandler(async (req, res) => {
         codLimit,
         cashCollected,
         remainingLimit,
+        canDeposit: cashCollected > 0,
         totalEarned: totalEarned,
         currentBalance: currentBalance,
         pendingPayout: pendingPayout,

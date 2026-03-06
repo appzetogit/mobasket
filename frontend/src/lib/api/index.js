@@ -834,6 +834,23 @@ export const groceryStoreAPI = {
     return apiClient.delete(API_ENDPOINTS.GROCERY_STORE.NOTIFICATIONS);
   },
 
+  // Wallet
+  getWallet: () => {
+    return apiClient.get(API_ENDPOINTS.GROCERY_STORE.WALLET);
+  },
+  getWalletTransactions: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.GROCERY_STORE.WALLET_TRANSACTIONS, { params });
+  },
+  getWalletStats: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.GROCERY_STORE.WALLET_STATS, { params });
+  },
+  createWithdrawalRequest: (amount) => {
+    return apiClient.post(API_ENDPOINTS.GROCERY_STORE.WITHDRAWAL_REQUEST, { amount });
+  },
+  getWithdrawalRequests: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.GROCERY_STORE.WITHDRAWAL_REQUESTS, { params });
+  },
+
   // Products
   getProducts: (params = {}) => {
     return apiClient.get(API_ENDPOINTS.GROCERY_STORE.PRODUCTS, { params });
