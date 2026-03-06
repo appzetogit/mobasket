@@ -103,6 +103,32 @@ function normalizePlatformFilter(value) {
   return null;
 }
 
+function normalizeCityValue(value = '') {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+function matchesRequestedCity(restaurant, requestedCity) {
+  const normalizedRequestedCity = normalizeCityValue(requestedCity);
+  if (!normalizedRequestedCity) return true;
+
+  const candidates = [
+    restaurant?.location?.city,
+    restaurant?.location?.area,
+    restaurant?.location?.formattedAddress,
+    restaurant?.location?.address,
+    restaurant?.onboarding?.step1?.location?.city,
+    restaurant?.onboarding?.step1?.location?.formattedAddress
+  ];
+
+  return candidates.some((candidate) => {
+    const normalizedCandidate = normalizeCityValue(candidate);
+    return normalizedCandidate.includes(normalizedRequestedCity);
+  });
+}
+
 function getActiveZoneQueryByPlatform(platform = 'mofood') {
   return platform === 'mogrocery'
     ? { isActive: true, platform: 'mogrocery' }
@@ -123,6 +149,7 @@ export const getRestaurants = async (req, res) => {
       maxPrice,
       hasOffers,
       platform,
+      city,
       zoneId // User's zone ID (optional - used only for validation/metadata)
     } = req.query;
     const requestedPlatform = normalizePlatformFilter(platform);
@@ -174,6 +201,9 @@ export const getRestaurants = async (req, res) => {
     const query = { isActive: true };
     if (requestedPlatform) {
       query.platform = requestedPlatform;
+    }
+    if (city) {
+      query['location.city'] = { $regex: new RegExp(String(city).trim(), 'i') };
     }
     
     // Cuisine filter
@@ -262,6 +292,9 @@ export const getRestaurants = async (req, res) => {
       if (cuisine) {
         groceryQuery.cuisines = { $in: [new RegExp(cuisine, 'i')] };
       }
+      if (city) {
+        groceryQuery['location.city'] = { $regex: new RegExp(String(city).trim(), 'i') };
+      }
 
       if (minRating) {
         groceryQuery.rating = { $gte: parseFloat(minRating) };
@@ -316,6 +349,8 @@ export const getRestaurants = async (req, res) => {
     }
 
     restaurants = restaurants.filter((restaurant) => {
+      if (!matchesRequestedCity(restaurant, city)) return false;
+
       const restaurantPlatform = getRestaurantPlatform(restaurant);
       if (requestedPlatform && restaurantPlatform !== requestedPlatform) return false;
 

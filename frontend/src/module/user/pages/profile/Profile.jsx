@@ -30,6 +30,7 @@ import {
 import AnimatedPage from "../../components/AnimatedPage";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import AddressLocationPicker from "@/components/AddressLocationPicker";
 import { useProfile } from "../../context/ProfileContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useCompanyName } from "@/lib/hooks/useCompanyName";
@@ -1208,6 +1209,13 @@ export default function Profile() {
               onChange={(e) =>
                 setAddressForm((prev) => ({ ...prev, zipCode: e.target.value }))
               }
+            />
+
+            <AddressLocationPicker
+              value={addressForm}
+              onChange={setAddressForm}
+              title="Exact address pin"
+              description="Drag the pin or set the typed address on the map before saving this address."
             />
 
             <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">

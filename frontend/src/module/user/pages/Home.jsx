@@ -963,6 +963,9 @@ export default function Home() {
 
         // Home page is MoFood-only.
         params.platform = "mofood";
+        if (location?.city && location.city !== "Current Location") {
+          params.city = location.city;
+        }
 
         // Strict zone filter: show only restaurants from the same detected zone when available.
         const hasResolvedZone = Boolean(zoneId);

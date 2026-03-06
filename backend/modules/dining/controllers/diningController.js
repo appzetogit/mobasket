@@ -6,6 +6,13 @@ import DiningMustTry from '../models/DiningMustTry.js';
 import DiningOfferBanner from '../models/DiningOfferBanner.js';
 import DiningStory from '../models/DiningStory.js';
 
+function normalizeCityValue(value = '') {
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, ' ');
+}
+
 // Get all dining restaurants (with filtering)
 export const getRestaurants = async (req, res) => {
     try {
@@ -17,7 +24,13 @@ export const getRestaurants = async (req, res) => {
             query.location = { $regex: city, $options: 'i' };
         }
 
-        const restaurants = await DiningRestaurant.find(query);
+        let restaurants = await DiningRestaurant.find(query);
+        if (city) {
+            const normalizedCity = normalizeCityValue(city);
+            restaurants = restaurants.filter((restaurant) =>
+                normalizeCityValue(restaurant?.location).includes(normalizedCity)
+            );
+        }
         res.status(200).json({
             success: true,
             count: restaurants.length,

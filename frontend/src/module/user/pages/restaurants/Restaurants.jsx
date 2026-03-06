@@ -29,6 +29,9 @@ export default function Restaurants() {
         setError("");
 
         const params = { platform: "mofood", limit: 100, onlyZone: "true" };
+        if (location?.city && location.city !== "Current Location") {
+          params.city = location.city;
+        }
         if (zoneId) params.zoneId = zoneId;
 
         const response = await restaurantAPI.getRestaurants(params);
@@ -119,7 +122,7 @@ export default function Restaurants() {
     };
 
     fetchRestaurants();
-  }, [zoneId]);
+  }, [location?.city, zoneId]);
 
   return (
     <AnimatedPage className="min-h-screen bg-gradient-to-b from-yellow-50/30 dark:from-[#0a0a0a] via-white dark:via-[#0a0a0a] to-orange-50/20 dark:to-[#0a0a0a]">

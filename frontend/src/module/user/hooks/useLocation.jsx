@@ -33,6 +33,7 @@ export function useLocation() {
   const MIN_DB_WRITE_INTERVAL_MS = 30000
   const MIN_DB_WRITE_DISTANCE_M = 25
   const DB_UNAVAILABLE_BACKOFF_MS = 120000
+  const LOCATION_STALE_MS = 15 * 60 * 1000
 
   /* ===================== DB UPDATE (LIVE LOCATION TRACKING) ===================== */
   const updateLocationInDB = async (locationData) => {
@@ -69,6 +70,7 @@ export function useLocation() {
         state: locationData.state || "",
         area: locationData.area || "",
         formattedAddress: locationData.formattedAddress || locationData.address || "",
+        lastUpdated: locationData.lastUpdated || locationData.timestamp || Date.now(),
       }
 
       // Add optional fields if available
@@ -162,12 +164,14 @@ export function useLocation() {
         formattedAddress:
           data.formattedAddress ||
           `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+        lastUpdated: Date.now(),
       }
     } catch {
       return {
         city: "Current Location",
         address: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
         formattedAddress: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+        lastUpdated: Date.now(),
       }
     }
   }
@@ -1249,6 +1253,7 @@ export function useLocation() {
           area: area || "", // Area is CRITICAL - must be extracted
           address: formattedAddress || `${city || "Current Location"}`,
           formattedAddress: formattedAddress || `${city || "Current Location"}`,
+          lastUpdated: Date.now(),
         }
         
         return finalLocation
@@ -1304,7 +1309,8 @@ export function useLocation() {
           return {
             ...loc,
             latitude: Number(loc.latitude),
-            longitude: Number(loc.longitude)
+            longitude: Number(loc.longitude),
+            lastUpdated: loc.lastUpdated || Date.now()
           }
         }
 
@@ -1331,7 +1337,12 @@ export function useLocation() {
             loc.latitude,
             loc.longitude
           )
-          return { ...addr, latitude: loc.latitude, longitude: loc.longitude }
+          return {
+            ...addr,
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            lastUpdated: loc.lastUpdated || Date.now()
+          }
         } catch (geocodeErr) {
           // If reverse geocoding fails, return location without coordinates in address
           console.warn("⚠️ Reverse geocoding failed in fetchLocationFromDB:", geocodeErr.message)
@@ -1460,6 +1471,7 @@ export function useLocation() {
                 latitude, 
                 longitude,
                 accuracy: accuracy || null,
+                lastUpdated: timestamp,
                 address: displayAddress, // Locality parts for navbar display
                 formattedAddress: completeFormattedAddress || addr.formattedAddress || displayAddress // Complete detailed address
               }
@@ -1478,6 +1490,7 @@ export function useLocation() {
                   latitude,
                   longitude,
                   accuracy: accuracy || null,
+                  lastUpdated: timestamp,
                   city: finalLoc.city,
                   address: finalLoc.address,
                   formattedAddress: finalLoc.formattedAddress
@@ -1521,7 +1534,8 @@ export function useLocation() {
                     ...lastResortAddr,
                     latitude,
                     longitude,
-                    accuracy: pos.coords.accuracy || null
+                    accuracy: pos.coords.accuracy || null,
+                    lastUpdated: pos.timestamp || Date.now()
                   }
                   console.log("✅ Last resort geocoding succeeded:", lastResortLoc)
                   localStorage.setItem("userLocation", JSON.stringify(lastResortLoc))
@@ -1548,6 +1562,7 @@ export function useLocation() {
                 state: "",
                 address: "Select location", // Don't show coordinates
                 formattedAddress: "Select location", // Don't show coordinates
+                lastUpdated: pos.timestamp || Date.now(),
               }
             // Don't save placeholder values to localStorage
             // Only set in state for display
@@ -1796,6 +1811,7 @@ export function useLocation() {
               latitude, 
               longitude,
               accuracy: accuracy || null,
+              lastUpdated: pos.timestamp || Date.now(),
               address: displayAddress, // Locality parts for navbar display (NEVER coordinates)
               formattedAddress: completeFormattedAddress // Complete detailed address (NEVER coordinates)
             }
@@ -1881,6 +1897,7 @@ export function useLocation() {
               state: "",
               address: "Select location", // NEVER use coordinates
               formattedAddress: "Select location", // NEVER use coordinates
+              lastUpdated: pos.timestamp || Date.now(),
             }
             console.warn("⚠️ Using fallback location (reverse geocoding failed):", fallbackLoc)
             // Don't save placeholder values to localStorage
@@ -1965,6 +1982,11 @@ export function useLocation() {
     if (stored) {
       try {
         const parsedLocation = JSON.parse(stored)
+        const locationAgeMs = Date.now() - Number(parsedLocation?.lastUpdated || 0)
+        const isLocationStale =
+          !parsedLocation?.lastUpdated ||
+          !Number.isFinite(locationAgeMs) ||
+          locationAgeMs > LOCATION_STALE_MS
         
         // Show cached location immediately (even if incomplete) - better UX
         // We'll refresh in background but user sees something right away
@@ -1985,6 +2007,9 @@ export function useLocation() {
             parsedLocation.formattedAddress.split(',').length >= 4
           
           if (!hasCompleteAddress) {
+            shouldForceRefresh = true
+          }
+          if (isLocationStale) {
             shouldForceRefresh = true
           }
         } else {
@@ -2012,6 +2037,14 @@ export function useLocation() {
               dbLoc.formattedAddress.split(',').length >= 4
             
             if (!hasCompleteAddress) {
+              shouldForceRefresh = true
+            }
+            const dbLocationAgeMs = Date.now() - Number(dbLoc?.lastUpdated || 0)
+            if (
+              !dbLoc?.lastUpdated ||
+              !Number.isFinite(dbLocationAgeMs) ||
+              dbLocationAgeMs > LOCATION_STALE_MS
+            ) {
               shouldForceRefresh = true
             }
           } else {

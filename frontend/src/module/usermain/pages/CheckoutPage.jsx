@@ -18,6 +18,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import AddressLocationPicker from "@/components/AddressLocationPicker";
 import { toast } from "sonner";
 import { useCart } from "../../user/context/CartContext";
 import { useProfile } from "../../user/context/ProfileContext";
@@ -1439,6 +1440,13 @@ export default function CheckoutPage() {
                       onChange={(e) => setNewAddress((prev) => ({ ...prev, zipCode: e.target.value }))}
                       placeholder="Pincode"
                       className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs"
+                    />
+
+                    <AddressLocationPicker
+                      value={newAddress}
+                      onChange={setNewAddress}
+                      title="Exact delivery location"
+                      description="For family or out-of-station orders, drag the pin to the exact drop point before saving."
                     />
 
                     <label className="flex items-center gap-2 text-xs text-gray-600">

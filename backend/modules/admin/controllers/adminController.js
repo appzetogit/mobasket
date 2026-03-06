@@ -24,6 +24,19 @@ const logger = winston.createLogger({
   ]
 });
 
+const normalizeCityValue = (value = '') =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+
+const buildCityRegex = (value = '') => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return null;
+  const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(escaped, 'i');
+};
+
 const normalizeSidebarAccess = (sidebarAccess) => {
   if (!Array.isArray(sidebarAccess)) return [];
   return Array.from(
@@ -71,12 +84,19 @@ const resolveDuplicateAdminValue = (error, field) => {
 export const getDashboardStats = asyncHandler(async (req, res) => {
   try {
     const requestedPlatform = req.query?.platform === 'mogrocery' ? 'mogrocery' : 'mofood';
+    const requestedCity = String(req.query?.city || req.query?.zone || '').trim();
+    const cityRegex = buildCityRegex(requestedCity);
     const restaurantPlatformQuery = { $or: [{ platform: 'mofood' }, { platform: { $exists: false } }] };
     let scopedRestaurants = [];
     if (requestedPlatform === 'mogrocery') {
-      scopedRestaurants = await GroceryStore.find({}).select('_id').lean();
+      const groceryCityQuery = cityRegex ? { 'location.city': cityRegex } : {};
+      scopedRestaurants = await GroceryStore.find(groceryCityQuery).select('_id').lean();
     } else {
-      scopedRestaurants = await Restaurant.find(restaurantPlatformQuery).select('_id').lean();
+      const restaurantCityQuery = cityRegex ? { 'location.city': cityRegex } : {};
+      scopedRestaurants = await Restaurant.find({
+        ...restaurantPlatformQuery,
+        ...restaurantCityQuery
+      }).select('_id').lean();
     }
 
     // Scope dashboard metrics to the active platform restaurants/stores.
@@ -186,8 +206,8 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
     // Get active partners count
     const activeRestaurants = requestedPlatform === 'mogrocery'
-      ? await GroceryStore.countDocuments({ isActive: true })
-      : await Restaurant.countDocuments({ ...restaurantPlatformQuery, isActive: true });
+      ? await GroceryStore.countDocuments({ isActive: true, ...(cityRegex ? { 'location.city': cityRegex } : {}) })
+      : await Restaurant.countDocuments({ ...restaurantPlatformQuery, isActive: true, ...(cityRegex ? { 'location.city': cityRegex } : {}) });
     // Note: Delivery partners are stored in User model
     const User = (await import('../../auth/models/User.js')).default;
     const activeDeliveryPartners = await User.countDocuments({ 
@@ -200,8 +220,8 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     // Total restaurants (only active/approved restaurants)
     // This matches the admin restaurants list which shows only active restaurants by default
     const totalRestaurants = requestedPlatform === 'mogrocery'
-      ? await GroceryStore.countDocuments({ isActive: true })
-      : await Restaurant.countDocuments({ ...restaurantPlatformQuery, isActive: true });
+      ? await GroceryStore.countDocuments({ isActive: true, ...(cityRegex ? { 'location.city': cityRegex } : {}) })
+      : await Restaurant.countDocuments({ ...restaurantPlatformQuery, isActive: true, ...(cityRegex ? { 'location.city': cityRegex } : {}) });
     
     // Restaurant requests pending (inactive restaurants with completed onboarding, no rejection)
     const pendingRestaurantRequestsQuery = {
@@ -230,8 +250,29 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       ]
     };
     const pendingRestaurantRequests = requestedPlatform === 'mogrocery'
-      ? await GroceryStore.countDocuments(pendingRestaurantRequestsQuery)
-      : await Restaurant.countDocuments({ ...restaurantPlatformQuery, ...pendingRestaurantRequestsQuery });
+      ? await GroceryStore.countDocuments({
+          ...pendingRestaurantRequestsQuery,
+          ...(cityRegex
+            ? {
+                $or: [
+                  { 'location.city': cityRegex },
+                  { 'onboarding.step1.location.city': cityRegex }
+                ]
+              }
+            : {})
+        })
+      : await Restaurant.countDocuments({
+          ...restaurantPlatformQuery,
+          ...pendingRestaurantRequestsQuery,
+          ...(cityRegex
+            ? {
+                $or: [
+                  { 'location.city': cityRegex },
+                  { 'onboarding.step1.location.city': cityRegex }
+                ]
+              }
+            : {})
+        });
     
     // Total delivery boys (all delivery users)
     const totalDeliveryBoys = await User.countDocuments({ role: 'delivery' });
@@ -334,12 +375,14 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     const recentRestaurants = requestedPlatform === 'mogrocery'
       ? await GroceryStore.countDocuments({
           createdAt: { $gte: last24Hours },
-          isActive: true
+          isActive: true,
+          ...(cityRegex ? { 'location.city': cityRegex } : {})
         })
       : await Restaurant.countDocuments({
           ...restaurantPlatformQuery,
           createdAt: { $gte: last24Hours },
-          isActive: true
+          isActive: true,
+          ...(cityRegex ? { 'location.city': cityRegex } : {})
         });
 
     // Get monthly data for last 12 months
@@ -1135,7 +1178,8 @@ export const getRestaurants = asyncHandler(async (req, res) => {
       search,
       status,
       cuisine,
-      zone
+      zone,
+      city
     } = req.query;
 
     // Build query
@@ -1175,6 +1219,10 @@ export const getRestaurants = asyncHandler(async (req, res) => {
     // Cuisine filter
     if (cuisine) {
       query.cuisines = { $in: [new RegExp(cuisine, 'i')] };
+    }
+
+    if (city) {
+      query['location.city'] = { $regex: buildCityRegex(city) };
     }
 
     // Zone filter

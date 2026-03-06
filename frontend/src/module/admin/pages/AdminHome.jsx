@@ -37,6 +37,33 @@ export default function AdminHome() {
   const [selectedPeriod, setSelectedPeriod] = useState("overall")
   const [isLoading, setIsLoading] = useState(true)
   const [dashboardData, setDashboardData] = useState(null)
+  const [cityOptions, setCityOptions] = useState([])
+
+  useEffect(() => {
+    const fetchCityOptions = async () => {
+      try {
+        const response = isGrocery
+          ? await adminAPI.getGroceryStores({ limit: 1000, activeOnly: "true" })
+          : await adminAPI.getRestaurants({ limit: 1000, status: "active" })
+        const list = isGrocery
+          ? response?.data?.data?.stores || response?.data?.stores || []
+          : response?.data?.data?.restaurants || []
+        const nextCities = Array.from(
+          new Set(
+            (Array.isArray(list) ? list : [])
+              .map((item) => String(item?.location?.city || "").trim())
+              .filter(Boolean)
+          )
+        ).sort((a, b) => a.localeCompare(b))
+        setCityOptions(nextCities)
+      } catch (error) {
+        console.error("Error fetching dashboard city options:", error)
+        setCityOptions([])
+      }
+    }
+
+    fetchCityOptions()
+  }, [isGrocery, platform])
 
   // Fetch dashboard stats for active platform + filters
   useEffect(() => {
@@ -45,7 +72,7 @@ export default function AdminHome() {
         setIsLoading(true)
         const response = await adminAPI.getDashboardStats({
           platform,
-          zone: selectedZone,
+          city: selectedZone !== "all" ? selectedZone : undefined,
           period: selectedPeriod,
         })
         if (response.data?.success && response.data?.data) {
@@ -256,14 +283,13 @@ export default function AdminHome() {
           <div className="flex flex-wrap gap-3">
             <Select value={selectedZone} onValueChange={setSelectedZone}>
               <SelectTrigger className="min-w-[160px] border-neutral-300 bg-white text-neutral-900">
-                <SelectValue placeholder="All zones" />
+                <SelectValue placeholder="All cities" />
               </SelectTrigger>
               <SelectContent className="border-neutral-200 bg-white text-neutral-900">
-                <SelectItem value="all">All zones</SelectItem>
-                <SelectItem value="zone1">Zone 1</SelectItem>
-                <SelectItem value="zone2">Zone 2</SelectItem>
-                <SelectItem value="zone3">Zone 3</SelectItem>
-                <SelectItem value="zone4">Zone 4</SelectItem>
+                <SelectItem value="all">All cities</SelectItem>
+                {cityOptions.map((city) => (
+                  <SelectItem key={city} value={city}>{city}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={selectedPeriod} onValueChange={setSelectedPeriod}>
