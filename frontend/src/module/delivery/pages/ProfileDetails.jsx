@@ -4,11 +4,13 @@ import { ArrowLeft, Plus, Edit2, ChevronRight, FileText, CheckCircle, XCircle, E
 import BottomPopup from "../components/BottomPopup"
 import { toast } from "sonner"
 import { deliveryAPI, uploadAPI } from "@/lib/api"
+import { fetchDeliveryWallet } from "../utils/deliveryWalletState"
 
 export default function ProfileDetails() {
   const navigate = useNavigate()
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [walletBalance, setWalletBalance] = useState(0)
   const [vehicleNumber, setVehicleNumber] = useState("")
   const [showVehiclePopup, setShowVehiclePopup] = useState(false)
   const [vehicleInput, setVehicleInput] = useState("")
@@ -71,7 +73,20 @@ export default function ProfileDetails() {
       }
     }
 
+    const loadWallet = async () => {
+      try {
+        const walletData = await fetchDeliveryWallet()
+        const pocketBalance = walletData?.pocketBalance !== undefined
+          ? Number(walletData.pocketBalance) || 0
+          : Number(walletData?.totalBalance) || 0
+        setWalletBalance(pocketBalance)
+      } catch (error) {
+        console.error("Error fetching wallet balance:", error)
+      }
+    }
+
     fetchProfile()
+    loadWallet()
   }, [navigate])
 
   const getDocumentStatusLabel = (documentNode) => {
@@ -150,21 +165,21 @@ export default function ProfileDetails() {
     }
   }
 
-  const handleProfileCameraClick = async () => {
-    // If Flutter InAppWebView is available, use native camera handler
-    if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === 'function') {
+  const handleProfileImageUpdate = async (source = "camera") => {
+    // If Flutter InAppWebView is available, use native camera/gallery handler
+    if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function") {
       try {
-        const result = await window.flutter_inappwebview.callHandler('openCamera', {
-          source: 'camera',
-          accept: 'image/*',
+        const result = await window.flutter_inappwebview.callHandler("openCamera", {
+          source: source,
+          accept: "image/*",
           multiple: false,
-          quality: 0.8
+          quality: 0.8,
         })
 
         if (result && result.success && result.base64) {
           let base64Data = result.base64
-          if (base64Data.includes(',')) {
-            base64Data = base64Data.split(',')[1]
+          if (base64Data.includes(",")) {
+            base64Data = base64Data.split(",")[1]
           }
 
           try {
@@ -174,23 +189,19 @@ export default function ProfileDetails() {
               byteNumbers[i] = byteCharacters.charCodeAt(i)
             }
             const byteArray = new Uint8Array(byteNumbers)
-            const mimeType = result.mimeType || 'image/jpeg'
+            const mimeType = result.mimeType || "image/jpeg"
             const blob = new Blob([byteArray], { type: mimeType })
-            const file = new File(
-              [blob],
-              result.fileName || `delivery-profile-${Date.now()}.jpg`,
-              { type: mimeType }
-            )
+            const file = new File([blob], result.fileName || `delivery-profile-${Date.now()}.jpg`, { type: mimeType })
             await handleProfileImageFile(file)
             return
           } catch (convertError) {
-            console.error('Error converting base64 camera image:', convertError)
-            toast.error('Failed to process image from camera. Please try again.')
+            console.error(`Error converting base64 ${source} image:`, convertError)
+            toast.error(`Failed to process image from ${source}. Please try again.`)
           }
         }
         // If user cancelled or result invalid, just fall back to file input
       } catch (error) {
-        console.error('Error calling Flutter camera handler:', error)
+        console.error(`Error calling Flutter ${source} handler:`, error)
         // fall through to web file input
       }
     }
@@ -228,26 +239,23 @@ export default function ProfileDetails() {
       <div className="bg-white px-4 py-6 flex flex-col items-center gap-3 border-b border-gray-100">
         {/* Circle Avatar */}
         <div className="relative">
-          <div className="w-24 h-24 rounded-full overflow-hidden bg-gray-200 border-2 border-gray-300 flex items-center justify-center">
+          <div
+            onClick={() => handleProfileImageUpdate("gallery")}
+            className="w-24 h-24 rounded-full overflow-hidden bg-gray-200 border-2 border-gray-300 flex items-center justify-center cursor-pointer active:scale-95 transition-transform"
+          >
             {loading ? (
               <div className="w-full h-full bg-gray-200 animate-pulse" />
-            ) : (imagePreview || profileImageUrl) ? (
-              <img
-                src={imagePreview || profileImageUrl}
-                alt="Profile"
-                className="w-full h-full object-cover"
-              />
+            ) : imagePreview || profileImageUrl ? (
+              <img src={imagePreview || profileImageUrl} alt="Profile" className="w-full h-full object-cover" />
             ) : (
               // Show first letter of name when no image
-              <span className="text-3xl font-bold text-gray-500 select-none">
-                {profile?.name?.charAt(0)?.toUpperCase() || "?"}
-              </span>
+              <span className="text-3xl font-bold text-gray-500 select-none">{profile?.name?.charAt(0)?.toUpperCase() || "?"}</span>
             )}
           </div>
 
           {/* Camera button - always visible */}
           <button
-            onClick={handleProfileCameraClick}
+            onClick={() => handleProfileImageUpdate("camera")}
             disabled={isUploadingProfilePhoto || isDeletingProfilePhoto}
             className="absolute bottom-0 right-0 bg-[#00B761] text-white rounded-full p-1.5 shadow-md hover:bg-[#00A055] transition-colors disabled:opacity-50"
             title="Change photo"
@@ -392,12 +400,7 @@ export default function ProfileDetails() {
               </p>
             </div>
             <div className="divide-y divide-gray-200">
-              <div className="p-2 px-3 flex items-center justify-between">
-                <p className="text-sm text-gray-900">Zone</p>
-                <p className="text-base text-gray-900">
-                  {profile?.availability?.zones?.length > 0 ? "Assigned" : "Not assigned"}
-                </p>
-              </div>
+
               <div className="p-2 px-3 flex items-center justify-between">
                 <p className="text-sm text-gray-900">City</p>
                 <p className="text-base text-gray-900">
@@ -597,7 +600,7 @@ export default function ProfileDetails() {
               <div className="w-full align-center flex content-center justify-between">
                 <p className="text-sm text-gray-900 mb-1">Wallet Balance</p>
                 <p className="text-base text-gray-900">
-                  ₹{profile?.wallet?.balance?.toFixed(2) || "0.00"}
+                  ₹{walletBalance.toFixed(2)}
                 </p>
               </div>
             </div>

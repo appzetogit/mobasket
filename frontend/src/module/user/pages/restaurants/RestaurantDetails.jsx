@@ -4936,109 +4936,149 @@ export default function RestaurantDetails() {
 
                     {shouldShowSectionItems && filteredDirectItems.length > 0 && (
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 md:gap-6 md:py-2">
+                      <div className="grid grid-cols-1 md:grid-cols-3 md:gap-6 md:py-2">
 
-                          {filteredDirectItems.map((item) => {
+                        {filteredDirectItems.map((item) => {
 
-                              const quantity = quantities[item.id || item._id] || 0;
+                          const quantity = quantities[item.id || item._id] || 0;
 
-                              // Determine veg/non-veg based on foodType
+                          // Determine veg/non-veg based on foodType
 
-                              const isVeg = getItemDietType(item) === "veg";
-
-
-
-                              // Debug: Log preparationTime for troubleshooting
-
-                              if (item.preparationTime) {
-
-                                console.log(
-
-                                  `[FRONTEND] Item "${item.name}" preparationTime:`,
-
-                                  item.preparationTime,
-
-                                  "Type:",
-
-                                  typeof item.preparationTime,
-
-                                );
-
-                              }
+                          const isVeg = getItemDietType(item) === "veg";
 
 
 
-                              return (
+                          // Debug: Log preparationTime for troubleshooting
 
-                                <div
+                          if (item.preparationTime) {
 
-                                  key={item.id}
+                            console.log(
 
-                                  className={`flex gap-4 p-4 relative cursor-pointer border-b border-gray-100 last:border-none md:last:border md:border md:border-gray-200 dark:md:border-gray-800 md:rounded-2xl`}
+                              `[FRONTEND] Item "${item.name}" preparationTime:`,
 
-                                  onClick={() => handleItemClick(item)}
+                              item.preparationTime,
 
-                                >
+                              "Type:",
 
-                                  {/* Left Side - Details */}
+                              typeof item.preparationTime,
 
-                                  <div className="flex-1 min-w-0">
+                            );
 
-                                    {/* Veg Icon & Spicy Indicator */}
+                          }
 
-                                    <div className="flex items-center gap-2 mb-1">
 
-                                      {isVeg ? (
 
-                                        <div className="w-4 h-4 border-2 border-green-600 flex items-center justify-center rounded-sm flex-shrink-0">
+                          return (
 
-                                          <div className="w-2 h-2 bg-green-600 rounded-full"></div>
+                            <div
 
-                                        </div>
+                              key={item.id}
 
-                                      ) : (
+                              className={`flex gap-4 p-4 relative cursor-pointer border-b border-gray-100 last:border-none md:last:border md:border md:border-gray-200 dark:md:border-gray-800 md:rounded-2xl`}
 
-                                        <div className="w-4 h-4 border-2 border-orange-600 flex items-center justify-center rounded-sm flex-shrink-0">
+                              onClick={() => handleItemClick(item)}
 
-                                          <div className="w-2 h-2 bg-orange-600 rounded-full"></div>
+                            >
 
-                                        </div>
+                              {/* Left Side - Details */}
 
-                                      )}
+                              <div className="flex-1 min-w-0">
 
-                                      {item.isSpicy && (
+                                {/* Veg Icon & Spicy Indicator */}
 
-                                        <span className="text-red-500">🌶️</span>
+                                <div className="flex items-center gap-2 mb-1">
 
-                                      )}
+                                  {isVeg ? (
+
+                                    <div className="w-4 h-4 border-2 border-green-600 flex items-center justify-center rounded-sm flex-shrink-0">
+
+                                      <div className="w-2 h-2 bg-green-600 rounded-full"></div>
 
                                     </div>
 
+                                  ) : (
+
+                                    <div className="w-4 h-4 border-2 border-orange-600 flex items-center justify-center rounded-sm flex-shrink-0">
+
+                                      <div className="w-2 h-2 bg-orange-600 rounded-full"></div>
+
+                                    </div>
+
+                                  )}
+
+                                  {item.isSpicy && (
+
+                                    <span className="text-red-500">🌶️</span>
+
+                                  )}
+
+                                </div>
 
 
-                                    <h3 className="font-bold text-gray-800 dark:text-white text-lg leading-tight">
 
-                                      {item.name}
+                                <h3 className="font-bold text-gray-800 dark:text-white text-lg leading-tight">
 
-                                    </h3>
+                                  {item.name}
+
+                                </h3>
 
 
 
-                                    {/* Highly Reordered Progress Bar - Show if customisable */}
+                                {/* Highly Reordered Progress Bar - Show if customisable */}
 
-                                    {item.customisable && (
+                                {item.customisable && (
 
-                                      <div className="flex items-center gap-2 mt-1">
+                                  <div className="flex items-center gap-2 mt-1">
 
-                                        <div className="h-1.5 w-16 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                                    <div className="h-1.5 w-16 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
 
-                                          <div className="h-full bg-green-600 w-3/4"></div>
+                                      <div className="h-full bg-green-600 w-3/4"></div>
 
-                                        </div>
+                                    </div>
 
-                                        <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                                    <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
 
-                                          Highly reordered
+                                      Highly reordered
+
+                                    </span>
+
+                                  </div>
+
+                                )}
+
+
+
+                                <div className="flex items-center gap-3 mt-1">
+
+                                  <p className="font-semibold text-gray-900 dark:text-white">
+
+                                    ₹{Math.round(item.price)}
+
+                                  </p>
+
+                                  {/* Preparation Time - Show if available */}
+
+                                  {item.preparationTime &&
+
+                                    String(item.preparationTime).trim() && (
+
+                                      <div className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+
+                                        <Clock
+
+                                          size={12}
+
+                                          className="text-gray-500"
+
+                                        />
+
+                                        <span>
+
+                                          {String(
+
+                                            item.preparationTime,
+
+                                          ).trim()}
 
                                         </span>
 
@@ -5046,83 +5086,69 @@ export default function RestaurantDetails() {
 
                                     )}
 
-
-
-                                    <div className="flex items-center gap-3 mt-1">
-
-                                      <p className="font-semibold text-gray-900 dark:text-white">
-
-                                        ₹{Math.round(item.price)}
-
-                                      </p>
-
-                                      {/* Preparation Time - Show if available */}
-
-                                      {item.preparationTime &&
-
-                                        String(item.preparationTime).trim() && (
-
-                                          <div className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
-
-                                            <Clock
-
-                                              size={12}
-
-                                              className="text-gray-500"
-
-                                            />
-
-                                            <span>
-
-                                              {String(
-
-                                                item.preparationTime,
-
-                                              ).trim()}
-
-                                            </span>
-
-                                          </div>
-
-                                        )}
-
-                                    </div>
+                                </div>
 
 
 
-                                    {/* Description - Show if available */}
+                                {/* Description - Show if available */}
 
-                                    {item.description && (
+                                {item.description && (
 
-                                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+                                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
 
-                                        {item.description}
+                                    {item.description}
 
-                                      </p>
+                                  </p>
 
-                                    )}
+                                )}
 
 
 
-                                    {/* Action Buttons - Bookmark and Share */}
+                                {/* Action Buttons - Bookmark and Share */}
 
-                                    <div className="flex gap-4 mt-3">
+                                <div className="flex gap-4 mt-3">
 
-                                      <button
+                                  <button
 
-                                        type="button"
+                                    type="button"
 
-                                        onClick={(e) => {
+                                    onClick={(e) => {
 
-                                          e.preventDefault();
+                                      e.preventDefault();
 
-                                          e.stopPropagation();
+                                      e.stopPropagation();
 
-                                          handleBookmarkClick(item);
+                                      handleBookmarkClick(item);
 
-                                        }}
+                                    }}
 
-                                        className={`p-1.5 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${isDishFavorite(
+                                    className={`p-1.5 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${isDishFavorite(
+
+                                      item.id,
+
+                                      restaurant?.restaurantId ||
+
+                                      restaurant?._id ||
+
+                                      restaurant?.id,
+
+                                    )
+
+                                      ? "border-red-500 text-red-500 bg-red-50 dark:bg-red-900/20"
+
+                                      : "border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400"
+
+                                      }`}
+
+                                  >
+
+                                    <Bookmark
+
+                                      size={18}
+
+                                      className={
+
+                                        isDishFavorite(
 
                                           item.id,
 
@@ -5134,329 +5160,303 @@ export default function RestaurantDetails() {
 
                                         )
 
-                                          ? "border-red-500 text-red-500 bg-red-50 dark:bg-red-900/20"
+                                          ? "fill-red-500"
 
-                                          : "border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400"
-
-                                          }`}
-
-                                      >
-
-                                        <Bookmark
-
-                                          size={18}
-
-                                          className={
-
-                                            isDishFavorite(
-
-                                              item.id,
-
-                                              restaurant?.restaurantId ||
-
-                                              restaurant?._id ||
-
-                                              restaurant?.id,
-
-                                            )
-
-                                              ? "fill-red-500"
-
-                                              : ""
-
-                                          }
-
-                                        />
-
-                                      </button>
-
-                                      <button
-
-                                        onClick={(e) => {
-
-                                          e.preventDefault();
-
-                                          e.stopPropagation();
-
-                                          handleShareClick(item);
-
-                                        }}
-
-                                        className="p-1.5 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-
-                                      >
-
-                                        <Share2 size={18} />
-
-                                      </button>
-
-                                    </div>
-
-                                  </div>
-
-
-
-                                  {/* Right Side - Image and Add Button */}
-
-                                  <div className="relative w-32 h-32 flex-shrink-0">
-
-                                    {(() => {
-
-                                      const itemImages = getItemImages(item);
-
-                                      if (itemImages.length > 1) {
-
-                                        return (
-
-                                          <div className="grid grid-cols-2 gap-1 w-full h-full rounded-2xl overflow-hidden shadow-sm bg-white">
-
-                                            {itemImages.slice(0, 2).map((img, idx) => (
-
-                                              <img
-
-                                                key={`${item.id || item._id || item.name}-img-${idx}`}
-
-                                                src={img}
-
-                                                alt={`${item.name} ${idx + 1}`}
-
-                                                className="w-full h-full object-cover"
-
-                                              />
-
-                                            ))}
-
-                                          </div>
-
-                                        );
+                                          : ""
 
                                       }
 
+                                    />
 
+                                  </button>
 
-                                      if (itemImages.length === 1) {
+                                  <button
 
-                                        return (
+                                    onClick={(e) => {
 
-                                          <img
+                                      e.preventDefault();
 
-                                            src={itemImages[0]}
+                                      e.stopPropagation();
 
-                                            alt={item.name}
+                                      handleShareClick(item);
 
-                                            className="w-full h-full object-cover rounded-2xl shadow-sm"
+                                    }}
 
-                                          />
+                                    className="p-1.5 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
 
-                                        );
+                                  >
 
-                                      }
+                                    <Share2 size={18} />
 
-
-
-                                      return (
-
-                                        <div className="w-full h-full bg-gray-200 dark:bg-gray-700 rounded-2xl flex items-center justify-center">
-
-                                          <span className="text-xs text-gray-400">
-
-                                            No image
-
-                                          </span>
-
-                                        </div>
-
-                                      );
-
-                                    })()}
-
-                                    {quantity > 0 ? (
-
-                                      <motion.div
-
-                                        initial={{ opacity: 0, scale: 0.8 }}
-
-                                        animate={{ opacity: 1, scale: 1 }}
-
-                                        className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-4 py-1.5 rounded-lg shadow-md flex items-center gap-1 ${shouldShowGrayscale
-
-                                          ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
-
-                                          : "border-green-600 text-green-600 hover:bg-green-50"
-
-                                          }`}
-
-                                      >
-
-                                        <button
-
-                                          onClick={(e) => {
-
-                                            e.stopPropagation();
-
-                                            if (!shouldShowGrayscale) {
-
-                                              updateItemQuantity(
-
-                                                item,
-
-                                                Math.max(0, quantity - 1),
-
-                                                e,
-
-                                              );
-
-                                            }
-
-                                          }}
-
-                                          disabled={shouldShowGrayscale}
-
-                                          className={
-
-                                            shouldShowGrayscale
-
-                                              ? "text-gray-400 cursor-not-allowed"
-
-                                              : "text-green-600 hover:text-green-700"
-
-                                          }
-
-                                        >
-
-                                          <Minus size={14} />
-
-                                        </button>
-
-                                        <span
-
-                                          className={`mx-2 text-sm ${shouldShowGrayscale ? "text-gray-400" : ""}`}
-
-                                        >
-
-                                          {quantity}
-
-                                        </span>
-
-                                        <button
-
-                                          onClick={(e) => {
-
-                                            e.stopPropagation();
-
-                                            if (!shouldShowGrayscale) {
-
-                                              updateItemQuantity(
-
-                                                item,
-
-                                                quantity + 1,
-
-                                                e,
-
-                                              );
-
-                                            }
-
-                                          }}
-
-                                          disabled={shouldShowGrayscale}
-
-                                          className={
-
-                                            shouldShowGrayscale
-
-                                              ? "text-gray-400 cursor-not-allowed"
-
-                                              : "text-green-600 hover:text-green-700"
-
-                                          }
-
-                                        >
-
-                                          <Plus
-
-                                            size={14}
-
-                                            className="stroke-[3px]"
-
-                                          />
-
-                                        </button>
-
-                                      </motion.div>
-
-                                    ) : (
-
-                                      <motion.button
-
-                                        layoutId={`add-button-${item.id}`}
-
-                                        initial={{ opacity: 0, scale: 0.9 }}
-
-                                        animate={{ opacity: 1, scale: 1 }}
-
-                                        transition={{
-
-                                          duration: 0.3,
-
-                                          type: "spring",
-
-                                          damping: 20,
-
-                                          stiffness: 300,
-
-                                        }}
-
-                                        onClick={(e) => {
-
-                                          e.stopPropagation();
-
-                                          if (!shouldShowGrayscale) {
-
-                                            updateItemQuantity(item, 1, e);
-
-                                          }
-
-                                        }}
-
-                                        disabled={shouldShowGrayscale}
-
-                                        className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-6 py-1.5 rounded-lg shadow-md flex items-center gap-1 transition-colors ${shouldShowGrayscale
-
-                                          ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
-
-                                          : "border-green-600 text-green-600 hover:bg-green-50"
-
-                                          }`}
-
-                                      >
-
-                                        ADD{" "}
-
-                                        <Plus
-
-                                          size={14}
-
-                                          className="stroke-[3px]"
-
-                                        />
-
-                                      </motion.button>
-
-                                    )}
-
-                                  </div>
+                                  </button>
 
                                 </div>
 
-                              );
+                              </div>
 
-                            })}
 
-                        </div>
 
-                      )}
+                              {/* Right Side - Image and Add Button */}
+
+                              <div className="relative w-32 h-32 flex-shrink-0">
+
+                                {(() => {
+
+                                  const itemImages = getItemImages(item);
+
+                                  if (itemImages.length > 1) {
+
+                                    return (
+
+                                      <div className="grid grid-cols-2 gap-1 w-full h-full rounded-2xl overflow-hidden shadow-sm bg-white">
+
+                                        {itemImages.slice(0, 2).map((img, idx) => (
+
+                                          <img
+
+                                            key={`${item.id || item._id || item.name}-img-${idx}`}
+
+                                            src={img}
+
+                                            alt={`${item.name} ${idx + 1}`}
+
+                                            className="w-full h-full object-cover"
+
+                                          />
+
+                                        ))}
+
+                                      </div>
+
+                                    );
+
+                                  }
+
+
+
+                                  if (itemImages.length === 1) {
+
+                                    return (
+
+                                      <img
+
+                                        src={itemImages[0]}
+
+                                        alt={item.name}
+
+                                        className="w-full h-full object-cover rounded-2xl shadow-sm"
+
+                                      />
+
+                                    );
+
+                                  }
+
+
+
+                                  return (
+
+                                    <div className="w-full h-full bg-gray-200 dark:bg-gray-700 rounded-2xl flex items-center justify-center">
+
+                                      <span className="text-xs text-gray-400">
+
+                                        No image
+
+                                      </span>
+
+                                    </div>
+
+                                  );
+
+                                })()}
+
+                                {quantity > 0 ? (
+
+                                  <motion.div
+
+                                    initial={{ opacity: 0, scale: 0.8 }}
+
+                                    animate={{ opacity: 1, scale: 1 }}
+
+                                    className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-4 py-1.5 rounded-lg shadow-md flex items-center gap-1 ${shouldShowGrayscale
+
+                                      ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
+
+                                      : "border-green-600 text-green-600 hover:bg-green-50"
+
+                                      }`}
+
+                                  >
+
+                                    <button
+
+                                      onClick={(e) => {
+
+                                        e.stopPropagation();
+
+                                        if (!shouldShowGrayscale) {
+
+                                          updateItemQuantity(
+
+                                            item,
+
+                                            Math.max(0, quantity - 1),
+
+                                            e,
+
+                                          );
+
+                                        }
+
+                                      }}
+
+                                      disabled={shouldShowGrayscale}
+
+                                      className={
+
+                                        shouldShowGrayscale
+
+                                          ? "text-gray-400 cursor-not-allowed"
+
+                                          : "text-green-600 hover:text-green-700"
+
+                                      }
+
+                                    >
+
+                                      <Minus size={14} />
+
+                                    </button>
+
+                                    <span
+
+                                      className={`mx-2 text-sm ${shouldShowGrayscale ? "text-gray-400" : ""}`}
+
+                                    >
+
+                                      {quantity}
+
+                                    </span>
+
+                                    <button
+
+                                      onClick={(e) => {
+
+                                        e.stopPropagation();
+
+                                        if (!shouldShowGrayscale) {
+
+                                          updateItemQuantity(
+
+                                            item,
+
+                                            quantity + 1,
+
+                                            e,
+
+                                          );
+
+                                        }
+
+                                      }}
+
+                                      disabled={shouldShowGrayscale}
+
+                                      className={
+
+                                        shouldShowGrayscale
+
+                                          ? "text-gray-400 cursor-not-allowed"
+
+                                          : "text-green-600 hover:text-green-700"
+
+                                      }
+
+                                    >
+
+                                      <Plus
+
+                                        size={14}
+
+                                        className="stroke-[3px]"
+
+                                      />
+
+                                    </button>
+
+                                  </motion.div>
+
+                                ) : (
+
+                                  <motion.button
+
+                                    layoutId={`add-button-${item.id}`}
+
+                                    initial={{ opacity: 0, scale: 0.9 }}
+
+                                    animate={{ opacity: 1, scale: 1 }}
+
+                                    transition={{
+
+                                      duration: 0.3,
+
+                                      type: "spring",
+
+                                      damping: 20,
+
+                                      stiffness: 300,
+
+                                    }}
+
+                                    onClick={(e) => {
+
+                                      e.stopPropagation();
+
+                                      if (!shouldShowGrayscale) {
+
+                                        updateItemQuantity(item, 1, e);
+
+                                      }
+
+                                    }}
+
+                                    disabled={shouldShowGrayscale}
+
+                                    className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-6 py-1.5 rounded-lg shadow-md flex items-center gap-1 transition-colors ${shouldShowGrayscale
+
+                                      ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
+
+                                      : "border-green-600 text-green-600 hover:bg-green-50"
+
+                                      }`}
+
+                                  >
+
+                                    ADD{" "}
+
+                                    <Plus
+
+                                      size={14}
+
+                                      className="stroke-[3px]"
+
+                                    />
+
+                                  </motion.button>
+
+                                )}
+
+                              </div>
+
+                            </div>
+
+                          );
+
+                        })}
+
+                      </div>
+
+                    )}
 
 
 
@@ -7616,10 +7616,14 @@ export default function RestaurantDetails() {
 
                       </button>
 
-                      <button className="h-10 w-10 rounded-full border border-white dark:border-gray-800 bg-white/90 dark:bg-[#1a1a1a]/90 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-[#2a2a2a] flex items-center justify-center transition-colors">
-
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleShareClick(selectedItem);
+                        }}
+                        className="h-10 w-10 rounded-full border border-white dark:border-gray-800 bg-white/90 dark:bg-[#1a1a1a]/90 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-[#2a2a2a] flex items-center justify-center transition-colors"
+                      >
                         <Share2 className="h-5 w-5" />
-
                       </button>
 
                     </div>
@@ -7710,10 +7714,14 @@ export default function RestaurantDetails() {
 
                         </button>
 
-                        <button className="h-8 w-8 rounded-full border border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 flex items-center justify-center transition-colors">
-
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleShareClick(selectedItem);
+                          }}
+                          className="h-8 w-8 rounded-full border border-gray-300 dark:border-gray-700 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 flex items-center justify-center transition-colors"
+                        >
                           <Share2 className="h-4 w-4" />
-
                         </button>
 
                       </div>

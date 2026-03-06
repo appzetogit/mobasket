@@ -21,7 +21,7 @@ export function decodeToken(token) {
     const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
     const padding = "=".repeat((4 - (base64.length % 4)) % 4);
     const decoded = JSON.parse(atob(base64 + padding));
-    
+
     return decoded;
   } catch (error) {
     console.error('Error decoding token:', error);
@@ -47,7 +47,7 @@ export function getRoleFromToken(token) {
 export function isTokenExpired(token) {
   const decoded = decodeToken(token);
   if (!decoded || !decoded.exp) return true;
-  
+
   // exp is in seconds, Date.now() is in milliseconds
   return decoded.exp * 1000 < Date.now();
 }
@@ -98,16 +98,16 @@ export function getCurrentUserRole(module = null) {
   if (module) {
     const token = getModuleToken(module);
     if (!token) return null;
-    
+
     if (isTokenExpired(token)) {
       // Token expired, clear it
       clearModuleAuth(module);
       return null;
     }
-    
+
     return getRoleFromToken(token);
   }
-  
+
   // Legacy: check all modules and return the first valid role found
   // This is for backward compatibility but should be avoided
   const modules = ['user', 'restaurant', 'delivery', 'admin', 'grocery-store'];
@@ -117,7 +117,7 @@ export function getCurrentUserRole(module = null) {
       return getRoleFromToken(token);
     }
   }
-  
+
   return null;
 }
 
@@ -133,7 +133,7 @@ export function isModuleAuthenticated(module) {
     // Allow refresh-only sessions; interceptors/guards can issue silent refresh.
     return hasRefreshToken;
   }
-  
+
   if (isTokenExpired(token)) {
     // Keep session alive if a refresh token exists; axios/route guards can refresh access token lazily.
     if (!hasRefreshToken) {
@@ -142,7 +142,7 @@ export function isModuleAuthenticated(module) {
     }
     return true;
   }
-  
+
   return true;
 }
 
@@ -255,7 +255,7 @@ export function setAuthData(module, token, user, refreshToken) {
     // Verify the token was stored correctly
     const storedToken = localStorage.getItem(tokenKey);
     const storedAuth = localStorage.getItem(authKey);
-    
+
     if (storedToken !== token) {
       console.error(`[setAuthData] Token mismatch:`, {
         expected: token?.substring(0, 20) + '...',
@@ -287,7 +287,7 @@ export function setAuthData(module, token, user, refreshToken) {
         if (user) {
           localStorage.setItem(`${module}_user`, JSON.stringify(user));
         }
-        
+
         // Verify again after retry
         const storedToken = localStorage.getItem(`${module}_accessToken`);
         if (storedToken !== token) {
@@ -303,6 +303,26 @@ export function setAuthData(module, token, user, refreshToken) {
     }
   }
 }
+/**
+ * Clear all delivery-related authentication and session data
+ */
+export function clearDeliverySignupSession() {
+  // Clear localStorage auth data
+  clearModuleAuth("delivery");
 
+  // Clear all delivery signup drafts from sessionStorage
+  try {
+    const keys = Object.keys(sessionStorage);
+    keys.forEach(key => {
+      if (key.startsWith('delivery_signup_step') ||
+        key.includes('deliveryAuthData')) {
+        sessionStorage.removeItem(key);
+      }
+    });
 
-
+    // Also clear module-specific drafts if any
+    sessionStorage.removeItem('deliveryAuthData');
+  } catch (error) {
+    console.error("Error clearing delivery signup session:", error);
+  }
+}

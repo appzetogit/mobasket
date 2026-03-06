@@ -26,7 +26,7 @@ export default function DeliveryOTP() {
     // Only redirect if token exists and is valid - don't redirect during OTP flow
     const token = localStorage.getItem("delivery_accessToken")
     const authenticated = localStorage.getItem("delivery_authenticated") === "true"
-    
+
     // Only redirect if both token and authenticated flag exist (user is fully logged in)
     if (token && authenticated) {
       // Check if token is not expired
@@ -35,8 +35,19 @@ export default function DeliveryOTP() {
         if (parts.length === 3) {
           const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')))
           const now = Math.floor(Date.now() / 1000)
-          // If token is valid and not expired, redirect to home
+
+          // If token is valid and not expired
           if (payload.exp && payload.exp > now) {
+            // Also check status from localStorage user object
+            const rawUser = localStorage.getItem("delivery_user")
+            if (rawUser) {
+              const user = JSON.parse(rawUser)
+              if (user.status === "onboarding") {
+                navigate("/delivery/signup/details", { replace: true })
+                return
+              }
+            }
+
             navigate("/delivery", { replace: true })
             return
           }
@@ -158,7 +169,7 @@ export default function DeliveryOTP() {
     if (!showNameInput && digits.length === 6) {
       handleVerify(newOtp.join(""))
       return
-    } 
+    }
     inputRefs.current[digits.length]?.focus()
   }
 
@@ -169,7 +180,7 @@ export default function DeliveryOTP() {
     }
 
     const code = otpValue || otp.join("")
-    
+
     if (code.length !== 6) {
       return
     }
@@ -260,13 +271,21 @@ export default function DeliveryOTP() {
       const verifyAndNavigate = () => {
         const storedToken = localStorage.getItem("delivery_accessToken")
         const storedAuth = localStorage.getItem("delivery_authenticated")
-        
+
         console.log("Verifying token storage:", { hasToken: !!storedToken, authenticated: storedAuth, retryCount })
-        
+
         if (storedToken && storedAuth === "true") {
-          // Token is stored, navigate to delivery home
-          console.log("Token verified, navigating to /delivery")
-          navigate("/delivery", { replace: true })
+          // Check user status for redirection
+          const rawUser = localStorage.getItem("delivery_user")
+          const user = rawUser ? JSON.parse(rawUser) : {}
+
+          if (user.status === "onboarding") {
+            console.log("Token verified, user is onboarding, navigating to /delivery/signup/details")
+            navigate("/delivery/signup/details", { replace: true })
+          } else {
+            console.log("Token verified, navigating to /delivery")
+            navigate("/delivery", { replace: true })
+          }
         } else if (retryCount < maxRetries) {
           // Token not stored yet, retry after short delay
           retryCount++
@@ -356,9 +375,9 @@ export default function DeliveryOTP() {
       const verifyAndNavigate = () => {
         const storedToken = localStorage.getItem("delivery_accessToken")
         const storedAuth = localStorage.getItem("delivery_authenticated")
-        
+
         console.log("Verifying token storage (with name):", { hasToken: !!storedToken, authenticated: storedAuth, retryCount })
-        
+
         if (storedToken && storedAuth === "true") {
           // Token is stored, navigate to delivery home
           console.log("Token verified, navigating to /delivery")
@@ -468,7 +487,7 @@ export default function DeliveryOTP() {
           <ArrowLeft className="h-5 w-5 text-black" />
         </button>
         <h1 className="text-lg font-bold text-black">OTP Verification</h1>
-      </div> 
+      </div>
 
       {/* Main Content */}
       <div className="flex flex-col justify-center px-6 pt-8 pb-12">
@@ -556,9 +575,8 @@ export default function DeliveryOTP() {
                   }}
                   disabled={isLoading}
                   placeholder="Enter your name"
-                  className={`h-11 border ${
-                    nameError ? "border-red-500" : "border-gray-300"
-                  }`}
+                  className={`h-11 border ${nameError ? "border-red-500" : "border-gray-300"
+                    }`}
                 />
                 {nameError && (
                   <p className="text-xs text-red-500 text-left">
