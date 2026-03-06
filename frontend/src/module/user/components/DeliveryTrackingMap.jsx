@@ -74,8 +74,17 @@ const DeliveryTrackingMap = ({
     ) {
       return firebaseCustomerCoords;
     }
+
+    if (
+      customerCoords &&
+      typeof customerCoords.lat === 'number' &&
+      typeof customerCoords.lng === 'number'
+    ) {
+      return customerCoords;
+    }
+
     return null;
-  }, [firebaseCustomerCoords]);
+  }, [firebaseCustomerCoords, customerCoords]);
 
   const renderPolylinePath = useCallback((points, isCustomerLeg = false) => {
     if (!mapInstance.current || !window.google?.maps || !Array.isArray(points) || points.length === 0) {

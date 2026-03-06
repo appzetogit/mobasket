@@ -74,6 +74,7 @@ const GroceryPage = () => {
   const [groceryStores, setGroceryStores] = useState([]);
   const [hasActiveGroceryStore, setHasActiveGroceryStore] = useState(true);
   const [activeGroceryOrder, setActiveGroceryOrder] = useState(null);
+  const [dismissedOrderTrackerFor, setDismissedOrderTrackerFor] = useState("");
   const orderSnapshotRef = useRef(new Map());
   const hasSeededOrderSnapshotRef = useRef(false);
   const zoneRecoveryAttemptedRef = useRef(false);
@@ -355,6 +356,10 @@ const GroceryPage = () => {
     () => (activeGroceryOrder ? getOrderTrackerMeta(activeGroceryOrder) : null),
     [activeGroceryOrder]
   );
+  const activeOrderTrackerKey = String(activeGroceryOrder?.orderId || activeGroceryOrder?._id || "");
+  const isOrderTrackerVisible =
+    Boolean(activeGroceryOrder && activeOrderMeta && !isMoGroceryPlanOrder(activeGroceryOrder)) &&
+    dismissedOrderTrackerFor !== activeOrderTrackerKey;
 
   // Snow effect timer
   useEffect(() => {
@@ -2242,7 +2247,7 @@ const GroceryPage = () => {
       )}
 
       {/* --- 8. BOTTOM FLOATING OFFER --- */}
-      {activeGroceryOrder && activeOrderMeta && !isMoGroceryPlanOrder(activeGroceryOrder) && (
+      {isOrderTrackerVisible && (
         <motion.div
           initial={{ opacity: 0, y: 30, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -2257,9 +2262,19 @@ const GroceryPage = () => {
                 </div>
                 <p className="text-[11px] font-black uppercase tracking-wide text-[#7b1f30]">Live Order Updates</p>
               </div>
-              <span className={`text-[10px] px-2 py-1 rounded-full border font-bold ${activeOrderMeta.chipClass}`}>
-                {activeOrderMeta.label}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className={`text-[10px] px-2 py-1 rounded-full border font-bold ${activeOrderMeta.chipClass}`}>
+                  {activeOrderMeta.label}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Close order updates"
+                  onClick={() => setDismissedOrderTrackerFor(activeOrderTrackerKey)}
+                  className="w-6 h-6 rounded-full border border-[#efc5c9] bg-white/80 text-[#9a4b56] flex items-center justify-center hover:bg-white"
+                >
+                  <X size={12} />
+                </button>
+              </div>
             </div>
 
             <div className="px-4 pb-3">

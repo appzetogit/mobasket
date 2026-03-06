@@ -527,7 +527,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       await emitOrderClaimedToOtherPartners(order, currentDeliveryId, order.assignmentInfo || {});
     } else if (orderDeliveryPartnerId !== currentDeliveryId) {
       console.error(`❌ Order ${order.orderId} is assigned to ${orderDeliveryPartnerId}, but current delivery partner is ${currentDeliveryId}`);
-      return errorResponse(res, 403, 'Order is assigned to another delivery partner');
+      return errorResponse(res, 409, 'Order was accepted by another delivery partner.');
     } else {
       console.log(`✅ Order ${order.orderId} is already assigned to current delivery partner`);
     }
@@ -844,6 +844,9 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         orderMongoId,
         {
           $set: {
+            'assignmentInfo.deliveryPartnerId': String(delivery._id),
+            'assignmentInfo.assignedBy': 'delivery_accept',
+            'assignmentInfo.assignedAt': new Date(),
             'deliveryState.status': 'accepted',
             'deliveryState.acceptedAt': new Date(),
             'deliveryState.currentPhase': 'en_route_to_pickup',

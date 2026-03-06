@@ -32,6 +32,20 @@ const getOrderModificationWindow = (order) => {
 };
 
 const getRestaurantIdsByPlatform = async (platform) => {
+  if (platform === 'mogrocery') {
+    const GroceryStore = (await import('../../grocery/models/GroceryStore.js')).default;
+    const stores = await GroceryStore.find({})
+      .select('_id restaurantId')
+      .lean();
+
+    return [...new Set(stores.flatMap((store) => {
+      const ids = [];
+      if (store?._id) ids.push(store._id.toString());
+      if (store?.restaurantId) ids.push(String(store.restaurantId));
+      return ids;
+    }))];
+  }
+
   const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
   const restaurants = await Restaurant.find({ platform })
     .select('_id restaurantId')
@@ -218,7 +232,8 @@ export const getOrders = asyncHandler(async (req, res) => {
     if (restaurant && restaurant !== 'All restaurants') {
       // Try to find restaurant by name or ID
       const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
-      const restaurantSearchQuery = {
+      const GroceryStore = (await import('../../grocery/models/GroceryStore.js')).default;
+      const baseSearchQuery = {
         $or: [
           { name: { $regex: restaurant, $options: 'i' } },
           { _id: mongoose.Types.ObjectId.isValid(restaurant) ? restaurant : null },
@@ -226,13 +241,15 @@ export const getOrders = asyncHandler(async (req, res) => {
         ]
       };
 
-      if (normalizedPlatform) {
-        restaurantSearchQuery.platform = normalizedPlatform;
-      }
-
-      const restaurantDoc = await Restaurant.findOne(restaurantSearchQuery)
-        .select('_id restaurantId')
-        .lean();
+      const restaurantDoc = normalizedPlatform === 'mogrocery'
+        ? await GroceryStore.findOne(baseSearchQuery).select('_id restaurantId').lean()
+        : await Restaurant.findOne(
+            normalizedPlatform
+              ? { ...baseSearchQuery, platform: normalizedPlatform }
+              : baseSearchQuery
+          )
+            .select('_id restaurantId')
+            .lean();
 
       if (restaurantDoc) {
         const selectedRestaurantId = restaurantDoc._id?.toString() || String(restaurantDoc.restaurantId || '');
