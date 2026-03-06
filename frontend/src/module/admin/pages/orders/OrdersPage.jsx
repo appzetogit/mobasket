@@ -237,6 +237,34 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
     }
   }
 
+  const handleDeleteOrder = async (order) => {
+    const orderIdToUse = order.id || order._id || order.orderId
+    if (!orderIdToUse) {
+      toast.error("Order ID not found")
+      return
+    }
+
+    const confirmDelete = window.confirm(
+      `Delete order ${order.orderId || orderIdToUse} permanently?\n\nThis will remove it from admin and delivery screens as well.`
+    )
+    if (!confirmDelete) return
+
+    try {
+      await adminAPI.deleteOrder(orderIdToUse)
+      toast.success(`Order ${order.orderId || orderIdToUse} deleted`)
+      setOrders((prevOrders) =>
+        prevOrders.filter(
+          (currentOrder) =>
+            (currentOrder.id || currentOrder._id || currentOrder.orderId) !== orderIdToUse
+        )
+      )
+      setTotalCount((prev) => Math.max(0, prev - 1))
+    } catch (error) {
+      console.error("Error deleting order:", error)
+      toast.error(error?.response?.data?.message || "Failed to delete order")
+    }
+  }
+
   const handleShowRiderDetails = async (order) => {
     const orderIdToUse = order.id || order._id || order.orderId
     if (!orderIdToUse) {
@@ -536,6 +564,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         onResendRiderNotification={handleResendRiderNotification}
         onShowRiderDetails={handleShowRiderDetails}
         onCancelOrder={handleCancelApprovedOrder}
+        onDeleteOrder={handleDeleteOrder}
         isGrocery={activePlatform === "mogrocery"}
       />
     </div>

@@ -1461,6 +1461,9 @@ export const adminAPI = {
       params: { ...params, platform: params.platform || getAdminPlatform() }
     });
   },
+  deleteOrder: (orderId) => {
+    return apiClient.delete(`${API_ENDPOINTS.ADMIN.ORDERS}/${encodeURIComponent(orderId)}`);
+  },
 
   // Get orders searching for deliveryman
   getSearchingDeliverymanOrders: (params = {}) => {

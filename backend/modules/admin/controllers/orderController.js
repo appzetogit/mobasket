@@ -3,6 +3,11 @@ import { successResponse, errorResponse } from '../../../shared/utils/response.j
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 import { restoreGroceryStockForOrder } from '../../order/services/groceryStockService.js';
 import mongoose from 'mongoose';
+import OrderEvent from '../../order/models/OrderEvent.js';
+import ETALog from '../../order/models/ETALog.js';
+import OrderSettlement from '../../order/models/OrderSettlement.js';
+import Payment from '../../payment/models/Payment.js';
+import AuditLog from '../models/AuditLog.js';
 
 const normalizePlatform = (value) => (value === 'mogrocery' ? 'mogrocery' : 'mofood');
 
@@ -66,6 +71,15 @@ const getRestaurantIdsByPlatform = async (platform) => {
     if (restaurant?.restaurantId) ids.push(String(restaurant.restaurantId));
     return ids;
   }))];
+};
+
+const findOrderByAdminIdentifier = async (id, session = null) => {
+  if (mongoose.Types.ObjectId.isValid(id)) {
+    const order = await Order.findById(id).session(session);
+    if (order) return order;
+  }
+
+  return Order.findOne({ orderId: id }).session(session);
 };
 
 /**
@@ -606,6 +620,76 @@ export const getOrders = asyncHandler(async (req, res) => {
   } catch (error) {
     console.error('Error fetching admin orders:', error);
     return errorResponse(res, 500, 'Failed to fetch orders');
+  }
+});
+
+/**
+ * DELETE /api/admin/orders/:id
+ * Permanently remove an order and linked records.
+ */
+export const deleteOrderPermanently = asyncHandler(async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    const orderIdentifier = String(req.params.id || '').trim();
+    if (!orderIdentifier) {
+      return errorResponse(res, 400, 'Order ID is required');
+    }
+
+    let deletedOrder = null;
+
+    await session.withTransaction(async () => {
+      const order = await findOrderByAdminIdentifier(orderIdentifier, session);
+
+      if (!order) {
+        throw new Error('ORDER_NOT_FOUND');
+      }
+
+      const isGroceryOrder =
+        String(order.restaurantPlatform || order.platform || '').toLowerCase() === 'mogrocery';
+      const groceryStockWasReduced = Boolean(order.stockSync?.grocery?.reduced);
+      const groceryStockAlreadyRestored = Boolean(order.stockSync?.grocery?.restored);
+
+      if (
+        isGroceryOrder &&
+        groceryStockWasReduced &&
+        !groceryStockAlreadyRestored &&
+        order.status !== 'delivered'
+      ) {
+        await restoreGroceryStockForOrder(order);
+      }
+
+      const orderId = order._id;
+
+      await Promise.all([
+        Payment.deleteMany({ orderId }, { session }),
+        OrderSettlement.deleteMany({ orderId }, { session }),
+        OrderEvent.deleteMany({ orderId }, { session }),
+        ETALog.deleteMany({ orderId }, { session }),
+        AuditLog.deleteMany({ orderId }, { session }),
+      ]);
+
+      await Order.deleteOne({ _id: orderId }, { session });
+      deletedOrder = order;
+    });
+
+    if (!deletedOrder) {
+      return errorResponse(res, 404, 'Order not found');
+    }
+
+    return successResponse(res, 200, 'Order deleted permanently', {
+      orderId: deletedOrder.orderId,
+      id: deletedOrder._id,
+    });
+  } catch (error) {
+    if (error?.message === 'ORDER_NOT_FOUND') {
+      return errorResponse(res, 404, 'Order not found');
+    }
+
+    console.error('Error deleting order permanently:', error);
+    return errorResponse(res, 500, 'Failed to delete order');
+  } finally {
+    await session.endSession();
   }
 });
 

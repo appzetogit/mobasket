@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react"
-import { Eye, Printer, ArrowUpDown, ArrowUp, ArrowDown, Loader2, CheckCircle2, XCircle, BellRing, Info } from "lucide-react"
+import { Eye, Printer, ArrowUpDown, ArrowUp, ArrowDown, Loader2, CheckCircle2, XCircle, BellRing, Info, Trash2 } from "lucide-react"
 
 const getStatusColor = (orderStatus, isGrocery = false) => {
   // Grocery (Blinkit-style) status colors
@@ -84,6 +84,7 @@ export default function OrdersTable({
   onResendRiderNotification,
   onShowRiderDetails,
   onCancelOrder,
+  onDeleteOrder,
   isGrocery = false,
 }) {
   const [currentPage, setCurrentPage] = useState(1)
@@ -563,6 +564,15 @@ export default function OrdersTable({
                             <Info className="w-4 h-4" />
                           </button>
                         )}
+                      {isGrocery && typeof onDeleteOrder === "function" && (
+                        <button
+                          onClick={() => onDeleteOrder(order)}
+                          className="p-1.5 rounded text-red-700 hover:bg-red-50 transition-colors"
+                          title="Delete Order Permanently"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                       {/* Show Refund button or Refunded status for cancelled orders with Online/Wallet payment (restaurant or user cancelled) */}
                       {(() => {
                         // Check if order is cancelled by restaurant or user
