@@ -79,7 +79,21 @@ const findStoreWithLegacyFallback = async (filter, projection = null) => {
   return store;
 };
 
+const getRequestedPlatform = (body = {}) => String(body?.platform || '').trim().toLowerCase();
+
+const rejectIfRestaurantPlatformRequest = (req, res) => {
+  if (!getRequestedPlatform(req?.body)) return false;
+  if (getRequestedPlatform(req?.body) === 'mogrocery') return false;
+  errorResponse(
+    res,
+    400,
+    'Use restaurant auth endpoints for mofood accounts (/api/restaurant/auth/*).'
+  );
+  return true;
+};
+
 export const sendOTP = asyncHandler(async (req, res) => {
+  if (rejectIfRestaurantPlatformRequest(req, res)) return;
   const { phone, email, purpose = 'login' } = req.body;
 
   if (!phone && !email) {
@@ -119,6 +133,7 @@ export const sendOTP = asyncHandler(async (req, res) => {
 });
 
 export const verifyOTP = asyncHandler(async (req, res) => {
+  if (rejectIfRestaurantPlatformRequest(req, res)) return;
   const { phone, email, otp, purpose = 'login', name, password } = req.body;
   const fcmPatch = getFcmPatchFromBody(req.body);
 
@@ -236,6 +251,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 });
 
 export const register = asyncHandler(async (req, res) => {
+  if (rejectIfRestaurantPlatformRequest(req, res)) return;
   const { name, email, password, phone, ownerName, ownerEmail, ownerPhone } = req.body;
   const fcmPatch = getFcmPatchFromBody(req.body);
 
@@ -301,6 +317,7 @@ export const register = asyncHandler(async (req, res) => {
 });
 
 export const login = asyncHandler(async (req, res) => {
+  if (rejectIfRestaurantPlatformRequest(req, res)) return;
   const { email, password } = req.body;
   const fcmPatch = getFcmPatchFromBody(req.body);
 
@@ -361,6 +378,7 @@ export const login = asyncHandler(async (req, res) => {
 });
 
 export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
+  if (rejectIfRestaurantPlatformRequest(req, res)) return;
   const { idToken } = req.body;
   const fcmPatch = getFcmPatchFromBody(req.body);
 

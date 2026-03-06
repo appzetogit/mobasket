@@ -102,6 +102,78 @@ import {
 
 } from "../../utils/orderEditSession";
 
+const normalizeSlugLike = (value = "") =>
+  String(value || "")
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+const toCompactSlug = (value = "") => normalizeSlugLike(value).replace(/-/g, "");
+
+const levenshteinDistance = (a = "", b = "") => {
+  const left = String(a);
+  const right = String(b);
+  const rows = left.length + 1;
+  const cols = right.length + 1;
+  const matrix = Array.from({ length: rows }, () => Array(cols).fill(0));
+
+  for (let i = 0; i < rows; i += 1) matrix[i][0] = i;
+  for (let j = 0; j < cols; j += 1) matrix[0][j] = j;
+
+  for (let i = 1; i < rows; i += 1) {
+    for (let j = 1; j < cols; j += 1) {
+      const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+
+  return matrix[rows - 1][cols - 1];
+};
+
+const findRestaurantByFlexibleSlug = (restaurants = [], rawSlug = "") => {
+  const targetSlug = normalizeSlugLike(rawSlug);
+  const targetCompact = toCompactSlug(rawSlug);
+  if (!targetSlug) return null;
+
+  const exact = restaurants.find((restaurant) => {
+    const restaurantSlug = normalizeSlugLike(restaurant?.slug || "");
+    const derivedSlug = normalizeSlugLike(restaurant?.name || "");
+    return (
+      restaurantSlug === targetSlug ||
+      derivedSlug === targetSlug ||
+      toCompactSlug(restaurantSlug) === targetCompact ||
+      toCompactSlug(derivedSlug) === targetCompact
+    );
+  });
+  if (exact) return exact;
+
+  let best = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  restaurants.forEach((restaurant) => {
+    const candidates = [
+      normalizeSlugLike(restaurant?.slug || ""),
+      normalizeSlugLike(restaurant?.name || ""),
+    ].filter(Boolean);
+    candidates.forEach((candidate) => {
+      const score = Math.min(
+        levenshteinDistance(targetSlug, candidate),
+        levenshteinDistance(targetCompact, toCompactSlug(candidate))
+      );
+      if (score < bestScore) {
+        bestScore = score;
+        best = restaurant;
+      }
+    });
+  });
+
+  return bestScore <= 2 ? best : null;
+};
+
 
 
 export default function RestaurantDetails() {

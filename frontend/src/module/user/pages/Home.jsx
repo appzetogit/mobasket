@@ -393,6 +393,78 @@ export default function Home() {
     return /(cover|banner|store|restaurant|profile|logo|outlet|shop)/.test(src);
   };
 
+  const extractImageUrl = (value) => {
+    if (!value) return "";
+    if (typeof value === "string") {
+      return isLikelyImageUrl(value) ? value : "";
+    }
+    if (typeof value !== "object") return "";
+
+    const candidates = [
+      value.url,
+      value.imageUrl,
+      value.image,
+      value.src,
+      value.secure_url,
+      value.publicUrl,
+      value.path,
+      value.profileImage?.url,
+      value.profileImage,
+    ];
+
+    for (const candidate of candidates) {
+      if (typeof candidate === "string" && isLikelyImageUrl(candidate)) {
+        return candidate;
+      }
+    }
+    return "";
+  };
+
+  const extractRestaurantImages = (restaurant = {}) => {
+    const pushIfValid = (list, value) => {
+      const url = extractImageUrl(value);
+      if (url) list.push(url);
+    };
+
+    const storefront = [];
+    const all = [];
+
+    (restaurant.coverImages || []).forEach((entry) => {
+      const url = extractImageUrl(entry);
+      if (!url) return;
+      all.push(url);
+      if (isStorefrontLikeImage(url)) storefront.push(url);
+    });
+
+    (restaurant.menuImages || []).forEach((entry) => {
+      const url = extractImageUrl(entry);
+      if (!url) return;
+      all.push(url);
+    });
+
+    (restaurant.onboarding?.step2?.menuImageUrls || []).forEach((entry) => {
+      const url = extractImageUrl(entry);
+      if (!url) return;
+      all.push(url);
+    });
+
+    pushIfValid(storefront, restaurant.profileImage?.url);
+    pushIfValid(storefront, restaurant.profileImage);
+    pushIfValid(storefront, restaurant.onboarding?.step2?.profileImageUrl?.url);
+    pushIfValid(storefront, restaurant.imageUrl);
+    pushIfValid(storefront, restaurant.image);
+    pushIfValid(storefront, restaurant.logo);
+    pushIfValid(storefront, restaurant.thumbnail);
+
+    storefront.forEach((url) => all.push(url));
+
+    const dedupe = (arr) => Array.from(new Set(arr.filter(Boolean)));
+    return {
+      storefront: dedupe(storefront),
+      all: dedupe(all),
+    };
+  };
+
   // Swipe functionality for hero banner carousel
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
@@ -1025,40 +1097,18 @@ export default function Home() {
                   ? restaurant.cuisines[0]
                   : "Multi-cuisine";
 
-              // Get cover images (separate from menu images) for carousel
-              const coverImages =
-                restaurant.coverImages && restaurant.coverImages.length > 0
-                  ? restaurant.coverImages.map((img) => img.url || img)
-                  : [];
-
-              // Fallback to menuImages only if coverImages don't exist (for backward compatibility)
-              const fallbackImages =
-                restaurant.menuImages && restaurant.menuImages.length > 0
-                  ? restaurant.menuImages
-                    .map((img) => img?.url || img)
-                    .filter((img) => isLikelyImageUrl(img))
-                  : [];
-
-              const fallbackSeed =
-                restaurant.slug ||
-                restaurant.restaurantId ||
-                restaurant._id ||
-                restaurant.name ||
-                index;
-              const seededFallbackImages = fallbackImageGalleryBySeed(fallbackSeed, 3);
-
-              // Use cover images first, then fallback to menu images, then profile image, then seeded placeholders
+              const extractedImages = extractRestaurantImages(restaurant);
+              const coverImages = extractedImages.storefront;
+              const fallbackImages = extractedImages.all;
               const allImages =
                 coverImages.length > 0
                   ? coverImages
                   : fallbackImages.length > 0
                     ? fallbackImages
-                    : restaurant.profileImage?.url
-                      ? [restaurant.profileImage.url]
-                      : seededFallbackImages;
+                    : [];
 
               // Keep single image for backward compatibility
-              const image = allImages[0];
+              const image = allImages[0] || "";
               const rawRating =
                 restaurant?.rating ??
                 restaurant?.averageRating ??
@@ -2117,15 +2167,25 @@ export default function Home() {
                     >
                       <div className="flex flex-col items-center gap-2 w-[74px] sm:w-[92px] md:w-[104px]">
                         <div className="w-14 h-14 sm:w-[72px] sm:h-[72px] md:w-20 md:h-20 rounded-full overflow-hidden shadow-sm transition-all border border-gray-100 dark:border-gray-800 bg-white">
-                          <img
-                            src={sanitizeImageSrc(restaurant.image, restaurant.slug || restaurant.id || restaurant.name)}
-                            alt={restaurant.name}
-                            className="w-full h-full bg-white rounded-full object-cover"
-                            onError={(e) => {
-                              e.currentTarget.src = fallbackImageBySeed(restaurant.slug || restaurant.id || restaurant.name);
-                            }}
-                            loading="lazy"
-                          />
+                          {isLikelyImageUrl(restaurant.image) ? (
+                            <img
+                              src={restaurant.image}
+                              alt={restaurant.name}
+                              className="w-full h-full bg-white rounded-full object-cover"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none";
+                                const fallbackEl = e.currentTarget.nextElementSibling;
+                                if (fallbackEl) fallbackEl.style.display = "flex";
+                              }}
+                              loading="lazy"
+                            />
+                          ) : null}
+                          <div
+                            className="w-full h-full rounded-full bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 items-center justify-center"
+                            style={{ display: isLikelyImageUrl(restaurant.image) ? "none" : "flex" }}
+                          >
+                            <Store className="w-5 h-5 sm:w-6 sm:h-6" />
+                          </div>
                         </div>
                         <span className="text-xs sm:text-sm font-semibold text-gray-800 dark:text-gray-200 text-center leading-tight line-clamp-1 w-full px-1">
                           {restaurant.name}

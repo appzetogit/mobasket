@@ -51,6 +51,13 @@ export const updateOnboarding = asyncHandler(async (req, res) => {
     const storeId = req.store._id;
     const { storeImage, additionalImages, completedSteps } = req.body;
 
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'platform')) {
+      const requestedPlatform = String(req.body.platform || '').trim().toLowerCase();
+      if (requestedPlatform && requestedPlatform !== 'mogrocery') {
+        return errorResponse(res, 400, 'Platform cannot be changed from grocery store onboarding.');
+      }
+    }
+
     const update = {};
 
     if (storeImage !== undefined) {

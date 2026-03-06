@@ -93,11 +93,11 @@ export const getOnboarding = async (req, res) => {
 export const upsertOnboarding = async (req, res) => {
   try {
     const restaurantId = req.restaurant._id;
-    const { step1, step2, step3, step4, completedSteps, platform } = req.body;
+    const { step1, step2, step3, step4, completedSteps } = req.body;
 
-    // Set store type (grocery vs restaurant) when chosen at onboarding start
-    if (platform === 'mogrocery' || platform === 'mofood') {
-      await Restaurant.findByIdAndUpdate(restaurantId, { $set: { platform } });
+    // Keep model boundaries strict: restaurant onboarding cannot switch platform.
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'platform')) {
+      return errorResponse(res, 400, 'Platform cannot be changed from restaurant onboarding.');
     }
 
     // Get existing restaurant data to merge if needed

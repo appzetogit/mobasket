@@ -1,6 +1,7 @@
 import GroceryStore from '../models/GroceryStore.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import Order from '../../order/models/Order.js';
+import GroceryProduct from '../models/GroceryProduct.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
@@ -23,8 +24,17 @@ const buildStoreSearchOr = (search = '') => ([
   { email: { $regex: search, $options: 'i' } }
 ]);
 
+let lastLegacyHydrationAt = 0;
+const LEGACY_HYDRATION_COOLDOWN_MS = 60 * 1000;
+
 const hydrateMissingLegacyGroceryStores = async ({ search, status }) => {
   try {
+    const now = Date.now();
+    const shouldThrottleHydration = !search && !status && (now - lastLegacyHydrationAt) < LEGACY_HYDRATION_COOLDOWN_MS;
+    if (shouldThrottleHydration) {
+      return;
+    }
+
     const legacyQuery = {
       platform: { $in: ['mogrocery', 'grocery'] }
     };
@@ -56,6 +66,13 @@ const hydrateMissingLegacyGroceryStores = async ({ search, status }) => {
       .map((id) => String(id || '').trim())
       .filter((id) => /^[a-fA-F0-9]{24}$/.test(id));
 
+    // Also include restaurant IDs linked to grocery products.
+    // This catches legacy stores that were accidentally saved with `platform: mofood`.
+    const productLinkedRestaurantIds = await GroceryProduct.distinct('restaurant', {});
+    const normalizedProductIds = productLinkedRestaurantIds
+      .map((id) => String(id || '').trim())
+      .filter((id) => /^[a-fA-F0-9]{24}$/.test(id));
+
     let orderLinkedStores = [];
     if (normalizedOrderIds.length > 0) {
       const orderLinkedQuery = {
@@ -77,8 +94,29 @@ const hydrateMissingLegacyGroceryStores = async ({ search, status }) => {
         .lean();
     }
 
+    let productLinkedStores = [];
+    if (normalizedProductIds.length > 0) {
+      const productLinkedQuery = {
+        _id: { $in: normalizedProductIds }
+      };
+
+      if (status === 'inactive') {
+        productLinkedQuery.isActive = false;
+      } else if (status === 'active') {
+        productLinkedQuery.isActive = true;
+      }
+
+      if (search) {
+        productLinkedQuery.$or = buildStoreSearchOr(search);
+      }
+
+      productLinkedStores = await Restaurant.find(productLinkedQuery)
+        .select('+password')
+        .lean();
+    }
+
     const legacyStoreMap = new Map();
-    [...legacyStores, ...orderLinkedStores].forEach((store) => {
+    [...legacyStores, ...orderLinkedStores, ...productLinkedStores].forEach((store) => {
       if (!store?._id) return;
       legacyStoreMap.set(String(store._id), store);
     });
@@ -112,6 +150,7 @@ const hydrateMissingLegacyGroceryStores = async ({ search, status }) => {
     });
 
     await GroceryStore.bulkWrite(bulkOps, { ordered: false });
+    lastLegacyHydrationAt = now;
     logger.info(`Hydrated ${missingLegacyStores.length} legacy mogrocery stores into GroceryStore collection`);
   } catch (error) {
     logger.warn(`Legacy grocery store hydration skipped: ${error.message}`);
