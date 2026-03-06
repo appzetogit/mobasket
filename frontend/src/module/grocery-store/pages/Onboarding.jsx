@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useEffect, useMemo, useState } from "react"
+import { useLocation, useNavigate } from "react-router-dom"
 import { Image as ImageIcon, MapPin, Phone, Store, Upload, User, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -28,6 +28,9 @@ const createInitialForm = () => ({
 export default function GroceryStoreOnboarding() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
+  const location = useLocation()
+  const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
+  const isFreshStepOne = searchParams.get("step") === "1"
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
@@ -40,6 +43,21 @@ export default function GroceryStoreOnboarding() {
 
   useEffect(() => {
     const fetchData = async () => {
+      if (isFreshStepOne) {
+        setForm(createInitialForm())
+        setImages({
+          storeImage: null,
+          additionalImages: [],
+        })
+        try {
+          localStorage.removeItem("grocery-store_onboarding")
+        } catch (storageError) {
+          console.error("Failed to clear grocery store onboarding cache:", storageError)
+        }
+        setLoading(false)
+        return
+      }
+
       try {
         setLoading(true)
         const res = await groceryStoreAPI.getOnboarding()
@@ -91,7 +109,7 @@ export default function GroceryStoreOnboarding() {
       }
     }
     fetchData()
-  }, [])
+  }, [isFreshStepOne])
 
   const handleUpload = async (file, folder) => {
     try {
