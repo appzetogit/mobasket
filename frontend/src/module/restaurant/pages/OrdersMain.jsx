@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { checkOnboardingStatus } from "../utils/onboardingUtils"
+import { checkGroceryStoreOnboardingStatus } from "@/module/grocery-store/utils/onboardingUtils"
 import { motion, AnimatePresence } from "framer-motion"
 import Lenis from "lenis"
 import { Printer, Volume2, VolumeX, ChevronDown, ChevronUp, Minus, Plus, X, AlertCircle, Loader2 } from "lucide-react"
@@ -652,6 +653,12 @@ export default function OrdersMain() {
             const incompleteStep = await checkOnboardingStatus()
             if (incompleteStep) {
               navigate(`/restaurant/onboarding?step=${incompleteStep}`, { replace: true })
+              return
+            }
+          } else {
+            const incompleteStep = await checkGroceryStoreOnboardingStatus()
+            if (incompleteStep) {
+              navigate(`/store/onboarding?step=${incompleteStep}`, { replace: true })
               return
             }
           }

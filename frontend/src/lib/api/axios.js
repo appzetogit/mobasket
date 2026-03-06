@@ -748,12 +748,25 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 404) {
       if (import.meta.env.DEV) {
         const url = error.config?.url || "unknown";
+        const responseMessage = String(
+          error.response?.data?.message ||
+          error.response?.data?.error ||
+          "",
+        ).toLowerCase();
+        const isBusinessLogic404 =
+          responseMessage.includes("no grocery store account found") ||
+          responseMessage.includes("no restaurant account found") ||
+          responseMessage.includes("please sign up first") ||
+          responseMessage.includes("please login");
 
         // Show toast for auth routes (important)
         if (
-          url.includes("/auth/") ||
-          url.includes("/send-otp") ||
-          url.includes("/verify-otp")
+          !isBusinessLogic404 &&
+          (
+            url.includes("/auth/") ||
+            url.includes("/send-otp") ||
+            url.includes("/verify-otp")
+          )
         ) {
           toast.error(
             "Auth API endpoint not found. Make sure backend is running on port 5000.",

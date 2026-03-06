@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { groceryStoreAPI } from "@/lib/api"
 import { setAuthData } from "@/lib/utils/auth"
+import { redirectGroceryStoreAfterAuth } from "../../utils/onboardingUtils"
 
 export default function GroceryStoreOTP() {
   const navigate = useNavigate()
@@ -111,16 +112,19 @@ export default function GroceryStoreOTP() {
       }
 
       const purpose = authData?.isSignUp ? "register" : "login"
-      const registerName = purpose === "register" ? (authData?.name || "").trim() : null
-      if (purpose === "register" && !registerName) {
-        throw new Error("Store name is required. Please restart signup.")
-      }
-
       const phone = authData.method === "phone" ? (authData.phone || "").trim() || null : null
       const email = authData.method === "email" ? (authData.email || "").trim() || null : null
       if (!phone && !email) {
         throw new Error("Session expired. Please try again from the login page.")
       }
+
+      const registerName =
+        purpose === "register"
+          ? (authData?.name || "").trim() ||
+            (email
+              ? `Grocery Store ${email.split("@")[0]}`
+              : `Grocery Store ${String(phone).replace(/\D/g, "").slice(-4) || "Partner"}`)
+          : null
 
       const response = await groceryStoreAPI.verifyOTP(
         phone || null,
@@ -142,8 +146,8 @@ export default function GroceryStoreOTP() {
       setAuthData("grocery-store", accessToken, store, refreshToken)
       window.dispatchEvent(new Event("groceryStoreAuthChanged"))
 
-      // Grocery-store onboarding is optional; allow partners into `/store` directly.
-      navigate("/store")
+      sessionStorage.removeItem("groceryStoreAuthData")
+      await redirectGroceryStoreAfterAuth(navigate, { replace: true })
     } catch (err) {
       const message =
         err?.response?.data?.message ||

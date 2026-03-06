@@ -1,6 +1,7 @@
 import { Navigate } from "react-router-dom"
 import { isModuleAuthenticated } from "@/lib/utils/auth"
 import { getPostAuthRestaurantPathFromCachedData } from "@/module/restaurant/utils/onboardingUtils"
+import { getPostAuthGroceryStorePathFromCachedData } from "@/module/grocery-store/utils/onboardingUtils"
 
 /**
  * AuthRedirect Component
@@ -30,6 +31,8 @@ export default function AuthRedirect({ children, module, redirectTo = null }) {
     const resolvedHomePath =
       module === "restaurant"
         ? getPostAuthRestaurantPathFromCachedData()
+        : module === "grocery-store"
+        ? getPostAuthGroceryStorePathFromCachedData()
         : moduleHomePages[module] || "/"
     const homePath = redirectTo || resolvedHomePath
     return <Navigate to={homePath} replace />
