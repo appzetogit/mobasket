@@ -181,7 +181,7 @@ export default function RestaurantsList() {
   }, [editRestaurantDialog, editingRestaurant?._id])
 
   const [filters, setFilters] = useState({
-    all: "All",
+    all: "Active",
     businessModel: "",
     cuisine: "",
     zone: "",
@@ -720,10 +720,13 @@ export default function RestaurantsList() {
       try {
         await adminAPI.deleteRestaurant(restaurantId)
         
-        // Remove from local state on success
+        // Backend delete is a soft archive by default, so keep counts accurate locally
+        // and let the default "Active" filter hide the archived row.
         setRestaurants(prevRestaurants => 
-          prevRestaurants.filter(r => 
-            r.id !== restaurant.id && r._id !== restaurant._id
+          prevRestaurants.map(r => 
+            (r.id === restaurant.id || r._id === restaurant._id)
+              ? { ...r, status: false }
+              : r
           )
         )
         
@@ -731,7 +734,7 @@ export default function RestaurantsList() {
         setDeleteConfirmDialog(null)
         
         // Show success message
-        alert(`Restaurant "${restaurant.name}" deleted successfully!`)
+        alert(`Restaurant "${restaurant.name}" archived successfully!`)
       } catch (apiErr) {
         console.error("API Error:", apiErr)
         alert(apiErr.response?.data?.message || "Failed to delete restaurant. Please try again.")

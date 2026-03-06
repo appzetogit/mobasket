@@ -1559,8 +1559,7 @@ export default function Home() {
             restaurant?.image,
             restaurant?.slug || restaurant?.id || restaurant?.name,
           ),
-        }))
-        .slice(0, 10),
+        })),
     [restaurantsForVegMode],
   );
 
