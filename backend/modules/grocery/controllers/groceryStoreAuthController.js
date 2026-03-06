@@ -503,6 +503,82 @@ export const getCurrentStore = asyncHandler(async (req, res) => {
   });
 });
 
+export const updateStoreProfile = asyncHandler(async (req, res) => {
+  const store = req.store;
+  const { name, ownerName, ownerEmail, ownerPhone, primaryContactNumber, location, profileImage } = req.body || {};
+
+  if (name !== undefined) {
+    store.name = String(name || '').trim();
+  }
+  if (ownerName !== undefined) {
+    store.ownerName = String(ownerName || '').trim();
+  }
+  if (ownerEmail !== undefined) {
+    store.ownerEmail = String(ownerEmail || '').trim().toLowerCase();
+  }
+  if (ownerPhone !== undefined) {
+    store.ownerPhone = String(ownerPhone || '').trim();
+  }
+  if (primaryContactNumber !== undefined) {
+    store.primaryContactNumber = String(primaryContactNumber || '').trim();
+  }
+  if (profileImage !== undefined) {
+    store.profileImage = profileImage;
+  }
+
+  if (location && typeof location === 'object') {
+    const nextLocation = {
+      ...(store.location?.toObject ? store.location.toObject() : store.location || {}),
+      ...location,
+    };
+
+    if (
+      Number.isFinite(Number(nextLocation.latitude)) &&
+      Number.isFinite(Number(nextLocation.longitude)) &&
+      (!Array.isArray(nextLocation.coordinates) || nextLocation.coordinates.length < 2)
+    ) {
+      nextLocation.coordinates = [Number(nextLocation.longitude), Number(nextLocation.latitude)];
+    }
+
+    if (
+      Array.isArray(nextLocation.coordinates) &&
+      nextLocation.coordinates.length >= 2
+    ) {
+      if (!Number.isFinite(Number(nextLocation.longitude))) {
+        nextLocation.longitude = Number(nextLocation.coordinates[0]);
+      }
+      if (!Number.isFinite(Number(nextLocation.latitude))) {
+        nextLocation.latitude = Number(nextLocation.coordinates[1]);
+      }
+    }
+
+    if (!nextLocation.address && nextLocation.formattedAddress) {
+      nextLocation.address = nextLocation.formattedAddress;
+    }
+
+    store.location = nextLocation;
+
+    if (store.onboarding?.step1 && typeof store.onboarding.step1 === 'object') {
+      store.onboarding.step1 = {
+        ...store.onboarding.step1,
+        location: {
+          ...(store.onboarding.step1.location || {}),
+          ...nextLocation,
+        },
+      };
+    }
+  }
+
+  await store.save();
+
+  const storeResponse = store.toObject();
+  delete storeResponse.password;
+
+  return successResponse(res, 200, 'Store profile updated successfully', {
+    store: storeResponse,
+  });
+});
+
 /**
  * Update FCM token for grocery store app notifications
  * POST /api/grocery/store/auth/fcm-token

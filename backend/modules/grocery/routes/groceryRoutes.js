@@ -31,6 +31,7 @@ import {
 import {
   sendOTP as sendGroceryStoreOTP,
   verifyOTP as verifyGroceryStoreOTP,
+  updateStoreProfile,
 } from '../controllers/groceryStoreAuthController.js';
 import groceryStoreAuthRoutes from './groceryStoreAuthRoutes.js';
 import groceryStoreOrderRoutes from './groceryStoreOrderRoutes.js';
@@ -112,6 +113,7 @@ router.get('/store/onboarding', authenticate, getOnboarding);
 router.put('/store/onboarding', authenticate, updateOnboarding);
 
 // Grocery Store Profile Routes (authenticated)
+router.put('/store/profile', authenticate, updateStoreProfile);
 router.get('/store/owner/me', authenticate, async (req, res) => {
   const store = req.store;
   const storeResponse = store.toObject();

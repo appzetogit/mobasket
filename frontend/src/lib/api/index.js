@@ -772,6 +772,9 @@ export const groceryStoreAPI = {
   getCurrentStore: () => {
     return apiClient.get(API_ENDPOINTS.GROCERY_STORE.AUTH.ME);
   },
+  updateProfile: (data) => {
+    return apiClient.put(API_ENDPOINTS.GROCERY_STORE.PROFILE, data);
+  },
   updateFcmToken: (token, platform) => {
     return apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.FCM_TOKEN, { token, platform });
   },
