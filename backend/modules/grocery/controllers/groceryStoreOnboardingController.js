@@ -61,8 +61,9 @@ export const updateOnboarding = asyncHandler(async (req, res) => {
       update['onboarding.additionalImages'] = additionalImages;
     }
 
-    if (typeof completedSteps === 'number') {
-      update['onboarding.completedSteps'] = completedSteps;
+    const normalizedCompletedSteps = Number(completedSteps);
+    if (Number.isFinite(normalizedCompletedSteps)) {
+      update['onboarding.completedSteps'] = normalizedCompletedSteps;
     }
 
     const store = await GroceryStore.findByIdAndUpdate(

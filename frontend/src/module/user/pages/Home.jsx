@@ -373,6 +373,17 @@ export default function Home() {
     return foodImages[hash % foodImages.length] || foodImages[0];
   };
 
+  const fallbackImageGalleryBySeed = (seed, size = 3) => {
+    const str = String(seed || "");
+    const hash = str.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+    const total = Math.max(1, foodImages.length);
+    const gallery = [];
+    for (let i = 0; i < size; i += 1) {
+      gallery.push(foodImages[(hash + i * 7) % total] || foodImages[0]);
+    }
+    return gallery;
+  };
+
   const sanitizeImageSrc = (src, seed = "") =>
     isLikelyImageUrl(src) ? src : fallbackImageBySeed(seed);
 
@@ -800,12 +811,9 @@ export default function Home() {
       try {
         setLoadingRestaurants(true);
 
-        // Enforce strict same-zone listing on Home.
+        // Prefer strict same-zone listing on Home.
+        // If zone detection is unavailable, gracefully fall back to non-zone listing.
         if (zoneLoading) {
-          return;
-        }
-        if (!zoneId) {
-          setRestaurantsData([]);
           return;
         }
 
@@ -884,11 +892,41 @@ export default function Home() {
         // Home page is MoFood-only.
         params.platform = "mofood";
 
-        // Strict zone filter: show only restaurants from the same detected zone.
-        params.zoneId = zoneId;
-        params.onlyZone = "true";
+        // Strict zone filter: show only restaurants from the same detected zone when available.
+        const hasResolvedZone = Boolean(zoneId);
+        if (hasResolvedZone) {
+          params.zoneId = zoneId;
+          params.onlyZone = "true";
+        }
         
-        const response = await restaurantAPI.getRestaurants(params);
+        let response;
+        let restaurantsArrayRaw = [];
+        try {
+          response = await restaurantAPI.getRestaurants(params);
+          restaurantsArrayRaw = response?.data?.data?.restaurants || [];
+        } catch (zoneScopedFetchError) {
+          if (!hasResolvedZone) {
+            throw zoneScopedFetchError;
+          }
+          const fallbackParams = { ...params };
+          delete fallbackParams.zoneId;
+          delete fallbackParams.onlyZone;
+          response = await restaurantAPI.getRestaurants(fallbackParams);
+          restaurantsArrayRaw = response?.data?.data?.restaurants || [];
+        }
+
+        // If strict zone query returns empty, retry once without zone restriction.
+        if (
+          hasResolvedZone &&
+          Array.isArray(restaurantsArrayRaw) &&
+          restaurantsArrayRaw.length === 0
+        ) {
+          const fallbackParams = { ...params };
+          delete fallbackParams.zoneId;
+          delete fallbackParams.onlyZone;
+          response = await restaurantAPI.getRestaurants(fallbackParams);
+          restaurantsArrayRaw = response?.data?.data?.restaurants || [];
+        }
 
         if (
           response.data &&
@@ -896,7 +934,7 @@ export default function Home() {
           response.data.data &&
           response.data.data.restaurants
         ) {
-          const restaurantsArray = (response.data.data.restaurants || []).filter(
+          const restaurantsArray = (restaurantsArrayRaw || []).filter(
             (restaurant) => {
               const platform = String(restaurant?.platform || "").toLowerCase();
               return !platform || platform === "mofood";
@@ -1001,7 +1039,15 @@ export default function Home() {
                     .filter((img) => isLikelyImageUrl(img))
                   : [];
 
-              // Use cover images first, then fallback to menu images, then profile image
+              const fallbackSeed =
+                restaurant.slug ||
+                restaurant.restaurantId ||
+                restaurant._id ||
+                restaurant.name ||
+                index;
+              const seededFallbackImages = fallbackImageGalleryBySeed(fallbackSeed, 3);
+
+              // Use cover images first, then fallback to menu images, then profile image, then seeded placeholders
               const allImages =
                 coverImages.length > 0
                   ? coverImages
@@ -1009,9 +1055,7 @@ export default function Home() {
                     ? fallbackImages
                     : restaurant.profileImage?.url
                       ? [restaurant.profileImage.url]
-                      : [
-                        "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop",
-                      ];
+                      : seededFallbackImages;
 
               // Keep single image for backward compatibility
               const image = allImages[0];
@@ -1195,7 +1239,7 @@ export default function Home() {
           restaurantsData.map(async (restaurant) => {
             const restaurantId = restaurant?.restaurantId || restaurant?.id;
             if (!restaurantId) {
-              return [String(restaurant?.id || Math.random()), false];
+              return [String(restaurant?.id || Math.random()), null];
             }
 
             try {
@@ -1238,7 +1282,8 @@ export default function Home() {
                 return [String(restaurantId), hasAnyVeg];
               }
             } catch {
-              return [String(restaurantId), false];
+              // Keep unknown when menu fetch fails; don't hide whole list.
+              return [String(restaurantId), null];
             }
           }),
         );
@@ -1260,7 +1305,10 @@ export default function Home() {
     if (vegMode) {
       filtered = filtered.filter((restaurant) => {
         const restaurantId = String(restaurant?.restaurantId || restaurant?.id || "");
-        return Boolean(vegEligibilityByRestaurant[restaurantId]);
+        const eligibility = vegEligibilityByRestaurant[restaurantId];
+        if (eligibility === false) return false;
+        // true or unknown (null/undefined) should stay visible.
+        return true;
       });
     }
 
@@ -1389,7 +1437,9 @@ export default function Home() {
     if (!vegMode) return restaurantsData;
     return restaurantsData.filter((restaurant) => {
       const restaurantId = String(restaurant?.restaurantId || restaurant?.id || "");
-      return Boolean(vegEligibilityByRestaurant[restaurantId]);
+      const eligibility = vegEligibilityByRestaurant[restaurantId];
+      if (eligibility === false) return false;
+      return true;
     });
   }, [vegMode, restaurantsData, vegEligibilityByRestaurant]);
 

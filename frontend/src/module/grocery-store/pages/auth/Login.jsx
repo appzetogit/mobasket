@@ -399,12 +399,12 @@ export default function GroceryStoreLogin() {
       <div className="flex-1 flex flex-col px-6 overflow-y-auto">
         <div className="w-full max-w-md mx-auto space-y-6 py-4">
           <div className="text-center">
-            <p className="text-base text-gray-700 leading-relaxed">
-              {loginMethod === "email"
-                ? "Enter your email to continue. We'll send you a one-time code."
-                : "Enter your phone number to continue. New? We'll create your store account."
-              }
-            </p>
+              <p className="text-base text-gray-700 leading-relaxed">
+                {loginMethod === "email"
+                  ? "Enter your email to continue. We'll send you a one-time code."
+                  : "Enter your phone number to continue. This is only for existing store accounts."
+                }
+              </p>
           </div>
 
           {loginMethod === "phone" && (

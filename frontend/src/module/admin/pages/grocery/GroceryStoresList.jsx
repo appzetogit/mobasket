@@ -89,7 +89,10 @@ export default function GroceryStoresList() {
       setLoading(true)
       setError(null)
       
-      const response = await adminAPI.getGroceryStores()
+      const response = await adminAPI.getGroceryStores({
+        page: 1,
+        limit: 1000,
+      })
       
       if (response.data && response.data.success && response.data.data) {
         const storesData = response.data.data.stores || []

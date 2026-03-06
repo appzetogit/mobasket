@@ -34,11 +34,20 @@ const getOrderModificationWindow = (order) => {
 const getRestaurantIdsByPlatform = async (platform) => {
   if (platform === 'mogrocery') {
     const GroceryStore = (await import('../../grocery/models/GroceryStore.js')).default;
+    const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
+
     const stores = await GroceryStore.find({})
       .select('_id restaurantId')
       .lean();
 
-    return [...new Set(stores.flatMap((store) => {
+    // Legacy grocery orders may still point to Restaurant docs with grocery platform.
+    const legacyRestaurants = await Restaurant.find({
+      platform: { $in: ['mogrocery', 'grocery'] }
+    })
+      .select('_id restaurantId')
+      .lean();
+
+    return [...new Set([...stores, ...legacyRestaurants].flatMap((store) => {
       const ids = [];
       if (store?._id) ids.push(store._id.toString());
       if (store?.restaurantId) ids.push(String(store.restaurantId));
@@ -96,19 +105,41 @@ export const getOrders = asyncHandler(async (req, res) => {
     if (normalizedPlatform) {
       platformRestaurantIds = await getRestaurantIdsByPlatform(normalizedPlatform);
 
-      if (platformRestaurantIds.length === 0) {
-        return successResponse(res, 200, 'Orders retrieved successfully', {
-          orders: [],
-          pagination: {
-            page: parseInt(page),
-            limit: parseInt(limit),
-            total: 0,
-            pages: 0
-          }
-        });
-      }
+      const platformOrderFilter =
+        normalizedPlatform === 'mogrocery'
+          ? {
+              $or: [
+                { restaurantPlatform: 'mogrocery' },
+                { platform: 'mogrocery' },
+                { restaurantName: { $regex: /grocery/i } }
+              ]
+            }
+          : {
+              $and: [
+                {
+                  $or: [
+                    { restaurantPlatform: 'mofood' },
+                    { platform: 'mofood' },
+                    { restaurantPlatform: { $exists: false } },
+                    { platform: { $exists: false } }
+                  ]
+                },
+                {
+                  restaurantName: { $not: /grocery/i }
+                }
+              ]
+            };
 
-      query.restaurantId = { $in: platformRestaurantIds };
+      if (platformRestaurantIds.length > 0) {
+        addAndCondition({
+          $or: [
+            { restaurantId: { $in: platformRestaurantIds } },
+            platformOrderFilter
+          ]
+        });
+      } else {
+        addAndCondition(platformOrderFilter);
+      }
     }
 
     // Status filter

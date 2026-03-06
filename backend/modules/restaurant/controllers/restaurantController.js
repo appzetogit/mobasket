@@ -130,10 +130,15 @@ export const getRestaurants = async (req, res) => {
     // Optional: Zone lookup - if zoneId is provided, validate and enforce same-zone listing.
     let userZone = null;
     if (zoneId) {
-      userZone = await Zone.findById(zoneId).lean();
-      if (!userZone || !userZone.isActive) {
-        userZone = null;
-      } else if (requestedPlatform && userZone.platform && userZone.platform !== requestedPlatform) {
+      const zoneIdString = String(zoneId).trim();
+      if (mongoose.Types.ObjectId.isValid(zoneIdString)) {
+        userZone = await Zone.findById(zoneIdString).lean();
+        if (!userZone || !userZone.isActive) {
+          userZone = null;
+        } else if (requestedPlatform && userZone.platform && userZone.platform !== requestedPlatform) {
+          userZone = null;
+        }
+      } else {
         userZone = null;
       }
     }
@@ -916,18 +921,22 @@ export const deleteRestaurantAccount = asyncHandler(async (req, res) => {
       // Continue with account deletion even if image deletion fails
     }
 
-    // Delete the restaurant from database
-    await Restaurant.findByIdAndDelete(restaurantId);
+    // Soft delete instead of physical deletion.
+    restaurant.isActive = false;
+    restaurant.isAcceptingOrders = false;
+    restaurant.rejectionReason = restaurant.rejectionReason || 'Account deactivated by owner';
+    restaurant.rejectedAt = new Date();
+    await restaurant.save();
 
-    console.log(`Restaurant account deleted: ${restaurantId}`, { 
+    console.log(`Restaurant account deactivated: ${restaurantId}`, { 
       restaurantId: restaurant.restaurantId,
       name: restaurant.name 
     });
 
-    return successResponse(res, 200, 'Restaurant account deleted successfully');
+    return successResponse(res, 200, 'Restaurant account deactivated successfully');
   } catch (error) {
     console.error('Error deleting restaurant account:', error);
-    return errorResponse(res, 500, 'Failed to delete restaurant account');
+    return errorResponse(res, 500, 'Failed to deactivate restaurant account');
   }
 });
 

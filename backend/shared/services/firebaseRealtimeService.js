@@ -166,6 +166,32 @@ function normalizeActiveOrderPayload(payload = {}) {
   if (typeof payload.polyline === 'string' && payload.polyline.trim()) {
     normalized.polyline = payload.polyline.trim();
   }
+  if (Array.isArray(payload.points) && payload.points.length > 0) {
+    const normalizedPoints = payload.points
+      .map((point) => {
+        if (!point) return null;
+        if (Array.isArray(point) && point.length >= 2) {
+          const first = toNumber(point[0]);
+          const second = toNumber(point[1]);
+          if (!Number.isFinite(first) || !Number.isFinite(second)) return null;
+          if (Math.abs(first) <= 90 && Math.abs(second) <= 180) {
+            return { lat: first, lng: second };
+          }
+          if (Math.abs(second) <= 90 && Math.abs(first) <= 180) {
+            return { lat: second, lng: first };
+          }
+          return null;
+        }
+        const lat = toNumber(point.lat ?? point.latitude);
+        const lng = toNumber(point.lng ?? point.longitude);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+        return { lat, lng };
+      })
+      .filter(Boolean);
+    if (normalizedPoints.length > 0) {
+      normalized.points = normalizedPoints;
+    }
+  }
   if (payload.status) normalized.status = String(payload.status);
 
   const createdAt = toNumber(payload.created_at);

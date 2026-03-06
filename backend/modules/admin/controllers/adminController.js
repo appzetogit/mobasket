@@ -2305,15 +2305,25 @@ export const deleteRestaurant = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, 'Restaurant not found');
     }
 
-    // Delete restaurant
-    await Restaurant.findByIdAndDelete(id);
+    // Safety first: default to soft delete so business records are never physically removed.
+    // Hard delete is allowed only when explicitly enabled via env flag.
+    if (process.env.ALLOW_HARD_DELETE_BUSINESS_ENTITIES === 'true') {
+      await Restaurant.findByIdAndDelete(id);
+    } else {
+      restaurant.isActive = false;
+      restaurant.isAcceptingOrders = false;
+      restaurant.rejectionReason = restaurant.rejectionReason || 'Archived by admin';
+      restaurant.rejectedAt = new Date();
+      restaurant.rejectedBy = adminId;
+      await restaurant.save();
+    }
 
-    logger.info(`Restaurant deleted: ${id}`, {
+    logger.info(`Restaurant removed (soft by default): ${id}`, {
       deletedBy: adminId,
       restaurantName: restaurant.name
     });
 
-    return successResponse(res, 200, 'Restaurant deleted successfully', {
+    return successResponse(res, 200, 'Restaurant removed successfully', {
       restaurant: {
         id: id,
         name: restaurant.name

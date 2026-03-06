@@ -393,6 +393,23 @@ restaurantSchema.methods.comparePassword = async function(candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
+const canHardDeleteBusinessEntities = () => process.env.ALLOW_HARD_DELETE_BUSINESS_ENTITIES === 'true';
+
+const blockRestaurantHardDelete = function(next) {
+  if (canHardDeleteBusinessEntities()) return next();
+  const error = new Error(
+    'Hard delete blocked for Restaurant. Use soft delete (isActive=false) or set ALLOW_HARD_DELETE_BUSINESS_ENTITIES=true explicitly.'
+  );
+  error.code = 'RESTAURANT_HARD_DELETE_BLOCKED';
+  return next(error);
+};
+
+restaurantSchema.pre('deleteOne', { document: true, query: false }, blockRestaurantHardDelete);
+restaurantSchema.pre('deleteOne', { document: false, query: true }, blockRestaurantHardDelete);
+restaurantSchema.pre('deleteMany', blockRestaurantHardDelete);
+restaurantSchema.pre('findOneAndDelete', blockRestaurantHardDelete);
+restaurantSchema.pre('findByIdAndDelete', blockRestaurantHardDelete);
+
 export default mongoose.model('Restaurant', restaurantSchema);
 
 
