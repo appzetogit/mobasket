@@ -847,6 +847,30 @@ const payload = {
           throw new Error('Invalid response from server')
         }
 
+        try {
+          const cachedRaw = localStorage.getItem("restaurant_user")
+          const cachedRestaurant = cachedRaw ? JSON.parse(cachedRaw) : {}
+          const responseRestaurant = response?.data?.data?.restaurant || {}
+          const responseOnboarding = response?.data?.data?.onboarding || {}
+
+          localStorage.setItem(
+            "restaurant_user",
+            JSON.stringify({
+              ...cachedRestaurant,
+              ...responseRestaurant,
+              onboarding: {
+                ...(cachedRestaurant?.onboarding || {}),
+                ...responseOnboarding,
+                completedSteps: 4,
+              },
+            }),
+          )
+          window.dispatchEvent(new Event("restaurantAuthChanged"))
+          window.dispatchEvent(new Event("restaurantProfileRefresh"))
+        } catch (storageError) {
+          console.error("Failed to update cached restaurant after onboarding:", storageError)
+        }
+
         // Clear localStorage when onboarding is complete
         clearOnboardingFromLocalStorage()
 

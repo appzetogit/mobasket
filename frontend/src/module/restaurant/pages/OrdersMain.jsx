@@ -468,6 +468,12 @@ export default function OrdersMain() {
   // Determine if we're on grocery store route and use appropriate API
   const isGroceryStore = location.pathname.startsWith('/store')
   const [authFailed, setAuthFailed] = useState(false)
+  const authFailedRef = useRef(false)
+
+  useEffect(() => {
+    authFailedRef.current = authFailed
+  }, [authFailed])
+
   const orderAPI = useMemo(() => {
     const baseOrderAPI = isGroceryStore ? groceryStoreAPI : restaurantAPI
     const accessTokenKey = isGroceryStore ? "grocery-store_accessToken" : "restaurant_accessToken"
@@ -485,7 +491,7 @@ export default function OrdersMain() {
     return {
       ...baseOrderAPI,
       getOrders: async (params = {}) => {
-        if (authFailed) {
+        if (authFailedRef.current) {
           throw createAuthError()
         }
 
@@ -493,7 +499,10 @@ export default function OrdersMain() {
         const refreshToken = localStorage.getItem(refreshTokenKey)
 
         if (!accessToken && !refreshToken) {
-          setAuthFailed(true)
+          if (!authFailedRef.current) {
+            authFailedRef.current = true
+            setAuthFailed(true)
+          }
           throw createAuthError()
         }
 
@@ -501,13 +510,16 @@ export default function OrdersMain() {
           return await baseOrderAPI.getOrders(params)
         } catch (error) {
           if (Number(error?.response?.status || 0) === 401) {
-            setAuthFailed(true)
+            if (!authFailedRef.current) {
+              authFailedRef.current = true
+              setAuthFailed(true)
+            }
           }
           throw error
         }
       },
     }
-  }, [authFailed, isGroceryStore])
+  }, [isGroceryStore])
   const entityLabel = isGroceryStore ? "store" : "restaurant"
   const EntityLabel = isGroceryStore ? "Store" : "Restaurant"
   
@@ -553,6 +565,14 @@ export default function OrdersMain() {
     isLoading: true
   })
   const [isReverifying, setIsReverifying] = useState(false)
+  const hasCompletedRestaurantOnboarding =
+    !isGroceryStore && restaurantStatus.onboarding?.completedSteps === 4
+  const canAccessLiveOrders =
+    isGroceryStore || restaurantStatus.isActive === true
+  const shouldShowVerificationState =
+    !restaurantStatus.isLoading &&
+    hasCompletedRestaurantOnboarding &&
+    restaurantStatus.isActive !== true
 
   useEffect(() => {
     if (!authFailed) return
@@ -589,7 +609,10 @@ export default function OrdersMain() {
   }, [activeFilter])
 
   // Restaurant notifications hook for real-time orders
-  const { newOrder, clearNewOrder, isConnected } = useRestaurantNotifications({ enableSound: false })
+  const { newOrder, clearNewOrder, isConnected } = useRestaurantNotifications({
+    enableSound: false,
+    enabled: canAccessLiveOrders,
+  })
 
   const rejectReasons = [
     `${EntityLabel} is too busy`,
@@ -621,6 +644,10 @@ export default function OrdersMain() {
           // Restaurant onboarding redirection should be based on computed status,
           // not only onboarding.completedSteps (which can be stale/missing for old accounts).
           if (!isGroceryStore) {
+            if (restaurant.onboarding?.completedSteps === 4) {
+              return
+            }
+
             // Onboarding is incomplete, redirect to onboarding page
             const incompleteStep = await checkOnboardingStatus()
             if (incompleteStep) {
@@ -759,6 +786,8 @@ export default function OrdersMain() {
 
   // Check for confirmed orders that haven't been shown in popup yet (fallback if Socket.IO fails)
   useEffect(() => {
+    if (!canAccessLiveOrders) return undefined
+
     const checkConfirmedOrders = async () => {
       // Skip if popup is already showing or Socket.IO order exists
       if (showNewOrderPopupRef.current || newOrderRef.current) return
@@ -818,7 +847,7 @@ export default function OrdersMain() {
     checkConfirmedOrders()
 
     return () => clearInterval(interval)
-  }, []) // Empty dependency array - check runs independently
+  }, [canAccessLiveOrders, orderAPI])
 
   // Play audio when popup opens
   useEffect(() => {
@@ -1234,6 +1263,10 @@ export default function OrdersMain() {
   }
 
   const renderContent = () => {
+    if (!canAccessLiveOrders) {
+      return null
+    }
+
     switch (activeFilter) {
       case "preparing":
         return <PreparingOrders onSelectOrder={handleSelectOrder} onCancel={handleCancelClick} orderAPI={orderAPI} />
@@ -1260,68 +1293,70 @@ export default function OrdersMain() {
       </div>
 
       {/* Top Filter Bar - Sticky below navbar */}
-      <div className="sticky top-[50px] z-40 pb-2 bg-gray-100">
-        <div 
-          ref={filterBarRef}
-          className="flex gap-2 overflow-x-auto scrollbar-hide bg-transparent rounded-full px-3 py-2 mt-2"
-          style={{
-            scrollbarWidth: 'none',
-            msOverflowStyle: 'none',
-            WebkitOverflowScrolling: 'touch'
-          }}
-        >
-          <style>{`
-            .scrollbar-hide::-webkit-scrollbar {
-              display: none;
-            }
-          `}</style>
-          {filterTabs.map((tab, index) => {
-            const isActive = activeFilter === tab.id
-            
-            return (
-              <motion.button
-                key={tab.id}
-                onClick={() => {
-                  if (!isTransitioning) {
-                    setIsTransitioning(true)
-                    setActiveFilter(tab.id)
-                    scrollToFilter(index)
-                    setTimeout(() => setIsTransitioning(false), 300)
-                  }
-                }}
-                className={`shrink-0 px-6 py-3.5 rounded-full font-medium text-sm whitespace-nowrap relative overflow-hidden ${
-                  isActive
-                    ? 'text-white'
-                    : 'bg-white text-black'
-                }`}
-                animate={{
-                  scale: isActive ? 1.05 : 1,
-                  opacity: isActive ? 1 : 0.7,
-                }}
-                transition={{
-                  duration: 0.3,
-                  ease: [0.25, 0.1, 0.25, 1],
-                }}
-                whileTap={{ scale: 0.95 }}
-              >
-                {isActive && (
-                  <motion.div
-                    layoutId="activeFilterBackground"
-                    className="absolute inset-0 bg-black rounded-full -z-10"
-                    initial={false}
-                    transition={{
-                      type: "spring",
-                      stiffness: 500,
-                      damping: 30
-                    }}
-                  />
-                )}
-                <span className="relative z-10">{tab.label}</span>
-              </motion.button>
-            )
-          })}
+      {canAccessLiveOrders && (
+        <div className="sticky top-[50px] z-40 pb-2 bg-gray-100">
+          <div 
+            ref={filterBarRef}
+            className="flex gap-2 overflow-x-auto scrollbar-hide bg-transparent rounded-full px-3 py-2 mt-2"
+            style={{
+              scrollbarWidth: 'none',
+              msOverflowStyle: 'none',
+              WebkitOverflowScrolling: 'touch'
+            }}
+          >
+            <style>{`
+              .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+              }
+            `}</style>
+            {filterTabs.map((tab, index) => {
+              const isActive = activeFilter === tab.id
+              
+              return (
+                <motion.button
+                  key={tab.id}
+                  onClick={() => {
+                    if (!isTransitioning) {
+                      setIsTransitioning(true)
+                      setActiveFilter(tab.id)
+                      scrollToFilter(index)
+                      setTimeout(() => setIsTransitioning(false), 300)
+                    }
+                  }}
+                  className={`shrink-0 px-6 py-3.5 rounded-full font-medium text-sm whitespace-nowrap relative overflow-hidden ${
+                    isActive
+                      ? 'text-white'
+                      : 'bg-white text-black'
+                  }`}
+                  animate={{
+                    scale: isActive ? 1.05 : 1,
+                    opacity: isActive ? 1 : 0.7,
+                  }}
+                  transition={{
+                    duration: 0.3,
+                    ease: [0.25, 0.1, 0.25, 1],
+                  }}
+                  whileTap={{ scale: 0.95 }}
+                >
+                  {isActive && (
+                    <motion.div
+                      layoutId="activeFilterBackground"
+                      className="absolute inset-0 bg-black rounded-full -z-10"
+                      initial={false}
+                      transition={{
+                        type: "spring",
+                        stiffness: 500,
+                        damping: 30
+                      }}
+                    />
+                  )}
+                  <span className="relative z-10">{tab.label}</span>
+                </motion.button>
+              )
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Content Area - Scrollable */}
       <div 
@@ -1396,9 +1431,7 @@ export default function OrdersMain() {
         `}</style>
         
         {/* Verification Pending Card - Show if onboarding is complete (all 4 steps) and restaurant is not active */}
-        {!restaurantStatus.isLoading && 
-         !restaurantStatus.isActive && 
-         restaurantStatus.onboarding?.completedSteps === 4 && (
+        {shouldShowVerificationState && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

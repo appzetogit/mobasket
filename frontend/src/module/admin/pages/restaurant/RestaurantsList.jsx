@@ -720,13 +720,10 @@ export default function RestaurantsList() {
       try {
         await adminAPI.deleteRestaurant(restaurantId)
         
-        // Backend delete is a soft archive by default, so keep counts accurate locally
-        // and let the default "Active" filter hide the archived row.
+        // Remove from local state on success.
         setRestaurants(prevRestaurants => 
-          prevRestaurants.map(r => 
-            (r.id === restaurant.id || r._id === restaurant._id)
-              ? { ...r, status: false }
-              : r
+          prevRestaurants.filter(r => 
+            r.id !== restaurant.id && r._id !== restaurant._id
           )
         )
         
@@ -734,7 +731,7 @@ export default function RestaurantsList() {
         setDeleteConfirmDialog(null)
         
         // Show success message
-        alert(`Restaurant "${restaurant.name}" archived successfully!`)
+        alert(`Restaurant "${restaurant.name}" deleted successfully!`)
       } catch (apiErr) {
         console.error("API Error:", apiErr)
         alert(apiErr.response?.data?.message || "Failed to delete restaurant. Please try again.")

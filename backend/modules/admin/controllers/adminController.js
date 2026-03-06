@@ -2299,26 +2299,27 @@ export const deleteRestaurant = asyncHandler(async (req, res) => {
     const { id } = req.params;
     const adminId = req.user._id;
 
-    const restaurant = await Restaurant.findById(id);
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return errorResponse(res, 400, 'Invalid restaurant id');
+    }
+
+    const restaurantObjectId = new mongoose.Types.ObjectId(id);
+
+    const restaurant = await Restaurant.findById(restaurantObjectId);
 
     if (!restaurant) {
       return errorResponse(res, 404, 'Restaurant not found');
     }
 
-    // Safety first: default to soft delete so business records are never physically removed.
-    // Hard delete is allowed only when explicitly enabled via env flag.
-    if (process.env.ALLOW_HARD_DELETE_BUSINESS_ENTITIES === 'true') {
-      await Restaurant.findByIdAndDelete(id);
-    } else {
-      restaurant.isActive = false;
-      restaurant.isAcceptingOrders = false;
-      restaurant.rejectionReason = restaurant.rejectionReason || 'Archived by admin';
-      restaurant.rejectedAt = new Date();
-      restaurant.rejectedBy = adminId;
-      await restaurant.save();
+    // Admin delete from the restaurants list should remove the entity entirely.
+    // Use the native collection to bypass model-level soft-delete guards.
+    const deleteResult = await Restaurant.collection.deleteOne({ _id: restaurantObjectId });
+
+    if (!deleteResult?.deletedCount) {
+      return errorResponse(res, 500, 'Failed to delete restaurant');
     }
 
-    logger.info(`Restaurant removed (soft by default): ${id}`, {
+    logger.info(`Restaurant hard deleted: ${id}`, {
       deletedBy: adminId,
       restaurantName: restaurant.name
     });
