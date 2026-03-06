@@ -370,24 +370,50 @@ const GroceryPage = () => {
   // Search & Voice Logic
   const [searchQuery, setSearchQuery] = useState("");
   const [isListening, setIsListening] = useState(false);
+  const speechRecognitionRef = useRef(null);
   const hasActiveSearch = searchQuery.trim().length > 0;
 
   const startListening = () => {
     if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.lang = 'en-IN'; // Better for Indian context
 
-      recognition.onstart = () => setIsListening(true);
-      recognition.onend = () => setIsListening(false);
+      if (!speechRecognitionRef.current) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = false;
+        recognition.lang = 'en-IN'; // Better for Indian context
 
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setSearchQuery(transcript);
-      };
+        recognition.onstart = () => setIsListening(true);
+        recognition.onend = () => setIsListening(false);
+        recognition.onerror = () => setIsListening(false);
 
-      recognition.start();
+        recognition.onresult = (event) => {
+          const transcript = event.results[0][0].transcript;
+          setSearchQuery(transcript);
+        };
+
+        speechRecognitionRef.current = recognition;
+      }
+
+      if (isListening) {
+        try {
+          speechRecognitionRef.current.stop();
+        } catch (e) {
+          // ignore
+        }
+        setIsListening(false);
+        return;
+      }
+
+      try {
+        speechRecognitionRef.current.start();
+      } catch (error) {
+        if (error.name === 'InvalidStateError' || (error.message && error.message.includes('already started'))) {
+          setIsListening(true);
+        } else {
+          setIsListening(false);
+          alert(error?.message || "Unable to start voice search. Please try again.");
+        }
+      }
     } else {
       alert("Voice search is not supported in this browser.");
     }
@@ -534,21 +560,21 @@ const GroceryPage = () => {
     const zoneScopedProducts = (Array.isArray(rawProducts) ? rawProducts : []).filter((product) => {
       const productZoneId = String(
         product?.zoneId?._id ||
-          product?.zoneId?.id ||
-          product?.zoneId ||
-          product?.storeId?.zoneId?._id ||
-          product?.storeId?.zoneId?.id ||
-          product?.storeId?.zoneId ||
-          "",
+        product?.zoneId?.id ||
+        product?.zoneId ||
+        product?.storeId?.zoneId?._id ||
+        product?.storeId?.zoneId?.id ||
+        product?.storeId?.zoneId ||
+        "",
       ).trim();
       const productStoreId = String(
         product?.storeId?._id ||
-          product?.storeId?.id ||
-          product?.storeId ||
-          product?.restaurantId?._id ||
-          product?.restaurantId?.id ||
-          product?.restaurantId ||
-          "",
+        product?.storeId?.id ||
+        product?.storeId ||
+        product?.restaurantId?._id ||
+        product?.restaurantId?.id ||
+        product?.restaurantId ||
+        "",
       ).trim();
       if (zoneId && productZoneId && productZoneId !== String(zoneId)) return false;
       return productStoreId && allowedStoreIds.has(productStoreId);
@@ -578,12 +604,12 @@ const GroceryPage = () => {
 
           const storeZoneId = String(
             restaurant?.zoneId?._id ||
-              restaurant?.zoneId?.id ||
-              restaurant?.zoneId ||
-              restaurant?.zone?._id ||
-              restaurant?.zone?.id ||
-              restaurant?.zone ||
-              "",
+            restaurant?.zoneId?.id ||
+            restaurant?.zoneId ||
+            restaurant?.zone?._id ||
+            restaurant?.zone?.id ||
+            restaurant?.zone ||
+            "",
           ).trim();
           if (zoneId && storeZoneId && storeZoneId !== String(zoneId)) return false;
 
@@ -2172,7 +2198,7 @@ const GroceryPage = () => {
                 <div className="h-7 flex items-start justify-center w-full">
                   <p
                     className={`${cardIndex === 0 ? "text-[12px]" : "text-[11px]"
-                    } font-[700] text-center text-[#2b2b2b] dark:text-slate-200 leading-tight px-0.5 line-clamp-2`}
+                      } font-[700] text-center text-[#2b2b2b] dark:text-slate-200 leading-tight px-0.5 line-clamp-2`}
                   >
                     {card.name}
                   </p>

@@ -323,11 +323,21 @@ export default function Home() {
       }
 
       if (isListening) {
+        try {
+          speechRecognitionRef.current.stop();
+        } catch (e) {
+          // Ignore
+        }
+        setIsListening(false);
         return;
       }
 
       speechRecognitionRef.current.start();
     } catch (error) {
+      if (error.name === 'InvalidStateError' || (error.message && error.message.includes('already started'))) {
+        setIsListening(true);
+        return;
+      }
       setIsListening(false);
       alert(error?.message || "Unable to start voice search. Please try again.");
     }
@@ -887,7 +897,7 @@ export default function Home() {
         // Strict zone filter: show only restaurants from the same detected zone.
         params.zoneId = zoneId;
         params.onlyZone = "true";
-        
+
         const response = await restaurantAPI.getRestaurants(params);
 
         if (

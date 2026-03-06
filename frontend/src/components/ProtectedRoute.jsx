@@ -32,12 +32,29 @@ export default function ProtectedRoute({ children, requiredRole, loginPath, modu
 
   const isAuthenticated = isModuleAuthenticated(moduleToCheck);
 
+  // If authenticated as delivery, check if signup is complete
+  if (isAuthenticated && moduleToCheck === 'delivery') {
+    const rawUser = localStorage.getItem('delivery_user');
+    const user = rawUser ? JSON.parse(rawUser) : null;
+
+    // If status is onboarding, and not already on a signup page, redirect to signup details
+    if (user && user.status === 'onboarding') {
+      const isSignupPage = location.pathname.startsWith('/delivery/signup/') ||
+        location.pathname === '/delivery/otp' ||
+        location.pathname === '/delivery/sign-in';
+
+      if (!isSignupPage) {
+        return <Navigate to="/delivery/signup/details" replace />;
+      }
+    }
+  }
+
   // If not authenticated for this module, redirect to login
   if (!isAuthenticated) {
     if (loginPath) {
       return <Navigate to={loginPath} state={{ from: location.pathname }} replace />;
     }
-    
+
     // Fallback: redirect to appropriate login page
     const roleLoginPaths = {
       'admin': '/admin/login',
@@ -46,7 +63,7 @@ export default function ProtectedRoute({ children, requiredRole, loginPath, modu
       'user': '/user/auth/sign-in',
       'grocery-store': '/store/login'
     };
-    
+
     const redirectPath = roleLoginPaths[moduleToCheck] || roleLoginPaths[requiredRole] || '/';
     return <Navigate to={redirectPath} replace />;
   }

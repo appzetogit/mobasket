@@ -4,6 +4,7 @@ import { ArrowLeft, Upload, X, Check } from "lucide-react"
 import { deliveryAPI } from "@/lib/api"
 import apiClient from "@/lib/api/axios"
 import { toast } from "sonner"
+import { clearDeliverySignupSession } from "@/lib/utils/auth"
 
 export default function SignupStep2() {
   const navigate = useNavigate()
@@ -25,8 +26,49 @@ export default function SignupStep2() {
     panPhoto: false,
     drivingLicensePhoto: false
   })
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [drivingLicenseNumber, setDrivingLicenseNumber] = useState("")
+  const [showBackPopup, setShowBackPopup] = useState(false)
+
+  const handleBack = () => {
+    setShowBackPopup(true)
+  }
+
+  const confirmBack = () => {
+    clearDeliverySignupSession()
+    navigate("/delivery/sign-in", { replace: true })
+  }
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const response = await deliveryAPI.getProfile()
+        const user = response?.data?.data?.user || response?.data?.user || response?.data?.data?.profile || response?.data?.profile
+
+        if (user) {
+          // Map stored documents to state
+          const docs = user.documents || {}
+          setUploadedDocs({
+            profilePhoto: user.profileImage?.url ? { url: user.profileImage.url, publicId: user.profileImage.publicId } : null,
+            aadharPhoto: docs.aadhar?.document ? { url: docs.aadhar.document } : null,
+            panPhoto: docs.pan?.document ? { url: docs.pan.document } : null,
+            drivingLicensePhoto: docs.drivingLicense?.document ? { url: docs.drivingLicense.document } : null
+          })
+
+          if (docs.drivingLicense?.number) {
+            setDrivingLicenseNumber(docs.drivingLicense.number)
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching delivery profile:", error)
+      } finally {
+        setIsLoadingProfile(false)
+      }
+    }
+
+    fetchProfile()
+  }, [])
 
   useEffect(() => {
     // Ensure this step always opens from the top.
@@ -127,6 +169,13 @@ export default function SignupStep2() {
 
       if (response?.data?.success) {
         toast.success("Signup completed successfully!")
+
+        // Update user status and profile in localStorage
+        const profile = response.data.data?.profile || response.data?.profile
+        if (profile) {
+          localStorage.setItem("delivery_user", JSON.stringify(profile))
+        }
+
         // Redirect to delivery home page
         setTimeout(() => {
           navigate("/delivery", { replace: true })
@@ -210,7 +259,7 @@ export default function SignupStep2() {
       {/* Header */}
       <div className="bg-white px-4 py-3 flex items-center gap-4 border-b border-gray-200">
         <button
-          onClick={() => navigate(-1)}
+          onClick={handleBack}
           className="p-2 hover:bg-gray-100 rounded-full transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -220,46 +269,87 @@ export default function SignupStep2() {
 
       {/* Content */}
       <div className="px-4 py-6">
-        <div className="mb-6">
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Document Verification</h2>
-          <p className="text-sm text-gray-600">Please upload clear photos of your documents</p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <DocumentUpload docType="profilePhoto" label="Profile Photo" required={true} />
-          <DocumentUpload docType="aadharPhoto" label="Aadhar Card Photo" required={true} />
-          <DocumentUpload docType="panPhoto" label="PAN Card Photo" required={true} />
-
-          {/* Driving License Number Input */}
-          <div className="bg-white rounded-lg p-4 border border-gray-200">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Driving License Number <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={drivingLicenseNumber}
-              onChange={(e) => setDrivingLicenseNumber(e.target.value)}
-              placeholder="Enter Driving License Number"
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#00B761] text-sm"
-              required
-            />
+        {isLoadingProfile ? (
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-green-500 mb-4"></div>
+            <p className="text-gray-500">Loading documents...</p>
           </div>
+        ) : (
+          <>
+            <div className="mb-6">
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Document Verification</h2>
+              <p className="text-sm text-gray-600">Please upload clear photos of your documents</p>
+            </div>
 
-          <DocumentUpload docType="drivingLicensePhoto" label="Driving License Photo (Optional)" required={false} />
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <DocumentUpload docType="profilePhoto" label="Profile Photo" required={true} />
+              <DocumentUpload docType="aadharPhoto" label="Aadhar Card Photo" required={true} />
+              <DocumentUpload docType="panPhoto" label="PAN Card Photo" required={true} />
 
-          {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !drivingLicenseNumber}
-            className={`w-full py-4 rounded-lg font-bold text-white text-base transition-colors mt-6 ${isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !drivingLicenseNumber
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-[#00B761] hover:bg-[#00A055]"
-              }`}
-          >
-            {isSubmitting ? "Submitting..." : "Complete Signup"}
-          </button>
-        </form>
+              {/* Driving License Number Input */}
+              <div className="bg-white rounded-lg p-4 border border-gray-200">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Driving License Number <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={drivingLicenseNumber}
+                  onChange={(e) => setDrivingLicenseNumber(e.target.value)}
+                  placeholder="Enter Driving License Number"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#00B761] text-sm"
+                  required
+                />
+              </div>
+
+              <DocumentUpload docType="drivingLicensePhoto" label="Driving License Photo (Optional)" required={false} />
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !drivingLicenseNumber}
+                className={`w-full py-4 rounded-lg font-bold text-white text-base transition-colors mt-6 ${isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !drivingLicenseNumber
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-[#00B761] hover:bg-[#00A055]"
+                  }`}
+              >
+                {isSubmitting ? "Submitting..." : "Complete Signup"}
+              </button>
+            </form>
+          </>
+        )}
       </div>
+
+      {/* Confirmation Popup */}
+      {showBackPopup && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-8 sm:slide-in-from-scale-95 duration-300">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <ArrowLeft className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Abandon Signup?</h3>
+              <p className="text-gray-600 mb-6">
+                Are you sure you want to go back without completing the signup process? Your progress will be cleared.
+              </p>
+
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => setShowBackPopup(false)}
+                  className="w-full py-3.5 bg-[#00B761] text-white font-bold rounded-xl hover:bg-[#00A055] transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  Continue Signup
+                </button>
+                <button
+                  onClick={confirmBack}
+                  className="w-full py-3.5 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-all"
+                >
+                  Go Back
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

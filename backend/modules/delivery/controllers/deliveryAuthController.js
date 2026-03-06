@@ -124,15 +124,15 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         phone,
         phoneVerified: true,
         signupMethod: 'phone',
-        status: 'pending', // New delivery boys start as pending approval
+        status: 'onboarding', // New delivery boys start as onboarding until documents are submitted
         isActive: true, // Allow login to see verification message
         ...fcmPatch
       };
 
       try {
         delivery = await Delivery.create(deliveryData);
-        logger.info(`New delivery boy registered: ${delivery._id}`, { 
-          phone, 
+        logger.info(`New delivery boy registered: ${delivery._id}`, {
+          phone,
           deliveryId: delivery._id,
           deliveryIdField: delivery.deliveryId
         });
@@ -170,15 +170,15 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           phone,
           phoneVerified: true,
           signupMethod: 'phone',
-          status: 'pending', // New delivery boys start as pending approval
+          status: 'onboarding', // New delivery boys start as onboarding until documents are submitted
           isActive: true, // Allow login to see verification message
           ...fcmPatch
         };
 
         try {
           delivery = await Delivery.create(deliveryData);
-          logger.info(`New delivery boy created for signup: ${delivery._id}`, { 
-            phone, 
+          logger.info(`New delivery boy created for signup: ${delivery._id}`, {
+            phone,
             deliveryId: delivery._id,
             deliveryIdField: delivery.deliveryId,
             hasName: !!normalizedName
@@ -226,13 +226,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
 
       // Check if signup needs to be completed (missing required fields)
-      const needsSignup = !delivery.location?.city || 
-                         !delivery.vehicle?.number || 
-                         !delivery.documents?.pan?.number ||
-                         !delivery.documents?.aadhar?.number ||
-                         !delivery.documents?.aadhar?.document ||
-                         !delivery.documents?.pan?.document ||
-                         !delivery.documents?.drivingLicense?.document;
+      const needsSignup = !delivery.location?.city ||
+        !delivery.vehicle?.number ||
+        !delivery.documents?.pan?.number ||
+        !delivery.documents?.aadhar?.number ||
+        !delivery.documents?.aadhar?.document ||
+        !delivery.documents?.pan?.document ||
+        !delivery.documents?.drivingLicense?.document;
 
       if (needsSignup) {
         // Generate tokens for signup flow
