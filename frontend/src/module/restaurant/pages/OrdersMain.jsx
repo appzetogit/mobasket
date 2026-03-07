@@ -568,11 +568,14 @@ export default function OrdersMain() {
   const [isReverifying, setIsReverifying] = useState(false)
   const hasCompletedRestaurantOnboarding =
     !isGroceryStore && restaurantStatus.onboarding?.completedSteps === 4
+  const hasRejectedVerification = Boolean(
+    !isGroceryStore && String(restaurantStatus.rejectionReason || "").trim()
+  )
   const canAccessLiveOrders =
     isGroceryStore || restaurantStatus.isActive === true
   const shouldShowVerificationState =
     !restaurantStatus.isLoading &&
-    hasCompletedRestaurantOnboarding &&
+    (hasCompletedRestaurantOnboarding || hasRejectedVerification) &&
     restaurantStatus.isActive !== true
 
   useEffect(() => {

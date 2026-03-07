@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useLocation } from "@/module/user/hooks/useLocation";
 import { useZone } from "@/module/user/hooks/useZone";
+import { restaurantAPI } from "@/lib/api";
 import {
   MapPin,
   Bell,
@@ -29,6 +30,8 @@ export default function HomePage() {
   const { location, loading: locationLoading } = useLocation();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [currentPlaceholderIndex, setCurrentPlaceholderIndex] = useState(0);
+  const [popularRestaurants, setPopularRestaurants] = useState([]);
+  const [restaurantsLoading, setRestaurantsLoading] = useState(true);
   const [wishlist, setWishlist] = useState(() => {
     // Load wishlist from localStorage
     const saved = localStorage.getItem("wishlist");
@@ -115,7 +118,7 @@ export default function HomePage() {
 
   // Use location from hook, fallback to stored location
   const currentLocation = location || storedLocation;
-  const { isOutOfService } = useZone(currentLocation, "mofood");
+  const { zoneId, isOutOfService } = useZone(currentLocation, "mofood");
 
   // Get display location parts
   // Priority: formattedAddress > address > area/city
@@ -521,64 +524,112 @@ export default function HomePage() {
     },
   ];
 
-  // Popular Restaurants data
-  const popularRestaurants = [
-    {
-      id: 1,
-      name: "Hungry Puppets",
-      foodImage:
-        "https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400&h=300&fit=crop",
-      restaurantIcon: UtensilsCrossed,
-      cuisines: "Bengali, Indian, Pizza, Pasta",
-      distance: "967.40 km",
-      deliveryTime: "30-40 min",
-      rating: 4.7,
-    },
-    {
-      id: 2,
-      name: "Pizza Paradise",
-      foodImage:
-        "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=400&h=300&fit=crop",
-      restaurantIcon: ChefHat,
-      cuisines: "Italian, Pizza, Pasta",
-      distance: "850.20 km",
-      deliveryTime: "20-25 min",
-      rating: 4.8,
-    },
-    {
-      id: 3,
-      name: "Burger King",
-      foodImage:
-        "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=400&h=300&fit=crop",
-      restaurantIcon: Store,
-      cuisines: "American, Fast Food, Burgers",
-      distance: "720.50 km",
-      deliveryTime: "30-35 min",
-      rating: 4.6,
-    },
-    {
-      id: 4,
-      name: "Sushi Express",
-      foodImage:
-        "https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?w=400&h=300&fit=crop",
-      restaurantIcon: ChefHat,
-      cuisines: "Japanese, Sushi, Asian",
-      distance: "1100.30 km",
-      deliveryTime: "35-40 min",
-      rating: 4.9,
-    },
-    {
-      id: 5,
-      name: "Taco Bell",
-      foodImage:
-        "https://images.unsplash.com/photo-1626700051175-6818013e1d4f?w=400&h=300&fit=crop",
-      restaurantIcon: Coffee,
-      cuisines: "Mexican, Fast Food, Tacos",
-      distance: "650.80 km",
-      deliveryTime: "25-30 min",
-      rating: 4.5,
-    },
-  ];
+  const normalizeCity = (value) => String(value || "").trim().toLowerCase();
+
+  const extractImageUrl = (value) => {
+    if (!value) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "object") {
+      return value.url || value.image || value.imageUrl || value.secure_url || "";
+    }
+    return "";
+  };
+
+  useEffect(() => {
+    const fetchPopularRestaurants = async () => {
+      try {
+        setRestaurantsLoading(true);
+
+        const city = currentLocation?.city;
+        if (!city || city === "Current Location") {
+          setPopularRestaurants([]);
+          return;
+        }
+
+        const params = {
+          platform: "mofood",
+          limit: 20,
+          city,
+        };
+
+        if (zoneId) {
+          params.zoneId = zoneId;
+          params.onlyZone = "true";
+        }
+
+        const response = await restaurantAPI.getRestaurants(params);
+        const rawRestaurants = Array.isArray(response?.data?.data?.restaurants)
+          ? response.data.data.restaurants
+          : [];
+
+        const normalizedCurrentCity = normalizeCity(city);
+        const cityFilteredRestaurants = rawRestaurants.filter((restaurant) => {
+          if (String(restaurant?.platform || "").toLowerCase() !== "mofood") return false;
+          if (!normalizedCurrentCity) return true;
+
+          const restaurantCity = normalizeCity(
+            restaurant?.location?.city ||
+            restaurant?.city ||
+            restaurant?.address?.city
+          );
+
+          return restaurantCity === normalizedCurrentCity;
+        });
+
+        const transformedRestaurants = cityFilteredRestaurants.map((restaurant) => {
+          const coverImages = Array.isArray(restaurant?.coverImages)
+            ? restaurant.coverImages.map(extractImageUrl).filter(Boolean)
+            : [];
+          const menuImages = Array.isArray(restaurant?.menuImages)
+            ? restaurant.menuImages.map(extractImageUrl).filter(Boolean)
+            : [];
+          const foodImage =
+            coverImages[0] ||
+            menuImages[0] ||
+            extractImageUrl(restaurant?.profileImage) ||
+            "https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400&h=300&fit=crop";
+
+          const cuisines = Array.isArray(restaurant?.cuisines)
+            ? restaurant.cuisines.filter(Boolean).join(", ")
+            : String(restaurant?.cuisine || "Multi-cuisine");
+
+          const rawTime =
+            restaurant?.estimatedDeliveryTime ||
+            restaurant?.deliveryTime ||
+            restaurant?.avgDeliveryTime ||
+            "25-30 min";
+          const deliveryTime =
+            typeof rawTime === "number" ? `${rawTime} min` : String(rawTime);
+
+          const numericRating = Number(restaurant?.rating || restaurant?.averageRating || 0);
+
+          return {
+            id: restaurant?._id || restaurant?.restaurantId || restaurant?.slug || restaurant?.name,
+            slug:
+              restaurant?.slug ||
+              String(restaurant?.name || "")
+                .toLowerCase()
+                .replace(/\s+/g, "-"),
+            name: restaurant?.name || "Restaurant",
+            foodImage,
+            restaurantIcon: UtensilsCrossed,
+            cuisines,
+            distance: restaurant?.distance || "",
+            deliveryTime,
+            rating: Number.isFinite(numericRating) && numericRating > 0 ? numericRating.toFixed(1) : "N/A",
+          };
+        });
+
+        setPopularRestaurants(transformedRestaurants);
+      } catch {
+        setPopularRestaurants([]);
+      } finally {
+        setRestaurantsLoading(false);
+      }
+    };
+
+    fetchPopularRestaurants();
+  }, [currentLocation?.city, zoneId]);
 
   return (
     <div className="min-h-screen bg-[#f6e9dc] overflow-x-hidden pb-20">
@@ -845,6 +896,16 @@ export default function HomePage() {
         </div>
 
         <div className="flex gap-4 overflow-x-auto scrollbar-hide -mx-4 px-4">
+          {restaurantsLoading && (
+            <div className="w-full rounded-xl bg-white px-4 py-5 text-sm font-medium text-gray-500 shadow-sm">
+              Loading restaurants for your city...
+            </div>
+          )}
+          {!restaurantsLoading && popularRestaurants.length === 0 && (
+            <div className="w-full rounded-xl bg-white px-4 py-5 text-sm font-medium text-gray-500 shadow-sm">
+              No restaurants available in your city right now.
+            </div>
+          )}
           {popularRestaurants.map((restaurant) => (
             <motion.div
               key={restaurant.id}
@@ -854,7 +915,7 @@ export default function HomePage() {
               whileHover={{ y: -5 }}
               className="flex-shrink-0 w-[200px] bg-white rounded-xl overflow-visible shadow-sm hover:shadow-md transition-shadow cursor-pointer"
               onClick={() => {
-                // Navigate to restaurant page
+                navigate(`/restaurants/${restaurant.slug}`);
               }}
             >
               {/* Food Image - Large */}

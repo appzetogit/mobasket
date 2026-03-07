@@ -4408,7 +4408,7 @@ export default function RestaurantDetails() {
 
               </p>
 
-              <p className="text-[13px] text-gray-400 mt-0.5 line-clamp-1">
+              <p className="text-[13px] text-gray-400 mt-0.5 break-words whitespace-normal">
 
                 {restaurant?.location || "Indore"}
 
