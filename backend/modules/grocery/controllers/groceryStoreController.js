@@ -6,6 +6,7 @@ import { successResponse, errorResponse } from '../../../shared/utils/response.j
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
 import winston from 'winston';
+import mongoose from 'mongoose';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -357,23 +358,39 @@ export const updateGroceryStoreStatus = asyncHandler(async (req, res) => {
  */
 export const deleteGroceryStore = asyncHandler(async (req, res) => {
   try {
-    const archiveUpdate = {
-      isActive: false,
-      isAcceptingOrders: false,
-      rejectionReason: 'Archived',
-      rejectedAt: new Date()
-    };
+    const { id } = req.params;
 
-    const store = await GroceryStore.findOneAndUpdate(
-      { _id: req.params.id },
-      { $set: archiveUpdate },
-      { new: true }
-    );
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return errorResponse(res, 400, 'Invalid grocery store id');
+    }
 
-    const legacyStore = await syncLegacyRestaurantStoreState(req.params.id, archiveUpdate);
+    const storeObjectId = new mongoose.Types.ObjectId(id);
+    const isLegacyStore = await isLegacyGroceryRestaurant(storeObjectId);
+
+    const [store, legacyStore] = await Promise.all([
+      GroceryStore.findById(storeObjectId).select('name').lean(),
+      isLegacyStore
+        ? Restaurant.findById(storeObjectId).select('name').lean()
+        : Promise.resolve(null)
+    ]);
 
     if (!store && !legacyStore) {
       return errorResponse(res, 404, 'Grocery store not found');
+    }
+
+    const [groceryDeleteResult, legacyDeleteResult] = await Promise.all([
+      GroceryStore.collection.deleteOne({ _id: storeObjectId }),
+      isLegacyStore
+        ? Restaurant.collection.deleteOne({ _id: storeObjectId })
+        : Promise.resolve({ deletedCount: 0 })
+    ]);
+
+    const deletedAny =
+      Boolean(groceryDeleteResult?.deletedCount) ||
+      Boolean(legacyDeleteResult?.deletedCount);
+
+    if (!deletedAny) {
+      return errorResponse(res, 500, 'Failed to remove grocery store');
     }
 
     return successResponse(res, 200, 'Grocery store removed successfully');
