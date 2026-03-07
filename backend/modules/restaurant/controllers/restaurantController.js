@@ -72,25 +72,27 @@ function isRestaurantInAnyZone(restaurantLat, restaurantLng, activeZones) {
  * @param {Array} activeZones - Array of active zones
  * @returns {string|null} Zone ID or null
  */
-function getRestaurantZoneId(restaurantLat, restaurantLng, activeZones) {
-  if (!restaurantLat || !restaurantLng) return null;
-  
+function getRestaurantZoneIds(restaurantLat, restaurantLng, activeZones) {
+  if (!Number.isFinite(restaurantLat) || !Number.isFinite(restaurantLng)) return [];
+
+  const zoneIds = [];
+
   for (const zone of activeZones) {
     if (!zone.coordinates || zone.coordinates.length < 3) continue;
-    
+
     let isInZone = false;
     if (typeof zone.containsPoint === 'function') {
       isInZone = zone.containsPoint(restaurantLat, restaurantLng);
     } else {
       isInZone = isPointInZone(restaurantLat, restaurantLng, zone.coordinates);
     }
-    
-    if (isInZone) {
-      return zone._id.toString();
+
+    if (isInZone && zone?._id) {
+      zoneIds.push(zone._id.toString());
     }
   }
-  
-  return null;
+
+  return zoneIds;
 }
 
 function getRestaurantPlatform(restaurant) {
@@ -359,10 +361,10 @@ export const getRestaurants = async (req, res) => {
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return !strictZoneFilterResolved;
 
       const platformZones = restaurantPlatform === 'mogrocery' ? mogroceryZones : mofoodZones;
-      const restaurantZoneId = getRestaurantZoneId(lat, lng, platformZones);
-      if (!restaurantZoneId) return !strictZoneFilterResolved;
+      const restaurantZoneIds = getRestaurantZoneIds(lat, lng, platformZones);
+      if (restaurantZoneIds.length === 0) return !strictZoneFilterResolved;
 
-      if (strictZoneFilterResolved && restaurantZoneId !== userZoneIdNormalized) {
+      if (strictZoneFilterResolved && !restaurantZoneIds.includes(userZoneIdNormalized)) {
         return false;
       }
 

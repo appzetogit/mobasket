@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { Loader } from "@googlemaps/js-api-loader";
 import {
   ArrowLeft,
   ChevronRight,
@@ -46,6 +47,7 @@ import { authAPI } from "@/lib/api";
 import { locationAPI } from "@/lib/api";
 import { firebaseAuth } from "@/lib/firebase";
 import { clearModuleAuth } from "@/lib/utils/auth";
+import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey";
 import { toast } from "sonner";
 
 export default function Profile() {
@@ -60,6 +62,10 @@ export default function Profile() {
   const [addressDialogOpen, setAddressDialogOpen] = useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
   const [isSavingAddress, setIsSavingAddress] = useState(false);
+  const [googlePlacesReady, setGooglePlacesReady] = useState(false);
+  const [addressSuggestions, setAddressSuggestions] = useState([]);
+  const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
+  const [loadingAddressSuggestions, setLoadingAddressSuggestions] = useState(false);
   const [addressForm, setAddressForm] = useState({
     label: "Home",
     street: "",
@@ -71,6 +77,9 @@ export default function Profile() {
     longitude: "",
     isDefault: false,
   });
+  const autocompleteServiceRef = useRef(null);
+  const placesServiceRef = useRef(null);
+  const suggestionsDebounceRef = useRef(null);
 
   // Settings states
   const [appearance, setAppearance] = useState(() => {
@@ -295,6 +304,31 @@ export default function Profile() {
     };
   };
 
+  const parseAddressComponents = useCallback((components = []) => {
+    const findByType = (type) =>
+      components.find((component) => component.types?.includes(type))?.long_name || "";
+
+    const streetNumber = findByType("street_number");
+    const route = findByType("route");
+    const sublocality =
+      findByType("sublocality_level_1") ||
+      findByType("sublocality") ||
+      findByType("neighborhood");
+    const city =
+      findByType("locality") ||
+      findByType("administrative_area_level_2");
+    const state = findByType("administrative_area_level_1");
+    const zipCode = findByType("postal_code");
+
+    return {
+      street: [streetNumber, route].filter(Boolean).join(" ").trim(),
+      additionalDetails: sublocality,
+      city,
+      state,
+      zipCode,
+    };
+  }, []);
+
   const resetAddressForm = () => {
     setAddressForm({
       label: "Home",
@@ -307,7 +341,139 @@ export default function Profile() {
       longitude: "",
       isDefault: false,
     });
+    setAddressSuggestions([]);
+    setShowAddressSuggestions(false);
   };
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!addressDialogOpen) return undefined;
+    if (autocompleteServiceRef.current && placesServiceRef.current) {
+      setGooglePlacesReady(true);
+      return undefined;
+    }
+
+    const initGooglePlaces = async () => {
+      try {
+        const apiKey = await getGoogleMapsApiKey();
+        if (!apiKey || !isMounted) return;
+
+        const loader = new Loader({
+          apiKey,
+          version: "weekly",
+          libraries: ["places"],
+        });
+        const google = await loader.load();
+        if (!isMounted) return;
+
+        autocompleteServiceRef.current = new google.maps.places.AutocompleteService();
+        placesServiceRef.current = new google.maps.places.PlacesService(document.createElement("div"));
+        setGooglePlacesReady(true);
+      } catch (error) {
+        console.error("Profile address suggestions init failed:", error);
+        if (isMounted) setGooglePlacesReady(false);
+      }
+    };
+
+    initGooglePlaces();
+    return () => {
+      isMounted = false;
+    };
+  }, [addressDialogOpen]);
+
+  const fetchAddressSuggestions = useCallback((inputValue) => {
+    const query = String(inputValue || "").trim();
+    if (!query || query.length < 3 || !autocompleteServiceRef.current) {
+      setAddressSuggestions([]);
+      setLoadingAddressSuggestions(false);
+      return;
+    }
+
+    setLoadingAddressSuggestions(true);
+    autocompleteServiceRef.current.getPlacePredictions(
+      {
+        input: query,
+        componentRestrictions: { country: "in" },
+        types: ["address"],
+      },
+      (predictions, status) => {
+        const ok =
+          status === window.google?.maps?.places?.PlacesServiceStatus?.OK ||
+          status === "OK";
+        setAddressSuggestions(ok && Array.isArray(predictions) ? predictions.slice(0, 6) : []);
+        setLoadingAddressSuggestions(false);
+      },
+    );
+  }, []);
+
+  const handleStreetInputChange = useCallback((value) => {
+    setAddressForm((prev) => ({ ...prev, street: value }));
+    setShowAddressSuggestions(Boolean(value));
+
+    if (suggestionsDebounceRef.current) {
+      clearTimeout(suggestionsDebounceRef.current);
+    }
+
+    suggestionsDebounceRef.current = window.setTimeout(() => {
+      fetchAddressSuggestions(value);
+    }, 220);
+  }, [fetchAddressSuggestions]);
+
+  const handleAddressSuggestionSelect = useCallback((suggestion) => {
+    if (!suggestion?.place_id || !placesServiceRef.current) {
+      setAddressForm((prev) => ({ ...prev, street: suggestion?.description || prev.street }));
+      setShowAddressSuggestions(false);
+      return;
+    }
+
+    placesServiceRef.current.getDetails(
+      {
+        placeId: suggestion.place_id,
+        fields: ["formatted_address", "address_components", "geometry"],
+      },
+      (placeResult, status) => {
+        const ok =
+          status === window.google?.maps?.places?.PlacesServiceStatus?.OK ||
+          status === "OK";
+
+        if (!ok || !placeResult) {
+          setAddressForm((prev) => ({ ...prev, street: suggestion?.description || prev.street }));
+          setShowAddressSuggestions(false);
+          return;
+        }
+
+        const parsed = parseAddressComponents(placeResult.address_components || []);
+        const lat = placeResult?.geometry?.location?.lat?.();
+        const lng = placeResult?.geometry?.location?.lng?.();
+        const formatted = String(placeResult.formatted_address || "");
+        const fallbackStreet =
+          parsed.street ||
+          suggestion?.structured_formatting?.main_text ||
+          suggestion?.description ||
+          "";
+
+        setAddressForm((prev) => ({
+          ...prev,
+          street: fallbackStreet || prev.street,
+          additionalDetails: parsed.additionalDetails || prev.additionalDetails || formatted,
+          city: parsed.city || prev.city,
+          state: parsed.state || prev.state,
+          zipCode: parsed.zipCode || prev.zipCode,
+          latitude: Number.isFinite(lat) ? String(lat) : prev.latitude,
+          longitude: Number.isFinite(lng) ? String(lng) : prev.longitude,
+        }));
+        setShowAddressSuggestions(false);
+      },
+    );
+  }, [parseAddressComponents]);
+
+  useEffect(() => {
+    return () => {
+      if (suggestionsDebounceRef.current) {
+        clearTimeout(suggestionsDebounceRef.current);
+      }
+    };
+  }, []);
 
   const handleDetectCurrentLocation = async () => {
     if (!navigator.geolocation) {
@@ -321,7 +487,7 @@ export default function Profile() {
         navigator.geolocation.getCurrentPosition(resolve, reject, {
           enableHighAccuracy: true,
           timeout: 15000,
-          maximumAge: 0,
+          maximumAge: 10000,
         });
       });
 
@@ -337,6 +503,8 @@ export default function Profile() {
         ...prev,
         ...parsed,
       }));
+      setShowAddressSuggestions(false);
+      setAddressSuggestions([]);
       toast.success("Current location detected.");
     } catch (error) {
       console.error("Detect location failed:", error);
@@ -1127,7 +1295,16 @@ export default function Profile() {
       </div>
 
       {/* Address Popup */}
-      <Dialog open={addressDialogOpen} onOpenChange={setAddressDialogOpen}>
+      <Dialog
+        open={addressDialogOpen}
+        onOpenChange={(open) => {
+          setAddressDialogOpen(open);
+          if (!open) {
+            setShowAddressSuggestions(false);
+            setAddressSuggestions([]);
+          }
+        }}
+      >
         <DialogContent className="max-w-sm md:max-w-md lg:max-w-lg w-[calc(100%-2rem)] rounded-2xl p-0 overflow-hidden bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-800">
           <DialogHeader className="p-5 pb-2">
             <DialogTitle className="text-lg font-bold text-gray-900 dark:text-white">
@@ -1165,14 +1342,44 @@ export default function Profile() {
               {isDetectingLocation ? "Detecting..." : "Detect Current Location"}
             </Button>
 
-            <input
-              className="w-full h-10 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111] px-3 text-sm text-gray-900 dark:text-white"
-              placeholder="Street / House No."
-              value={addressForm.street}
-              onChange={(e) =>
-                setAddressForm((prev) => ({ ...prev, street: e.target.value }))
-              }
-            />
+            <div className="relative">
+              <input
+                className="w-full h-10 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111] px-3 text-sm text-gray-900 dark:text-white"
+                placeholder="Street / House No."
+                value={addressForm.street}
+                onChange={(e) => handleStreetInputChange(e.target.value)}
+                onFocus={() => {
+                  if (addressSuggestions.length > 0) {
+                    setShowAddressSuggestions(true);
+                  }
+                }}
+              />
+              {showAddressSuggestions && (loadingAddressSuggestions || addressSuggestions.length > 0) ? (
+                <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg">
+                  {loadingAddressSuggestions ? (
+                    <div className="px-3 py-2 text-xs text-gray-500">
+                      Loading suggestions...
+                    </div>
+                  ) : (
+                    addressSuggestions.map((suggestion) => (
+                      <button
+                        key={suggestion.place_id || suggestion.description}
+                        type="button"
+                        className="block w-full border-b border-gray-100 px-3 py-2 text-left text-sm text-gray-700 last:border-b-0 hover:bg-gray-50"
+                        onClick={() => handleAddressSuggestionSelect(suggestion)}
+                      >
+                        {suggestion.description}
+                      </button>
+                    ))
+                  )}
+                </div>
+              ) : null}
+              {googlePlacesReady && addressForm.street?.trim()?.length >= 3 && !loadingAddressSuggestions && showAddressSuggestions && addressSuggestions.length === 0 ? (
+                <div className="absolute z-20 mt-1 w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-xs text-gray-500 shadow-lg">
+                  No address suggestions found.
+                </div>
+              ) : null}
+            </div>
             <input
               className="w-full h-10 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111] px-3 text-sm text-gray-900 dark:text-white"
               placeholder="Area / Landmark"

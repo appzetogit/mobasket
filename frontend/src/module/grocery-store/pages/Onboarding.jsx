@@ -1,12 +1,43 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
-import { Image as ImageIcon, MapPin, Phone, Store, Upload, User, X, ArrowLeft } from "lucide-react"
+import { Image as ImageIcon, MapPin, Phone, Store, Upload, User, X, ArrowLeft, Search, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { uploadAPI, groceryStoreAPI } from "@/lib/api"
 import { toast } from "sonner"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 import { clearStoreSignupSession } from "@/lib/utils/auth"
+import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey"
+import { Loader } from "@googlemaps/js-api-loader"
+
+const parseAddressComponents = (components = []) => {
+  const byType = (type) => components.find((component) => component.types?.includes(type))
+  const streetNumber = byType("street_number")?.long_name || ""
+  const route = byType("route")?.long_name || ""
+  const sublocality =
+    byType("sublocality_level_1")?.long_name ||
+    byType("sublocality")?.long_name ||
+    byType("neighborhood")?.long_name ||
+    ""
+  const city =
+    byType("locality")?.long_name ||
+    byType("administrative_area_level_2")?.long_name ||
+    byType("administrative_area_level_3")?.long_name ||
+    ""
+  const state = byType("administrative_area_level_1")?.long_name || ""
+  const zipCode = byType("postal_code")?.long_name || ""
+  const landmark = byType("point_of_interest")?.long_name || ""
+
+  return {
+    addressLine1: [streetNumber, route].filter(Boolean).join(" ").trim(),
+    addressLine2: "",
+    area: sublocality || city,
+    city,
+    state,
+    landmark,
+    zipCode,
+  }
+}
 
 const createInitialForm = () => ({
   storeName: "",
@@ -23,6 +54,10 @@ const createInitialForm = () => ({
     landmark: "",
     zipCode: "",
     formattedAddress: "",
+    address: "",
+    latitude: "",
+    longitude: "",
+    coordinates: [],
   },
 })
 
@@ -37,11 +72,200 @@ export default function GroceryStoreOnboarding() {
   const [error, setError] = useState("")
   const [showBackPopup, setShowBackPopup] = useState(false)
   const [form, setForm] = useState(createInitialForm)
+  const mapRef = useRef(null)
+  const mapInstanceRef = useRef(null)
+  const markerRef = useRef(null)
+  const autocompleteInputRef = useRef(null)
+  const autocompleteRef = useRef(null)
+  const [mapLoading, setMapLoading] = useState(true)
+  const [mapError, setMapError] = useState("")
+  const [locationSearch, setLocationSearch] = useState("")
+  const hasResolvedInitialMapCenterRef = useRef(false)
 
   const [images, setImages] = useState({
     storeImage: null,
     additionalImages: [],
   })
+
+  const updateSelectedLocation = (lat, lng, address, components = []) => {
+    const parsedAddress = parseAddressComponents(components)
+    const normalizedLat = Number(Number(lat).toFixed(6))
+    const normalizedLng = Number(Number(lng).toFixed(6))
+    const resolvedAddress = String(address || "").trim() || `${normalizedLat}, ${normalizedLng}`
+
+    setLocationSearch(resolvedAddress)
+    setForm((prev) => ({
+      ...prev,
+      location: {
+        ...prev.location,
+        addressLine1: parsedAddress.addressLine1 || prev.location.addressLine1 || "",
+        addressLine2: parsedAddress.addressLine2 || prev.location.addressLine2 || "",
+        area: parsedAddress.area || prev.location.area || "",
+        city: parsedAddress.city || prev.location.city || "",
+        state: parsedAddress.state || prev.location.state || "",
+        landmark: parsedAddress.landmark || prev.location.landmark || "",
+        zipCode: parsedAddress.zipCode || prev.location.zipCode || "",
+        formattedAddress: resolvedAddress,
+        address: resolvedAddress,
+        latitude: normalizedLat,
+        longitude: normalizedLng,
+        coordinates: [normalizedLng, normalizedLat],
+      },
+    }))
+
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.panTo({ lat: normalizedLat, lng: normalizedLng })
+      if (mapInstanceRef.current.getZoom() < 16) {
+        mapInstanceRef.current.setZoom(16)
+      }
+    }
+
+    if (!window.google?.maps || !mapInstanceRef.current) return
+
+    if (!markerRef.current) {
+      markerRef.current = new window.google.maps.Marker({
+        map: mapInstanceRef.current,
+        draggable: true,
+        animation: window.google.maps.Animation.DROP,
+      })
+
+      markerRef.current.addListener("dragend", (event) => {
+        const newLat = event.latLng.lat()
+        const newLng = event.latLng.lng()
+        const geocoder = new window.google.maps.Geocoder()
+        geocoder.geocode({ location: { lat: newLat, lng: newLng } }, (results, status) => {
+          if (status === "OK" && results?.length) {
+            updateSelectedLocation(newLat, newLng, results[0].formatted_address, results[0].address_components || [])
+          } else {
+            updateSelectedLocation(newLat, newLng, `${newLat.toFixed(6)}, ${newLng.toFixed(6)}`)
+          }
+        })
+      })
+    }
+
+    markerRef.current.setPosition({ lat: normalizedLat, lng: normalizedLng })
+    markerRef.current.setTitle(resolvedAddress)
+  }
+
+  const initializeMap = (google) => {
+    if (!mapRef.current) return
+
+    const initialLat = Number(form.location.latitude)
+    const initialLng = Number(form.location.longitude)
+    const center =
+      Number.isFinite(initialLat) && Number.isFinite(initialLng)
+        ? { lat: initialLat, lng: initialLng }
+        : { lat: 20.5937, lng: 78.9629 }
+
+    const map = new google.maps.Map(mapRef.current, {
+      center,
+      zoom: Number.isFinite(initialLat) && Number.isFinite(initialLng) ? 16 : 5,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: true,
+      zoomControl: true,
+      gestureHandling: "greedy",
+    })
+
+    mapInstanceRef.current = map
+    map.addListener("click", (event) => {
+      const lat = event.latLng.lat()
+      const lng = event.latLng.lng()
+      const geocoder = new google.maps.Geocoder()
+      geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+        if (status === "OK" && results?.length) {
+          updateSelectedLocation(lat, lng, results[0].formatted_address, results[0].address_components || [])
+        } else {
+          updateSelectedLocation(lat, lng, `${lat.toFixed(6)}, ${lng.toFixed(6)}`)
+        }
+      })
+    })
+
+    if (autocompleteInputRef.current && google.maps.places && !autocompleteRef.current) {
+      const autocomplete = new google.maps.places.Autocomplete(autocompleteInputRef.current, {
+        types: ["geocode", "establishment"],
+        componentRestrictions: { country: "in" },
+      })
+
+      autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace()
+        if (!place?.geometry?.location) return
+        const lat = place.geometry.location.lat()
+        const lng = place.geometry.location.lng()
+        updateSelectedLocation(lat, lng, place.formatted_address || place.name || "", place.address_components || [])
+      })
+
+      autocompleteRef.current = autocomplete
+    }
+
+    if (Number.isFinite(initialLat) && Number.isFinite(initialLng)) {
+      updateSelectedLocation(
+        initialLat,
+        initialLng,
+        form.location.formattedAddress || form.location.address || `${initialLat}, ${initialLng}`
+      )
+    }
+
+    setMapLoading(false)
+  }
+
+  const reverseGeocodeCurrentLocation = (lat, lng) => {
+    if (!window.google?.maps) {
+      updateSelectedLocation(lat, lng, `${lat.toFixed(6)}, ${lng.toFixed(6)}`)
+      return
+    }
+
+    const geocoder = new window.google.maps.Geocoder()
+    geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+      if (status === "OK" && results?.length) {
+        updateSelectedLocation(lat, lng, results[0].formatted_address, results[0].address_components || [])
+      } else {
+        updateSelectedLocation(lat, lng, `${lat.toFixed(6)}, ${lng.toFixed(6)}`)
+      }
+    })
+  }
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadMap = async () => {
+      try {
+        setMapLoading(true)
+        setMapError("")
+
+        let googleLib = window.google
+        if (!googleLib?.maps) {
+          const apiKey = await getGoogleMapsApiKey()
+          if (!apiKey) {
+            throw new Error("Google Maps API key is missing")
+          }
+
+          const loader = new Loader({
+            apiKey,
+            version: "weekly",
+            libraries: ["places"],
+          })
+          googleLib = await loader.load()
+        }
+
+        if (!cancelled) {
+          initializeMap(googleLib)
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Failed to load onboarding map:", err)
+          setMapError(err?.message || "Failed to load map")
+          setMapLoading(false)
+        }
+      }
+    }
+
+    loadMap()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -92,8 +316,31 @@ export default function GroceryStoreOnboarding() {
                 source.location?.formattedAddress ||
                 store?.location?.formattedAddress ||
                 "",
+              address:
+                source.location?.address ||
+                store?.location?.address ||
+                "",
+              latitude:
+                source.location?.latitude ??
+                store?.location?.latitude ??
+                "",
+              longitude:
+                source.location?.longitude ??
+                store?.location?.longitude ??
+                "",
+              coordinates:
+                source.location?.coordinates ||
+                store?.location?.coordinates ||
+                [],
             },
           })
+          setLocationSearch(
+            source.location?.formattedAddress ||
+              store?.location?.formattedAddress ||
+              source.location?.address ||
+              store?.location?.address ||
+              ""
+          )
         }
 
         if (data?.storeImage || store?.profileImage) {
@@ -112,6 +359,57 @@ export default function GroceryStoreOnboarding() {
     }
     fetchData()
   }, [isFreshStepOne])
+
+  useEffect(() => {
+    if (!mapInstanceRef.current) return
+
+    const lat = Number(form.location.latitude)
+    const lng = Number(form.location.longitude)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+
+    updateSelectedLocation(
+      lat,
+      lng,
+      form.location.formattedAddress || form.location.address || `${lat}, ${lng}`
+    )
+  }, [form.location.latitude, form.location.longitude, form.location.formattedAddress, form.location.address])
+
+  useEffect(() => {
+    if (!mapInstanceRef.current || hasResolvedInitialMapCenterRef.current) return
+
+    const existingLat = Number(form.location.latitude)
+    const existingLng = Number(form.location.longitude)
+    if (Number.isFinite(existingLat) && Number.isFinite(existingLng)) {
+      hasResolvedInitialMapCenterRef.current = true
+      return
+    }
+
+    if (!navigator.geolocation) {
+      hasResolvedInitialMapCenterRef.current = true
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (hasResolvedInitialMapCenterRef.current) return
+        hasResolvedInitialMapCenterRef.current = true
+
+        const lat = Number(position?.coords?.latitude)
+        const lng = Number(position?.coords?.longitude)
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+
+        reverseGeocodeCurrentLocation(lat, lng)
+      },
+      () => {
+        hasResolvedInitialMapCenterRef.current = true
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 8000,
+        maximumAge: 60000,
+      }
+    )
+  }, [form.location.latitude, form.location.longitude])
 
   const handleUpload = async (file, folder) => {
     try {
@@ -200,6 +498,9 @@ export default function GroceryStoreOnboarding() {
     if (!form.location.city.trim()) return "City is required"
     if (!form.location.state.trim()) return "State is required"
     if (!form.location.zipCode.trim()) return "ZIP / postal code is required"
+    if (!Number.isFinite(Number(form.location.latitude)) || !Number.isFinite(Number(form.location.longitude))) {
+      return "Please pinpoint the store location on the map"
+    }
     return ""
   }
 
@@ -236,6 +537,13 @@ export default function GroceryStoreOnboarding() {
           location: {
             ...form.location,
             formattedAddress,
+            address: formattedAddress,
+            latitude: Number(form.location.latitude),
+            longitude: Number(form.location.longitude),
+            coordinates: [
+              Number(form.location.longitude),
+              Number(form.location.latitude),
+            ],
           },
         },
         storeImage: images.storeImage,
@@ -380,6 +688,56 @@ export default function GroceryStoreOnboarding() {
                   <span className="text-xs font-medium text-gray-700">Landmark</span>
                   <Input value={form.location.landmark} onChange={(e) => handleLocationChange("landmark", e.target.value)} />
                 </label>
+              </div>
+            </section>
+
+            <section className="bg-white p-4 sm:p-6 rounded-md space-y-5">
+              <div>
+                <h2 className="text-lg font-semibold text-black">Pinpoint store location</h2>
+                <p className="text-xs text-gray-500 mt-1">
+                  Search for your store, click on the map, or drag the pin to set the exact location.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <Input
+                    ref={autocompleteInputRef}
+                    value={locationSearch}
+                    onChange={(e) => setLocationSearch(e.target.value)}
+                    placeholder="Search for your store location"
+                    className="pl-10"
+                  />
+                </div>
+
+                {(form.location.formattedAddress || (Number.isFinite(Number(form.location.latitude)) && Number.isFinite(Number(form.location.longitude)))) && (
+                  <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
+                    <div className="font-medium">{form.location.formattedAddress || "Pinned location selected"}</div>
+                    {Number.isFinite(Number(form.location.latitude)) && Number.isFinite(Number(form.location.longitude)) && (
+                      <div className="mt-1 text-green-700">
+                        Coordinates: {Number(form.location.latitude).toFixed(6)}, {Number(form.location.longitude).toFixed(6)}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="relative overflow-hidden rounded-md border border-gray-200 bg-gray-50">
+                  <div ref={mapRef} className="h-[320px] w-full" />
+                  {mapLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-white/80">
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Loading map...</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="text-xs text-gray-500">
+                  Tap anywhere on the map to drop a pin. You can drag the marker if the spot needs adjustment.
+                </div>
+                {mapError && <div className="text-xs text-red-600">{mapError}</div>}
               </div>
             </section>
 

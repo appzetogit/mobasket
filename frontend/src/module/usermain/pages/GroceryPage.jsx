@@ -1463,11 +1463,33 @@ const GroceryPage = () => {
     return nearestDistance;
   }, [groceryStores, userLocation?.latitude, userLocation?.longitude]);
 
+  const selectedStoreDistanceKm = useMemo(() => {
+    if (selectedStoreId === "all-stores") return null;
+
+    const userLat = Number(userLocation?.latitude);
+    const userLng = Number(userLocation?.longitude);
+    if (!Number.isFinite(userLat) || !Number.isFinite(userLng)) {
+      return null;
+    }
+
+    const selectedStore = groceryStores.find(
+      (store) => getNormalizedStoreId(store) === String(selectedStoreId)
+    );
+    const coords = getStoreCoordinates(selectedStore);
+    if (!coords) return null;
+
+    const distanceKm = calculateDistanceKm(userLat, userLng, coords.lat, coords.lng);
+    return Number.isFinite(distanceKm) ? distanceKm : null;
+  }, [groceryStores, selectedStoreId, userLocation?.latitude, userLocation?.longitude]);
+
   const deliveryEtaMinutes = useMemo(() => {
-    if (!Number.isFinite(nearestStoreDistanceKm)) return 8;
+    const activeDistanceKm =
+      selectedStoreId === "all-stores" ? nearestStoreDistanceKm : selectedStoreDistanceKm;
+
+    if (!Number.isFinite(activeDistanceKm)) return 8;
     // Base prep/packing + travel estimate (~4 min per km)
-    return Math.max(8, Math.min(60, Math.round(8 + nearestStoreDistanceKm * 4)));
-  }, [nearestStoreDistanceKm]);
+    return Math.max(8, Math.min(60, Math.round(8 + activeDistanceKm * 4)));
+  }, [nearestStoreDistanceKm, selectedStoreDistanceKm, selectedStoreId]);
 
   const topAddress = useMemo(() => {
     const formattedAddress = (userLocation?.formattedAddress || "").trim();

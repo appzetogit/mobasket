@@ -90,6 +90,31 @@ const placeholders = [
 
 const normalizeCityName = (value) => String(value || "").trim().toLowerCase();
 
+const matchesRestaurantCity = (restaurant, normalizedUserCity) => {
+  if (!normalizedUserCity) return true;
+
+  const candidates = [
+    restaurant?.location?.city,
+    restaurant?.city,
+    restaurant?.address?.city,
+    restaurant?.location?.area,
+    restaurant?.location?.formattedAddress,
+    restaurant?.location?.address,
+    extractRestaurantCity(restaurant),
+  ]
+    .map((value) => normalizeCityName(value))
+    .filter(Boolean);
+
+  if (candidates.length === 0) return true;
+
+  return candidates.some(
+    (candidate) =>
+      candidate === normalizedUserCity ||
+      candidate.includes(normalizedUserCity) ||
+      normalizedUserCity.includes(candidate),
+  );
+};
+
 const extractRestaurantCity = (restaurant) => {
   const directCity =
     restaurant?.location?.city ||
@@ -1063,10 +1088,7 @@ export default function Home() {
           const restaurantsArray = (restaurantsArrayRaw || []).filter((restaurant) => {
             const platform = String(restaurant?.platform || "").toLowerCase();
             if (platform && platform !== "mofood") return false;
-            if (!normalizedUserCity) return false;
-
-            const restaurantCity = normalizeCityName(extractRestaurantCity(restaurant));
-            return restaurantCity === normalizedUserCity;
+            return matchesRestaurantCity(restaurant, normalizedUserCity);
           });
 
           if (restaurantsArray.length === 0) {
