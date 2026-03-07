@@ -60,6 +60,64 @@ export default function RestaurantsList() {
   })
   const editMapRef = useRef(null)
 
+  const resolveRestaurantLocation = (restaurant = {}) => {
+    const currentLocation =
+      restaurant?.location && typeof restaurant.location === "object"
+        ? restaurant.location
+        : {}
+    const onboardingLocation =
+      restaurant?.onboarding?.step1?.location &&
+      typeof restaurant.onboarding.step1.location === "object"
+        ? restaurant.onboarding.step1.location
+        : {}
+
+    const mergedLocation = {
+      ...onboardingLocation,
+      ...currentLocation,
+    }
+
+    const hasUsefulLocation = [
+      mergedLocation.addressLine1,
+      mergedLocation.addressLine2,
+      mergedLocation.area,
+      mergedLocation.city,
+      mergedLocation.state,
+      mergedLocation.pincode,
+      mergedLocation.zipCode,
+      mergedLocation.postalCode,
+      mergedLocation.address,
+      mergedLocation.formattedAddress,
+    ].some((value) => String(value || "").trim())
+
+    return hasUsefulLocation ? mergedLocation : {}
+  }
+
+  const formatRestaurantAddress = (restaurant = {}) => {
+    const location = resolveRestaurantLocation(restaurant)
+    if (!location || Object.keys(location).length === 0) return "N/A"
+
+    if (String(location.formattedAddress || "").trim()) return String(location.formattedAddress).trim()
+    if (String(location.address || "").trim()) return String(location.address).trim()
+
+    const parts = [
+      location.addressLine1,
+      location.addressLine2,
+      location.area,
+      location.city,
+      location.state,
+      location.pincode || location.zipCode || location.postalCode,
+    ]
+      .map((part) => String(part || "").trim())
+      .filter(Boolean)
+
+    return parts.join(", ") || "N/A"
+  }
+
+  const normalizeRestaurantRecord = (restaurant = {}) => ({
+    ...restaurant,
+    location: resolveRestaurantLocation(restaurant),
+  })
+
   // Format Restaurant ID to REST format (e.g., REST422829)
   const formatRestaurantId = (id) => {
     if (!id) return "REST000000"
@@ -138,22 +196,26 @@ export default function RestaurantsList() {
           // Map backend data to frontend format
           const restaurantsData = response.data.data.restaurants || response.data.data || []
           
-          const mappedRestaurants = restaurantsData.map((restaurant, index) => ({
+          const mappedRestaurants = restaurantsData.map((restaurant, index) => {
+            const resolvedLocation = resolveRestaurantLocation(restaurant)
+            return {
             id: restaurant._id || restaurant.id || index + 1,
             _id: restaurant._id, // Preserve original _id for API calls
             name: restaurant.name || "N/A",
             ownerName: restaurant.ownerName || "N/A",
             ownerPhone: restaurant.ownerPhone || restaurant.phone || "N/A",
-            zone: restaurant.location?.area || restaurant.location?.city || restaurant.zone || "N/A",
+            zone: resolvedLocation?.area || resolvedLocation?.city || restaurant.zone || "N/A",
             cuisine: Array.isArray(restaurant.cuisines) && restaurant.cuisines.length > 0 
               ? restaurant.cuisines[0] 
               : (restaurant.cuisine || "N/A"),
             status: restaurant.isActive !== false, // Default to true if not set (matches backend behavior)
             rating: restaurant.ratings?.average || restaurant.rating || 0,
             logo: restaurant.profileImage?.url || restaurant.logo || "https://via.placeholder.com/40",
+            address: formatRestaurantAddress(restaurant),
             // Preserve original restaurant data for details modal
-            originalData: restaurant,
-          }))
+            originalData: normalizeRestaurantRecord(restaurant),
+          }
+        })
           
           setRestaurants(mappedRestaurants)
         } else {
@@ -425,7 +487,7 @@ export default function RestaurantsList() {
       // First, use original data if available (has all details)
       if (restaurant.originalData) {
         console.log("Using original restaurant data:", restaurant.originalData)
-        setRestaurantDetails(restaurant.originalData)
+        setRestaurantDetails(normalizeRestaurantRecord(restaurant.originalData))
         setLoadingDetails(false)
         return
       }
@@ -460,9 +522,9 @@ export default function RestaurantsList() {
         const data = response.data.data
         // Handle different response structures
         if (data?.restaurant) {
-          setRestaurantDetails(data.restaurant)
+          setRestaurantDetails(normalizeRestaurantRecord(data.restaurant))
         } else if (data) {
-          setRestaurantDetails(data)
+          setRestaurantDetails(normalizeRestaurantRecord(data))
         } else {
           // Fallback to restaurant data from list
           setRestaurantDetails(restaurant)
@@ -470,12 +532,12 @@ export default function RestaurantsList() {
       } else {
         // Use the restaurant data we already have
         console.log("Using restaurant data from list:", restaurant)
-        setRestaurantDetails(restaurant)
+        setRestaurantDetails(normalizeRestaurantRecord(restaurant))
       }
     } catch (err) {
       console.error("Error fetching restaurant details:", err)
       // Use the restaurant data we already have
-      setRestaurantDetails(restaurant)
+      setRestaurantDetails(normalizeRestaurantRecord(restaurant))
     } finally {
       setLoadingDetails(false)
     }
@@ -494,6 +556,8 @@ export default function RestaurantsList() {
         restaurantData = response?.data?.data?.restaurant || response?.data?.data || restaurant
       }
 
+      restaurantData = normalizeRestaurantRecord(restaurantData)
+      const resolvedLocation = resolveRestaurantLocation(restaurantData)
       setEditingRestaurant(restaurantData)
       setEditRestaurantImageFile(null)
       setEditRestaurantImagePreview(restaurantData?.profileImage?.url || restaurantData?.logo || "")
@@ -502,19 +566,19 @@ export default function RestaurantsList() {
         ownerName: restaurantData?.ownerName || "",
         ownerPhone: restaurantData?.ownerPhone || restaurantData?.phone || "",
         ownerEmail: restaurantData?.ownerEmail || restaurantData?.email || "",
-        addressLine1: restaurantData?.location?.addressLine1 || "",
-        addressLine2: restaurantData?.location?.addressLine2 || "",
-        area: restaurantData?.location?.area || "",
-        city: restaurantData?.location?.city || "",
-        state: restaurantData?.location?.state || "",
-        pincode: restaurantData?.location?.pincode || restaurantData?.location?.zipCode || "",
-        latitude: Number.isFinite(Number(restaurantData?.location?.latitude))
-          ? Number(restaurantData.location.latitude).toFixed(6)
+        addressLine1: resolvedLocation?.addressLine1 || "",
+        addressLine2: resolvedLocation?.addressLine2 || "",
+        area: resolvedLocation?.area || "",
+        city: resolvedLocation?.city || "",
+        state: resolvedLocation?.state || "",
+        pincode: resolvedLocation?.pincode || resolvedLocation?.zipCode || "",
+        latitude: Number.isFinite(Number(resolvedLocation?.latitude))
+          ? Number(resolvedLocation.latitude).toFixed(6)
           : "",
-        longitude: Number.isFinite(Number(restaurantData?.location?.longitude))
-          ? Number(restaurantData.location.longitude).toFixed(6)
+        longitude: Number.isFinite(Number(resolvedLocation?.longitude))
+          ? Number(resolvedLocation.longitude).toFixed(6)
           : "",
-        address: restaurantData?.location?.address || restaurantData?.location?.formattedAddress || "",
+        address: formatRestaurantAddress(restaurantData),
       })
       setEditRestaurantDialog(true)
     } catch (err) {

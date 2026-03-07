@@ -37,6 +37,45 @@ const buildCityRegex = (value = '') => {
   return new RegExp(escaped, 'i');
 };
 
+const getRestaurantLocationSnapshot = (restaurant = {}) => {
+  const liveLocation =
+    restaurant?.location && typeof restaurant.location === 'object'
+      ? restaurant.location
+      : {};
+  const onboardingLocation =
+    restaurant?.onboarding?.step1?.location &&
+    typeof restaurant.onboarding.step1.location === 'object'
+      ? restaurant.onboarding.step1.location
+      : {};
+
+  const mergedLocation = {
+    ...onboardingLocation,
+    ...liveLocation,
+  };
+
+  const hasMeaningfulLocation = [
+    mergedLocation.formattedAddress,
+    mergedLocation.address,
+    mergedLocation.addressLine1,
+    mergedLocation.addressLine2,
+    mergedLocation.area,
+    mergedLocation.city,
+    mergedLocation.state,
+    mergedLocation.pincode,
+    mergedLocation.zipCode,
+    mergedLocation.postalCode,
+    mergedLocation.landmark,
+    mergedLocation.street,
+  ].some((value) => String(value || '').trim());
+
+  return hasMeaningfulLocation ? mergedLocation : {};
+};
+
+const normalizeRestaurantAddressRecord = (restaurant = {}) => ({
+  ...restaurant,
+  location: getRestaurantLocationSnapshot(restaurant),
+});
+
 const normalizeSidebarAccess = (sidebarAccess) => {
   if (!Array.isArray(sidebarAccess)) return [];
   return Array.from(
@@ -1222,14 +1261,32 @@ export const getRestaurants = asyncHandler(async (req, res) => {
     }
 
     if (city) {
-      query['location.city'] = { $regex: buildCityRegex(city) };
+      const cityRegex = buildCityRegex(city);
+      if (cityRegex) {
+        query.$and = [
+          ...(Array.isArray(query.$and) ? query.$and : []),
+          {
+            $or: [
+              { 'location.city': cityRegex },
+              { 'onboarding.step1.location.city': cityRegex }
+            ]
+          }
+        ];
+      }
     }
 
     // Zone filter
     if (zone && zone !== 'All over the World') {
-      query.$or = [
-        { 'location.area': { $regex: zone, $options: 'i' } },
-        { 'location.city': { $regex: zone, $options: 'i' } }
+      query.$and = [
+        ...(Array.isArray(query.$and) ? query.$and : []),
+        {
+          $or: [
+            { 'location.area': { $regex: zone, $options: 'i' } },
+            { 'location.city': { $regex: zone, $options: 'i' } },
+            { 'onboarding.step1.location.area': { $regex: zone, $options: 'i' } },
+            { 'onboarding.step1.location.city': { $regex: zone, $options: 'i' } }
+          ]
+        }
       ];
     }
 
@@ -1244,11 +1301,13 @@ export const getRestaurants = asyncHandler(async (req, res) => {
       .limit(parseInt(limit))
       .lean();
 
+    const normalizedRestaurants = restaurants.map(normalizeRestaurantAddressRecord);
+
     // Get total count
     const total = await Restaurant.countDocuments(query);
 
     return successResponse(res, 200, 'Restaurants retrieved successfully', {
-      restaurants: restaurants,
+      restaurants: normalizedRestaurants,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -1259,6 +1318,26 @@ export const getRestaurants = asyncHandler(async (req, res) => {
   } catch (error) {
     logger.error(`Error fetching restaurants: ${error.message}`, { error: error.stack });
     return errorResponse(res, 500, 'Failed to fetch restaurants');
+  }
+});
+
+export const getRestaurantById = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const restaurant = await Restaurant.findById(id)
+      .select('-password')
+      .lean();
+
+    if (!restaurant) {
+      return errorResponse(res, 404, 'Restaurant not found');
+    }
+
+    return successResponse(res, 200, 'Restaurant retrieved successfully', {
+      restaurant: normalizeRestaurantAddressRecord(restaurant),
+    });
+  } catch (error) {
+    logger.error(`Error fetching restaurant: ${error.message}`, { error: error.stack });
+    return errorResponse(res, 500, 'Failed to fetch restaurant');
   }
 });
 
@@ -1424,7 +1503,7 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
     });
 
     return successResponse(res, 200, 'Restaurant updated successfully', {
-      restaurant: updatedRestaurant,
+      restaurant: normalizeRestaurantAddressRecord(updatedRestaurant),
     });
   } catch (error) {
     logger.error(`Error updating restaurant: ${error.message}`, { error: error.stack });
