@@ -1207,6 +1207,9 @@ export const adminAPI = {
   addRestaurantMenuItem: (restaurantId, payload) => {
     return apiClient.post(`/admin/restaurants/${restaurantId}/menu/items`, payload);
   },
+  updateRestaurantMenuItem: (restaurantId, itemId, payload) => {
+    return apiClient.put(`/admin/restaurants/${restaurantId}/menu/items/${itemId}`, payload);
+  },
 
   // Create restaurant
   createRestaurant: (data) => {

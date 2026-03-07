@@ -156,7 +156,8 @@ import {
 } from '../controllers/groceryCategoryRequestApprovalController.js';
 import {
   getRestaurantMenuForAdmin,
-  addRestaurantMenuItemByAdmin
+  addRestaurantMenuItemByAdmin,
+  updateRestaurantMenuItemByAdmin
 } from '../controllers/menuManagementController.js';
 import {
   getAllComplaints,
@@ -438,6 +439,7 @@ router.post('/food-approvals/:id/approve', approveFoodItem);
 router.post('/food-approvals/:id/reject', rejectFoodItem);
 router.get('/restaurants/:restaurantId/menu', getRestaurantMenuForAdmin);
 router.post('/restaurants/:restaurantId/menu/items', addRestaurantMenuItemByAdmin);
+router.put('/restaurants/:restaurantId/menu/items/:itemId', updateRestaurantMenuItemByAdmin);
 
 // Grocery Approval Management (Order Approvals)
 router.get('/grocery-approvals', getPendingGroceryApprovals);

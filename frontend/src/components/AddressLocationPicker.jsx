@@ -71,6 +71,8 @@ export default function AddressLocationPicker({
   const dragListenerRef = useRef(null);
   const clickListenerRef = useRef(null);
   const reverseGeocodeTimerRef = useRef(null);
+  const typedAddressTimerRef = useRef(null);
+  const lastTypedQueryRef = useRef("");
   const [mapsReady, setMapsReady] = useState(false);
   const [mapsLoading, setMapsLoading] = useState(false);
   const [isLocatingTypedAddress, setIsLocatingTypedAddress] = useState(false);
@@ -85,6 +87,15 @@ export default function AddressLocationPicker({
     }
     return DEFAULT_CENTER;
   }, [latitude, longitude]);
+
+  const typedAddressQuery = useMemo(
+    () =>
+      [value?.street, value?.additionalDetails, value?.city, value?.state, value?.zipCode]
+        .map((part) => String(part || "").trim())
+        .filter(Boolean)
+        .join(", "),
+    [value?.street, value?.additionalDetails, value?.city, value?.state, value?.zipCode],
+  );
 
   const updateMarkerPosition = useCallback((position, shouldPan = true) => {
     if (!mapRef.current || !markerRef.current) return;
@@ -160,6 +171,7 @@ export default function AddressLocationPicker({
         const loader = new Loader({
           apiKey,
           version: "weekly",
+          libraries: ["places"],
         });
 
         const google = await loader.load();
@@ -220,6 +232,9 @@ export default function AddressLocationPicker({
       if (reverseGeocodeTimerRef.current) {
         clearTimeout(reverseGeocodeTimerRef.current);
       }
+      if (typedAddressTimerRef.current) {
+        clearTimeout(typedAddressTimerRef.current);
+      }
       if (dragListenerRef.current && window.google?.maps?.event) {
         window.google.maps.event.removeListener(dragListenerRef.current);
       }
@@ -234,13 +249,24 @@ export default function AddressLocationPicker({
     updateMarkerPosition(targetPosition, false);
   }, [mapsReady, targetPosition, updateMarkerPosition]);
 
-  const handleLocateTypedAddress = useCallback(async () => {
-    setIsLocatingTypedAddress(true);
+  const locateTypedAddress = useCallback(async (options = {}) => {
+    const { showToast = false } = options;
     try {
       const apiKey = await getGoogleMapsApiKey();
-      const result = await geocodeAddress(value, apiKey);
+      const result = await geocodeAddress(
+        {
+          street: value?.street,
+          additionalDetails: value?.additionalDetails,
+          city: value?.city,
+          state: value?.state,
+          zipCode: value?.zipCode,
+        },
+        apiKey,
+      );
       if (!result?.latitude || !result?.longitude) {
-        toast.error("Enter a more complete address to set its map location.");
+        if (showToast) {
+          toast.error("Enter a more complete address to set its map location.");
+        }
         return;
       }
 
@@ -258,21 +284,61 @@ export default function AddressLocationPicker({
         latitude: String(nextPosition.lat),
         longitude: String(nextPosition.lng),
       });
+      lastTypedQueryRef.current = typedAddressQuery;
 
       updateMarkerPosition(nextPosition, true);
       if (mapRef.current) {
         mapRef.current.setZoom(16);
       }
 
-      await reverseGeocodeAt(nextPosition.lat, nextPosition.lng);
-      toast.success("Map location updated from the typed address.");
+      if (showToast) {
+        await reverseGeocodeAt(nextPosition.lat, nextPosition.lng);
+        toast.success("Map location updated from the typed address.");
+      }
     } catch (error) {
       console.error("Typed address geocoding failed:", error);
-      toast.error("Unable to set map location from the typed address.");
+      if (showToast) {
+        toast.error("Unable to set map location from the typed address.");
+      }
     } finally {
-      setIsLocatingTypedAddress(false);
+      if (showToast) {
+        setIsLocatingTypedAddress(false);
+      }
     }
-  }, [reverseGeocodeAt, syncLocationFields, updateMarkerPosition, value]);
+  }, [reverseGeocodeAt, syncLocationFields, typedAddressQuery, updateMarkerPosition, value]);
+
+  const handleLocateTypedAddress = useCallback(async () => {
+    setIsLocatingTypedAddress(true);
+    await locateTypedAddress({ showToast: true });
+  }, [locateTypedAddress]);
+
+  useEffect(() => {
+    if (!mapsReady) return;
+
+    const query = typedAddressQuery;
+    const shouldAutoLocate =
+      query.length >= 3 &&
+      (String(value?.city || "").trim().length >= 2 ||
+        String(value?.street || "").trim().length >= 3 ||
+        String(value?.zipCode || "").trim().length >= 5);
+
+    if (!shouldAutoLocate) return;
+    if (query === lastTypedQueryRef.current) return;
+
+    if (typedAddressTimerRef.current) {
+      clearTimeout(typedAddressTimerRef.current);
+    }
+
+    typedAddressTimerRef.current = window.setTimeout(() => {
+      locateTypedAddress({ showToast: false });
+    }, 500);
+
+    return () => {
+      if (typedAddressTimerRef.current) {
+        clearTimeout(typedAddressTimerRef.current);
+      }
+    };
+  }, [locateTypedAddress, mapsReady, typedAddressQuery, value?.city, value?.street, value?.zipCode]);
 
   const handleUseCurrentLocation = useCallback(async () => {
     if (!navigator.geolocation) {
