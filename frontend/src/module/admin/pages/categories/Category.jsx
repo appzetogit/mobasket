@@ -5,6 +5,7 @@ import { Search, Download, ChevronDown, Plus, Edit, Trash2, Info, MapPin, Slider
 import { Button } from "@/components/ui/button"
 import { adminAPI, uploadAPI } from "@/lib/api"
 import { API_BASE_URL } from "@/lib/api/config"
+import { buildImageFallback } from "@/lib/utils/imageFallback"
 import { toast } from "sonner"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
@@ -16,7 +17,7 @@ const GROCERY_ENTITY_OPTIONS = [
   { value: "subcategories", label: "Subcategories" },
   { value: "products", label: "Products" },
 ]
-const DEFAULT_CATEGORY_IMAGE = "https://via.placeholder.com/40"
+const DEFAULT_CATEGORY_IMAGE = buildImageFallback(40, "CAT")
 
 const getInitialFormData = () => ({
   name: "",
@@ -1061,7 +1062,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                           alt={category.name}
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            e.target.src = "https://via.placeholder.com/40"
+                                  e.target.src = DEFAULT_CATEGORY_IMAGE
                           }}
                         />
                       </div>
@@ -1795,7 +1796,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                               alt="Category preview"
                               className="w-full h-full object-cover"
                               onError={(e) => {
-                                e.target.src = "https://via.placeholder.com/128"
+                                e.target.src = buildImageFallback(128, "CAT")
                               }}
                             />
                             {imagePreview && (

@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { DEFAULT_IMAGE_FALLBACK_40 } from '../../../shared/utils/imageFallback.js';
 
 const adminCategoryManagementSchema = new mongoose.Schema(
   {
@@ -9,7 +10,7 @@ const adminCategoryManagementSchema = new mongoose.Schema(
     },
     image: {
       type: String,
-      default: 'https://via.placeholder.com/40',
+      default: DEFAULT_IMAGE_FALLBACK_40,
     },
     type: {
       type: String,

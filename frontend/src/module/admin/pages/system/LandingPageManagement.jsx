@@ -3,6 +3,7 @@ import { Upload, Trash2, Image as ImageIcon, Loader2, AlertCircle, CheckCircle2,
 import api from "@/lib/api"
 import { adminAPI } from "@/lib/api"
 import { getModuleToken } from "@/lib/utils/auth"
+import { buildImageFallback } from "@/lib/utils/imageFallback"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
@@ -2097,7 +2098,7 @@ export default function LandingPageManagement({ forcedPlatform, initialTab = 'ba
                             ? coverImages[0]
                             : (menuImages.length > 0
                                 ? menuImages[0]
-                                : (item.restaurant?.profileImage?.url || "https://via.placeholder.com/400"))
+                                : (item.restaurant?.profileImage?.url || buildImageFallback(400, "RES")))
 
                           return (
                             <div key={item._id} className="border border-slate-200 rounded-lg overflow-hidden">
@@ -2307,7 +2308,7 @@ export default function LandingPageManagement({ forcedPlatform, initialTab = 'ba
                       <div className="max-h-[560px] overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
                         {filteredProductSectionItems.map((item) => {
                           const itemId = String(item?._id || "")
-                          const image = (Array.isArray(item?.images) ? item.images[0] : '') || "https://via.placeholder.com/80"
+                          const image = (Array.isArray(item?.images) ? item.images[0] : '') || buildImageFallback(80, "IMG")
                           const isInActiveSection = addedProductItemIdsInActiveSection.has(itemId)
                           const isAddedInAnotherSection = addedProductItemIds.has(itemId) && !isInActiveSection
                           return (
@@ -2367,8 +2368,8 @@ export default function LandingPageManagement({ forcedPlatform, initialTab = 'ba
                           const displayName = item.itemId?.name || 'N/A'
                           const displayImage =
                             item.itemType === 'product'
-                              ? (Array.isArray(item.itemId?.images) ? item.itemId.images[0] : '') || "https://via.placeholder.com/120"
-                              : item.itemId?.image || "https://via.placeholder.com/120"
+                              ? (Array.isArray(item.itemId?.images) ? item.itemId.images[0] : '') || buildImageFallback(120, "IMG")
+                              : item.itemId?.image || buildImageFallback(120, "IMG")
                           return (
                             <div key={item._id} className="border border-slate-200 rounded-lg p-3 flex items-center justify-between gap-3">
                               <div className="flex items-center gap-3 min-w-0">
@@ -2416,7 +2417,7 @@ export default function LandingPageManagement({ forcedPlatform, initialTab = 'ba
                           <div className="flex gap-3 overflow-x-auto pb-1">
                             {section.items.map((item) => {
                               const product = item?.itemId || {}
-                              const image = (Array.isArray(product?.images) ? product.images[0] : '') || "https://via.placeholder.com/120"
+                              const image = (Array.isArray(product?.images) ? product.images[0] : '') || buildImageFallback(120, "IMG")
                               return (
                                 <div key={item._id} className="min-w-[165px] max-w-[165px] rounded-xl border border-slate-200 p-2.5 bg-white">
                                   <img src={image} alt={product?.name || 'Product'} className="w-full h-24 rounded-lg object-cover border border-slate-100 mb-2" />
@@ -2531,7 +2532,7 @@ export default function LandingPageManagement({ forcedPlatform, initialTab = 'ba
                     .map((item, index) => (
                       <div key={item._id} className="border border-slate-200 rounded-lg p-3 flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          <img src={item.menuItemImage || "https://via.placeholder.com/120"} alt={item.menuItemName || 'N/A'} className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
+                          <img src={item.menuItemImage || buildImageFallback(120, "IMG")} alt={item.menuItemName || 'N/A'} className="w-14 h-14 rounded-lg object-cover border border-slate-200" />
                           <div className="min-w-0">
                             <h3 className="font-semibold text-slate-900 line-clamp-1">{item.menuItemName || 'N/A'}</h3>
                             <p className="text-xs text-slate-500">{item.restaurantId?.name || 'Restaurant'}</p>

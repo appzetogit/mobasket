@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react"
 import { Search, Trash2, Loader2 } from "lucide-react"
 import { adminAPI, restaurantAPI } from "@/lib/api"
+import { buildImageFallback } from "@/lib/utils/imageFallback"
 import { toast } from "sonner"
 
 export default function AddonsList() {
@@ -55,7 +56,7 @@ export default function AddonsList() {
                 menuAddonId: menuAddonId, // Store separately for clarity
                 _id: addon._id,
                 name: addon.name || "Unnamed Addon",
-                image: addon.image || addon.images?.[0] || "https://via.placeholder.com/40",
+                image: addon.image || addon.images?.[0] || buildImageFallback(40, "ADD"),
                 price: addon.price || 0,
                 description: addon.description || "",
                 isAvailable: addon.isAvailable !== false,
@@ -297,7 +298,7 @@ export default function AddonsList() {
                           alt={addon.name}
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            e.target.src = "https://via.placeholder.com/40"
+                            e.target.src = buildImageFallback(40, "ADD")
                           }}
                         />
                       </div>

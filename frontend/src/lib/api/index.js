@@ -251,6 +251,11 @@ export const zoneAPI = {
       params: { lat, lng, platform }
     });
   },
+  detectAllZones: (lat, lng, platform = "mofood") => {
+    return apiClient.get(API_ENDPOINTS.ZONE.DETECT_ALL, {
+      params: { lat, lng, platform }
+    });
+  },
   getActiveZones: (platform = "mofood") => {
     return apiClient.get(API_ENDPOINTS.ZONE.ACTIVE, {
       params: { platform }

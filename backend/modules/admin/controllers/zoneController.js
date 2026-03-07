@@ -560,6 +560,98 @@ export const detectUserZone = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Detect all active zones that contain the user location (PUBLIC API)
+ * GET /api/zones/detect-all?lat=&lng=
+ */
+export const detectAllUserZones = asyncHandler(async (req, res) => {
+  try {
+    const { lat, lng, latitude, longitude, platform } = req.query;
+
+    const userLat = parseFloat(lat || latitude);
+    const userLng = parseFloat(lng || longitude);
+
+    if (!Number.isFinite(userLat) || !Number.isFinite(userLng)) {
+      return errorResponse(res, 400, 'Latitude and longitude are required');
+    }
+
+    if (userLat < -90 || userLat > 90 || userLng < -180 || userLng > 180) {
+      return errorResponse(res, 400, 'Invalid coordinates');
+    }
+
+    const activeZones = await Zone.find({
+      isActive: true,
+      ...buildPlatformQuery(platform)
+    }).lean();
+
+    if (activeZones.length === 0) {
+      return successResponse(res, 200, 'No active zones found', {
+        status: 'OUT_OF_SERVICE',
+        zoneIds: [],
+        zones: [],
+        message: 'No delivery zones are currently active'
+      });
+    }
+
+    const matchedZones = [];
+
+    for (const zone of activeZones) {
+      if (!zone.coordinates || zone.coordinates.length < 3) continue;
+
+      let isInZone = false;
+      if (typeof zone.containsPoint === 'function') {
+        isInZone = zone.containsPoint(userLat, userLng);
+      } else {
+        let inside = false;
+        for (let i = 0, j = zone.coordinates.length - 1; i < zone.coordinates.length; j = i++) {
+          const coordI = zone.coordinates[i];
+          const coordJ = zone.coordinates[j];
+          const xi = typeof coordI === 'object' ? Number(coordI.latitude ?? coordI.lat) : null;
+          const yi = typeof coordI === 'object' ? Number(coordI.longitude ?? coordI.lng) : null;
+          const xj = typeof coordJ === 'object' ? Number(coordJ.latitude ?? coordJ.lat) : null;
+          const yj = typeof coordJ === 'object' ? Number(coordJ.longitude ?? coordJ.lng) : null;
+
+          if (!Number.isFinite(xi) || !Number.isFinite(yi) || !Number.isFinite(xj) || !Number.isFinite(yj)) continue;
+
+          const intersect = ((yi > userLng) !== (yj > userLng)) &&
+            (userLat < (xj - xi) * (userLng - yi) / (yj - yi) + xi);
+          if (intersect) inside = !inside;
+        }
+        isInZone = inside;
+      }
+
+      if (isInZone) {
+        matchedZones.push(zone);
+      }
+    }
+
+    if (matchedZones.length === 0) {
+      return successResponse(res, 200, 'User location is outside all service zones', {
+        status: 'OUT_OF_SERVICE',
+        zoneIds: [],
+        zones: [],
+        message: 'Your location is not within any active delivery zone. Please check if delivery is available in your area.'
+      });
+    }
+
+    return successResponse(res, 200, 'Zones detected successfully', {
+      status: 'IN_SERVICE',
+      zoneIds: matchedZones.map((zone) => zone._id.toString()),
+      zones: matchedZones.map((zone) => ({
+        _id: zone._id.toString(),
+        name: zone.name || zone.zoneName,
+        zoneName: zone.zoneName || zone.name,
+        country: zone.country,
+        unit: zone.unit
+      })),
+      message: 'Service available in your area'
+    });
+  } catch (error) {
+    console.error('Error detecting all user zones:', error);
+    return errorResponse(res, 500, 'Failed to detect zones');
+  }
+});
+
+/**
  * Get active zones for map overlays (PUBLIC API)
  * GET /api/zones/active?platform=mofood|mogrocery
  */

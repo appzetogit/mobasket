@@ -13,6 +13,7 @@ import winston from 'winston';
 import mongoose from 'mongoose';
 import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
 import { initializeCloudinary } from '../../../config/cloudinary.js';
+import { DEFAULT_IMAGE_FALLBACK_40 } from '../../../shared/utils/imageFallback.js';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -1718,7 +1719,7 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
         _id: restaurant._id.toString(),
         sl: skip + index + 1,
         restaurantName: restaurant.name || 'N/A',
-        restaurantImage: restaurant.profileImage?.url || restaurant.onboarding?.step2?.profileImageUrl?.url || 'https://via.placeholder.com/40',
+        restaurantImage: restaurant.profileImage?.url || restaurant.onboarding?.step2?.profileImageUrl?.url || DEFAULT_IMAGE_FALLBACK_40,
         ownerName: restaurant.ownerName || 'N/A',
         ownerPhone: restaurant.ownerPhone || restaurant.phone || 'N/A',
         zone: zone,
@@ -1928,7 +1929,7 @@ export const getGroceryStoreJoinRequests = asyncHandler(async (req, res) => {
         _id: store._id.toString(),
         sl: skip + index + 1,
         storeName: store.name || 'N/A',
-        storeImage: store.profileImage?.url || store.onboarding?.storeImage?.url || 'https://via.placeholder.com/40',
+        storeImage: store.profileImage?.url || store.onboarding?.storeImage?.url || DEFAULT_IMAGE_FALLBACK_40,
         ownerName: store.ownerName || 'N/A',
         ownerPhone: store.ownerPhone || store.phone || 'N/A',
         zone: zone,

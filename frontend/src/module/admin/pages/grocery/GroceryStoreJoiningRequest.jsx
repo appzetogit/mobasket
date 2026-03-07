@@ -4,6 +4,7 @@ import {
   FileText, Image as ImageIcon, ExternalLink, CreditCard, Calendar, Star, Building2, User, Phone, Mail, MapPin, Clock
 } from "lucide-react"
 import { adminAPI } from "../../../../lib/api"
+import { buildImageFallback } from "@/lib/utils/imageFallback"
 
 export default function GroceryStoreJoiningRequest() {
   const [activeTab, setActiveTab] = useState("pending")
@@ -273,11 +274,11 @@ export default function GroceryStoreJoiningRequest() {
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0">
                             <img
-                              src={request.storeImage || "https://via.placeholder.com/40"}
+                              src={request.storeImage || buildImageFallback(40, "STR")}
                               alt={request.storeName}
                               className="w-full h-full object-cover"
                               onError={(e) => {
-                                e.target.src = "https://via.placeholder.com/40"
+                                e.target.src = buildImageFallback(40, "STR")
                               }}
                             />
                           </div>
@@ -429,11 +430,11 @@ export default function GroceryStoreJoiningRequest() {
                   <div className="flex items-start gap-6 pb-6 border-b border-slate-200">
                     <div className="w-24 h-24 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0">
                       <img
-                        src={storeDetails?.profileImage?.url || storeDetails?.onboarding?.storeImage?.url || selectedRequest?.storeImage || "https://via.placeholder.com/96"}
+                        src={storeDetails?.profileImage?.url || storeDetails?.onboarding?.storeImage?.url || selectedRequest?.storeImage || buildImageFallback(96, "STR")}
                         alt={storeDetails?.name || selectedRequest?.storeName || "Store"}
                         className="w-full h-full object-cover"
                         onError={(e) => {
-                          e.target.src = "https://via.placeholder.com/96"
+                          e.target.src = buildImageFallback(96, "STR")
                         }}
                       />
                     </div>

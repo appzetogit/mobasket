@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Search, Loader2, Pencil } from "lucide-react";
 import { adminAPI } from "@/lib/api";
+import { buildImageFallback } from "@/lib/utils/imageFallback";
 import { toast } from "sonner";
 
 function normalizeImage(item = {}) {
@@ -21,7 +22,7 @@ function normalizeImage(item = {}) {
       .find(Boolean);
     if (firstImage) return firstImage;
   }
-  return "https://via.placeholder.com/40";
+  return buildImageFallback(40, "FOO");
 }
 
 function flattenApprovedItems(menuSections = [], restaurant = {}) {
@@ -143,7 +144,7 @@ export default function FoodsList() {
   }, []);
 
   const openEditModal = (food) => {
-    const initialImage = food?.image === "https://via.placeholder.com/40" ? "" : food?.image || "";
+    const initialImage = food?.image === buildImageFallback(40, "FOO") ? "" : food?.image || "";
     setSelectedFood(food);
     setEditForm({
       name: food?.itemName || "",
@@ -328,7 +329,7 @@ export default function FoodsList() {
                           alt={food.itemName || "food"}
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            e.currentTarget.src = "https://via.placeholder.com/40";
+                            e.currentTarget.src = buildImageFallback(40, "FOO");
                           }}
                         />
                       </div>

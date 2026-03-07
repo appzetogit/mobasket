@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from "react"
 import { Search, Trash2, Loader2 } from "lucide-react"
 import { adminAPI } from "@/lib/api"
+import { buildImageFallback } from "@/lib/utils/imageFallback"
 import { toast } from "sonner"
 import { usePlatform } from "../../context/PlatformContext"
 
@@ -29,7 +30,7 @@ export default function GroceryProductsList() {
               id: item?._id || item?.id || "",
               _id: item?._id || item?.id || "",
               name: item?.name || "Unnamed Product",
-              image: item?.images?.[0] || "https://via.placeholder.com/40",
+              image: item?.images?.[0] || buildImageFallback(40, "PRD"),
               status: item?.isActive !== false && item?.inStock !== false && item?.approvalStatus !== "rejected",
               restaurantId: item?.storeId?._id || item?.storeId || "",
               restaurantName: item?.storeId?.name || "Unknown Store",
@@ -209,7 +210,7 @@ export default function GroceryProductsList() {
                           alt={product.name}
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            e.target.src = "https://via.placeholder.com/40"
+                            e.target.src = buildImageFallback(40, "PRD")
                           }}
                         />
                       </div>
