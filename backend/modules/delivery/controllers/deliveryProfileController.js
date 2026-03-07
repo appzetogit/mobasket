@@ -166,8 +166,14 @@ export const updateProfile = asyncHandler(async (req, res) => {
     }
 
     // 3. Handle Other Fields
-    if (updateData.name) deliveryDoc.name = updateData.name;
-    if (updateData.email !== undefined) deliveryDoc.email = updateData.email;
+    if (updateData.name && updateData.name !== deliveryDoc.name) {
+      deliveryDoc.name = updateData.name;
+      documentUpdatedForStatus = true;
+    }
+    if (updateData.email !== undefined && updateData.email !== deliveryDoc.email) {
+      deliveryDoc.email = updateData.email;
+      documentUpdatedForStatus = true;
+    }
     if (updateData.dateOfBirth) deliveryDoc.dateOfBirth = updateData.dateOfBirth;
     if (updateData.gender) deliveryDoc.gender = updateData.gender;
 

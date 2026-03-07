@@ -49,6 +49,35 @@ export default function ProtectedRoute({ children, requiredRole, loginPath, modu
     }
   }
 
+  // If authenticated as restaurant or grocery-store, check status
+  if (isAuthenticated && (moduleToCheck === 'restaurant' || moduleToCheck === 'grocery-store')) {
+    const modulePrefix = moduleToCheck === 'restaurant' ? 'restaurant' : 'store';
+    const rawUser = localStorage.getItem(`${moduleToCheck}_user`);
+    const user = rawUser ? JSON.parse(rawUser) : null;
+
+    if (user) {
+      // Handle onboarding status
+      if (user.status === 'onboarding') {
+        const isOnboardingPage = location.pathname.startsWith(`/${modulePrefix}/onboarding`) ||
+          location.pathname.includes('/otp') ||
+          location.pathname.includes('/login');
+
+        if (!isOnboardingPage) {
+          return <Navigate to={`/${modulePrefix}/onboarding`} replace />;
+        }
+      }
+      // Handle pending status
+      else if (user.status === 'pending') {
+        const isPendingPage = location.pathname === `/${modulePrefix}/pending-approval`;
+        const isAuthPage = location.pathname.includes('/login') || location.pathname.includes('/otp');
+
+        if (!isPendingPage && !isAuthPage) {
+          return <Navigate to={`/${modulePrefix}/pending-approval`} replace />;
+        }
+      }
+    }
+  }
+
   // If not authenticated for this module, redirect to login
   if (!isAuthenticated) {
     if (loginPath) {

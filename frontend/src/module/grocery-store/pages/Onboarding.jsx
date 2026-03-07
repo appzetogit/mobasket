@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
-import { Image as ImageIcon, MapPin, Phone, Store, Upload, User, X } from "lucide-react"
+import { Image as ImageIcon, MapPin, Phone, Store, Upload, User, X, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { uploadAPI, groceryStoreAPI } from "@/lib/api"
 import { toast } from "sonner"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
+import { clearStoreSignupSession } from "@/lib/utils/auth"
 
 const createInitialForm = () => ({
   storeName: "",
@@ -34,6 +35,7 @@ export default function GroceryStoreOnboarding() {
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  const [showBackPopup, setShowBackPopup] = useState(false)
   const [form, setForm] = useState(createInitialForm)
 
   const [images, setImages] = useState({
@@ -310,32 +312,32 @@ export default function GroceryStoreOnboarding() {
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="space-y-2">
-                  <span className="text-xs font-medium text-gray-700">Store name</span>
+                  <span className="text-xs font-medium text-gray-700">Store name <span className="text-red-500 ml-0.5">*</span></span>
                   <div className="relative">
                     <Store className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                     <Input value={form.storeName} onChange={(e) => handleFieldChange("storeName", e.target.value)} className="pl-10" />
                   </div>
                 </label>
                 <label className="space-y-2">
-                  <span className="text-xs font-medium text-gray-700">Owner name</span>
+                  <span className="text-xs font-medium text-gray-700">Owner name <span className="text-red-500 ml-0.5">*</span></span>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                     <Input value={form.ownerName} onChange={(e) => handleFieldChange("ownerName", e.target.value)} className="pl-10" />
                   </div>
                 </label>
                 <label className="space-y-2">
-                  <span className="text-xs font-medium text-gray-700">Owner email</span>
+                  <span className="text-xs font-medium text-gray-700">Owner email <span className="text-red-500 ml-0.5">*</span></span>
                   <Input type="email" value={form.ownerEmail} onChange={(e) => handleFieldChange("ownerEmail", e.target.value)} />
                 </label>
                 <label className="space-y-2">
-                  <span className="text-xs font-medium text-gray-700">Owner phone</span>
+                  <span className="text-xs font-medium text-gray-700">Owner phone <span className="text-red-500 ml-0.5">*</span></span>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                     <Input value={form.ownerPhone} onChange={(e) => handleFieldChange("ownerPhone", e.target.value)} className="pl-10" />
                   </div>
                 </label>
                 <label className="space-y-2 sm:col-span-2">
-                  <span className="text-xs font-medium text-gray-700">Primary contact number</span>
+                  <span className="text-xs font-medium text-gray-700">Primary contact number <span className="text-red-500 ml-0.5">*</span></span>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                     <Input value={form.primaryContactNumber} onChange={(e) => handleFieldChange("primaryContactNumber", e.target.value)} className="pl-10" />
@@ -348,7 +350,7 @@ export default function GroceryStoreOnboarding() {
               <h2 className="text-lg font-semibold text-black">Store address</h2>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="space-y-2 sm:col-span-2">
-                  <span className="text-xs font-medium text-gray-700">Address line 1</span>
+                  <span className="text-xs font-medium text-gray-700">Address line 1 <span className="text-red-500 ml-0.5">*</span></span>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                     <Input value={form.location.addressLine1} onChange={(e) => handleLocationChange("addressLine1", e.target.value)} className="pl-10" />
@@ -359,19 +361,19 @@ export default function GroceryStoreOnboarding() {
                   <Input value={form.location.addressLine2} onChange={(e) => handleLocationChange("addressLine2", e.target.value)} />
                 </label>
                 <label className="space-y-2">
-                  <span className="text-xs font-medium text-gray-700">Area</span>
+                  <span className="text-xs font-medium text-gray-700">Area <span className="text-red-500 ml-0.5">*</span></span>
                   <Input value={form.location.area} onChange={(e) => handleLocationChange("area", e.target.value)} />
                 </label>
                 <label className="space-y-2">
-                  <span className="text-xs font-medium text-gray-700">City</span>
+                  <span className="text-xs font-medium text-gray-700">City <span className="text-red-500 ml-0.5">*</span></span>
                   <Input value={form.location.city} onChange={(e) => handleLocationChange("city", e.target.value)} />
                 </label>
                 <label className="space-y-2">
-                  <span className="text-xs font-medium text-gray-700">State</span>
+                  <span className="text-xs font-medium text-gray-700">State <span className="text-red-500 ml-0.5">*</span></span>
                   <Input value={form.location.state} onChange={(e) => handleLocationChange("state", e.target.value)} />
                 </label>
                 <label className="space-y-2">
-                  <span className="text-xs font-medium text-gray-700">ZIP / postal code</span>
+                  <span className="text-xs font-medium text-gray-700">ZIP / postal code <span className="text-red-500 ml-0.5">*</span></span>
                   <Input value={form.location.zipCode} onChange={(e) => handleLocationChange("zipCode", e.target.value)} />
                 </label>
                 <label className="space-y-2 sm:col-span-2">
@@ -439,13 +441,56 @@ export default function GroceryStoreOnboarding() {
 
       {error && <div className="px-4 sm:px-6 pb-2 text-xs text-red-600">{error}</div>}
 
-      <footer className="px-4 sm:px-6 py-3 bg-white">
-        <div className="flex justify-end items-center">
+      <footer className="px-4 sm:px-6 py-3 bg-white border-t border-gray-100">
+        <div className="flex justify-between items-center">
+          <Button
+            variant="ghost"
+            disabled={saving}
+            onClick={() => setShowBackPopup(true)}
+            className="text-sm text-gray-700 bg-transparent hover:bg-gray-50"
+          >
+            Back
+          </Button>
           <Button onClick={handleSubmit} disabled={saving} className="text-sm bg-black text-white px-6">
             {saving ? "Saving..." : "Complete onboarding"}
           </Button>
         </div>
       </footer>
+
+      {/* Confirmation Popup */}
+      {showBackPopup && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-8 sm:slide-in-from-scale-95 duration-300">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <ArrowLeft className="w-8 h-8" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">Abandon Signup?</h3>
+              <p className="text-gray-600 mb-6 px-2 text-sm leading-relaxed">
+                Are you sure you want to go back without completing the signup process? Your progress will be cleared.
+              </p>
+
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => setShowBackPopup(false)}
+                  className="w-full py-3.5 bg-black text-white font-bold rounded-xl hover:bg-gray-900 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  Continue Signup
+                </button>
+                <button
+                  onClick={() => {
+                    clearStoreSignupSession()
+                    navigate("/store/login", { replace: true })
+                  }}
+                  className="w-full py-3.5 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-all"
+                >
+                  Go Back
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

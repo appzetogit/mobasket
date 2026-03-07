@@ -36,12 +36,12 @@ const isStepComplete = (stepData, stepNumber) => {
   }
 
   if (stepNumber === 3) {
-    const hasPanImage = stepData.pan?.image && 
+    const hasPanImage = stepData.pan?.image &&
       (stepData.pan.image.url || typeof stepData.pan.image === 'string')
     // GST image is required only if GST is registered
-    const hasGstImage = !stepData.gst?.isRegistered || 
+    const hasGstImage = !stepData.gst?.isRegistered ||
       (stepData.gst?.image && (stepData.gst.image.url || typeof stepData.gst.image === 'string'))
-    
+
     return (
       stepData.pan?.panNumber &&
       stepData.pan?.nameOnPan &&
@@ -92,15 +92,15 @@ const hasProvisionedRestaurantProfile = (restaurant) => {
 
   const hasBasicInfo = Boolean(
     restaurant.name &&
-      restaurant.ownerName &&
-      restaurant.ownerEmail &&
-      (restaurant.ownerPhone || restaurant.phone || restaurant.primaryContactNumber),
+    restaurant.ownerName &&
+    restaurant.ownerEmail &&
+    (restaurant.ownerPhone || restaurant.phone || restaurant.primaryContactNumber),
   )
   const hasLocation = Boolean(restaurant.location?.area || restaurant.location?.city)
   const hasCatalogSignals = Boolean(
     (Array.isArray(restaurant.cuisines) && restaurant.cuisines.length > 0) ||
-      (Array.isArray(restaurant.menuImages) && restaurant.menuImages.length > 0) ||
-      restaurant.profileImage,
+    (Array.isArray(restaurant.menuImages) && restaurant.menuImages.length > 0) ||
+    restaurant.profileImage,
   )
 
   return hasBasicInfo && hasLocation && hasCatalogSignals

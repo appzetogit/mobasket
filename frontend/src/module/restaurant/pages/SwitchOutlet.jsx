@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
+import { clearRestaurantSignupSession, clearStoreSignupSession } from "@/lib/utils/auth"
 import { motion } from "framer-motion"
 import Lenis from "lenis"
 import { ArrowLeft, Search, Power } from "lucide-react"
@@ -12,6 +13,10 @@ export default function SwitchOutlet() {
   const navigate = useNavigate()
   const [showOffline, setShowOffline] = useState(true)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const location = useLocation()
+  const isStore = location.pathname.startsWith("/store")
+  const moduleName = isStore ? "grocery-store" : "restaurant"
+  const welcomePath = isStore ? "/store/login" : "/restaurant/welcome"
 
   // Mock outlet data - replace with actual data from your API/store
   const outlets = [
@@ -27,8 +32,8 @@ export default function SwitchOutlet() {
   const mappedOutletsCount = outlets.length
 
   // Filter outlets based on showOffline checkbox
-  const visibleOutlets = showOffline 
-    ? outlets 
+  const visibleOutlets = showOffline
+    ? outlets
     : outlets.filter(outlet => outlet.status === "online")
 
   // Lenis smooth scrolling
@@ -53,9 +58,9 @@ export default function SwitchOutlet() {
 
   const handleLogout = async () => {
     if (isLoggingOut) return // Prevent multiple clicks
-    
+
     setIsLoggingOut(true)
-    
+
     try {
       // Call backend logout API to invalidate refresh token
       try {
@@ -77,27 +82,32 @@ export default function SwitchOutlet() {
         console.warn("Firebase logout failed, continuing with local cleanup:", firebaseError)
       }
 
-      // Clear restaurant module authentication data
-      clearModuleAuth("restaurant")
-      
-      // Clear any onboarding data from localStorage
-      localStorage.removeItem("restaurant_onboarding")
-      localStorage.removeItem("restaurant_accessToken")
-      
-      // Dispatch auth change event to notify other components
-      window.dispatchEvent(new Event("restaurantAuthChanged"))
+      // Clear module authentication data
+      if (isStore) {
+        clearStoreSignupSession()
+      } else {
+        clearRestaurantSignupSession()
+      }
 
-      // Small delay for UX, then navigate to welcome page
+      // Dispatch auth change event to notify other components
+      const authEvent = isStore ? "groceryStoreAuthChanged" : "restaurantAuthChanged"
+      window.dispatchEvent(new Event(authEvent))
+
+      // Small delay for UX, then navigate to welcome/login page
       setTimeout(() => {
-        navigate("/restaurant/welcome", { replace: true })
+        navigate(welcomePath, { replace: true })
       }, 300)
     } catch (error) {
       // Even if there's an error, we should still clear local data and logout
       console.error("Error during logout:", error)
-      clearModuleAuth("restaurant")
-      localStorage.removeItem("restaurant_onboarding")
-      window.dispatchEvent(new Event("restaurantAuthChanged"))
-      navigate("/restaurant/welcome", { replace: true })
+      if (isStore) {
+        clearStoreSignupSession()
+      } else {
+        clearRestaurantSignupSession()
+      }
+      const authEvent = isStore ? "groceryStoreAuthChanged" : "restaurantAuthChanged"
+      window.dispatchEvent(new Event(authEvent))
+      navigate(welcomePath, { replace: true })
     } finally {
       setIsLoggingOut(false)
     }
@@ -115,17 +125,17 @@ export default function SwitchOutlet() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ 
+      transition={{
         duration: 0.2,
         ease: [0.25, 0.1, 0.25, 1]
       }}
       className="min-h-screen bg-white overflow-x-hidden"
     >
       {/* Header */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ 
+        transition={{
           duration: 0.25,
           ease: [0.25, 0.1, 0.25, 1]
         }}
@@ -195,8 +205,8 @@ export default function SwitchOutlet() {
                 {/* Outlet Image */}
                 <div className="w-16 h-16 bg-white rounded-lg flex items-center justify-center shrink-0 overflow-hidden shadow-sm border border-gray-200">
                   {outlet.image && outlet.image !== "/api/placeholder/80/80" ? (
-                    <img 
-                      src={outlet.image} 
+                    <img
+                      src={outlet.image}
                       alt={outlet.name}
                       className="w-full h-full object-cover"
                       onError={(e) => {
@@ -207,8 +217,8 @@ export default function SwitchOutlet() {
                       }}
                     />
                   ) : null}
-                  <div 
-                    className="w-full h-full bg-gray-100 flex items-center justify-center" 
+                  <div
+                    className="w-full h-full bg-gray-100 flex items-center justify-center"
                     style={{ display: (outlet.image && outlet.image !== "/api/placeholder/80/80") ? 'none' : 'flex' }}
                   >
                     <span className="text-3xl">🍔</span>
@@ -226,22 +236,20 @@ export default function SwitchOutlet() {
                   <p className="text-xs text-gray-600">
                     Outlet ID: {outlet.id}
                   </p>
-                  
+
                 </div>
               </div>
-                  {/* Status Indicator */}
-                  <div className="flex p-2 rounded-b-lg items-center w-full bg-gray-200 border border-blue-200 gap-1.5 mt-3">
-                    <Power 
-                      className={`w-4 h-4 ${
-                        outlet.status === "offline" ? "text-red-600" : "text-green-600"
-                      }`} 
-                    />
-                    <span className={`text-sm font-medium ${
-                      outlet.status === "offline" ? "text-red-600" : "text-green-600"
-                    }`}>
-                      {outlet.status === "offline" ? "Offline" : "Online"}
-                    </span>
-                  </div>
+              {/* Status Indicator */}
+              <div className="flex p-2 rounded-b-lg items-center w-full bg-gray-200 border border-blue-200 gap-1.5 mt-3">
+                <Power
+                  className={`w-4 h-4 ${outlet.status === "offline" ? "text-red-600" : "text-green-600"
+                    }`}
+                />
+                <span className={`text-sm font-medium ${outlet.status === "offline" ? "text-red-600" : "text-green-600"
+                  }`}>
+                  {outlet.status === "offline" ? "Offline" : "Online"}
+                </span>
+              </div>
             </motion.div>
           ))}
         </div>

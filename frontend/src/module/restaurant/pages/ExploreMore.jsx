@@ -32,27 +32,27 @@ import {
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { DateRangeCalendar } from "@/components/ui/date-range-calendar"
-import { clearModuleAuth, clearAuthData } from "@/lib/utils/auth"
+import { clearRestaurantSignupSession, clearStoreSignupSession, clearAuthData } from "@/lib/utils/auth"
 import { restaurantAPI, groceryStoreAPI } from "@/lib/api"
 import { firebaseAuth } from "@/lib/firebase"
 
 // Time Picker Wheel Component
-function TimePickerWheel({ 
-  isOpen, 
-  onClose, 
-  initialHour, 
-  initialMinute, 
+function TimePickerWheel({
+  isOpen,
+  onClose,
+  initialHour,
+  initialMinute,
   initialPeriod,
-  onConfirm 
+  onConfirm
 }) {
   const parsedHour = Math.max(1, Math.min(12, parseInt(initialHour) || 1))
   const parsedMinute = Math.max(0, Math.min(59, parseInt(initialMinute) || 0))
   const parsedPeriod = (initialPeriod === "am" || initialPeriod === "pm") ? initialPeriod : "am"
-  
+
   const [selectedHour, setSelectedHour] = useState(parsedHour)
   const [selectedMinute, setSelectedMinute] = useState(parsedMinute)
   const [selectedPeriod, setSelectedPeriod] = useState(parsedPeriod)
-  
+
   const hourRef = useRef(null)
   const minuteRef = useRef(null)
   const periodRef = useRef(null)
@@ -72,7 +72,7 @@ function TimePickerWheel({
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
-      
+
       const timer = setTimeout(() => {
         const padding = 80
         const itemHeight = 40
@@ -126,7 +126,7 @@ function TimePickerWheel({
 
   const handleScroll = (container, setValue, values, itemHeight) => {
     if (!container) return
-    
+
     const padding = 80
     const itemCenterOffset = itemHeight / 2
     const scrollTop = container.scrollTop
@@ -138,7 +138,7 @@ function TimePickerWheel({
 
     const clampedIndex = Math.max(0, Math.min(index, values.length - 1))
     const newValue = values[clampedIndex]
-    
+
     if (newValue !== undefined) {
       setValue(newValue)
     }
@@ -204,9 +204,9 @@ function TimePickerWheel({
                 scrollbar-width: none;
               }
             `}</style>
-            
+
             <div className="flex-1 flex flex-col items-center">
-              <div 
+              <div
                 ref={hourRef}
                 className="w-full h-48 overflow-y-scroll time-picker-scroll snap-y snap-mandatory"
                 style={{
@@ -225,11 +225,10 @@ function TimePickerWheel({
                     style={{ minHeight: '40px' }}
                   >
                     <span
-                      className={`text-lg transition-all duration-200 ${
-                        selectedHour === hour
-                          ? "font-bold text-gray-900 text-xl"
-                          : "font-normal text-gray-400 text-base"
-                      }`}
+                      className={`text-lg transition-all duration-200 ${selectedHour === hour
+                        ? "font-bold text-gray-900 text-xl"
+                        : "font-normal text-gray-400 text-base"
+                        }`}
                     >
                       {hour}
                     </span>
@@ -244,7 +243,7 @@ function TimePickerWheel({
             </div>
 
             <div className="flex-1 flex flex-col items-center">
-              <div 
+              <div
                 ref={minuteRef}
                 className="w-full h-48 overflow-y-scroll time-picker-scroll snap-y snap-mandatory"
                 style={{
@@ -263,11 +262,10 @@ function TimePickerWheel({
                     style={{ minHeight: '40px' }}
                   >
                     <span
-                      className={`text-lg transition-all duration-200 ${
-                        selectedMinute === minute
-                          ? "font-bold text-gray-900 text-xl"
-                          : "font-normal text-gray-400 text-base"
-                      }`}
+                      className={`text-lg transition-all duration-200 ${selectedMinute === minute
+                        ? "font-bold text-gray-900 text-xl"
+                        : "font-normal text-gray-400 text-base"
+                        }`}
                     >
                       {minute.toString().padStart(2, "0")}
                     </span>
@@ -278,7 +276,7 @@ function TimePickerWheel({
             </div>
 
             <div className="flex-1 flex flex-col items-center">
-              <div 
+              <div
                 ref={periodRef}
                 className="w-full h-48 overflow-y-scroll time-picker-scroll snap-y snap-mandatory"
                 style={{
@@ -297,11 +295,10 @@ function TimePickerWheel({
                     style={{ minHeight: '40px' }}
                   >
                     <span
-                      className={`text-lg transition-all duration-200 ${
-                        selectedPeriod === period
-                          ? "font-bold text-gray-900 text-xl"
-                          : "font-normal text-gray-400 text-base"
-                      }`}
+                      className={`text-lg transition-all duration-200 ${selectedPeriod === period
+                        ? "font-bold text-gray-900 text-xl"
+                        : "font-normal text-gray-400 text-base"
+                        }`}
                     >
                       {period.toUpperCase()}
                     </span>
@@ -339,7 +336,7 @@ export default function ExploreMore() {
   const [profileOpen, setProfileOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
-  
+
   // Schedule off states
   const [scheduleOffOpen, setScheduleOffOpen] = useState(false)
   const [dateTimePickerOpen, setDateTimePickerOpen] = useState(false)
@@ -366,7 +363,7 @@ export default function ExploreMore() {
     const fetchRestaurantData = async () => {
       try {
         setLoadingRestaurant(true)
-        const response = isGroceryStore 
+        const response = isGroceryStore
           ? await groceryStoreAPI.getCurrentStore()
           : await restaurantAPI.getCurrentRestaurant()
         const data = isGroceryStore
@@ -392,14 +389,14 @@ export default function ExploreMore() {
   // Format address from location object
   const formatAddress = (location) => {
     if (!location) return ""
-    
+
     const parts = []
-    
+
     // Add area if available
     if (location.area) {
       parts.push(location.area.trim())
     }
-    
+
     // Add city if available and not already in area
     if (location.city) {
       const city = location.city.trim()
@@ -408,7 +405,7 @@ export default function ExploreMore() {
         parts.push(city)
       }
     }
-    
+
     return parts.join(", ") || ""
   }
 
@@ -435,7 +432,7 @@ export default function ExploreMore() {
 
   const handleLogout = async () => {
     if (isLoggingOut) return // Prevent multiple clicks
-    
+
     setIsLoggingOut(true)
     setProfileOpen(false)
 
@@ -465,28 +462,17 @@ export default function ExploreMore() {
       }
 
       // Clear module authentication data
-      const module = isGroceryStore ? "grocery-store" : "restaurant"
-      clearModuleAuth(module)
-      
-      // Clear any onboarding data from localStorage
       if (isGroceryStore) {
-        localStorage.removeItem("grocery-store_onboarding")
-        localStorage.removeItem("grocery-store_accessToken")
-        localStorage.removeItem("grocery-store_refreshToken")
-        localStorage.removeItem("grocery-store_authenticated")
-        localStorage.removeItem("grocery-store_user")
-        sessionStorage.removeItem("groceryStoreAuthData")
-        window.dispatchEvent(new Event("groceryStoreAuthChanged"))
+        clearStoreSignupSession()
+        const authEvent = "groceryStoreAuthChanged"
+        window.dispatchEvent(new Event(authEvent))
         setTimeout(() => {
           navigate("/store/login", { replace: true })
         }, 300)
       } else {
-        localStorage.removeItem("restaurant_onboarding")
-        localStorage.removeItem("restaurant_accessToken")
-        localStorage.removeItem("restaurant_authenticated")
-        localStorage.removeItem("restaurant_user")
-        sessionStorage.removeItem("restaurantAuthData")
-        window.dispatchEvent(new Event("restaurantAuthChanged"))
+        clearRestaurantSignupSession()
+        const authEvent = "restaurantAuthChanged"
+        window.dispatchEvent(new Event(authEvent))
         setTimeout(() => {
           navigate("/restaurant/welcome", { replace: true })
         }, 300)
@@ -494,23 +480,12 @@ export default function ExploreMore() {
     } catch (error) {
       // Even if there's an error, we should still clear local data and logout
       console.error("Error during logout:", error)
-      const module = isGroceryStore ? "grocery-store" : "restaurant"
-      clearModuleAuth(module)
       if (isGroceryStore) {
-        localStorage.removeItem("grocery-store_onboarding")
-        localStorage.removeItem("grocery-store_accessToken")
-        localStorage.removeItem("grocery-store_refreshToken")
-        localStorage.removeItem("grocery-store_authenticated")
-        localStorage.removeItem("grocery-store_user")
-        sessionStorage.removeItem("groceryStoreAuthData")
+        clearStoreSignupSession()
         window.dispatchEvent(new Event("groceryStoreAuthChanged"))
         navigate("/store/login", { replace: true })
       } else {
-        localStorage.removeItem("restaurant_onboarding")
-        localStorage.removeItem("restaurant_accessToken")
-        localStorage.removeItem("restaurant_authenticated")
-        localStorage.removeItem("restaurant_user")
-        sessionStorage.removeItem("restaurantAuthData")
+        clearRestaurantSignupSession()
         window.dispatchEvent(new Event("restaurantAuthChanged"))
         navigate("/restaurant/welcome", { replace: true })
       }
@@ -521,7 +496,7 @@ export default function ExploreMore() {
 
   const handleLogoutAllDevices = async () => {
     if (isLoggingOut) return // Prevent multiple clicks
-    
+
     setIsLoggingOut(true)
     setProfileOpen(false)
 
@@ -552,7 +527,7 @@ export default function ExploreMore() {
 
       // Clear auth for all modules (admin, restaurant, delivery, user)
       clearAuthData()
-      
+
       // Clear any onboarding data from localStorage
       if (isGroceryStore) {
         localStorage.removeItem("grocery-store_onboarding")
@@ -569,12 +544,12 @@ export default function ExploreMore() {
           navigate("/restaurant/welcome", { replace: true })
         }, 300)
       }
-      
+
       // Clear sessionStorage for all modules
       sessionStorage.removeItem("adminAuthData")
       sessionStorage.removeItem("deliveryAuthData")
       sessionStorage.removeItem("userAuthData")
-      
+
       // Dispatch auth change events to notify other components
       window.dispatchEvent(new Event("adminAuthChanged"))
       window.dispatchEvent(new Event("deliveryAuthChanged"))
@@ -584,13 +559,11 @@ export default function ExploreMore() {
       console.error("Error during logout from all devices:", error)
       clearAuthData()
       if (isGroceryStore) {
-        localStorage.removeItem("grocery-store_onboarding")
-        sessionStorage.removeItem("groceryStoreAuthData")
+        clearStoreSignupSession()
         window.dispatchEvent(new Event("groceryStoreAuthChanged"))
         navigate("/store/login", { replace: true })
       } else {
-        localStorage.removeItem("restaurant_onboarding")
-        sessionStorage.removeItem("restaurantAuthData")
+        clearRestaurantSignupSession()
         window.dispatchEvent(new Event("restaurantAuthChanged"))
         navigate("/restaurant/welcome", { replace: true })
       }
@@ -773,7 +746,7 @@ export default function ExploreMore() {
     return allSections
       .map(section => ({
         ...section,
-        items: section.items.filter(item => 
+        items: section.items.filter(item =>
           item.label.toLowerCase().includes(query)
         )
       }))
@@ -786,14 +759,14 @@ export default function ExploreMore() {
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ 
-        duration: 0.3, 
+      transition={{
+        duration: 0.3,
         delay,
         ease: [0.25, 0.1, 0.25, 1]
       }}
       className="mb-8"
     >
-      <motion.h2 
+      <motion.h2
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.2, delay: delay + 0.05 }}
@@ -809,8 +782,8 @@ export default function ExploreMore() {
               key={item.id}
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ 
-                duration: 0.25, 
+              transition={{
+                duration: 0.25,
                 delay: delay + 0.1 + (index * 0.02),
                 ease: [0.25, 0.1, 0.25, 1]
               }}
@@ -838,7 +811,7 @@ export default function ExploreMore() {
                     <IconComponent className="w-8 h-8 text-gray-900" strokeWidth={1.5} />
                   )}
                   {item.badge && (
-                    <motion.span 
+                    <motion.span
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
                       transition={{ delay: delay + 0.15 + (index * 0.02), type: "spring", stiffness: 500 }}
@@ -864,17 +837,17 @@ export default function ExploreMore() {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ 
+      transition={{
         duration: 0.2,
         ease: [0.25, 0.1, 0.25, 1]
       }}
       className="min-h-screen bg-white overflow-x-hidden"
     >
       {/* Header */}
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ 
+        transition={{
           duration: 0.25,
           ease: [0.25, 0.1, 0.25, 1]
         }}
@@ -916,7 +889,7 @@ export default function ExploreMore() {
         <motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ 
+          transition={{
             duration: 0.3,
             delay: 0.05,
             ease: [0.25, 0.1, 0.25, 1]
@@ -955,7 +928,7 @@ export default function ExploreMore() {
             <div key={section.key}>
               {renderSection(section.title, section.items, 0.1 + (index * 0.05))}
               {index < filteredSections.length - 1 && (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.25 + (index * 0.05), duration: 0.2 }}
@@ -976,7 +949,7 @@ export default function ExploreMore() {
             <p className="text-sm text-gray-500">Try searching with different keywords</p>
           </motion.div>
         )}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.45, duration: 0.2 }}
@@ -1000,13 +973,13 @@ export default function ExploreMore() {
                 setSearchQuery("")
               }}
             />
-            
+
             {/* Search Modal */}
             <motion.div
               initial={{ y: "-100%" }}
               animate={{ y: 0 }}
               exit={{ y: "-100%" }}
-              transition={{ 
+              transition={{
                 type: "spring",
                 damping: 30,
                 stiffness: 300
@@ -1124,13 +1097,13 @@ export default function ExploreMore() {
               className="fixed inset-0 bg-black/50 z-50"
               onClick={() => setProfileOpen(false)}
             />
-            
+
             {/* Popup Sheet */}
             <motion.div
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              transition={{ 
+              transition={{
                 type: "spring",
                 damping: 30,
                 stiffness: 300
@@ -1212,8 +1185,8 @@ export default function ExploreMore() {
               {/* Footer Links */}
               <div className="px-6 py-4 border-t border-gray-200">
                 <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
-                  <a 
-                    href="#" 
+                  <a
+                    href="#"
                     className="hover:text-gray-700 transition-colors border-b border-dotted border-gray-400"
                     onClick={(e) => {
                       e.preventDefault()
@@ -1223,8 +1196,8 @@ export default function ExploreMore() {
                     Terms of Service
                   </a>
                   <span className="text-gray-400">|</span>
-                  <a 
-                    href="#" 
+                  <a
+                    href="#"
                     className="hover:text-gray-700 transition-colors border-b border-dotted border-gray-400"
                     onClick={(e) => {
                       e.preventDefault()
@@ -1234,8 +1207,8 @@ export default function ExploreMore() {
                     Privacy Policy
                   </a>
                   <span className="text-gray-400">|</span>
-                  <a 
-                    href="#" 
+                  <a
+                    href="#"
                     className="hover:text-gray-700 transition-colors border-b border-dotted border-gray-400"
                     onClick={(e) => {
                       e.preventDefault()
@@ -1264,13 +1237,13 @@ export default function ExploreMore() {
               className="fixed inset-0 bg-black/50 z-50"
               onClick={() => setScheduleOffOpen(false)}
             />
-            
+
             {/* Popup Sheet */}
             <motion.div
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              transition={{ 
+              transition={{
                 type: "spring",
                 damping: 30,
                 stiffness: 300
@@ -1320,13 +1293,13 @@ export default function ExploreMore() {
               className="fixed inset-0 bg-black/50 z-50"
               onClick={() => setDateTimePickerOpen(false)}
             />
-            
+
             {/* Popup Sheet */}
             <motion.div
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              transition={{ 
+              transition={{
                 type: "spring",
                 damping: 30,
                 stiffness: 300
@@ -1469,7 +1442,7 @@ export default function ExploreMore() {
               onClick={() => setSuccessPopupOpen(false)}
               className="fixed inset-0 bg-black/50 z-[10000]"
             />
-            
+
             {/* Success Modal */}
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
@@ -1522,13 +1495,13 @@ export default function ExploreMore() {
               className="fixed inset-0 bg-black/50 z-50"
               onClick={() => setExistingScheduleOpen(false)}
             />
-            
+
             {/* Popup Sheet */}
             <motion.div
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              transition={{ 
+              transition={{
                 type: "spring",
                 damping: 30,
                 stiffness: 300

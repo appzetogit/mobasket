@@ -103,6 +103,7 @@ import ToHub from "@/module/restaurant/pages/ToHub";
 import ManageOutlets from "@/module/restaurant/pages/ManageOutlets";
 import UpdateBankDetails from "@/module/restaurant/pages/UpdateBankDetails";
 import ZoneSetup from "@/module/restaurant/pages/ZoneSetup";
+import RestaurantPendingApproval from "@/module/restaurant/pages/PendingApproval";
 
 import AdminRouter from "@/module/admin/components/AdminRouter";
 import AdminLogin from "@/module/admin/pages/auth/AdminLogin";
@@ -1458,6 +1459,23 @@ export default function App() {
               loginPath="/delivery/sign-in"
             >
               <DeliveryRouter />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/restaurant/pending-approval"
+          element={
+            <ProtectedRoute module="restaurant">
+              <RestaurantPendingApproval />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/store/pending-approval"
+          element={
+            <ProtectedRoute module="grocery-store">
+              <RestaurantPendingApproval />
             </ProtectedRoute>
           }
         />
