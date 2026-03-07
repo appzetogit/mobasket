@@ -1049,15 +1049,21 @@ export default function PocketPage() {
               </div> */}
 
               {/* Action Buttons */}
-              {depositAmount > 0 && (
+              {(isCashLimitReached || depositAmount > 0) && (
                 <div className="flex gap-3 pt-2">
                   <Button
                     onClick={() => setShowDepositPopup(true)}
+                    disabled={depositAmount <= 0}
                     className="flex-1 font-semibold py-3 rounded-lg bg-white hover:bg-gray-300 text-black border border-black"
                   >
                     Deposit
                   </Button>
                 </div>
+              )}
+              {(isCashLimitReached || depositAmount > 0) && depositAmount <= 0 && (
+                <p className="text-xs text-slate-600 pt-1">
+                  Deposit will appear here once COD cash in hand is available.
+                </p>
               )}
             </CardContent>
           </Card>
