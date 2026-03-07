@@ -44,7 +44,7 @@ export default function PocketPage() {
     totalBalance: 0,
     cashInHand: 0,
     deductions: 0,
-    totalCashLimit: 750,
+    totalCashLimit: 0,
     availableCashLimit: 0,
     totalWithdrawn: 0,
     totalEarned: 0,
@@ -430,6 +430,7 @@ export default function PocketPage() {
   const cashInHand = depositableCashInHand
   const deductions = Math.max(0, Number(walletState?.deductions) || 0)
   const isCashLimitReached = totalCashLimit > 0 && availableCashLimit <= 0
+  const shouldWarnDeposit = totalCashLimit > 0 && availableCashLimit < totalCashLimit
   const depositAmount = cashInHand > 0 ? cashInHand : 0
 
   // Customer tips balance - calculate from transactions
@@ -1032,9 +1033,9 @@ export default function PocketPage() {
                 Remaining COD limit: {formatCurrency(availableCashLimit)}. New COD order can be assigned only if {`cashCollected + orderCOD <= codLimit`}.
               </div>
 
-              {isCashLimitReached && (
+              {shouldWarnDeposit && (
                 <div className="rounded-lg p-3 text-xs font-medium bg-amber-50 text-amber-800 border border-amber-200">
-                  COD limit exhausted. Deposit cash to start receiving new COD orders again.
+                  Available cash limit is below the admin cash limit. Deposit cash to restore it.
                 </div>
               )}
 
