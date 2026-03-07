@@ -5,6 +5,29 @@ import { deliveryAPI } from '@/lib/api';
 import alertSound from '@/assets/audio/alert.mp3';
 import originalSound from '@/assets/audio/original.mp3';
 
+const DELIVERY_ORDER_SUPPRESSION_KEY = 'delivery_suppressed_order_ids';
+
+const readSuppressedOrderIds = () => {
+  try {
+    const raw = localStorage.getItem(DELIVERY_ORDER_SUPPRESSION_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return new Set(Array.isArray(parsed) ? parsed.map((id) => String(id)).filter(Boolean) : []);
+  } catch (error) {
+    return new Set();
+  }
+};
+
+const persistSuppressedOrderIds = (orderIds) => {
+  try {
+    localStorage.setItem(
+      DELIVERY_ORDER_SUPPRESSION_KEY,
+      JSON.stringify(Array.from(orderIds))
+    );
+  } catch (error) {
+    // Ignore storage failures.
+  }
+};
+
 export const useDeliveryNotifications = () => {
   // CRITICAL: All hooks must be called unconditionally and in the same order every render
   // Order: useRef -> useState -> useEffect -> useCallback
@@ -12,6 +35,7 @@ export const useDeliveryNotifications = () => {
   // Step 1: All refs first (unconditional)
   const socketRef = useRef(null);
   const audioRef = useRef(null);
+  const suppressedOrderIdsRef = useRef(readSuppressedOrderIds());
   
   // Step 2: All state hooks (unconditional)
   const [newOrder, setNewOrder] = useState(null);
@@ -66,6 +90,48 @@ export const useDeliveryNotifications = () => {
       }
     }
   }, []);
+
+  const normalizeOrderIds = useCallback((orderData = {}) => {
+    return [
+      orderData?.orderId,
+      orderData?.orderMongoId,
+      orderData?.mongoId,
+      orderData?._id,
+      orderData?.fullOrder?._id,
+      orderData?.fullOrder?.orderId,
+    ]
+      .map((id) => (id == null ? null : String(id)))
+      .filter(Boolean);
+  }, []);
+
+  const suppressOrderNotifications = useCallback((...orderIds) => {
+    let changed = false;
+    orderIds
+      .flat()
+      .map((id) => (id == null ? null : String(id)))
+      .filter(Boolean)
+      .forEach((id) => {
+        if (!suppressedOrderIdsRef.current.has(id)) {
+          suppressedOrderIdsRef.current.add(id);
+          changed = true;
+        }
+      });
+
+    if (changed) {
+      persistSuppressedOrderIds(suppressedOrderIdsRef.current);
+    }
+
+    setNewOrder((currentOrder) => {
+      if (!currentOrder) return currentOrder;
+      const currentIds = normalizeOrderIds(currentOrder);
+      return currentIds.some((id) => suppressedOrderIdsRef.current.has(id)) ? null : currentOrder;
+    });
+  }, [normalizeOrderIds]);
+
+  const shouldIgnoreOrderNotification = useCallback((orderData = {}) => {
+    const ids = normalizeOrderIds(orderData);
+    return ids.some((id) => suppressedOrderIdsRef.current.has(id));
+  }, [normalizeOrderIds]);
 
   // Step 4: All effects (unconditional hook calls, conditional logic inside)
   // Track user interaction for autoplay policy
@@ -263,12 +329,18 @@ export const useDeliveryNotifications = () => {
     });
 
     socketRef.current.on('new_order', (orderData) => {
+      if (shouldIgnoreOrderNotification(orderData)) {
+        return;
+      }
       setNewOrder(orderData);
       playNotificationSound();
     });
 
     // Listen for priority-based order notifications (new_order_available)
     socketRef.current.on('new_order_available', (orderData) => {
+      if (shouldIgnoreOrderNotification(orderData)) {
+        return;
+      }
       // Treat it the same as new_order for now - delivery boy can accept it
       setNewOrder(orderData);
       playNotificationSound();
@@ -284,6 +356,7 @@ export const useDeliveryNotifications = () => {
     });
 
     socketRef.current.on('order_unavailable', (payload) => {
+      suppressOrderNotifications(payload?.orderId, payload?.orderMongoId, payload?.mongoId);
       setNewOrder((currentOrder) => {
         if (!currentOrder) return currentOrder;
         const currentOrderId = currentOrder.orderId || currentOrder.orderMongoId || currentOrder.mongoId;
@@ -301,7 +374,7 @@ export const useDeliveryNotifications = () => {
         socketRef.current = null;
       }
     };
-  }, [deliveryPartnerId, playNotificationSound]);
+  }, [deliveryPartnerId, playNotificationSound, shouldIgnoreOrderNotification, suppressOrderNotifications]);
 
   // Helper functions
   const clearNewOrder = () => {
@@ -318,6 +391,7 @@ export const useDeliveryNotifications = () => {
     orderReady,
     clearOrderReady,
     isConnected,
-    playNotificationSound
+    playNotificationSound,
+    suppressOrderNotifications
   };
 };

@@ -24,6 +24,58 @@ const logger = winston.createLogger({
   ]
 });
 
+const normalizeCityValue = (value = '') =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+
+const buildCityRegex = (value = '') => {
+  const trimmed = String(value || '').trim();
+  if (!trimmed) return null;
+  const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(escaped, 'i');
+};
+
+const getRestaurantLocationSnapshot = (restaurant = {}) => {
+  const liveLocation =
+    restaurant?.location && typeof restaurant.location === 'object'
+      ? restaurant.location
+      : {};
+  const onboardingLocation =
+    restaurant?.onboarding?.step1?.location &&
+    typeof restaurant.onboarding.step1.location === 'object'
+      ? restaurant.onboarding.step1.location
+      : {};
+
+  const mergedLocation = {
+    ...onboardingLocation,
+    ...liveLocation,
+  };
+
+  const hasMeaningfulLocation = [
+    mergedLocation.formattedAddress,
+    mergedLocation.address,
+    mergedLocation.addressLine1,
+    mergedLocation.addressLine2,
+    mergedLocation.area,
+    mergedLocation.city,
+    mergedLocation.state,
+    mergedLocation.pincode,
+    mergedLocation.zipCode,
+    mergedLocation.postalCode,
+    mergedLocation.landmark,
+    mergedLocation.street,
+  ].some((value) => String(value || '').trim());
+
+  return hasMeaningfulLocation ? mergedLocation : {};
+};
+
+const normalizeRestaurantAddressRecord = (restaurant = {}) => ({
+  ...restaurant,
+  location: getRestaurantLocationSnapshot(restaurant),
+});
+
 const normalizeSidebarAccess = (sidebarAccess) => {
   if (!Array.isArray(sidebarAccess)) return [];
   return Array.from(
@@ -71,12 +123,19 @@ const resolveDuplicateAdminValue = (error, field) => {
 export const getDashboardStats = asyncHandler(async (req, res) => {
   try {
     const requestedPlatform = req.query?.platform === 'mogrocery' ? 'mogrocery' : 'mofood';
+    const requestedCity = String(req.query?.city || req.query?.zone || '').trim();
+    const cityRegex = buildCityRegex(requestedCity);
     const restaurantPlatformQuery = { $or: [{ platform: 'mofood' }, { platform: { $exists: false } }] };
     let scopedRestaurants = [];
     if (requestedPlatform === 'mogrocery') {
-      scopedRestaurants = await GroceryStore.find({}).select('_id').lean();
+      const groceryCityQuery = cityRegex ? { 'location.city': cityRegex } : {};
+      scopedRestaurants = await GroceryStore.find(groceryCityQuery).select('_id').lean();
     } else {
-      scopedRestaurants = await Restaurant.find(restaurantPlatformQuery).select('_id').lean();
+      const restaurantCityQuery = cityRegex ? { 'location.city': cityRegex } : {};
+      scopedRestaurants = await Restaurant.find({
+        ...restaurantPlatformQuery,
+        ...restaurantCityQuery
+      }).select('_id').lean();
     }
 
     // Scope dashboard metrics to the active platform restaurants/stores.
@@ -186,8 +245,8 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
     // Get active partners count
     const activeRestaurants = requestedPlatform === 'mogrocery'
-      ? await GroceryStore.countDocuments({ isActive: true })
-      : await Restaurant.countDocuments({ ...restaurantPlatformQuery, isActive: true });
+      ? await GroceryStore.countDocuments({ isActive: true, ...(cityRegex ? { 'location.city': cityRegex } : {}) })
+      : await Restaurant.countDocuments({ ...restaurantPlatformQuery, isActive: true, ...(cityRegex ? { 'location.city': cityRegex } : {}) });
     // Note: Delivery partners are stored in User model
     const User = (await import('../../auth/models/User.js')).default;
     const activeDeliveryPartners = await User.countDocuments({ 
@@ -200,8 +259,8 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     // Total restaurants (only active/approved restaurants)
     // This matches the admin restaurants list which shows only active restaurants by default
     const totalRestaurants = requestedPlatform === 'mogrocery'
-      ? await GroceryStore.countDocuments({ isActive: true })
-      : await Restaurant.countDocuments({ ...restaurantPlatformQuery, isActive: true });
+      ? await GroceryStore.countDocuments({ isActive: true, ...(cityRegex ? { 'location.city': cityRegex } : {}) })
+      : await Restaurant.countDocuments({ ...restaurantPlatformQuery, isActive: true, ...(cityRegex ? { 'location.city': cityRegex } : {}) });
     
     // Restaurant requests pending (inactive restaurants with completed onboarding, no rejection)
     const pendingRestaurantRequestsQuery = {
@@ -230,8 +289,29 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       ]
     };
     const pendingRestaurantRequests = requestedPlatform === 'mogrocery'
-      ? await GroceryStore.countDocuments(pendingRestaurantRequestsQuery)
-      : await Restaurant.countDocuments({ ...restaurantPlatformQuery, ...pendingRestaurantRequestsQuery });
+      ? await GroceryStore.countDocuments({
+          ...pendingRestaurantRequestsQuery,
+          ...(cityRegex
+            ? {
+                $or: [
+                  { 'location.city': cityRegex },
+                  { 'onboarding.step1.location.city': cityRegex }
+                ]
+              }
+            : {})
+        })
+      : await Restaurant.countDocuments({
+          ...restaurantPlatformQuery,
+          ...pendingRestaurantRequestsQuery,
+          ...(cityRegex
+            ? {
+                $or: [
+                  { 'location.city': cityRegex },
+                  { 'onboarding.step1.location.city': cityRegex }
+                ]
+              }
+            : {})
+        });
     
     // Total delivery boys (all delivery users)
     const totalDeliveryBoys = await User.countDocuments({ role: 'delivery' });
@@ -334,12 +414,14 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     const recentRestaurants = requestedPlatform === 'mogrocery'
       ? await GroceryStore.countDocuments({
           createdAt: { $gte: last24Hours },
-          isActive: true
+          isActive: true,
+          ...(cityRegex ? { 'location.city': cityRegex } : {})
         })
       : await Restaurant.countDocuments({
           ...restaurantPlatformQuery,
           createdAt: { $gte: last24Hours },
-          isActive: true
+          isActive: true,
+          ...(cityRegex ? { 'location.city': cityRegex } : {})
         });
 
     // Get monthly data for last 12 months
@@ -1135,7 +1217,8 @@ export const getRestaurants = asyncHandler(async (req, res) => {
       search,
       status,
       cuisine,
-      zone
+      zone,
+      city
     } = req.query;
 
     // Build query
@@ -1177,11 +1260,33 @@ export const getRestaurants = asyncHandler(async (req, res) => {
       query.cuisines = { $in: [new RegExp(cuisine, 'i')] };
     }
 
+    if (city) {
+      const cityRegex = buildCityRegex(city);
+      if (cityRegex) {
+        query.$and = [
+          ...(Array.isArray(query.$and) ? query.$and : []),
+          {
+            $or: [
+              { 'location.city': cityRegex },
+              { 'onboarding.step1.location.city': cityRegex }
+            ]
+          }
+        ];
+      }
+    }
+
     // Zone filter
     if (zone && zone !== 'All over the World') {
-      query.$or = [
-        { 'location.area': { $regex: zone, $options: 'i' } },
-        { 'location.city': { $regex: zone, $options: 'i' } }
+      query.$and = [
+        ...(Array.isArray(query.$and) ? query.$and : []),
+        {
+          $or: [
+            { 'location.area': { $regex: zone, $options: 'i' } },
+            { 'location.city': { $regex: zone, $options: 'i' } },
+            { 'onboarding.step1.location.area': { $regex: zone, $options: 'i' } },
+            { 'onboarding.step1.location.city': { $regex: zone, $options: 'i' } }
+          ]
+        }
       ];
     }
 
@@ -1196,11 +1301,13 @@ export const getRestaurants = asyncHandler(async (req, res) => {
       .limit(parseInt(limit))
       .lean();
 
+    const normalizedRestaurants = restaurants.map(normalizeRestaurantAddressRecord);
+
     // Get total count
     const total = await Restaurant.countDocuments(query);
 
     return successResponse(res, 200, 'Restaurants retrieved successfully', {
-      restaurants: restaurants,
+      restaurants: normalizedRestaurants,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -1211,6 +1318,26 @@ export const getRestaurants = asyncHandler(async (req, res) => {
   } catch (error) {
     logger.error(`Error fetching restaurants: ${error.message}`, { error: error.stack });
     return errorResponse(res, 500, 'Failed to fetch restaurants');
+  }
+});
+
+export const getRestaurantById = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const restaurant = await Restaurant.findById(id)
+      .select('-password')
+      .lean();
+
+    if (!restaurant) {
+      return errorResponse(res, 404, 'Restaurant not found');
+    }
+
+    return successResponse(res, 200, 'Restaurant retrieved successfully', {
+      restaurant: normalizeRestaurantAddressRecord(restaurant),
+    });
+  } catch (error) {
+    logger.error(`Error fetching restaurant: ${error.message}`, { error: error.stack });
+    return errorResponse(res, 500, 'Failed to fetch restaurant');
   }
 });
 
@@ -1376,7 +1503,7 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
     });
 
     return successResponse(res, 200, 'Restaurant updated successfully', {
-      restaurant: updatedRestaurant,
+      restaurant: normalizeRestaurantAddressRecord(updatedRestaurant),
     });
   } catch (error) {
     logger.error(`Error updating restaurant: ${error.message}`, { error: error.stack });

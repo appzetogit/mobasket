@@ -121,14 +121,31 @@ export const getGroceryStoreOrderById = asyncHandler(async (req, res) => {
     const store = req.store;
     const { id } = req.params;
 
-    const storeIdString = store._id?.toString();
+    const storeIdVariations = Array.from(new Set([
+      store._id?.toString(),
+      store.restaurantId?.toString(),
+      store.id?.toString(),
+    ].filter(Boolean)));
 
-    const order = await Order.findOne({
-      _id: id,
-      restaurantId: storeIdString
-    })
-      .populate('userId', 'name email phone')
-      .lean();
+    let order = null;
+
+    if (mongoose.Types.ObjectId.isValid(id) && id.length === 24) {
+      order = await Order.findOne({
+        _id: id,
+        restaurantId: { $in: storeIdVariations }
+      })
+        .populate('userId', 'name email phone')
+        .lean();
+    }
+
+    if (!order) {
+      order = await Order.findOne({
+        orderId: id,
+        restaurantId: { $in: storeIdVariations }
+      })
+        .populate('userId', 'name email phone')
+        .lean();
+    }
 
     if (!order) {
       return errorResponse(res, 404, 'Order not found');

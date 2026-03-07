@@ -30,15 +30,11 @@ const isCashLimitReached = (walletState) =>
   getAvailableCashLimit(walletState) <= 0;
 
 const getDepositEligibleCashInHand = (walletState) => {
-  const totalCashLimit = Number(walletState?.totalCashLimit ?? walletState?.codLimit) || 0;
-  const availableCashLimit = getAvailableCashLimit(walletState);
-
   return Math.max(
     0,
     Number(walletState?.cashInHand) || 0,
     Number(walletState?.codCashCollected) || 0,
     Number(walletState?.cashCollected) || 0,
-    totalCashLimit > 0 ? totalCashLimit - availableCashLimit : 0,
   );
 };
 
@@ -146,6 +142,9 @@ export default function FeedNavbar({ className = "" }) {
   const handleProfileClick = () => navigate("/delivery/profile");
 
   const promptCashDeposit = () => {
+    if (cashInHandForDeposit <= 0) {
+      return;
+    }
     setShowDepositCashPopup(true);
     toast.dismiss(CASH_LIMIT_TOAST_ID);
     toast.error("Available cash limit is 0. Deposit cash to continue taking orders.", {
@@ -188,7 +187,7 @@ export default function FeedNavbar({ className = "" }) {
   useEffect(() => {
     if (!walletLoaded) return;
 
-    if (!cashLimitReached) {
+    if (!cashLimitReached || cashInHandForDeposit <= 0) {
       cashLimitPromptShownRef.current = false;
       return;
     }
@@ -204,7 +203,7 @@ export default function FeedNavbar({ className = "" }) {
     deliveryAPI.updateOnlineStatus(false).catch((error) => {
       console.error("Error forcing rider offline after COD limit exhaustion:", error);
     });
-  }, [cashLimitReached, isOnline, walletLoaded]);
+  }, [cashLimitReached, cashInHandForDeposit, isOnline, walletLoaded]);
 
   const handleToggle = async (e) => {
     e?.preventDefault?.();

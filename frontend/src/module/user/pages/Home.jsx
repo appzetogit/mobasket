@@ -88,6 +88,44 @@ const placeholders = [
   'Search "dosa"',
 ];
 
+const normalizeCityName = (value) => String(value || "").trim().toLowerCase();
+
+const extractRestaurantCity = (restaurant) => {
+  const directCity =
+    restaurant?.location?.city ||
+    restaurant?.city ||
+    restaurant?.address?.city ||
+    "";
+
+  if (String(directCity || "").trim()) {
+    return String(directCity).trim();
+  }
+
+  const formattedAddress =
+    restaurant?.location?.formattedAddress ||
+    restaurant?.location?.address ||
+    restaurant?.address ||
+    "";
+
+  if (!formattedAddress || typeof formattedAddress !== "string") return "";
+
+  const parts = formattedAddress
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const pincodeIndex = parts.findIndex((part) => /^\d{5,6}$/.test(part));
+  if (pincodeIndex >= 1) {
+    return parts[pincodeIndex - 1] || "";
+  }
+
+  if (parts.length >= 2) {
+    return parts[parts.length - 2] || "";
+  }
+
+  return "";
+};
+
 const collectSearchableItems = (restaurant = {}) => {
   const names = new Set();
 
@@ -971,8 +1009,14 @@ export default function Home() {
           params.trusted = "true";
         }
 
-        // Home page is MoFood-only.
+        // Home page is MoFood-only and should stay within the user's city.
         params.platform = "mofood";
+        const normalizedUserCity = normalizeCityName(
+          location?.city && location.city !== "Current Location" ? location.city : ""
+        );
+        if (normalizedUserCity) {
+          params.city = location.city;
+        }
 
         // Strict zone filter: show only restaurants from the same detected zone when available.
         const hasResolvedZone = Boolean(zoneId);
@@ -1016,12 +1060,14 @@ export default function Home() {
           response.data.data &&
           response.data.data.restaurants
         ) {
-          const restaurantsArray = (restaurantsArrayRaw || []).filter(
-            (restaurant) => {
-              const platform = String(restaurant?.platform || "").toLowerCase();
-              return !platform || platform === "mofood";
-            },
-          );
+          const restaurantsArray = (restaurantsArrayRaw || []).filter((restaurant) => {
+            const platform = String(restaurant?.platform || "").toLowerCase();
+            if (platform && platform !== "mofood") return false;
+            if (!normalizedUserCity) return false;
+
+            const restaurantCity = normalizeCityName(extractRestaurantCity(restaurant));
+            return restaurantCity === normalizedUserCity;
+          });
 
           if (restaurantsArray.length === 0) {
             console.warn("No restaurants found in API response");
@@ -1197,7 +1243,7 @@ export default function Home() {
         setLoadingRestaurants(false);
       }
     },
-    [zoneId, zoneLoading],
+    [location?.city, location?.latitude, location?.longitude, zoneId, zoneLoading],
   );
 
   // Fetch restaurants when appliedFilters change

@@ -51,6 +51,7 @@ const GroceryPage = () => {
   const [activeTab, setActiveTab] = useState("All");
   const [activeCategoryId, setActiveCategoryId] = useState("all");
   const [activeSubcategoryId, setActiveSubcategoryId] = useState("all-subcategories");
+  const [selectedStoreId, setSelectedStoreId] = useState("all-stores");
 
   const [isScrolled, setIsScrolled] = useState(false);
   const [currentBanner, setCurrentBanner] = useState(0);
@@ -126,6 +127,17 @@ const GroceryPage = () => {
 
     return null;
   };
+
+  const getNormalizedStoreId = (storeLike) =>
+    String(
+      storeLike?._id ||
+      storeLike?.id ||
+      storeLike?.restaurantId ||
+      storeLike?.storeId?._id ||
+      storeLike?.storeId?.id ||
+      storeLike?.storeId ||
+      ""
+    ).trim();
 
   const resolveStoreObjectFromProduct = (product) => {
     const populatedStore =
@@ -596,6 +608,16 @@ const GroceryPage = () => {
   }, [effectiveZoneId, rawProducts, groceryStores]);
 
   useEffect(() => {
+    if (selectedStoreId === "all-stores") return;
+    const hasSelectedStore = groceryStores.some(
+      (store) => getNormalizedStoreId(store) === String(selectedStoreId)
+    );
+    if (!hasSelectedStore) {
+      setSelectedStoreId("all-stores");
+    }
+  }, [groceryStores, selectedStoreId]);
+
+  useEffect(() => {
     const fetchGroceryStores = async () => {
       if ((locationLoading || zoneLoading) && !effectiveZoneId) {
         setIsStoresLoading(true);
@@ -863,8 +885,15 @@ const GroceryPage = () => {
     return true;
   };
 
+  const storeFilteredProducts = useMemo(() => {
+    if (selectedStoreId === "all-stores") return allProducts;
+    return allProducts.filter(
+      (product) => getNormalizedStoreId(product) === String(selectedStoreId)
+    );
+  }, [allProducts, selectedStoreId]);
+
   const visibleLayoutProducts = useMemo(() => {
-    return allProducts.filter((product) => {
+    return storeFilteredProducts.filter((product) => {
       const productCategoryId = String(
         product?.category?._id || product?.category?.id || product?.category || ""
       );
@@ -886,7 +915,7 @@ const GroceryPage = () => {
 
       return categoryMatch && subcategoryMatch;
     });
-  }, [activeCategoryId, activeSubcategoryId, activeTab, allProducts]);
+  }, [activeCategoryId, activeSubcategoryId, activeTab, storeFilteredProducts]);
 
   const extractImageUrl = (imageValue) => {
     if (typeof imageValue === "string") return imageValue;
@@ -978,7 +1007,7 @@ const GroceryPage = () => {
         };
       });
 
-      const productCards = allProducts
+      const productCards = storeFilteredProducts
         .filter((product) => {
           const productCategoryId = String(
             product?.category?._id || product?.category?.id || product?.category || ""
@@ -1014,13 +1043,13 @@ const GroceryPage = () => {
         homepageCards: cards,
       };
     });
-  }, [allProducts, homepageCategorySections]);
+  }, [homepageCategorySections, storeFilteredProducts]);
 
   const visibleSearchProducts = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
     if (!query) return [];
 
-    return allProducts.filter((product) => {
+    return storeFilteredProducts.filter((product) => {
       const name = String(product?.name || "").toLowerCase();
       const description = String(product?.description || "").toLowerCase();
       const categoryName = String(product?.category?.name || "").toLowerCase();
@@ -1033,15 +1062,16 @@ const GroceryPage = () => {
         .filter(Boolean)
         .join(" ");
 
-      return (
+      const searchMatch = (
         name.includes(query) ||
         description.includes(query) ||
         categoryName.includes(query) ||
         unit.includes(query) ||
         subcategoryNames.includes(query)
       );
+      return searchMatch;
     });
-  }, [allProducts, searchQuery]);
+  }, [searchQuery, storeFilteredProducts]);
 
   const activeCollectionCategory = useMemo(() => {
     if (!collectionCategoryId || collectionCategoryId === "all") return null;
@@ -1060,17 +1090,17 @@ const GroceryPage = () => {
   }, [homepageCategories]);
 
   const collectionVisibleProducts = useMemo(() => {
-    if (collectionCategoryId === "all") return allProducts;
+    if (collectionCategoryId === "all") return storeFilteredProducts;
     const categoryId = String(collectionCategoryId || "");
     if (!categoryId) return [];
 
-    return allProducts.filter((product) => {
+    return storeFilteredProducts.filter((product) => {
       const productCategoryId = String(
         product?.category?._id || product?.category?.id || product?.category || ""
       );
       return productCategoryId === categoryId;
     });
-  }, [allProducts, collectionCategoryId]);
+  }, [collectionCategoryId, storeFilteredProducts]);
 
   const getWishlistItemId = (product) => `food-${String(product?._id || product?.id || "")}`;
 
@@ -1124,7 +1154,7 @@ const GroceryPage = () => {
 
     if (wantedIds.size === 0) return [];
 
-    const matchedProducts = allProducts.filter((product) =>
+    const matchedProducts = storeFilteredProducts.filter((product) =>
       wantedIds.has(String(product?._id || product?.id || ""))
     );
 
@@ -1140,7 +1170,7 @@ const GroceryPage = () => {
         unit: item?.unit || "",
         image: item?.image || FALLBACK_IMAGE,
       }));
-  }, [allProducts, wishlistItems]);
+  }, [storeFilteredProducts, wishlistItems]);
 
   const visibleBestSellers = useMemo(() => {
     if (!hasActiveGroceryStore) return [];
@@ -1159,7 +1189,7 @@ const GroceryPage = () => {
       const type = String(item?.itemType || "");
       const targetId = String(item?.itemId || "");
 
-      const productImages = allProducts
+      const productImages = storeFilteredProducts
         .filter((product) => {
           if (!targetId) return false;
 
@@ -1199,7 +1229,7 @@ const GroceryPage = () => {
       if (!targetId) return 0;
 
       if (type === "category") {
-        return allProducts.filter((product) => {
+        return storeFilteredProducts.filter((product) => {
           const productCategoryId = String(
             product?.category?._id || product?.category?.id || product?.category || ""
           );
@@ -1208,7 +1238,7 @@ const GroceryPage = () => {
       }
 
       if (type === "subcategory") {
-        return allProducts.filter((product) => {
+        return storeFilteredProducts.filter((product) => {
           const productSubcategoryIds = [
             ...(Array.isArray(product?.subcategories) ? product.subcategories : []),
             product?.subcategory,
@@ -1225,7 +1255,38 @@ const GroceryPage = () => {
     if (bestSellerItems.length === 0) return [];
 
     return bestSellerItems
-      .filter((item) => (item?.name || "").toLowerCase().includes(query))
+      .filter((item) => {
+        if (!(item?.name || "").toLowerCase().includes(query)) return false;
+        if (selectedStoreId === "all-stores") return true;
+
+        const targetId = String(item?.itemId || "");
+        const type = String(item?.itemType || "");
+        if (type === "product") {
+          return storeFilteredProducts.some(
+            (product) => String(product?._id || product?.id || "") === targetId
+          );
+        }
+        if (type === "category") {
+          return storeFilteredProducts.some((product) => {
+            const productCategoryId = String(
+              product?.category?._id || product?.category?.id || product?.category || ""
+            );
+            return productCategoryId === targetId;
+          });
+        }
+        if (type === "subcategory") {
+          return storeFilteredProducts.some((product) => {
+            const productSubcategoryIds = [
+              ...(Array.isArray(product?.subcategories) ? product.subcategories : []),
+              product?.subcategory,
+            ]
+              .map((subcat) => String(subcat?._id || subcat?.id || subcat || ""))
+              .filter(Boolean);
+            return productSubcategoryIds.includes(targetId);
+          });
+        }
+        return true;
+      })
       .map((item) => ({
         id: item._id,
         name: item.name || "",
@@ -1242,11 +1303,11 @@ const GroceryPage = () => {
         itemId: item.itemId,
         subcategories: Array.isArray(item.subcategories) ? item.subcategories : [],
       }));
-  }, [allProducts, bestSellerItems, hasActiveGroceryStore, searchQuery]);
+  }, [bestSellerItems, hasActiveGroceryStore, searchQuery, selectedStoreId, storeFilteredProducts]);
 
   const orderedBestSellerProductSections = useMemo(() => {
     const productMap = new Map(
-      (Array.isArray(allProducts) ? allProducts : []).map((product) => [
+      (Array.isArray(storeFilteredProducts) ? storeFilteredProducts : []).map((product) => [
         String(product?._id || product?.id || ""),
         product,
       ])
@@ -1297,7 +1358,32 @@ const GroceryPage = () => {
         if (a.order !== b.order) return a.order - b.order;
         return a.name.localeCompare(b.name);
       });
-  }, [allProducts, bestSellerItems, bestSellerSections]);
+  }, [bestSellerItems, bestSellerSections, storeFilteredProducts]);
+
+  const storeFilterOptions = useMemo(() => {
+    const counts = new Map();
+    allProducts.forEach((product) => {
+      const productStoreId = getNormalizedStoreId(product);
+      if (!productStoreId) return;
+      counts.set(productStoreId, (counts.get(productStoreId) || 0) + 1);
+    });
+
+    return groceryStores
+      .map((store) => {
+        const storeId = getNormalizedStoreId(store);
+        if (!storeId) return null;
+        return {
+          id: storeId,
+          name: String(store?.name || "Store").trim() || "Store",
+          count: counts.get(storeId) || 0,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => {
+        if (b.count !== a.count) return b.count - a.count;
+        return a.name.localeCompare(b.name);
+      });
+  }, [allProducts, groceryStores]);
 
   useEffect(() => {
     setActiveSubcategoryId("all-subcategories");
@@ -1777,6 +1863,65 @@ const GroceryPage = () => {
             </div>
           </div>
 
+          {!shouldShowShimmer && groceryStores.length > 0 && (
+            <div className="px-4 mt-1 mb-2 relative z-30">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div>
+                  <p className="text-[12px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                    Filter By Store
+                  </p>
+                  <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    {selectedStoreId === "all-stores"
+                      ? `${storeFilterOptions.length} grocery stores`
+                      : `${storeFilterOptions.find((store) => store.id === selectedStoreId)?.name || "Store"} selected`}
+                  </p>
+                </div>
+                {selectedStoreId !== "all-stores" && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStoreId("all-stores")}
+                    className="text-xs font-bold text-[#EF4F5F] dark:text-cyan-300"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedStoreId("all-stores")}
+                  className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold transition-colors ${
+                    selectedStoreId === "all-stores"
+                      ? "border-[#facc15] bg-[#fff4cc] text-slate-900 dark:border-cyan-400/70 dark:bg-[#152338] dark:text-cyan-100"
+                      : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-[#111a28] dark:text-slate-300"
+                  }`}
+                >
+                  All Stores
+                </button>
+                {storeFilterOptions.map((store) => (
+                  <button
+                    type="button"
+                    key={store.id}
+                    onClick={() => setSelectedStoreId(store.id)}
+                    className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold transition-colors ${
+                      selectedStoreId === store.id
+                        ? "border-[#facc15] bg-[#fff4cc] text-slate-900 dark:border-cyan-400/70 dark:bg-[#152338] dark:text-cyan-100"
+                        : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-[#111a28] dark:text-slate-300"
+                    }`}
+                  >
+                    {store.name}
+                    {store.count > 0 && (
+                      <span className="ml-2 text-[11px] font-extrabold text-slate-400 dark:text-slate-500">
+                        {store.count}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Nav Tabs (Mobile Only) - OUTSIDE YELLOW BOX */}
           {!hasActiveSearch && (
             <div className="px-2 pb-2 mt-2 md:hidden">
@@ -1843,6 +1988,66 @@ const GroceryPage = () => {
           ))}
         </div>
       )}
+
+      {!shouldShowShimmer && groceryStores.length > 0 && (
+        <div className="hidden md:block px-4 pt-1 pb-3 relative z-10 md:max-w-6xl md:mx-auto">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <div>
+              <p className="text-[13px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+                Filter By Store
+              </p>
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                {selectedStoreId === "all-stores"
+                  ? `${storeFilterOptions.length} stores available`
+                  : `${storeFilterOptions.find((store) => store.id === selectedStoreId)?.name || "Store"} selected`}
+              </p>
+            </div>
+            {selectedStoreId !== "all-stores" && (
+              <button
+                type="button"
+                onClick={() => setSelectedStoreId("all-stores")}
+                className="text-xs font-bold text-[#EF4F5F] dark:text-cyan-300"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+            <button
+              type="button"
+              onClick={() => setSelectedStoreId("all-stores")}
+              className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold transition-colors ${
+                selectedStoreId === "all-stores"
+                  ? "border-[#facc15] bg-[#fff4cc] text-slate-900 dark:border-cyan-400/70 dark:bg-[#152338] dark:text-cyan-100"
+                  : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-[#111a28] dark:text-slate-300"
+              }`}
+            >
+              All Stores
+            </button>
+            {storeFilterOptions.map((store) => (
+              <button
+                type="button"
+                key={store.id}
+                onClick={() => setSelectedStoreId(store.id)}
+                className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold transition-colors ${
+                  selectedStoreId === store.id
+                    ? "border-[#facc15] bg-[#fff4cc] text-slate-900 dark:border-cyan-400/70 dark:bg-[#152338] dark:text-cyan-100"
+                    : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-[#111a28] dark:text-slate-300"
+                }`}
+              >
+                {store.name}
+                {store.count > 0 && (
+                  <span className="ml-2 text-[11px] font-extrabold text-slate-400 dark:text-slate-500">
+                    {store.count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {shouldShowShimmer && (
         <div className="px-4 pt-3 pb-24 relative z-10 md:max-w-6xl md:mx-auto animate-fade-in-up">
           <div className="h-[140px] md:h-[185px] rounded-2xl bg-slate-200 shimmer-bg mb-4" />

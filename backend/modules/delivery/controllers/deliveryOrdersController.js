@@ -861,10 +861,17 @@ export const acceptOrder = asyncHandler(async (req, res) => {
             'assignmentInfo.deliveryPartnerId': String(delivery._id),
             'assignmentInfo.assignedBy': 'delivery_accept',
             'assignmentInfo.assignedAt': new Date(),
+            'assignmentInfo.notificationPhase': 'accepted',
             'deliveryState.status': 'accepted',
             'deliveryState.acceptedAt': new Date(),
             'deliveryState.currentPhase': 'en_route_to_pickup',
             'deliveryState.routeToPickup': routeToPickup
+          },
+          $unset: {
+            'assignmentInfo.priorityDeliveryPartnerIds': '',
+            'assignmentInfo.expandedDeliveryPartnerIds': '',
+            'assignmentInfo.priorityNotifiedAt': '',
+            'assignmentInfo.expandedNotifiedAt': ''
           }
         },
         { new: true }

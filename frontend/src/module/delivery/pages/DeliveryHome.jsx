@@ -1769,7 +1769,7 @@ export default function DeliveryHome() {
   // Delivery notifications hook
 
 
-  const { newOrder, clearNewOrder, orderReady, clearOrderReady, isConnected } = useDeliveryNotifications()
+  const { newOrder, clearNewOrder, orderReady, clearOrderReady, isConnected, suppressOrderNotifications } = useDeliveryNotifications()
 
 
 
@@ -1881,6 +1881,7 @@ export default function DeliveryHome() {
 
 
   const acceptedOrderIdsRef = useRef(new Set()) // Track accepted order IDs to prevent duplicate notifications
+  const acceptingOrderIdsRef = useRef(new Set()) // Prevent duplicate accept requests for the same order
 
 
   const normalizeOrderId = useCallback((value) => {
@@ -1911,6 +1912,33 @@ export default function DeliveryHome() {
 
 
   }, [normalizeOrderId])
+
+
+  const markOrderAsUnavailable = useCallback((...ids) => {
+
+
+    const normalizedIds = ids
+
+
+      .map((id) => normalizeOrderId(id))
+
+
+      .filter(Boolean)
+
+
+    normalizedIds.forEach((id) => acceptedOrderIdsRef.current.add(id))
+
+
+    if (normalizedIds.length > 0) {
+
+
+      suppressOrderNotifications(normalizedIds)
+
+
+    }
+
+
+  }, [normalizeOrderId, suppressOrderNotifications])
 
 
   const isOrderAlreadyAccepted = useCallback((...ids) => {
@@ -7907,6 +7935,7 @@ export default function DeliveryHome() {
 
 
         const orderId = selectedRestaurant?.id || newOrder?.orderMongoId || newOrder?.orderId
+        const normalizedOrderId = normalizeOrderId(orderId)
 
 
 
@@ -7949,6 +7978,24 @@ export default function DeliveryHome() {
 
 
 
+
+
+        if (normalizedOrderId && acceptingOrderIdsRef.current.has(normalizedOrderId)) {
+
+
+          return
+
+
+        }
+
+
+        if (normalizedOrderId) {
+
+
+          acceptingOrderIdsRef.current.add(normalizedOrderId)
+
+
+        }
 
 
         // Declare currentLocation in outer scope so it's accessible in catch block
@@ -9277,6 +9324,24 @@ export default function DeliveryHome() {
             });
 
 
+            suppressOrderNotifications(
+
+
+              restaurantInfo?.id,
+
+
+              restaurantInfo?.orderId,
+
+
+              newOrder?.orderMongoId,
+
+
+              newOrder?.orderId,
+
+
+            );
+
+
             clearNewOrder();
 
 
@@ -9883,6 +9948,24 @@ export default function DeliveryHome() {
           }
 
 
+          const conflictStatus = error?.response?.status
+
+
+          const conflictMessage = String(error?.response?.data?.message || '').toLowerCase()
+
+
+          if (conflictStatus === 409 && (conflictMessage.includes('accepted by another') || conflictMessage.includes('no longer available'))) {
+
+
+            markOrderAsUnavailable(orderId, newOrder?.orderMongoId, newOrder?.orderId)
+
+
+            clearNewOrder()
+
+
+          }
+
+
 
 
 
@@ -9962,6 +10045,15 @@ export default function DeliveryHome() {
 
 
         } finally {
+
+
+          if (normalizedOrderId) {
+
+
+            acceptingOrderIdsRef.current.delete(normalizedOrderId)
+
+
+          }
 
 
           // Reset after animation
