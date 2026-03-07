@@ -157,6 +157,44 @@ const hydrateMissingLegacyGroceryStores = async ({ search, status }) => {
   }
 };
 
+const isLegacyGroceryRestaurant = async (restaurantId) => {
+  if (!restaurantId) return false;
+
+  const restaurant = await Restaurant.findById(restaurantId)
+    .select('_id platform')
+    .lean();
+
+  if (!restaurant) return false;
+  if (restaurant.platform === 'mogrocery' || restaurant.platform === 'grocery') {
+    return true;
+  }
+
+  const [hasGroceryOrders, hasGroceryProducts] = await Promise.all([
+    Order.exists({
+      restaurantId: restaurant._id,
+      $or: [
+        { restaurantPlatform: 'mogrocery' },
+        { platform: 'mogrocery' }
+      ]
+    }),
+    GroceryProduct.exists({ restaurant: restaurant._id })
+  ]);
+
+  return Boolean(hasGroceryOrders || hasGroceryProducts);
+};
+
+const syncLegacyRestaurantStoreState = async (restaurantId, update) => {
+  if (!restaurantId) return null;
+  const isLegacyGrocery = await isLegacyGroceryRestaurant(restaurantId);
+  if (!isLegacyGrocery) return null;
+
+  return Restaurant.findOneAndUpdate(
+    { _id: restaurantId },
+    { $set: update },
+    { new: true }
+  );
+};
+
 /**
  * Get All Grocery Stores
  * GET /api/grocery/stores
@@ -288,13 +326,22 @@ export const updateGroceryStore = asyncHandler(async (req, res) => {
 export const updateGroceryStoreStatus = asyncHandler(async (req, res) => {
   try {
     const { isActive } = req.body;
+    const statusUpdate = {
+      isActive,
+      isAcceptingOrders: Boolean(isActive),
+      rejectionReason: isActive ? null : 'Archived',
+      rejectedAt: isActive ? null : new Date()
+    };
+
     const store = await GroceryStore.findOneAndUpdate(
       { _id: req.params.id },
-      { isActive },
+      { $set: statusUpdate },
       { new: true }
     ).select('-password');
 
-    if (!store) {
+    const legacyStore = await syncLegacyRestaurantStoreState(req.params.id, statusUpdate);
+
+    if (!store && !legacyStore) {
       return errorResponse(res, 404, 'Grocery store not found');
     }
 
@@ -310,31 +357,20 @@ export const updateGroceryStoreStatus = asyncHandler(async (req, res) => {
  */
 export const deleteGroceryStore = asyncHandler(async (req, res) => {
   try {
+    const archiveUpdate = {
+      isActive: false,
+      isAcceptingOrders: false,
+      rejectionReason: 'Archived',
+      rejectedAt: new Date()
+    };
+
     const store = await GroceryStore.findOneAndUpdate(
       { _id: req.params.id },
-      {
-        $set: {
-          isActive: false,
-          isAcceptingOrders: false,
-          rejectionReason: 'Archived',
-          rejectedAt: new Date()
-        }
-      },
+      { $set: archiveUpdate },
       { new: true }
     );
 
-    const legacyStore = await Restaurant.findOneAndUpdate(
-      { _id: req.params.id, platform: 'mogrocery' },
-      {
-        $set: {
-          isActive: false,
-          isAcceptingOrders: false,
-          rejectionReason: 'Archived',
-          rejectedAt: new Date()
-        }
-      },
-      { new: true }
-    );
+    const legacyStore = await syncLegacyRestaurantStoreState(req.params.id, archiveUpdate);
 
     if (!store && !legacyStore) {
       return errorResponse(res, 404, 'Grocery store not found');

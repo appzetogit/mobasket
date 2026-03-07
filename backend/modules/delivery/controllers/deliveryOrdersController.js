@@ -13,6 +13,10 @@ import AdminCommission from '../../admin/models/AdminCommission.js';
 import { calculateRoute } from '../../order/services/routeCalculationService.js';
 import { calculateDriverEarning } from '../../order/services/deliveryEarningService.js';
 import { validateCODLimitBeforeAssignment } from '../services/codLimitService.js';
+import {
+  getDeliveryEligibilityErrorMessage,
+  isDeliveryEligibleForOrders
+} from '../utils/deliveryEligibility.js';
 import { upsertActiveOrderTracking } from '../../../shared/services/firebaseRealtimeService.js';
 import mongoose from 'mongoose';
 import winston from 'winston';
@@ -70,6 +74,15 @@ const terminalOrderActionMessage = (order, actionLabel) => {
     return `Order is already delivered. Cannot ${actionLabel}.`;
   }
   return `Order is not valid to ${actionLabel}.`;
+};
+
+const ensureDeliveryEligibleForOrders = (delivery, res) => {
+  if (isDeliveryEligibleForOrders(delivery)) {
+    return true;
+  }
+
+  errorResponse(res, 403, getDeliveryEligibilityErrorMessage(delivery));
+  return false;
 };
 
 const isPointInZoneBoundary = (lat, lng, zoneCoordinates = []) => {
@@ -196,6 +209,9 @@ const emitOrderClaimedToOtherPartners = async (orderLike, claimedByDeliveryId, a
 export const getOrders = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
+    if (!ensureDeliveryEligibleForOrders(delivery, res)) {
+      return;
+    }
     const { status, page = 1, limit = 20, includeDelivered } = req.query;
 
     const deliveryIdString = delivery._id.toString();
@@ -302,6 +318,9 @@ export const getOrders = asyncHandler(async (req, res) => {
 export const getOrderDetails = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
+    if (!ensureDeliveryEligibleForOrders(delivery, res)) {
+      return;
+    }
     const { orderId } = req.params;
 
     // Build query to find order by either _id or orderId field
@@ -338,21 +357,12 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
       return String(id);
     };
     
-    // Valid statuses for order acceptance (unassigned orders in these statuses can be viewed by any delivery boy)
-    const validAcceptanceStatuses = ['preparing', 'ready'];
-    
     // If order is assigned to this delivery partner, allow access
     if (orderDeliveryPartnerId === currentDeliveryId) {
       // Order is assigned, proceed
       console.log(`✅ Order ${order.orderId} is assigned to current delivery partner ${currentDeliveryId}`);
     } else if (!orderDeliveryPartnerId) {
-      // Order not assigned yet - allow access if:
-      // 1. Order is in a valid status for acceptance (preparing/ready), OR
-      // 2. This delivery boy was notified about it
-      
-      const isInValidStatus = validAcceptanceStatuses.includes(order.status);
-      
-      // Check if this delivery boy was notified
+      // Order not assigned yet - allow access only if this delivery boy was explicitly notified.
       const assignmentInfo = order.assignmentInfo || {};
       const priorityIds = assignmentInfo.priorityDeliveryPartnerIds || [];
       const expandedIds = assignmentInfo.expandedDeliveryPartnerIds || [];
@@ -368,15 +378,13 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
       console.log(`🔍 Checking access for order ${order.orderId}:`, {
         currentDeliveryId: normalizedCurrentId,
         orderStatus: order.status,
-        isInValidStatus,
         wasNotified,
         priorityIds: normalizedPriorityIds,
         expandedIds: normalizedExpandedIds
       });
       
-      // Allow access if order is in valid status OR delivery boy was notified
-      if (isInValidStatus || wasNotified) {
-        console.log(`✅ Allowing access to order ${order.orderId} - Status: ${order.status}, Notified: ${wasNotified}`);
+      if (wasNotified) {
+        console.log(`✅ Allowing access to order ${order.orderId} for notified delivery partner ${currentDeliveryId}`);
         // Allow access to view order details
       } else {
         console.warn(`⚠️ Delivery partner ${currentDeliveryId} cannot access order ${order.orderId} - Status: ${order.status}, Notified: ${wasNotified}`);
@@ -414,6 +422,9 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
 export const acceptOrder = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
+    if (!ensureDeliveryEligibleForOrders(delivery, res)) {
+      return;
+    }
     const { orderId } = req.params;
     const { currentLat, currentLng } = req.body; // Delivery boy's current location
 
@@ -460,8 +471,6 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       const assignmentInfo = order.assignmentInfo || {};
       const priorityIds = assignmentInfo.priorityDeliveryPartnerIds || [];
       const expandedIds = assignmentInfo.expandedDeliveryPartnerIds || [];
-      const isInValidStatus = ['preparing', 'ready'].includes(String(order.status || '').toLowerCase());
-      
       // Helper function to normalize ID for comparison
       const normalizeId = (id) => {
         if (!id) return null;
@@ -479,7 +488,6 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         currentDeliveryId: normalizedCurrentId,
         priorityIds: normalizedPriorityIds,
         expandedIds: normalizedExpandedIds,
-          isInValidStatus,
         orderStatus: order.status,
         assignmentInfo: JSON.stringify(assignmentInfo)
       });
@@ -487,7 +495,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       const wasNotified = normalizedPriorityIds.includes(normalizedCurrentId) || 
                          normalizedExpandedIds.includes(normalizedCurrentId);
       
-      if (!wasNotified && !isInValidStatus) {
+      if (!wasNotified) {
         console.error(`❌ Order ${order.orderId} is not assigned and delivery partner ${currentDeliveryId} was not notified`);
         console.error(`❌ Full order details:`, {
           orderId: order.orderId,
@@ -2028,6 +2036,12 @@ export const completeDelivery = asyncHandler(async (req, res) => {
               { $inc: { cashInHand: codAmount, codCashCollected: codAmount } }
             );
             if (updateResult.modifiedCount > 0) {
+              await Delivery.updateOne(
+                { _id: delivery._id },
+                { $inc: { 'cod.cashCollected': codAmount } }
+              );
+              wallet.cashInHand = Math.max(0, Number(wallet.cashInHand || 0) + codAmount);
+              wallet.codCashCollected = wallet.cashInHand;
               console.log(`✅ Cash collected ₹${codAmount.toFixed(2)} (COD) added to cashInHand for order ${orderIdForLog}`);
             } else {
               console.warn(`⚠️ Wallet update for cashInHand had no effect (deliveryId: ${delivery._id})`);

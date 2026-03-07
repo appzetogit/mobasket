@@ -13,29 +13,22 @@ const LS_KEY = "app:isOnline";
 const TOAST_ID_KEY = "feedNavbar-onlineStatus";
 const CASH_LIMIT_TOAST_ID = "feedNavbar-cashLimit";
 
-const getAvailableCashLimit = (walletState) => {
-  const totalCashLimit =
-    Number(walletState?.codLimit ?? walletState?.totalCashLimit) || 0;
-  const cashInHand =
-    Number(walletState?.cashInHand ?? walletState?.codCashCollected ?? walletState?.cashCollected) || 0;
-
-  if (Number.isFinite(Number(walletState?.availableCashLimit))) {
-    return Math.max(0, Number(walletState.availableCashLimit));
-  }
-
-  return Math.max(0, totalCashLimit - cashInHand);
-};
+const getCashLimitUsed = (walletState) =>
+  Math.max(
+    0,
+    Number(walletState?.cashLimitUsed ?? walletState?.cashCollected ?? walletState?.cashInHand ?? walletState?.codCashCollected) || 0,
+  );
 
 const getTotalCashLimit = (walletState) =>
   Math.max(0, Number(walletState?.codLimit ?? walletState?.totalCashLimit) || 0);
 
 const isCashLimitReached = (walletState) =>
-  getAvailableCashLimit(walletState) <= 0;
+  getTotalCashLimit(walletState) > 0 && getCashLimitUsed(walletState) >= getTotalCashLimit(walletState);
 
 const shouldWarnDeposit = (walletState) => {
   const totalCashLimit = getTotalCashLimit(walletState);
   if (totalCashLimit <= 0) return false;
-  return getAvailableCashLimit(walletState) < totalCashLimit;
+  return getCashLimitUsed(walletState) >= totalCashLimit;
 };
 
 const getDepositEligibleCashInHand = (walletState) => {
@@ -156,7 +149,7 @@ export default function FeedNavbar({ className = "" }) {
     }
     setShowDepositCashPopup(true);
     toast.dismiss(CASH_LIMIT_TOAST_ID);
-    toast.error("Available cash limit is below admin cash limit. Deposit cash to restore it.", {
+    toast.error("Cash limit reached. Deposit cash to continue taking COD orders.", {
       id: CASH_LIMIT_TOAST_ID,
       style: { marginTop: "80px" }
     });

@@ -12,6 +12,7 @@ const EMPTY_WALLET_STATE = {
   deductions: 0,
   totalCashLimit: 0,
   availableCashLimit: 0,
+  cashLimitUsed: 0,
   codLimit: 0,
   cashCollected: 0,
   remainingLimit: 0,
@@ -84,6 +85,7 @@ export const fetchDeliveryWallet = async () => {
         Number.isFinite(Number(walletData.availableCashLimit))
           ? Number(walletData.availableCashLimit)
           : transformedRemainingLimit
+      const transformedCashLimitUsed = transformedCashCollected
 
       // Transform API response to match expected format (support both camelCase and snake_case)
       const transformedData = {
@@ -94,6 +96,7 @@ export const fetchDeliveryWallet = async () => {
         totalEarned: Number(walletData.totalEarned) || 0,
         totalCashLimit: transformedTotalCashLimit,
         availableCashLimit: transformedAvailableCashLimit,
+        cashLimitUsed: transformedCashLimitUsed,
         codLimit: Number.isFinite(Number(walletData.codLimit)) ? Number(walletData.codLimit) : transformedTotalCashLimit,
         cashCollected: transformedCashCollected,
         remainingLimit: transformedRemainingLimit,

@@ -10,7 +10,13 @@ export default function AvailableCashLimit({ onClose, walletData = {} }) {
     0,
     Number.isFinite(Number(walletData.availableCashLimit))
       ? Number(walletData.availableCashLimit)
-      : (totalCashLimit - cashInHand)
+      : cashInHand
+  )
+  const remainingLimit = Math.max(
+    0,
+    Number.isFinite(Number(walletData.remainingLimit))
+      ? Number(walletData.remainingLimit)
+      : (totalCashLimit - availableCashLimit)
   )
 
   return (
@@ -20,8 +26,8 @@ export default function AvailableCashLimit({ onClose, walletData = {} }) {
           <div>
             <div className="text-sm font-medium">Total cash limit</div>
             <div className="text-xs text-gray-500 leading-tight mt-1">
-              Resets every Monday and increases with<br />
-              earnings
+              Starts at zero and increases with<br />
+              COD collections
             </div>
           </div>
           <div className="text-sm font-semibold">{formatCurrency(totalCashLimit)}</div>
@@ -36,13 +42,18 @@ export default function AvailableCashLimit({ onClose, walletData = {} }) {
           <div className="text-sm font-semibold">{formatCurrency(availableCashLimit)}</div>
         </div>
 
+        <div className="py-3 flex justify-between items-center border-b border-gray-200">
+          <div className="text-sm font-medium">Remaining COD capacity</div>
+          <div className="text-sm font-semibold">{formatCurrency(remainingLimit)}</div>
+        </div>
+
         <div className="py-3 text-xs text-gray-600 border-b border-gray-200">
           Assignment rule: cashCollected + orderCOD must be within {formatCurrency(totalCashLimit)}.
         </div>
 
-        {availableCashLimit <= 0 && (
+        {availableCashLimit >= totalCashLimit && totalCashLimit > 0 && (
           <div className="py-3 text-xs text-amber-700">
-            COD limit exhausted. Deposit cash to increase remaining limit.
+            Cash limit reached. Deposit cash to continue taking COD orders.
           </div>
         )}
       </div>

@@ -11,6 +11,10 @@ import {
   upsertActiveOrderTracking,
   updateActiveOrderLocation
 } from '../../../shared/services/firebaseRealtimeService.js';
+import {
+  getDeliveryEligibilityErrorMessage,
+  isDeliveryEligibleForOrders
+} from '../utils/deliveryEligibility.js';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -81,6 +85,9 @@ export const updateLocation = asyncHandler(async (req, res) => {
 
     // Update online status if provided
     if (typeof isOnline === 'boolean') {
+      if (isOnline && !isDeliveryEligibleForOrders(delivery)) {
+        return errorResponse(res, 403, getDeliveryEligibilityErrorMessage(delivery));
+      }
       updateData['availability.isOnline'] = isOnline;
     }
 

@@ -2,6 +2,9 @@ import Order from '../models/Order.js';
 import Delivery from '../../delivery/models/Delivery.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import GroceryStore from '../../grocery/models/GroceryStore.js';
+import {
+  isDeliveryEligibleForOrders
+} from '../../delivery/utils/deliveryEligibility.js';
 import mongoose from 'mongoose';
 import { calculateDriverEarning } from './deliveryEarningService.js';
 
@@ -156,6 +159,11 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
     if (!deliveryPartner) {
       console.error(`❌ Delivery partner not found: ${deliveryPartnerId}`);
       return;
+    }
+
+    if (!isDeliveryEligibleForOrders(deliveryPartner)) {
+      console.warn(`⚠️ Delivery partner ${deliveryPartnerId} is not eligible for order notifications.`);
+      return { success: false, reason: 'delivery_partner_not_eligible' };
     }
 
     // Verify delivery partner is online and active
@@ -337,7 +345,7 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
       console.log(`📤 Emitted notification to room: ${room}`);
     });
 
-    // Also emit to all sockets in the delivery namespace (fallback if no specific room found)
+    // Never broadcast a targeted order to all delivery sockets.
     if (socketsInRoom.length === 0) {
       console.warn(`⚠️ No sockets connected in any delivery room for partner ${normalizedDeliveryPartnerId}`);
       console.warn(`⚠️ Delivery partner details:`, {
@@ -366,15 +374,7 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
         console.warn(`⚠️ No delivery partners are currently connected to the app!`);
       }
       
-      // Still broadcast to all delivery sockets as fallback
-      console.warn(`⚠️ Broadcasting to all delivery sockets as fallback (in case they connect later)`);
-      deliveryNamespace.emit('new_order', orderNotification);
-      deliveryNamespace.emit('play_notification_sound', {
-        type: 'new_order',
-        orderId: order.orderId,
-        message: `New order assigned: ${order.orderId}`
-      });
-      notificationSent = true;
+      console.warn(`⚠️ Skipping global broadcast fallback for targeted order notification.`);
     } else {
       console.log(`✅ Successfully found ${socketsInRoom.length} connected socket(s) for delivery partner ${normalizedDeliveryPartnerId}`);
       console.log(`✅ Notification sent to room: ${foundRoom}`);
@@ -589,6 +589,14 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
     // Notify each delivery partner
     for (const deliveryPartnerId of deliveryPartnerIds) {
       try {
+        const deliveryPartner = await Delivery.findById(deliveryPartnerId)
+          .select('phoneVerified status isActive')
+          .lean();
+        if (!isDeliveryEligibleForOrders(deliveryPartner)) {
+          console.warn(`⚠️ Skipping ineligible delivery partner ${deliveryPartnerId} for order ${order.orderId}`);
+          continue;
+        }
+
         const normalizedId = deliveryPartnerId?.toString() || deliveryPartnerId;
         const roomVariations = [
           `delivery:${normalizedId}`,
