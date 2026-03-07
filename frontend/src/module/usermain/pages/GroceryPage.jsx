@@ -776,7 +776,7 @@ const GroceryPage = () => {
   }, []);
 
   const canResolveStoreAvailability = Boolean(effectiveZoneId) || (!locationLoading && !zoneLoading);
-  const isGroceryUnavailable = canResolveStoreAvailability && !hasActiveGroceryStore;
+  const isGroceryUnavailable = canResolveStoreAvailability && !hasActiveGroceryStore && !isStoresLoading;
   const shouldShowShimmer =
     !hasActiveSearch &&
     (isCategoriesLoading || isProductsLoading || isBestSellersLoading || isBannersLoading || isStoresLoading);

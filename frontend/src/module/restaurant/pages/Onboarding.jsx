@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Image as ImageIcon, Upload, Clock, Calendar as CalendarIcon, Sparkles } from "lucide-react"
+import { Image as ImageIcon, Upload, Clock, Calendar as CalendarIcon, Sparkles, ArrowLeft } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -20,6 +20,7 @@ import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns"
 import { determineStepToShow } from "../utils/onboardingUtils"
 import { toast } from "sonner"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
+import { clearRestaurantSignupSession } from "@/lib/utils/auth"
 
 const cuisinesOptions = [
   "North Indian",
@@ -181,6 +182,7 @@ export default function RestaurantOnboarding() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const [signedInPhone, setSignedInPhone] = useState("")
+  const [showBackPopup, setShowBackPopup] = useState(false)
 
   const [step1, setStep1] = useState({
     restaurantName: "",
@@ -657,8 +659,9 @@ export default function RestaurantOnboarding() {
         }
         // If menuImages already have URLs (from previous save), include them
         const existingMenuUrls = step2.menuImages.filter((img) => !(img instanceof File) && (img?.url || (typeof img === 'string' && img.startsWith('http'))))
-        const allMenuUrls = [...existingMenuUrls, ...menuUploads]
-// Upload profile image if it's a File object
+        const allMenuUrls = [...existingMenuUrls, ...menuUploads]
+
+        // Upload profile image if it's a File object
         let profileUpload = null
         if (step2.profileImage instanceof File) {
           try {
@@ -677,8 +680,9 @@ export default function RestaurantOnboarding() {
         } else if (typeof step2.profileImage === 'string' && step2.profileImage.startsWith('http')) {
           // If it's a direct URL string
           profileUpload = { url: step2.profileImage }
-        }
-const payload = {
+        }
+
+        const payload = {
           step2: {
             menuImageUrls: allMenuUrls.length > 0 ? allMenuUrls : [],
             profileImageUrl: profileUpload,
@@ -740,8 +744,9 @@ const payload = {
         } else if (typeof step3.panImage === 'string' && step3.panImage.startsWith('http')) {
           // If it's a direct URL string
           panImageUpload = { url: step3.panImage }
-        }
-// Upload GST image if it's a File object (only if GST registered)
+        }
+
+        // Upload GST image if it's a File object (only if GST registered)
         let gstImageUpload = null
         if (step3.gstRegistered) {
           if (step3.gstImage instanceof File) {
@@ -761,8 +766,9 @@ const payload = {
           } else if (typeof step3.gstImage === 'string' && step3.gstImage.startsWith('http')) {
             // If it's a direct URL string
             gstImageUpload = { url: step3.gstImage }
-          }
-}
+          }
+
+        }
 
         // Upload FSSAI image if it's a File object
         let fssaiImageUpload = null
@@ -1584,7 +1590,7 @@ const payload = {
               value={step3.accountHolderName || ""}
               onChange={(e) => {
                 // Allow only letters, spaces, hyphens
-                  const val = e.target.value.replace(/[^A-Za-z\s-]/g, "")
+                const val = e.target.value.replace(/[^A-Za-z\s-]/g, "")
                 setStep3({ ...step3, accountHolderName: val })
               }}
               className="bg-white text-sm"
@@ -1699,8 +1705,8 @@ const payload = {
           <div className="flex justify-between items-center">
             <Button
               variant="ghost"
-              disabled={step === 1 || saving}
-              onClick={() => setStep((s) => Math.max(1, s - 1))}
+              disabled={saving}
+              onClick={() => setShowBackPopup(true)}
               className="text-sm text-gray-700 bg-transparent"
             >
               Back
@@ -1714,6 +1720,41 @@ const payload = {
             </Button>
           </div>
         </footer>
+
+        {/* Confirmation Popup */}
+        {showBackPopup && (
+          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-8 sm:slide-in-from-scale-95 duration-300">
+              <div className="p-6 text-center">
+                <div className="w-16 h-16 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <ArrowLeft className="w-8 h-8" />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Abandon Signup?</h3>
+                <p className="text-gray-600 mb-6">
+                  Are you sure you want to go back without completing the signup process? Your progress will be cleared.
+                </p>
+
+                <div className="flex flex-col gap-3">
+                  <button
+                    onClick={() => setShowBackPopup(false)}
+                    className="w-full py-3.5 bg-black text-white font-bold rounded-xl hover:bg-gray-900 transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+                  >
+                    Continue Signup
+                  </button>
+                  <button
+                    onClick={() => {
+                      clearRestaurantSignupSession()
+                      navigate("/restaurant/login", { replace: true })
+                    }}
+                    className="w-full py-3.5 bg-gray-100 text-gray-700 font-bold rounded-xl hover:bg-gray-200 transition-all"
+                  >
+                    Go Back
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </LocalizationProvider>
   )

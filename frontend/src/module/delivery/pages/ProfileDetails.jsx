@@ -29,6 +29,9 @@ export default function ProfileDetails() {
   const [isDeletingProfilePhoto, setIsDeletingProfilePhoto] = useState(false)
   const [isUploadingDocument, setIsUploadingDocument] = useState(null) // null or 'aadhar' | 'pan' | 'drivingLicense'
   const [imagePreview, setImagePreview] = useState(null)
+  const [showEmailPopup, setShowEmailPopup] = useState(false)
+  const [emailInput, setEmailInput] = useState("")
+  const [isUpdatingEmail, setIsUpdatingEmail] = useState(false)
   const fileInputRef = useRef(null)
   const documentInputRef = useRef(null)
 
@@ -45,6 +48,7 @@ export default function ProfileDetails() {
           setProfile(profileData)
           setVehicleNumber(profileData?.vehicle?.number || "")
           setVehicleInput(profileData?.vehicle?.number || "")
+          setEmailInput(profileData?.email || "")
           // Set bank details
           setBankDetails({
             accountHolderName: profileData?.documents?.bankDetails?.accountHolderName || "",
@@ -209,6 +213,41 @@ export default function ProfileDetails() {
     // Web / fallback: open file picker
     if (fileInputRef.current) {
       fileInputRef.current.click()
+    }
+  }
+
+  const handleEmailUpdate = async () => {
+    if (!emailInput.trim()) {
+      toast.error("Email is required")
+      return
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(emailInput.trim())) {
+      toast.error("Invalid email format")
+      return
+    }
+
+    setIsUpdatingEmail(true)
+    try {
+      const response = await deliveryAPI.updateProfile({
+        email: emailInput.trim()
+      })
+
+      if (response?.data?.success) {
+        toast.success("Email update request sent for admin approval")
+        setShowEmailPopup(false)
+        // Refresh profile to show new status
+        const profileRes = await deliveryAPI.getProfile()
+        if (profileRes?.data?.success && profileRes?.data?.data?.profile) {
+          setProfile(profileRes.data.data.profile)
+        }
+      }
+    } catch (error) {
+      console.error("Error updating email:", error)
+      toast.error(error?.response?.data?.message || "Failed to update email")
+    } finally {
+      setIsUpdatingEmail(false)
     }
   }
 
@@ -575,9 +614,20 @@ export default function ProfileDetails() {
               </div>
             </div>
             <div className="p-2 px-3 flex items-center justify-between">
-              <div className="w-full align-center flex content-center justify-between">
-                <p className="text-sm text-gray-900 mb-1">Email</p>
-                <p className="text-base text-gray-900">{profile?.email || "-"}</p>
+              <div className="w-full flex items-center justify-between">
+                <p className="text-sm text-gray-900">Email</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-base text-gray-900">{profile?.email || "-"}</p>
+                  <button
+                    onClick={() => {
+                      setEmailInput(profile?.email || "")
+                      setShowEmailPopup(true)
+                    }}
+                    className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4 text-green-600" />
+                  </button>
+                </div>
               </div>
             </div>
             <div className="p-2 px-3 flex items-center justify-between">
@@ -1004,6 +1054,46 @@ export default function ProfileDetails() {
               }`}
           >
             {isUpdatingBankDetails ? "Updating..." : "Save Bank Details"}
+          </button>
+        </div>
+      </BottomPopup>
+      {/* Email Edit Popup */}
+      <BottomPopup
+        isOpen={showEmailPopup}
+        onClose={() => !isUpdatingEmail && setShowEmailPopup(false)}
+        title="Edit Email Address"
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              New Email Address
+            </label>
+            <input
+              type="email"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-1 focus:ring-green-500 focus:border-green-500 outline-none"
+              placeholder="Enter your email"
+              disabled={isUpdatingEmail}
+            />
+          </div>
+          <div className="bg-blue-50 p-3 rounded-lg flex gap-2">
+            <div className="shrink-0 mt-0.5">
+              <FileText className="w-4 h-4 text-blue-600" />
+            </div>
+            <p className="text-xs text-blue-700 leading-relaxed">
+              Note: Changing your email will require admin approval. Your profile status will be set to pending until verified.
+            </p>
+          </div>
+          <button
+            onClick={handleEmailUpdate}
+            disabled={isUpdatingEmail}
+            className={`w-full py-3 rounded-lg font-medium text-white transition-colors ${isUpdatingEmail
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-[#00B761] hover:bg-[#00A055]"
+              }`}
+          >
+            {isUpdatingEmail ? "Updating..." : "Update Email"}
           </button>
         </div>
       </BottomPopup>

@@ -36,12 +36,12 @@ const isStepComplete = (stepData, stepNumber) => {
   }
 
   if (stepNumber === 3) {
-    const hasPanImage = stepData.pan?.image && 
+    const hasPanImage = stepData.pan?.image &&
       (stepData.pan.image.url || typeof stepData.pan.image === 'string')
     // GST image is required only if GST is registered
-    const hasGstImage = !stepData.gst?.isRegistered || 
+    const hasGstImage = !stepData.gst?.isRegistered ||
       (stepData.gst?.image && (stepData.gst.image.url || typeof stepData.gst.image === 'string'))
-    
+
     return (
       stepData.pan?.panNumber &&
       stepData.pan?.nameOnPan &&
@@ -90,17 +90,28 @@ const hasProvisionedRestaurantProfile = (restaurant) => {
   if (!restaurant || typeof restaurant !== "object") return false
   if (restaurant.isActive === true) return true
 
+  const normalizedStatus = String(restaurant.status || "").trim().toLowerCase()
+  if (normalizedStatus && normalizedStatus !== "onboarding") return true
+
+  if (restaurant.approvedAt || restaurant.rejectedAt || restaurant.rejectionReason) {
+    return true
+  }
+
+  if (Number(restaurant?.onboarding?.completedSteps || 0) >= 4) {
+    return true
+  }
+
   const hasBasicInfo = Boolean(
     restaurant.name &&
-      restaurant.ownerName &&
-      restaurant.ownerEmail &&
-      (restaurant.ownerPhone || restaurant.phone || restaurant.primaryContactNumber),
+    restaurant.ownerName &&
+    restaurant.ownerEmail &&
+    (restaurant.ownerPhone || restaurant.phone || restaurant.primaryContactNumber),
   )
   const hasLocation = Boolean(restaurant.location?.area || restaurant.location?.city)
   const hasCatalogSignals = Boolean(
     (Array.isArray(restaurant.cuisines) && restaurant.cuisines.length > 0) ||
-      (Array.isArray(restaurant.menuImages) && restaurant.menuImages.length > 0) ||
-      restaurant.profileImage,
+    (Array.isArray(restaurant.menuImages) && restaurant.menuImages.length > 0) ||
+    restaurant.profileImage,
   )
 
   return hasBasicInfo && hasLocation && hasCatalogSignals
@@ -123,16 +134,13 @@ export const checkOnboardingStatus = async () => {
         ? profileResult.value?.data?.data?.restaurant || profileResult.value?.data?.restaurant
         : null
 
-    if (onboardingData) {
-      const stepToShow = determineStepToShow(onboardingData)
-      if (stepToShow && hasProvisionedRestaurantProfile(restaurantProfile)) {
-        return null
-      }
-      return stepToShow
-    }
-
     if (hasProvisionedRestaurantProfile(restaurantProfile)) {
       return null
+    }
+
+    if (onboardingData) {
+      const stepToShow = determineStepToShow(onboardingData)
+      return stepToShow
     }
 
     // No onboarding/profile data, start from step 1

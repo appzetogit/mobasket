@@ -172,7 +172,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     if (phone && !normalizedPhone) {
       return errorResponse(res, 400, 'Invalid phone number format');
     }
-    
+
     const identifier = normalizedPhone || email;
     const identifierType = normalizedPhone ? 'phone' : 'email';
 
@@ -180,7 +180,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       // Registration flow
       // Check if restaurant already exists with normalized phone
       // For phone, search in both formats (with and without country code) to handle old data
-      const findQuery = normalizedPhone 
+      const findQuery = normalizedPhone
         ? buildPhoneQuery(normalizedPhone)
         : { email: email?.toLowerCase().trim() };
       restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(findQuery));
@@ -244,8 +244,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         } else {
           restaurant = await Restaurant.create(restaurantData);
         }
-        logger.info(`New restaurant registered: ${restaurant._id}`, { 
-          [identifierType]: identifier, 
+        logger.info(`New restaurant registered: ${restaurant._id}`, {
+          [identifierType]: identifier,
           restaurantId: restaurant._id
         });
       } catch (createError) {
@@ -256,7 +256,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           email,
           restaurantData: { ...restaurantData, password: '***' }
         });
-        
+
         // Handle duplicate key error (email, phone, or slug)
         if (createError.code === 11000) {
           // Check if it's an email null duplicate key error (common with phone signups)
@@ -288,8 +288,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             }
             try {
               restaurant = await Restaurant.create(retryRestaurantData);
-              logger.info(`New restaurant registered (fixed email null issue): ${restaurant._id}`, { 
-                [identifierType]: identifier, 
+              logger.info(`New restaurant registered (fixed email null issue): ${restaurant._id}`, {
+                [identifierType]: identifier,
                 restaurantId: restaurant._id
               });
             } catch (retryError) {
@@ -309,13 +309,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               }
               throw new Error(`Failed to create restaurant: ${retryError.message}. Please contact support.`);
             }
-            } else if (createError.keyPattern && createError.keyPattern.phone) {
-              // Phone duplicate key error - search in both formats
-              const phoneQuery = buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone };
-              restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(phoneQuery));
-                if (restaurant) {
-                  return errorResponse(res, 400, `Restaurant already exists with this phone number. Please login.`);
-                }
+          } else if (createError.keyPattern && createError.keyPattern.phone) {
+            // Phone duplicate key error - search in both formats
+            const phoneQuery = buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone };
+            restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(phoneQuery));
+            if (restaurant) {
+              return errorResponse(res, 400, `Restaurant already exists with this phone number. Please login.`);
+            }
             throw new Error(`Phone number already exists: ${createError.message}`);
           } else if (createError.keyPattern && createError.keyPattern.slug) {
             // Check if it's a slug conflict
@@ -333,15 +333,15 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             restaurantData.slug = uniqueSlug;
             try {
               restaurant = await Restaurant.create(restaurantData);
-              logger.info(`New restaurant registered with unique slug: ${restaurant._id}`, { 
-                [identifierType]: identifier, 
+              logger.info(`New restaurant registered with unique slug: ${restaurant._id}`, {
+                [identifierType]: identifier,
                 restaurantId: restaurant._id,
                 slug: uniqueSlug
               });
             } catch (retryError) {
               // If still fails, check if restaurant exists
-              const findQuery = normalizedPhone 
-                ? { phone: normalizedPhone } 
+              const findQuery = normalizedPhone
+                ? { phone: normalizedPhone }
                 : { email: email?.toLowerCase().trim() };
               restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(findQuery));
               if (!restaurant) {
@@ -351,8 +351,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             }
           } else {
             // Other duplicate key errors (email, phone)
-            const findQuery = normalizedPhone 
-              ? { phone: normalizedPhone } 
+            const findQuery = normalizedPhone
+              ? { phone: normalizedPhone }
               : { email: email?.toLowerCase().trim() };
             restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(findQuery));
             if (!restaurant) {
@@ -442,8 +442,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           } else {
             restaurant = await Restaurant.create(restaurantData);
           }
-          logger.info(`New restaurant auto-registered: ${restaurant._id}`, { 
-            [identifierType]: identifier, 
+          logger.info(`New restaurant auto-registered: ${restaurant._id}`, {
+            [identifierType]: identifier,
             restaurantId: restaurant._id
           });
         } catch (createError) {
@@ -454,7 +454,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             email,
             restaurantData: { ...restaurantData, password: '***' }
           });
-          
+
           if (createError.code === 11000) {
             // Check if it's an email null duplicate key error (common with phone signups)
             if (createError.keyPattern && createError.keyPattern.email && phone && !email) {
@@ -487,8 +487,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
                 }
                 try {
                   restaurant = await Restaurant.create(retryRestaurantData);
-                  logger.info(`New restaurant auto-registered (fixed email null issue): ${restaurant._id}`, { 
-                    [identifierType]: identifier, 
+                  logger.info(`New restaurant auto-registered (fixed email null issue): ${restaurant._id}`, {
+                    [identifierType]: identifier,
                     restaurantId: restaurant._id
                   });
                 } catch (retryError) {
@@ -538,15 +538,15 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               restaurantData.slug = uniqueSlug;
               try {
                 restaurant = await Restaurant.create(restaurantData);
-                logger.info(`New restaurant auto-registered with unique slug: ${restaurant._id}`, { 
-                  [identifierType]: identifier, 
+                logger.info(`New restaurant auto-registered with unique slug: ${restaurant._id}`, {
+                  [identifierType]: identifier,
                   restaurantId: restaurant._id,
                   slug: uniqueSlug
                 });
               } catch (retryError) {
                 // If still fails, check if restaurant exists
-                const findQuery = phone 
-                  ? { phone } 
+                const findQuery = phone
+                  ? { phone }
                   : { email };
                 restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(findQuery));
                 if (!restaurant) {
@@ -556,8 +556,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               }
             } else {
               // Other duplicate key errors (email, phone)
-              const findQuery = phone 
-                ? { phone } 
+              const findQuery = phone
+                ? { phone }
                 : { email };
               restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(findQuery));
               if (!restaurant) {
@@ -605,9 +605,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     });
 
+    // Check if onboarding needs to be completed (new accounts start with 'onboarding' status)
+    const needsSignup = restaurant.status === 'onboarding';
+
     // Return access token and restaurant info
-    return successResponse(res, 200, 'Authentication successful', {
+    return successResponse(res, 200, needsSignup ? 'OTP verified. Please complete your profile.' : 'Authentication successful', {
       accessToken: tokens.accessToken,
+      needsSignup,
       restaurant: {
         id: restaurant._id,
         restaurantId: restaurant.restaurantId,
@@ -618,6 +622,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         signupMethod: restaurant.signupMethod,
         profileImage: restaurant.profileImage,
         isActive: restaurant.isActive,
+        status: restaurant.status,
         onboarding: restaurant.onboarding
       }
     });
@@ -647,7 +652,7 @@ export const register = asyncHandler(async (req, res) => {
   }
 
   // Check if restaurant already exists
-  const existingRestaurant = await Restaurant.findOne(withRestaurantPlatformFilter({ 
+  const existingRestaurant = await Restaurant.findOne(withRestaurantPlatformFilter({
     $or: [
       { email: email.toLowerCase().trim() },
       ...(normalizedPhone ? [{ phone: normalizedPhone }] : [])
@@ -675,13 +680,13 @@ export const register = asyncHandler(async (req, res) => {
     isActive: false,
     ...fcmPatch
   };
-  
+
   // Only include phone if provided (don't set to null)
   if (normalizedPhone) {
     restaurantData.phone = normalizedPhone;
     restaurantData.ownerPhone = ownerPhone ? normalizePhoneNumber(ownerPhone) : normalizedPhone;
   }
-  
+
   const restaurant = await Restaurant.create(restaurantData);
 
   // Generate tokens (email may be null for phone signups)
@@ -898,11 +903,33 @@ export const logout = asyncHandler(async (req, res) => {
   return successResponse(res, 200, 'Logged out successfully');
 });
 
+const normalizeRestaurantOnboardingState = (restaurant) => {
+  const onboarding = restaurant?.onboarding?.toObject
+    ? restaurant.onboarding.toObject()
+    : { ...(restaurant?.onboarding || {}) };
+
+  const status = String(restaurant?.status || '').trim().toLowerCase();
+  const isProvisioned =
+    restaurant?.isActive === true ||
+    Boolean(restaurant?.approvedAt) ||
+    Boolean(restaurant?.rejectedAt) ||
+    Boolean(restaurant?.rejectionReason) ||
+    (status && status !== 'onboarding') ||
+    Number(onboarding?.completedSteps || 0) >= 4;
+
+  if (isProvisioned && Number(onboarding?.completedSteps || 0) < 4) {
+    onboarding.completedSteps = 4;
+  }
+
+  return onboarding;
+};
+
 /**
  * Get current restaurant
  * GET /api/restaurant/auth/me
  */
 export const getCurrentRestaurant = asyncHandler(async (req, res) => {
+  const normalizedOnboarding = normalizeRestaurantOnboardingState(req.restaurant);
   // Restaurant is attached by authenticate middleware
   return successResponse(res, 200, 'Restaurant retrieved successfully', {
     restaurant: {
@@ -915,7 +942,8 @@ export const getCurrentRestaurant = asyncHandler(async (req, res) => {
       signupMethod: req.restaurant.signupMethod,
       profileImage: req.restaurant.profileImage,
       isActive: req.restaurant.isActive,
-      onboarding: req.restaurant.onboarding,
+      status: req.restaurant.status,
+      onboarding: normalizedOnboarding,
       ownerName: req.restaurant.ownerName,
       ownerEmail: req.restaurant.ownerEmail,
       ownerPhone: req.restaurant.ownerPhone,

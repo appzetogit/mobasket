@@ -326,3 +326,57 @@ export function clearDeliverySignupSession() {
     console.error("Error clearing delivery signup session:", error);
   }
 }
+
+/**
+ * Clear all restaurant-related authentication and session data
+ */
+export function clearRestaurantSignupSession() {
+  // Clear localStorage auth data
+  clearModuleAuth("restaurant");
+
+  // Clear all restaurant signup drafts from sessionStorage and localStorage
+  try {
+    const sKeys = Object.keys(sessionStorage);
+    sKeys.forEach(key => {
+      if (key.includes('restaurantAuthData') || key.startsWith('restaurant_onboarding')) {
+        sessionStorage.removeItem(key);
+      }
+    });
+
+    const lKeys = Object.keys(localStorage);
+    lKeys.forEach(key => {
+      if (key.includes('restaurant_onboarding') || key === 'restaurant_user' || key === 'restaurant_authenticated') {
+        localStorage.removeItem(key);
+      }
+    });
+  } catch (error) {
+    console.error("Error clearing restaurant signup session:", error);
+  }
+}
+
+/**
+ * Clear all grocery-store-related authentication and session data
+ */
+export function clearStoreSignupSession() {
+  // Clear localStorage auth data
+  clearModuleAuth("grocery-store");
+
+  // Clear all store signup drafts from sessionStorage and localStorage
+  try {
+    const sKeys = Object.keys(sessionStorage);
+    sKeys.forEach(key => {
+      if (key.includes('groceryStoreAuthData') || key.startsWith('grocery-store_onboarding')) {
+        sessionStorage.removeItem(key);
+      }
+    });
+
+    const lKeys = Object.keys(localStorage);
+    lKeys.forEach(key => {
+      if (key.includes('grocery-store_onboarding') || key === 'grocery-store_user' || key === 'grocery-store_authenticated') {
+        localStorage.removeItem(key);
+      }
+    });
+  } catch (error) {
+    console.error("Error clearing store signup session:", error);
+  }
+}
