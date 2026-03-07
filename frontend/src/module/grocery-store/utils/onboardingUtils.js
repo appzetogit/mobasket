@@ -10,6 +10,34 @@ export const determineGroceryStoreStepToShow = (onboarding) => {
   return Number(onboarding.completedSteps || 0) >= 1 ? null : 1
 }
 
+const hasProvisionedGroceryStoreProfile = (store) => {
+  if (!store || typeof store !== "object") return false
+  if (store.isActive === true) return true
+
+  if (store.approvedAt || store.rejectedAt || store.rejectionReason) {
+    return true
+  }
+
+  if (Number(store?.onboarding?.completedSteps || 0) >= 1) {
+    return true
+  }
+
+  const hasBasicInfo = Boolean(
+    store.name &&
+    store.ownerName &&
+    (store.ownerEmail || store.email) &&
+    (store.ownerPhone || store.phone || store.primaryContactNumber),
+  )
+  const hasLocation = Boolean(
+    store.location?.formattedAddress ||
+    store.location?.address ||
+    store.location?.area ||
+    store.location?.city
+  )
+
+  return hasBasicInfo && hasLocation
+}
+
 export const checkGroceryStoreOnboardingStatus = async () => {
   try {
     const [onboardingResult, profileResult] = await Promise.allSettled([
@@ -25,6 +53,10 @@ export const checkGroceryStoreOnboardingStatus = async () => {
       profileResult.status === "fulfilled"
         ? profileResult.value?.data?.data?.store || profileResult.value?.data?.store
         : null
+
+    if (hasProvisionedGroceryStoreProfile(storeProfile)) {
+      return null
+    }
 
     if (onboardingData) {
       return determineGroceryStoreStepToShow(onboardingData)

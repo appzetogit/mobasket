@@ -494,9 +494,29 @@ export const logout = asyncHandler(async (req, res) => {
   return successResponse(res, 200, 'Logged out successfully');
 });
 
+const normalizeStoreOnboardingState = (store) => {
+  const onboarding = store?.onboarding?.toObject
+    ? store.onboarding.toObject()
+    : { ...(store?.onboarding || {}) };
+
+  const isProvisioned =
+    store?.isActive === true ||
+    Boolean(store?.approvedAt) ||
+    Boolean(store?.rejectedAt) ||
+    Boolean(store?.rejectionReason) ||
+    Number(onboarding?.completedSteps || 0) >= 1;
+
+  if (isProvisioned && Number(onboarding?.completedSteps || 0) < 1) {
+    onboarding.completedSteps = 1;
+  }
+
+  return onboarding;
+};
+
 export const getCurrentStore = asyncHandler(async (req, res) => {
   const store = req.store;
   const storeResponse = store.toObject();
+  storeResponse.onboarding = normalizeStoreOnboardingState(store);
   delete storeResponse.password;
   return successResponse(res, 200, 'Store retrieved successfully', {
     store: storeResponse

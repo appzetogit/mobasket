@@ -13,6 +13,22 @@ const logger = winston.createLogger({
   ]
 });
 
+const normalizeStoreOnboardingState = (store) => {
+  const onboarding = { ...(store?.onboarding || {}) };
+  const isProvisioned =
+    store?.isActive === true ||
+    Boolean(store?.approvedAt) ||
+    Boolean(store?.rejectedAt) ||
+    Boolean(store?.rejectionReason) ||
+    Number(onboarding?.completedSteps || 0) >= 1;
+
+  if (isProvisioned && Number(onboarding?.completedSteps || 0) < 1) {
+    onboarding.completedSteps = 1;
+  }
+
+  return onboarding;
+};
+
 /**
  * Get Grocery Store Onboarding Data
  * GET /api/grocery/store/onboarding
@@ -26,7 +42,7 @@ export const getOnboarding = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, 'Grocery store not found');
     }
 
-    const onboarding = store.onboarding || {};
+    const onboarding = normalizeStoreOnboardingState(store);
     const normalizedStep1 = {
       storeName: onboarding.step1?.storeName || store.name || '',
       ownerName: onboarding.step1?.ownerName || store.ownerName || '',
