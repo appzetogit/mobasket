@@ -468,9 +468,14 @@ const GroceryPage = () => {
   const openCategorySheet = (categoryId = "all") => {
     const normalizedCategoryId =
       typeof categoryId === "object" && categoryId !== null ? "all" : String(categoryId || "all");
+    const selectedStoreState =
+      selectedStoreId && selectedStoreId !== "all-stores"
+        ? { storeId: String(selectedStoreId) }
+        : {};
     navigate("/grocery/categories", {
       state: {
         categoryId: normalizedCategoryId,
+        ...selectedStoreState,
       },
     });
   };
@@ -908,7 +913,14 @@ const GroceryPage = () => {
       return true;
     }
 
-    navigate("/grocery/categories");
+    navigate("/grocery/categories", {
+      state: {
+        categoryId: "all",
+        ...(selectedStoreId && selectedStoreId !== "all-stores"
+          ? { storeId: String(selectedStoreId) }
+          : {}),
+      },
+    });
     return true;
   };
 
@@ -1738,7 +1750,14 @@ const GroceryPage = () => {
       }
       return;
     }
-    navigate("/grocery/categories");
+    navigate("/grocery/categories", {
+      state: {
+        categoryId: "all",
+        ...(selectedStoreId && selectedStoreId !== "all-stores"
+          ? { storeId: String(selectedStoreId) }
+          : {}),
+      },
+    });
   };
 
   const handleHomeNavClick = () => {

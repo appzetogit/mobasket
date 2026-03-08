@@ -25,6 +25,17 @@ const extractId = (value) => {
   return "";
 };
 
+const extractStoreId = (product) =>
+  String(
+    product?.storeId?._id ||
+      product?.storeId?.id ||
+      product?.storeId ||
+      product?.restaurantId?._id ||
+      product?.restaurantId?.id ||
+      product?.restaurantId ||
+      "",
+  ).trim();
+
 const normalizeVariantKey = (value) =>
   String(value || "")
     .trim()
@@ -103,6 +114,7 @@ export function CategoryFoodsContent({
   isModal = false,
   initialCategory = "all",
   initialSubcategoryId = "",
+  initialStoreId = "all-stores",
 }) {
   const navigate = useNavigate();
   const { addToCart, isInCart } = useCart();
@@ -114,6 +126,7 @@ export function CategoryFoodsContent({
 
   const [selectedCategory, setSelectedCategory] = useState(initialCategory || "all");
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState(initialSubcategoryId || "");
+  const [selectedStoreId, setSelectedStoreId] = useState(initialStoreId || "all-stores");
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [isCategoriesLoading, setIsCategoriesLoading] = useState(true);
@@ -126,6 +139,10 @@ export function CategoryFoodsContent({
   useEffect(() => {
     setSelectedSubcategoryId(initialSubcategoryId || "");
   }, [initialSubcategoryId]);
+
+  useEffect(() => {
+    setSelectedStoreId(initialStoreId || "all-stores");
+  }, [initialStoreId]);
 
   useEffect(() => {
     let mounted = true;
@@ -176,6 +193,9 @@ export function CategoryFoodsContent({
           ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
           ...(selectedCategory && selectedCategory !== "all" ? { categoryId: selectedCategory } : {}),
           ...(selectedSubcategoryId ? { subcategoryId: selectedSubcategoryId } : {}),
+          ...(selectedStoreId && selectedStoreId !== "all-stores"
+            ? { storeId: selectedStoreId }
+            : {}),
         };
 
         const response = await api.get("/grocery/products", { params });
@@ -218,9 +238,19 @@ export function CategoryFoodsContent({
             const subcategoryMatch =
               !selectedSubcategoryId ||
               productSubcategoryIds.includes(String(selectedSubcategoryId));
+            const storeMatch =
+              !selectedStoreId ||
+              selectedStoreId === "all-stores" ||
+              extractStoreId(product) === String(selectedStoreId);
 
-            return categoryMatch && subcategoryMatch;
+            return categoryMatch && subcategoryMatch && storeMatch;
           });
+        }
+
+        if (selectedStoreId && selectedStoreId !== "all-stores") {
+          zoneSafeData = zoneSafeData.filter(
+            (product) => extractStoreId(product) === String(selectedStoreId),
+          );
         }
 
         if (!mounted) return;
@@ -238,7 +268,14 @@ export function CategoryFoodsContent({
     return () => {
       mounted = false;
     };
-  }, [effectiveZoneId, locationLoading, selectedCategory, selectedSubcategoryId, zoneLoading]);
+  }, [
+    effectiveZoneId,
+    locationLoading,
+    selectedCategory,
+    selectedStoreId,
+    selectedSubcategoryId,
+    zoneLoading,
+  ]);
 
   const sidebarCategories = useMemo(() => {
     const dynamic = categories.map((category) => ({
@@ -505,12 +542,15 @@ const CategoryFoodsPage = () => {
   const { id } = useParams();
   const isCategoriesRootPage = location?.pathname === "/grocery/categories";
   const stateCategoryId = String(location?.state?.categoryId || "").trim();
+  const stateStoreId = String(location?.state?.storeId || "").trim();
   const initialCategory = isCategoriesRootPage ? "all" : (id || stateCategoryId || "all");
+  const initialStoreId = stateStoreId || "all-stores";
 
   return (
     <CategoryFoodsContent
       onClose={() => navigate(-1)}
       initialCategory={initialCategory}
+      initialStoreId={initialStoreId}
     />
   );
 };
