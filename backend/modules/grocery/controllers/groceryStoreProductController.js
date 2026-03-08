@@ -29,6 +29,80 @@ const normalizeSubcategoryIds = (subcategoryIds) => {
   return Array.from(unique);
 };
 
+const normalizeProductVariants = (variants) => {
+  if (!Array.isArray(variants)) {
+    return [];
+  }
+
+  const normalized = variants
+    .map((variant, index) => {
+      const name = String(variant?.name || '').trim();
+      const mrp = Number(variant?.mrp);
+      const sellingPrice = Number(variant?.sellingPrice);
+      const stockQuantity = Number(variant?.stockQuantity);
+      const order = Number(variant?.order);
+
+      if (!name || !Number.isFinite(mrp) || !Number.isFinite(sellingPrice)) {
+        return null;
+      }
+
+      return {
+        name,
+        mrp: Math.max(0, mrp),
+        sellingPrice: Math.max(0, sellingPrice),
+        stockQuantity: Number.isFinite(stockQuantity) ? Math.max(0, stockQuantity) : 0,
+        inStock: variant?.inStock !== false,
+        isDefault: variant?.isDefault === true,
+        order: Number.isFinite(order) ? order : index,
+      };
+    })
+    .filter(Boolean);
+
+  if (normalized.length === 0) {
+    return [];
+  }
+
+  const defaultIndex = normalized.findIndex((variant) => variant.isDefault);
+  const resolvedDefaultIndex = defaultIndex >= 0 ? defaultIndex : 0;
+
+  return normalized.map((variant, index) => ({
+    ...variant,
+    isDefault: index === resolvedDefaultIndex,
+  }));
+};
+
+const buildVariantBackedProductFields = ({
+  variants,
+  mrp,
+  sellingPrice,
+  unit = '',
+  stockQuantity = 0,
+  inStock = true,
+}) => {
+  const normalizedVariants = normalizeProductVariants(variants);
+
+  if (normalizedVariants.length > 0) {
+    const defaultVariant = normalizedVariants.find((variant) => variant.isDefault) || normalizedVariants[0];
+    return {
+      variants: normalizedVariants,
+      mrp: defaultVariant.mrp,
+      sellingPrice: defaultVariant.sellingPrice,
+      unit: defaultVariant.name,
+      stockQuantity: defaultVariant.stockQuantity,
+      inStock: defaultVariant.inStock,
+    };
+  }
+
+  return {
+    variants: [],
+    mrp: Number(mrp),
+    sellingPrice: Number(sellingPrice),
+    unit: String(unit || '').trim(),
+    stockQuantity: Number(stockQuantity) || 0,
+    inStock: Boolean(inStock),
+  };
+};
+
 const buildUniqueProductSlug = async ({ baseSlug, storeId, excludeId = null }) => {
   const safeBaseSlug = String(baseSlug || '').trim() || `product-${Date.now()}`;
   let candidateSlug = safeBaseSlug;
@@ -283,6 +357,7 @@ export const createGroceryStoreProduct = asyncHandler(async (req, res) => {
       mrp,
       sellingPrice,
       unit = '',
+      variants = [],
       isActive = true,
       inStock = true,
       stockQuantity = 0,
@@ -291,8 +366,10 @@ export const createGroceryStoreProduct = asyncHandler(async (req, res) => {
       requestedNewSubcategoryNames = [],
     } = req.body;
 
-    if (!category || !name || mrp === undefined || sellingPrice === undefined) {
-      return errorResponse(res, 400, 'Category, name, mrp and sellingPrice are required');
+    const normalizedVariants = normalizeProductVariants(variants);
+
+    if (!category || !name || (normalizedVariants.length === 0 && (mrp === undefined || sellingPrice === undefined))) {
+      return errorResponse(res, 400, 'Category, name, and pricing or variants are required');
     }
 
     if (!mongoose.Types.ObjectId.isValid(category)) {
@@ -331,6 +408,15 @@ export const createGroceryStoreProduct = asyncHandler(async (req, res) => {
       ? requestedNewSubcategoryNames.map((n) => String(n).trim()).filter(Boolean)
       : [];
 
+    const variantBackedFields = buildVariantBackedProductFields({
+      variants: normalizedVariants,
+      mrp,
+      sellingPrice,
+      unit,
+      stockQuantity,
+      inStock,
+    });
+
     const product = await GroceryProduct.create({
       category,
       subcategories: normalizedSubcategories,
@@ -339,12 +425,8 @@ export const createGroceryStoreProduct = asyncHandler(async (req, res) => {
       slug: normalizedSlug,
       images: Array.isArray(images) ? images : [],
       description,
-      mrp,
-      sellingPrice,
-      unit,
+      ...variantBackedFields,
       isActive: Boolean(isActive),
-      inStock: Boolean(inStock),
-      stockQuantity: Number(stockQuantity) || 0,
       order: Number(order) || 0,
       storeId: store._id,
       approvalStatus: 'pending',
@@ -483,6 +565,24 @@ export const updateGroceryStoreProduct = asyncHandler(async (req, res) => {
       }
       update.subcategories = normalizedSubcategories;
       update.subcategory = normalizedSubcategories[0] || null;
+    }
+
+    if (update.variants !== undefined) {
+      const variantBackedFields = buildVariantBackedProductFields({
+        variants: update.variants,
+        mrp: update.mrp ?? existingProduct.mrp,
+        sellingPrice: update.sellingPrice ?? existingProduct.sellingPrice,
+        unit: update.unit ?? existingProduct.unit,
+        stockQuantity: update.stockQuantity ?? existingProduct.stockQuantity,
+        inStock: update.inStock ?? existingProduct.inStock,
+      });
+
+      update.variants = variantBackedFields.variants;
+      update.mrp = variantBackedFields.mrp;
+      update.sellingPrice = variantBackedFields.sellingPrice;
+      update.unit = variantBackedFields.unit;
+      update.stockQuantity = variantBackedFields.stockQuantity;
+      update.inStock = variantBackedFields.inStock;
     }
 
     const product = await GroceryProduct.findByIdAndUpdate(

@@ -9,6 +9,47 @@ import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
 import { CategoryFoodsContent } from "./CategoryFoodsPage";
 
+const normalizeVariantKey = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
+
+const getDefaultVariant = (product) => {
+  const variants = Array.isArray(product?.variants) ? product.variants : [];
+  const normalized = variants
+    .map((variant, index) => {
+      const name = String(variant?.name || "").trim();
+      const price = Number(variant?.sellingPrice ?? variant?.price ?? 0);
+      const mrp = Number(variant?.mrp ?? price);
+      if (!name || !Number.isFinite(price)) return null;
+
+      return {
+        ...variant,
+        key: normalizeVariantKey(name) || `variant-${index}`,
+        name,
+        price,
+        mrp,
+        isDefault: variant?.isDefault === true,
+      };
+    })
+    .filter(Boolean);
+
+  return normalized.find((variant) => variant.isDefault) || normalized[0] || null;
+};
+
+const getCardProductData = (product) => {
+  const productId = String(product?._id || product?.id || "").trim();
+  const defaultVariant = getDefaultVariant(product);
+  const price = Number(defaultVariant?.price ?? product?.sellingPrice ?? product?.price ?? 0);
+  const mrp = Number(defaultVariant?.mrp ?? product?.mrp ?? price);
+  const weight = defaultVariant?.name || product?.unit || product?.weight || "";
+  const cartItemId = defaultVariant ? `${productId}::${defaultVariant.key}` : productId;
+
+  return { productId, defaultVariant, price, mrp, weight, cartItemId };
+};
+
 export default function GroceryBestSellerProductsPage() {
   const navigate = useNavigate();
   const { itemType, itemId } = useParams();
@@ -171,10 +212,12 @@ export default function GroceryBestSellerProductsPage() {
 
   const handleAddToCart = (product, event) => {
     try {
+      event?.stopPropagation();
       const image =
         Array.isArray(product?.images) && product.images[0]
           ? product.images[0]
           : "https://via.placeholder.com/200";
+      const { defaultVariant, price, mrp, weight, cartItemId } = getCardProductData(product);
       const storeId = String(product?.storeId?._id || product?.storeId?.id || product?.storeId || "").trim();
       const storeName = String(product?.storeId?.name || product?.storeName || "").trim();
       const storeAddress = String(
@@ -193,11 +236,23 @@ export default function GroceryBestSellerProductsPage() {
 
       const sourcePosition = getSourcePosition(event, product?._id || product?.id);
       addToCart({
-        id: product?._id || product?.id,
+        id: cartItemId,
+        cartItemId,
+        productId: product?._id || product?.id,
         name: product?.name || "Product",
-        price: Number(product?.sellingPrice || 0),
-        mrp: Number(product?.mrp || 0),
-        weight: product?.unit || "",
+        price,
+        mrp,
+        weight,
+        unit: weight,
+        variantName: defaultVariant?.name || "",
+        selectedVariant: defaultVariant
+          ? {
+              name: defaultVariant.name,
+              key: defaultVariant.key,
+              price: defaultVariant.price,
+              mrp: defaultVariant.mrp,
+            }
+          : null,
         image,
         categoryId: String(
           product?.category?._id ||
@@ -235,6 +290,7 @@ export default function GroceryBestSellerProductsPage() {
       Array.isArray(product?.images) && product.images[0]
         ? product.images[0]
         : "https://via.placeholder.com/200";
+    const { price, mrp, weight } = getCardProductData(product);
 
     navigate(`/food/${productId}`, {
       state: {
@@ -242,10 +298,12 @@ export default function GroceryBestSellerProductsPage() {
           id: productId,
           name: product?.name || "Product",
           description: product?.description || "",
-          weight: product?.unit || "",
-          price: Number(product?.sellingPrice || 0),
-          mrp: Number(product?.mrp || 0),
+          weight,
+          unit: weight,
+          price,
+          mrp,
           image,
+          variants: Array.isArray(product?.variants) ? product.variants : [],
           categoryId: String(
             product?.category?._id ||
             product?.category?.id ||
@@ -295,7 +353,11 @@ export default function GroceryBestSellerProductsPage() {
 
       {!loading && !error && products.length > 0 && (
         <div className="grid grid-cols-2 gap-3 px-4 py-4 md:grid-cols-3">
-          {products.map((product) => (
+          {products.map((product) => {
+            const { price, mrp, weight, cartItemId } = getCardProductData(product);
+            const alreadyInCart = cartItemId ? isInCart(cartItemId) : false;
+
+            return (
             <div
               key={product._id}
               className="rounded-2xl border border-slate-200 p-3 bg-white shadow-sm flex flex-col min-h-[240px] cursor-pointer hover:shadow-md transition-shadow"
@@ -309,15 +371,15 @@ export default function GroceryBestSellerProductsPage() {
                 />
               </div>
               <p className="text-sm font-semibold text-slate-900 line-clamp-2">{product.name}</p>
-              <p className="text-xs text-slate-500 mt-1">{product.unit || "Unit not specified"}</p>
+              <p className="text-xs text-[#2ca34a] font-semibold mt-1">{weight || "Unit not specified"}</p>
               <div className="mt-auto pt-3">
                 <div className="flex items-end justify-between gap-2">
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-slate-900">Rs {product.sellingPrice ?? 0}</p>
-                  {product.mrp && Number(product.mrp) > Number(product.sellingPrice) && (
-                    <p className="text-xs text-slate-400 line-through">Rs {product.mrp}</p>
+                    <p className="text-sm font-bold text-slate-900">Rs {price}</p>
+                  {mrp > price && (
+                    <p className="text-xs text-slate-400 line-through">Rs {mrp}</p>
                   )}
-                    {isInCart(product?._id || product?.id) && (
+                    {alreadyInCart && (
                       <p className="text-[10px] font-semibold text-emerald-700 mt-1">Added to cart</p>
                     )}
                   </div>
@@ -325,18 +387,19 @@ export default function GroceryBestSellerProductsPage() {
                   type="button"
                     onClick={(event) => handleAddToCart(product, event)}
                   className={`h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1 ${
-                    isInCart(product?._id || product?.id)
+                    alreadyInCart
                       ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
                       : "bg-emerald-600 text-white"
                   }`}
                 >
                   <ShoppingCart size={14} />
-                  {isInCart(product?._id || product?.id) ? "Added" : "Add"}
+                  {alreadyInCart ? "Added" : "Add"}
                 </button>
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

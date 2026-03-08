@@ -19,10 +19,44 @@ const extractId = (value) => {
 
 const isValidObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || "").trim());
 
+const normalizeVariantKey = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
+
+const normalizeVariants = (variants = []) =>
+  Array.isArray(variants)
+    ? variants
+        .map((variant, index) => {
+          const name = String(variant?.name || "").trim();
+          const price = Number(variant?.sellingPrice ?? variant?.price ?? 0);
+          const mrp = Number(variant?.mrp ?? price);
+          if (!name || !Number.isFinite(price)) {
+            return null;
+          }
+
+          return {
+            ...variant,
+            id: String(variant?.id || variant?._id || `${name}-${index}`),
+            key: normalizeVariantKey(name) || `variant-${index}`,
+            name,
+            price,
+            mrp,
+            inStock: variant?.inStock !== false,
+            isDefault: variant?.isDefault === true,
+          };
+        })
+        .filter(Boolean)
+    : [];
+
 const normalizeProduct = (item = {}, fallbackId = "") => {
   const id = item?.id || item?._id || fallbackId;
-  const price = Number(item?.price ?? item?.sellingPrice ?? 0);
-  const mrp = Number(item?.mrp ?? price);
+  const variants = normalizeVariants(item?.variants);
+  const defaultVariant = variants.find((variant) => variant.isDefault) || variants[0] || null;
+  const price = Number(defaultVariant?.price ?? item?.price ?? item?.sellingPrice ?? 0);
+  const mrp = Number(defaultVariant?.mrp ?? item?.mrp ?? price);
   const discountPercent = mrp > price && mrp > 0 ? Math.max(1, Math.round(((mrp - price) / mrp) * 100)) : 0;
 
   const resolvedStoreId =
@@ -41,12 +75,18 @@ const normalizeProduct = (item = {}, fallbackId = "") => {
     item?.storeId?.location?.formattedAddress ||
     item?.storeId?.location?.address ||
     "";
+  const resolvedStoreZoneId =
+    extractId(item?.zoneId) ||
+    extractId(item?.storeId?.zoneId) ||
+    extractId(item?.storeId?.restaurantId) ||
+    "";
 
   return {
     ...item,
     id,
     name: item?.name || "Product",
-    weight: item?.weight || item?.unit || "200 g",
+    weight: defaultVariant?.name || item?.weight || item?.unit || "200 g",
+    unit: defaultVariant?.name || item?.unit || "",
     price,
     mrp,
     discount: item?.discount || (discountPercent > 0 ? `${discountPercent}% OFF` : ""),
@@ -65,9 +105,12 @@ const normalizeProduct = (item = {}, fallbackId = "") => {
     storeName: resolvedStoreName,
     storeId: resolvedStoreId,
     storeAddress: resolvedStoreAddress,
+    storeZoneId: resolvedStoreZoneId,
     restaurantId: item?.restaurantId || resolvedStoreId || "",
     restaurant: item?.restaurant || resolvedStoreName || "MoGrocery",
     restaurantAddress: item?.restaurantAddress || resolvedStoreAddress || "",
+    variants,
+    defaultVariantKey: defaultVariant?.key || "",
     storeLocation:
       item?.storeLocation ||
       item?.storeId?.location ||
@@ -101,12 +144,26 @@ export default function FoodDetailPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showStickyHeader, setShowStickyHeader] = useState(false);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [selectedVariantKey, setSelectedVariantKey] = useState(product?.defaultVariantKey || "");
 
   const wishlistItem = useMemo(() => ({ ...product, id: product?.id || id }), [product, id]);
   const productId = String(product?.id || id || "");
+  const selectedVariant = useMemo(() => {
+    const variants = Array.isArray(product?.variants) ? product.variants : [];
+    if (!variants.length) return null;
+    return variants.find((variant) => variant.key === selectedVariantKey) || variants[0];
+  }, [product?.variants, selectedVariantKey]);
+  const displayedWeight = selectedVariant?.name || product?.weight || product?.unit || "1 unit";
+  const displayedPrice = Number(selectedVariant?.price ?? product?.price ?? 0);
+  const displayedMrp = Number(selectedVariant?.mrp ?? product?.mrp ?? displayedPrice);
+  const displayedDiscount =
+    displayedMrp > displayedPrice && displayedMrp > 0
+      ? `${Math.max(1, Math.round(((displayedMrp - displayedPrice) / displayedMrp) * 100))}% OFF`
+      : "";
+  const cartItemId = selectedVariant ? `${productId}::${selectedVariant.key}` : productId;
   const groceryCartItem = useMemo(
-    () => groceryCart.find((item) => String(item?.id || "") === productId),
-    [groceryCart, productId],
+    () => groceryCart.find((item) => String(item?.id || "") === cartItemId),
+    [cartItemId, groceryCart],
   );
   const isAddedToCart = Boolean(groceryCartItem);
   const currentQuantity = Number(groceryCartItem?.quantity || 0);
@@ -116,6 +173,10 @@ export default function FoodDetailPage() {
     window.addEventListener("scroll", onScroll);
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
+
+  useEffect(() => {
+    setSelectedVariantKey(product?.defaultVariantKey || product?.variants?.[0]?.key || "");
+  }, [product]);
 
   useEffect(() => {
     const loadProduct = async () => {
@@ -167,7 +228,8 @@ export default function FoodDetailPage() {
           // Filter current product and normalize
           const filtered = data
             .filter((p) => String(p._id || p.id) !== productId)
-            .map((p) => normalizeProduct(p));
+            .map((p) => normalizeProduct(p))
+            .filter((p) => !zoneId || !p.storeZoneId || String(p.storeZoneId) === String(zoneId));
           setSimilarProducts(filtered);
         } else {
           setSimilarProducts([]);
@@ -228,6 +290,10 @@ export default function FoodDetailPage() {
     if (e) e.stopPropagation();
     const targetProduct = itemToWeight || product;
     const resolvedStoreId = String(targetProduct.restaurantId || targetProduct.storeId || "").trim();
+    const targetVariant =
+      itemToWeight && Array.isArray(itemToWeight?.variants)
+        ? itemToWeight.variants.find((variant) => variant.key === itemToWeight.defaultVariantKey) || itemToWeight.variants[0]
+        : selectedVariant;
 
     if (!resolvedStoreId) {
       toast.error("Store information missing for this product.");
@@ -236,7 +302,28 @@ export default function FoodDetailPage() {
 
     addToCart({
       ...targetProduct,
-      id: targetProduct.id || id,
+      id:
+        targetVariant && (targetProduct.id || id)
+          ? `${targetProduct.id || id}::${targetVariant.key}`
+          : targetProduct.id || id,
+      cartItemId:
+        targetVariant && (targetProduct.id || id)
+          ? `${targetProduct.id || id}::${targetVariant.key}`
+          : targetProduct.id || id,
+      productId: targetProduct.id || id,
+      variantName: targetVariant?.name || "",
+      selectedVariant: targetVariant
+        ? {
+            name: targetVariant.name,
+            key: targetVariant.key,
+            price: targetVariant.price,
+            mrp: targetVariant.mrp,
+          }
+        : null,
+      weight: targetVariant?.name || targetProduct.weight,
+      unit: targetVariant?.name || targetProduct.unit,
+      price: Number(targetVariant?.price ?? targetProduct.price ?? 0),
+      mrp: Number(targetVariant?.mrp ?? targetProduct.mrp ?? targetProduct.price ?? 0),
       restaurantId: resolvedStoreId,
       restaurant: targetProduct.restaurant || targetProduct.storeName || "MoGrocery",
       restaurantAddress:
@@ -271,16 +358,16 @@ export default function FoodDetailPage() {
   const handleIncreaseQuantity = (e) => {
     if (e) e.stopPropagation();
     if (!isAddedToCart) {
-      handleAddToCart(e);
+      handleAddToCart(null, e);
       return;
     }
-    updateQuantityByPlatform(productId, currentQuantity + 1, "mogrocery");
+    updateQuantityByPlatform(cartItemId, currentQuantity + 1, "mogrocery");
   };
 
   const handleDecreaseQuantity = (e) => {
     if (e) e.stopPropagation();
     if (!isAddedToCart) return;
-    updateQuantityByPlatform(productId, currentQuantity - 1, "mogrocery");
+    updateQuantityByPlatform(cartItemId, currentQuantity - 1, "mogrocery");
   };
 
   const quickActions = (
@@ -401,16 +488,58 @@ export default function FoodDetailPage() {
               </p>
             )}
 
-            <p className="text-[13px] md:text-base font-semibold text-slate-500 mt-1 md:mt-3">{product.weight}</p>
+            <p className="text-[13px] md:text-base font-bold text-[#2ca34a] mt-1 md:mt-3">{displayedWeight}</p>
+
+            {Array.isArray(product.variants) && product.variants.length > 0 && (
+              <div className="mt-4 md:mt-5">
+                <p className="text-[12px] md:text-sm font-bold text-slate-700 mb-2">Choose size</p>
+                <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                  {product.variants.map((variant) => {
+                    const isSelected = selectedVariant?.key === variant.key;
+                    const variantDiscount =
+                      variant.mrp > variant.price && variant.mrp > 0
+                        ? Math.max(1, Math.round(((variant.mrp - variant.price) / variant.mrp) * 100))
+                        : 0;
+                    return (
+                      <button
+                        key={variant.key}
+                        type="button"
+                        onClick={() => setSelectedVariantKey(variant.key)}
+                        className={`min-w-[112px] rounded-2xl border px-3 py-2.5 text-left transition-all ${
+                          isSelected
+                            ? "border-emerald-500 bg-emerald-50 shadow-sm"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                        }`}
+                      >
+                        <div className={`text-[12px] md:text-sm font-bold ${isSelected ? "text-emerald-700" : "text-[#2ca34a]"}`}>
+                          {variant.name}
+                        </div>
+                        <div className="mt-1 text-[15px] leading-none font-black text-slate-900">
+                          Rs {variant.price}
+                        </div>
+                        {variant.mrp > variant.price && (
+                          <div className="mt-1 text-[11px] leading-none text-slate-400 line-through">
+                            Rs {variant.mrp}
+                          </div>
+                        )}
+                        {variantDiscount > 0 && (
+                          <div className="mt-1 text-[10px] font-bold text-blue-600">{variantDiscount}% OFF</div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             <div className="flex items-center gap-2 mt-2.5 md:mt-6">
-              <span className="text-xl md:text-3xl font-[900] text-slate-900">Rs {product.price}</span>
-              {product.mrp > product.price && (
-                <span className="text-[11px] md:text-sm font-bold text-slate-400 line-through">MRP Rs {product.mrp}</span>
+              <span className="text-xl md:text-3xl font-[900] text-slate-900">Rs {displayedPrice}</span>
+              {displayedMrp > displayedPrice && (
+                <span className="text-[11px] md:text-sm font-bold text-slate-400 line-through">MRP Rs {displayedMrp}</span>
               )}
-              {product.discount && (
+              {(displayedDiscount || product.discount) && (
                 <span className="bg-[#e8f0fe] md:bg-blue-100 text-[#2c73eb] md:text-blue-700 text-[10px] md:text-xs font-[800] px-1.5 py-0.5 md:px-2 md:py-1 rounded-md">
-                  {product.discount}
+                  {displayedDiscount || product.discount}
                 </span>
               )}
             </div>
@@ -472,10 +601,21 @@ export default function FoodDetailPage() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-x-3 md:gap-x-5 gap-y-6 md:gap-y-8">
             {similarProducts.map((item) => {
-              const itemCartRef = groceryCart.find((c) => String(c.id) === String(item.id));
+              const itemDefaultVariant =
+                Array.isArray(item?.variants) && item.variants.length > 0
+                  ? item.variants.find((variant) => variant.key === item.defaultVariantKey) || item.variants[0]
+                  : null;
+              const itemCartId = itemDefaultVariant ? `${item.id}::${itemDefaultVariant.key}` : item.id;
+              const itemCartRef = groceryCart.find((c) => String(c.id) === String(itemCartId));
               const itemInCart = Boolean(itemCartRef);
               const itemQty = itemCartRef?.quantity || 0;
-              const discountVal = item.mrp > item.price ? Math.round(((item.mrp - item.price) / item.mrp) * 100) : 0;
+              const itemWeight = itemDefaultVariant?.name || item.weight;
+              const itemPrice = Number(itemDefaultVariant?.price ?? item.price ?? 0);
+              const itemMrp = Number(itemDefaultVariant?.mrp ?? item.mrp ?? itemPrice);
+              const discountVal = itemMrp > itemPrice ? Math.round(((itemMrp - itemPrice) / itemMrp) * 100) : 0;
+              item.weight = itemWeight;
+              item.price = itemPrice;
+              item.mrp = itemMrp;
 
               return (
                 <div
@@ -505,7 +645,7 @@ export default function FoodDetailPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              updateQuantityByPlatform(item.id, itemQty - 1, "mogrocery");
+                              updateQuantityByPlatform(itemCartId, itemQty - 1, "mogrocery");
                             }}
                             className="w-6 h-6 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center active:scale-90 transition-transform"
                           >
@@ -515,7 +655,7 @@ export default function FoodDetailPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              updateQuantityByPlatform(item.id, itemQty + 1, "mogrocery");
+                              updateQuantityByPlatform(itemCartId, itemQty + 1, "mogrocery");
                             }}
                             className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center active:scale-90 transition-transform"
                           >
@@ -538,12 +678,32 @@ export default function FoodDetailPage() {
                     <div className="w-3 h-3 border border-green-600 flex items-center justify-center p-[1px]">
                       <div className="w-full h-full bg-green-600 rounded-full" />
                     </div>
-                    <span className="text-[10px] font-bold text-slate-500">{item.weight}</span>
+                    <span className="text-[10px] font-bold text-[#2ca34a]">{itemWeight}</span>
                   </div>
 
                   <p className="text-[12px] font-bold text-slate-900 leading-tight line-clamp-2 min-h-[32px] mb-1">
                     {item.name}
                   </p>
+
+                  {Array.isArray(item?.variants) && item.variants.length > 1 && (
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {item.variants.slice(0, 3).map((variant) => {
+                        const isDefault = variant.key === itemDefaultVariant?.key;
+                        return (
+                          <span
+                            key={`${item.id}-${variant.key}`}
+                            className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
+                              isDefault
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                : "bg-slate-100 text-slate-500 border border-slate-200"
+                            }`}
+                          >
+                            {variant.name}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {/* Time with Icon */}
                   <div className="flex items-center gap-1 mb-1.5">

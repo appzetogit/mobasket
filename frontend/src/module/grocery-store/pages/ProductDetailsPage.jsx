@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react"
-import { useNavigate, useParams, useLocation } from "react-router-dom"
-import { ArrowLeft, X, Upload, Loader2, Package } from "lucide-react"
+import { useNavigate, useParams } from "react-router-dom"
+import { ArrowLeft, X, Upload, Loader2, Package, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -8,10 +8,46 @@ import { Switch } from "@/components/ui/switch"
 import { groceryStoreAPI, uploadAPI } from "@/lib/api"
 import { toast } from "sonner"
 
+const createEmptyVariant = () => ({
+  name: "",
+  mrp: "",
+  sellingPrice: "",
+  stockQuantity: 0,
+  inStock: true,
+  isDefault: false,
+})
+
+const normalizeVariantsForForm = (variants = []) => {
+  if (!Array.isArray(variants) || variants.length === 0) {
+    return []
+  }
+
+  const normalized = variants
+    .map((variant, index) => ({
+      name: variant?.name || "",
+      mrp: variant?.mrp ?? "",
+      sellingPrice: variant?.sellingPrice ?? "",
+      stockQuantity: variant?.stockQuantity ?? 0,
+      inStock: variant?.inStock !== false,
+      isDefault: variant?.isDefault === true,
+      order: variant?.order ?? index,
+    }))
+    .filter((variant) => String(variant.name || "").trim())
+
+  if (normalized.length === 0) return []
+
+  const defaultIndex = normalized.findIndex((variant) => variant.isDefault)
+  const resolvedDefaultIndex = defaultIndex >= 0 ? defaultIndex : 0
+
+  return normalized.map((variant, index) => ({
+    ...variant,
+    isDefault: index === resolvedDefaultIndex,
+  }))
+}
+
 export default function GroceryStoreProductDetailsPage() {
   const navigate = useNavigate()
   const { id: idParam } = useParams()
-  const location = useLocation()
   // Treat "new", "undefined", or missing id as new product
   const isNewProduct = !idParam || idParam === "new" || idParam === "undefined"
   const id = isNewProduct ? null : idParam
@@ -27,8 +63,8 @@ export default function GroceryStoreProductDetailsPage() {
   const [stockQuantity, setStockQuantity] = useState("0")
   const [inStock, setInStock] = useState(true)
   const [isActive, setIsActive] = useState(true)
+  const [variants, setVariants] = useState([])
   const [images, setImages] = useState([])
-  const [imageFiles, setImageFiles] = useState(new Map())
   const [uploadingImages, setUploadingImages] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -129,6 +165,7 @@ export default function GroceryStoreProductDetailsPage() {
             setStockQuantity(product.stockQuantity?.toString() || "0")
             setInStock(product.inStock !== false)
             setIsActive(product.isActive !== false)
+            setVariants(normalizeVariantsForForm(product.variants))
             setImages(product.images || [])
           }
         } catch (error) {
@@ -158,7 +195,7 @@ export default function GroceryStoreProductDetailsPage() {
         }
       }
       toast.success(`${uploads.length} image(s) uploaded`)
-    } catch (error) {
+    } catch {
       toast.error('Failed to upload images')
     } finally {
       setUploadingImages(false)
@@ -170,6 +207,41 @@ export default function GroceryStoreProductDetailsPage() {
 
   const removeImage = (index) => {
     setImages(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const addVariant = () => {
+    setVariants((prev) => {
+      const next = [...prev, createEmptyVariant()]
+      if (next.length === 1) {
+        next[0].isDefault = true
+      }
+      return next
+    })
+  }
+
+  const updateVariant = (index, key, value) => {
+    setVariants((prev) => prev.map((variant, variantIndex) => (
+      variantIndex === index
+        ? { ...variant, [key]: value }
+        : variant
+    )))
+  }
+
+  const setDefaultVariant = (index) => {
+    setVariants((prev) => prev.map((variant, variantIndex) => ({
+      ...variant,
+      isDefault: variantIndex === index,
+    })))
+  }
+
+  const removeVariant = (index) => {
+    setVariants((prev) => {
+      const next = prev.filter((_, variantIndex) => variantIndex !== index)
+      if (next.length > 0 && !next.some((variant) => variant.isDefault)) {
+        next[0] = { ...next[0], isDefault: true }
+      }
+      return next
+    })
   }
 
   const handleSubmit = async () => {
@@ -190,6 +262,16 @@ export default function GroceryStoreProductDetailsPage() {
       return
     }
 
+    const normalizedVariants = normalizeVariantsForForm(variants).map((variant, index) => ({
+      name: String(variant.name || "").trim(),
+      mrp: Number(variant.mrp || 0),
+      sellingPrice: Number(variant.sellingPrice || 0),
+      stockQuantity: Number(variant.stockQuantity || 0),
+      inStock: variant.inStock !== false,
+      isDefault: variant.isDefault === true,
+      order: Number(variant.order ?? index) || index,
+    }))
+
     try {
       setSaving(true)
       const payload = {
@@ -203,6 +285,7 @@ export default function GroceryStoreProductDetailsPage() {
         stockQuantity: parseInt(stockQuantity) || 0,
         inStock,
         isActive,
+        variants: normalizedVariants,
         images: images.filter(Boolean)
       }
 
@@ -414,6 +497,123 @@ export default function GroceryStoreProductDetailsPage() {
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
               />
             </div>
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-700">
+                  Variants
+                </label>
+                <p className="text-xs text-slate-500 mt-1">
+                  Add custom variants like 500gm, 1kg, Family Pack. The default variant becomes the main price shown for the product.
+                </p>
+              </div>
+              <Button type="button" onClick={addVariant} className="bg-blue-600 hover:bg-blue-700 text-white">
+                <Plus className="w-4 h-4 mr-1" />
+                Add Variant
+              </Button>
+            </div>
+
+            {variants.length === 0 ? (
+              <p className="text-xs text-slate-500">
+                No variants added yet. Use the base MRP, selling price, unit, and stock fields above for a single-size product.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {variants.map((variant, index) => (
+                  <div key={`product-variant-${index}`} className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-slate-800">Variant {index + 1}</p>
+                      <button
+                        type="button"
+                        onClick={() => removeVariant(index)}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        Remove
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-slate-600 mb-1">
+                        Variant Name
+                      </label>
+                      <input
+                        type="text"
+                        value={variant.name}
+                        onChange={(e) => updateVariant(index, "name", e.target.value)}
+                        placeholder="e.g. 500gm, 1kg, Combo Pack"
+                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">
+                          MRP
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={variant.mrp}
+                          onChange={(e) => updateVariant(index, "mrp", e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">
+                          Selling Price
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={variant.sellingPrice}
+                          onChange={(e) => updateVariant(index, "sellingPrice", e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-600 mb-1">
+                          Stock Quantity
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={variant.stockQuantity}
+                          onChange={(e) => updateVariant(index, "stockQuantity", e.target.value)}
+                          className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 bg-white"
+                        />
+                      </div>
+                      <div className="flex items-center gap-4 pt-6">
+                        <label className="inline-flex items-center gap-2 text-xs text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={variant.inStock}
+                            onChange={(e) => updateVariant(index, "inStock", e.target.checked)}
+                            className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                          />
+                          In stock
+                        </label>
+                        <label className="inline-flex items-center gap-2 text-xs text-slate-700">
+                          <input
+                            type="radio"
+                            name="default-store-variant"
+                            checked={variant.isDefault}
+                            onChange={() => setDefaultVariant(index)}
+                            className="w-4 h-4 text-blue-600 border-slate-300 focus:ring-blue-500"
+                          />
+                          Default
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

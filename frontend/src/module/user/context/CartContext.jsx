@@ -115,11 +115,36 @@ const resolveGroceryProductId = (item) => {
   return candidates.find((id) => isMongoObjectId(id)) || "";
 };
 
-const normalizeGroceryCartItem = (item) => {
-  const normalizedId = resolveGroceryProductId(item);
-  if (!normalizedId) return null;
-  return { ...item, id: normalizedId };
-};
+const normalizeVariantKey = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
+
+const getGroceryCartItemId = (item) => {
+  const explicitId = String(item?.cartItemId || item?.id || "").trim();
+  if (explicitId) return explicitId;
+
+  const productId = resolveGroceryProductId(item);
+  if (!productId) return "";
+
+  const variantLabel =
+    item?.selectedVariant?.name ||
+    item?.variantName ||
+    item?.weight ||
+    item?.unit ||
+    "";
+  const variantKey = normalizeVariantKey(variantLabel);
+
+  return variantKey ? `${productId}::${variantKey}` : productId;
+};
+
+const normalizeGroceryCartItem = (item) => {
+  const normalizedId = resolveGroceryProductId(item);
+  if (!normalizedId) return null;
+  return { ...item, id: getGroceryCartItemId(item), productId: normalizedId };
+};
 
 const normalizeFoodCartItem = (item) => {
   const normalizedId = String(item?.itemId || item?.id || item?._id || "").trim();
@@ -310,7 +335,7 @@ export function CartProvider({ children }) {
 
     const normalizedItemId =
       itemPlatform === "mogrocery"
-        ? normalizedGroceryProductId
+        ? getGroceryCartItemId({ ...item, productId: normalizedGroceryProductId })
         : String(item?.itemId || item?.id || item?._id || "").trim();
 
     if (!normalizedItemId) {
@@ -348,7 +373,9 @@ export function CartProvider({ children }) {
 
       const newItem = {
         ...item,
-        ...(itemPlatform === "mogrocery" ? { id: normalizedGroceryProductId } : {}),
+        ...(itemPlatform === "mogrocery"
+          ? { id: normalizedItemId, cartItemId: normalizedItemId, productId: normalizedGroceryProductId }
+          : {}),
         ...(itemPlatform === "mofood" ? { id: normalizedItemId, itemId: normalizedItemId } : {}),
         platform: itemPlatform,
         restaurantPlatform: itemPlatform,

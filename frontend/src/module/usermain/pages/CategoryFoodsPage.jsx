@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle, X } from "lucide-react";
+import { ArrowLeft, CheckCircle, ShoppingCart, X } from "lucide-react";
 import { toast } from "sonner";
 import { useCart } from "../../user/context/CartContext";
 import WishlistButton from "@/components/WishlistButton";
@@ -25,7 +25,49 @@ const extractId = (value) => {
   return "";
 };
 
+const normalizeVariantKey = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
+
+const getDefaultVariant = (product) => {
+  const variants = Array.isArray(product?.variants) ? product.variants : [];
+  const normalized = variants
+    .map((variant, index) => {
+      const name = String(variant?.name || "").trim();
+      const price = Number(variant?.sellingPrice ?? variant?.price ?? 0);
+      const mrp = Number(variant?.mrp ?? price);
+      if (!name || !Number.isFinite(price)) return null;
+
+      return {
+        ...variant,
+        key: normalizeVariantKey(name) || `variant-${index}`,
+        name,
+        price,
+        mrp,
+        isDefault: variant?.isDefault === true,
+      };
+    })
+    .filter(Boolean);
+
+  return normalized.find((variant) => variant.isDefault) || normalized[0] || null;
+};
+
+const getCardProductData = (product) => {
+  const productId = String(product?._id || product?.id || "").trim();
+  const defaultVariant = getDefaultVariant(product);
+  const price = Number(defaultVariant?.price ?? product?.sellingPrice ?? product?.price ?? 0);
+  const mrp = Number(defaultVariant?.mrp ?? product?.mrp ?? price);
+  const weight = defaultVariant?.name || product?.unit || product?.weight || "";
+  const cartItemId = defaultVariant ? `${productId}::${defaultVariant.key}` : productId;
+
+  return { productId, defaultVariant, price, mrp, weight, cartItemId };
+};
+
 const buildProductDetailState = (product) => {
+  const { price, mrp, weight } = getCardProductData(product);
   const storeId = String(product?.storeId?._id || product?.storeId?.id || product?.storeId || "").trim();
   const storeName = String(product?.storeId?.name || product?.storeName || "").trim();
   const storeAddress = String(
@@ -40,10 +82,12 @@ const buildProductDetailState = (product) => {
     id: product?._id || product?.id,
     name: product?.name || "Product",
     description: product?.description || "",
-    weight: product?.unit || "",
-    price: Number(product?.sellingPrice || product?.price || 0),
-    mrp: Number(product?.mrp || product?.sellingPrice || product?.price || 0),
+    weight,
+    unit: weight,
+    price,
+    mrp,
     image: extractImage(product),
+    variants: Array.isArray(product?.variants) ? product.variants : [],
     categoryId: extractId(product?.category),
     subcategoryId: extractId(product?.subcategory) || extractId(Array.isArray(product?.subcategories) ? product.subcategories[0] : ""),
     storeId,
@@ -234,12 +278,26 @@ export function CategoryFoodsContent({
       return;
     }
 
+    const { defaultVariant, price, mrp, weight, cartItemId } = getCardProductData(product);
+
     addToCart({
-      id: product?._id || product?.id,
+      id: cartItemId,
+      cartItemId,
+      productId: product?._id || product?.id,
       name: product?.name || "Product",
-      price: Number(product?.sellingPrice || product?.price || 0),
-      mrp: Number(product?.mrp || product?.sellingPrice || product?.price || 0),
-      weight: product?.unit || "",
+      price,
+      mrp,
+      weight,
+      unit: weight,
+      variantName: defaultVariant?.name || "",
+      selectedVariant: defaultVariant
+        ? {
+            name: defaultVariant.name,
+            key: defaultVariant.key,
+            price: defaultVariant.price,
+            mrp: defaultVariant.mrp,
+          }
+        : null,
       image: extractImage(product),
       categoryId: extractId(product?.category),
       subcategoryId: extractId(product?.subcategory) || extractId(Array.isArray(product?.subcategories) ? product.subcategories[0] : ""),
@@ -357,10 +415,8 @@ export function CategoryFoodsContent({
             {!isProductsLoading && products.length > 0 && (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {products.map((item) => {
-                  const productId = String(item?._id || item?.id || "");
-                  const alreadyInCart = productId ? isInCart(productId) : false;
-                  const price = Number(item?.sellingPrice || item?.price || 0);
-                  const mrp = Number(item?.mrp || price || 0);
+                  const { productId, price, mrp, weight, cartItemId } = getCardProductData(item);
+                  const alreadyInCart = cartItemId ? isInCart(cartItemId) : false;
                   const discountPercent =
                     mrp > price && mrp > 0
                       ? Math.max(1, Math.round(((mrp - price) / mrp) * 100))
@@ -407,7 +463,7 @@ export function CategoryFoodsContent({
                           </h3>
 
                           <p className="text-[10px] font-medium text-slate-400 mb-2">
-                            {item?.unit || "Unit"}
+                            {weight || "Unit"}
                           </p>
 
                           <div className="flex items-center gap-2">

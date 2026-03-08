@@ -1,5 +1,46 @@
 import mongoose from 'mongoose';
 
+const groceryProductVariantSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: [true, 'Variant name is required'],
+      trim: true,
+      maxlength: [120, 'Variant name cannot exceed 120 characters'],
+    },
+    mrp: {
+      type: Number,
+      min: [0, 'Variant MRP cannot be negative'],
+      required: [true, 'Variant MRP is required'],
+    },
+    sellingPrice: {
+      type: Number,
+      min: [0, 'Variant selling price cannot be negative'],
+      required: [true, 'Variant selling price is required'],
+    },
+    stockQuantity: {
+      type: Number,
+      min: [0, 'Variant stock quantity cannot be negative'],
+      default: 0,
+    },
+    inStock: {
+      type: Boolean,
+      default: true,
+    },
+    isDefault: {
+      type: Boolean,
+      default: false,
+    },
+    order: {
+      type: Number,
+      default: 0,
+    },
+  },
+  {
+    _id: false,
+  }
+);
+
 const groceryProductSchema = new mongoose.Schema(
   {
     category: {
@@ -59,6 +100,10 @@ const groceryProductSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: '',
+    },
+    variants: {
+      type: [groceryProductVariantSchema],
+      default: [],
     },
     isActive: {
       type: Boolean,
