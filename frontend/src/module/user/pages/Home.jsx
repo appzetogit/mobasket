@@ -208,7 +208,7 @@ function RestaurantImageCarousel({
 
   if (!images || images.length === 0) {
     return (
-      <div className="relative h-48 sm:h-56 md:h-60 lg:h-64 xl:h-72 w-full overflow-hidden rounded-t-md flex-shrink-0 bg-gray-200">
+      <div className="relative h-full w-full overflow-hidden rounded-t-md flex-shrink-0 bg-gray-200">
         <OptimizedImage
           src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop"
           alt={restaurantName}
@@ -263,7 +263,7 @@ function RestaurantImageCarousel({
 
   return (
     <div
-      className="relative h-48 sm:h-56 md:h-60 lg:h-64 xl:h-72 w-full overflow-hidden rounded-t-md flex-shrink-0 group"
+      className="relative h-full w-full overflow-hidden rounded-t-md flex-shrink-0 group"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -433,11 +433,41 @@ export default function Home() {
   const [loadingRealCategories, setLoadingRealCategories] = useState(true);
   const [showAllCategoriesModal, setShowAllCategoriesModal] = useState(false);
   const isHandlingSwitchOff = useRef(false);
+  const backendAssetBaseUrl = API_BASE_URL.replace(/\/api\/?$/, "");
 
   const isLikelyImageUrl = (value) => {
     const src = String(value || "").trim();
     if (!src) return false;
-    return src.startsWith("http://") || src.startsWith("https://") || src.startsWith("/");
+    return (
+      src.startsWith("http://") ||
+      src.startsWith("https://") ||
+      src.startsWith("/") ||
+      src.startsWith("uploads/") ||
+      src.startsWith("./uploads/") ||
+      src.startsWith("../uploads/")
+    );
+  };
+
+  const resolveImageUrl = (value) => {
+    const src = String(value || "").trim();
+    if (!src) return "";
+
+    if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:")) {
+      return src;
+    }
+
+    if (src.startsWith("//")) {
+      return `https:${src}`;
+    }
+
+    const normalizedPath = src.replace(/^(\.\/|\.\.\/)+/, "").replace(/^\/+/, "");
+    if (!normalizedPath) return "";
+
+    if (src.startsWith("/") || normalizedPath.startsWith("uploads/")) {
+      return `${backendAssetBaseUrl}/${normalizedPath}`;
+    }
+
+    return "";
   };
 
   const fallbackImageBySeed = (seed) => {
@@ -458,7 +488,7 @@ export default function Home() {
   };
 
   const sanitizeImageSrc = (src, seed = "") =>
-    isLikelyImageUrl(src) ? src : fallbackImageBySeed(seed);
+    resolveImageUrl(src) || fallbackImageBySeed(seed);
 
   const isStorefrontLikeImage = (value) => {
     const src = String(value || "").toLowerCase();
@@ -469,7 +499,7 @@ export default function Home() {
   const extractImageUrl = (value) => {
     if (!value) return "";
     if (typeof value === "string") {
-      return isLikelyImageUrl(value) ? value : "";
+      return resolveImageUrl(value);
     }
     if (typeof value !== "object") return "";
 
@@ -486,8 +516,11 @@ export default function Home() {
     ];
 
     for (const candidate of candidates) {
-      if (typeof candidate === "string" && isLikelyImageUrl(candidate)) {
-        return candidate;
+      if (typeof candidate === "string") {
+        const resolvedUrl = resolveImageUrl(candidate);
+        if (resolvedUrl) {
+          return resolvedUrl;
+        }
       }
     }
     return "";
