@@ -1544,7 +1544,25 @@ export default function OrderTracking() {
     }
   }
 
-  // Loading state
+  const shouldBackToHome =
+    orderStatus === "delivered" ||
+    String(order?.status || "").toLowerCase() === "delivered" ||
+    String(order?.status || "").toLowerCase() === "completed"
+
+  useEffect(() => {
+    if (!shouldBackToHome) return
+
+    const handlePopState = () => {
+      navigate("/home", { replace: true })
+    }
+
+    window.addEventListener("popstate", handlePopState)
+    return () => {
+      window.removeEventListener("popstate", handlePopState)
+    }
+  }, [shouldBackToHome, navigate])
+
+  // Loading state
   if (loading) {
     return (
       <AnimatedPage className="min-h-screen bg-gray-50 p-4">
@@ -1628,27 +1646,9 @@ export default function OrderTracking() {
     color: orderStatus === "cancelled" ? "bg-red-600" : "bg-green-700"
   }
 
-  const currentStatus = isPlanSubscriptionOrder
-    ? planStatusConfig
+  const currentStatus = isPlanSubscriptionOrder
+    ? planStatusConfig
     : (statusConfig[orderStatus] || statusConfig.placed)
-
-  const shouldBackToHome =
-    orderStatus === "delivered" ||
-    String(order?.status || "").toLowerCase() === "delivered" ||
-    String(order?.status || "").toLowerCase() === "completed"
-
-  useEffect(() => {
-    if (!shouldBackToHome) return
-
-    const handlePopState = () => {
-      navigate("/home", { replace: true })
-    }
-
-    window.addEventListener("popstate", handlePopState)
-    return () => {
-      window.removeEventListener("popstate", handlePopState)
-    }
-  }, [shouldBackToHome, navigate])
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-[#0a0a0a]">
@@ -2191,3 +2191,4 @@ export default function OrderTracking() {
     </div>
   )
 }
+
