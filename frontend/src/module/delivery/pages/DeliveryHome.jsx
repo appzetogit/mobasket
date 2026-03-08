@@ -2051,6 +2051,9 @@ export default function DeliveryHome() {
   const directionsRouteCacheRef = useRef(new Map()) // Cache directions responses by rounded origin/destination
 
 
+  const isRestoringActiveOrderRef = useRef(false) // Prevent route cleanup races during refresh restore
+
+
   const fetchedOrderDetailsForDropRef = useRef(null) // Prevent re-fetching order details for Reached Drop customer coords
 
 
@@ -8957,10 +8960,10 @@ export default function DeliveryHome() {
                 address: normalizeAddressLabel(restaurantAddress, 'Restaurant address not available'), // Restaurant address from backend
 
 
-                lat: restaurantLat || selectedRestaurant?.lat,
+                lat: restaurantLat ?? selectedRestaurant?.lat,
 
 
-                lng: restaurantLng || selectedRestaurant?.lng,
+                lng: restaurantLng ?? selectedRestaurant?.lng,
 
 
                 distance: selectedRestaurant?.distance || '0 km',
@@ -9098,6 +9101,13 @@ export default function DeliveryHome() {
 
               setRoutePolyline(routeCoordinates);
 
+              // Render backend pickup route immediately as fallback while Directions/GPS settle.
+              try {
+                updateRoutePolyline(routeCoordinates);
+              } catch (polylineFallbackError) {
+                console.warn('⚠️ Could not render fallback pickup polyline:', polylineFallbackError);
+              }
+
 
             }
 
@@ -9114,7 +9124,29 @@ export default function DeliveryHome() {
             // Use restaurantInfo directly (not selectedRestaurant) since state update is async
 
 
-            if (restaurantInfo && restaurantInfo.lat && restaurantInfo.lng && currentLocation) {
+            const hasValidRestaurantCoords =
+              Number.isFinite(Number(restaurantInfo?.lat)) &&
+              Number.isFinite(Number(restaurantInfo?.lng))
+
+            const riderPositionForPickupRoute =
+              (Array.isArray(currentLocation) &&
+                currentLocation.length === 2 &&
+                Number.isFinite(Number(currentLocation[0])) &&
+                Number.isFinite(Number(currentLocation[1])))
+                ? [Number(currentLocation[0]), Number(currentLocation[1])]
+                : (Array.isArray(riderLocation) &&
+                  riderLocation.length === 2 &&
+                  Number.isFinite(Number(riderLocation[0])) &&
+                  Number.isFinite(Number(riderLocation[1])))
+                  ? [Number(riderLocation[0]), Number(riderLocation[1])]
+                  : (Array.isArray(lastLocationRef.current) &&
+                    lastLocationRef.current.length === 2 &&
+                    Number.isFinite(Number(lastLocationRef.current[0])) &&
+                    Number.isFinite(Number(lastLocationRef.current[1])))
+                    ? [Number(lastLocationRef.current[0]), Number(lastLocationRef.current[1])]
+                    : null
+
+            if (hasValidRestaurantCoords && riderPositionForPickupRoute) {
 
 
               console.log('🗺️ Calculating route with Google Maps Directions API...');
@@ -9132,7 +9164,7 @@ export default function DeliveryHome() {
                 const directionsResult = await calculateRouteWithDirectionsAPI(
 
 
-                  currentLocation, // Delivery boy's current live location
+                  riderPositionForPickupRoute, // Delivery boy's current live location
 
 
                   { lat: restaurantInfo.lat, lng: restaurantInfo.lng } // Restaurant location
@@ -9186,7 +9218,7 @@ export default function DeliveryHome() {
                   // Initialize live tracking polyline with full route (Delivery Boy → Restaurant)
 
 
-                  if (currentLocation) {
+                  if (riderPositionForPickupRoute) {
 
 
                     // Ensure map is ready before updating polyline
@@ -9195,7 +9227,7 @@ export default function DeliveryHome() {
                     if (window.deliveryMapInstance) {
 
 
-                      updateLiveTrackingPolyline(directionsResult, currentLocation);
+                      updateLiveTrackingPolyline(directionsResult, riderPositionForPickupRoute);
 
 
                     } else {
@@ -9207,10 +9239,10 @@ export default function DeliveryHome() {
                       setTimeout(() => {
 
 
-                        if (window.deliveryMapInstance && currentLocation) {
+                        if (window.deliveryMapInstance && riderPositionForPickupRoute) {
 
 
-                          updateLiveTrackingPolyline(directionsResult, currentLocation);
+                          updateLiveTrackingPolyline(directionsResult, riderPositionForPickupRoute);
 
 
                         }
@@ -18935,7 +18967,7 @@ export default function DeliveryHome() {
   const updateLiveTrackingPolyline = useCallback((directionsResult, riderPosition) => {
 
 
-    if (!directionsResult || !riderPosition || !window.google || !window.google.maps) {
+    if (!directionsResult || !window.google || !window.google.maps) {
 
 
       return;
@@ -18998,10 +19030,34 @@ export default function DeliveryHome() {
 
 
 
-      // Convert rider position to object format
+      // Resolve rider position with robust fallbacks so route still renders on refresh/reconnect.
+      // Priority:
+      // 1) explicit riderPosition arg
+      // 2) last known location ref
+      // 3) first point of full polyline (so route is still visible even before GPS resolves)
+      const riderPositionArray =
+        Array.isArray(riderPosition) &&
+        riderPosition.length === 2 &&
+        Number.isFinite(Number(riderPosition[0])) &&
+        Number.isFinite(Number(riderPosition[1]))
+          ? [Number(riderPosition[0]), Number(riderPosition[1])]
+          : (Array.isArray(lastLocationRef.current) &&
+            lastLocationRef.current.length === 2 &&
+            Number.isFinite(Number(lastLocationRef.current[0])) &&
+            Number.isFinite(Number(lastLocationRef.current[1])))
+            ? [Number(lastLocationRef.current[0]), Number(lastLocationRef.current[1])]
+            : null;
 
+      const riderPos = riderPositionArray
+        ? { lat: riderPositionArray[0], lng: riderPositionArray[1] }
+        : {
+            lat: Number(fullPolyline?.[0]?.lat ?? 0),
+            lng: Number(fullPolyline?.[0]?.lng ?? 0),
+          };
 
-      const riderPos = { lat: riderPosition[0], lng: riderPosition[1] };
+      if (!Number.isFinite(riderPos.lat) || !Number.isFinite(riderPos.lng)) {
+        return;
+      }
 
 
 
@@ -20822,6 +20878,9 @@ export default function DeliveryHome() {
     const restoreActiveOrder = async () => {
 
 
+      isRestoringActiveOrderRef.current = true;
+
+
       try {
 
 
@@ -21466,16 +21525,31 @@ export default function DeliveryHome() {
 
 
 
+          const fallbackRouteCoordinates =
+            (isPickedUpPhase
+              ? restoredOrder?.deliveryState?.routeToDelivery?.coordinates
+              : restoredOrder?.deliveryState?.routeToPickup?.coordinates) ||
+            restoredOrder?.deliveryState?.routeToPickup?.coordinates ||
+            restoredOrder?.deliveryState?.routeToDelivery?.coordinates ||
+            activeOrderData?.routeCoordinates ||
+            [];
+
           const destinationForRestore = isPickedUpPhase && hasCustomerLocation
 
 
             ? { lat: Number(restoredOrder.customerLat), lng: Number(restoredOrder.customerLng) }
 
 
-            : (activeOrderData.restaurantInfo && activeOrderData.restaurantInfo.lat && activeOrderData.restaurantInfo.lng)
+            : (Number.isFinite(Number(restoredOrder?.lat)) && Number.isFinite(Number(restoredOrder?.lng)))
 
 
-              ? { lat: activeOrderData.restaurantInfo.lat, lng: activeOrderData.restaurantInfo.lng }
+              ? { lat: Number(restoredOrder.lat), lng: Number(restoredOrder.lng) }
+
+
+              : (activeOrderData.restaurantInfo && activeOrderData.restaurantInfo.lat && activeOrderData.restaurantInfo.lng)
+
+
+                ? { lat: activeOrderData.restaurantInfo.lat, lng: activeOrderData.restaurantInfo.lng }
 
 
               : null
@@ -21535,10 +21609,16 @@ export default function DeliveryHome() {
                   // Fallback to coordinates if Directions API fails
 
 
-                  if (activeOrderData.routeCoordinates && activeOrderData.routeCoordinates.length > 0) {
+                  if (fallbackRouteCoordinates.length > 0) {
 
 
-                    setRoutePolyline(activeOrderData.routeCoordinates);
+                    setRoutePolyline(fallbackRouteCoordinates);
+
+
+                    updateRoutePolyline(fallbackRouteCoordinates);
+
+
+                    setShowRoutePath(true);
 
 
                   }
@@ -21556,10 +21636,16 @@ export default function DeliveryHome() {
                 // Fallback to coordinates
 
 
-                if (activeOrderData.routeCoordinates && activeOrderData.routeCoordinates.length > 0) {
+                if (fallbackRouteCoordinates.length > 0) {
 
 
-                  setRoutePolyline(activeOrderData.routeCoordinates);
+                  setRoutePolyline(fallbackRouteCoordinates);
+
+
+                  updateRoutePolyline(fallbackRouteCoordinates);
+
+
+                  setShowRoutePath(true);
 
 
                   console.log('✅ Using fallback route coordinates from localStorage');
@@ -21571,25 +21657,37 @@ export default function DeliveryHome() {
               });
 
 
-            } else if (activeOrderData.routeCoordinates && activeOrderData.routeCoordinates.length > 0) {
+            } else if (fallbackRouteCoordinates.length > 0) {
 
 
               // Use saved coordinates if we don't have Directions API flag
 
 
-              setRoutePolyline(activeOrderData.routeCoordinates);
+              setRoutePolyline(fallbackRouteCoordinates);
+
+
+              updateRoutePolyline(fallbackRouteCoordinates);
+
+
+              setShowRoutePath(true);
 
 
             }
 
 
-          } else if (activeOrderData.routeCoordinates && activeOrderData.routeCoordinates.length > 0) {
+          } else if (fallbackRouteCoordinates.length > 0) {
 
 
             // Fallback: Use coordinates if restaurant info or rider location not available
 
 
-            setRoutePolyline(activeOrderData.routeCoordinates);
+            setRoutePolyline(fallbackRouteCoordinates);
+
+
+            updateRoutePolyline(fallbackRouteCoordinates);
+
+
+            setShowRoutePath(true);
 
 
           }
@@ -21629,6 +21727,12 @@ export default function DeliveryHome() {
 
 
         setShowPaymentPage(false);
+
+
+      } finally {
+
+
+        isRestoringActiveOrderRef.current = false;
 
 
       }
@@ -21772,22 +21876,13 @@ export default function DeliveryHome() {
       shouldUseCurrentDirections &&
 
 
-      currentRiderLocation &&
-
-
-      currentRiderLocation.length === 2 &&
-
-
       !liveTrackingPolylineRef.current) {
 
 
-      updateLiveTrackingPolyline(currentDirectionsResponse, currentRiderLocation);
+      updateLiveTrackingPolyline(currentDirectionsResponse, currentRiderLocation || null);
 
 
     } else if (currentDirectionsResponse &&
-
-
-      currentRiderLocation &&
 
 
       liveTrackingPolylineRef.current &&
@@ -21871,7 +21966,7 @@ export default function DeliveryHome() {
     // Clear immediately on mount if no active order
 
 
-    if (!selectedRestaurant && window.deliveryMapInstance) {
+    if (!selectedRestaurant && window.deliveryMapInstance && !isRestoringActiveOrderRef.current) {
 
 
       // Clear route polyline
@@ -21949,7 +22044,7 @@ export default function DeliveryHome() {
     const timer = setTimeout(() => {
 
 
-      if (!selectedRestaurant && window.deliveryMapInstance) {
+      if (!selectedRestaurant && window.deliveryMapInstance && !isRestoringActiveOrderRef.current) {
 
 
         // Clear route polyline

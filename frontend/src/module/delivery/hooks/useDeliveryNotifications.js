@@ -184,6 +184,18 @@ export const useDeliveryNotifications = (options = {}) => {
     }
   }, []);
 
+  const triggerOrderBuzz = useCallback(() => {
+    try {
+      if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') {
+        return;
+      }
+      // Two short pulses for new order alert.
+      navigator.vibrate([180, 120, 220]);
+    } catch (error) {
+      // Ignore vibration errors.
+    }
+  }, []);
+
   const normalizeOrderIds = useCallback((orderData = {}) => {
     return [
       orderData?.orderId,
@@ -471,6 +483,7 @@ export const useDeliveryNotifications = (options = {}) => {
       }
       setNewOrder(orderData);
       playNotificationSound();
+      triggerOrderBuzz();
       if (enableBrowserNotificationRef.current && document.hidden) {
         showBrowserNotification({
           title: 'New delivery order',
@@ -488,6 +501,7 @@ export const useDeliveryNotifications = (options = {}) => {
       // Treat it the same as new_order for now - delivery boy can accept it
       setNewOrder(orderData);
       playNotificationSound();
+      triggerOrderBuzz();
       if (enableBrowserNotificationRef.current && document.hidden) {
         showBrowserNotification({
           title: 'New delivery order',
@@ -499,6 +513,7 @@ export const useDeliveryNotifications = (options = {}) => {
 
     socketRef.current.on('play_notification_sound', (data) => {
       playNotificationSound();
+      triggerOrderBuzz();
     });
 
     socketRef.current.on('order_ready', (orderData) => {
@@ -532,7 +547,7 @@ export const useDeliveryNotifications = (options = {}) => {
         socketRef.current = null;
       }
     };
-  }, [deliveryPartnerId, enabled, playNotificationSound, shouldIgnoreOrderNotification, suppressOrderNotifications]);
+  }, [deliveryPartnerId, enabled, playNotificationSound, shouldIgnoreOrderNotification, suppressOrderNotifications, triggerOrderBuzz]);
 
   useEffect(() => {
     if (!enabled || !deliveryPartnerId) {
@@ -566,6 +581,7 @@ export const useDeliveryNotifications = (options = {}) => {
 
         const normalizedOrder = formatPolledOrderForNotification(nextAvailableOrder);
         const incomingIds = normalizeOrderIds(normalizedOrder);
+        let shouldTriggerAlert = false;
 
         setNewOrder((currentOrder) => {
           const currentIds = normalizeOrderIds(currentOrder);
@@ -573,8 +589,14 @@ export const useDeliveryNotifications = (options = {}) => {
             currentIds.length > 0 &&
             incomingIds.some((id) => currentIds.includes(id));
 
+          shouldTriggerAlert = !isSameOrder;
           return isSameOrder ? currentOrder : normalizedOrder;
         });
+
+        if (shouldTriggerAlert) {
+          playNotificationSound();
+          triggerOrderBuzz();
+        }
       } catch (error) {
         // Socket remains primary. Polling is only a fallback, so fail silently.
       }
@@ -587,7 +609,7 @@ export const useDeliveryNotifications = (options = {}) => {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [deliveryPartnerId, enabled, normalizeOrderIds, shouldIgnoreOrderNotification]);
+  }, [deliveryPartnerId, enabled, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, triggerOrderBuzz]);
 
   // Helper functions
   const clearNewOrder = () => {

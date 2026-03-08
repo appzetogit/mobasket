@@ -1,10 +1,12 @@
 import Restaurant from '../models/Restaurant.js';
+import OutletTimings from '../models/OutletTimings.js';
 import otpService from '../../auth/services/otpService.js';
 import jwtService from '../../auth/services/jwtService.js';
 import firebaseAuthService from '../../auth/services/firebaseAuthService.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
+import { isOpenFromOutletTimings } from '../utils/outletTimingStatus.js';
 import winston from 'winston';
 
 /**
@@ -930,6 +932,13 @@ const normalizeRestaurantOnboardingState = (restaurant) => {
  */
 export const getCurrentRestaurant = asyncHandler(async (req, res) => {
   const normalizedOnboarding = normalizeRestaurantOnboardingState(req.restaurant);
+  const outletTimings = await OutletTimings.findOne({
+    restaurantId: req.restaurant._id,
+    isActive: true,
+  }).lean();
+  const isAcceptingOrders = outletTimings?.timings
+    ? isOpenFromOutletTimings(outletTimings.timings)
+    : req.restaurant.isAcceptingOrders;
   // Restaurant is attached by authenticate middleware
   return successResponse(res, 200, 'Restaurant retrieved successfully', {
     restaurant: {
@@ -955,7 +964,7 @@ export const getCurrentRestaurant = asyncHandler(async (req, res) => {
       deliveryTimings: req.restaurant.deliveryTimings,
       menuImages: req.restaurant.menuImages,
       slug: req.restaurant.slug,
-      isAcceptingOrders: req.restaurant.isAcceptingOrders,
+      isAcceptingOrders,
       // Include verification status
       rejectionReason: req.restaurant.rejectionReason || null,
       approvedAt: req.restaurant.approvedAt || null,

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { Search, Menu, ChevronRight, MapPin, X, Bell } from "lucide-react"
 import { restaurantAPI, groceryStoreAPI } from "@/lib/api"
+import { isOpenFromOutletTimingsMap } from "@/lib/utils/outletTimingsStatus"
 
 export default function RestaurantNavbar({
   restaurantName: propRestaurantName,
@@ -180,6 +181,19 @@ export default function RestaurantNavbar({
   useEffect(() => {
     const updateStatus = () => {
       try {
+        if (!isGroceryStore) {
+          const savedTimings = localStorage.getItem("restaurant_outlet_timings")
+          if (savedTimings) {
+            const parsedTimings = JSON.parse(savedTimings)
+            const scheduleStatus = isOpenFromOutletTimingsMap(parsedTimings)
+            if (typeof scheduleStatus === "boolean") {
+              setStatus(scheduleStatus ? "Online" : "Offline")
+              localStorage.setItem("restaurant_online_status", JSON.stringify(scheduleStatus))
+              return
+            }
+          }
+        }
+
         if (typeof restaurantData?.isAcceptingOrders === "boolean") {
           const backendOnline = restaurantData.isAcceptingOrders;
           setStatus(backendOnline ? "Online" : "Offline");
@@ -214,13 +228,15 @@ export default function RestaurantNavbar({
 
     const statusEventName = isGroceryStore ? 'groceryStoreStatusChanged' : 'restaurantStatusChanged'
     window.addEventListener(statusEventName, handleStatusChange)
+    window.addEventListener("outletTimingsUpdated", updateStatus)
     
-    // Also check localStorage periodically to catch direct changes
-    const interval = setInterval(updateStatus, 1000)
+    // Recompute status periodically so homepage state follows timing windows.
+    const interval = setInterval(updateStatus, 60000)
     
     return () => {
       const statusEventName = isGroceryStore ? 'groceryStoreStatusChanged' : 'restaurantStatusChanged'
       window.removeEventListener(statusEventName, handleStatusChange)
+      window.removeEventListener("outletTimingsUpdated", updateStatus)
       clearInterval(interval)
     }
   }, [isGroceryStore, restaurantData?.isAcceptingOrders])

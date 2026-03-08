@@ -220,10 +220,10 @@ const toValidDeliveryPartner = (partner) => {
   const name = (partner.name || partner.fullName || "").trim()
   const phone = (partner.phone || partner.mobile || "").trim()
 
-  if (!name || !phone) return null
+  if (!name && !phone) return null
 
   return {
-    name,
+    name: name || "Delivery partner",
     phone,
     avatar: partner.avatar || null,
     availability: partner.availability || null
@@ -573,7 +573,13 @@ export default function OrderTracking() {
       )
     )
   }, [order?.deliveryState?.currentPhase, order?.deliveryState?.status, order?.status, riderInfo])
-  const riderDialNumber = sanitizePhoneForTel(riderInfo?.phone || "")
+  const hasAssignedRider = useMemo(() => {
+
+    return Boolean(riderInfo || order?.deliveryPartnerId || order?.assignmentInfo?.deliveryPartnerId)
+
+  }, [riderInfo, order?.deliveryPartnerId, order?.assignmentInfo?.deliveryPartnerId])
+
+  const riderDialNumber = sanitizePhoneForTel(riderInfo?.phone || "")
 
   const userLiveCoords = useMemo(() => {
     const toFinite = (value) => {
@@ -1911,10 +1917,14 @@ export default function OrderTracking() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 truncate">
-                  {isRiderAccepted && riderInfo?.name ? riderInfo.name : "Delivery partner will be assigned soon"}
+                  {hasAssignedRider
+                    ? (riderInfo?.name || "Delivery partner assigned")
+                    : "Assigning delivery partner..."}
                 </p>
                 <p className="text-sm text-gray-500 truncate">
-                  {isRiderAccepted && riderInfo?.phone ? riderInfo.phone : "Phone number not available"}
+                  {hasAssignedRider
+                    ? (riderInfo?.phone || "Phone number not available")
+                    : "Phone number not available"}
                 </p>
               </div>
               <motion.button

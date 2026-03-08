@@ -2,32 +2,9 @@ import OutletTimings from '../models/OutletTimings.js';
 import Restaurant from '../models/Restaurant.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
+import { parseTimeToMinutes, isOpenFromOutletTimings } from '../utils/outletTimingStatus.js';
 
 const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-
-const parseTimeToMinutes = (value) => {
-  if (!value || typeof value !== 'string') return null;
-  const normalized = value.trim().toUpperCase();
-  const match = normalized.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/);
-  if (!match) return null;
-
-  let hours = Number(match[1]);
-  const minutes = Number(match[2]);
-  const meridiem = match[3] || null;
-
-  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null;
-  if (minutes < 0 || minutes > 59) return null;
-
-  if (meridiem) {
-    if (hours < 1 || hours > 12) return null;
-    if (meridiem === 'PM' && hours !== 12) hours += 12;
-    if (meridiem === 'AM' && hours === 12) hours = 0;
-  } else if (hours < 0 || hours > 23) {
-    return null;
-  }
-
-  return hours * 60 + minutes;
-};
 
 const minutesToTime24 = (totalMinutes) => {
   if (!Number.isInteger(totalMinutes) || totalMinutes < 0) return null;
@@ -53,9 +30,8 @@ const syncRestaurantTimingFields = async (restaurantId, timings) => {
 
   const updateData = {
     openDays,
-    // Keep storefront availability aligned with updated schedule edits.
-    // Schedule windows will still control closed/open in user module.
-    isAcceptingOrders: true,
+    // Outlet timings are the source of truth for online/offline state.
+    isAcceptingOrders: isOpenFromOutletTimings(timings),
   };
   if (openingMinutes.length > 0 && closingMinutes.length > 0) {
     updateData.deliveryTimings = {

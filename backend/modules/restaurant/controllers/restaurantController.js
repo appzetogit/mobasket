@@ -1,4 +1,5 @@
 import Restaurant from '../models/Restaurant.js';
+import OutletTimings from '../models/OutletTimings.js';
 import GroceryStore from '../../grocery/models/GroceryStore.js';
 import Menu from '../models/Menu.js';
 import Zone from '../../admin/models/Zone.js';
@@ -7,6 +8,7 @@ import { uploadToCloudinary, deleteFromCloudinary } from '../../../shared/utils/
 import { initializeCloudinary } from '../../../config/cloudinary.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 import mongoose from 'mongoose';
+import { isOpenFromOutletTimings } from '../utils/outletTimingStatus.js';
 
 /**
  * Check if a point is within a zone polygon using ray casting algorithm
@@ -411,6 +413,34 @@ export const getRestaurants = async (req, res) => {
       return true;
     });
     
+    if (!isMogroceryRequest && restaurants.length > 0) {
+      const restaurantIds = restaurants
+        .map((restaurant) => restaurant?._id)
+        .filter(Boolean);
+
+      if (restaurantIds.length > 0) {
+        const outletTimingDocs = await OutletTimings.find({
+          restaurantId: { $in: restaurantIds },
+          isActive: true,
+        })
+          .select('restaurantId timings')
+          .lean();
+
+        const timingByRestaurantId = new Map(
+          outletTimingDocs.map((doc) => [String(doc.restaurantId), doc.timings || []])
+        );
+
+        restaurants = restaurants.map((restaurant) => {
+          const timing = timingByRestaurantId.get(String(restaurant._id));
+          if (!timing) return restaurant;
+          return {
+            ...restaurant,
+            isAcceptingOrders: isOpenFromOutletTimings(timing),
+          };
+        });
+      }
+    }
+
     // Apply string-based filters that can't be done in MongoDB query
     if (maxDeliveryTime) {
       const maxTime = parseInt(maxDeliveryTime);
@@ -479,6 +509,7 @@ export const getRestaurantById = async (req, res) => {
       .lean();
 
     // Fallback for mogrocery store entities migrated to dedicated GroceryStore collection.
+    const isRestaurantEntity = Boolean(restaurant);
     if (!restaurant) {
       const groceryConditions = [{ restaurantId: id }, { slug: id }];
       if (mongoose.Types.ObjectId.isValid(id) && id.length === 24) {
@@ -495,6 +526,18 @@ export const getRestaurantById = async (req, res) => {
 
     if (!restaurant) {
       return errorResponse(res, 404, 'Restaurant not found');
+    }
+
+    if (isRestaurantEntity && restaurant?._id) {
+      const outletTimings = await OutletTimings.findOne({
+        restaurantId: restaurant._id,
+        isActive: true,
+      })
+        .select('timings')
+        .lean();
+      if (outletTimings?.timings) {
+        restaurant.isAcceptingOrders = isOpenFromOutletTimings(outletTimings.timings);
+      }
     }
 
     return successResponse(res, 200, 'Restaurant retrieved successfully', {
@@ -516,6 +559,16 @@ export const getRestaurantByOwner = async (req, res) => {
 
     if (!restaurant) {
       return errorResponse(res, 404, 'Restaurant not found');
+    }
+
+    const outletTimings = await OutletTimings.findOne({
+      restaurantId: restaurant._id,
+      isActive: true,
+    })
+      .select('timings')
+      .lean();
+    if (outletTimings?.timings) {
+      restaurant.isAcceptingOrders = isOpenFromOutletTimings(outletTimings.timings);
     }
 
     return successResponse(res, 200, 'Restaurant retrieved successfully', {
