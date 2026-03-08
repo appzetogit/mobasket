@@ -1141,6 +1141,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         orderMongoId,
         {
           $set: {
+            deliveryPartnerId: delivery._id,
             'assignmentInfo.deliveryPartnerId': String(delivery._id),
             'assignmentInfo.assignedBy': 'delivery_accept',
             'assignmentInfo.assignedAt': new Date(),

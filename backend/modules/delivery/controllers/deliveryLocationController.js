@@ -183,9 +183,21 @@ export const updateLocation = asyncHandler(async (req, res) => {
       const io = req.app.get('io');
       if (io) {
         try {
+          const deliveryPartnerObjectId = delivery._id;
+          const deliveryPartnerStringId = String(delivery._id);
+
           const activeOrder = await Order.findOne({
-            deliveryPartnerId: delivery._id,
-            $or: [
+            $and: [
+              {
+                $or: [
+                  { deliveryPartnerId: deliveryPartnerObjectId },
+                  { deliveryPartnerId: deliveryPartnerStringId },
+                  { 'assignmentInfo.deliveryPartnerId': deliveryPartnerStringId },
+                  { 'assignmentInfo.deliveryPartnerId': deliveryPartnerObjectId }
+                ]
+              },
+              {
+                $or: [
               { status: { $in: ['confirmed', 'preparing', 'ready', 'out_for_delivery'] } },
               {
                 'deliveryState.status': {
@@ -196,6 +208,8 @@ export const updateLocation = asyncHandler(async (req, res) => {
                 'deliveryState.currentPhase': {
                   $in: ['en_route_to_pickup', 'at_pickup', 'picked_up', 'en_route_to_delivery', 'at_delivery']
                 }
+              }
+                ]
               }
             ]
           })

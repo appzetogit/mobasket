@@ -28,7 +28,11 @@ import { toast } from "sonner";
 import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
 import { Loader } from "@googlemaps/js-api-loader";
 import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey";
+import AddressLocationPicker from "@/components/AddressLocationPicker";
 import { useRef } from "react";
+
+const GROCERY_ITEM_FALLBACK_IMAGE =
+  "https://images.unsplash.com/photo-1542838132-92c53300491e?w=240&h=240&fit=crop";
 
 const extractAddressCoordinates = (address) => {
   if (!address || typeof address !== "object") return null;
@@ -190,6 +194,8 @@ export default function GroceryCheckoutPage() {
       findByType("administrative_area_level_2");
     const state = findByType("administrative_area_level_1");
     const zipCode = findByType("postal_code");
+    const premise = findByType("premise") || findByType("subpremise");
+    const establishment = findByType("establishment");
 
     return {
       street: [streetNumber, route].filter(Boolean).join(" ").trim(),
@@ -197,7 +203,45 @@ export default function GroceryCheckoutPage() {
       city,
       state,
       zipCode,
+      premise,
+      establishment,
     };
+  }, []);
+
+  const hasMeaningfulStreet = useCallback((value) => {
+    const text = String(value || "").trim();
+    if (!text) return false;
+    const normalized = text.toLowerCase();
+    const blocked = ["district", "state", "india"];
+    if (blocked.some((token) => normalized === token || normalized.endsWith(` ${token}`))) {
+      return false;
+    }
+    return text.length >= 3;
+  }, []);
+
+  const selectBestReverseGeocodeResult = useCallback((results = []) => {
+    if (!Array.isArray(results) || results.length === 0) return null;
+
+    const scoreResult = (result) => {
+      const types = Array.isArray(result?.types) ? result.types : [];
+      let score = 0;
+      if (types.includes("street_address")) score += 120;
+      if (types.includes("premise")) score += 100;
+      if (types.includes("subpremise")) score += 90;
+      if (types.includes("establishment")) score += 80;
+      if (types.includes("route")) score += 60;
+      if (types.includes("point_of_interest")) score += 40;
+      if (types.includes("sublocality")) score += 20;
+      if (types.includes("locality")) score += 10;
+      if (types.includes("administrative_area_level_2")) score += 5;
+
+      const formatted = String(result?.formatted_address || "");
+      if (/\b\d{6}\b/.test(formatted)) score += 15;
+      if (formatted.split(",").filter(Boolean).length >= 4) score += 10;
+      return score;
+    };
+
+    return [...results].sort((a, b) => scoreResult(b) - scoreResult(a))[0] || results[0];
   }, []);
 
   useEffect(() => {
@@ -342,8 +386,8 @@ export default function GroceryCheckoutPage() {
 
   const extractDetectedAddress = (response, latitude, longitude) => {
     const results = response?.data?.data?.results || [];
-    const firstResult = results[0] || {};
-    const components = firstResult?.address_components || {};
+    const selectedResult = selectBestReverseGeocodeResult(results) || results[0] || {};
+    const components = selectedResult?.address_components || {};
 
     const fromArray = Array.isArray(components)
       ? {
@@ -363,20 +407,36 @@ export default function GroceryCheckoutPage() {
         zipCode: components.zipCode || components.postal_code || "",
       };
 
-    const formattedAddress = firstResult?.formatted_address || "";
+    const parsed = parseAddressComponents(Array.isArray(components) ? components : []);
+    const formattedAddress = selectedResult?.formatted_address || "";
     const pincodeFromText =
       formattedAddress.match(/\b\d{6}\b/)?.[0] ||
       response?.data?.data?.formattedAddress?.match(/\b\d{6}\b/)?.[0] ||
       "";
     const parts = formattedAddress.split(",").map((part) => part.trim()).filter(Boolean);
+    const primaryStreetCandidate =
+      selectedResult?.street ||
+      parsed.street ||
+      parsed.premise ||
+      parsed.establishment ||
+      parts[0] ||
+      "";
+    const fallbackStreet = parts.slice(0, 2).join(", ");
+    const street = hasMeaningfulStreet(primaryStreetCandidate)
+      ? primaryStreetCandidate
+      : (fallbackStreet || formattedAddress || "Current location");
 
     return {
-      street: firstResult?.street || parts[0] || "",
-      additionalDetails:
-        firstResult?.area ||
-        firstResult?.sublocality ||
-        firstResult?.neighborhood ||
-        (parts.length > 1 ? parts.slice(1, Math.min(parts.length - 2, 3)).join(", ") : ""),
+      street,
+      additionalDetails: [
+        selectedResult?.area,
+        selectedResult?.sublocality,
+        selectedResult?.neighborhood,
+        parsed.additionalDetails,
+        parts.length > 1 ? parts.slice(1, Math.min(parts.length - 2, 3)).join(", ") : "",
+      ]
+        .map((part) => String(part || "").trim())
+        .find(Boolean) || "",
       city: fromArray.city,
       state: fromArray.state,
       zipCode: fromArray.zipCode || pincodeFromText,
@@ -542,6 +602,37 @@ export default function GroceryCheckoutPage() {
     ]
       .filter(Boolean)
       .join(", ");
+
+  const getGroceryItemImage = useCallback((item) => {
+    if (typeof item?.image === "string" && item.image.trim()) return item.image;
+    if (typeof item?.imageUrl === "string" && item.imageUrl.trim()) return item.imageUrl;
+    if (typeof item?.selectedVariant?.image === "string" && item.selectedVariant.image.trim()) {
+      return item.selectedVariant.image;
+    }
+    if (Array.isArray(item?.images) && typeof item.images[0] === "string" && item.images[0].trim()) {
+      return item.images[0];
+    }
+    return GROCERY_ITEM_FALLBACK_IMAGE;
+  }, []);
+
+  const getGroceryItemVariantLabel = useCallback((item) => {
+    const explicitLabel =
+      item?.selectedVariant?.name ||
+      item?.variantName ||
+      item?.weight ||
+      item?.unit ||
+      "";
+    const normalized = String(explicitLabel || "").trim();
+    if (normalized) return normalized;
+
+    const quantity = Number(item?.selectedVariant?.quantity);
+    const unit = String(item?.selectedVariant?.unit || "").trim();
+    if (Number.isFinite(quantity) && quantity > 0 && unit) {
+      return `${quantity} ${unit}`;
+    }
+
+    return "1 unit";
+  }, []);
   const selectedAddressKey = useMemo(() => {
     if (!normalizedSelectedAddress) return "none";
     const coords = extractAddressCoordinates(normalizedSelectedAddress);
@@ -1302,17 +1393,20 @@ export default function GroceryCheckoutPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#fefce8] dark:bg-[#0a0a0a] pb-24">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#fff8cc_0%,_#fffdf4_42%,_#f8fafc_100%)] dark:bg-[#0a0a0a] pb-24">
       {/* Header */}
-      <div className="bg-white dark:bg-[#111111] sticky top-0 z-50 rounded-b-3xl shadow-sm border-b border-transparent dark:border-gray-800">
+      <div className="bg-gradient-to-r from-[#ffe25a] via-[#facd01] to-[#f4c300] sticky top-0 z-50 rounded-b-3xl shadow-md border-b border-yellow-300 dark:border-gray-800">
         <div className="px-4 py-4 flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
-            className="p-2 hover:bg-yellow-50 dark:hover:bg-[#1f1f1f] rounded-full transition-colors"
+            className="p-2 hover:bg-white/50 rounded-full transition-colors"
           >
-            <ArrowLeft className="w-5 h-5 text-gray-800 dark:text-gray-100" />
+            <ArrowLeft className="w-5 h-5 text-gray-900" />
           </button>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">Checkout</h1>
+          <div>
+            <h1 className="text-lg font-extrabold text-gray-900">Grocery checkout</h1>
+            <p className="text-[11px] font-medium text-gray-700">Fast delivery, fresh essentials</p>
+          </div>
         </div>
       </div>
 
@@ -1466,6 +1560,13 @@ export default function GroceryCheckoutPage() {
                       className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:bg-[#1f1f1f] dark:border-gray-700 dark:text-white dark:placeholder-gray-500"
                     />
 
+                    <AddressLocationPicker
+                      value={newAddress}
+                      onChange={setNewAddress}
+                      title="Exact address pin"
+                      description="Drag the pin or use the typed address to lock your delivery point."
+                    />
+
                     <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                       <input
                         type="checkbox"
@@ -1495,24 +1596,55 @@ export default function GroceryCheckoutPage() {
 
       {/* Order Items */}
       <div className="px-4 mb-4">
-        <div className="bg-white dark:bg-[#1a1a1a] rounded-xl p-4 shadow-sm border border-yellow-50 dark:border-gray-800">
-          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-3 border-b border-gray-50 dark:border-gray-800 pb-2">
-            Order Items
-          </h3>
+        <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-4 shadow-md border border-yellow-100 dark:border-gray-800">
+          <div className="flex items-center justify-between mb-3 border-b border-yellow-100 dark:border-gray-800 pb-2">
+            <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Order Items</h3>
+            <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-300">
+              {groceryItems.length} item{groceryItems.length === 1 ? "" : "s"}
+            </span>
+          </div>
           <div className="space-y-3">
             {groceryItems.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between pb-3 border-b border-gray-50 last:border-0 last:pb-0"
+                className="flex items-start gap-3 rounded-xl border border-gray-100 bg-[#fffef7] px-3 py-3 last:mb-0 dark:bg-[#202020] dark:border-gray-700"
               >
-                <div className="flex-1">
-                  <p className="text-sm font-bold text-gray-900 dark:text-gray-100">{item.name}</p>
-                  <p className="text-xs text-gray-500">
-                    Quantity: {item.quantity}
-                  </p>
+                <div className="h-16 w-16 shrink-0 rounded-lg bg-white border border-yellow-100 overflow-hidden">
+                  <img
+                    src={getGroceryItemImage(item)}
+                    alt={item.name}
+                    className="h-full w-full object-contain p-1"
+                    loading="lazy"
+                    onError={(event) => {
+                      event.currentTarget.src = GROCERY_ITEM_FALLBACK_IMAGE;
+                    }}
+                  />
                 </div>
-                <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                  ₹{(item.price * item.quantity).toFixed(2)}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-gray-900 dark:text-gray-100 leading-tight line-clamp-2">
+                    {item.name}
+                  </p>
+                  <div className="mt-1 flex items-center gap-2">
+                    <span className="rounded-full bg-[#ecfdf3] text-[#166534] px-2 py-0.5 text-[10px] font-bold">
+                      {getGroceryItemVariantLabel(item)}
+                    </span>
+                    <span className="rounded-full bg-gray-100 text-gray-700 px-2 py-0.5 text-[10px] font-semibold dark:bg-gray-700 dark:text-gray-200">
+                      Qty {item.quantity}
+                    </span>
+                  </div>
+                  <div className="mt-2 flex items-center gap-2">
+                    <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                      Rs {Number(item.price || 0).toFixed(2)}
+                    </p>
+                    {Number(item.mrp || 0) > Number(item.price || 0) && (
+                      <p className="text-xs text-gray-400 line-through">
+                        Rs {Number(item.mrp || 0).toFixed(2)}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <p className="text-sm font-extrabold text-gray-900 dark:text-gray-100 whitespace-nowrap">
+                  Rs {(Number(item.price || 0) * Number(item.quantity || 0)).toFixed(2)}
                 </p>
               </div>
             ))}

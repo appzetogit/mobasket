@@ -18598,7 +18598,20 @@ export default function DeliveryHome() {
       !(customerLat === 0 && customerLng === 0);
 
 
-    const shouldShowCustomerMarker = navigationMode === 'customer' && hasCustomerCoords;
+    const orderStatus = String(selectedRestaurant?.orderStatus || selectedRestaurant?.status || '').toLowerCase();
+    const deliveryPhase = String(selectedRestaurant?.deliveryPhase || selectedRestaurant?.deliveryState?.currentPhase || '').toLowerCase();
+    const deliveryStateStatus = String(selectedRestaurant?.deliveryState?.status || '').toLowerCase();
+    const isDeliveredOrCompleted =
+      orderStatus === 'delivered' ||
+      orderStatus === 'completed' ||
+      deliveryPhase === 'delivered' ||
+      deliveryPhase === 'completed' ||
+      deliveryStateStatus === 'delivered';
+
+    const shouldShowCustomerMarker =
+      navigationMode === 'customer' &&
+      hasCustomerCoords &&
+      !isDeliveredOrCompleted;
 
 
 
@@ -18727,7 +18740,22 @@ export default function DeliveryHome() {
     selectedRestaurant?.customerLng,
 
 
-    selectedRestaurant?.customerName
+    selectedRestaurant?.customerName,
+
+
+    selectedRestaurant?.orderStatus,
+
+
+    selectedRestaurant?.status,
+
+
+    selectedRestaurant?.deliveryPhase,
+
+
+    selectedRestaurant?.deliveryState?.currentPhase,
+
+
+    selectedRestaurant?.deliveryState?.status
 
 
   ])

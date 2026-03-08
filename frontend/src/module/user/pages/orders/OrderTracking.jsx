@@ -1887,7 +1887,8 @@ export default function OrderTracking() {
         </motion.button>
 
         {/* Delivery Details Banner */}
-        <motion.div
+        {!isDeliveryCompleted && (
+        <motion.div 
           className="bg-yellow-50 rounded-xl p-4 text-center"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1898,7 +1899,8 @@ export default function OrderTracking() {
               ? `Driver is ${driverDistanceKm < 1 ? `${Math.round(driverDistanceKm * 1000)} m` : `${driverDistanceKm.toFixed(1)} km`} from your location`
               : 'All your delivery details in one place 👇'}
           </p>
-        </motion.div>
+        </motion.div>
+        )}
 
         {/* Contact & Address Section */}
         <motion.div 

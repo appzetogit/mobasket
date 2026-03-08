@@ -329,15 +329,14 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     // Stale popups or a second click can hit this endpoint after the order already moved
     // to preparing/ready, and that should be treated as a successful accept.
     const alreadyAcceptedStatuses = ['preparing', 'ready'];
-    if (alreadyAcceptedStatuses.includes(order.status)) {
-      return successResponse(res, 200, 'Order already accepted', { order });
-    }
+    const wasAlreadyAccepted = alreadyAcceptedStatuses.includes(order.status);
 
-    // Allow accepting orders with status 'pending' or 'confirmed'
-    // 'confirmed' status means payment is verified, restaurant can still accept
-    if (!['pending', 'confirmed'].includes(order.status)) {
-      return errorResponse(res, 400, `Order cannot be accepted. Current status: ${order.status}`);
-    }
+    if (!wasAlreadyAccepted) {
+      // Allow accepting orders with status 'pending' or 'confirmed'
+      // 'confirmed' status means payment is verified, restaurant can still accept
+      if (!['pending', 'confirmed'].includes(order.status)) {
+        return errorResponse(res, 400, `Order cannot be accepted. Current status: ${order.status}`);
+      }
 
     // When restaurant accepts order, it means they're starting to prepare it
     // So set status to 'preparing' and mark as confirmed if it was pending
@@ -408,14 +407,17 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       console.error('Error sending notification:', notifError);
     }
 
-    // Notify user tracking room that restaurant accepted the order
-    try {
-      await emitOrderTrackingUpdate(order, {
-        status: 'preparing',
-        message: 'Restaurant accepted your order'
-      });
-    } catch (userNotifError) {
-      console.error('Error sending user accepted notification:', userNotifError);
+      // Notify user tracking room that restaurant accepted the order
+      try {
+        await emitOrderTrackingUpdate(order, {
+          status: 'preparing',
+          message: 'Restaurant accepted your order'
+        });
+      } catch (userNotifError) {
+        console.error('Error sending user accepted notification:', userNotifError);
+      }
+    } else {
+      console.log(`ℹ️ Order ${order.orderId} already in accepted state (${order.status}), re-running rider dispatch sync.`);
     }
 
     // Direct assignment fallback from restaurant accept flow.
@@ -624,7 +626,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       }
     }
 
-    return successResponse(res, 200, 'Order accepted successfully', {
+    return successResponse(res, 200, wasAlreadyAccepted ? 'Order already accepted' : 'Order accepted successfully', {
       order
     });
   } catch (error) {

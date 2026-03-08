@@ -69,25 +69,50 @@ const DeliveryTrackingMap = ({
   const [hasFirebaseRoute, setHasFirebaseRoute] = useState(false);
   const [firebaseCustomerCoords, setFirebaseCustomerCoords] = useState(null);
 
+  const normalizeCustomerCoords = useCallback((source) => {
+    if (!source || typeof source !== "object") return null;
+    const lat = Number(source.lat ?? source.latitude);
+    const lng = Number(source.lng ?? source.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    return { lat, lng };
+  }, []);
+
+  const savedOrderCustomerCoords = useMemo(() => {
+    const fromGeoJson = Array.isArray(order?.address?.location?.coordinates) && order.address.location.coordinates.length >= 2
+      ? { lat: Number(order.address.location.coordinates[1]), lng: Number(order.address.location.coordinates[0]) }
+      : Array.isArray(order?.address?.coordinates) && order.address.coordinates.length >= 2
+        ? { lat: Number(order.address.coordinates[1]), lng: Number(order.address.coordinates[0]) }
+        : null;
+
+    if (fromGeoJson && Number.isFinite(fromGeoJson.lat) && Number.isFinite(fromGeoJson.lng)) {
+      return fromGeoJson;
+    }
+
+    return normalizeCustomerCoords(order?.address?.location) || normalizeCustomerCoords(order?.address);
+  }, [order?.address, normalizeCustomerCoords]);
+
   const effectiveCustomerCoords = useMemo(() => {
-    if (
-      customerCoords &&
-      typeof customerCoords.lat === 'number' &&
-      typeof customerCoords.lng === 'number'
-    ) {
-      return customerCoords;
-    }
+    return (
+      savedOrderCustomerCoords ||
+      normalizeCustomerCoords(customerCoords) ||
+      normalizeCustomerCoords(firebaseCustomerCoords) ||
+      null
+    );
+  }, [savedOrderCustomerCoords, customerCoords, firebaseCustomerCoords, normalizeCustomerCoords]);
 
-    if (
-      firebaseCustomerCoords &&
-      typeof firebaseCustomerCoords.lat === 'number' &&
-      typeof firebaseCustomerCoords.lng === 'number'
-    ) {
-      return firebaseCustomerCoords;
-    }
-
-    return null;
-  }, [firebaseCustomerCoords, customerCoords]);
+  const isDeliveryCompleted = useMemo(() => {
+    const orderStatus = String(order?.status || '').toLowerCase();
+    const deliveryStatus = String(order?.deliveryState?.status || '').toLowerCase();
+    const deliveryPhase = String(order?.deliveryState?.currentPhase || '').toLowerCase();
+    return (
+      orderStatus === 'delivered' ||
+      orderStatus === 'completed' ||
+      deliveryStatus === 'delivered' ||
+      deliveryPhase === 'completed' ||
+      deliveryPhase === 'delivered'
+    );
+  }, [order?.status, order?.deliveryState?.status, order?.deliveryState?.currentPhase]);
 
   const renderPolylinePath = useCallback((points, isCustomerLeg = false) => {
     if (!mapInstance.current || !window.google?.maps || !Array.isArray(points) || points.length === 0) {
@@ -1325,7 +1350,7 @@ const DeliveryTrackingMap = ({
         }
 
         // Add customer marker with clean user pin icon (MoFood-style)
-        if (!mapInstance.current._customerMarker) {
+        if (!isDeliveryCompleted && !mapInstance.current._customerMarker) {
           const customerUserPinIconUrl = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
             <svg xmlns="http://www.w3.org/2000/svg" width="36" height="46" viewBox="0 0 36 46">
               <!-- Pin shape -->
@@ -1347,11 +1372,14 @@ const DeliveryTrackingMap = ({
             },
             zIndex: window.google.maps.Marker.MAX_ZINDEX + 1
           });
-        } else {
+        } else if (!isDeliveryCompleted && mapInstance.current._customerMarker) {
           mapInstance.current._customerMarker.setPosition({
             lat: effectiveCustomerCoords.lat,
             lng: effectiveCustomerCoords.lng
           });
+        } else if (isDeliveryCompleted && mapInstance.current._customerMarker) {
+          mapInstance.current._customerMarker.setMap(null);
+          mapInstance.current._customerMarker = null;
         }
         // Draw route based on order phase
         mapInstance.current.addListener('tilesloaded', () => {
@@ -1412,7 +1440,7 @@ const DeliveryTrackingMap = ({
         console.error('❌ Map initialization error:', error);
       }
     }
-  }, [restaurantCoords, effectiveCustomerCoords]); // Removed dependencies that cause re-initialization
+  }, [restaurantCoords, effectiveCustomerCoords, isDeliveryCompleted]); // Removed dependencies that cause re-initialization
 
   // Memoize restaurant and customer coordinates to avoid dependency issues
   const restaurantLat = restaurantCoords?.lat;
@@ -1425,14 +1453,24 @@ const DeliveryTrackingMap = ({
 
   // Keep customer marker pinned to saved order destination (Firebase coords preferred).
   useEffect(() => {
-    if (!isMapLoaded || !mapInstance.current || !effectiveCustomerCoords) return;
+    if (!isMapLoaded || !mapInstance.current) return;
+
+    if (isDeliveryCompleted) {
+      if (mapInstance.current._customerMarker) {
+        mapInstance.current._customerMarker.setMap(null);
+        mapInstance.current._customerMarker = null;
+      }
+      return;
+    }
+
+    if (!effectiveCustomerCoords) return;
     if (mapInstance.current._customerMarker) {
       mapInstance.current._customerMarker.setPosition({
         lat: effectiveCustomerCoords.lat,
         lng: effectiveCustomerCoords.lng
       });
     }
-  }, [isMapLoaded, effectiveCustomerCoords?.lat, effectiveCustomerCoords?.lng]);
+  }, [isMapLoaded, effectiveCustomerCoords?.lat, effectiveCustomerCoords?.lng, isDeliveryCompleted]);
 
   // Update route when delivery boy location or order phase changes
   useEffect(() => {
