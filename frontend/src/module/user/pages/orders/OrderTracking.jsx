@@ -979,7 +979,19 @@ export default function OrderTracking() {
   }, [modificationWindowSeconds])
 
   useEffect(() => {
-    const handleDriverDistanceUpdate = (event) => {
+    const isDeliveryCompletedNow =
+      orderStatus === "delivered" ||
+      String(order?.status || "").toLowerCase() === "delivered" ||
+      String(order?.status || "").toLowerCase() === "completed" ||
+      String(order?.deliveryState?.status || "").toLowerCase() === "delivered" ||
+      String(order?.deliveryState?.currentPhase || "").toLowerCase() === "completed"
+
+    if (isDeliveryCompletedNow) {
+      setDriverDistanceKm(null)
+      return
+    }
+
+    const handleDriverDistanceUpdate = (event) => {
       const detail = event?.detail || {}
       const eventOrderId = detail.orderId ? String(detail.orderId) : ""
       const currentOrderId = String(orderId || "")
@@ -997,7 +1009,7 @@ export default function OrderTracking() {
 
     window.addEventListener("driverDistanceUpdate", handleDriverDistanceUpdate)
     return () => window.removeEventListener("driverDistanceUpdate", handleDriverDistanceUpdate)
-  }, [orderId, order?.id])
+  }, [orderId, order?.id, orderStatus, order?.status, order?.deliveryState?.status, order?.deliveryState?.currentPhase])
 
   // Refetch order (e.g. after socket status update) so map gets latest deliveryState for blue polyline
   const refetchOrder = useCallback(async () => {
@@ -1544,10 +1556,14 @@ export default function OrderTracking() {
     }
   }
 
-  const shouldBackToHome =
+  const isDeliveryCompleted =
     orderStatus === "delivered" ||
     String(order?.status || "").toLowerCase() === "delivered" ||
-    String(order?.status || "").toLowerCase() === "completed"
+    String(order?.status || "").toLowerCase() === "completed" ||
+    String(order?.deliveryState?.status || "").toLowerCase() === "delivered" ||
+    String(order?.deliveryState?.currentPhase || "").toLowerCase() === "completed"
+
+  const shouldBackToHome = isDeliveryCompleted
 
   useEffect(() => {
     if (!shouldBackToHome) return
@@ -1769,7 +1785,7 @@ export default function OrderTracking() {
       </div>
 
       {/* Map Section */}
-      {!isPlanSubscriptionOrder && (
+      {!isPlanSubscriptionOrder && !isDeliveryCompleted && (
         <DeliveryMap
           orderId={orderId}
           order={order}

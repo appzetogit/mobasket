@@ -234,20 +234,9 @@ export const useDeliveryNotifications = (options = {}) => {
       ''
     ).toLowerCase();
     const deliveryStateStatus = String(orderData?.deliveryState?.status || '').toLowerCase();
-    const orderDeliveryPartnerId = String(
-      orderData?.deliveryPartnerId?._id ||
-      orderData?.deliveryPartnerId ||
-      orderData?.assignmentInfo?.deliveryPartnerId ||
-      ''
-    );
-    const currentDeliveryId = String(deliveryPartnerId || '');
     const notificationPhase = String(orderData?.assignmentInfo?.notificationPhase || '').toLowerCase();
 
-    const isAssignedToCurrentPartner =
-      currentDeliveryId && orderDeliveryPartnerId && currentDeliveryId === orderDeliveryPartnerId;
-
     return (
-      isAssignedToCurrentPartner ||
       notificationPhase === 'accepted' ||
       status === 'out_for_delivery' ||
       status === 'picked_up' ||

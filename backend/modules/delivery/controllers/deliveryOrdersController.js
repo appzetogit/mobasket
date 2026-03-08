@@ -229,6 +229,57 @@ const resolveStoreEntityByIdentifier = async (storeIdentifier) => {
   return { entity, source, platform };
 };
 
+const buildStoreAddress = (store, fallback = '') => {
+  if (!store || typeof store !== 'object') return fallback;
+
+  const location = store.location || {};
+  const composed = [
+    location.addressLine1 || location.street,
+    location.addressLine2,
+    location.area,
+    location.city,
+    location.state,
+    location.pincode || location.zipCode || location.postalCode
+  ]
+    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+    .filter(Boolean)
+    .join(', ');
+
+  return (
+    (typeof location.formattedAddress === 'string' && location.formattedAddress.trim()) ||
+    (typeof location.address === 'string' && location.address.trim()) ||
+    (typeof store.address === 'string' && store.address.trim()) ||
+    composed ||
+    fallback
+  );
+};
+
+const buildStoreLocationPayload = (store, resolvedAddress = '') => {
+  const location = store?.location || null;
+  if (!location || typeof location !== 'object') return null;
+
+  const coords = Array.isArray(location.coordinates) ? location.coordinates : [];
+  const lngFromCoords = Number(coords[0]);
+  const latFromCoords = Number(coords[1]);
+  const latFromFields = Number(location.latitude);
+  const lngFromFields = Number(location.longitude);
+
+  const lat = Number.isFinite(latFromCoords) ? latFromCoords : (Number.isFinite(latFromFields) ? latFromFields : null);
+  const lng = Number.isFinite(lngFromCoords) ? lngFromCoords : (Number.isFinite(lngFromFields) ? lngFromFields : null);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  return {
+    latitude: Number(lat),
+    longitude: Number(lng),
+    address:
+      (typeof location.formattedAddress === 'string' && location.formattedAddress.trim()) ||
+      (typeof location.address === 'string' && location.address.trim()) ||
+      resolvedAddress ||
+      ''
+  };
+};
+
 const emitOrderClaimedToOtherPartners = async (orderLike, claimedByDeliveryId, assignmentInfo = {}) => {
   try {
     const serverModule = await import('../../../server.js');
@@ -396,9 +447,15 @@ export const getOrders = asyncHandler(async (req, res) => {
               ]
             },
             {
-              'assignmentInfo.zoneId': {
-                $in: currentZoneIds
-              }
+              $or: [
+                {
+                  'assignmentInfo.zoneId': {
+                    $in: currentZoneIds
+                  }
+                },
+                { 'assignmentInfo.zoneId': { $exists: false } },
+                { 'assignmentInfo.zoneId': null }
+              ]
             }
           ]
         }
@@ -448,8 +505,42 @@ export const getOrders = asyncHandler(async (req, res) => {
     const ordersWithEstimatedEarnings = await Promise.all(
       orders.map(async (order) => {
         try {
+          let resolvedStore = order?.restaurantId && typeof order.restaurantId === 'object'
+            ? order.restaurantId
+            : null;
+          let resolvedPlatform = order?.restaurantPlatform || null;
+
+          if (!resolvedStore) {
+            const resolvedStoreInfo = await resolveStoreEntityByIdentifier(order?.restaurantId);
+            resolvedStore = resolvedStoreInfo?.entity || null;
+            resolvedPlatform = resolvedStoreInfo?.platform || resolvedPlatform;
+          }
+
+          const resolvedAddress = buildStoreAddress(
+            resolvedStore,
+            typeof order?.restaurantAddress === 'string' ? order.restaurantAddress : ''
+          );
+          const resolvedLocation = buildStoreLocationPayload(resolvedStore, resolvedAddress);
+
           return {
             ...order,
+            restaurantPlatform: resolvedPlatform || order?.restaurantPlatform || 'mofood',
+            restaurantName:
+              order?.restaurantName ||
+              resolvedStore?.name ||
+              (resolvedPlatform === 'mogrocery' ? 'Store' : 'Restaurant'),
+            restaurantAddress: resolvedAddress || order?.restaurantAddress || '',
+            restaurantLocation: resolvedLocation || order?.restaurantLocation || null,
+            restaurantId:
+              resolvedStore && typeof resolvedStore === 'object'
+                ? {
+                    ...(typeof order?.restaurantId === 'object' ? order.restaurantId : {}),
+                    _id: resolvedStore?._id || order?.restaurantId,
+                    name: resolvedStore?.name || order?.restaurantName || 'Store',
+                    address: resolvedAddress || resolvedStore?.address || '',
+                    location: resolvedStore?.location || order?.restaurantId?.location || null
+                  }
+                : order?.restaurantId,
             estimatedEarnings: await buildEstimatedEarnings(order)
           };
         } catch (error) {

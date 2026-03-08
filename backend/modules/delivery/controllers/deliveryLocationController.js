@@ -185,9 +185,22 @@ export const updateLocation = asyncHandler(async (req, res) => {
         try {
           const activeOrder = await Order.findOne({
             deliveryPartnerId: delivery._id,
-            status: { $in: ['accepted', 'preparing', 'ready', 'out_for_delivery'] }
+            $or: [
+              { status: { $in: ['confirmed', 'preparing', 'ready', 'out_for_delivery'] } },
+              {
+                'deliveryState.status': {
+                  $in: ['accepted', 'reached_pickup', 'order_confirmed', 'en_route_to_delivery', 'reached_drop']
+                }
+              },
+              {
+                'deliveryState.currentPhase': {
+                  $in: ['en_route_to_pickup', 'at_pickup', 'picked_up', 'en_route_to_delivery', 'at_delivery']
+                }
+              }
+            ]
           })
             .select('_id orderId')
+            .sort({ updatedAt: -1, createdAt: -1 })
             .lean();
           if (activeOrder) {
             const aliases = [

@@ -88,8 +88,8 @@ import {
 
 } from "lucide-react"
 
-const DELIVERY_SWIPE_CONFIRM_THRESHOLD = 0.3
-const DELIVERY_SWIPE_START_THRESHOLD_PX = 2
+const DELIVERY_SWIPE_CONFIRM_THRESHOLD = 0.18
+const DELIVERY_SWIPE_START_THRESHOLD_PX = 1
 
 
 import BottomPopup from "../components/BottomPopup"
@@ -1038,6 +1038,9 @@ function resolveStoreAddressFromOrder(order, fallback = "Restaurant address") {
 
 
   const orderRestaurantLocation = order?.restaurantLocation || {}
+  const fullOrder = order?.fullOrder && typeof order?.fullOrder === "object" ? order.fullOrder : null
+  const fullOrderStore = fullOrder?.restaurantId && typeof fullOrder?.restaurantId === "object" ? fullOrder.restaurantId : null
+  const fullOrderStoreLocation = fullOrderStore?.location || {}
 
 
 
@@ -1079,7 +1082,15 @@ function resolveStoreAddressFromOrder(order, fallback = "Restaurant address") {
     buildAddressFromLocation(orderRestaurantLocation),
 
 
-    order?.restaurantAddress
+    order?.restaurantAddress,
+    fullOrderStoreLocation?.formattedAddress,
+    fullOrderStoreLocation?.address,
+    buildAddressFromLocation(fullOrderStoreLocation),
+    fullOrderStore?.address,
+    fullOrder?.restaurantAddress,
+    fullOrder?.restaurantLocation?.formattedAddress,
+    fullOrder?.restaurantLocation?.address,
+    buildAddressFromLocation(fullOrder?.restaurantLocation || {})
 
 
   ]
@@ -1125,6 +1136,9 @@ function resolveStoreCoordsFromOrder(order) {
 
 
   const orderRestaurantLocation = order?.restaurantLocation || {}
+  const fullOrder = order?.fullOrder && typeof order?.fullOrder === "object" ? order.fullOrder : null
+  const fullOrderStore = fullOrder?.restaurantId && typeof fullOrder?.restaurantId === "object" ? fullOrder.restaurantId : null
+  const fullOrderStoreLocation = fullOrderStore?.location || {}
 
 
 
@@ -1197,6 +1211,54 @@ function resolveStoreCoordsFromOrder(order) {
 
 
       lng: Number(orderRestaurantLocation.longitude)
+
+
+    }
+
+
+  }
+
+
+
+
+
+  if (Array.isArray(fullOrderStoreLocation?.coordinates) && fullOrderStoreLocation.coordinates.length >= 2) {
+
+
+    const lat = Number(fullOrderStoreLocation.coordinates[1])
+
+
+    const lng = Number(fullOrderStoreLocation.coordinates[0])
+
+
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng }
+
+
+  }
+
+
+
+
+
+  if (
+
+
+    Number.isFinite(Number(fullOrderStoreLocation?.latitude)) &&
+
+
+    Number.isFinite(Number(fullOrderStoreLocation?.longitude))
+
+
+  ) {
+
+
+    return {
+
+
+      lat: Number(fullOrderStoreLocation.latitude),
+
+
+      lng: Number(fullOrderStoreLocation.longitude)
 
 
     }
@@ -7867,10 +7929,6 @@ export default function DeliveryHome() {
 
 
   }
-
-
-
-
 
   const handleNewOrderAcceptTouchMove = (e) => {
 

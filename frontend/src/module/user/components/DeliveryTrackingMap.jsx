@@ -60,8 +60,8 @@ const DeliveryTrackingMap = ({
   const mapInitializedRef = useRef(false);
   const directionsCacheRef = useRef(new Map()); // Cache for locally generated route paths
   const lastRouteRequestRef = useRef({ start: null, end: null, timestamp: 0 });
-  const SOCKET_LOCATION_REFRESH_INTERVAL_MS = 3000;
-  const SOCKET_LOCATION_STALE_THRESHOLD_MS = 6000;
+  const SOCKET_LOCATION_REFRESH_INTERVAL_MS = 1500;
+  const SOCKET_LOCATION_STALE_THRESHOLD_MS = 2000;
   const ROUTE_RECALC_MIN_INTERVAL_MS = 2500;
 
   const backendUrl = SOCKET_BASE_URL;
@@ -115,8 +115,8 @@ const DeliveryTrackingMap = ({
       path: normalizedPath,
       geodesic: true,
       strokeColor: activeColor,
-      strokeOpacity: 0.8,
-      strokeWeight: 4,
+      strokeOpacity: 0.95,
+      strokeWeight: 6,
       icons: [{
         icon: {
           path: 'M 0,-1 0,1',
@@ -129,7 +129,7 @@ const DeliveryTrackingMap = ({
         repeat: '15px'
       }],
       map: mapInstance.current,
-      zIndex: 1
+      zIndex: 10
     });
 
     if (bikeMarkerRef.current && !animationControllerRef.current) {
@@ -640,9 +640,16 @@ const DeliveryTrackingMap = ({
               nearest.segmentIndex
             );
             if (routePolylineRef.current && Array.isArray(trimmedRoute) && trimmedRoute.length > 0) {
-              visibleRoutePolylinePointsRef.current = trimmedRoute;
+              let visibleRoute = trimmedRoute;
+              if (visibleRoute.length < 2 && routePolylinePointsRef.current.length > 1) {
+                const lastPoint = routePolylinePointsRef.current[routePolylinePointsRef.current.length - 1];
+                if (lastPoint && (Number(lastPoint.lat) !== Number(visibleRoute[0]?.lat) || Number(lastPoint.lng) !== Number(visibleRoute[0]?.lng))) {
+                  visibleRoute = [visibleRoute[0], lastPoint];
+                }
+              }
+              visibleRoutePolylinePointsRef.current = visibleRoute;
               routePolylineRef.current.setPath(
-                trimmedRoute.map((point) => ({
+                visibleRoute.map((point) => ({
                   lat: Number(point?.lat),
                   lng: Number(point?.lng)
                 }))
@@ -807,12 +814,11 @@ const DeliveryTrackingMap = ({
         socketRef.current.emit('request-current-location', alias);
       });
 
-      // Fallback sync: request current location quickly when stream is stale.
+      // Fallback sync: aggressively request current location so user map stays in sync with rider app.
       const locationRequestInterval = setInterval(() => {
         const now = Date.now();
         const isLiveUpdateStale = (now - (lastLiveLocationUpdateAtRef.current || 0)) > SOCKET_LOCATION_STALE_THRESHOLD_MS;
-        const hasFirebaseStream = Boolean(activeFirebaseAliasRef.current);
-        if (socketRef.current && socketRef.current.connected && (isLiveUpdateStale || !hasFirebaseStream)) {
+        if (socketRef.current && socketRef.current.connected && isLiveUpdateStale) {
           orderAliases.forEach((alias) => {
             socketRef.current.emit('request-current-location', alias);
           });
@@ -1481,10 +1487,8 @@ const DeliveryTrackingMap = ({
 
     const route = getRouteToShow();
     if (!route.start || !route.end) {
-      if (routePolylineRef.current) {
-        routePolylineRef.current.setMap(null);
-        routePolylineRef.current = null;
-      }
+      // Keep the previously drawn route during transient location/state gaps.
+      // This prevents rider->customer polyline flicker/disappearance while zooming/refreshing.
       return;
     }
     if (route.start && route.end) {

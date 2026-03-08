@@ -351,7 +351,7 @@ export default function FoodDetailPage() {
           <div className="absolute bottom-0 left-0 h-1 bg-emerald-500 w-full" />
         </div>
       ),
-      { duration: 1600, position: "bottom-right" },
+      { duration: 1600, position: "top-center" },
     );
   };
 

@@ -332,7 +332,7 @@ export function CategoryFoodsContent({
       ),
       {
         duration: 2000,
-        position: "bottom-right",
+        position: "top-center",
       },
     );
   };
