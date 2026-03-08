@@ -83,6 +83,16 @@ const environmentVariableSchema = new mongoose.Schema(
       default: '',
       trim: true
     },
+    FIREBASE_VAPID_KEY: {
+      type: String,
+      default: '',
+      trim: true
+    },
+    FIREBASE_VAPID_SECRET_KEY: {
+      type: String,
+      default: '',
+      trim: true
+    },
     
     // SMTP
     SMTP_HOST: {
@@ -181,6 +191,7 @@ environmentVariableSchema.methods.toEnvObject = function() {
     'FIREBASE_API_KEY',
     'FIREBASE_CLIENT_EMAIL',
     'FIREBASE_PRIVATE_KEY',
+    'FIREBASE_VAPID_SECRET_KEY',
     'SMTP_USER',
     'SMTP_PASS',
     'SMSINDIAHUB_API_KEY',
@@ -211,6 +222,7 @@ environmentVariableSchema.pre('save', function(next) {
     'FIREBASE_API_KEY',
     'FIREBASE_CLIENT_EMAIL',
     'FIREBASE_PRIVATE_KEY',
+    'FIREBASE_VAPID_SECRET_KEY',
     'SMTP_USER',
     'SMTP_PASS',
     'SMSINDIAHUB_API_KEY',

@@ -13,6 +13,7 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '',
   databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || 'https://mobasket-83a5e-default-rtdb.asia-southeast1.firebasedatabase.app/'
 };
+const firebaseVapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY || '';
 
 // Validate Firebase configuration
 const requiredFields = ['apiKey', 'authDomain', 'projectId', 'appId', 'messagingSenderId'];
@@ -67,6 +68,6 @@ function ensureFirebaseInitialized() {
 ensureFirebaseInitialized();
 
 export const firebaseApp = app;
-export { firebaseAuth, googleProvider, realtimeDb, ensureFirebaseInitialized };
+export { firebaseAuth, googleProvider, realtimeDb, ensureFirebaseInitialized, firebaseVapidKey };
 
 

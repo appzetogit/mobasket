@@ -131,7 +131,9 @@ export default function FirebaseNotification() {
     authDomain: "zomato-607fa.firebaseapp.com",
     appId: "1:1065631021082:web:7424afd0ad2054ed6879a3",
     storageBucket: "zomato-607fa.firebasestorage.app",
-    measurementId: "G-7JJV7JYVRX"
+    measurementId: "G-7JJV7JYVRX",
+    vapidPublicKey: "",
+    vapidSecretKey: ""
   })
 
   const handleMessageToggle = (id) => {
@@ -166,7 +168,9 @@ export default function FirebaseNotification() {
       authDomain: "zomato-607fa.firebaseapp.com",
       appId: "1:1065631021082:web:7424afd0ad2054ed6879a3",
       storageBucket: "zomato-607fa.firebasestorage.app",
-      measurementId: "G-7JJV7JYVRX"
+      measurementId: "G-7JJV7JYVRX",
+      vapidPublicKey: "",
+      vapidSecretKey: ""
     })
   }
 
@@ -385,6 +389,32 @@ export default function FirebaseNotification() {
                     value={firebaseConfig.measurementId}
                     onChange={(e) => handleFirebaseConfigChange("measurementId", e.target.value)}
                     placeholder="Ex: F-12345678"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    VAPID Public Key
+                  </label>
+                  <input
+                    type="text"
+                    value={firebaseConfig.vapidPublicKey}
+                    onChange={(e) => handleFirebaseConfigChange("vapidPublicKey", e.target.value)}
+                    placeholder="Used by frontend getToken({ vapidKey })"
+                    className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                    VAPID Secret Key
+                  </label>
+                  <input
+                    type="password"
+                    value={firebaseConfig.vapidSecretKey}
+                    onChange={(e) => handleFirebaseConfigChange("vapidSecretKey", e.target.value)}
+                    placeholder="Backend use only"
                     className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
