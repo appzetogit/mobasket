@@ -14,6 +14,92 @@ function calculateDistanceMeters(lat1, lng1, lat2, lng2) {
   return R * c
 }
 
+function getSavedAddressLocation() {
+  try {
+    const rawAddresses = localStorage.getItem("userAddresses")
+    if (!rawAddresses) return null
+
+    const parsedAddresses = JSON.parse(rawAddresses)
+    if (!Array.isArray(parsedAddresses) || parsedAddresses.length === 0) {
+      return null
+    }
+
+    const selectedAddress =
+      parsedAddresses.find((address) => address?.isDefault) || parsedAddresses[0]
+
+    if (!selectedAddress || typeof selectedAddress !== "object") {
+      return null
+    }
+
+    const coordinates = Array.isArray(selectedAddress?.location?.coordinates)
+      ? selectedAddress.location.coordinates
+      : Array.isArray(selectedAddress?.coordinates)
+        ? selectedAddress.coordinates
+        : null
+
+    const latitude = Number(
+      selectedAddress?.latitude ??
+      selectedAddress?.lat ??
+      selectedAddress?.location?.latitude ??
+      selectedAddress?.location?.lat ??
+      (coordinates ? coordinates[1] : undefined)
+    )
+
+    const longitude = Number(
+      selectedAddress?.longitude ??
+      selectedAddress?.lng ??
+      selectedAddress?.location?.longitude ??
+      selectedAddress?.location?.lng ??
+      (coordinates ? coordinates[0] : undefined)
+    )
+
+    const formattedAddress = String(
+      selectedAddress?.formattedAddress ||
+      [
+        selectedAddress?.addressLine1,
+        selectedAddress?.street,
+        selectedAddress?.area || selectedAddress?.location?.area,
+        selectedAddress?.city || selectedAddress?.location?.city,
+        selectedAddress?.state || selectedAddress?.location?.state,
+        selectedAddress?.zipCode || selectedAddress?.postalCode || selectedAddress?.pincode,
+      ].filter(Boolean).join(", ")
+    ).trim()
+
+    const address = String(
+      selectedAddress?.address ||
+      selectedAddress?.street ||
+      selectedAddress?.addressLine1 ||
+      formattedAddress
+    ).trim()
+
+    if (!formattedAddress) return null
+
+    return {
+      ...selectedAddress,
+      latitude: Number.isFinite(latitude) ? latitude : undefined,
+      longitude: Number.isFinite(longitude) ? longitude : undefined,
+      city: selectedAddress?.city || selectedAddress?.location?.city || "",
+      state: selectedAddress?.state || selectedAddress?.location?.state || "",
+      area:
+        selectedAddress?.area ||
+        selectedAddress?.location?.area ||
+        selectedAddress?.additionalDetails ||
+        selectedAddress?.label ||
+        "",
+      address,
+      formattedAddress,
+      zipCode:
+        selectedAddress?.zipCode ||
+        selectedAddress?.postalCode ||
+        selectedAddress?.pincode ||
+        "",
+      lastUpdated: Date.now(),
+    }
+  } catch {
+    return null
+  }
+}
+
 export function useLocation() {
   const [location, setLocation] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -34,6 +120,25 @@ export function useLocation() {
   const MIN_DB_WRITE_DISTANCE_M = 25
   const DB_UNAVAILABLE_BACKOFF_MS = 120000
   const LOCATION_STALE_MS = 15 * 60 * 1000
+
+  useEffect(() => {
+    const applySavedAddressLocation = () => {
+      const savedAddressLocation = getSavedAddressLocation()
+      if (!savedAddressLocation) return
+
+      localStorage.setItem("userLocation", JSON.stringify(savedAddressLocation))
+      setLocation(savedAddressLocation)
+      setPermissionGranted(true)
+      setLoading(false)
+      setError(null)
+      stopWatchingLocation()
+    }
+
+    window.addEventListener("userAddressesChanged", applySavedAddressLocation)
+    return () => {
+      window.removeEventListener("userAddressesChanged", applySavedAddressLocation)
+    }
+  }, [])
 
   /* ===================== DB UPDATE (LIVE LOCATION TRACKING) ===================== */
   const updateLocationInDB = async (locationData) => {
@@ -1974,6 +2079,19 @@ export function useLocation() {
 
   /* ===================== INIT ===================== */
   useEffect(() => {
+    const savedAddressLocation = getSavedAddressLocation()
+    if (savedAddressLocation) {
+      localStorage.setItem("userLocation", JSON.stringify(savedAddressLocation))
+      setLocation(savedAddressLocation)
+      setPermissionGranted(true)
+      setLoading(false)
+      setError(null)
+
+      return () => {
+        stopWatchingLocation()
+      }
+    }
+
     // Load stored location first for IMMEDIATE display (no loading state)
     const stored = localStorage.getItem("userLocation")
     let shouldForceRefresh = false

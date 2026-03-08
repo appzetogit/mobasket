@@ -83,6 +83,33 @@ export default function HomePage() {
     return null;
   };
 
+  const resolveSavedAddress = () => {
+    const defaultAddress = getDefaultAddress?.();
+    const defaultAddressId = String(defaultAddress?._id || defaultAddress?.id || "").trim();
+
+    if (defaultAddressId && Array.isArray(addresses) && addresses.length > 0) {
+      const hydratedDefault = addresses.find(
+        (address) => String(address?._id || address?.id || "").trim() === defaultAddressId,
+      );
+      if (hydratedDefault) return hydratedDefault;
+    }
+
+    if (defaultAddress) return defaultAddress;
+
+    if (Array.isArray(persistedAddresses) && persistedAddresses.length > 0) {
+      return (
+        persistedAddresses.find((address) => address?.isDefault) ||
+        persistedAddresses[0]
+      );
+    }
+
+    if (Array.isArray(addresses) && addresses.length > 0) {
+      return addresses.find((address) => address?.isDefault) || addresses[0];
+    }
+
+    return null;
+  };
+
   // Function to extract location parts for display
   // Main location: First 2 parts only (e.g., "Mama Loca, G-2")
   // Sub location: City and State (e.g., "New Palasia, Indore")
@@ -168,15 +195,7 @@ export default function HomePage() {
   }, [addresses]);
 
   const selectedAddress = useMemo(() => {
-    if (Array.isArray(persistedAddresses) && persistedAddresses.length > 0) {
-      return persistedAddresses.find((address) => address?.isDefault) || persistedAddresses[0];
-    }
-
-    const defaultAddress = getDefaultAddress?.();
-    if (defaultAddress) return defaultAddress;
-    if (Array.isArray(addresses) && addresses.length > 0) return addresses[0];
-
-    return null;
+    return resolveSavedAddress();
   }, [addresses, getDefaultAddress, persistedAddresses]);
 
   useEffect(() => {

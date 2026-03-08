@@ -27,6 +27,7 @@ import { useCart } from "../../user/context/CartContext";
 import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
 import { useLocationSelector } from "../../user/components/UserLayout";
+import { useProfile } from "../../user/context/ProfileContext";
 import { CategoryFoodsContent } from "./CategoryFoodsPage";
 import AddToCartAnimation from "../../user/components/AddToCartAnimation";
 import api, { restaurantAPI, userAPI } from "@/lib/api";
@@ -35,11 +36,36 @@ import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
 // Icons
 import imgBag3D from "@/assets/icons/shopping-bag_18008822.png";
 
+const formatSavedAddressForHeader = (address) => {
+  if (!address || typeof address !== "object") return "";
+
+  const formattedAddress = String(
+    address?.formattedAddress ||
+      address?.address ||
+      "",
+  ).trim();
+  if (formattedAddress) return formattedAddress;
+
+  const fallbackParts = [
+    address?.addressLine1,
+    address?.street,
+    address?.area || address?.location?.area,
+    address?.city || address?.location?.city,
+    address?.state || address?.location?.state,
+    address?.zipCode || address?.postalCode || address?.pincode,
+  ]
+    .map((part) => (typeof part === "string" ? part.trim() : ""))
+    .filter(Boolean);
+
+  return fallbackParts.join(", ");
+};
+
 const GroceryPage = () => {
   const FALLBACK_IMAGE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
   const navigate = useNavigate();
   const routerLocation = useRouterLocation();
   const { getGroceryCartCount, addToCart, isInCart } = useCart();
+  const { addresses, getDefaultAddress } = useProfile();
   const { location: userLocation, loading: locationLoading } = useUserLocation();
   const { openLocationSelector } = useLocationSelector();
   const { zoneId, refreshZone, loading: zoneLoading } = useZone(userLocation, "mogrocery");
@@ -1491,7 +1517,26 @@ const GroceryPage = () => {
     return Math.max(8, Math.min(60, Math.round(8 + activeDistanceKm * 4)));
   }, [nearestStoreDistanceKm, selectedStoreDistanceKm, selectedStoreId]);
 
+  const savedHeaderAddress = useMemo(() => {
+    const defaultAddress = getDefaultAddress?.();
+    const defaultAddressId = String(defaultAddress?._id || defaultAddress?.id || "").trim();
+
+    if (defaultAddressId && Array.isArray(addresses)) {
+      const hydratedDefault = addresses.find(
+        (address) => String(address?._id || address?.id || "").trim() === defaultAddressId,
+      );
+      const hydratedDisplay = formatSavedAddressForHeader(hydratedDefault);
+      if (hydratedDisplay) return hydratedDisplay;
+    }
+
+    return formatSavedAddressForHeader(defaultAddress);
+  }, [addresses, getDefaultAddress]);
+
   const topAddress = useMemo(() => {
+    if (savedHeaderAddress) {
+      return savedHeaderAddress;
+    }
+
     const formattedAddress = (userLocation?.formattedAddress || "").trim();
     if (formattedAddress) {
       return formattedAddress;
@@ -1519,7 +1564,7 @@ const GroceryPage = () => {
     return (
       "Select your location"
     );
-  }, [userLocation]);
+  }, [savedHeaderAddress, userLocation]);
 
   const handleBestSellerClick = (item) => {
     if (item.itemType === "category" && item.itemId) {
