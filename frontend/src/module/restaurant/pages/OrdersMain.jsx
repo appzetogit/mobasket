@@ -561,21 +561,25 @@ export default function OrdersMain() {
   const shownOrdersRef = useRef(new Set()) // Track orders already shown in popup
   const [restaurantStatus, setRestaurantStatus] = useState({
     isActive: null,
+    status: null,
     rejectionReason: null,
     onboarding: null,
     isLoading: true
   })
   const [isReverifying, setIsReverifying] = useState(false)
-  const hasCompletedRestaurantOnboarding =
-    !isGroceryStore && restaurantStatus.onboarding?.completedSteps === 4
+  const completedOnboardingSteps = Number(restaurantStatus.onboarding?.completedSteps || 0)
+  const normalizedVerificationStatus = String(restaurantStatus.status || "").trim().toLowerCase()
+  const hasCompletedVerificationSubmission = isGroceryStore
+    ? completedOnboardingSteps >= 1
+    : completedOnboardingSteps === 4 || (normalizedVerificationStatus && normalizedVerificationStatus !== "onboarding")
   const hasRejectedVerification = Boolean(
-    !isGroceryStore && String(restaurantStatus.rejectionReason || "").trim()
+    String(restaurantStatus.rejectionReason || "").trim()
   )
   const canAccessLiveOrders =
-    isGroceryStore || restaurantStatus.isActive === true
+    restaurantStatus.isActive === true
   const shouldShowVerificationState =
     !restaurantStatus.isLoading &&
-    (hasCompletedRestaurantOnboarding || hasRejectedVerification) &&
+    (hasCompletedVerificationSubmission || hasRejectedVerification) &&
     restaurantStatus.isActive !== true
 
   useEffect(() => {
@@ -638,13 +642,20 @@ export default function OrdersMain() {
           ? (response?.data?.data?.store || response?.data?.store || response?.data?.data?.restaurant || response?.data?.restaurant)
           : (response?.data?.data?.restaurant || response?.data?.restaurant)
         if (restaurant) {
+          const normalizedStatus = String(restaurant.status || "").trim().toLowerCase()
           setRestaurantStatus({
             isActive: restaurant.isActive,
+            status: restaurant.status || null,
             rejectionReason: restaurant.rejectionReason || null,
             onboarding: restaurant.onboarding || null,
             isLoading: false
           })
           
+          // Once the restaurant has moved past onboarding, keep them on /restaurant.
+          if (normalizedStatus && normalizedStatus !== "onboarding") {
+            return
+          }
+
           // Restaurant onboarding redirection should be based on computed status,
           // not only onboarding.completedSteps (which can be stale/missing for old accounts).
           if (!isGroceryStore) {
@@ -711,6 +722,7 @@ export default function OrdersMain() {
       if (restaurant) {
         setRestaurantStatus({
           isActive: restaurant.isActive,
+          status: restaurant.status || null,
           rejectionReason: restaurant.rejectionReason || null,
           onboarding: restaurant.onboarding || null,
           isLoading: false
@@ -1479,27 +1491,37 @@ export default function OrdersMain() {
                   </div>
                 </div>
                 <p className="text-sm text-gray-700 mb-3">
-                  Please correct the above issues and click "Reverify" to resubmit your request for approval.
+                  {isGroceryStore
+                    ? "Your grocery store verification was declined. Update the submitted details from onboarding and contact admin support to review it again."
+                    : 'Please correct the above issues and click "Reverify" to resubmit your request for approval.'}
                 </p>
-                <button
-                  onClick={handleReverify}
-                  disabled={isReverifying}
-                  className="w-full px-6 py-2.5 bg-blue-600 text-white rounded-lg font-semibold text-sm hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                >
-                  {isReverifying ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Submitting...
-                    </>
-                  ) : (
-                    "Reverify"
-                  )}
-                </button>
+                {!isGroceryStore && (
+                  <button
+                    onClick={handleReverify}
+                    disabled={isReverifying}
+                    className="w-full px-6 py-2.5 bg-blue-600 text-white rounded-lg font-semibold text-sm hover:bg-blue-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {isReverifying ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      "Reverify"
+                    )}
+                  </button>
+                )}
               </>
             ) : (
               <>
-                <h3 className="text-lg font-bold text-gray-900 mb-1">Verification Done in 24 Hours</h3>
-                <p className="text-sm text-gray-600">Your account is under verification. You'll be notified once approved.</p>
+                <h3 className="text-lg font-bold text-gray-900 mb-1">
+                  {isGroceryStore ? "Verification pending" : "Verification Done in 24 Hours"}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  {isGroceryStore
+                    ? "Your store details have been submitted successfully. You can access the dashboard after admin approval."
+                    : "Your account is under verification. You'll be notified once approved."}
+                </p>
               </>
             )}
           </motion.div>

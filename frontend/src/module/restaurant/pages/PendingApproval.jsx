@@ -5,6 +5,7 @@ import { Clock, CheckCircle2, PhoneCall, LogOut, ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { clearRestaurantSignupSession, clearStoreSignupSession } from "@/lib/utils/auth"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
+import { groceryStoreAPI, restaurantAPI } from "@/lib/api"
 
 export default function PendingApproval() {
     const navigate = useNavigate()
@@ -25,6 +26,43 @@ export default function PendingApproval() {
             console.error("Error loading user data:", error)
         }
     }, [isStore])
+
+    useEffect(() => {
+        let cancelled = false
+
+        const syncApprovalState = async () => {
+            try {
+                const response = isStore
+                    ? await groceryStoreAPI.getCurrentStore()
+                    : await restaurantAPI.getCurrentRestaurant()
+
+                const entity = isStore
+                    ? (response?.data?.data?.store || response?.data?.store || response?.data?.data?.restaurant || response?.data?.restaurant)
+                    : (response?.data?.data?.restaurant || response?.data?.restaurant)
+
+                if (!entity || cancelled) {
+                    return
+                }
+
+                const module = isStore ? "grocery-store" : "restaurant"
+                const normalizedStatus = String(entity.status || "").trim().toLowerCase()
+                localStorage.setItem(`${module}_user`, JSON.stringify(entity))
+                setUserName(entity.ownerName || entity.name || "Restaurant Owner")
+
+                if (entity.isActive === true || (normalizedStatus && normalizedStatus !== "pending" && normalizedStatus !== "onboarding")) {
+                    navigate(isStore ? "/store" : "/restaurant", { replace: true })
+                }
+            } catch (error) {
+                console.error("Error syncing approval status:", error)
+            }
+        }
+
+        syncApprovalState()
+
+        return () => {
+            cancelled = true
+        }
+    }, [isStore, navigate])
 
     const handleLogout = () => {
         if (isStore) {

@@ -4054,7 +4054,8 @@ export default function DeliveryHome() {
     Number.isFinite(Number(walletState?.availableCashLimit))
       ? Number(walletState.availableCashLimit)
       : Math.max(0, totalCashLimit - cashInHand)
-  const isCashInHandLimitReached = cashInHand >= totalCashLimit
+  const isCashInHandLimitReached =
+    totalCashLimit > 0 && cashInHand >= totalCashLimit
   const isMapLockedForOrderEligibility = isCashInHandLimitReached
 
 

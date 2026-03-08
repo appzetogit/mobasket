@@ -23,34 +23,12 @@ const isStepComplete = (stepData, stepNumber) => {
       stepData.deliveryTimings?.openingTime &&
       stepData.deliveryTimings?.closingTime &&
       Array.isArray(stepData.openDays) &&
-      stepData.openDays.length > 0 &&
-      // Check for menu images (must have at least one)
-      Array.isArray(stepData.menuImageUrls) &&
-      stepData.menuImageUrls.length > 0 &&
-      // Check for profile image
-      stepData.profileImageUrl &&
-      (stepData.profileImageUrl.url || typeof stepData.profileImageUrl === 'string')
+      stepData.openDays.length > 0
     )
   }
 
   if (stepNumber === 3) {
-    const hasPanImage = stepData.pan?.image &&
-      (stepData.pan.image.url || typeof stepData.pan.image === 'string')
-    // GST image is required only if GST is registered
-    const hasGstImage = !stepData.gst?.isRegistered ||
-      (stepData.gst?.image && (stepData.gst.image.url || typeof stepData.gst.image === 'string'))
-
-    return (
-      stepData.pan?.panNumber &&
-      stepData.pan?.nameOnPan &&
-      hasPanImage &&
-      stepData.fssai?.registrationNumber &&
-      hasGstImage &&
-      stepData.bank?.accountNumber &&
-      stepData.bank?.ifscCode &&
-      stepData.bank?.accountHolderName &&
-      stepData.bank?.accountType
-    )
+    return true
   }
 
   return false
@@ -60,9 +38,20 @@ const isStepComplete = (stepData, stepNumber) => {
 export const determineStepToShow = (data) => {
   if (!data) return 1
 
-  // If completedSteps is 4, onboarding is complete (admin-created restaurants)
-  if (data.completedSteps === 4) {
+  const completedSteps = Number(data.completedSteps || 0)
+
+  // Completed steps are the source of truth once a step has been saved.
+  if (completedSteps >= 4) {
     return null
+  }
+  if (completedSteps >= 3) {
+    return 4
+  }
+  if (completedSteps >= 2) {
+    return 3
+  }
+  if (completedSteps >= 1) {
+    return 2
   }
 
   // Check step 1

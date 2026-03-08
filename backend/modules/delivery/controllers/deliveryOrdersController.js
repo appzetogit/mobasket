@@ -201,6 +201,58 @@ const emitOrderClaimedToOtherPartners = async (orderLike, claimedByDeliveryId, a
   }
 };
 
+const normalizeZoneId = (value) => {
+  if (!value) return null;
+  if (typeof value === 'string') return value.trim() || null;
+  if (value.toString) return value.toString().trim() || null;
+  return String(value).trim() || null;
+};
+
+const getCurrentDeliveryZoneIds = async (deliveryId) => {
+  const deliveryPartner = await Delivery.findById(deliveryId)
+    .select('availability.currentLocation availability.zones')
+    .lean();
+
+  if (!deliveryPartner) {
+    return [];
+  }
+
+  const savedZoneIds = (deliveryPartner.availability?.zones || [])
+    .map(normalizeZoneId)
+    .filter(Boolean);
+
+  if (savedZoneIds.length > 0) {
+    return Array.from(new Set(savedZoneIds));
+  }
+
+  const coordinates = deliveryPartner.availability?.currentLocation?.coordinates;
+  if (!Array.isArray(coordinates) || coordinates.length < 2) {
+    return [];
+  }
+
+  const [longitude, latitude] = coordinates;
+  if (!Number.isFinite(Number(latitude)) || !Number.isFinite(Number(longitude))) {
+    return [];
+  }
+
+  const activeZones = await Zone.find({
+    isActive: true,
+    $or: [
+      { platform: 'mofood' },
+      { platform: 'mogrocery' },
+      { platform: { $exists: false } },
+      { platform: null }
+    ]
+  })
+    .select('_id coordinates')
+    .lean();
+
+  return activeZones
+    .filter((zone) => isPointInZoneBoundary(Number(latitude), Number(longitude), zone.coordinates))
+    .map((zone) => normalizeZoneId(zone._id))
+    .filter(Boolean);
+};
+
 /**
  * Get Delivery Partner Orders
  * GET /api/delivery/orders
@@ -213,6 +265,7 @@ export const getOrders = asyncHandler(async (req, res) => {
       return;
     }
     const { status, page = 1, limit = 20, includeDelivered } = req.query;
+    const currentZoneIds = await getCurrentDeliveryZoneIds(delivery._id);
 
     const deliveryIdString = delivery._id.toString();
     const deliveryIdObject = mongoose.Types.ObjectId.isValid(deliveryIdString)
@@ -247,6 +300,11 @@ export const getOrders = asyncHandler(async (req, res) => {
                   }
                 }
               ]
+            },
+            {
+              'assignmentInfo.zoneId': {
+                $in: currentZoneIds
+              }
             }
           ]
         }

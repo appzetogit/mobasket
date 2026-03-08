@@ -177,6 +177,16 @@ export const updateOnboarding = asyncHandler(async (req, res) => {
     const normalizedCompletedSteps = Number(completedSteps);
     if (Number.isFinite(normalizedCompletedSteps)) {
       update['onboarding.completedSteps'] = normalizedCompletedSteps;
+
+      // A newly completed grocery onboarding should stay in the admin review queue
+      // until an admin explicitly approves the store.
+      if (
+        normalizedCompletedSteps >= 1 &&
+        !req.store?.approvedAt
+      ) {
+        update.isActive = false;
+        update.isAcceptingOrders = false;
+      }
     }
 
     if (!update.name) {

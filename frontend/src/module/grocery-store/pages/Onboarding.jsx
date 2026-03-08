@@ -80,6 +80,7 @@ export default function GroceryStoreOnboarding() {
   const [mapLoading, setMapLoading] = useState(true)
   const [mapError, setMapError] = useState("")
   const [locationSearch, setLocationSearch] = useState("")
+  const [detectingLocation, setDetectingLocation] = useState(false)
   const hasResolvedInitialMapCenterRef = useRef(false)
 
   const [images, setImages] = useState({
@@ -223,6 +224,72 @@ export default function GroceryStoreOnboarding() {
         updateSelectedLocation(lat, lng, `${lat.toFixed(6)}, ${lng.toFixed(6)}`)
       }
     })
+  }
+
+  const handleSavePinnedLocation = () => {
+    const markerPosition = markerRef.current?.getPosition?.()
+    const mapCenter = mapInstanceRef.current?.getCenter?.()
+
+    const lat = Number(
+      markerPosition?.lat?.() ??
+      mapCenter?.lat?.() ??
+      form.location.latitude
+    )
+    const lng = Number(
+      markerPosition?.lng?.() ??
+      mapCenter?.lng?.() ??
+      form.location.longitude
+    )
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      toast.error("Move the map pin first, then save the location")
+      return
+    }
+
+    reverseGeocodeCurrentLocation(lat, lng)
+    toast.success("Pinned location saved")
+  }
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported on this device/browser")
+      return
+    }
+
+    setDetectingLocation(true)
+    setMapError("")
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = Number(position?.coords?.latitude)
+        const lng = Number(position?.coords?.longitude)
+
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+          setDetectingLocation(false)
+          toast.error("Unable to detect your current location")
+          return
+        }
+
+        reverseGeocodeCurrentLocation(lat, lng)
+        setDetectingLocation(false)
+        toast.success("Current location selected")
+      },
+      (geoError) => {
+        setDetectingLocation(false)
+        const message =
+          geoError?.code === 1
+            ? "Location permission denied"
+            : geoError?.code === 2
+              ? "Current location is unavailable"
+              : "Timed out while fetching current location"
+        toast.error(message)
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 30000,
+      }
+    )
   }
 
   useEffect(() => {
@@ -668,15 +735,36 @@ export default function GroceryStoreOnboarding() {
               </div>
 
               <div className="space-y-3">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                  <Input
-                    ref={autocompleteInputRef}
-                    value={locationSearch}
-                    onChange={(e) => setLocationSearch(e.target.value)}
-                    placeholder="Search for your store location"
-                    className="pl-10"
-                  />
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <Input
+                      ref={autocompleteInputRef}
+                      value={locationSearch}
+                      onChange={(e) => setLocationSearch(e.target.value)}
+                      placeholder="Search for your store location"
+                      className="pl-10"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleUseCurrentLocation}
+                    disabled={detectingLocation}
+                    className="sm:min-w-[180px]"
+                  >
+                    {detectingLocation ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Fetching...
+                      </>
+                    ) : (
+                      <>
+                        <MapPin className="mr-2 h-4 w-4" />
+                        Use current location
+                      </>
+                    )}
+                  </Button>
                 </div>
 
                 {(form.location.formattedAddress || (Number.isFinite(Number(form.location.latitude)) && Number.isFinite(Number(form.location.longitude)))) && (
@@ -704,6 +792,16 @@ export default function GroceryStoreOnboarding() {
 
                 <div className="text-xs text-gray-500">
                   Tap anywhere on the map to drop a pin. You can drag the marker if the spot needs adjustment.
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    onClick={handleSavePinnedLocation}
+                    variant="outline"
+                    className="sm:min-w-[160px]"
+                  >
+                    Save location
+                  </Button>
                 </div>
                 {mapError && <div className="text-xs text-red-600">{mapError}</div>}
               </div>

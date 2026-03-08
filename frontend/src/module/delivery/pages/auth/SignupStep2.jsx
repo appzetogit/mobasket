@@ -6,6 +6,15 @@ import apiClient from "@/lib/api/axios"
 import { toast } from "sonner"
 import { clearDeliverySignupSession } from "@/lib/utils/auth"
 
+const getCachedDeliveryUser = () => {
+  try {
+    const rawUser = localStorage.getItem("delivery_user")
+    return rawUser ? JSON.parse(rawUser) : null
+  } catch {
+    return null
+  }
+}
+
 export default function SignupStep2() {
   const navigate = useNavigate()
   const [documents, setDocuments] = useState({
@@ -30,6 +39,7 @@ export default function SignupStep2() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [drivingLicenseNumber, setDrivingLicenseNumber] = useState("")
   const [showBackPopup, setShowBackPopup] = useState(false)
+  const [cachedUser] = useState(() => getCachedDeliveryUser())
 
   const handleBack = () => {
     setShowBackPopup(true)
@@ -41,12 +51,32 @@ export default function SignupStep2() {
   }
 
   useEffect(() => {
+    if (cachedUser?.status && cachedUser.status !== "onboarding") {
+      navigate("/delivery", { replace: true })
+      return
+    }
+
+    let isMounted = true
+
     const fetchProfile = async () => {
       try {
         const response = await deliveryAPI.getProfile()
         const user = response?.data?.data?.user || response?.data?.user || response?.data?.data?.profile || response?.data?.profile
 
+        if (!isMounted) return
+
         if (user) {
+          try {
+            localStorage.setItem("delivery_user", JSON.stringify(user))
+          } catch {
+            // Ignore localStorage write failures here; route logic should still proceed.
+          }
+
+          if (user.status && user.status !== "onboarding") {
+            navigate("/delivery", { replace: true })
+            return
+          }
+
           // Map stored documents to state
           const docs = user.documents || {}
           setUploadedDocs({
@@ -61,13 +91,22 @@ export default function SignupStep2() {
           }
         }
       } catch (error) {
+        if (!isMounted) return
         console.error("Error fetching delivery profile:", error)
       } finally {
-        setIsLoadingProfile(false)
+        if (isMounted) {
+          setIsLoadingProfile(false)
+        }
       }
     }
 
     fetchProfile()
+    return () => {
+      isMounted = false
+    }
+    // `navigate` is stable from react-router; keep an empty dependency list so
+    // HMR does not swap this hook between [] and [navigate] on live edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -168,6 +207,19 @@ export default function SignupStep2() {
       })
 
       if (response?.data?.success) {
+        const updatedProfile =
+          response?.data?.data?.profile ||
+          response?.data?.profile ||
+          null
+
+        if (updatedProfile) {
+          try {
+            localStorage.setItem("delivery_user", JSON.stringify(updatedProfile))
+          } catch (storageError) {
+            console.warn("Failed to update local delivery profile cache:", storageError)
+          }
+        }
+
         toast.success("Signup completed successfully!")
 
         // Redirect to delivery home page
