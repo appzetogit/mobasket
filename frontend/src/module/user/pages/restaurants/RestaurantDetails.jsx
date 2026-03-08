@@ -283,6 +283,7 @@ export default function RestaurantDetails() {
   const [restaurant, setRestaurant] = useState(null);
 
   const [loadingRestaurant, setLoadingRestaurant] = useState(true);
+  const [loadingDeferredContent, setLoadingDeferredContent] = useState(false);
 
   const [restaurantError, setRestaurantError] = useState(null);
 
@@ -415,6 +416,239 @@ export default function RestaurantDetails() {
     }
 
   }, [restaurant?.id, restaurant?.restaurantId, restaurant?._id]);
+
+  const _hydrateRestaurantDeferredData = useCallback(
+    async (restaurantIdForMenu, transformedRestaurant, { cancelledRef } = {}) => {
+      if (!restaurantIdForMenu) return;
+
+      const isCancelled = () => cancelledRef?.current === true;
+
+      setLoadingDeferredContent(true);
+
+      try {
+        const menuResponse = await restaurantAPI.getMenuByRestaurantId(restaurantIdForMenu);
+        if (isCancelled()) return;
+
+        if (
+          menuResponse.data &&
+          menuResponse.data.success &&
+          menuResponse.data.data &&
+          menuResponse.data.data.menu
+        ) {
+          const menuSections = menuResponse.data.data.menu.sections || [];
+
+          setRestaurant((prev) =>
+            prev
+              ? {
+                ...prev,
+                menuSections,
+              }
+              : prev,
+          );
+
+          const defaultExpandedSections = new Set([0, 1, 2]);
+          setExpandedSections(defaultExpandedSections);
+
+          window.setTimeout(async () => {
+            try {
+              if (isCancelled()) return;
+
+              const normalizeText = (value) =>
+                String(value || "")
+                  .toLowerCase()
+                  .replace(/[^a-z0-9]+/g, " ")
+                  .trim();
+              const normalizeId = (value) => String(value || "").trim().toLowerCase();
+
+              const availableMenuItems = [];
+              menuSections.forEach((section) => {
+                if (Array.isArray(section.items)) {
+                  section.items.forEach((item) => {
+                    if (item?.isAvailable !== false) {
+                      availableMenuItems.push(item);
+                    }
+                  });
+                }
+                if (Array.isArray(section.subsections)) {
+                  section.subsections.forEach((subsection) => {
+                    if (Array.isArray(subsection.items)) {
+                      subsection.items.forEach((item) => {
+                        if (item?.isAvailable !== false) {
+                          availableMenuItems.push(item);
+                        }
+                      });
+                    }
+                  });
+                }
+              });
+
+              const itemById = new Map();
+              const itemByName = new Map();
+              availableMenuItems.forEach((item) => {
+                const itemId = normalizeId(item?.id || item?._id);
+                const itemName = normalizeText(item?.name);
+                if (itemId && !itemById.has(itemId)) itemById.set(itemId, item);
+                if (itemName && !itemByName.has(itemName)) itemByName.set(itemName, item);
+              });
+
+              const ordersResponse = await orderAPI.getOrders({ limit: 200, page: 1 });
+              if (isCancelled()) return;
+
+              const ordersData =
+                ordersResponse?.data?.data?.orders ||
+                ordersResponse?.data?.orders ||
+                (Array.isArray(ordersResponse?.data?.data) ? ordersResponse.data.data : []);
+
+              const targetRestaurantId = normalizeId(restaurantIdForMenu);
+              const targetRestaurantName = normalizeText(transformedRestaurant?.name);
+
+              const itemScore = new Map();
+              const addScore = (key, item) => {
+                if (!key || !item) return;
+                const current = itemScore.get(key) || { item, score: 0 };
+                current.score += 1;
+                itemScore.set(key, current);
+              };
+
+              ordersData
+                .filter((order) => {
+                  const orderRestaurantId = normalizeId(
+                    order?.restaurantId?._id ||
+                    order?.restaurantId ||
+                    order?.restaurant ||
+                    order?.restaurantName,
+                  );
+                  const orderRestaurantName = normalizeText(
+                    order?.restaurantId?.name || order?.restaurant || order?.restaurantName,
+                  );
+
+                  return (
+                    (targetRestaurantId && orderRestaurantId === targetRestaurantId) ||
+                    (targetRestaurantName && orderRestaurantName === targetRestaurantName)
+                  );
+                })
+                .forEach((order) => {
+                  const orderItems = Array.isArray(order?.items) ? order.items : [];
+                  orderItems.forEach((orderedItem) => {
+                    const orderedIds = [
+                      orderedItem?.itemId,
+                      orderedItem?.menuItemId,
+                      orderedItem?._id,
+                      orderedItem?.id,
+                    ]
+                      .map(normalizeId)
+                      .filter(Boolean);
+                    const orderedName = normalizeText(orderedItem?.name || orderedItem?.foodName);
+
+                    let matched = false;
+                    for (const orderedId of orderedIds) {
+                      if (itemById.has(orderedId)) {
+                        addScore(orderedId, itemById.get(orderedId));
+                        matched = true;
+                        break;
+                      }
+                    }
+
+                    if (!matched && orderedName && itemByName.has(orderedName)) {
+                      addScore(`name:${orderedName}`, itemByName.get(orderedName));
+                    }
+                  });
+                });
+
+              const personalizedRecommendedItems = Array.from(itemScore.values())
+                .sort((a, b) => b.score - a.score)
+                .map((entry) => entry.item);
+
+              if (personalizedRecommendedItems.length === 0 || isCancelled()) return;
+
+              const finalMenuSections = [
+                {
+                  name: "Recommended for you",
+                  isPersonalizedRecommended: true,
+                  items: personalizedRecommendedItems,
+                  subsections: [],
+                },
+                ...menuSections,
+              ];
+
+              setRestaurant((prev) =>
+                prev
+                  ? {
+                    ...prev,
+                    menuSections: finalMenuSections,
+                  }
+                  : prev,
+              );
+            } catch (ordersError) {
+              console.warn(
+                "Could not build personalized recommendations:",
+                ordersError?.message || ordersError,
+              );
+            }
+          }, 0);
+        }
+      } catch (menuError) {
+        if (menuError.response && menuError.response.status === 404) {
+          console.log("⚠️ Menu not found for this restaurant (might be a dining-only listing).");
+        } else {
+          console.error("❌ Error fetching menu:", menuError);
+        }
+      }
+
+      try {
+        const inventoryResponse = await restaurantAPI.getInventoryByRestaurantId(restaurantIdForMenu);
+        if (isCancelled()) return;
+
+        if (
+          inventoryResponse.data &&
+          inventoryResponse.data.success &&
+          inventoryResponse.data.data &&
+          inventoryResponse.data.data.inventory
+        ) {
+          const inventoryCategories = inventoryResponse.data.data.inventory.categories || [];
+
+          const normalizedInventory = inventoryCategories.map((category, index) => ({
+            id: category.id || `category-${index}`,
+            name: category.name || "Unnamed Category",
+            description: category.description || "",
+            itemCount: category.itemCount ?? (category.items?.length || 0),
+            inStock: category.inStock !== undefined ? category.inStock : true,
+            items: Array.isArray(category.items)
+              ? category.items.map((item) => ({
+                id: String(item.id || Date.now() + Math.random()),
+                name: item.name || "Unnamed Item",
+                inStock: item.inStock !== undefined ? item.inStock : true,
+                isVeg: item.isVeg !== undefined ? item.isVeg : true,
+                stockQuantity: item.stockQuantity || "Unlimited",
+                unit: item.unit || "piece",
+                expiryDate: item.expiryDate || null,
+                lastRestocked: item.lastRestocked || null,
+              }))
+              : [],
+            order: category.order !== undefined ? category.order : index,
+          }));
+
+          setRestaurant((prev) =>
+            prev
+              ? {
+                ...prev,
+                inventory: normalizedInventory,
+              }
+              : prev,
+          );
+        }
+      } catch (inventoryError) {
+        if (inventoryError.response && inventoryError.response.status !== 404) {
+          console.error("❌ Error fetching inventory:", inventoryError);
+        }
+      } finally {
+        if (!isCancelled()) {
+          setLoadingDeferredContent(false);
+        }
+      }
+    },
+    [],
+  );
 
 
 
@@ -1551,6 +1785,8 @@ export default function RestaurantDetails() {
           setRestaurant(transformedRestaurant);
 
           fetchedRestaurantRef.current = true; // Mark as fetched
+          setLoadingRestaurant(false);
+          setLoadingDeferredContent(true);
 
 
 
@@ -2233,6 +2469,7 @@ export default function RestaurantDetails() {
       } finally {
 
         setLoadingRestaurant(false);
+        setLoadingDeferredContent(false);
 
       }
 
@@ -4242,7 +4479,7 @@ export default function RestaurantDetails() {
 
       id="scrollingelement"
 
-      className={`min-h-screen bg-white dark:bg-[#0a0a0a] flex flex-col transition-all duration-300 ${shouldShowGrayscale ? "grayscale opacity-75" : ""
+      className={`min-h-screen overflow-x-hidden bg-white dark:bg-[#0a0a0a] flex flex-col transition-all duration-300 ${shouldShowGrayscale ? "grayscale opacity-75" : ""
 
         }`}
 
@@ -4689,6 +4926,18 @@ export default function RestaurantDetails() {
 
 
       {/* Menu Items Section */}
+
+      {loadingDeferredContent &&
+        (!restaurant?.menuSections || restaurant.menuSections.length === 0) && (
+          <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4">
+            <div className="rounded-2xl border border-gray-200 bg-white px-4 py-5 shadow-sm">
+              <div className="flex items-center gap-3 text-sm text-gray-600">
+                <Loader2 className="h-4 w-4 animate-spin text-green-600" />
+                <span>Loading menu and restaurant details...</span>
+              </div>
+            </div>
+          </div>
+        )}
 
       {restaurant?.menuSections &&
 
