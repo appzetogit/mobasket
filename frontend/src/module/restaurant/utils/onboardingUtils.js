@@ -1,7 +1,5 @@
 import { api } from "@/lib/api"
 
-const ONBOARDING_STORAGE_KEY = "restaurant_onboarding_data"
-
 // Helper function to check if a step is complete
 const isStepComplete = (stepData, stepNumber) => {
   if (!stepData) return false
@@ -146,17 +144,6 @@ export const checkOnboardingStatus = async () => {
     // No onboarding/profile data, start from step 1
     return 1
   } catch (err) {
-    // If API call fails, check localStorage
-    try {
-      const localData = localStorage.getItem(ONBOARDING_STORAGE_KEY)
-      if (localData) {
-        const parsed = JSON.parse(localData)
-        return parsed.currentStep || 1
-      }
-    } catch (localErr) {
-      console.error("Failed to check localStorage:", localErr)
-    }
-    // Default to step 1 if everything fails
     return 1
   }
 }
@@ -168,15 +155,7 @@ export const getOnboardingStepFromRestaurantPayload = (restaurant) => {
 }
 
 export const getPostAuthRestaurantPathFromCachedData = () => {
-  try {
-    const raw = localStorage.getItem("restaurant_user")
-    if (!raw) return "/restaurant"
-    const restaurant = JSON.parse(raw)
-    const step = getOnboardingStepFromRestaurantPayload(restaurant)
-    return step ? `/restaurant/onboarding?step=${step}` : "/restaurant"
-  } catch {
-    return "/restaurant"
-  }
+  return "/restaurant"
 }
 
 export const redirectRestaurantAfterAuth = async (navigate, { replace = true } = {}) => {

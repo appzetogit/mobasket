@@ -34,8 +34,6 @@ export const getRestaurantData = () => {
     if (saved) {
       return JSON.parse(saved)
     }
-    // Initialize with default data
-    setRestaurantData(DEFAULT_RESTAURANT_DATA)
     return DEFAULT_RESTAURANT_DATA
   } catch (error) {
     console.error('Error reading restaurant data from localStorage:', error)

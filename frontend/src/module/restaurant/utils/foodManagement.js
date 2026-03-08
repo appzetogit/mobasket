@@ -151,8 +151,6 @@ export const getAllFoods = () => {
     if (saved) {
       return JSON.parse(saved)
     }
-    // Initialize with default foods
-    setAllFoods(DEFAULT_FOODS)
     return DEFAULT_FOODS
   } catch (error) {
     console.error('Error reading foods from localStorage:', error)

@@ -2793,13 +2793,6 @@ export default function Home() {
                               </div>
                             )}
 
-                            {/* Offer Badge on Image */}
-                            {restaurant.offer && (
-                              <div className="absolute bottom-3 left-0 bg-[#2563eb] text-white text-[10px] font-bold px-2 py-1 shadow-lg z-10 leading-none">
-                                {restaurant.offer.toUpperCase()}
-                              </div>
-                            )}
-
                             {/* Bookmark Icon */}
                             <motion.div
                               variants={{

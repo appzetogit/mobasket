@@ -199,12 +199,6 @@ export default function Restaurants() {
                           className="w-full h-full object-cover transition-transform duration-500"
                         />
 
-                        {restaurant.offer ? (
-                          <div className="absolute bottom-3 left-0 bg-[#2563eb] text-white text-[10px] font-bold px-2 py-1 shadow-lg z-10 leading-none">
-                            {restaurant.offer}
-                          </div>
-                        ) : null}
-
                         <motion.div
                           variants={{ rest: { scale: 1 }, hover: { scale: 1.1 } }}
                           transition={{ duration: 0.2 }}

@@ -170,12 +170,6 @@ export default function SignupStep2() {
       if (response?.data?.success) {
         toast.success("Signup completed successfully!")
 
-        // Update user status and profile in localStorage
-        const profile = response.data.data?.profile || response.data?.profile
-        if (profile) {
-          localStorage.setItem("delivery_user", JSON.stringify(profile))
-        }
-
         // Redirect to delivery home page
         setTimeout(() => {
           navigate("/delivery", { replace: true })

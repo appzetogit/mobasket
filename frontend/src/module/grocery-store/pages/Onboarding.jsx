@@ -275,11 +275,6 @@ export default function GroceryStoreOnboarding() {
           storeImage: null,
           additionalImages: [],
         })
-        try {
-          localStorage.removeItem("grocery-store_onboarding")
-        } catch (storageError) {
-          console.error("Failed to clear grocery store onboarding cache:", storageError)
-        }
         setLoading(false)
         return
       }
@@ -552,35 +547,8 @@ export default function GroceryStoreOnboarding() {
       }
 
       const response = await groceryStoreAPI.updateOnboarding(payload)
-      const responseStore = response?.data?.data?.store || {}
-      const responseOnboarding = response?.data?.data?.onboarding || {}
-
-      try {
-        const cachedRaw = localStorage.getItem("grocery-store_user")
-        const cachedStore = cachedRaw ? JSON.parse(cachedRaw) : {}
-
-        localStorage.setItem(
-          "grocery-store_user",
-          JSON.stringify({
-            ...cachedStore,
-            ...responseStore,
-            onboarding: {
-              ...(cachedStore?.onboarding || {}),
-              ...responseOnboarding,
-              completedSteps: 1,
-            },
-          }),
-        )
-        localStorage.setItem(
-          "grocery-store_onboarding",
-          JSON.stringify({
-            ...responseOnboarding,
-            completedSteps: 1,
-          }),
-        )
+      if (response?.data) {
         window.dispatchEvent(new Event("groceryStoreAuthChanged"))
-      } catch (storageError) {
-        console.error("Failed to update cached grocery store onboarding:", storageError)
       }
 
       toast.success("Onboarding completed successfully!")
