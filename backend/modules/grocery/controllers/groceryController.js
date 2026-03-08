@@ -105,6 +105,27 @@ const isPointInZone = (lat, lng, zoneCoordinates = []) => {
 };
 
 const resolveStoreZoneId = (store, activeZones = []) => {
+  const explicitZoneId = String(
+    store?.zoneId?._id ||
+    store?.zoneId?.id ||
+    store?.zoneId ||
+    ''
+  ).trim();
+  if (explicitZoneId) {
+    const explicitZone = activeZones.find((zone) => String(zone?._id || '') === explicitZoneId);
+    if (explicitZone?._id) return String(explicitZone._id);
+  }
+
+  const storeIdCandidates = new Set([
+    String(store?._id || '').trim(),
+    String(store?.restaurantId || '').trim()
+  ].filter(Boolean));
+  const linkedZone = activeZones.find((zone) => {
+    const linkedRestaurantId = String(zone?.restaurantId?._id || zone?.restaurantId || '').trim();
+    return linkedRestaurantId && storeIdCandidates.has(linkedRestaurantId);
+  });
+  if (linkedZone?._id) return String(linkedZone._id);
+
   const lat = Number(store?.location?.latitude ?? store?.location?.coordinates?.[1]);
   const lng = Number(store?.location?.longitude ?? store?.location?.coordinates?.[0]);
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
@@ -235,7 +256,7 @@ export const getProducts = async (req, res) => {
     }
 
     const activeGroceryZones = await Zone.find({ isActive: true, platform: 'mogrocery' })
-      .select('_id coordinates')
+      .select('_id coordinates restaurantId')
       .lean();
 
     if (activeOnly !== 'false') {
@@ -277,7 +298,7 @@ export const getProducts = async (req, res) => {
       .populate('category', 'name slug section')
       .populate('subcategories', 'name slug')
       .populate('subcategory', 'name slug')
-      .populate('storeId', 'name location address platform isActive')
+      .populate('storeId', 'name location address platform isActive zoneId restaurantId')
       .sort({ order: 1, createdAt: -1 });
 
     if (Number.isInteger(parsedLimit) && parsedLimit > 0) {
@@ -563,7 +584,7 @@ export const getProductById = async (req, res) => {
       .populate('category', 'name slug section')
       .populate('subcategories', 'name slug')
       .populate('subcategory', 'name slug')
-      .populate('storeId', 'name location address platform isActive')
+      .populate('storeId', 'name location address platform isActive zoneId restaurantId')
       .lean();
 
     if (!product) {
@@ -571,7 +592,7 @@ export const getProductById = async (req, res) => {
     }
 
     const activeGroceryZones = await Zone.find({ isActive: true, platform: 'mogrocery' })
-      .select('_id coordinates')
+      .select('_id coordinates restaurantId')
       .lean();
 
     if (!product?.storeId || product.storeId.isActive === false) {

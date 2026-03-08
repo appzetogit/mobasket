@@ -120,6 +120,12 @@ const groceryStoreSchema = new mongoose.Schema({
   },
   primaryContactNumber: String,
   location: locationSchema,
+  zoneId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Zone',
+    default: null,
+    index: true
+  },
   profileImage: {
     url: String,
     publicId: String

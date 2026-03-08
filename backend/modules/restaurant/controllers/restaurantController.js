@@ -95,6 +95,43 @@ function getRestaurantZoneIds(restaurantLat, restaurantLng, activeZones) {
   return zoneIds;
 }
 
+function getNormalizedEntityZoneIds(restaurant, activeZones = []) {
+  const resolvedZoneIds = new Set();
+  const explicitZoneId = String(
+    restaurant?.zoneId?._id ||
+    restaurant?.zoneId?.id ||
+    restaurant?.zoneId ||
+    ''
+  ).trim();
+
+  if (explicitZoneId) {
+    const explicitZone = activeZones.find((zone) => String(zone?._id || '') === explicitZoneId);
+    if (explicitZone?._id) {
+      resolvedZoneIds.add(String(explicitZone._id));
+    }
+  }
+
+  const entityIdCandidates = new Set([
+    String(restaurant?._id || '').trim(),
+    String(restaurant?.restaurantId || '').trim()
+  ].filter(Boolean));
+
+  activeZones.forEach((zone) => {
+    const linkedRestaurantId = String(zone?.restaurantId?._id || zone?.restaurantId || '').trim();
+    if (linkedRestaurantId && entityIdCandidates.has(linkedRestaurantId)) {
+      resolvedZoneIds.add(String(zone._id));
+    }
+  });
+
+  const lat = Number(restaurant?.location?.latitude ?? restaurant?.location?.coordinates?.[1]);
+  const lng = Number(restaurant?.location?.longitude ?? restaurant?.location?.coordinates?.[0]);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    getRestaurantZoneIds(lat, lng, activeZones).forEach((zoneId) => resolvedZoneIds.add(zoneId));
+  }
+
+  return Array.from(resolvedZoneIds);
+}
+
 function getRestaurantPlatform(restaurant) {
   return restaurant?.platform === 'mogrocery' ? 'mogrocery' : 'mofood';
 }
@@ -356,17 +393,20 @@ export const getRestaurants = async (req, res) => {
       const restaurantPlatform = getRestaurantPlatform(restaurant);
       if (requestedPlatform && restaurantPlatform !== requestedPlatform) return false;
 
-      const lat = Number(restaurant?.location?.latitude ?? restaurant?.location?.coordinates?.[1]);
-      const lng = Number(restaurant?.location?.longitude ?? restaurant?.location?.coordinates?.[0]);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return !strictZoneFilterResolved;
-
       const platformZones = restaurantPlatform === 'mogrocery' ? mogroceryZones : mofoodZones;
-      const restaurantZoneIds = getRestaurantZoneIds(lat, lng, platformZones);
+      const restaurantZoneIds = getNormalizedEntityZoneIds(restaurant, platformZones);
       if (restaurantZoneIds.length === 0) return !strictZoneFilterResolved;
 
       if (strictZoneFilterResolved && !restaurantZoneIds.includes(userZoneIdNormalized)) {
         return false;
       }
+
+      const preferredZoneId =
+        (userZoneIdNormalized && restaurantZoneIds.includes(userZoneIdNormalized) && userZoneIdNormalized) ||
+        restaurantZoneIds[0] ||
+        null;
+      restaurant.zoneId = preferredZoneId;
+      restaurant.zoneIds = restaurantZoneIds;
 
       return true;
     });
