@@ -182,6 +182,14 @@ console.error = (...args) => {
     return
   }
 
+  // Suppress browser autoplay-policy audio errors (expected before first user interaction)
+  if (
+    errorStr.includes('Audio play failed') &&
+    (errorStr.includes('NotAllowedError') || errorStr.includes("didn't interact with the document first"))
+  ) {
+    return
+  }
+
   originalError.apply(console, args)
 }
 
@@ -212,6 +220,15 @@ window.addEventListener('unhandledrejection', (event) => {
     (error?.code === 1 && (errorMsg.includes('location') || errorMsg.includes('geolocation')))
   ) {
     event.preventDefault() // Prevent error from showing in console
+    return
+  }
+
+  // Suppress browser autoplay-policy audio errors from rejected play() promises
+  if (
+    errorName === 'NotAllowedError' &&
+    (errorMsg.includes('play() failed') || errorStr.includes("didn't interact with the document first"))
+  ) {
+    event.preventDefault()
     return
   }
   

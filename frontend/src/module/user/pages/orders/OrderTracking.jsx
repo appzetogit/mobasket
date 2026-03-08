@@ -775,9 +775,14 @@ export default function OrderTracking() {
             syncModificationWindow(apiOrder);
           }
         }
-      } catch (err) {
-        console.error('Error polling order updates:', err);
-      }
+      } catch (err) {
+        if (err?.response?.status === 404) {
+          setOrder(null);
+          setError('This order is no longer available. It may have been deleted by the admin.');
+        } else {
+          console.error('Error polling order updates:', err);
+        }
+      }
     }, pollInterval);
     
     return () => clearInterval(interval);
@@ -917,12 +922,17 @@ export default function OrderTracking() {
         } else {
           throw new Error('Order not found')
         }
-      } catch (err) {
-        console.error('Error fetching order:', err)
-        setError(err.response?.data?.message || err.message || 'Failed to fetch order')
-      } finally {
-        setLoading(false)
-      }
+      } catch (err) {
+        if (err?.response?.status === 404) {
+          setOrder(null)
+          setError('This order is no longer available. It may have been deleted by the admin.')
+        } else {
+          console.error('Error fetching order:', err)
+          setError(err.response?.data?.message || err.message || 'Failed to fetch order')
+        }
+      } finally {
+        setLoading(false)
+      }
     }
 
     if (orderId) {
@@ -1522,11 +1532,16 @@ export default function OrderTracking() {
         setOrderStatus(deriveUiOrderStatus(apiOrder.status, apiOrder))
         syncModificationWindow(apiOrder)
       }
-    } catch (err) {
-      console.error('Error refreshing order:', err)
-    } finally {
-      setIsRefreshing(false)
-    }
+    } catch (err) {
+      if (err?.response?.status === 404) {
+        setOrder(null)
+        setError('This order is no longer available. It may have been deleted by the admin.')
+      } else {
+        console.error('Error refreshing order:', err)
+      }
+    } finally {
+      setIsRefreshing(false)
+    }
   }
 
   // Loading state
@@ -1548,7 +1563,7 @@ export default function OrderTracking() {
         <div className="max-w-lg mx-auto text-center py-20">
           <h1 className="text-lg sm:text-xl md:text-2xl font-bold mb-4">Order Not Found</h1>
           <p className="text-gray-600 mb-6">{error || 'The order you\'re looking for doesn\'t exist.'}</p>
-          <Link to="/orders" replace>
+          <Link to={shouldBackToHome ? "/home" : "/orders"} replace>
             <Button>Back to Orders</Button>
           </Link>
         </div>
@@ -1615,7 +1630,25 @@ export default function OrderTracking() {
 
   const currentStatus = isPlanSubscriptionOrder
     ? planStatusConfig
-    : (statusConfig[orderStatus] || statusConfig.placed)
+    : (statusConfig[orderStatus] || statusConfig.placed)
+
+  const shouldBackToHome =
+    orderStatus === "delivered" ||
+    String(order?.status || "").toLowerCase() === "delivered" ||
+    String(order?.status || "").toLowerCase() === "completed"
+
+  useEffect(() => {
+    if (!shouldBackToHome) return
+
+    const handlePopState = () => {
+      navigate("/home", { replace: true })
+    }
+
+    window.addEventListener("popstate", handlePopState)
+    return () => {
+      window.removeEventListener("popstate", handlePopState)
+    }
+  }, [shouldBackToHome, navigate])
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-[#0a0a0a]">
@@ -1671,7 +1704,7 @@ export default function OrderTracking() {
       <div className={`${currentStatus.color} text-white sticky top-0 z-40`}>
         {/* Navigation bar */}
         <div className="flex items-center justify-between px-4 py-3">
-          <Link to="/orders" replace>
+          <Link to={shouldBackToHome ? "/home" : "/orders"} replace>
             <motion.button 
               className="w-10 h-10 flex items-center justify-center"
               whileTap={{ scale: 0.9 }}

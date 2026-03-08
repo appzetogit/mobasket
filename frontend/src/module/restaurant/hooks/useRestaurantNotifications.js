@@ -4,6 +4,10 @@ import io from 'socket.io-client';
 import { API_BASE_URL, SOCKET_BASE_URL } from '@/lib/api/config';
 import { restaurantAPI, groceryStoreAPI } from '@/lib/api';
 import alertSound from '@/assets/audio/alert.mp3';
+import {
+  requestBrowserNotificationPermission,
+  showBrowserNotification,
+} from '@/lib/browserNotifications';
 
 /**
  * Hook for restaurant/grocery store to receive real-time order notifications with sound
@@ -12,7 +16,7 @@ import alertSound from '@/assets/audio/alert.mp3';
  * @returns {object} - { newOrder, playSound, isConnected }
  */
 export const useRestaurantNotifications = (options = {}) => {
-  const { enableSound = true, enabled = true } = options;
+  const { enableSound = true, enabled = true, enableBrowserNotification = true } = options;
   const location = useLocation();
   const isGroceryStore = location.pathname.startsWith('/store');
   const socketRef = useRef(null);
@@ -23,6 +27,7 @@ export const useRestaurantNotifications = (options = {}) => {
   const [restaurantId, setRestaurantId] = useState(null);
   const lastConnectErrorLogRef = useRef(0);
   const enableSoundRef = useRef(enableSound);
+  const enableBrowserNotificationRef = useRef(enableBrowserNotification);
   const lastSoundAtRef = useRef(0);
   const CONNECT_ERROR_LOG_THROTTLE_MS = 10000;
 
@@ -31,6 +36,12 @@ export const useRestaurantNotifications = (options = {}) => {
   }, [enableSound]);
 
   useEffect(() => {
+    enableBrowserNotificationRef.current = enableBrowserNotification;
+  }, [enableBrowserNotification]);
+
+  useEffect(() => {
+    requestBrowserNotificationPermission();
+
     if (!enabled && socketRef.current) {
       socketRef.current.disconnect();
       socketRef.current = null;
@@ -277,6 +288,14 @@ export const useRestaurantNotifications = (options = {}) => {
       // Play notification sound
       if (enableSoundRef.current) {
         playNotificationSound();
+      }
+
+      if (enableBrowserNotificationRef.current && document.hidden) {
+        showBrowserNotification({
+          title: isGroceryStore ? 'New store order' : 'New restaurant order',
+          body: `Order ${orderData?.orderId || ''} just arrived.`.trim(),
+          tag: `${isGroceryStore ? 'store' : 'restaurant'}-new-order-${orderData?.orderId || orderData?.orderMongoId || orderData?._id || 'latest'}`,
+        });
       }
     });
 

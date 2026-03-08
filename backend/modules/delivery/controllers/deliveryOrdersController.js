@@ -31,6 +31,70 @@ const logger = winston.createLogger({
   ]
 });
 
+const haversineDistanceKm = (lat1, lng1, lat2, lng2) => {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+           Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+           Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+const getOrderDeliveryDistanceKm = (order) => {
+  if (order?.deliveryState?.routeToDelivery?.distance) {
+    return Number(order.deliveryState.routeToDelivery.distance) || 0;
+  }
+
+  if (order?.assignmentInfo?.distance) {
+    return Number(order.assignmentInfo.distance) || 0;
+  }
+
+  const restaurantCoords = order?.restaurantId?.location?.coordinates;
+  const customerCoords = order?.address?.location?.coordinates;
+
+  if (Array.isArray(restaurantCoords) && Array.isArray(customerCoords) && restaurantCoords.length >= 2 && customerCoords.length >= 2) {
+    const [restaurantLng, restaurantLat] = restaurantCoords;
+    const [customerLng, customerLat] = customerCoords;
+
+    if ([restaurantLat, restaurantLng, customerLat, customerLng].every((value) => Number.isFinite(Number(value)))) {
+      return haversineDistanceKm(
+        Number(restaurantLat),
+        Number(restaurantLng),
+        Number(customerLat),
+        Number(customerLng)
+      );
+    }
+  }
+
+  return 0;
+};
+
+const buildEstimatedEarnings = async (order) => {
+  const deliveryDistance = getOrderDeliveryDistanceKm(order);
+  const earningResult = await calculateDriverEarning(deliveryDistance, order?.platform || 'mofood');
+
+  return {
+    basePayout: Number(earningResult.baseAmount || 0),
+    distance: Number(earningResult.distanceKm || 0),
+    commissionPerKm: Number(earningResult.extraPerKmFee || 0),
+    distanceCommission: Number(earningResult.extraDistanceKm || 0) * Number(earningResult.extraPerKmFee || 0),
+    totalEarning: Number(earningResult.totalEarning || 0),
+    breakdown: {
+      basePayout: Number(earningResult.baseAmount || 0),
+      distance: Number(earningResult.distanceKm || 0),
+      commissionPerKm: Number(earningResult.extraPerKmFee || 0),
+      distanceCommission: Number(earningResult.extraDistanceKm || 0) * Number(earningResult.extraPerKmFee || 0),
+      minDistance: Number(earningResult.rangeStartKm || 0),
+      maxDistance: Number(earningResult.rangeEndKm || 0),
+      extraDistanceKm: Number(earningResult.extraDistanceKm || 0),
+      formula: earningResult.breakdownText || ''
+    },
+    source: earningResult.source || 'fee_settings'
+  };
+};
+
 const emitOrderTrackingUpdate = async (orderLike, payload = {}) => {
   try {
     const serverModule = await import('../../../server.js');
@@ -208,6 +272,36 @@ const normalizeZoneId = (value) => {
   return String(value).trim() || null;
 };
 
+const normalizeDeliveryNotificationId = (value) => {
+  if (!value) return null;
+  if (typeof value === 'string') return value.trim() || null;
+  if (typeof value === 'object') {
+    return String(
+      value.deliveryPartnerId ||
+      value._id ||
+      value.id ||
+      value.deliveryId ||
+      ''
+    ).trim() || null;
+  }
+  if (value.toString) return value.toString().trim() || null;
+  return String(value).trim() || null;
+};
+
+const extractNotifiedDeliveryIds = (assignmentInfo = {}) => {
+  const priorityIds = Array.isArray(assignmentInfo?.priorityDeliveryPartnerIds)
+    ? assignmentInfo.priorityDeliveryPartnerIds
+    : [];
+  const expandedIds = Array.isArray(assignmentInfo?.expandedDeliveryPartnerIds)
+    ? assignmentInfo.expandedDeliveryPartnerIds
+    : [];
+
+  return {
+    priorityIds: priorityIds.map(normalizeDeliveryNotificationId).filter(Boolean),
+    expandedIds: expandedIds.map(normalizeDeliveryNotificationId).filter(Boolean),
+  };
+};
+
 const getCurrentDeliveryZoneIds = async (deliveryId) => {
   const deliveryPartner = await Delivery.findById(deliveryId)
     .select('availability.currentLocation availability.zones')
@@ -351,11 +445,25 @@ export const getOrders = asyncHandler(async (req, res) => {
       .populate('userId', 'name phone')
       .lean();
 
+    const ordersWithEstimatedEarnings = await Promise.all(
+      orders.map(async (order) => {
+        try {
+          return {
+            ...order,
+            estimatedEarnings: await buildEstimatedEarnings(order)
+          };
+        } catch (error) {
+          logger.warn(`Failed to calculate estimated earnings for order ${order?.orderId || order?._id}: ${error.message}`);
+          return order;
+        }
+      })
+    );
+
     // Get total count
     const total = await Order.countDocuments(query);
 
     return successResponse(res, 200, 'Orders retrieved successfully', {
-      orders,
+      orders: ordersWithEstimatedEarnings,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -422,13 +530,11 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
     } else if (!orderDeliveryPartnerId) {
       // Order not assigned yet - allow access only if this delivery boy was explicitly notified.
       const assignmentInfo = order.assignmentInfo || {};
-      const priorityIds = assignmentInfo.priorityDeliveryPartnerIds || [];
-      const expandedIds = assignmentInfo.expandedDeliveryPartnerIds || [];
-      
-      // Normalize all IDs to strings for comparison
       const normalizedCurrentId = normalizeId(currentDeliveryId);
-      const normalizedPriorityIds = priorityIds.map(normalizeId).filter(Boolean);
-      const normalizedExpandedIds = expandedIds.map(normalizeId).filter(Boolean);
+      const {
+        priorityIds: normalizedPriorityIds,
+        expandedIds: normalizedExpandedIds,
+      } = extractNotifiedDeliveryIds(assignmentInfo);
       
       const wasNotified = normalizedPriorityIds.includes(normalizedCurrentId) || 
                          normalizedExpandedIds.includes(normalizedCurrentId);
@@ -463,6 +569,12 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
       } catch (e) { /* ignore */ }
     }
     const orderWithPayment = { ...order, paymentMethod };
+
+    try {
+      orderWithPayment.estimatedEarnings = await buildEstimatedEarnings(orderWithPayment);
+    } catch (error) {
+      logger.warn(`Failed to calculate estimated earnings for order details ${order?.orderId || order?._id}: ${error.message}`);
+    }
 
     return successResponse(res, 200, 'Order details retrieved successfully', {
       order: orderWithPayment
@@ -527,8 +639,6 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       
       // Check if this delivery boy was in the priority or expanded notification list
       const assignmentInfo = order.assignmentInfo || {};
-      const priorityIds = assignmentInfo.priorityDeliveryPartnerIds || [];
-      const expandedIds = assignmentInfo.expandedDeliveryPartnerIds || [];
       // Helper function to normalize ID for comparison
       const normalizeId = (id) => {
         if (!id) return null;
@@ -539,8 +649,15 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       
       // Normalize all IDs to strings for comparison
       const normalizedCurrentId = normalizeId(currentDeliveryId);
-      const normalizedPriorityIds = priorityIds.map(normalizeId).filter(Boolean);
-      const normalizedExpandedIds = expandedIds.map(normalizeId).filter(Boolean);
+      const {
+        priorityIds: normalizedPriorityIds,
+        expandedIds: normalizedExpandedIds,
+      } = extractNotifiedDeliveryIds(assignmentInfo);
+      const hasExplicitNotificationLists =
+        normalizedPriorityIds.length > 0 || normalizedExpandedIds.length > 0;
+      const orderZoneId = normalizeZoneId(assignmentInfo?.zoneId);
+      const currentZoneIds = await getCurrentDeliveryZoneIds(delivery._id);
+      const isSameZoneEligible = !orderZoneId || currentZoneIds.includes(orderZoneId);
       
       console.log(`🔍 Checking notification status for order acceptance:`, {
         currentDeliveryId: normalizedCurrentId,
@@ -552,8 +669,12 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       
       const wasNotified = normalizedPriorityIds.includes(normalizedCurrentId) || 
                          normalizedExpandedIds.includes(normalizedCurrentId);
+      const allowSameZoneFallback =
+        !hasExplicitNotificationLists &&
+        isSameZoneEligible &&
+        ['preparing', 'ready'].includes(String(order.status || '').toLowerCase());
       
-      if (!wasNotified) {
+      if (!wasNotified && !allowSameZoneFallback) {
         console.error(`❌ Order ${order.orderId} is not assigned and delivery partner ${currentDeliveryId} was not notified`);
         console.error(`❌ Full order details:`, {
           orderId: order.orderId,
@@ -562,7 +683,11 @@ export const acceptOrder = asyncHandler(async (req, res) => {
           assignmentInfo: JSON.stringify(order.assignmentInfo),
           priorityIds: normalizedPriorityIds,
           expandedIds: normalizedExpandedIds,
-          currentDeliveryId: normalizedCurrentId
+          currentDeliveryId: normalizedCurrentId,
+          hasExplicitNotificationLists,
+          orderZoneId,
+          currentZoneIds,
+          isSameZoneEligible
         });
         return errorResponse(res, 403, 'This order is not available for you. It may have been assigned to another delivery partner or you were not notified about it.');
       }
@@ -604,13 +729,14 @@ export const acceptOrder = asyncHandler(async (req, res) => {
 
       order = claimedOrder;
       claimedDuringThisRequest = true;
-      await emitOrderClaimedToOtherPartners(order, currentDeliveryId, order.assignmentInfo || {});
     } else if (orderDeliveryPartnerId !== currentDeliveryId) {
       console.error(`❌ Order ${order.orderId} is assigned to ${orderDeliveryPartnerId}, but current delivery partner is ${currentDeliveryId}`);
       return errorResponse(res, 409, 'Order was accepted by another delivery partner.');
     } else {
       console.log(`✅ Order ${order.orderId} is already assigned to current delivery partner`);
     }
+
+    const notifiedAssignmentInfoSnapshot = order.assignmentInfo || {};
 
     console.log(`✅ Order found: ${order.orderId}, Status: ${order.status}, Delivery Partner: ${order.deliveryPartnerId}`);
     console.log(`📍 Order details:`, {
@@ -964,6 +1090,12 @@ export const acceptOrder = asyncHandler(async (req, res) => {
 
     console.log(`✅ Order ${order.orderId} accepted by delivery partner ${delivery._id}`);
     console.log(`📍 Route calculated: ${routeData.distance.toFixed(2)} km, ${routeData.duration.toFixed(1)} mins`);
+
+    try {
+      await emitOrderClaimedToOtherPartners(updatedOrder || order, currentDeliveryId, notifiedAssignmentInfoSnapshot);
+    } catch (emitClaimedError) {
+      logger.warn(`Failed to emit order_unavailable after accept for ${order.orderId}: ${emitClaimedError.message}`);
+    }
 
     try {
       const customerCoords = Array.isArray(updatedOrder?.address?.location?.coordinates)

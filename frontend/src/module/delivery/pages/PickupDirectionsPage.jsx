@@ -15,6 +15,9 @@ import {
   CheckCircle2
 } from "lucide-react"
 
+const DELIVERY_SWIPE_CONFIRM_THRESHOLD = 0.3
+const DELIVERY_SWIPE_START_THRESHOLD_PX = 2
+
 // Fix Leaflet default icon issue
 delete (L.Icon.Default.prototype)._getIconUrl
 L.Icon.Default.mergeOptions({
@@ -252,7 +255,7 @@ export default function PickupDirectionsPage() {
     const deltaY = e.touches[0].clientY - reachedButtonSwipeStartY.current
     
     // Only handle horizontal swipes (swipe right)
-    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+    if (Math.abs(deltaX) > DELIVERY_SWIPE_START_THRESHOLD_PX && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
       reachedButtonIsSwiping.current = true
       e.preventDefault()
       
@@ -278,7 +281,7 @@ export default function PickupDirectionsPage() {
     const circleWidth = 56
     const padding = 16
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
-    const threshold = maxSwipe * 0.7
+    const threshold = maxSwipe * DELIVERY_SWIPE_CONFIRM_THRESHOLD
     
     if (deltaX > threshold) {
       // Animate to completion
@@ -626,7 +629,7 @@ export default function PickupDirectionsPage() {
                   damping: 25
                 } : { duration: 0 }}
               >
-                {reachedButtonProgress > 0.5 ? 'Release to Confirm' : 'Reached pickup'}
+                {reachedButtonProgress > DELIVERY_SWIPE_CONFIRM_THRESHOLD ? 'Release to Confirm' : 'Reached pickup'}
               </motion.span>
             </div>
           </div>

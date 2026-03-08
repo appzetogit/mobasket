@@ -564,7 +564,7 @@ export default function OrdersTable({
                             <Info className="w-4 h-4" />
                           </button>
                         )}
-                      {isGrocery && typeof onDeleteOrder === "function" && (
+                      {typeof onDeleteOrder === "function" && (
                         <button
                           onClick={() => onDeleteOrder(order)}
                           className="p-1.5 rounded text-red-700 hover:bg-red-50 transition-colors"

@@ -60,6 +60,9 @@ const DeliveryTrackingMap = ({
   const mapInitializedRef = useRef(false);
   const directionsCacheRef = useRef(new Map()); // Cache for locally generated route paths
   const lastRouteRequestRef = useRef({ start: null, end: null, timestamp: 0 });
+  const SOCKET_LOCATION_REFRESH_INTERVAL_MS = 3000;
+  const SOCKET_LOCATION_STALE_THRESHOLD_MS = 6000;
+  const ROUTE_RECALC_MIN_INTERVAL_MS = 2500;
 
   const backendUrl = SOCKET_BASE_URL;
   const [GOOGLE_MAPS_API_KEY, setGOOGLE_MAPS_API_KEY] = useState("");
@@ -68,19 +71,19 @@ const DeliveryTrackingMap = ({
 
   const effectiveCustomerCoords = useMemo(() => {
     if (
-      firebaseCustomerCoords &&
-      typeof firebaseCustomerCoords.lat === 'number' &&
-      typeof firebaseCustomerCoords.lng === 'number'
-    ) {
-      return firebaseCustomerCoords;
-    }
-
-    if (
       customerCoords &&
       typeof customerCoords.lat === 'number' &&
       typeof customerCoords.lng === 'number'
     ) {
       return customerCoords;
+    }
+
+    if (
+      firebaseCustomerCoords &&
+      typeof firebaseCustomerCoords.lat === 'number' &&
+      typeof firebaseCustomerCoords.lng === 'number'
+    ) {
+      return firebaseCustomerCoords;
     }
 
     return null;
@@ -226,7 +229,7 @@ const DeliveryTrackingMap = ({
     }
   }, [getInitialRiderLocationFromOrder, deliveryBoyLocation?.lat, deliveryBoyLocation?.lng, currentLocation?.lat, currentLocation?.lng]);
 
-  // Draw route from start/end coordinates using local interpolation (no Directions API calls).
+  // Draw road-snapped route from start/end coordinates, with interpolation fallback.
   const drawRoute = useCallback((start, end) => {
     if (!mapInstance.current || !window.google?.maps) return;
 
@@ -278,30 +281,71 @@ const DeliveryTrackingMap = ({
       timestamp: now
     };
 
-    const routeDistanceMeters = calculateHaversineDistance(startLat, startLng, endLat, endLng);
-    const segmentCount = Math.max(1, Math.min(120, Math.ceil(routeDistanceMeters / 30)));
-    const points = [];
-    for (let i = 0; i <= segmentCount; i += 1) {
-      const t = i / segmentCount;
-      points.push({
-        lat: startLat + (endLat - startLat) * t,
-        lng: startLng + (endLng - startLng) * t
-      });
-    }
-
-    directionsCacheRef.current.set(cacheKey, {
-      points,
-      timestamp: now
-    });
-
-    const tenMinutesAgo = now - 600000;
-    for (const [key, value] of directionsCacheRef.current.entries()) {
-      if (value.timestamp < tenMinutesAgo) {
-        directionsCacheRef.current.delete(key);
+    const fallbackToInterpolatedPath = () => {
+      const routeDistanceMeters = calculateHaversineDistance(startLat, startLng, endLat, endLng);
+      const segmentCount = Math.max(1, Math.min(120, Math.ceil(routeDistanceMeters / 30)));
+      const points = [];
+      for (let i = 0; i <= segmentCount; i += 1) {
+        const t = i / segmentCount;
+        points.push({
+          lat: startLat + (endLat - startLat) * t,
+          lng: startLng + (endLng - startLng) * t
+        });
       }
+
+      directionsCacheRef.current.set(cacheKey, {
+        points,
+        timestamp: Date.now()
+      });
+      renderPolylinePath(points, isCustomerLegRef.current);
+    };
+
+    if (!window.google?.maps?.DirectionsService || !window.google?.maps?.TravelMode) {
+      fallbackToInterpolatedPath();
+      return;
     }
 
-    renderPolylinePath(points, isCustomerLegRef.current);
+    const directionsService = new window.google.maps.DirectionsService();
+    directionsService.route(
+      {
+        origin: { lat: startLat, lng: startLng },
+        destination: { lat: endLat, lng: endLng },
+        travelMode: window.google.maps.TravelMode.DRIVING,
+        provideRouteAlternatives: false,
+      },
+      (result, status) => {
+        if (status === 'OK' && result?.routes?.[0]) {
+          const route = result.routes[0];
+          const points = Array.isArray(route.overview_path)
+            ? route.overview_path
+                .map((point) => ({
+                  lat: Number(point?.lat?.() ?? point?.lat),
+                  lng: Number(point?.lng?.() ?? point?.lng)
+                }))
+                .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
+            : [];
+
+          if (points.length > 1) {
+            directionsCacheRef.current.set(cacheKey, {
+              points,
+              timestamp: Date.now()
+            });
+
+            const tenMinutesAgo = Date.now() - 600000;
+            for (const [key, value] of directionsCacheRef.current.entries()) {
+              if (value.timestamp < tenMinutesAgo) {
+                directionsCacheRef.current.delete(key);
+              }
+            }
+
+            renderPolylinePath(points, isCustomerLegRef.current);
+            return;
+          }
+        }
+
+        fallbackToInterpolatedPath();
+      }
+    );
   }, [renderPolylinePath]);
   // Check if delivery partner is assigned (memoized to avoid dependency issues)
   // MUST be defined BEFORE any useEffect that uses it
@@ -398,13 +442,13 @@ const DeliveryTrackingMap = ({
       return { start: null, end: null };
     }
 
-    // Initial stage: before rider accepts, show customer <-> store route.
+    // Initial stage: before rider accepts, show store -> saved order address route.
     if (
       !order ||
       (!hasRiderLocation && status === 'pending' && currentPhase === 'assigned' && orderStatus !== 'out_for_delivery')
     ) {
       if (hasRestaurantCoords) {
-        return { start: effectiveCustomerCoords, end: restaurantCoords };
+        return { start: restaurantCoords, end: effectiveCustomerCoords };
       }
       return { start: null, end: null };
     }
@@ -763,17 +807,17 @@ const DeliveryTrackingMap = ({
         socketRef.current.emit('request-current-location', alias);
       });
 
-      // Fallback sync: only when live updates are stale and Firebase stream is not active.
+      // Fallback sync: request current location quickly when stream is stale.
       const locationRequestInterval = setInterval(() => {
         const now = Date.now();
-        const isLiveUpdateStale = (now - (lastLiveLocationUpdateAtRef.current || 0)) > 20000;
+        const isLiveUpdateStale = (now - (lastLiveLocationUpdateAtRef.current || 0)) > SOCKET_LOCATION_STALE_THRESHOLD_MS;
         const hasFirebaseStream = Boolean(activeFirebaseAliasRef.current);
-        if (socketRef.current && socketRef.current.connected && isLiveUpdateStale && !hasFirebaseStream) {
+        if (socketRef.current && socketRef.current.connected && (isLiveUpdateStale || !hasFirebaseStream)) {
           orderAliases.forEach((alias) => {
             socketRef.current.emit('request-current-location', alias);
           });
         }
-      }, 20000);
+      }, SOCKET_LOCATION_REFRESH_INTERVAL_MS);
 
       socketRef.current._locationRequestInterval = locationRequestInterval;
     });
@@ -913,7 +957,11 @@ const DeliveryTrackingMap = ({
         const value = snapshot.val();
         if (!value || typeof value !== 'object') return;
 
-        activeFirebaseAliasRef.current = alias;
+        const firebaseLastUpdated = Number(value?.last_updated || 0);
+        const isFreshFirebaseStream =
+          Number.isFinite(firebaseLastUpdated) &&
+          (Date.now() - firebaseLastUpdated) <= 15000;
+        activeFirebaseAliasRef.current = isFreshFirebaseStream ? alias : null;
 
         const isCustomerLeg =
           value?.status === 'en_route_to_delivery' ||
@@ -970,7 +1018,7 @@ const DeliveryTrackingMap = ({
             ? { lat: customerLat, lng: customerLng }
             : null;
         const expectedDestination = isCustomerLeg
-          ? (firebaseCustomerCoordsValue || effectiveCustomerCoords || null)
+          ? (effectiveCustomerCoords || firebaseCustomerCoordsValue || null)
           : (firebaseRestaurantCoords || restaurantCoords || null);
 
         let pointsToRender = normalizedPoints;
@@ -1402,7 +1450,7 @@ const DeliveryTrackingMap = ({
     
     // Throttle route updates to avoid too many API calls
     const now = Date.now();
-    if (lastRouteUpdateRef.current && (now - lastRouteUpdateRef.current) < 10000) {
+    if (lastRouteUpdateRef.current && (now - lastRouteUpdateRef.current) < ROUTE_RECALC_MIN_INTERVAL_MS) {
       return; // Skip if updated less than 10 seconds ago
     }
     

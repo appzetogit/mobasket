@@ -138,6 +138,48 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
       return;
     }
 
+    // Never re-send "new order" once delivery flow has already progressed.
+    try {
+      const OrderModel = await import('../models/Order.js');
+      const latestOrder = await OrderModel.default
+        .findById(order?._id || order?.id || order?.orderMongoId)
+        .select('status deliveryPartnerId deliveryState')
+        .lean();
+
+      const latestStatus = String(latestOrder?.status || '').toLowerCase();
+      const latestPhase = String(latestOrder?.deliveryState?.currentPhase || '').toLowerCase();
+      const latestDeliveryStateStatus = String(latestOrder?.deliveryState?.status || '').toLowerCase();
+      const latestAssignedDeliveryId = String(latestOrder?.deliveryPartnerId || '');
+      const targetDeliveryId = String(deliveryPartnerId || '');
+
+      const isAlreadyInProgress =
+        latestStatus === 'out_for_delivery' ||
+        latestStatus === 'picked_up' ||
+        latestStatus === 'delivered' ||
+        latestPhase === 'en_route_to_pickup' ||
+        latestPhase === 'at_pickup' ||
+        latestPhase === 'en_route_to_delivery' ||
+        latestPhase === 'picked_up' ||
+        latestPhase === 'at_delivery' ||
+        latestPhase === 'completed' ||
+        latestDeliveryStateStatus === 'accepted' ||
+        latestDeliveryStateStatus === 'reached_pickup' ||
+        latestDeliveryStateStatus === 'order_confirmed' ||
+        latestDeliveryStateStatus === 'en_route_to_delivery' ||
+        latestDeliveryStateStatus === 'reached_drop' ||
+        latestDeliveryStateStatus === 'delivered';
+
+      if (isAlreadyInProgress) {
+        return { success: false, reason: 'order_already_in_progress' };
+      }
+
+      if (latestAssignedDeliveryId && targetDeliveryId && latestAssignedDeliveryId !== targetDeliveryId) {
+        return { success: false, reason: 'order_assigned_to_other_delivery_partner' };
+      }
+    } catch (latestOrderGuardError) {
+      console.warn('Could not verify latest order state before notifying delivery partner:', latestOrderGuardError.message);
+    }
+
     // Populate userId if it's not already populated
     let orderWithUser = order;
     if (order.userId && typeof order.userId === 'object' && order.userId._id) {
@@ -234,15 +276,9 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
       deliveryDistance = calculateDistance(restaurantLat, restaurantLng, customerLat, customerLng);
     }
 
-    // Calculate estimated earnings; use order's delivery fee as fallback when 0 or distance missing
+    // Calculate estimated earnings using the configured rider earning formula.
     const deliveryFeeFromOrder = order.pricing?.deliveryFee ?? 0;
     let estimatedEarnings = await calculateEstimatedEarnings(deliveryDistance || 0, orderWithUser?.platform || order?.platform || 'mofood');
-    const earnedValue = typeof estimatedEarnings === 'object' ? (estimatedEarnings.totalEarning ?? 0) : (Number(estimatedEarnings) || 0);
-    if (earnedValue <= 0 && deliveryFeeFromOrder > 0) {
-      estimatedEarnings = typeof estimatedEarnings === 'object'
-        ? { ...estimatedEarnings, totalEarning: deliveryFeeFromOrder }
-        : deliveryFeeFromOrder;
-    }
 
     // Prepare order notification data
     const resolvedDeliveryDistance =
@@ -411,6 +447,43 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
       return { success: false, notified: 0 };
     }
 
+    // Do not notify multiple partners if this order is already accepted/assigned/in-progress.
+    try {
+      const OrderModel = await import('../models/Order.js');
+      const latestOrder = await OrderModel.default
+        .findById(order?._id || order?.id || order?.orderMongoId)
+        .select('status deliveryPartnerId deliveryState')
+        .lean();
+
+      const latestStatus = String(latestOrder?.status || '').toLowerCase();
+      const latestPhase = String(latestOrder?.deliveryState?.currentPhase || '').toLowerCase();
+      const latestDeliveryStateStatus = String(latestOrder?.deliveryState?.status || '').toLowerCase();
+
+      const isAlreadyAssignedOrInProgress =
+        Boolean(latestOrder?.deliveryPartnerId) ||
+        latestStatus === 'out_for_delivery' ||
+        latestStatus === 'picked_up' ||
+        latestStatus === 'delivered' ||
+        latestPhase === 'en_route_to_pickup' ||
+        latestPhase === 'at_pickup' ||
+        latestPhase === 'en_route_to_delivery' ||
+        latestPhase === 'picked_up' ||
+        latestPhase === 'at_delivery' ||
+        latestPhase === 'completed' ||
+        latestDeliveryStateStatus === 'accepted' ||
+        latestDeliveryStateStatus === 'reached_pickup' ||
+        latestDeliveryStateStatus === 'order_confirmed' ||
+        latestDeliveryStateStatus === 'en_route_to_delivery' ||
+        latestDeliveryStateStatus === 'reached_drop' ||
+        latestDeliveryStateStatus === 'delivered';
+
+      if (isAlreadyAssignedOrInProgress) {
+        return { success: false, notified: 0, reason: 'order_already_assigned_or_in_progress' };
+      }
+    } catch (latestOrderGuardError) {
+      console.warn('Could not verify latest order state before notifying multiple delivery partners:', latestOrderGuardError.message);
+    }
+
     const io = await getIOInstance();
     if (!io) {
       console.warn('Socket.IO not initialized, skipping delivery boy notifications');
@@ -508,26 +581,29 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
         deliveryDistance
       });
       
-      // Use deliveryFee as fallback if earnings is 0 or invalid
-      if (earnedValue <= 0 && deliveryFeeFromOrder > 0) {
-        console.log(`⚠️ Earnings is 0, using deliveryFee as fallback: ₹${deliveryFeeFromOrder}`);
-        estimatedEarnings = typeof estimatedEarnings === 'object'
-          ? { ...estimatedEarnings, totalEarning: deliveryFeeFromOrder }
-          : deliveryFeeFromOrder;
-      }
-      
       console.log(`✅ Final estimated earnings for order ${orderWithUser.orderId}: ₹${typeof estimatedEarnings === 'object' ? estimatedEarnings.totalEarning : estimatedEarnings} (distance: ${deliveryDistance.toFixed(2)} km)`);
     } catch (earningsError) {
       console.error('❌ Error calculating estimated earnings in notification:', earningsError);
       console.error('❌ Error stack:', earningsError.stack);
-      // Fallback to deliveryFee or default
-      estimatedEarnings = deliveryFeeFromOrder > 0 ? deliveryFeeFromOrder : {
-        basePayout: 10,
+      // Fallback to the default rider earning formula if fee settings cannot be loaded.
+      const extraDistanceKm = Math.max(0, Number(deliveryDistance || 0) - 2);
+      estimatedEarnings = {
+        basePayout: 20,
         distance: deliveryDistance,
         commissionPerKm: 5,
-        distanceCommission: 0,
-        totalEarning: 10,
-        breakdown: 'Default calculation'
+        distanceCommission: extraDistanceKm * 5,
+        totalEarning: 20 + (extraDistanceKm * 5),
+        breakdown: {
+          basePayout: 20,
+          distance: deliveryDistance,
+          commissionPerKm: 5,
+          distanceCommission: extraDistanceKm * 5,
+          minDistance: 0,
+          maxDistance: 2,
+          extraDistanceKm,
+          formula: `Rs20.00 + (${extraDistanceKm.toFixed(2)} km x Rs5.00) = Rs${(20 + (extraDistanceKm * 5)).toFixed(2)}`
+        },
+        source: 'default_formula'
       };
       console.log(`⚠️ Using fallback earnings: ₹${typeof estimatedEarnings === 'object' ? estimatedEarnings.totalEarning : estimatedEarnings}`);
     }

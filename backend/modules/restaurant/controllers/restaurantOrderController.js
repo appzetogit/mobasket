@@ -324,6 +324,14 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, 'Order not found');
     }
 
+    // Accept should be idempotent from the restaurant UI.
+    // Stale popups or a second click can hit this endpoint after the order already moved
+    // to preparing/ready, and that should be treated as a successful accept.
+    const alreadyAcceptedStatuses = ['preparing', 'ready'];
+    if (alreadyAcceptedStatuses.includes(order.status)) {
+      return successResponse(res, 200, 'Order already accepted', { order });
+    }
+
     // Allow accepting orders with status 'pending' or 'confirmed'
     // 'confirmed' status means payment is verified, restaurant can still accept
     if (!['pending', 'confirmed'].includes(order.status)) {
@@ -468,7 +476,8 @@ export const acceptOrder = asyncHandler(async (req, res) => {
           } else if (freshOrder.deliveryPartnerId) {
             console.log(`⚠️ Order ${order.orderId} already has delivery partner: ${freshOrder.deliveryPartnerId}`);
           } else {
-            // Step 1: Find nearest delivery boys (within 5km priority distance)
+            // Step 1: Find nearest delivery boys (within 20km priority distance)
+            // Keep this aligned with manual resend so initial accept behaves the same.
             const requiredZoneId = freshOrder?.assignmentInfo?.zoneId ? String(freshOrder.assignmentInfo.zoneId) : null;
             const incomingCodAmount = ['cash', 'cod'].includes(String(freshOrder?.payment?.method || '').toLowerCase())
               ? Math.max(0, Number(freshOrder?.pricing?.total) || 0)
@@ -477,7 +486,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
               restaurantLat,
               restaurantLng,
               restaurantId,
-              5,
+              20,
               { requiredZoneId, incomingCodAmount }
             );
             
@@ -597,6 +606,21 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       }
     } else {
       console.log(`ℹ️ Order ${order.orderId} already has delivery partner assigned: ${order.deliveryPartnerId}`);
+      // Ensure assigned delivery partner gets notification immediately from accept flow.
+      // This prevents cases where assignment succeeded but first emit failed, forcing manual resend.
+      try {
+        const assignedOrder = await Order.findById(order._id)
+          .populate('userId', 'name phone')
+          .populate('restaurantId', 'name address location phone ownerPhone')
+          .lean();
+
+        if (assignedOrder) {
+          await notifyDeliveryBoyNewOrder(assignedOrder, order.deliveryPartnerId);
+          console.log(`✅ Ensured notification for assigned delivery partner ${order.deliveryPartnerId} on order ${order.orderId}`);
+        }
+      } catch (assignedNotifyError) {
+        console.error(`❌ Failed to ensure assigned delivery notification for order ${order.orderId}:`, assignedNotifyError);
+      }
     }
 
     return successResponse(res, 200, 'Order accepted successfully', {
