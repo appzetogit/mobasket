@@ -23,7 +23,7 @@ export default function DeliveryEmergencyHelp() {
     try {
       setLoading(true)
       const response = await adminAPI.getEmergencyHelp()
-      
+
       if (response?.data?.success && response?.data?.data) {
         const data = response.data.data
         setFormData({
@@ -43,29 +43,43 @@ export default function DeliveryEmergencyHelp() {
 
   const validateForm = () => {
     const errors = {}
-    const phoneRegex = /^[\d\s\-\+\(\)]+$/
 
-    if (formData.medicalEmergency && !phoneRegex.test(formData.medicalEmergency.trim())) {
-      errors.medicalEmergency = "Invalid phone number format"
+    const validateField = (id, value) => {
+      if (!value) return;
+      const trimmed = value.trim();
+      const digits = trimmed.replace(/\D/g, "");
+
+      // Only enforce 10 digits for full phone number fields
+      const isPhoneNumberField = id === "accidentHelpline" || id === "insurance";
+      if (isPhoneNumberField && digits.length !== 10) {
+        errors[id] = "Phone number must be exactly 10 digits";
+      }
     }
-    if (formData.accidentHelpline && !phoneRegex.test(formData.accidentHelpline.trim())) {
-      errors.accidentHelpline = "Invalid phone number format"
-    }
-    if (formData.contactPolice && !phoneRegex.test(formData.contactPolice.trim())) {
-      errors.contactPolice = "Invalid phone number format"
-    }
-    if (formData.insurance && !phoneRegex.test(formData.insurance.trim())) {
-      errors.insurance = "Invalid phone number format"
-    }
+
+    validateField("medicalEmergency", formData.medicalEmergency);
+    validateField("accidentHelpline", formData.accidentHelpline);
+    validateField("contactPolice", formData.contactPolice);
+    validateField("insurance", formData.insurance);
 
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
 
   const handleInputChange = (field, value) => {
+    // Only enforce strict 10-digit numeric filtering for full phone number fields
+    const isPhoneNumberField = field === "accidentHelpline" || field === "insurance";
+    let filteredValue;
+
+    if (isPhoneNumberField) {
+      filteredValue = value.replace(/\D/g, "").slice(0, 10);
+    } else {
+      // For short codes (like 100, 108), allow basic phone formatting without strict 10-digit limit
+      filteredValue = value.replace(/[^\d\s\-\+\(\)]/g, "");
+    }
+
     setFormData(prev => ({
       ...prev,
-      [field]: value
+      [field]: filteredValue
     }))
     // Clear error for this field when user starts typing
     if (formErrors[field]) {
@@ -79,7 +93,7 @@ export default function DeliveryEmergencyHelp() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    
+
     if (!validateForm()) {
       toast.error("Please fix the errors in the form")
       return
@@ -176,7 +190,7 @@ export default function DeliveryEmergencyHelp() {
               <div className="text-sm text-blue-800">
                 <p className="font-semibold mb-1">Important Information</p>
                 <p>
-                  These phone numbers will be displayed to delivery partners in the emergency help section. 
+                  These phone numbers will be displayed to delivery partners in the emergency help section.
                   When a delivery partner clicks on any emergency option, it will automatically dial the corresponding number.
                 </p>
               </div>
@@ -194,15 +208,15 @@ export default function DeliveryEmergencyHelp() {
                 <p className="text-xs text-slate-600 mb-2">{field.description}</p>
                 <div className="relative">
                   <input
-                    type="text"
+                    type="tel"
+                    maxLength={field.id === "accidentHelpline" || field.id === "insurance" ? 10 : undefined}
                     value={formData[field.id]}
                     onChange={(e) => handleInputChange(field.id, e.target.value)}
                     placeholder={field.placeholder}
-                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                      formErrors[field.id]
-                        ? "border-red-300 focus:ring-red-500"
-                        : "border-slate-300"
-                    }`}
+                    className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${formErrors[field.id]
+                      ? "border-red-300 focus:ring-red-500"
+                      : "border-slate-300"
+                      }`}
                   />
                   {formErrors[field.id] && (
                     <p className="mt-1 text-sm text-red-600 flex items-center gap-1">

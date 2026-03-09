@@ -37,10 +37,10 @@ export default function GroceryStoreProductsListPage() {
   )
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col pb-24">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       <RestaurantNavbar />
-      
-      <div className="flex-1 px-4 py-6">
+
+      <div className="flex-1 px-4 py-6 pb-24">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900">All Products</h1>
           <button
@@ -88,37 +88,37 @@ export default function GroceryStoreProductsListPage() {
               const productId = product._id ?? product.id
               if (!productId) return null
               return (
-              <motion.button
-                key={productId}
-                onClick={() => navigate(`/store/product/${productId}`)}
-                className="bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow text-left"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                {product.images && product.images.length > 0 && (
-                  <img
-                    src={product.images[0]}
-                    alt={product.name}
-                    className="w-full h-32 object-cover rounded-lg mb-3"
-                  />
-                )}
-                <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2">
-                  {product.name}
-                </h3>
-                <p className="text-sm text-gray-600 mb-2 line-clamp-2">
-                  {product.description}
-                </p>
-                <div className="flex items-center justify-between">
-                  <span className="text-lg font-bold text-[#ff8100]">
-                    ₹{product.sellingPrice || product.price || 0}
-                  </span>
-                  {product.mrp && product.mrp > (product.sellingPrice || product.price) && (
-                    <span className="text-sm text-gray-400 line-through">
-                      ₹{product.mrp}
-                    </span>
+                <motion.button
+                  key={productId}
+                  onClick={() => navigate(`/store/product/${productId}`)}
+                  className="bg-white rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow text-left"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  {product.images && product.images.length > 0 && (
+                    <img
+                      src={product.images[0]}
+                      alt={product.name}
+                      className="w-full h-32 object-cover rounded-lg mb-3"
+                    />
                   )}
-                </div>
-              </motion.button>
+                  <h3 className="font-semibold text-gray-900 mb-1 line-clamp-2">
+                    {product.name}
+                  </h3>
+                  <p className="text-sm text-gray-600 mb-2 line-clamp-2">
+                    {product.description}
+                  </p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-lg font-bold text-[#ff8100]">
+                      ₹{product.sellingPrice || product.price || 0}
+                    </span>
+                    {product.mrp && product.mrp > (product.sellingPrice || product.price) && (
+                      <span className="text-sm text-gray-400 line-through">
+                        ₹{product.mrp}
+                      </span>
+                    )}
+                  </div>
+                </motion.button>
               )
             })}
           </div>

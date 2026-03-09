@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Image as ImageIcon, Upload, Clock, Calendar as CalendarIcon, Sparkles, ArrowLeft } from "lucide-react"
+import { Image as ImageIcon, Upload, Clock, Calendar as CalendarIcon, Sparkles, ArrowLeft, Camera } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -482,6 +482,38 @@ export default function RestaurantOnboarding() {
       throw new Error(`Image upload failed: ${errorMsg}`)
     }
   }
+
+  const handleCameraCapture = async (onSuccess) => {
+    if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+      try {
+        toast.loading("Capturing image...", { id: "cameraCapture" });
+        const result = await window.flutter_inappwebview.callHandler('openCamera');
+        if (result && result.success && result.base64) {
+          const base64Data = result.base64;
+          const mimeType = result.mimeType || 'image/jpeg';
+          const filename = result.fileName || `camera_${Date.now()}.jpg`;
+
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const file = new File([byteArray], filename, { type: mimeType });
+
+          onSuccess(file);
+          toast.success("Image captured successfully", { id: "cameraCapture" });
+        } else {
+          toast.error("Camera capture failed or cancelled", { id: "cameraCapture" });
+        }
+      } catch (error) {
+        console.error('Camera error:', error);
+        toast.error('Failed to capture image', { id: "cameraCapture" });
+      }
+    } else {
+      toast.error("Camera is only available in the mobile app");
+    }
+  };
 
   // Validation functions for each step
   const validateStep1 = () => {
@@ -1101,13 +1133,34 @@ export default function RestaurantOnboarding() {
                 </span>
               </div>
             </div>
-            <label
-              htmlFor="menuImagesInput"
-              className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black  border-black text-xs font-medium cursor-pointer     w-full items-center"
-            >
-              <Upload className="w-4.5 h-4.5" />
-              <span>Choose file</span>
-            </label>
+            <div className="flex w-full gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+                    handleCameraCapture((file) => {
+                      setStep2((prev) => ({
+                        ...prev,
+                        menuImages: [file],
+                      }))
+                    });
+                  } else {
+                    document.getElementById("menuImagesInput").click();
+                  }
+                }}
+                className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
+              >
+                <Camera className="w-4 h-4" />
+                <span>Camera</span>
+              </button>
+              <label
+                htmlFor="menuImagesInput"
+                className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
+              >
+                <ImageIcon className="w-4 h-4" />
+                <span>Gallery</span>
+              </label>
+            </div>
             <input
               id="menuImagesInput"
               type="file"
@@ -1221,13 +1274,34 @@ export default function RestaurantOnboarding() {
             </div>
 
           </div>
-          <label
-            htmlFor="profileImageInput"
-            className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black  border-black text-xs font-medium cursor-pointer     w-full items-center"
-          >
-            <Upload className="w-4.5 h-4.5" />
-            <span>Upload</span>
-          </label>
+          <div className="flex w-full gap-2 mt-2">
+            <button
+              type="button"
+              onClick={() => {
+                if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+                  handleCameraCapture((file) => {
+                    setStep2((prev) => ({
+                      ...prev,
+                      profileImage: file,
+                    }))
+                  });
+                } else {
+                  document.getElementById("profileImageInput").click();
+                }
+              }}
+              className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
+            >
+              <Camera className="w-4 h-4" />
+              <span>Camera</span>
+            </button>
+            <label
+              htmlFor="profileImageInput"
+              className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
+            >
+              <ImageIcon className="w-4 h-4" />
+              <span>Gallery</span>
+            </label>
+          </div>
           <input
             id="profileImageInput"
             type="file"
@@ -1342,13 +1416,29 @@ export default function RestaurantOnboarding() {
                 <span className="text-xs text-gray-500">No file chosen</span>
               </div>
             )}
-            <label
-              htmlFor={id}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white border border-gray-300 text-black text-xs font-medium cursor-pointer w-full justify-center"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              <span>{fileName ? "Choose another file" : "Choose file"}</span>
-            </label>
+            <div className="flex w-full gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+                    handleCameraCapture((f) => onFileChange(f));
+                  } else {
+                    document.getElementById(id).click();
+                  }
+                }}
+                className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-gray-300 text-xs font-medium cursor-pointer hover:bg-gray-50"
+              >
+                <Camera className="w-4 h-4" />
+                <span>Camera</span>
+              </button>
+              <label
+                htmlFor={id}
+                className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-gray-300 text-xs font-medium cursor-pointer hover:bg-gray-50"
+              >
+                <ImageIcon className="w-4 h-4" />
+                <span>Gallery</span>
+              </label>
+            </div>
             <input
               id={id}
               type="file"

@@ -33,7 +33,9 @@ export default function AddonsList() {
         for (const restaurant of restaurants) {
           try {
             const restaurantId = restaurant._id || restaurant.id
-            const addonsResponse = await restaurantAPI.getAddonsByRestaurantId(restaurantId)
+            const addonsResponse = await restaurantAPI.getAddonsByRestaurantId(restaurantId, {
+              includeUnapproved: "true",
+            })
             const restaurantAddons = addonsResponse?.data?.data?.addons || 
                                     addonsResponse?.data?.addons || 
                                     []

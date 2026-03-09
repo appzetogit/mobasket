@@ -587,8 +587,10 @@ export const restaurantAPI = {
   deleteAddon: (id) => {
     return apiClient.delete(API_ENDPOINTS.RESTAURANT.ADDON_BY_ID.replace(':id', id));
   },
-  getAddonsByRestaurantId: (restaurantId) => {
-    return apiClient.get(API_ENDPOINTS.RESTAURANT.ADDONS_BY_RESTAURANT_ID.replace(':id', restaurantId));
+  getAddonsByRestaurantId: (restaurantId, params = {}) => {
+    return apiClient.get(API_ENDPOINTS.RESTAURANT.ADDONS_BY_RESTAURANT_ID.replace(':id', restaurantId), {
+      params,
+    });
   },
 
   getMenuByRestaurantId: (restaurantId) => {
@@ -877,6 +879,20 @@ export const groceryStoreAPI = {
 
   deleteProduct: (id) => {
     return apiClient.delete(API_ENDPOINTS.GROCERY_STORE.PRODUCT_DELETE.replace(':id', id));
+  },
+
+  // Add-ons
+  addAddon: (addonData) => {
+    return apiClient.post(API_ENDPOINTS.GROCERY_STORE.ADDON, addonData);
+  },
+  getAddons: () => {
+    return apiClient.get(API_ENDPOINTS.GROCERY_STORE.ADDONS);
+  },
+  updateAddon: (id, addonData) => {
+    return apiClient.put(API_ENDPOINTS.GROCERY_STORE.ADDON_BY_ID.replace(':id', id), addonData);
+  },
+  deleteAddon: (id) => {
+    return apiClient.delete(API_ENDPOINTS.GROCERY_STORE.ADDON_BY_ID.replace(':id', id));
   },
 
   // Public grocery catalog (categories/subcategories) – no auth required

@@ -34,12 +34,12 @@ export default function LimitSettlement() {
           date:
             t.date || t.createdAt
               ? new Date(t.date || t.createdAt).toLocaleDateString("en-IN", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit"
-                })
+                day: "2-digit",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit"
+              })
               : "N/A"
         }))
 
@@ -161,8 +161,8 @@ export default function LimitSettlement() {
               No settlement transactions
             </p>
             <p className="text-gray-600 text-sm text-center max-w-xs">
-              Jab bhi aap available limit settle karoge, uski payment
-              transactions yahan dikhenge.
+              Whenever you settle your available limit, its payment transactions
+              will appear here.
             </p>
           </div>
         )}

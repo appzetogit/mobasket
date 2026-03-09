@@ -292,8 +292,8 @@ function TimePickerWheel({
                   >
                     <span
                       className={`text-lg transition-all duration-200 ${selectedHour === hour
-                          ? 'font-bold text-gray-900 text-xl'
-                          : 'font-normal text-gray-400 text-base'
+                        ? 'font-bold text-gray-900 text-xl'
+                        : 'font-normal text-gray-400 text-base'
                         }`}
                     >
                       {hour}
@@ -350,8 +350,8 @@ function TimePickerWheel({
                   >
                     <span
                       className={`text-lg transition-all duration-200 ${selectedMinute === minute
-                          ? 'font-bold text-gray-900 text-xl'
-                          : 'font-normal text-gray-400 text-base'
+                        ? 'font-bold text-gray-900 text-xl'
+                        : 'font-normal text-gray-400 text-base'
                         }`}
                     >
                       {minute.toString().padStart(2, '0')}
@@ -404,8 +404,8 @@ function TimePickerWheel({
                   >
                     <span
                       className={`text-lg transition-all duration-200 ${selectedPeriod === period
-                          ? 'font-bold text-gray-900 text-xl'
-                          : 'font-normal text-gray-400 text-base'
+                        ? 'font-bold text-gray-900 text-xl'
+                        : 'font-normal text-gray-400 text-base'
                         }`}
                     >
                       {period}
@@ -569,12 +569,12 @@ function SimpleCalendar({ selectedDate, onDateSelect, isOpen, onClose }) {
                       onClose()
                     }}
                     className={`h-10 text-sm rounded transition-colors ${!isCurrent
-                        ? 'text-gray-300'
-                        : isSelectedDate
-                          ? 'bg-black text-white'
-                          : isTodayDate
-                            ? 'bg-gray-100 text-black font-semibold'
-                            : 'text-gray-700 hover:bg-gray-100'
+                      ? 'text-gray-300'
+                      : isSelectedDate
+                        ? 'bg-black text-white'
+                        : isTodayDate
+                          ? 'bg-gray-100 text-black font-semibold'
+                          : 'text-gray-700 hover:bg-gray-100'
                       }`}
                   >
                     {date.getDate()}
@@ -643,6 +643,13 @@ export default function Inventory() {
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [addons, setAddons] = useState([])
   const [loadingAddons, setLoadingAddons] = useState(false)
+  const [isAddonModalOpen, setIsAddonModalOpen] = useState(false)
+  const [savingAddon, setSavingAddon] = useState(false)
+  const [newAddon, setNewAddon] = useState({
+    name: "",
+    description: "",
+    price: ""
+  })
 
   // Inventory tabs
   const inventoryTabs = ["all-items", "add-ons"]
@@ -653,29 +660,52 @@ export default function Inventory() {
   // Content container ref
   const contentContainerRef = useRef(null)
 
+  // Memoized filtered add-ons
+  const filteredAddons = useMemo(() => {
+    let result = addons
+    const q = searchQuery.trim().toLowerCase()
+
+    if (q) {
+      result = result.filter(addon =>
+        addon.name?.toLowerCase().includes(q) ||
+        (addon.description || "").toLowerCase().includes(q)
+      )
+    }
+
+    if (selectedFilter) {
+      if (selectedFilter === "out-of-stock") {
+        result = result.filter(addon => addon.isAvailable === false)
+      } else if (selectedFilter === "in-stock") {
+        result = result.filter(addon => addon.isAvailable !== false)
+      }
+    }
+
+    return result
+  }, [addons, searchQuery, selectedFilter])
+
   // Fetch menu items from API and convert to inventory format
   useEffect(() => {
     const fetchMenuData = async () => {
       try {
         setLoadingInventory(true)
-        
+
         // For grocery stores, use grocery products instead of menu
         if (isGroceryStore) {
           // Fetch grocery products and convert to inventory format
           const productsResponse = await groceryStoreAPI.getProducts({ activeOnly: 'false' })
-          
+
           if (productsResponse.data?.success && productsResponse.data?.data) {
-            const products = Array.isArray(productsResponse.data.data) 
-              ? productsResponse.data.data 
+            const products = Array.isArray(productsResponse.data.data)
+              ? productsResponse.data.data
               : productsResponse.data.data?.products || []
-            
+
             // Group products by category
             const categoryMap = new Map()
-            
+
             products.forEach(product => {
               const categoryId = product.category?._id || product.category
               const categoryName = product.category?.name || 'Uncategorized'
-              
+
               if (!categoryMap.has(categoryId)) {
                 categoryMap.set(categoryId, {
                   id: categoryId,
@@ -687,7 +717,7 @@ export default function Inventory() {
                   order: 0
                 })
               }
-              
+
               const category = categoryMap.get(categoryId)
               category.items.push({
                 id: product._id,
@@ -704,7 +734,7 @@ export default function Inventory() {
               })
               category.itemCount++
             })
-            
+
             const convertedCategories = Array.from(categoryMap.values())
             setCategories(convertedCategories)
             setExpandedCategories(convertedCategories.map(c => c.id))
@@ -715,22 +745,22 @@ export default function Inventory() {
           setLoadingInventory(false)
           return
         }
-        
+
         // For restaurants, fetch menu from API
         const menuResponse = await restaurantAPI.getMenu()
-        
+
         if (menuResponse.data && menuResponse.data.success && menuResponse.data.data && menuResponse.data.data.menu) {
           const menuSections = menuResponse.data.data.menu.sections || []
-          
+
           // Convert menu sections to inventory categories
           const convertedCategories = menuSections.map((section, sectionIndex) => {
             // Collect all items from section and subsections
             const allItems = []
-            
+
             // Add direct items from section
             if (Array.isArray(section.items)) {
               section.items.forEach(item => {
-                  allItems.push({
+                allItems.push({
                   id: String(item.id || Date.now() + Math.random()),
                   name: item.name || "Unnamed Item",
                   inStock: item.isAvailable !== undefined ? item.isAvailable : true,
@@ -745,35 +775,35 @@ export default function Inventory() {
                 })
               })
             }
-            
+
             // Add items from subsections
             if (Array.isArray(section.subsections)) {
               section.subsections.forEach(subsection => {
                 if (Array.isArray(subsection.items)) {
                   subsection.items.forEach(item => {
-                  allItems.push({
-                  id: String(item.id || Date.now() + Math.random()),
-                  name: item.name || "Unnamed Item",
-                  inStock: item.isAvailable !== undefined ? item.isAvailable : true,
-                  isVeg: item.foodType === "Veg",
-                  isRecommended: item.isRecommended !== undefined ? item.isRecommended : false,
-                  stockQuantity: item.stock || "Unlimited",
-                  unit: item.itemSizeUnit || "piece",
-                  approvalStatus: item.approvalStatus || '',
-                  status: item.status || '',
-                  expiryDate: null,
-                  lastRestocked: null,
-                })
+                    allItems.push({
+                      id: String(item.id || Date.now() + Math.random()),
+                      name: item.name || "Unnamed Item",
+                      inStock: item.isAvailable !== undefined ? item.isAvailable : true,
+                      isVeg: item.foodType === "Veg",
+                      isRecommended: item.isRecommended !== undefined ? item.isRecommended : false,
+                      stockQuantity: item.stock || "Unlimited",
+                      unit: item.itemSizeUnit || "piece",
+                      approvalStatus: item.approvalStatus || '',
+                      status: item.status || '',
+                      expiryDate: null,
+                      lastRestocked: null,
+                    })
                   })
                 }
               })
             }
-            
+
             // Use category's isEnabled from menu API, not calculated from items
             // Category toggle should be independent of item toggles
             const categoryInStock = section.isEnabled !== undefined ? section.isEnabled : true
             const itemCount = allItems.length
-            
+
             return {
               id: section.id || `category-${sectionIndex}`,
               name: section.name || "Unnamed Category",
@@ -784,7 +814,7 @@ export default function Inventory() {
               order: section.order !== undefined ? section.order : sectionIndex,
             }
           })
-          
+
           setCategories(convertedCategories)
           setExpandedCategories(convertedCategories.map(c => c.id))
         } else {
@@ -795,7 +825,7 @@ export default function Inventory() {
       } catch (error) {
         // Only log and show toast if it's not a network/timeout error
         if (error.code !== 'ERR_NETWORK' && error.code !== 'ECONNABORTED' && !error.message?.includes('timeout')) {
-        console.error('Error fetching menu data:', error)
+          console.error('Error fetching menu data:', error)
           toast.error('Failed to load menu data')
         } else if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
           // Silently handle network errors - backend is not running
@@ -807,7 +837,7 @@ export default function Inventory() {
         setLoadingInventory(false)
       }
     }
-    
+
     fetchMenuData()
   }, [isGroceryStore])
 
@@ -815,22 +845,23 @@ export default function Inventory() {
   // Stock status updates should be managed through the menu API, not inventory API
   // Auto-save disabled since we're displaying menu data, not inventory data
 
-  // Fetch add-ons when add-ons tab is active (restaurant only, grocery stores don't have addons)
+  const resetNewAddonForm = () => {
+    setNewAddon({
+      name: "",
+      description: "",
+      price: ""
+    })
+  }
+
+  // Fetch add-ons when add-ons tab is active
   const fetchAddons = async (showLoading = true) => {
-    if (isGroceryStore) {
-      // Grocery stores don't have addons concept
-      setAddons([])
-      if (showLoading) setLoadingAddons(false)
-      return
-    }
-    
     try {
       if (showLoading) setLoadingAddons(true)
-      const response = await restaurantAPI.getAddons()
+      const response = isGroceryStore
+        ? await groceryStoreAPI.getAddons()
+        : await restaurantAPI.getAddons()
       const data = response?.data?.data?.addons || response?.data?.addons || []
-      // Filter to show only approved add-ons
-      const approvedAddons = data.filter(addon => addon.approvalStatus === 'approved')
-      setAddons(approvedAddons)
+      setAddons(Array.isArray(data) ? data : [])
     } catch (error) {
       console.error('Error fetching add-ons:', error)
       toast.error('Failed to load add-ons')
@@ -844,23 +875,18 @@ export default function Inventory() {
     if (activeTab === "add-ons") {
       fetchAddons(true)
     }
-  }, [activeTab])
+  }, [activeTab, isGroceryStore])
 
   // Handle addon toggle
   const handleAddonToggle = async (addonId, isAvailable) => {
     try {
-      // Update addon availability via API
-      if (isGroceryStore) {
-        // Grocery stores don't have addons
-        toast.error('Addons are not available for grocery stores')
-        return
-      }
-      await restaurantAPI.updateAddon(addonId, {
+      const addonAPI = isGroceryStore ? groceryStoreAPI : restaurantAPI
+      await addonAPI.updateAddon(addonId, {
         isAvailable: isAvailable
       })
 
       // Update local state
-      setAddons(prev => prev.map(a => 
+      setAddons(prev => prev.map(a =>
         a.id === addonId ? { ...a, isAvailable } : a
       ))
 
@@ -868,6 +894,40 @@ export default function Inventory() {
     } catch (error) {
       console.error('Error toggling addon:', error)
       toast.error('Failed to update add-on availability')
+    }
+  }
+
+  const handleCreateAddon = async () => {
+    const name = newAddon.name.trim()
+    const price = Number(newAddon.price)
+
+    if (!name) {
+      toast.error("Please enter add-on name")
+      return
+    }
+
+    if (!Number.isFinite(price) || price < 0) {
+      toast.error("Please enter valid add-on price")
+      return
+    }
+
+    try {
+      setSavingAddon(true)
+      const addonAPI = isGroceryStore ? groceryStoreAPI : restaurantAPI
+      await addonAPI.addAddon({
+        name,
+        description: newAddon.description.trim(),
+        price
+      })
+      toast.success("Add-on created successfully")
+      setIsAddonModalOpen(false)
+      resetNewAddonForm()
+      fetchAddons(false)
+    } catch (error) {
+      console.error("Error creating add-on:", error)
+      toast.error(error?.response?.data?.message || "Failed to create add-on")
+    } finally {
+      setSavingAddon(false)
     }
   }
 
@@ -964,17 +1024,23 @@ export default function Inventory() {
   const statusFilteredCategories = useMemo(() => {
     if (!selectedFilter) return categories
 
-    return categories.filter(category => {
-      const items = category.items || []
-      if (selectedFilter === "out-of-stock") {
-        // Show categories that have at least one out of stock item
-        return items.some(item => !item.inStock)
-      } else if (selectedFilter === "in-stock") {
-        // Show categories that have all items in stock
-        return items.length > 0 && items.every(item => item.inStock)
-      }
-      return true
-    })
+    return categories
+      .map(category => {
+        const items = category.items || []
+        let filteredItems =
+          selectedFilter === "out-of-stock"
+            ? items.filter(item => !item.inStock)
+            : items.filter(item => item.inStock)
+
+        if (filteredItems.length === 0) return null
+
+        return {
+          ...category,
+          items: filteredItems,
+          itemCount: filteredItems.length
+        }
+      })
+      .filter(Boolean)
   }, [categories, selectedFilter])
 
   // Apply text search on categories & items
@@ -1057,10 +1123,10 @@ export default function Inventory() {
           // Update all products in category
           const productsResponse = await groceryStoreAPI.getProducts({ categoryId, activeOnly: 'false' })
           const products = productsResponse.data?.data?.products || productsResponse.data?.data || []
-          
+
           // Update all products in this category
           await Promise.all(
-            products.map(product => 
+            products.map(product =>
               groceryStoreAPI.updateProductStock(product._id, { inStock: isAvailable })
             )
           )
@@ -1106,7 +1172,7 @@ export default function Inventory() {
           const updatedItems = section.items.map(item =>
             item.id === String(itemId) ? { ...item, isAvailable: isAvailable } : item
           )
-          
+
           // Update items in subsections too
           const updatedSubsections = section.subsections.map(subsection => ({
             ...subsection,
@@ -1294,7 +1360,7 @@ export default function Inventory() {
         const updatedItems = section.items.map(item =>
           item.id === String(itemId) ? { ...item, isRecommended: isRecommended } : item
         )
-        
+
         // Update item in subsections too
         const updatedSubsections = section.subsections.map(subsection => ({
           ...subsection,
@@ -1369,8 +1435,8 @@ export default function Inventory() {
           <motion.button
             onClick={() => setActiveTab("all-items")}
             className={`px-6 py-3.5 rounded-full font-medium text-sm whitespace-nowrap relative overflow-hidden ${activeTab === "all-items"
-                ? 'text-white'
-                : 'bg-white text-black'
+              ? 'text-white'
+              : 'bg-white text-black'
               }`}
             animate={{
               scale: activeTab === "all-items" ? 1.05 : 1,
@@ -1402,8 +1468,8 @@ export default function Inventory() {
           <motion.button
             onClick={() => setActiveTab("add-ons")}
             className={`px-6 py-3.5 rounded-full font-medium text-sm whitespace-nowrap relative overflow-hidden ${activeTab === "add-ons"
-                ? 'text-white'
-                : 'bg-white text-black'
+              ? 'text-white'
+              : 'bg-white text-black'
               }`}
             animate={{
               scale: activeTab === "add-ons" ? 1.05 : 1,
@@ -1532,6 +1598,19 @@ export default function Inventory() {
           </button>
         </div>
 
+        {activeTab === "add-ons" && (
+          <div className="mb-4 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setIsAddonModalOpen(true)}
+              className="inline-flex items-center gap-2 bg-black text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition-colors"
+            >
+              <Plus className="w-4 h-4" />
+              Add add-on
+            </button>
+          </div>
+        )}
+
         {/* Categories Accordions */}
         <div className="space-y-3 mb-6">
           {activeTab === "add-ons" && (
@@ -1540,16 +1619,20 @@ export default function Inventory() {
                 <div className="flex items-center justify-center py-20">
                   <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
                 </div>
-              ) : addons.length === 0 ? (
+              ) : filteredAddons.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-20 px-4">
                   <div className="text-center">
-                    <p className="text-lg font-medium text-gray-500">No add-ons available</p>
-                    <p className="text-sm text-gray-400 mt-2">Approved add-ons will appear here</p>
+                    <p className="text-lg font-medium text-gray-500">
+                      {searchQuery || selectedFilter ? "No matching add-ons found" : "No add-ons available"}
+                    </p>
+                    <p className="text-sm text-gray-400 mt-2">
+                      {searchQuery || selectedFilter ? "Try adjusting your filters or search query" : "Add-ons will appear here"}
+                    </p>
                   </div>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {addons.map((addon) => (
+                  {filteredAddons.map((addon) => (
                     <div
                       key={addon.id}
                       className="bg-white rounded-lg border border-gray-200 p-4"
@@ -1561,11 +1644,20 @@ export default function Inventory() {
                             {addon.approvalStatus === 'approved' && (
                               <span className="px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800 rounded">Approved</span>
                             )}
+                            {addon.approvalStatus === 'pending' && (
+                              <span className="px-2 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded">Pending</span>
+                            )}
+                            {addon.approvalStatus === 'rejected' && (
+                              <span className="px-2 py-0.5 text-xs font-medium bg-red-100 text-red-700 rounded">Rejected</span>
+                            )}
                           </div>
                           {addon.description && (
                             <p className="text-sm text-gray-600 mb-2">{addon.description}</p>
                           )}
                           <p className="text-base font-bold text-gray-900">₹{addon.price}</p>
+                          {addon.rejectionReason && (
+                            <p className="text-xs text-red-600 mt-1">Reason: {addon.rejectionReason}</p>
+                          )}
                         </div>
                         <div className="flex items-start gap-2">
                           {addon.images && addon.images.length > 0 && addon.images[0] && (
@@ -1595,6 +1687,26 @@ export default function Inventory() {
               )}
             </>
           )}
+
+          {activeTab !== "add-ons" && loadingInventory && (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+            </div>
+          )}
+
+          {activeTab !== "add-ons" && !loadingInventory && listToRender.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-20 px-4">
+              <div className="text-center">
+                <p className="text-lg font-medium text-gray-500">
+                  {searchQuery || selectedFilter ? "No matching items found" : "Your menu is empty"}
+                </p>
+                <p className="text-sm text-gray-400 mt-2">
+                  {searchQuery || selectedFilter ? "Try adjusting your filters or search query" : "Items you add to your menu will appear here"}
+                </p>
+              </div>
+            </div>
+          )}
+
           {listToRender.map((category, index) => {
             const isExpanded = expandedCategories.includes(category.id)
             const categoryItems = category.items || []
@@ -1732,11 +1844,10 @@ export default function Inventory() {
                                     e.stopPropagation()
                                     handleRecommendToggle(category.id, item.id)
                                   }}
-                                  className={`p-1.5 rounded-lg transition-colors ${
-                                    item.isRecommended
-                                      ? "bg-blue-100 text-blue-600"
-                                      : "bg-gray-100 text-gray-400 hover:bg-gray-200"
-                                  }`}
+                                  className={`p-1.5 rounded-lg transition-colors ${item.isRecommended
+                                    ? "bg-blue-100 text-blue-600"
+                                    : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                                    }`}
                                   title={item.isRecommended ? "Recommended" : "Click to recommend"}
                                 >
                                   <ThumbsUp className="w-4 h-4" />
@@ -1879,7 +1990,7 @@ export default function Inventory() {
                   {/* Option 1: For specific time */}
                   <label className="flex items-center justify-between py-4 cursor-pointer border-b border-gray-200">
                     <div className="flex items-center gap-3 flex-1">
-                    
+
                       <span className="text-base text-gray-900">For specific time</span>
                       {selectedOption === "specific-time" && (
                         <div className="ml-auto py-3 flex items-center justify-center gap-4">
@@ -1900,7 +2011,7 @@ export default function Inventory() {
                           </button>
                         </div>
                       )}
-                        <input
+                      <input
                         type="radio"
                         name="outOfStockOption"
                         checked={selectedOption === "specific-time"}
@@ -1914,7 +2025,7 @@ export default function Inventory() {
                   {/* Option 2: Next business day */}
                   <label className="flex items-center justify-between py-4 cursor-pointer border-b border-gray-200">
                     <div className="flex items-center gap-3 flex-1">
-                   
+
                       <span className="text-base text-gray-900">Next business day - Opening time</span>
                       <input
                         type="radio"
@@ -1930,7 +2041,7 @@ export default function Inventory() {
                   {/* Option 3: Custom date & time */}
                   <label className="flex items-center justify-between py-4 cursor-pointer border-b border-gray-200">
                     <div className="flex items-center gap-3 flex-1">
-                    
+
                       <span className="text-base text-gray-900">Custom date & time</span>
                       <input
                         type="radio"
@@ -1965,7 +2076,7 @@ export default function Inventory() {
                   <label className="flex items-center justify-between py-4 cursor-pointer">
                     <div className="flex flex-col gap-1 flex-1">
                       <div className="flex items-center gap-3">
-                       
+
                         <span className="text-base text-gray-900">I will turn it on manually</span>
                         <input
                           type="radio"
@@ -1996,6 +2107,93 @@ export default function Inventory() {
                     className="flex-1 bg-black text-white py-3 rounded-lg font-medium hover:bg-gray-800 transition-colors"
                   >
                     Confirm
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isAddonModalOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 z-50"
+              onClick={() => {
+                if (savingAddon) return
+                setIsAddonModalOpen(false)
+                resetNewAddonForm()
+              }}
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 30, stiffness: 300 }}
+              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6 space-y-4">
+                <h2 className="text-lg font-bold text-gray-900">Add Add-on</h2>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Name</label>
+                    <input
+                      type="text"
+                      value={newAddon.name}
+                      onChange={(e) => setNewAddon((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder="Enter add-on name"
+                      className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black/10"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Price</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={newAddon.price}
+                      onChange={(e) => setNewAddon((prev) => ({ ...prev, price: e.target.value }))}
+                      placeholder="0"
+                      className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black/10"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-700">Description</label>
+                    <textarea
+                      rows={3}
+                      value={newAddon.description}
+                      onChange={(e) => setNewAddon((prev) => ({ ...prev, description: e.target.value }))}
+                      placeholder="Optional description"
+                      className="mt-1 w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-black/10 resize-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAddonModalOpen(false)
+                      resetNewAddonForm()
+                    }}
+                    disabled={savingAddon}
+                    className="flex-1 border border-gray-300 text-gray-900 py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors disabled:opacity-60"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateAddon}
+                    disabled={savingAddon}
+                    className="flex-1 bg-black text-white py-3 rounded-lg font-medium hover:bg-gray-800 transition-colors disabled:opacity-60"
+                  >
+                    {savingAddon ? "Saving..." : "Save"}
                   </button>
                 </div>
               </div>

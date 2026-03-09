@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
 import { Mail, ChevronDown, Phone } from "lucide-react"
 import { setAuthData } from "@/lib/utils/auth"
 import {
@@ -32,7 +32,7 @@ const countryCodes = [
   { code: "+34", country: "ES", flag: "🇪🇸" },
   { code: "+61", country: "AU", flag: "🇦🇺" },
   { code: "+7", country: "RU", flag: "🇷🇺" },
-  { code: "+55", country: "BR", flag: "🇧🇷" }, 
+  { code: "+55", country: "BR", flag: "🇧🇷" },
   { code: "+52", country: "MX", flag: "🇲🇽" },
   { code: "+82", country: "KR", flag: "🇰🇷" },
   { code: "+65", country: "SG", flag: "🇸🇬" },
@@ -46,6 +46,7 @@ const countryCodes = [
 export default function GroceryStoreLogin() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
+  const location = useLocation()
   const [loginMethod, setLoginMethod] = useState("phone")
   const [formData, setFormData] = useState({
     phone: "",
@@ -79,9 +80,10 @@ export default function GroceryStoreLogin() {
     const hasAccessToken = localStorage.getItem("grocery-store_accessToken")
     const hasRefreshToken = localStorage.getItem("grocery-store_refreshToken")
     if (hasAccessToken || hasRefreshToken) {
-      redirectGroceryStoreAfterAuth(navigate, { replace: true })
+      const from = location.state?.from?.pathname || location.state?.from || null
+      redirectGroceryStoreAfterAuth(navigate, { replace: true, redirectTo: from })
     }
-  }, [navigate])
+  }, [navigate, location.state])
 
   useEffect(() => {
     const loadPolicyUrls = async () => {
@@ -110,17 +112,17 @@ export default function GroceryStoreLogin() {
     if (!phone || phone.trim() === "") {
       return "Phone number is required"
     }
-    
+
     const digitsOnly = phone.replace(/\D/g, "")
-    
+
     if (digitsOnly.length < 7) {
       return "Phone number must be at least 7 digits"
     }
-    
+
     if (digitsOnly.length > 15) {
       return "Phone number is too long"
     }
-    
+
     if (countryCode === "+91") {
       if (digitsOnly.length !== 10) {
         return "Indian phone number must be 10 digits"
@@ -130,21 +132,21 @@ export default function GroceryStoreLogin() {
         return "Invalid Indian mobile number"
       }
     }
-    
+
     return ""
   }
 
   const handleSendOTP = async () => {
     setTouched({ phone: true })
     setApiError("")
-    
+
     const phoneError = validatePhone(formData.phone, formData.countryCode)
-    
+
     if (phoneError) {
       setErrors({ phone: phoneError })
       return
     }
-    
+
     setErrors({ phone: "" })
 
     const fullPhone = `${formData.countryCode} ${formData.phone}`.trim()
@@ -202,12 +204,12 @@ export default function GroceryStoreLogin() {
     if (!email || email.trim() === "") {
       return "Email is required"
     }
-    
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(email)) {
       return "Please enter a valid email address"
     }
-    
+
     return ""
   }
 
@@ -218,7 +220,7 @@ export default function GroceryStoreLogin() {
       email: value,
     }
     setFormData(newFormData)
-    
+
     if (touched.email) {
       const error = validateEmail(value)
       setErrors({ ...errors, email: error })
@@ -238,14 +240,14 @@ export default function GroceryStoreLogin() {
   const handleSendEmailOTP = async () => {
     setTouched({ ...touched, email: true })
     setApiError("")
-    
+
     const emailError = validateEmail(formData.email)
-    
+
     if (emailError) {
       setErrors({ ...errors, email: emailError })
       return
     }
-    
+
     setErrors({ ...errors, email: "" })
 
     try {
@@ -321,7 +323,8 @@ export default function GroceryStoreLogin() {
       setAuthData("grocery-store", accessToken, store, refreshToken)
       window.dispatchEvent(new Event("groceryStoreAuthChanged"))
 
-      await redirectGroceryStoreAfterAuth(navigate, { replace: true })
+      const from = location.state?.from?.pathname || location.state?.from || null
+      await redirectGroceryStoreAfterAuth(navigate, { replace: true, redirectTo: from })
     } catch (error) {
       console.error("Firebase Google login error:", error)
       const message =
@@ -342,10 +345,10 @@ export default function GroceryStoreLogin() {
       phone: value.slice(0, 15),
     }
     setFormData(newFormData)
-    
+
     const error = validatePhone(value, formData.countryCode)
     setErrors({ ...errors, phone: error })
-    
+
     if (!touched.phone && value.length > 0) {
       setTouched({ ...touched, phone: true })
     }
@@ -365,7 +368,7 @@ export default function GroceryStoreLogin() {
       countryCode: value,
     }
     setFormData(newFormData)
-    
+
     if (touched.phone) {
       const error = validatePhone(formData.phone, value)
       setErrors({ ...errors, phone: error })
@@ -437,7 +440,7 @@ export default function GroceryStoreLogin() {
     <div className="max-h-screen h-screen bg-white flex flex-col">
       <div className="flex flex-col items-center pt-12 pb-8 px-6">
         <div>
-          <h1 
+          <h1
             className="text-3xl italic md:text-4xl tracking-wide font-extrabold text-black"
             style={{
               WebkitTextStroke: "0.5px black",
@@ -447,23 +450,23 @@ export default function GroceryStoreLogin() {
             {displayCompanyName}
           </h1>
         </div>
-        
+
         <div className="">
           <span className="text-gray-600 font-light text-sm tracking-wide block text-center">
-          — grocery store partner —
+            — grocery store partner —
           </span>
-        </div>        
+        </div>
       </div>
 
       <div className="flex-1 flex flex-col px-6 overflow-y-auto">
         <div className="w-full max-w-md mx-auto space-y-6 py-4">
           <div className="text-center">
-              <p className="text-base text-gray-700 leading-relaxed">
-                {loginMethod === "email"
-                  ? "Enter your email to continue. We'll send you a one-time code."
-                  : "Enter your phone number to continue. New stores will continue into onboarding automatically."
-                }
-              </p>
+            <p className="text-base text-gray-700 leading-relaxed">
+              {loginMethod === "email"
+                ? "Enter your email to continue. We'll send you a one-time code."
+                : "Enter your phone number to continue. New stores will continue into onboarding automatically."
+              }
+            </p>
           </div>
 
           {loginMethod === "phone" && (
@@ -493,7 +496,7 @@ export default function GroceryStoreLogin() {
                     ))}
                   </SelectContent>
                 </Select>
-                
+
                 <div className="flex-1 flex flex-col">
                   <input
                     type="tel"
@@ -502,11 +505,10 @@ export default function GroceryStoreLogin() {
                     value={formData.phone}
                     onChange={handlePhoneChange}
                     onBlur={handlePhoneBlur}
-                    className={`w-full px-4 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 text-base border rounded-lg min-w-0 bg-white ${
-                      errors.phone && formData.phone.length > 0
+                    className={`w-full px-4 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 text-base border rounded-lg min-w-0 bg-white ${errors.phone && formData.phone.length > 0
                         ? "border-red-500 focus:ring-red-500 focus:border-red-500"
                         : "border-gray-300 focus:ring-blue-500 focus:border-blue-500"
-                    }`}
+                      }`}
                     style={{ height: '48px' }}
                   />
                   {errors.phone && formData.phone.length > 0 && (
@@ -522,11 +524,10 @@ export default function GroceryStoreLogin() {
               <Button
                 onClick={handleSendOTP}
                 disabled={!isValidPhone || isSending}
-                className={`w-full h-12 rounded-lg font-bold text-base transition-colors ${
-                  isValidPhone && !isSending
+                className={`w-full h-12 rounded-lg font-bold text-base transition-colors ${isValidPhone && !isSending
                     ? "bg-blue-600 hover:bg-blue-700 text-white"
                     : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                }`}
+                  }`}
               >
                 {isSending ? "Sending OTP..." : "Send OTP"}
               </Button>
@@ -543,11 +544,10 @@ export default function GroceryStoreLogin() {
                   value={formData.email}
                   onChange={handleEmailChange}
                   onBlur={handleEmailBlur}
-                  className={`w-full px-4 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 text-base border rounded-lg bg-white ${
-                    errors.email && formData.email.length > 0
+                  className={`w-full px-4 text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 text-base border rounded-lg bg-white ${errors.email && formData.email.length > 0
                       ? "border-red-500 focus:ring-red-500 focus:border-red-500"
                       : "border-gray-300 focus:ring-blue-500 focus:border-blue-500"
-                  }`}
+                    }`}
                   style={{ height: '48px' }}
                 />
                 {errors.email && formData.email.length > 0 && (
@@ -562,11 +562,10 @@ export default function GroceryStoreLogin() {
               <Button
                 onClick={handleSendEmailOTP}
                 disabled={!isValidEmail || isSending}
-                className={`w-full h-12 rounded-lg font-bold text-base transition-colors ${
-                  isValidEmail && !isSending
+                className={`w-full h-12 rounded-lg font-bold text-base transition-colors ${isValidEmail && !isSending
                     ? "bg-blue-600 hover:bg-blue-700 text-white"
                     : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                }`}
+                  }`}
               >
                 {isSending ? "Sending OTP..." : "Send OTP"}
               </Button>

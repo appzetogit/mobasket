@@ -1,5 +1,6 @@
 import Menu from '../models/Menu.js';
 import Restaurant from '../models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 import mongoose from 'mongoose';
@@ -11,7 +12,7 @@ export const getMenu = asyncHandler(async (req, res) => {
 
   // Find or create menu
   let menu = await Menu.findOne({ restaurant: restaurantId });
-  
+
   if (!menu) {
     // Create empty menu
     menu = new Menu({
@@ -35,19 +36,19 @@ export const updateMenu = asyncHandler(async (req, res) => {
   // Restaurant is attached by authenticate middleware
   const restaurantId = req.restaurant._id;
   const { sections } = req.body;
-  
+
   console.log('=== UPDATE MENU REQUEST RECEIVED ===');
   console.log('Restaurant ID:', restaurantId);
   console.log('Sections count:', sections?.length || 0);
-  
+
   // CRITICAL: Get existing menu FIRST to preserve approval status fields
   const existingMenu = await Menu.findOne({ restaurant: restaurantId });
   console.log('[UPDATE MENU] Existing menu found:', existingMenu ? 'Yes' : 'No');
-  
+
   if (existingMenu) {
     console.log('[UPDATE MENU] Existing sections count:', existingMenu.sections?.length || 0);
   }
-  
+
   // Debug: Log incoming images data
   if (sections && Array.isArray(sections)) {
     sections.forEach((section, sIdx) => {
@@ -81,175 +82,175 @@ export const updateMenu = asyncHandler(async (req, res) => {
   const normalizedSections = Array.isArray(sections) ? sections.map((section, index) => {
     // Find existing section to preserve approval status
     const existingSection = existingMenu?.sections?.find(s => s.id === section.id);
-    
+
     return {
       id: section.id || `section-${index}`,
       name: section.name || "Unnamed Section",
       items: Array.isArray(section.items) ? section.items.map(item => {
         // CRITICAL: Find existing item to preserve approval status fields
         const existingItem = existingSection?.items?.find(i => String(i.id) === String(item.id));
-        
+
         return {
-      id: String(item.id || Date.now() + Math.random()),
-      name: item.name || "Unnamed Item",
-      nameArabic: item.nameArabic || "",
-      image: item.image || "",
-      category: item.category || section.name,
-      rating: item.rating ?? 0.0,
-      reviews: item.reviews ?? 0,
-      price: item.price || 0,
-      stock: item.stock || "Unlimited",
-      discount: item.discount || null,
-      originalPrice: item.originalPrice || null,
-      foodType: item.foodType || "Non-Veg",
-      availabilityTimeStart: item.availabilityTimeStart || "12:01 AM",
-      availabilityTimeEnd: item.availabilityTimeEnd || "11:57 PM",
-      description: item.description || "",
-      discountType: item.discountType || "Percent",
-      discountAmount: item.discountAmount ?? 0.0,
-      isAvailable: item.isAvailable !== undefined ? item.isAvailable : true,
-      isRecommended: item.isRecommended || false,
-      variations: Array.isArray(item.variations) ? item.variations.map(v => ({
-        id: String(v.id || Date.now() + Math.random()),
-        name: v.name || "",
-        price: v.price || 0,
-        stock: v.stock || "Unlimited",
-      })) : [],
-      tags: Array.isArray(item.tags) ? item.tags : [],
-      nutrition: Array.isArray(item.nutrition) ? item.nutrition : [],
-      allergies: Array.isArray(item.allergies) ? item.allergies : [],
-      photoCount: item.photoCount ?? 1,
-      // Additional fields for complete item details
-      subCategory: item.subCategory || "",
-      servesInfo: item.servesInfo || "",
-      itemSize: item.itemSize || "",
-      itemSizeQuantity: item.itemSizeQuantity || "",
-      itemSizeUnit: item.itemSizeUnit || "piece",
-      gst: item.gst ?? 0,
-      preparationTime: existingItem?.preparationTime || item.preparationTime || "",
-      images: (() => {
-        // Ensure images array is properly handled - CRITICAL: Preserve all images
-        console.log(`[NORMALIZE] Item "${item.name || 'unnamed'}": Processing images...`);
-        console.log(`  - item.images type: ${Array.isArray(item.images) ? 'Array' : typeof item.images}`);
-        console.log(`  - item.images value:`, item.images);
-        console.log(`  - item.image value:`, item.image);
-        console.log(`  - item.photoCount:`, item.photoCount);
-        
-        if (Array.isArray(item.images)) {
-          const filteredImages = item.images.filter(img => {
-            const isValid = img && typeof img === 'string' && img.trim() !== '';
-            if (!isValid) {
-              console.log(`  - Filtering out invalid image:`, img);
+          id: String(item.id || Date.now() + Math.random()),
+          name: item.name || "Unnamed Item",
+          nameArabic: item.nameArabic || "",
+          image: item.image || "",
+          category: item.category || section.name,
+          rating: item.rating ?? 0.0,
+          reviews: item.reviews ?? 0,
+          price: item.price || 0,
+          stock: item.stock || "Unlimited",
+          discount: item.discount || null,
+          originalPrice: item.originalPrice || null,
+          foodType: item.foodType || "Non-Veg",
+          availabilityTimeStart: item.availabilityTimeStart || "12:01 AM",
+          availabilityTimeEnd: item.availabilityTimeEnd || "11:57 PM",
+          description: item.description || "",
+          discountType: item.discountType || "Percent",
+          discountAmount: item.discountAmount ?? 0.0,
+          isAvailable: item.isAvailable !== undefined ? item.isAvailable : true,
+          isRecommended: item.isRecommended || false,
+          variations: Array.isArray(item.variations) ? item.variations.map(v => ({
+            id: String(v.id || Date.now() + Math.random()),
+            name: v.name || "",
+            price: v.price || 0,
+            stock: v.stock || "Unlimited",
+          })) : [],
+          tags: Array.isArray(item.tags) ? item.tags : [],
+          nutrition: Array.isArray(item.nutrition) ? item.nutrition : [],
+          allergies: Array.isArray(item.allergies) ? item.allergies : [],
+          photoCount: item.photoCount ?? 1,
+          // Additional fields for complete item details
+          subCategory: item.subCategory || "",
+          servesInfo: item.servesInfo || "",
+          itemSize: item.itemSize || "",
+          itemSizeQuantity: item.itemSizeQuantity || "",
+          itemSizeUnit: item.itemSizeUnit || "piece",
+          gst: item.gst ?? 0,
+          preparationTime: existingItem?.preparationTime || item.preparationTime || "",
+          images: (() => {
+            // Ensure images array is properly handled - CRITICAL: Preserve all images
+            console.log(`[NORMALIZE] Item "${item.name || 'unnamed'}": Processing images...`);
+            console.log(`  - item.images type: ${Array.isArray(item.images) ? 'Array' : typeof item.images}`);
+            console.log(`  - item.images value:`, item.images);
+            console.log(`  - item.image value:`, item.image);
+            console.log(`  - item.photoCount:`, item.photoCount);
+
+            if (Array.isArray(item.images)) {
+              const filteredImages = item.images.filter(img => {
+                const isValid = img && typeof img === 'string' && img.trim() !== '';
+                if (!isValid) {
+                  console.log(`  - Filtering out invalid image:`, img);
+                }
+                return isValid;
+              });
+              console.log(`  - Input images: ${item.images.length}, Filtered images: ${filteredImages.length}`);
+              console.log(`  - Final images array:`, filteredImages);
+              if (filteredImages.length !== item.images.length) {
+                console.warn(`  - WARNING: Some images were filtered out! Original: ${item.images.length}, Filtered: ${filteredImages.length}`);
+              }
+              return filteredImages;
+            } else if (item.image && typeof item.image === 'string' && item.image.trim() !== '') {
+              console.log(`  - No images array, using single image field:`, item.image);
+              return [item.image];
+            } else {
+              console.log(`  - No images found, returning empty array`);
+              return [];
             }
-            return isValid;
-          });
-          console.log(`  - Input images: ${item.images.length}, Filtered images: ${filteredImages.length}`);
-          console.log(`  - Final images array:`, filteredImages);
-          if (filteredImages.length !== item.images.length) {
-            console.warn(`  - WARNING: Some images were filtered out! Original: ${item.images.length}, Filtered: ${filteredImages.length}`);
-          }
-          return filteredImages;
-        } else if (item.image && typeof item.image === 'string' && item.image.trim() !== '') {
-          console.log(`  - No images array, using single image field:`, item.image);
-          return [item.image];
-        } else {
-          console.log(`  - No images found, returning empty array`);
-          return [];
-        }
-      })(),
-      // CRITICAL: Preserve approval status fields from existing item
-      // Restaurant should NOT be able to overwrite these fields
-      approvalStatus: existingItem?.approvalStatus || item.approvalStatus || 'pending',
-      rejectionReason: existingItem?.rejectionReason || item.rejectionReason || '',
-      requestedAt: existingItem?.requestedAt || item.requestedAt || (item.approvalStatus === 'pending' ? new Date() : undefined),
-      approvedAt: existingItem?.approvedAt || item.approvedAt,
-      approvedBy: existingItem?.approvedBy || item.approvedBy,
-      rejectedAt: existingItem?.rejectedAt || item.rejectedAt,
-    };
+          })(),
+          // CRITICAL: Preserve approval status fields from existing item
+          // Restaurant should NOT be able to overwrite these fields
+          approvalStatus: existingItem?.approvalStatus || item.approvalStatus || 'pending',
+          rejectionReason: existingItem?.rejectionReason || item.rejectionReason || '',
+          requestedAt: existingItem?.requestedAt || item.requestedAt || (item.approvalStatus === 'pending' ? new Date() : undefined),
+          approvedAt: existingItem?.approvedAt || item.approvedAt,
+          approvedBy: existingItem?.approvedBy || item.approvedBy,
+          rejectedAt: existingItem?.rejectedAt || item.rejectedAt,
+        };
       }) : [],
-    subsections: Array.isArray(section.subsections) ? section.subsections.map(subsection => {
-      // Find existing subsection to preserve approval status
-      const existingSubsection = existingSection?.subsections?.find(s => s.id === subsection.id);
-      
-      return {
-        id: subsection.id || `subsection-${Date.now()}`,
-        name: subsection.name || "Unnamed Subsection",
-        items: Array.isArray(subsection.items) ? subsection.items.map(item => {
-          // CRITICAL: Find existing item to preserve approval status fields
-          const existingItem = existingSubsection?.items?.find(i => String(i.id) === String(item.id));
-          
-          return {
-        id: String(item.id || Date.now() + Math.random()),
-        name: item.name || "Unnamed Item",
-        nameArabic: item.nameArabic || "",
-        image: item.image || "",
-        category: item.category || section.name,
-        rating: item.rating ?? 0.0,
-        reviews: item.reviews ?? 0,
-        price: item.price || 0,
-        stock: item.stock || "Unlimited",
-        discount: item.discount || null,
-        originalPrice: item.originalPrice || null,
-        foodType: item.foodType || "Non-Veg",
-        availabilityTimeStart: item.availabilityTimeStart || "12:01 AM",
-        availabilityTimeEnd: item.availabilityTimeEnd || "11:57 PM",
-        description: item.description || "",
-        discountType: item.discountType || "Percent",
-        discountAmount: item.discountAmount ?? 0.0,
-        isAvailable: item.isAvailable !== undefined ? item.isAvailable : true,
-        isRecommended: item.isRecommended || false,
-        variations: Array.isArray(item.variations) ? item.variations.map(v => ({
-          id: String(v.id || Date.now() + Math.random()),
-          name: v.name || "",
-          price: v.price || 0,
-          stock: v.stock || "Unlimited",
-        })) : [],
-        tags: Array.isArray(item.tags) ? item.tags : [],
-        nutrition: Array.isArray(item.nutrition) ? item.nutrition : [],
-        allergies: Array.isArray(item.allergies) ? item.allergies : [],
-        photoCount: item.photoCount ?? 1,
-        // Additional fields for complete item details
-        subCategory: item.subCategory || "",
-        servesInfo: item.servesInfo || "",
-        itemSize: item.itemSize || "",
-        itemSizeQuantity: item.itemSizeQuantity || "",
-        itemSizeUnit: item.itemSizeUnit || "piece",
-        gst: item.gst ?? 0,
-        preparationTime: existingItem?.preparationTime || item.preparationTime || "",
-        images: (() => {
-          // Ensure images array is properly handled
-          if (Array.isArray(item.images) && item.images.length > 0) {
-            const filteredImages = item.images.filter(img => img && typeof img === 'string' && img.trim() !== '');
-            console.log(`[NORMALIZE] Subsection Item "${item.name}": Processing ${item.images.length} images, filtered to ${filteredImages.length} valid images`);
-            return filteredImages;
-          } else if (item.image && item.image.trim() !== '') {
-            console.log(`[NORMALIZE] Subsection Item "${item.name}": No images array, using single image field`);
-            return [item.image];
-          } else {
-            console.log(`[NORMALIZE] Subsection Item "${item.name}": No images found, returning empty array`);
-            return [];
-          }
-        })(),
-        // CRITICAL: Preserve approval status fields from existing item
-        // Restaurant should NOT be able to overwrite these fields
-        approvalStatus: existingItem?.approvalStatus || item.approvalStatus || 'pending',
-        rejectionReason: existingItem?.rejectionReason || item.rejectionReason || '',
-        requestedAt: existingItem?.requestedAt || item.requestedAt || (item.approvalStatus === 'pending' ? new Date() : undefined),
-        approvedAt: existingItem?.approvedAt || item.approvedAt,
-        approvedBy: existingItem?.approvedBy || item.approvedBy,
-        rejectedAt: existingItem?.rejectedAt || item.rejectedAt,
-      };
-        }) : [],
-      };
-    }) : [],
-    isEnabled: section.isEnabled !== undefined ? section.isEnabled : true,
-    order: section.order !== undefined ? section.order : index,
-  };
+      subsections: Array.isArray(section.subsections) ? section.subsections.map(subsection => {
+        // Find existing subsection to preserve approval status
+        const existingSubsection = existingSection?.subsections?.find(s => s.id === subsection.id);
+
+        return {
+          id: subsection.id || `subsection-${Date.now()}`,
+          name: subsection.name || "Unnamed Subsection",
+          items: Array.isArray(subsection.items) ? subsection.items.map(item => {
+            // CRITICAL: Find existing item to preserve approval status fields
+            const existingItem = existingSubsection?.items?.find(i => String(i.id) === String(item.id));
+
+            return {
+              id: String(item.id || Date.now() + Math.random()),
+              name: item.name || "Unnamed Item",
+              nameArabic: item.nameArabic || "",
+              image: item.image || "",
+              category: item.category || section.name,
+              rating: item.rating ?? 0.0,
+              reviews: item.reviews ?? 0,
+              price: item.price || 0,
+              stock: item.stock || "Unlimited",
+              discount: item.discount || null,
+              originalPrice: item.originalPrice || null,
+              foodType: item.foodType || "Non-Veg",
+              availabilityTimeStart: item.availabilityTimeStart || "12:01 AM",
+              availabilityTimeEnd: item.availabilityTimeEnd || "11:57 PM",
+              description: item.description || "",
+              discountType: item.discountType || "Percent",
+              discountAmount: item.discountAmount ?? 0.0,
+              isAvailable: item.isAvailable !== undefined ? item.isAvailable : true,
+              isRecommended: item.isRecommended || false,
+              variations: Array.isArray(item.variations) ? item.variations.map(v => ({
+                id: String(v.id || Date.now() + Math.random()),
+                name: v.name || "",
+                price: v.price || 0,
+                stock: v.stock || "Unlimited",
+              })) : [],
+              tags: Array.isArray(item.tags) ? item.tags : [],
+              nutrition: Array.isArray(item.nutrition) ? item.nutrition : [],
+              allergies: Array.isArray(item.allergies) ? item.allergies : [],
+              photoCount: item.photoCount ?? 1,
+              // Additional fields for complete item details
+              subCategory: item.subCategory || "",
+              servesInfo: item.servesInfo || "",
+              itemSize: item.itemSize || "",
+              itemSizeQuantity: item.itemSizeQuantity || "",
+              itemSizeUnit: item.itemSizeUnit || "piece",
+              gst: item.gst ?? 0,
+              preparationTime: existingItem?.preparationTime || item.preparationTime || "",
+              images: (() => {
+                // Ensure images array is properly handled
+                if (Array.isArray(item.images) && item.images.length > 0) {
+                  const filteredImages = item.images.filter(img => img && typeof img === 'string' && img.trim() !== '');
+                  console.log(`[NORMALIZE] Subsection Item "${item.name}": Processing ${item.images.length} images, filtered to ${filteredImages.length} valid images`);
+                  return filteredImages;
+                } else if (item.image && item.image.trim() !== '') {
+                  console.log(`[NORMALIZE] Subsection Item "${item.name}": No images array, using single image field`);
+                  return [item.image];
+                } else {
+                  console.log(`[NORMALIZE] Subsection Item "${item.name}": No images found, returning empty array`);
+                  return [];
+                }
+              })(),
+              // CRITICAL: Preserve approval status fields from existing item
+              // Restaurant should NOT be able to overwrite these fields
+              approvalStatus: existingItem?.approvalStatus || item.approvalStatus || 'pending',
+              rejectionReason: existingItem?.rejectionReason || item.rejectionReason || '',
+              requestedAt: existingItem?.requestedAt || item.requestedAt || (item.approvalStatus === 'pending' ? new Date() : undefined),
+              approvedAt: existingItem?.approvedAt || item.approvedAt,
+              approvedBy: existingItem?.approvedBy || item.approvedBy,
+              rejectedAt: existingItem?.rejectedAt || item.rejectedAt,
+            };
+          }) : [],
+        };
+      }) : [],
+      isEnabled: section.isEnabled !== undefined ? section.isEnabled : true,
+      order: section.order !== undefined ? section.order : index,
+    };
   }) : [];
 
   // Find or create menu
   let menu = await Menu.findOne({ restaurant: restaurantId });
-  
+
   // Debug: Log normalized sections before saving
   console.log('[UPDATE MENU] Normalized sections before save:');
   normalizedSections.forEach((section, sIdx) => {
@@ -259,7 +260,7 @@ export const updateMenu = asyncHandler(async (req, res) => {
       });
     }
   });
-  
+
   if (!menu) {
     menu = new Menu({
       restaurant: restaurantId,
@@ -281,7 +282,7 @@ export const updateMenu = asyncHandler(async (req, res) => {
   console.log('[UPDATE MENU] About to save menu...');
   await menu.save();
   console.log('[UPDATE MENU] Menu saved successfully');
-  
+
   // Debug: Verify what was saved - reload from database
   const savedMenu = await Menu.findOne({ restaurant: restaurantId }).lean();
   if (savedMenu && savedMenu.sections) {
@@ -322,7 +323,7 @@ export const addSection = asyncHandler(async (req, res) => {
 
   // Find or create menu
   let menu = await Menu.findOne({ restaurant: restaurantId });
-  
+
   if (!menu) {
     menu = new Menu({
       restaurant: restaurantId,
@@ -377,7 +378,7 @@ export const addItemToSection = asyncHandler(async (req, res) => {
 
   // Find menu
   const menu = await Menu.findOne({ restaurant: restaurantId });
-  
+
   if (!menu) {
     return errorResponse(res, 404, 'Menu not found');
   }
@@ -426,7 +427,7 @@ export const addItemToSection = asyncHandler(async (req, res) => {
     itemSizeQuantity: item.itemSizeQuantity || "",
     itemSizeUnit: item.itemSizeUnit || "piece",
     gst: item.gst ?? 0,
-    images: Array.isArray(item.images) && item.images.length > 0 
+    images: Array.isArray(item.images) && item.images.length > 0
       ? item.images.filter(img => img && typeof img === 'string' && img.trim() !== '')
       : (item.image && item.image.trim() !== '' ? [item.image] : []),
     preparationTime: item.preparationTime || "",
@@ -461,7 +462,7 @@ export const addSubsectionToSection = asyncHandler(async (req, res) => {
 
   // Find menu
   const menu = await Menu.findOne({ restaurant: restaurantId });
-  
+
   if (!menu) {
     return errorResponse(res, 404, 'Menu not found');
   }
@@ -515,7 +516,7 @@ export const addItemToSubsection = asyncHandler(async (req, res) => {
 
   // Find menu
   const menu = await Menu.findOne({ restaurant: restaurantId });
-  
+
   if (!menu) {
     return errorResponse(res, 404, 'Menu not found');
   }
@@ -564,7 +565,7 @@ export const addItemToSubsection = asyncHandler(async (req, res) => {
     allergies: Array.isArray(item.allergies) ? item.allergies : [],
     photoCount: item.photoCount ?? 1,
     gst: item.gst ?? 0,
-    images: Array.isArray(item.images) && item.images.length > 0 
+    images: Array.isArray(item.images) && item.images.length > 0
       ? item.images.filter(img => img && typeof img === 'string' && img.trim() !== '')
       : (item.image && item.image.trim() !== '' ? [item.image] : []),
     preparationTime: item.preparationTime || "",
@@ -588,14 +589,14 @@ export const addItemToSubsection = asyncHandler(async (req, res) => {
 export const getMenuByRestaurantId = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // Find restaurant by ID, slug, or restaurantId
     const restaurant = await Restaurant.findOne({
       $or: [
         { restaurantId: id },
         { slug: id },
-        ...(mongoose.Types.ObjectId.isValid(id) && id.length === 24 
-          ? [{ _id: new mongoose.Types.ObjectId(id) }] 
+        ...(mongoose.Types.ObjectId.isValid(id) && id.length === 24
+          ? [{ _id: new mongoose.Types.ObjectId(id) }]
           : []),
       ],
       isActive: true,
@@ -606,7 +607,7 @@ export const getMenuByRestaurantId = async (req, res) => {
     }
 
     // Find menu
-    const menu = await Menu.findOne({ 
+    const menu = await Menu.findOne({
       restaurant: restaurant._id,
       isActive: true,
     });
@@ -623,7 +624,7 @@ export const getMenuByRestaurantId = async (req, res) => {
 
     console.log('[USER MENU] Processing menu for restaurant:', restaurant._id);
     console.log('[USER MENU] Total sections:', menu.sections?.length || 0);
-    
+
     // Filter menu for user side: only show enabled sections and available items
     const filteredSections = (menu.sections || [])
       .filter(section => {
@@ -643,20 +644,20 @@ export const getMenuByRestaurantId = async (req, res) => {
           const isAvailable = item.isAvailable !== false;
           const isApproved = item.approvalStatus === 'approved' || !item.approvalStatus; // Include approved or legacy items without approvalStatus
           const shouldShow = isAvailable && isApproved;
-          
+
           // Debug logging for filtered items
           if (!shouldShow) {
             console.log(`[USER MENU] Filtering out item "${item.name}": isAvailable=${item.isAvailable}, approvalStatus=${item.approvalStatus}`);
           }
-          
+
           // Debug logging for preparationTime - log ALL items to see what's in the data
           if (shouldShow) {
             console.log(`[USER MENU] Item "${item.name}": preparationTime="${item.preparationTime}" (type: ${typeof item.preparationTime}, exists: ${item.hasOwnProperty('preparationTime')})`);
           }
-          
+
           return shouldShow;
         });
-        
+
         // Filter subsections and their items
         const availableSubsections = (section.subsections || [])
           .map(subsection => {
@@ -664,17 +665,17 @@ export const getMenuByRestaurantId = async (req, res) => {
               const isAvailable = item.isAvailable !== false;
               const isApproved = item.approvalStatus === 'approved' || !item.approvalStatus; // Include approved or legacy items without approvalStatus
               const shouldShow = isAvailable && isApproved;
-              
+
               // Debug logging for filtered items
               if (!shouldShow) {
                 console.log(`[USER MENU] Filtering out subsection item "${item.name}": isAvailable=${item.isAvailable}, approvalStatus=${item.approvalStatus}`);
               }
-              
+
               // Debug logging for preparationTime - log ALL items to see what's in the data
               if (shouldShow) {
                 console.log(`[USER MENU] Subsection item "${item.name}": preparationTime="${item.preparationTime}" (type: ${typeof item.preparationTime}, exists: ${item.hasOwnProperty('preparationTime')})`);
               }
-              
+
               return shouldShow;
             });
             // Only include subsection if it has available items
@@ -687,7 +688,7 @@ export const getMenuByRestaurantId = async (req, res) => {
             return null;
           })
           .filter(subsection => subsection !== null); // Remove null subsections
-        
+
         // Include section if it has at least one available item OR at least one subsection with available items
         // This ensures category remains visible even if some items are unavailable
         if (availableItems.length > 0 || availableSubsections.length > 0) {
@@ -740,7 +741,7 @@ export const addAddon = asyncHandler(async (req, res) => {
 
   // Find or create menu
   let menu = await Menu.findOne({ restaurant: restaurantId });
-  
+
   if (!menu) {
     menu = new Menu({
       restaurant: restaurantId,
@@ -790,7 +791,7 @@ export const getAddons = asyncHandler(async (req, res) => {
 
   // Find menu
   const menu = await Menu.findOne({ restaurant: restaurantId });
-  
+
   if (!menu) {
     return successResponse(res, 200, 'No add-ons found', {
       addons: [],
@@ -799,7 +800,7 @@ export const getAddons = asyncHandler(async (req, res) => {
 
   // Filter add-ons based on approval status
   let addons = menu.addons || [];
-  
+
   if (!includePending) {
     // For restaurant view, show all add-ons (including pending for their reference)
     // For public view, only show approved add-ons
@@ -818,24 +819,30 @@ export const getAddons = asyncHandler(async (req, res) => {
 export const getAddonsByRestaurantId = async (req, res) => {
   try {
     const { id } = req.params;
-    
+    const includeUnapproved = String(req.query?.includeUnapproved || '').toLowerCase() === 'true';
+
     console.log(`[ADDONS] Request received for ID: ${id}`);
     console.log(`[ADDONS] ID type: ${typeof id}, length: ${id?.length}`);
-    
-    // Find restaurant by ID, slug, or restaurantId - don't filter by isActive
-    let restaurant = await Restaurant.findOne({
+
+    const idOrSlugQuery = {
       $or: [
         { restaurantId: id },
         { slug: id },
-        ...(mongoose.Types.ObjectId.isValid(id) && id.length === 24 
-          ? [{ _id: new mongoose.Types.ObjectId(id) }] 
+        ...(mongoose.Types.ObjectId.isValid(id) && id.length === 24
+          ? [{ _id: new mongoose.Types.ObjectId(id) }]
           : []),
       ],
-    });
+    };
+
+    // Resolve entity from restaurant or grocery store collection.
+    let restaurant = await Restaurant.findOne(idOrSlugQuery);
+    if (!restaurant) {
+      restaurant = await GroceryStore.findOne(idOrSlugQuery);
+    }
 
     if (!restaurant) {
-      console.log(`[ADDONS] Restaurant not found for ID: ${id}`);
-      return errorResponse(res, 404, 'Restaurant not found');
+      console.log(`[ADDONS] Business entity not found for ID: ${id}`);
+      return errorResponse(res, 404, 'Store/restaurant not found');
     }
 
     console.log(`[ADDONS] Restaurant found: ${restaurant._id}, name: ${restaurant.name}, isActive: ${restaurant.isActive}`);
@@ -843,7 +850,7 @@ export const getAddonsByRestaurantId = async (req, res) => {
     console.log(`[ADDONS] Restaurant found: ${restaurant._id}, name: ${restaurant.name}`);
 
     // Find menu - don't filter by isActive, just get the menu
-    const menu = await Menu.findOne({ 
+    const menu = await Menu.findOne({
       restaurant: restaurant._id,
     });
 
@@ -858,13 +865,20 @@ export const getAddonsByRestaurantId = async (req, res) => {
     console.log(`[ADDONS] Menu isActive: ${menu.isActive}`);
     console.log(`[ADDONS] Total addons in menu: ${(menu.addons || []).length}`);
 
-    // Show all addons - no filtering (as per user request to show addons "kaise bhi")
     const allAddons = menu.addons || [];
-    
+    const filteredAddons = includeUnapproved
+      ? allAddons
+      : allAddons.filter((addon) => {
+          if (!addon || typeof addon !== 'object') return false;
+          const isAvailable = addon.isAvailable !== false;
+          const isApproved = addon.approvalStatus === 'approved' || !addon.approvalStatus;
+          return isAvailable && isApproved;
+        });
+
     // Log all addons for debugging
-    console.log(`[ADDONS] Returning all addons: ${allAddons.length}`);
-    if (allAddons.length > 0) {
-      console.log(`[ADDONS] Addon details:`, allAddons.map(a => ({
+    console.log(`[ADDONS] Returning addons: ${filteredAddons.length} (includeUnapproved=${includeUnapproved})`);
+    if (filteredAddons.length > 0) {
+      console.log(`[ADDONS] Addon details:`, filteredAddons.map(a => ({
         id: a.id,
         name: a.name,
         isAvailable: a.isAvailable,
@@ -876,7 +890,7 @@ export const getAddonsByRestaurantId = async (req, res) => {
     }
 
     return successResponse(res, 200, 'Add-ons retrieved successfully', {
-      addons: allAddons,
+      addons: filteredAddons,
     });
   } catch (error) {
     console.error('Error fetching addons by restaurant ID:', error);
@@ -893,7 +907,7 @@ export const updateAddon = asyncHandler(async (req, res) => {
 
   // Find menu
   const menu = await Menu.findOne({ restaurant: restaurantId });
-  
+
   if (!menu) {
     return errorResponse(res, 404, 'Menu not found');
   }
@@ -976,7 +990,7 @@ export const deleteAddon = asyncHandler(async (req, res) => {
 
   // Find menu
   const menu = await Menu.findOne({ restaurant: restaurantId });
-  
+
   if (!menu) {
     return errorResponse(res, 404, 'Menu not found');
   }

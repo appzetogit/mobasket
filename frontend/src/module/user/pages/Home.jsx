@@ -35,6 +35,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import Footer from "../components/Footer";
 import AddToCartButton from "../components/AddToCartButton";
 import StickyCartCard from "../components/StickyCartCard";
+import AddToCartAnimation from "../components/AddToCartAnimation";
 import OrderTrackingCard from "../components/OrderTrackingCard";
 import { useProfile } from "../context/ProfileContext";
 import { useCart } from "../context/CartContext";
@@ -4085,9 +4086,13 @@ export default function Home() {
 
       <StickyCartCard />
       <OrderTrackingCard />
+      <AddToCartAnimation
+        bottomOffset={80}
+        pillClassName="scale-105"
+        linkTo="/grocery/cart"
+        platform="mogrocery"
+        hideOnPages={true}
+      />
     </div>
   );
 }
-
-
-

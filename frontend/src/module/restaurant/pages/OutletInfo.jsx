@@ -12,8 +12,8 @@ import {
   Phone,
   Star,
   ChevronRight,
-  X,
   Trash2,
+  Camera,
 } from "lucide-react"
 import {
   Dialog,
@@ -34,7 +34,7 @@ export default function OutletInfo() {
   const navigate = useNavigate()
   const location = useLocation()
   const isGroceryStoreRoute = location.pathname.startsWith("/store")
-  
+
   // State management
   const [restaurantData, setRestaurantData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -64,7 +64,7 @@ export default function OutletInfo() {
   // Format address from location object
   const formatAddress = (location) => {
     if (!location) return ""
-    
+
     const parts = []
     if (location.addressLine1) parts.push(location.addressLine1.trim())
     if (location.addressLine2) parts.push(location.addressLine2.trim())
@@ -77,7 +77,7 @@ export default function OutletInfo() {
       }
     }
     if (location.landmark) parts.push(location.landmark.trim())
-    
+
     return parts.join(", ") || ""
   }
 
@@ -89,10 +89,10 @@ export default function OutletInfo() {
         const data = await fetchCurrentEntity()
         if (data) {
           setRestaurantData(data)
-          
+
           // Set restaurant name
           setRestaurantName(data.name || "")
-          
+
           // Set restaurant ID
           setRestaurantId(data.restaurantId || data.id || "")
           // Set MongoDB _id for last 5 digits display
@@ -100,11 +100,11 @@ export default function OutletInfo() {
           // Convert to string to ensure we can slice it
           const mongoId = String(data.id || data._id || "")
           setRestaurantMongoId(mongoId)
-          
+
           // Format and set address
           const formattedAddress = formatAddress(data.location)
           setAddress(formattedAddress)
-          
+
           // Format cuisines
           if (data.cuisines && Array.isArray(data.cuisines) && data.cuisines.length > 0) {
             setCuisineTags(data.cuisines.join(", "))
@@ -122,7 +122,7 @@ export default function OutletInfo() {
               console.error("Error loading cuisines from storage:", error)
             }
           }
-          
+
           // Set images
           if (data.profileImage?.url) {
             setThumbnailImage(data.profileImage.url)
@@ -174,7 +174,7 @@ export default function OutletInfo() {
 
     window.addEventListener("cuisinesUpdated", handleCuisinesUpdate)
     window.addEventListener("addressUpdated", handleAddressUpdate)
-    
+
     return () => {
       window.removeEventListener("cuisinesUpdated", handleCuisinesUpdate)
       window.removeEventListener("addressUpdated", handleAddressUpdate)
@@ -250,7 +250,7 @@ export default function OutletInfo() {
         if (uploadedImage.url) {
           setThumbnailImage(uploadedImage.url)
         }
-        
+
         // Refresh restaurant data to get latest from backend
         const data = await fetchCurrentEntity()
         if (data) {
@@ -298,9 +298,9 @@ export default function OutletInfo() {
       const currentData = await fetchCurrentEntity()
       const existingImages = currentData?.menuImages && Array.isArray(currentData.menuImages)
         ? currentData.menuImages.map(img => ({
-            url: img.url,
-            publicId: img.publicId
-          }))
+          url: img.url,
+          publicId: img.publicId
+        }))
         : []
 
       // Upload all images and collect their URLs
@@ -308,11 +308,11 @@ export default function OutletInfo() {
       // and then update profile with complete array
       const uploadedImageData = []
       const failedUploads = []
-      
+
       for (let i = 0; i < files.length; i++) {
         try {
           const uploadResponse = await restaurantAPI.uploadMenuImage(files[i])
-          
+
           // Extract uploaded image URL and publicId
           const uploadedImage = uploadResponse?.data?.data?.menuImage
           if (uploadedImage?.url) {
@@ -509,7 +509,7 @@ export default function OutletInfo() {
         response: error.response?.data,
         status: error.response?.status
       })
-      
+
       let errorMessage = "Failed to delete image. Please try again."
       if (error.response?.data?.message) {
         errorMessage = error.response.data.message
@@ -521,7 +521,7 @@ export default function OutletInfo() {
         }
       }
       alert(errorMessage)
-      
+
       // Revert local state on error
       setCoverImages(originalImages)
       if (originalImages.length > 0) {
@@ -585,13 +585,13 @@ export default function OutletInfo() {
     try {
       // Update restaurant name via API
       const response = await restaurantAPI.updateProfile({ name: newName })
-      
+
       if (response?.data?.data?.restaurant) {
         // Update local state
         setRestaurantName(newName)
         setRestaurantData(prev => prev ? { ...prev, name: newName } : null)
         setShowEditNameDialog(false)
-        
+
         // Refresh restaurant data to get latest from backend
         const data = await fetchCurrentEntity()
         if (data) {
@@ -654,7 +654,7 @@ export default function OutletInfo() {
         ) : (
           <div className="w-full h-full bg-white" />
         )}
-        
+
         {/* Add Image Button - Black background with white text */}
         <button
           onClick={() => menuImageInputRef.current?.click()}
@@ -663,8 +663,8 @@ export default function OutletInfo() {
         >
           <Plus className="w-4 h-4" />
           <span>
-            {uploadingImage && imageType === 'menu' 
-              ? `Uploading ${uploadingCount} image${uploadingCount > 1 ? 's' : ''}...` 
+            {uploadingImage && imageType === 'menu'
+              ? `Uploading ${uploadingCount} image${uploadingCount > 1 ? 's' : ''}...`
               : 'Add image'}
           </span>
         </button>
@@ -676,7 +676,7 @@ export default function OutletInfo() {
           className="hidden"
           onChange={handleCoverImageAdd}
         />
-        
+
         {/* Cover Images Gallery - Show all cover images with delete buttons */}
         {coverImages.length > 0 && (
           <div className="absolute bottom-2 right-4 flex gap-1.5 z-10">
@@ -714,25 +714,35 @@ export default function OutletInfo() {
         )}
 
         {/* Thumbnail Section - Overlapping bottom edge */}
-        <div className="absolute bottom-0 left-4 -mb-[45px] flex flex-col gap-2 shrink-0 z-10">
-          <div className="relative w-[70px] h-[70px] rounded overflow-hidden">
+        <div className="absolute -bottom-[45px] left-4 flex flex-col items-center shrink-0 z-10 pointer-events-auto">
+          <div className="relative w-[90px] h-[90px] rounded-full bg-white p-1 shadow-md border border-gray-100">
             {thumbnailImage ? (
               <img
                 src={thumbnailImage}
-                alt="Restaurant thumbnail"
-                className="w-full h-full rounded-xl object-cover"
+                alt="Profile thumbnail"
+                className="w-full h-full rounded-full object-cover"
               />
             ) : (
-              <div className="w-full h-full rounded-xl bg-white border border-gray-200" />
+              <div className="w-full h-full rounded-full bg-gray-50 flex items-center justify-center border border-gray-200" />
             )}
+
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                profileImageInputRef.current?.click();
+              }}
+              disabled={uploadingImage}
+              className="absolute bottom-0 right-0 p-1.5 bg-blue-600 hover:bg-blue-700 rounded-full text-white shadow-sm transition-all border-2 border-white disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 flex items-center justify-center z-20"
+              aria-label="Edit photo"
+            >
+              {uploadingImage && imageType === 'profile' ? (
+                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <Camera className="w-3.5 h-3.5" />
+              )}
+            </button>
           </div>
-          <button
-            onClick={() => profileImageInputRef.current?.click()}
-            disabled={uploadingImage}
-            className="text-blue-600 text-sm font-semibold hover:text-blue-700 transition-colors text-left disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {uploadingImage && imageType === 'profile' ? 'Uploading...' : 'Edit photo'}
-          </button>
+
           <input
             ref={profileImageInputRef}
             type="file"
@@ -746,35 +756,37 @@ export default function OutletInfo() {
       {/* Thumbnail and Reviews Section */}
       <div className="px-4 pt-[50px] pb-4 bg-white">
         <div className="flex items-start gap-4">
-     
-          {/* Reviews Section - Left Aligned */}
-          <div className="flex flex-col gap-2">
-            {/* Delivery Reviews */}
-            <button
-              onClick={() => navigate("/restaurant/ratings-reviews")}
-              className="flex items-center gap-2 text-left w-full"
-            >
-              <div className="bg-green-700 px-2.5 py-1.5 rounded flex items-center gap-1 shrink-0">
-                <span className="text-white text-sm font-bold">
-                  {restaurantData?.rating?.toFixed(1) || "0.0"}
-                </span>
-                <Star className="w-3.5 h-3.5 text-white fill-white" />
-              </div>
-              <span className="text-gray-800 text-sm font-normal">
-                {restaurantData?.totalRatings || 0} DELIVERY REVIEWS
-              </span>
-              <ChevronRight className="w-4 h-4 text-gray-400 shrink-0 ml-auto" />
-            </button>
 
-            {/* Dining Reviews */}
-            <div className="flex items-center gap-2">
-              <div className="bg-gray-300 px-2.5 py-1.5 rounded flex items-center gap-1 shrink-0">
-                <span className="text-white text-sm font-normal">-</span>
-                <Star className="w-3.5 h-3.5 text-white" />
+          {/* Reviews Section - Left Aligned */}
+          {!isGroceryStoreRoute && (
+            <div className="flex flex-col gap-2">
+              {/* Delivery Reviews */}
+              <button
+                onClick={() => navigate("/restaurant/ratings-reviews")}
+                className="flex items-center gap-2 text-left w-full"
+              >
+                <div className="bg-green-700 px-2.5 py-1.5 rounded flex items-center gap-1 shrink-0">
+                  <span className="text-white text-sm font-bold">
+                    {restaurantData?.rating?.toFixed(1) || "0.0"}
+                  </span>
+                  <Star className="w-3.5 h-3.5 text-white fill-white" />
+                </div>
+                <span className="text-gray-800 text-sm font-normal">
+                  {restaurantData?.totalRatings || 0} DELIVERY REVIEWS
+                </span>
+                <ChevronRight className="w-4 h-4 text-gray-400 shrink-0 ml-auto" />
+              </button>
+
+              {/* Dining Reviews */}
+              <div className="flex items-center gap-2">
+                <div className="bg-gray-300 px-2.5 py-1.5 rounded flex items-center gap-1 shrink-0">
+                  <span className="text-white text-sm font-normal">-</span>
+                  <Star className="w-3.5 h-3.5 text-white" />
+                </div>
+                <span className="text-gray-800 text-sm font-normal">NOT ENOUGH DINING REVIEWS</span>
               </div>
-              <span className="text-gray-800 text-sm font-normal">NOT ENOUGH DINING REVIEWS</span>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -785,113 +797,189 @@ export default function OutletInfo() {
 
       {/* Information Cards */}
       <div className="px-4 pb-6 space-y-3">
-        {/* Restaurant Name Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="bg-blue-100/50  rounded-lg p-4 border border-blue-300"
-        >
-          <div className="flex items-start justify-between">
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-gray-500 font-normal mb-1">Restaurant's name</p>
-              <p className="text-base font-semibold text-gray-900">
-                {loading ? "Loading..." : (restaurantName || "N/A")}
-              </p>
-            </div>
-            <button
-              onClick={handleOpenEditDialog}
-              disabled={isGroceryStoreRoute}
-              className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0"
+        {isGroceryStoreRoute ? (
+          <>
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="bg-blue-100/50 rounded-lg p-4 border border-blue-300"
             >
-              Edit
-            </button>
-          </div>
-        </motion.div>
-
-        {/* Cuisine Tags Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.05 }}
-          className="bg-blue-100/50 rounded-lg p-4 border border-blue-300"
-        >
-          <div className="flex items-start justify-between">
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-gray-500 font-normal mb-1">Cuisine tags</p>
-              <p className="text-base font-semibold text-gray-900">
-                {loading ? "Loading..." : (cuisineTags || "No cuisines selected")}
-              </p>
-            </div>
-            <button
-              onClick={() => navigate("/restaurant/edit-cuisines")}
-              disabled={isGroceryStoreRoute}
-              className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0 self-start"
-            >
-              Edit
-            </button>
-          </div>
-        </motion.div>
-
-        {/* Address Card */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.1 }}
-          className="bg-blue-100/50  rounded-lg p-4 border border-blue-300"
-        >
-          <div className="flex items-start justify-between mb-2">
-            <div className="flex-1 min-w-0">
-              <p className="text-xs text-gray-500 font-normal mb-1">Address</p>
-              <div className="flex items-start gap-1.5">
-                <MapPin className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
-                <p className="text-base font-semibold text-gray-900">
-                  {loading ? "Loading..." : (address || "No address provided")}
-                </p>
+              <div className="flex items-start justify-between mb-4">
+                <h3 className="font-semibold text-gray-900 text-base">Store Profile</h3>
+                <button
+                  onClick={() => navigate("/store/onboarding?edit=true")}
+                  className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0"
+                >
+                  Edit Profile
+                </button>
               </div>
-            </div>
-            <button
-              onClick={() => navigate("/restaurant/edit-address")}
-              disabled={isGroceryStoreRoute}
-              className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0 self-start"
+              <div className="space-y-4">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 font-normal mb-1">Store Name</p>
+                  <p className="text-sm font-semibold text-gray-900 truncate">
+                    {loading ? "Loading..." : (restaurantData?.name || "N/A")}
+                  </p>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 font-normal mb-1">Owner Name</p>
+                  <p className="text-sm font-semibold text-gray-900 truncate">
+                    {loading ? "Loading..." : (restaurantData?.ownerName || "N/A")}
+                  </p>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 font-normal mb-1">Owner Email</p>
+                  <p className="text-sm font-semibold text-gray-900 truncate">
+                    {loading ? "Loading..." : (restaurantData?.ownerEmail || "N/A")}
+                  </p>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 font-normal mb-1">Primary Contact Number</p>
+                  <p className="text-sm font-semibold text-gray-900 truncate">
+                    {loading ? "Loading..." : (restaurantData?.primaryContactNumber || restaurantData?.phone || "N/A")}
+                  </p>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 font-normal mb-1">Address</p>
+                  <div className="flex items-start gap-1.5 mt-1">
+                    <MapPin className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                    <p className="text-sm font-semibold text-gray-900">
+                      {loading ? "Loading..." : (address || "No address provided")}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.15 }}
+              className="space-y-3 pt-2"
             >
-              Edit
-            </button>
-          </div>
-        </motion.div>
+              <button
+                onClick={() => navigate(isGroceryStoreRoute ? "/store/outlet-timings" : "/restaurant/outlet-timings")}
+                className="w-full bg-blue-100/50 rounded-lg p-4 border border-blue-300 flex items-center justify-between hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <Clock className="w-5 h-5 text-blue-600" />
+                  <span className="text-base font-semibold text-gray-900">Outlet Timings</span>
+                </div>
+                <ChevronRight className="w-5 h-5 text-blue-600" />
+              </button>
+            </motion.div>
+          </>
+        ) : (
+          <>
+            {/* Restaurant Name Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="bg-blue-100/50  rounded-lg p-4 border border-blue-300"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 font-normal mb-1">Restaurant's name</p>
+                  <p className="text-base font-semibold text-gray-900">
+                    {loading ? "Loading..." : (restaurantName || "N/A")}
+                  </p>
+                </div>
+                <button
+                  onClick={handleOpenEditDialog}
+                  disabled={isGroceryStoreRoute}
+                  className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0"
+                >
+                  Edit
+                </button>
+              </div>
+            </motion.div>
 
-        {/* Action Cards */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3, delay: 0.15 }}
-          className="space-y-3 pt-2"
-        >
-          {/* Outlet Timings Card */}
-          <button
-            onClick={() => navigate(isGroceryStoreRoute ? "/store/outlet-timings" : "/restaurant/outlet-timings")}
-            className="w-full bg-blue-100/50 rounded-lg p-4 border border-blue-300 flex items-center justify-between hover:bg-gray-50 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <Clock className="w-5 h-5 text-blue-600" />
-              <span className="text-base font-semibold text-gray-900">Outlet Timings</span>
-            </div>
-            <ChevronRight className="w-5 h-5 text-blue-600" />
-          </button>
+            {/* Cuisine Tags Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.05 }}
+              className="bg-blue-100/50 rounded-lg p-4 border border-blue-300"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 font-normal mb-1">Cuisine tags</p>
+                  <p className="text-base font-semibold text-gray-900">
+                    {loading ? "Loading..." : (cuisineTags || "No cuisines selected")}
+                  </p>
+                </div>
+                <button
+                  onClick={() => navigate("/restaurant/edit-cuisines")}
+                  disabled={isGroceryStoreRoute}
+                  className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0 self-start"
+                >
+                  Edit
+                </button>
+              </div>
+            </motion.div>
 
-          {/* Contact Details Card */}
-          <button
-            onClick={() => navigate("/restaurant/contact-details")}
-            disabled={isGroceryStoreRoute}
-            className="w-full bg-blue-100/50 rounded-lg p-4 border border-blue-300 flex items-center justify-between hover:bg-gray-50 transition-colors"
-          >
-            <div className="flex items-center gap-3">
-              <Phone className="w-5 h-5 text-blue-600" />
-              <span className="text-base font-semibold text-gray-900">Contact Details</span>
-            </div>
-            <ChevronRight className="w-5 h-5 text-blue-600" />
-          </button>
-        </motion.div>
+            {/* Address Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.1 }}
+              className="bg-blue-100/50  rounded-lg p-4 border border-blue-300"
+            >
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-gray-500 font-normal mb-1">Address</p>
+                  <div className="flex items-start gap-1.5">
+                    <MapPin className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                    <p className="text-base font-semibold text-gray-900">
+                      {loading ? "Loading..." : (address || "No address provided")}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigate("/restaurant/edit-address")}
+                  disabled={isGroceryStoreRoute}
+                  className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0 self-start"
+                >
+                  Edit
+                </button>
+              </div>
+            </motion.div>
+
+            {/* Action Cards */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.15 }}
+              className="space-y-3 pt-2"
+            >
+              {/* Outlet Timings Card */}
+              <button
+                onClick={() => navigate(isGroceryStoreRoute ? "/store/outlet-timings" : "/restaurant/outlet-timings")}
+                className="w-full bg-blue-100/50 rounded-lg p-4 border border-blue-300 flex items-center justify-between hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <Clock className="w-5 h-5 text-blue-600" />
+                  <span className="text-base font-semibold text-gray-900">Outlet Timings</span>
+                </div>
+                <ChevronRight className="w-5 h-5 text-blue-600" />
+              </button>
+
+              {/* Contact Details Card */}
+              <button
+                onClick={() => navigate("/restaurant/contact-details")}
+                disabled={isGroceryStoreRoute}
+                className="w-full bg-blue-100/50 rounded-lg p-4 border border-blue-300 flex items-center justify-between hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <Phone className="w-5 h-5 text-blue-600" />
+                  <span className="text-base font-semibold text-gray-900">Contact Details</span>
+                </div>
+                <ChevronRight className="w-5 h-5 text-blue-600" />
+              </button>
+            </motion.div>
+          </>
+        )}
       </div>
 
 

@@ -64,7 +64,7 @@ export default function BottomNavOrders() {
     // For grocery stores, only show orders tabs, no hub mode
     if (isGroceryStore) {
       return (
-        <div className="sticky bottom-0 z-40 pb-3">
+        <div className="sticky bottom-0 z-40 pb-2">
           <div className="flex items-center gap-2 w-full">
             <div className="flex-1">
               <div className="bg-black rounded-full py-1.5 px-1 shadow-lg relative ml-1">
@@ -124,7 +124,7 @@ export default function BottomNavOrders() {
       const slideInStart = transitionDirection === 'right' ? '-100%' : '100%'
       document.body.style.transform = `translate3d(${slideInStart}, 0, 0)`
       document.body.style.transition = 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-      
+
       // Start exit phase - animate new page sliding in to center
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -132,7 +132,7 @@ export default function BottomNavOrders() {
           document.body.style.transform = 'translate3d(0, 0, 0)'
         })
       })
-      
+
       // After exit completes, reset
       const exitTimer = setTimeout(() => {
         setTransitionPhase('idle')
@@ -141,7 +141,7 @@ export default function BottomNavOrders() {
         document.body.style.transform = ''
         document.body.style.transition = ''
       }, 250)
-      
+
       return () => clearTimeout(exitTimer)
     }
     prevIsHubModeRef.current = isHubMode
@@ -154,14 +154,14 @@ export default function BottomNavOrders() {
     if (isTransitioning) {
       // Calculate slide direction: right = to Hub (slide right), left = to Orders (slide left)
       let slideTransform = 'translate3d(0, 0, 0)'
-      
+
       if (transitionPhase === 'entering') {
         // Old page slides out in the transition direction
         const slideOutAmount = transitionDirection === 'right' ? '100%' : '-100%'
         slideTransform = `translate3d(${slideOutAmount}, 0, 0)`
       }
       // Note: exiting phase transform is handled in the mode change effect
-      
+
       if (transitionPhase === 'entering') {
         document.body.style.transform = slideTransform
       }
@@ -178,7 +178,7 @@ export default function BottomNavOrders() {
       document.body.style.WebkitBackfaceVisibility = ''
       document.body.style.overflow = ''
     }
-    
+
     return () => {
       // Don't clean up during transition to avoid interrupting animation
       if (!isTransitioning) {
@@ -202,16 +202,16 @@ export default function BottomNavOrders() {
     const newMode = !isHubMode
     const direction = newMode ? 'right' : 'left' // right = to Hub, left = to Orders
     setTransitionDirection(direction)
-    
+
     // Set initial state
     setIsTransitioning(true)
     setTransitionPhase('idle')
-    
+
     // Force a reflow to ensure initial position is set, then start entering
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         setTransitionPhase('entering')
-        
+
         // After old page slides out, navigate and start exit (new page slides in)
         setTimeout(() => {
           const baseRoute = isGroceryStore ? "/store" : "/restaurant"
@@ -241,8 +241,8 @@ export default function BottomNavOrders() {
             <div
               className="flex flex-col items-center gap-3"
               style={{
-                transform: transitionPhase === 'entering' 
-                  ? 'translate3d(0, 0, 0) scale(1)' 
+                transform: transitionPhase === 'entering'
+                  ? 'translate3d(0, 0, 0) scale(1)'
                   : 'translate3d(0, -20px, 0) scale(0.9)',
                 transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
               }}
@@ -261,10 +261,9 @@ export default function BottomNavOrders() {
                 }}
               >
                 <div className="flex items-center gap-2">
-                  <ArrowRightLeft 
-                    className={`w-5 h-5 ${
-                      transitionDirection === 'right' ? 'text-blue-400' : 'text-pink-400'
-                    }`}
+                  <ArrowRightLeft
+                    className={`w-5 h-5 ${transitionDirection === 'right' ? 'text-blue-400' : 'text-pink-400'
+                      }`}
                     style={{
                       animation: transitionPhase === 'entering' ? 'spin 0.4s ease-in-out' : 'none',
                     }}
@@ -274,7 +273,7 @@ export default function BottomNavOrders() {
                   </span>
                 </div>
               </div>
-              
+
               {/* Loading indicator dots */}
               <div className="flex gap-1.5">
                 {[0, 1, 2].map((i) => (
@@ -294,7 +293,7 @@ export default function BottomNavOrders() {
               </div>
             </div>
           </div>
-          
+
           {/* CSS animations */}
           <style>{`
             @keyframes pulse {
@@ -319,68 +318,68 @@ export default function BottomNavOrders() {
         </>
       )}
 
-      <div className="sticky bottom-0 z-40 pb-3">
+      <div className="sticky bottom-0 z-40 pb-2">
         <div className="flex items-center gap-2 w-full">
 
-        {/* Left toggle (Hub → Orders) */}
-        {isHubMode && (
-          <button
-            onClick={handleToggleMode}
-            className="flex flex-col items-center gap-1 bg-black text-white/90 pr-3 py-3 rounded-r-full rounded-l-[12px] shadow-md border border-black active:scale-95"
-          >
-            <ArrowRightLeft className="w-4 h-4" />
-            <span className="text-[11px]">To Orders</span>
-          </button>
-        )}
+          {/* Left toggle (Hub → Orders) */}
+          {isHubMode && (
+            <button
+              onClick={handleToggleMode}
+              className="flex flex-col items-center gap-1 bg-black text-white/90 pr-3 py-3 rounded-r-full rounded-l-[12px] shadow-md border border-black active:scale-95"
+            >
+              <ArrowRightLeft className="w-4 h-4" />
+              <span className="text-[11px]">To Orders</span>
+            </button>
+          )}
 
-        <div className="flex-1">
-          <div className={`bg-black rounded-full py-1.5 px-1 shadow-lg relative ${isHubMode ? "mr-1" : "ml-1"}`}>
-            <div className="flex items-center justify-around relative">
-              {tabs.map(tab => {
-                const Icon = tab.icon
-                const isActive = activeTab === tab.id
+          <div className="flex-1">
+            <div className={`bg-black rounded-full py-1.5 px-1 shadow-lg relative ${isHubMode ? "mr-1" : "ml-1"}`}>
+              <div className="flex items-center justify-around relative">
+                {tabs.map(tab => {
+                  const Icon = tab.icon
+                  const isActive = activeTab === tab.id
 
-                return (
-                  <motion.button
-                    key={tab.id}
-                    onClick={() => handleTabClick(tab)}
-                    aria-current={isActive ? "page" : undefined}
-                    className="relative flex flex-col items-center gap-1 px-4 py-2 rounded-full overflow-hidden z-10"
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    {isActive && (
-                      <motion.div
-                        layoutId="bottomNavActive"
-                        className="absolute inset-0 bg-neutral-700 rounded-full -z-10"
-                        initial={false}
-                        transition={{
-                          type: "spring",
-                          stiffness: 500,
-                          damping: 30,
-                        }}
-                      />
-                    )}
-                    <Icon className={`w-5 h-4 relative z-10 transition-colors duration-300 ease-in-out ${isActive ? "text-white" : "text-white/80"}`} />
-                    <span className={`text-[11px] relative z-10 transition-colors duration-300 ease-in-out ${isActive ? "text-white" : "text-white/80"}`}>
-                      {tab.label}
-                    </span>
-                  </motion.button>
-                )
-              })}
+                  return (
+                    <motion.button
+                      key={tab.id}
+                      onClick={() => handleTabClick(tab)}
+                      aria-current={isActive ? "page" : undefined}
+                      className="relative flex flex-col items-center gap-1 px-4 py-2 rounded-full overflow-hidden z-10"
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      {isActive && (
+                        <motion.div
+                          layoutId="bottomNavActive"
+                          className="absolute inset-0 bg-neutral-700 rounded-full -z-10"
+                          initial={false}
+                          transition={{
+                            type: "spring",
+                            stiffness: 500,
+                            damping: 30,
+                          }}
+                        />
+                      )}
+                      <Icon className={`w-5 h-4 relative z-10 transition-colors duration-300 ease-in-out ${isActive ? "text-white" : "text-white/80"}`} />
+                      <span className={`text-[11px] relative z-10 transition-colors duration-300 ease-in-out ${isActive ? "text-white" : "text-white/80"}`}>
+                        {tab.label}
+                      </span>
+                    </motion.button>
+                  )
+                })}
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Right toggle (Orders → Hub) */}
-        {!isHubMode && (
-          <button
-            onClick={handleToggleMode}
-            className="flex flex-col items-center gap-1 bg-black text-white/90 pl-3 py-3 rounded-l-full rounded-r-[12px] shadow-md border border-black active:scale-95"
-          >
-            <ArrowRightLeft className="w-4 h-4" />
-            <span className="text-[11px]">To Hub</span>
-          </button>
-        )}
+          {/* Right toggle (Orders → Hub) */}
+          {!isHubMode && (
+            <button
+              onClick={handleToggleMode}
+              className="flex flex-col items-center gap-1 bg-black text-white/90 pl-3 py-3 rounded-l-full rounded-r-[12px] shadow-md border border-black active:scale-95"
+            >
+              <ArrowRightLeft className="w-4 h-4" />
+              <span className="text-[11px]">To Hub</span>
+            </button>
+          )}
         </div>
       </div>
     </>

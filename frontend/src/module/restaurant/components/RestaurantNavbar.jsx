@@ -9,6 +9,7 @@ export default function RestaurantNavbar({
   showSearch = true,
   showOfflineOnlineTag = true,
   showNotifications = true,
+  onSearchChange,
 }) {
   const navigate = useNavigate()
   const routeLocation = useLocation()
@@ -24,7 +25,7 @@ export default function RestaurantNavbar({
     const fetchRestaurantData = async () => {
       try {
         setLoading(true)
-        const response = isGroceryStore 
+        const response = isGroceryStore
           ? await groceryStoreAPI.getCurrentStore()
           : await restaurantAPI.getCurrentRestaurant()
         // Handle both restaurant and grocery store response formats
@@ -51,7 +52,7 @@ export default function RestaurantNavbar({
   // Format full address from location object - using stored data only, no live fetching
   const formatAddress = (location) => {
     if (!location) return ""
-    
+
     // Priority 1: Use formattedAddress if available (stored address from database)
     if (location.formattedAddress && location.formattedAddress.trim() !== "" && location.formattedAddress !== "Select location") {
       // Check if it's just coordinates (latitude, longitude format)
@@ -60,37 +61,37 @@ export default function RestaurantNavbar({
         return location.formattedAddress.trim()
       }
     }
-    
+
     // Priority 2: Use address field if available
     if (location.address && location.address.trim() !== "") {
       return location.address.trim()
     }
-    
+
     // Priority 3: Build from individual components
     const parts = []
-    
+
     // Add street address (addressLine1 or street)
     if (location.addressLine1) {
       parts.push(location.addressLine1.trim())
     } else if (location.street) {
       parts.push(location.street.trim())
     }
-    
+
     // Add addressLine2 if available
     if (location.addressLine2) {
       parts.push(location.addressLine2.trim())
     }
-    
+
     // Add area if available
     if (location.area) {
       parts.push(location.area.trim())
     }
-    
+
     // Add landmark if available
     if (location.landmark) {
       parts.push(location.landmark.trim())
     }
-    
+
     // Add city if available and not already in area
     if (location.city) {
       const city = location.city.trim()
@@ -100,7 +101,7 @@ export default function RestaurantNavbar({
         parts.push(city)
       }
     }
-    
+
     // Add state if available
     if (location.state) {
       const state = location.state.trim()
@@ -110,13 +111,13 @@ export default function RestaurantNavbar({
         parts.push(state)
       }
     }
-    
+
     // Add zipCode/pincode if available
     if (location.zipCode || location.pincode || location.postalCode) {
       const zip = (location.zipCode || location.pincode || location.postalCode).trim()
       parts.push(zip)
     }
-    
+
     return parts.length > 0 ? parts.join(", ") : ""
   }
 
@@ -134,7 +135,7 @@ export default function RestaurantNavbar({
   // Update location when restaurantData or propLocation changes
   useEffect(() => {
     let newLocation = ""
-    
+
     // Priority 1: Explicit prop takes highest priority
     if (propLocation && propLocation.trim() !== "") {
       newLocation = propLocation.trim()
@@ -143,16 +144,16 @@ export default function RestaurantNavbar({
     else if (restaurantData) {
       if (restaurantData.location) {
         // Use stored formattedAddress first (from database)
-        if (restaurantData.location.formattedAddress && 
-            restaurantData.location.formattedAddress.trim() !== "" && 
-            restaurantData.location.formattedAddress !== "Select location") {
+        if (restaurantData.location.formattedAddress &&
+          restaurantData.location.formattedAddress.trim() !== "" &&
+          restaurantData.location.formattedAddress !== "Select location") {
           // Check if it's just coordinates (latitude, longitude format)
           const isCoordinates = /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(restaurantData.location.formattedAddress.trim())
           if (!isCoordinates) {
             newLocation = restaurantData.location.formattedAddress.trim()
           }
         }
-        
+
         // If formattedAddress is not available or is coordinates, try formatAddress function
         if (!newLocation) {
           const formatted = formatAddress(restaurantData.location)
@@ -160,19 +161,19 @@ export default function RestaurantNavbar({
             newLocation = formatted.trim()
           }
         }
-        
+
         // Additional fallback: check if address is directly on location
         if (!newLocation && restaurantData.location.address && restaurantData.location.address.trim() !== "") {
           newLocation = restaurantData.location.address.trim()
         }
       }
-      
+
       // Priority 3: Fallback - check if address is directly on restaurantData (not in location object)
       if (!newLocation && restaurantData.address && restaurantData.address.trim() !== "") {
         newLocation = restaurantData.address.trim()
       }
     }
-    
+
     setLocation(newLocation)
   }, [restaurantData, propLocation])
 
@@ -214,10 +215,10 @@ export default function RestaurantNavbar({
 
     const statusEventName = isGroceryStore ? 'groceryStoreStatusChanged' : 'restaurantStatusChanged'
     window.addEventListener(statusEventName, handleStatusChange)
-    
+
     // Also check localStorage periodically to catch direct changes
     const interval = setInterval(updateStatus, 1000)
-    
+
     return () => {
       const statusEventName = isGroceryStore ? 'groceryStoreStatusChanged' : 'restaurantStatusChanged'
       window.removeEventListener(statusEventName, handleStatusChange)
@@ -236,10 +237,13 @@ export default function RestaurantNavbar({
   const handleSearchClose = () => {
     setIsSearchActive(false)
     setSearchValue("")
+    if (onSearchChange) onSearchChange("")
   }
 
   const handleSearchChange = (e) => {
-    setSearchValue(e.target.value)
+    const value = e.target.value
+    setSearchValue(value)
+    if (onSearchChange) onSearchChange(value)
   }
 
   const handleMenuClick = () => {
@@ -286,7 +290,7 @@ export default function RestaurantNavbar({
         <h1 className="text-base font-bold text-gray-900 truncate">
           {loading ? "Loading..." : displayName}
         </h1>
-        
+
         {/* Location */}
         {!loading && location && location.trim() !== "" && (
           <div className="flex items-center gap-1.5 mt-0.5">
@@ -304,23 +308,19 @@ export default function RestaurantNavbar({
         {showOfflineOnlineTag && (
           <button
             onClick={handleStatusClick}
-            className={`flex items-center gap-1.5 px-2 py-1 border rounded-full hover:opacity-80 transition-all ${
-              status === "Online" 
-                ? "bg-green-50 border-green-300" 
-                : "bg-gray-100 border-gray-300"
-            }`}
+            className={`flex items-center gap-1.5 px-2 py-1 border rounded-full hover:opacity-80 transition-all ${status === "Online"
+              ? "bg-green-50 border-green-300"
+              : "bg-gray-100 border-gray-300"
+              }`}
           >
-            <span className={`w-1.5 h-1.5 rounded-full ${
-              status === "Online" ? "bg-green-500" : "bg-gray-500"
-            }`}></span>
-            <span className={`text-sm font-medium ${
-              status === "Online" ? "text-green-700" : "text-gray-700"
-            }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${status === "Online" ? "bg-green-500" : "bg-gray-500"
+              }`}></span>
+            <span className={`text-sm font-medium ${status === "Online" ? "text-green-700" : "text-gray-700"
+              }`}>
               {status}
             </span>
-            <ChevronRight className={`w-4 h-4 ${
-              status === "Online" ? "text-green-700" : "text-gray-700"
-            }`} />
+            <ChevronRight className={`w-4 h-4 ${status === "Online" ? "text-green-700" : "text-gray-700"
+              }`} />
           </button>
         )}
 

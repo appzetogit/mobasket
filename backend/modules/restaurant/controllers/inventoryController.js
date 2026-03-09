@@ -11,7 +11,7 @@ export const getInventory = asyncHandler(async (req, res) => {
 
   // Find or create inventory
   let inventory = await Inventory.findOne({ restaurant: restaurantId });
-  
+
   if (!inventory) {
     // Create empty inventory
     inventory = new Inventory({
@@ -61,7 +61,7 @@ export const updateInventory = asyncHandler(async (req, res) => {
 
   // Find or create inventory
   let inventory = await Inventory.findOne({ restaurant: restaurantId });
-  
+
   if (!inventory) {
     inventory = new Inventory({
       restaurant: restaurantId,
@@ -86,14 +86,14 @@ export const updateInventory = asyncHandler(async (req, res) => {
 export const getInventoryByRestaurantId = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // Find restaurant by ID, slug, or restaurantId
     const restaurant = await Restaurant.findOne({
       $or: [
         { restaurantId: id },
         { slug: id },
-        ...(mongoose.Types.ObjectId.isValid(id) && id.length === 24 
-          ? [{ _id: new mongoose.Types.ObjectId(id) }] 
+        ...(mongoose.Types.ObjectId.isValid(id) && id.length === 24
+          ? [{ _id: new mongoose.Types.ObjectId(id) }]
           : []),
       ],
       isActive: true,
@@ -104,7 +104,7 @@ export const getInventoryByRestaurantId = async (req, res) => {
     }
 
     // Find inventory
-    const inventory = await Inventory.findOne({ 
+    const inventory = await Inventory.findOne({
       restaurant: restaurant._id,
       isActive: true,
     });

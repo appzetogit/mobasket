@@ -7,6 +7,7 @@ import WishlistButton from "@/components/WishlistButton";
 import { useCart } from "../../user/context/CartContext";
 import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
+import AddToCartAnimation from "../../user/components/AddToCartAnimation";
 
 import imgStrawberry from "@/assets/grocery&kitchen/strawberry2.jpeg";
 
@@ -73,6 +74,7 @@ const normalizeProduct = (item = {}, fallbackId = "") => {
       item?.storeId?.location ||
       item?.restaurantLocation ||
       null,
+    stockQuantity: item?.stockQuantity,
   };
 };
 
@@ -300,6 +302,13 @@ export default function FoodDetailPage() {
       >
         <Share2 className="w-5 h-5 text-slate-900" />
       </button>
+      <AddToCartAnimation
+        bottomOffset={20}
+        pillClassName="scale-105"
+        linkTo="/grocery/cart"
+        platform="mogrocery"
+        hideOnPages={true}
+      />
     </div>
   );
 
@@ -591,6 +600,13 @@ export default function FoodDetailPage() {
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
       `}</style>
+      <AddToCartAnimation
+        bottomOffset={20}
+        pillClassName="scale-105"
+        linkTo="/grocery/cart"
+        platform="mogrocery"
+        hideOnPages={true}
+      />
     </div>
   );
 }

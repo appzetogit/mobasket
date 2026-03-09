@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react"
 import { useNavigate, useParams, useLocation } from "react-router-dom"
-import { ArrowLeft, X, Upload, Loader2, Package } from "lucide-react"
+import { ArrowLeft, X, Upload, Loader2, Package, Camera, Image as ImageIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -16,6 +16,7 @@ export default function GroceryStoreProductDetailsPage() {
   const isNewProduct = !idParam || idParam === "new" || idParam === "undefined"
   const id = isNewProduct ? null : idParam
   const fileInputRef = useRef(null)
+  const galleryInputRef = useRef(null)
 
   const [productName, setProductName] = useState("")
   const [category, setCategory] = useState("")
@@ -28,7 +29,7 @@ export default function GroceryStoreProductDetailsPage() {
   const [inStock, setInStock] = useState(true)
   const [isActive, setIsActive] = useState(true)
   const [images, setImages] = useState([])
-  const [imageFiles, setImageFiles] = useState(new Map())
+  const [updatingImageIndex, setUpdatingImageIndex] = useState(null)
   const [uploadingImages, setUploadingImages] = useState(false)
   const [saving, setSaving] = useState(false)
 
@@ -116,10 +117,10 @@ export default function GroceryStoreProductDetailsPage() {
           setLoadingProduct(true)
           const response = await groceryStoreAPI.getProductById(id)
           if (response?.data?.success && response.data.data) {
-            const product = response.data.data
+            const product = response.data.data.product || response.data.data
             setProductName(product.name || "")
             setCategory(product.category?._id || product.category || "")
-            setSubcategories(Array.isArray(product.subcategories) 
+            setSubcategories(Array.isArray(product.subcategories)
               ? product.subcategories.map(s => s._id || s)
               : product.subcategory ? [product.subcategory._id || product.subcategory] : [])
             setDescription(product.description || "")
@@ -143,30 +144,93 @@ export default function GroceryStoreProductDetailsPage() {
   }, [id, isNewProduct])
 
   const handleImageAdd = async (e) => {
-    const files = Array.from(e.target.files)
-    if (!files.length) return
+    if (uploadingImages) return
+    const file = e.target.files?.[0]
+    if (!file) return
 
     try {
       setUploadingImages(true)
-      const uploads = []
-      for (const file of files) {
-        const uploaded = await uploadAPI.uploadMedia(file, { folder: "mobasket/grocery-store/products" })
-        const url = uploaded?.data?.data?.url || uploaded?.data?.url
-        if (url) {
-          uploads.push(url)
+      const uploaded = await uploadAPI.uploadMedia(file, { folder: "mobasket/grocery-store/products" })
+      const url = uploaded?.data?.data?.url || uploaded?.data?.url
+      if (url) {
+        if (updatingImageIndex !== null) {
+          setImages(prev => {
+            const next = [...prev]
+            next[updatingImageIndex] = url
+            return next
+          })
+          toast.success("Image updated successfully")
+        } else {
           setImages(prev => [...prev, url])
+          toast.success("Image uploaded successfully")
         }
       }
-      toast.success(`${uploads.length} image(s) uploaded`)
     } catch (error) {
-      toast.error('Failed to upload images')
+      console.error('Error uploading image:', error)
+      toast.error('Failed to upload image')
     } finally {
       setUploadingImages(false)
+      setUpdatingImageIndex(null)
       if (fileInputRef.current) {
         fileInputRef.current.value = ""
       }
+      if (galleryInputRef.current) {
+        galleryInputRef.current.value = ""
+      }
     }
   }
+
+  const handleCameraAdd = async (index) => {
+    if (uploadingImages) return;
+
+    if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+      try {
+        setUploadingImages(true);
+        const result = await window.flutter_inappwebview.callHandler('openCamera');
+        if (result && result.success && result.base64) {
+          const base64Data = result.base64;
+          const mimeType = result.mimeType || 'image/jpeg';
+          const filename = result.fileName || `camera_${Date.now()}.jpg`;
+
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const file = new File([byteArray], filename, { type: mimeType });
+
+          const uploaded = await uploadAPI.uploadMedia(file, { folder: "mobasket/grocery-store/products" });
+          const url = uploaded?.data?.data?.url || uploaded?.data?.url;
+
+          if (url) {
+            if (index !== null) {
+              setImages(prev => {
+                const next = [...prev];
+                next[index] = url;
+                return next;
+              });
+              toast.success("Image updated successfully");
+            } else {
+              setImages(prev => [...prev, url]);
+              toast.success("Image uploaded successfully");
+            }
+          }
+        } else {
+          toast.error("Camera capture failed or cancelled");
+        }
+      } catch (error) {
+        console.error('Camera error:', error);
+        toast.error('Failed to capture image');
+      } finally {
+        setUploadingImages(false);
+        setUpdatingImageIndex(null);
+      }
+    } else {
+      setUpdatingImageIndex(index);
+      fileInputRef.current?.click();
+    }
+  };
 
   const removeImage = (index) => {
     setImages(prev => prev.filter((_, i) => i !== index))
@@ -224,7 +288,7 @@ export default function GroceryStoreProductDetailsPage() {
         toast.success('Product updated successfully')
       }
 
-      navigate("/store")
+      navigate("/store/products/all")
     } catch (error) {
       const message = error?.response?.data?.message || error?.message || 'Failed to save product'
       toast.error(message)
@@ -244,7 +308,7 @@ export default function GroceryStoreProductDetailsPage() {
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white px-4 py-4 border-b border-slate-200 flex items-center gap-4 shadow-sm">
-        <Button variant="ghost" onClick={() => navigate("/store")} className="hover:bg-slate-100">
+        <Button variant="ghost" onClick={() => navigate(-1)} className="hover:bg-slate-100">
           <ArrowLeft className="w-5 h-5" />
         </Button>
         <div className="flex items-center gap-3">
@@ -327,11 +391,10 @@ export default function GroceryStoreProductDetailsPage() {
                               setSubcategories([...subcategories, sub.id])
                             }
                           }}
-                          className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${
-                            isSelected
-                              ? "bg-blue-600 text-white border-blue-600"
-                              : "bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100"
-                          }`}
+                          className={`px-3 py-1.5 rounded-full text-xs border transition-colors ${isSelected
+                            ? "bg-blue-600 text-white border-blue-600"
+                            : "bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100"
+                            }`}
                         >
                           {sub.name}
                         </button>
@@ -395,7 +458,12 @@ export default function GroceryStoreProductDetailsPage() {
                 min="0"
                 required
                 value={mrp}
-                onChange={(e) => setMrp(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value
+                  // Strip leading zeros only if followed by another digit (prevents 080 but allows 0.5)
+                  const cleaned = val.replace(/^0+(?=\d)/, '')
+                  setMrp(cleaned)
+                }}
                 placeholder="0.00"
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
               />
@@ -409,7 +477,11 @@ export default function GroceryStoreProductDetailsPage() {
                 min="0"
                 required
                 value={sellingPrice}
-                onChange={(e) => setSellingPrice(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value
+                  const cleaned = val.replace(/^0+(?=\d)/, '')
+                  setSellingPrice(cleaned)
+                }}
                 placeholder="0.00"
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
               />
@@ -437,7 +509,11 @@ export default function GroceryStoreProductDetailsPage() {
                 type="number"
                 min="0"
                 value={stockQuantity}
-                onChange={(e) => setStockQuantity(e.target.value)}
+                onChange={(e) => {
+                  const val = e.target.value
+                  const cleaned = val.replace(/^0+(?=\d)/, '')
+                  setStockQuantity(cleaned || '0')
+                }}
                 placeholder="0"
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
               />
@@ -467,35 +543,94 @@ export default function GroceryStoreProductDetailsPage() {
             <label className="block text-sm font-medium text-slate-700 mb-2">
               Product Images
             </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={handleImageAdd}
+              disabled={uploadingImages}
+            />
+            <input
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageAdd}
+              disabled={uploadingImages}
+            />
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
               {images.map((img, idx) => (
-                <div key={idx} className="relative aspect-square group">
+                <div
+                  key={idx}
+                  className="relative aspect-square group cursor-pointer"
+                >
                   <img
                     src={img}
                     alt={`Product ${idx + 1}`}
                     className="w-full h-full object-cover rounded-lg border border-slate-200"
                   />
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center space-x-2 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setUpdatingImageIndex(idx)
+                        handleCameraAdd(idx)
+                      }}
+                      className="p-1 rounded-full bg-white/20 hover:bg-white/40"
+                    >
+                      <Camera className="w-4 h-4 text-white" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setUpdatingImageIndex(idx)
+                        galleryInputRef.current?.click()
+                      }}
+                      className="p-1 rounded-full bg-white/20 hover:bg-white/40"
+                    >
+                      <ImageIcon className="w-4 h-4 text-white" />
+                    </button>
+                  </div>
                   <button
-                    onClick={() => removeImage(idx)}
-                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-md hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeImage(idx)
+                    }}
+                    className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1.5 shadow-md hover:bg-red-600 transition-colors z-10"
                   >
                     <X className="w-3 h-3" />
                   </button>
                 </div>
               ))}
-              <label className="aspect-square border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors bg-slate-50">
-                <Upload className="w-6 h-6 text-slate-400 mb-1" />
-                <span className="text-xs text-slate-500">Add Image</span>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={handleImageAdd}
-                  disabled={uploadingImages}
-                />
-              </label>
+              {images.length === 0 && (
+                <>
+                  <div
+                    onClick={() => {
+                      setUpdatingImageIndex(null)
+                      handleCameraAdd(null)
+                    }}
+                    className="aspect-square border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors bg-slate-50"
+                  >
+                    <Camera className="w-6 h-6 text-slate-400 mb-1" />
+                    <span className="text-xs text-slate-500">Camera</span>
+                  </div>
+                  <div
+                    onClick={() => {
+                      setUpdatingImageIndex(null)
+                      galleryInputRef.current?.click()
+                    }}
+                    className="aspect-square border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors bg-slate-50"
+                  >
+                    <ImageIcon className="w-6 h-6 text-slate-400 mb-1" />
+                    <span className="text-xs text-slate-500">Gallery</span>
+                  </div>
+                </>
+              )}
             </div>
             {uploadingImages && (
               <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">
@@ -509,25 +644,25 @@ export default function GroceryStoreProductDetailsPage() {
           </div>
 
           <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
-          <Button 
-            variant="outline" 
-            onClick={() => navigate("/store")}
-            className="px-6 border-slate-300 text-slate-700 hover:bg-slate-50"
-          >
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleSubmit} 
-            disabled={saving || uploadingImages}
-            className="px-6 bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            {saving ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                Saving...
-              </>
-            ) : isNewProduct ? "Create Product" : "Update Product"}
-          </Button>
+            <Button
+              variant="outline"
+              onClick={() => navigate(-1)}
+              className="px-6 border-slate-300 text-slate-700 hover:bg-slate-50"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              disabled={saving || uploadingImages}
+              className="px-6 bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Saving...
+                </>
+              ) : isNewProduct ? "Create Product" : "Update Product"}
+            </Button>
           </div>
         </div>
       </main>

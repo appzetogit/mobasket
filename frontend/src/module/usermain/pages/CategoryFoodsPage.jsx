@@ -7,6 +7,7 @@ import WishlistButton from "@/components/WishlistButton";
 import api from "@/lib/api";
 import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
+import AddToCartAnimation from "../../user/components/AddToCartAnimation";
 
 const FALLBACK_IMAGE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
 
@@ -30,10 +31,10 @@ const buildProductDetailState = (product) => {
   const storeName = String(product?.storeId?.name || product?.storeName || "").trim();
   const storeAddress = String(
     product?.storeAddress ||
-      product?.storeId?.address ||
-      product?.storeId?.location?.formattedAddress ||
-      product?.storeId?.location?.address ||
-      "",
+    product?.storeId?.address ||
+    product?.storeId?.location?.formattedAddress ||
+    product?.storeId?.location?.address ||
+    "",
   ).trim();
 
   return {
@@ -140,12 +141,12 @@ export function CategoryFoodsContent({
           if (!effectiveZoneId) return true;
           const productZoneId = String(
             product?.zoneId?._id ||
-              product?.zoneId?.id ||
-              product?.zoneId ||
-              product?.storeId?.zoneId?._id ||
-              product?.storeId?.zoneId?.id ||
-              product?.storeId?.zoneId ||
-              "",
+            product?.zoneId?.id ||
+            product?.zoneId ||
+            product?.storeId?.zoneId?._id ||
+            product?.storeId?.zoneId?.id ||
+            product?.storeId?.zoneId ||
+            "",
           ).trim();
           return !productZoneId || productZoneId === String(effectiveZoneId);
         });
@@ -223,10 +224,10 @@ export function CategoryFoodsContent({
     const storeName = String(product?.storeId?.name || product?.storeName || "").trim();
     const storeAddress = String(
       product?.storeAddress ||
-        product?.storeId?.address ||
-        product?.storeId?.location?.formattedAddress ||
-        product?.storeId?.location?.address ||
-        "",
+      product?.storeId?.address ||
+      product?.storeId?.location?.formattedAddress ||
+      product?.storeId?.location?.address ||
+      "",
     ).trim();
 
     if (!storeId) {
@@ -252,6 +253,7 @@ export function CategoryFoodsContent({
       restaurantAddress: storeAddress,
       restaurantLocation: product?.storeLocation || product?.storeId?.location || null,
       platform: "mogrocery",
+      stockQuantity: product?.stockQuantity,
     });
 
     toast.custom(
@@ -439,6 +441,13 @@ export function CategoryFoodsContent({
           scrollbar-width: none;
         }
       `}</style>
+      <AddToCartAnimation
+        bottomOffset={20}
+        pillClassName="scale-105"
+        linkTo="/grocery/cart"
+        platform="mogrocery"
+        hideOnPages={true}
+      />
     </div>
   );
 }

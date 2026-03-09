@@ -220,6 +220,7 @@ export default function GroceryBestSellerProductsPage() {
         restaurantAddress: storeAddress,
         restaurantLocation: storeLocation,
         platform: "mogrocery",
+        stockQuantity: product?.stockQuantity,
       }, sourcePosition);
       toast.success("Added to cart");
     } catch (err) {
@@ -314,25 +315,24 @@ export default function GroceryBestSellerProductsPage() {
                 <div className="flex items-end justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-slate-900">Rs {product.sellingPrice ?? 0}</p>
-                  {product.mrp && Number(product.mrp) > Number(product.sellingPrice) && (
-                    <p className="text-xs text-slate-400 line-through">Rs {product.mrp}</p>
-                  )}
+                    {product.mrp && Number(product.mrp) > Number(product.sellingPrice) && (
+                      <p className="text-xs text-slate-400 line-through">Rs {product.mrp}</p>
+                    )}
                     {isInCart(product?._id || product?.id) && (
                       <p className="text-[10px] font-semibold text-emerald-700 mt-1">Added to cart</p>
                     )}
                   </div>
-                <button
-                  type="button"
+                  <button
+                    type="button"
                     onClick={(event) => handleAddToCart(product, event)}
-                  className={`h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1 ${
-                    isInCart(product?._id || product?.id)
+                    className={`h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1 ${isInCart(product?._id || product?.id)
                       ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
                       : "bg-emerald-600 text-white"
-                  }`}
-                >
-                  <ShoppingCart size={14} />
-                  {isInCart(product?._id || product?.id) ? "Added" : "Add"}
-                </button>
+                      }`}
+                  >
+                    <ShoppingCart size={14} />
+                    {isInCart(product?._id || product?.id) ? "Added" : "Add"}
+                  </button>
                 </div>
               </div>
             </div>

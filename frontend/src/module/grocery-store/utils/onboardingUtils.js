@@ -66,10 +66,15 @@ export const getPostAuthGroceryStorePathFromCachedData = () => {
   }
 }
 
-export const redirectGroceryStoreAfterAuth = async (navigate, { replace = true } = {}) => {
+export const redirectGroceryStoreAfterAuth = async (navigate, { replace = true, redirectTo = null } = {}) => {
   try {
     const step = await checkGroceryStoreOnboardingStatus()
-    navigate(step ? `/store/onboarding?step=${step}` : "/store", { replace })
+    if (step) {
+      navigate(`/store/onboarding?step=${step}`, { replace })
+    } else {
+      // Use redirectTo if provided, otherwise fallback to /store
+      navigate(redirectTo || "/store", { replace })
+    }
   } catch {
     navigate("/store/onboarding", { replace })
   }

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { X } from "lucide-react"
 import { adminAPI } from "@/lib/api"
@@ -11,6 +11,8 @@ import { useCompanyName } from "@/lib/hooks/useCompanyName"
 export default function ShareFeedback() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
+  const location = useLocation()
+  const isGroceryStore = location.pathname.startsWith('/store')
   const [rating, setRating] = useState(null)
   const [showThanks, setShowThanks] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -23,13 +25,13 @@ export default function ShareFeedback() {
 
   const handleContinue = async () => {
     if (rating === null) return
-    
+
     try {
       setIsSubmitting(true)
       // Save feedback experience to backend (public route)
       await api.post(API_ENDPOINTS.ADMIN.FEEDBACK_EXPERIENCE_CREATE, {
         rating,
-        module: 'restaurant'
+        module: isGroceryStore ? 'grocery-store' : 'restaurant'
       })
       setShowThanks(true)
     } catch (error) {
@@ -86,11 +88,10 @@ export default function ShareFeedback() {
                   whileTap={{ scale: 0.96 }}
                   animate={{ scale }}
                   transition={{ type: "spring", stiffness: 260, damping: 20 }}
-                  className={`py-2 text-xs font-medium border-l border-gray-200 first:border-l-0 focus:outline-none ${
-                    isActive
-                      ? "bg-black text-white"
-                      : "bg-white text-gray-900 hover:bg-gray-50"
-                  }`}
+                  className={`py-2 text-xs font-medium border-l border-gray-200 first:border-l-0 focus:outline-none ${isActive
+                    ? "bg-black text-white"
+                    : "bg-white text-gray-900 hover:bg-gray-50"
+                    }`}
                 >
                   {num}
                 </motion.button>
@@ -137,11 +138,10 @@ export default function ShareFeedback() {
           type="button"
           onClick={handleContinue}
           disabled={rating === null}
-          className={`w-full py-3 rounded-full text-sm font-medium transition-colors ${
-            rating === null
-              ? "bg-gray-200 text-gray-500"
-              : "bg-black text-white hover:bg-gray-900"
-          }`}
+          className={`w-full py-3 rounded-full text-sm font-medium transition-colors ${rating === null
+            ? "bg-gray-200 text-gray-500"
+            : "bg-black text-white hover:bg-gray-900"
+            }`}
           whileTap={rating !== null ? { scale: 0.98 } : undefined}
         >
           Continue
