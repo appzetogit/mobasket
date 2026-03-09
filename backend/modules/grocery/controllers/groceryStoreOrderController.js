@@ -3,7 +3,6 @@ import { successResponse, errorResponse } from '../../../shared/utils/response.j
 import Order from '../../order/models/Order.js';
 import Payment from '../../payment/models/Payment.js';
 import mongoose from 'mongoose';
-import { notifyRestaurantOrderUpdate } from '../../order/services/restaurantNotificationService.js';
 
 /**
  * Get all orders for grocery store
@@ -175,83 +174,9 @@ export const getGroceryStoreOrderById = asyncHandler(async (req, res) => {
  * Adapts restaurant acceptOrder to work with req.store
  */
 export const acceptOrder = asyncHandler(async (req, res) => {
-  try {
-    const store = req.store;
-    const { id } = req.params;
-    const { preparationTime } = req.body;
-
-    const storeIdVariations = Array.from(new Set([
-      store._id?.toString(),
-      store.restaurantId?.toString(),
-      store.id?.toString(),
-      store.slug?.toString(),
-    ].filter(Boolean)));
-
-    let order = null;
-
-    if (mongoose.Types.ObjectId.isValid(id) && id.length === 24) {
-      order = await Order.findOne({
-        _id: id,
-        restaurantId: { $in: storeIdVariations }
-      });
-    }
-
-    if (!order) {
-      order = await Order.findOne({
-        orderId: id,
-        restaurantId: { $in: storeIdVariations }
-      });
-    }
-
-    if (!order) {
-      return errorResponse(res, 404, 'Order not found');
-    }
-
-    const alreadyAcceptedStatuses = ['preparing', 'ready'];
-    const wasAlreadyAccepted = alreadyAcceptedStatuses.includes(order.status);
-
-    if (!wasAlreadyAccepted) {
-      if (!['pending', 'confirmed'].includes(order.status)) {
-        return errorResponse(res, 400, `Order cannot be accepted. Current status: ${order.status}`);
-      }
-
-      if (!order.tracking || typeof order.tracking !== 'object') {
-        order.tracking = {};
-      }
-
-      if (order.status === 'pending') {
-        order.tracking.confirmed = { status: true, timestamp: new Date() };
-      }
-
-      order.status = 'preparing';
-      order.tracking.preparing = { status: true, timestamp: new Date() };
-
-      if (preparationTime) {
-        const parsedPrepTime = Number.parseInt(preparationTime, 10);
-        if (Number.isFinite(parsedPrepTime) && parsedPrepTime > 0) {
-          order.preparationTime = parsedPrepTime;
-        }
-      }
-
-      await order.save();
-
-      try {
-        await notifyRestaurantOrderUpdate(order._id.toString(), 'preparing');
-      } catch (notifyError) {
-        console.error('Error sending grocery order accept notification:', notifyError);
-      }
-    }
-
-    return successResponse(
-      res,
-      200,
-      wasAlreadyAccepted ? 'Order already accepted' : 'Order accepted successfully',
-      { order }
-    );
-  } catch (error) {
-    console.error('Error accepting grocery store order:', error);
-    return errorResponse(res, 500, 'Failed to accept order');
-  }
+  req.restaurant = req.store;
+  const { acceptOrder: restaurantAcceptOrder } = await import('../../restaurant/controllers/restaurantOrderController.js');
+  return restaurantAcceptOrder(req, res);
 });
 
 /**

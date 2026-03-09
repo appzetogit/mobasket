@@ -1052,6 +1052,11 @@ export const deliveryAPI = {
     }
     return apiClient.patch(API_ENDPOINTS.DELIVERY.ORDER_ACCEPT.replace(':orderId', orderId), payload);
   },
+  rejectOrder: (orderId, reason = '') => {
+    return apiClient.patch(API_ENDPOINTS.DELIVERY.ORDER_REJECT.replace(':orderId', orderId), {
+      reason
+    });
+  },
   confirmReachedPickup: (orderId, currentLocation = {}) => {
     const payload = {};
     if (currentLocation.lat !== undefined && currentLocation.lat !== null) {

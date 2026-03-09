@@ -2829,6 +2829,7 @@ export default function DeliveryHome() {
 
 
   const [rejectReason, setRejectReason] = useState("")
+  const [isRejectingOrder, setIsRejectingOrder] = useState(false)
 
 
   const alertAudioRef = useRef(null)
@@ -5969,35 +5970,41 @@ export default function DeliveryHome() {
 
 
   const handleRejectConfirm = () => {
+    const rejectOrder = async () => {
+      const orderId = selectedRestaurant?.id ||
+        selectedRestaurant?.orderId ||
+        newOrder?.orderMongoId ||
+        newOrder?.orderId ||
+        popupOrderId
 
+      if (!orderId) {
+        toast.error('Order ID not found for deny action.')
+        return
+      }
 
-    stopNewOrderAlertSound("order rejected")
+      try {
+        setIsRejectingOrder(true)
+        await deliveryAPI.rejectOrder(orderId, rejectReason)
+        markOrderAsUnavailable(orderId, newOrder?.orderMongoId, newOrder?.orderId, selectedRestaurant?.orderId)
+        clearNewOrder()
+        stopNewOrderAlertSound("order rejected")
+        setShowRejectPopup(false)
+        setShowNewOrderPopup(false)
+        setSelectedRestaurant(null)
+        setIsNewOrderPopupMinimized(false)
+        setNewOrderDragY(0)
+        setRejectReason("")
+        setCountdownSeconds(300)
+        toast.success("Order denied")
+      } catch (error) {
+        const message = error?.response?.data?.message || "Failed to deny order. Please try again."
+        toast.error(message)
+      } finally {
+        setIsRejectingOrder(false)
+      }
+    }
 
-
-    setShowRejectPopup(false)
-
-
-    setShowNewOrderPopup(false)
-
-
-    setIsNewOrderPopupMinimized(false) // Reset minimized state
-
-
-    setNewOrderDragY(0) // Reset drag position
-
-
-    setRejectReason("")
-
-
-    setCountdownSeconds(300)
-
-
-    // Here you would typically send the rejection to your backend
-
-
-    console.log("Order rejected with reason:", rejectReason)
-
-
+    void rejectOrder()
   }
 
 
@@ -7945,8 +7952,8 @@ export default function DeliveryHome() {
 
 
 
-    // Be tolerant of slight vertical movement; only require right swipe.
-    if (deltaX > DELIVERY_SWIPE_START_THRESHOLD_PX) {
+    // Match Reached Pickup behavior: require a dominant right swipe.
+    if (Math.abs(deltaX) > DELIVERY_SWIPE_START_THRESHOLD_PX && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
 
 
       newOrderAcceptButtonIsSwiping.current = true
@@ -8000,7 +8007,7 @@ export default function DeliveryHome() {
   const handleNewOrderAcceptTouchEnd = (e) => {
 
 
-    if (!newOrderAcceptButtonIsSwiping.current && newOrderAcceptButtonProgressRef.current < DELIVERY_SWIPE_CONFIRM_THRESHOLD) {
+    if (!newOrderAcceptButtonIsSwiping.current) {
 
 
       setNewOrderAcceptButtonProgress(0)
@@ -8016,8 +8023,7 @@ export default function DeliveryHome() {
 
 
 
-    const endTouchX = e?.changedTouches?.[0]?.clientX ?? (newOrderAcceptButtonSwipeStartX.current + ((newOrderAcceptButtonProgressRef.current || 0) * (newOrderAcceptButtonRef.current?.offsetWidth || 300)))
-    const deltaX = endTouchX - newOrderAcceptButtonSwipeStartX.current
+    const deltaX = e.changedTouches[0].clientX - newOrderAcceptButtonSwipeStartX.current
 
 
     const buttonWidth = newOrderAcceptButtonRef.current?.offsetWidth || 300
@@ -8033,14 +8039,12 @@ export default function DeliveryHome() {
 
 
     const threshold = maxSwipe * DELIVERY_SWIPE_CONFIRM_THRESHOLD
-    const rawProgress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
-    const finalProgress = Math.max(rawProgress, newOrderAcceptButtonProgressRef.current)
 
 
 
 
 
-    if (finalProgress >= DELIVERY_SWIPE_CONFIRM_THRESHOLD || deltaX > threshold) {
+    if (deltaX > threshold) {
 
 
       // Stop audio immediately when user accepts
@@ -30225,6 +30229,14 @@ export default function DeliveryHome() {
 
                   </div>
 
+                  <button
+                    type="button"
+                    onClick={handleRejectClick}
+                    className="mt-3 w-full border border-gray-300 text-gray-700 py-3 rounded-full font-semibold text-sm hover:bg-gray-50 transition-colors"
+                  >
+                    Can't accept this order
+                  </button>
+
 
                 </div>
 
@@ -32096,10 +32108,9 @@ export default function DeliveryHome() {
 
 
                       onTouchEnd={handleNewOrderAcceptTouchEnd}
-                      onTouchCancel={handleNewOrderAcceptTouchEnd}
 
 
-                      whileTap={{ scale: 0.995 }}
+                      whileTap={{ scale: 0.98 }}
 
 
                     >
@@ -32213,10 +32224,10 @@ export default function DeliveryHome() {
                             animate={{
 
 
-                              opacity: newOrderAcceptButtonProgress > DELIVERY_SWIPE_CONFIRM_THRESHOLD ? Math.max(0.2, 1 - newOrderAcceptButtonProgress * 0.8) : 1,
+                              opacity: newOrderAcceptButtonProgress > 0.5 ? Math.max(0.2, 1 - newOrderAcceptButtonProgress * 0.8) : 1,
 
 
-                              x: newOrderAcceptButtonProgress > DELIVERY_SWIPE_CONFIRM_THRESHOLD ? newOrderAcceptButtonProgress * 15 : 0
+                              x: newOrderAcceptButtonProgress > 0.5 ? newOrderAcceptButtonProgress * 15 : 0
 
 
                             }}
@@ -32268,51 +32279,6 @@ export default function DeliveryHome() {
 
 
 
-
-
-            {/* Reject Button - Outside the popup, positioned below */}
-
-
-            <motion.div
-
-
-              initial={{ opacity: 0, y: 20 }}
-
-
-              animate={{ opacity: 1, y: 0 }}
-
-
-              exit={{ opacity: 0, y: 20 }}
-
-
-              transition={{ duration: 0.3, delay: 0.1 }}
-
-
-              className="fixed top-4 right-4 z-[115]"
-
-
-            >
-
-
-              <button
-
-
-                onClick={handleRejectConfirm}
-
-
-                className="  bg-black border-2 border-white text-white text-bold px-5 p-2 rounded-full font-semibold text-sm hover:bg-red-50 transition-colors shadow-2xl"
-
-
-              >
-
-
-                Deny
-
-
-              </button>
-
-
-            </motion.div>
 
 
           </>
@@ -32499,6 +32465,7 @@ export default function DeliveryHome() {
 
 
                     onClick={handleRejectCancel}
+                    disabled={isRejectingOrder}
 
 
                     className="flex-1 bg-white border-2 border-gray-300 text-gray-700 py-3 rounded-lg font-semibold text-sm hover:bg-gray-50 transition-colors"
@@ -32519,7 +32486,7 @@ export default function DeliveryHome() {
                     onClick={handleRejectConfirm}
 
 
-                    disabled={!rejectReason}
+                    disabled={!rejectReason || isRejectingOrder}
 
 
                     className={`flex-1 py-3 rounded-lg font-semibold text-sm transition-colors ${rejectReason
@@ -32537,7 +32504,7 @@ export default function DeliveryHome() {
                   >
 
 
-                    Confirm
+                    {isRejectingOrder ? "Denying..." : "Confirm"}
 
 
                   </button>

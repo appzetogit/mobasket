@@ -353,6 +353,14 @@ const extractNotifiedDeliveryIds = (assignmentInfo = {}) => {
   };
 };
 
+const extractRejectedDeliveryIds = (assignmentInfo = {}) => {
+  const rejectedIds = Array.isArray(assignmentInfo?.rejectedDeliveryPartnerIds)
+    ? assignmentInfo.rejectedDeliveryPartnerIds
+    : [];
+
+  return rejectedIds.map(normalizeDeliveryNotificationId).filter(Boolean);
+};
+
 const getCurrentDeliveryZoneIds = async (deliveryId) => {
   const deliveryPartner = await Delivery.findById(deliveryId)
     .select('availability.currentLocation availability.zones')
@@ -432,6 +440,16 @@ export const getOrders = asyncHandler(async (req, res) => {
               ]
             },
             { status: { $in: ['preparing', 'ready'] } },
+            {
+              $or: [
+                { 'assignmentInfo.rejectedDeliveryPartnerIds': { $exists: false } },
+                {
+                  'assignmentInfo.rejectedDeliveryPartnerIds': {
+                    $nin: deliveryIdObject ? [deliveryIdString, deliveryIdObject] : [deliveryIdString]
+                  }
+                }
+              ]
+            },
             {
               $or: [
                 {
@@ -626,19 +644,23 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
         priorityIds: normalizedPriorityIds,
         expandedIds: normalizedExpandedIds,
       } = extractNotifiedDeliveryIds(assignmentInfo);
+      const normalizedRejectedIds = extractRejectedDeliveryIds(assignmentInfo);
       
       const wasNotified = normalizedPriorityIds.includes(normalizedCurrentId) || 
                          normalizedExpandedIds.includes(normalizedCurrentId);
+      const wasRejectedByCurrent = normalizedRejectedIds.includes(normalizedCurrentId);
       
       console.log(`🔍 Checking access for order ${order.orderId}:`, {
         currentDeliveryId: normalizedCurrentId,
         orderStatus: order.status,
         wasNotified,
+        wasRejectedByCurrent,
         priorityIds: normalizedPriorityIds,
-        expandedIds: normalizedExpandedIds
+        expandedIds: normalizedExpandedIds,
+        rejectedIds: normalizedRejectedIds
       });
       
-      if (wasNotified) {
+      if (wasNotified && !wasRejectedByCurrent) {
         console.log(`✅ Allowing access to order ${order.orderId} for notified delivery partner ${currentDeliveryId}`);
         // Allow access to view order details
       } else {
@@ -744,6 +766,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         priorityIds: normalizedPriorityIds,
         expandedIds: normalizedExpandedIds,
       } = extractNotifiedDeliveryIds(assignmentInfo);
+      const normalizedRejectedIds = extractRejectedDeliveryIds(assignmentInfo);
       const hasExplicitNotificationLists =
         normalizedPriorityIds.length > 0 || normalizedExpandedIds.length > 0;
       const orderZoneId = normalizeZoneId(assignmentInfo?.zoneId);
@@ -754,16 +777,22 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         currentDeliveryId: normalizedCurrentId,
         priorityIds: normalizedPriorityIds,
         expandedIds: normalizedExpandedIds,
+        rejectedIds: normalizedRejectedIds,
         orderStatus: order.status,
         assignmentInfo: JSON.stringify(assignmentInfo)
       });
       
       const wasNotified = normalizedPriorityIds.includes(normalizedCurrentId) || 
                          normalizedExpandedIds.includes(normalizedCurrentId);
+      const wasRejectedByCurrent = normalizedRejectedIds.includes(normalizedCurrentId);
       const allowSameZoneFallback =
         !hasExplicitNotificationLists &&
         isSameZoneEligible &&
         ['preparing', 'ready'].includes(String(order.status || '').toLowerCase());
+      
+      if (wasRejectedByCurrent) {
+        return errorResponse(res, 409, 'You already denied this order.');
+      }
       
       if (!wasNotified && !allowSameZoneFallback) {
         console.error(`❌ Order ${order.orderId} is not assigned and delivery partner ${currentDeliveryId} was not notified`);
@@ -1314,6 +1343,113 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       deliveryId: req.delivery?._id
     });
     return errorResponse(res, 500, error.message || 'Failed to accept order');
+  }
+});
+
+/**
+ * Reject Order (Delivery partner denies an available order)
+ * PATCH /api/delivery/orders/:orderId/reject
+ */
+export const rejectOrder = asyncHandler(async (req, res) => {
+  try {
+    const delivery = req.delivery;
+    if (!ensureDeliveryEligibleForOrders(delivery, res)) {
+      return;
+    }
+
+    const { orderId } = req.params;
+    const reason = String(req.body?.reason || '').trim();
+    const deliveryIdString = String(delivery._id);
+    const deliveryIdObject = mongoose.Types.ObjectId.isValid(deliveryIdString)
+      ? new mongoose.Types.ObjectId(deliveryIdString)
+      : null;
+
+    let order = await Order.findOne({
+      $or: [{ _id: orderId }, { orderId }]
+    }).lean();
+
+    if (!order) {
+      return errorResponse(res, 404, 'Order not found');
+    }
+
+    if (isOrderTerminalForDelivery(order)) {
+      return errorResponse(res, 409, terminalOrderActionMessage(order, 'deny this order'));
+    }
+
+    if (order.deliveryPartnerId && String(order.deliveryPartnerId) !== deliveryIdString) {
+      return errorResponse(res, 409, 'Order is already assigned to another delivery partner.');
+    }
+
+    if (order.deliveryPartnerId && String(order.deliveryPartnerId) === deliveryIdString) {
+      return errorResponse(res, 400, 'Order is already accepted by you and cannot be denied.');
+    }
+
+    if (!['preparing', 'ready'].includes(String(order.status || '').toLowerCase())) {
+      return errorResponse(res, 400, `Order cannot be denied. Current status: ${order.status}`);
+    }
+
+    const assignmentInfo = order.assignmentInfo || {};
+    const { priorityIds, expandedIds } = extractNotifiedDeliveryIds(assignmentInfo);
+    const rejectedIds = extractRejectedDeliveryIds(assignmentInfo);
+    const wasNotified =
+      priorityIds.includes(deliveryIdString) || expandedIds.includes(deliveryIdString);
+
+    if (!wasNotified) {
+      return errorResponse(res, 403, 'This order is not available for you.');
+    }
+
+    if (rejectedIds.includes(deliveryIdString)) {
+      return successResponse(res, 200, 'Order already denied', {
+        orderId: order.orderId,
+        orderMongoId: order._id,
+      });
+    }
+
+    const pullValues = deliveryIdObject ? [deliveryIdString, deliveryIdObject] : [deliveryIdString];
+    await Order.updateOne(
+      {
+        _id: order._id,
+        $or: [{ deliveryPartnerId: { $exists: false } }, { deliveryPartnerId: null }],
+      },
+      {
+        $pull: {
+          'assignmentInfo.priorityDeliveryPartnerIds': { $in: pullValues },
+          'assignmentInfo.expandedDeliveryPartnerIds': { $in: pullValues },
+        },
+        $addToSet: {
+          'assignmentInfo.rejectedDeliveryPartnerIds': deliveryIdString,
+        },
+        $set: {
+          'assignmentInfo.lastRejectedBy': deliveryIdString,
+          'assignmentInfo.lastRejectedAt': new Date(),
+          ...(reason ? { 'assignmentInfo.lastRejectionReason': reason } : {}),
+        },
+      }
+    );
+
+    try {
+      const serverModule = await import('../../../server.js');
+      const io = serverModule.getIO ? serverModule.getIO() : null;
+      const deliveryNamespace = io?.of('/delivery');
+      if (deliveryNamespace) {
+        const room = `delivery:${deliveryIdString}`;
+        deliveryNamespace.to(room).emit('order_unavailable', {
+          orderId: order.orderId,
+          orderMongoId: order._id?.toString?.() || order._id,
+          reason: 'rejected_by_delivery',
+        });
+      }
+    } catch (emitError) {
+      logger.warn(`Failed to emit order_unavailable after reject for ${order.orderId}: ${emitError.message}`);
+    }
+
+    return successResponse(res, 200, 'Order denied successfully', {
+      orderId: order.orderId,
+      orderMongoId: order._id,
+    });
+  } catch (error) {
+    logger.error(`Error rejecting order: ${error.message}`);
+    return errorResponse(res, 500, 'Failed to deny order');
   }
 });
 

@@ -1207,6 +1207,23 @@ export const markOrderReady = asyncHandler(async (req, res) => {
       } catch (deliveryNotifError) {
         console.error('Error sending delivery boy notification:', deliveryNotifError);
       }
+    } else {
+      try {
+        const { notifyDeliveryPartnersForOrder } = await import('./resendDeliveryNotification.js');
+        const notifyResult = await notifyDeliveryPartnersForOrder({
+          order: updatedOrderDoc,
+          restaurant,
+          assignedBy: 'ready_auto_notify',
+        });
+
+        if (!notifyResult.success) {
+          console.warn(`Ready auto-notify skipped for order ${updatedOrderDoc.orderId}: ${notifyResult.message}`);
+        } else {
+          console.log(`Ready auto-notify sent to ${notifyResult.notifiedCount} delivery partners for order ${updatedOrderDoc.orderId}`);
+        }
+      } catch (readyNotifyError) {
+        console.error(`Failed ready auto-notify for order ${updatedOrderDoc.orderId}:`, readyNotifyError);
+      }
     }
 
     return successResponse(res, 200, 'Order marked as ready', {
