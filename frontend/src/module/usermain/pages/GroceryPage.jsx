@@ -19,6 +19,7 @@ import {
   Monitor,
   X,
   Snowflake,
+  Store,
 } from "lucide-react";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -41,8 +42,8 @@ const formatSavedAddressForHeader = (address) => {
 
   const formattedAddress = String(
     address?.formattedAddress ||
-      address?.address ||
-      "",
+    address?.address ||
+    "",
   ).trim();
   if (formattedAddress) return formattedAddress;
 
@@ -1415,6 +1416,8 @@ const GroceryPage = () => {
           id: storeId,
           name: String(store?.name || "Store").trim() || "Store",
           count: counts.get(storeId) || 0,
+          image: store?.profileImage?.url || store?.logo || FALLBACK_IMAGE,
+          address: store?.location?.area || store?.location?.city || "",
         };
       })
       .filter(Boolean)
@@ -2091,18 +2094,21 @@ const GroceryPage = () => {
             )}
           </div>
 
-          <div className="flex flex-wrap gap-4 pb-1">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-1">
             <motion.button
               whileHover={{ scale: 1.02, translateY: -2 }}
               whileTap={{ scale: 0.98 }}
               type="button"
               onClick={() => setSelectedStoreId("all-stores")}
-              className={`w-[180px] h-[52px] rounded-2xl border-2 flex items-center justify-center text-sm font-bold transition-all duration-300 shadow-sm ${selectedStoreId === "all-stores"
+              className={`w-full h-auto min-h-[100px] rounded-2xl border-2 p-3 flex flex-col items-center justify-center text-center transition-all duration-300 shadow-sm ${selectedStoreId === "all-stores"
                 ? "border-[#facc15] bg-gradient-to-br from-[#fffdf0] to-[#fff4cc] text-slate-900 shadow-[#facc15]/20"
                 : "border-slate-100 bg-white text-slate-500 hover:border-[#facc15]/40 hover:text-slate-700 dark:border-slate-700 dark:bg-[#111a28] dark:text-slate-400"
                 }`}
             >
-              All Stores
+              <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-2">
+                <Store size={24} className={selectedStoreId === "all-stores" ? "text-[#facc15]" : "text-slate-400"} />
+              </div>
+              <span className="text-sm font-bold">All Stores</span>
             </motion.button>
             {storeFilterOptions.map((store) => (
               <motion.button
@@ -2111,16 +2117,28 @@ const GroceryPage = () => {
                 type="button"
                 key={store.id}
                 onClick={() => setSelectedStoreId(store.id)}
-                className={`w-[180px] h-[52px] rounded-2xl border-2 flex items-center justify-center text-sm font-bold transition-all duration-300 shadow-sm ${selectedStoreId === store.id
+                className={`w-full h-auto min-h-[100px] rounded-2xl border-2 p-3 flex flex-col items-center justify-center text-center transition-all duration-300 shadow-sm ${selectedStoreId === store.id
                   ? "border-[#facc15] bg-gradient-to-br from-[#fffdf0] to-[#fff4cc] text-slate-900 shadow-[#facc15]/20"
                   : "border-slate-100 bg-white text-slate-500 hover:border-[#facc15]/40 hover:text-slate-700 dark:border-slate-700 dark:bg-[#111a28] dark:text-slate-300"
                   }`}
               >
-                <span className="line-clamp-1">{store.name}</span>
-                {store.count > 0 && (
-                  <span className={`ml-2 px-2 py-0.5 rounded-lg text-[10px] font-black transition-colors ${selectedStoreId === store.id ? "bg-[#facc15] text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-400"}`}>
-                    {store.count}
-                  </span>
+                <div className="relative w-12 h-12 mb-2">
+                  <img
+                    src={store.image}
+                    alt={store.name}
+                    className="w-full h-full rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                  />
+                  {store.count > 0 && (
+                    <span className={`absolute -top-1 -right-1 px-1.5 py-0.5 rounded-lg text-[10px] font-black transition-colors ${selectedStoreId === store.id ? "bg-[#facc15] text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-400"}`}>
+                      {store.count}
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs font-bold line-clamp-2 leading-tight h-8 flex items-center justify-center">
+                  {store.name}
+                </span>
+                {store.address && (
+                  <span className="text-[10px] text-slate-400 mt-1 line-clamp-1">{store.address}</span>
                 )}
               </motion.button>
             ))}

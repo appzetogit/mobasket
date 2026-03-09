@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from "react";
 import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { resolveEntityId } from "@/lib/utils/entityIdResolver";
@@ -86,6 +86,9 @@ const isValidGroceryCartItem = (item) => {
   return Boolean(getNormalizedStoreId(item));
 };
 
+const isGroceryItem = (item) => {
+  return detectItemPlatform(item) === "mogrocery";
+};
 const parseStoredCart = (raw) => {
   try {
     const parsed = raw ? JSON.parse(raw) : [];
@@ -508,39 +511,57 @@ export function CartProvider({ children }) {
     else setFoodCart([]);
   };
 
-  const getCartCount = () => {
+  const getCartCount = useCallback(() => {
     return activeCart.reduce((total, item) => total + (item.quantity || 0), 0);
-  };
+  }, [activeCart]);
 
-  const getCartTotal = () => {
+  const getFoodCartCount = useCallback(() => {
+    return foodCart.reduce((total, item) => total + (item.quantity || 0), 0);
+  }, [foodCart]);
+
+  const getGroceryCartCount = useCallback(() => {
+    return groceryCart.reduce((total, item) => total + (item.quantity || 0), 0);
+  }, [groceryCart]);
+
+  const getCartTotal = useCallback(() => {
     return activeCart.reduce(
       (total, item) => total + (item.price || 0) * (item.quantity || 0),
       0,
     );
-  };
+  }, [activeCart]);
 
-  const getPlatformCartTotal = (platform) => {
+  const getPlatformCartTotal = useCallback((platform) => {
     const cart = platform === "mogrocery" ? groceryCart : foodCart;
     return cart.reduce(
       (total, item) => total + (item.price || 0) * (item.quantity || 0),
       0,
     );
-  };
+  }, [foodCart, groceryCart]);
 
-  const isInCart = (itemId) => {
+  const isInCart = useCallback((itemId) => {
     return activeCart.some((item) => item.id === itemId);
-  };
+  }, [activeCart]);
 
-  const getCartItem = (itemId) => {
+  const getCartItem = useCallback((itemId) => {
     return activeCart.find((item) => item.id === itemId);
-  };
+  }, [activeCart]);
 
-  const value = useMemo(
-    () => ({
+  const value = useMemo(() => {
+    const foodItemCount = foodCart.reduce((total, item) => total + (item.quantity || 0), 0);
+    const groceryItemCount = groceryCart.reduce((total, item) => total + (item.quantity || 0), 0);
+    const foodTotal = foodCart.reduce((total, item) => total + (item.price || 0) * (item.quantity || 0), 0);
+    const groceryTotal = groceryCart.reduce((total, item) => total + (item.price || 0) * (item.quantity || 0), 0);
+
+    const contextValue = {
       foodCart,
       groceryCart,
       activeCart,
+      cart: activeCart,
+      items: activeCart,
+      foodItems: foodCart,
+      groceryItems: groceryCart,
       activePlatform,
+      isGroceryItem,
       addToCart,
       removeFromCart,
       updateQuantity,
@@ -548,6 +569,8 @@ export function CartProvider({ children }) {
       clearCart,
       clearPlatformCart,
       getCartCount,
+      getFoodCartCount,
+      getGroceryCartCount,
       getCartTotal,
       getPlatformCartTotal,
       isInCart,
@@ -558,9 +581,30 @@ export function CartProvider({ children }) {
       lastAddEventGrocery,
       lastRemoveEventFood,
       lastRemoveEventGrocery,
-    }),
-    [foodCart, groceryCart, activeCart, activePlatform, lastAddEvent, lastRemoveEvent],
-  );
+      foodItemCount,
+      groceryItemCount,
+      itemCount: activePlatform === "mogrocery" ? groceryItemCount : foodItemCount,
+      foodTotal,
+      groceryTotal,
+      total: activePlatform === "mogrocery" ? groceryTotal : foodTotal,
+    };
+    return contextValue;
+  }, [
+    foodCart,
+    groceryCart,
+    activeCart,
+    activePlatform,
+    lastAddEvent,
+    lastRemoveEvent,
+    lastAddEventFood,
+    lastAddEventGrocery,
+    lastRemoveEventFood,
+    lastRemoveEventGrocery,
+    getFoodCartCount,
+    getGroceryCartCount,
+    getCartTotal,
+    isInCart,
+  ]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
