@@ -32,14 +32,28 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 }
 
 // Get icon based on address type/label
-const getAddressIcon = (address) => {
-  const label = (address.label || address.additionalDetails || "").toLowerCase()
-  if (label.includes("home")) return Home
-  if (label.includes("work") || label.includes("office")) return Briefcase
-  if (label.includes("building") || label.includes("apt")) return Building2
-  return Home
-}
-
+const getAddressIcon = (address) => {
+  const label = (address.label || address.additionalDetails || "").toLowerCase()
+  if (label.includes("home")) return Home
+  if (label.includes("work") || label.includes("office")) return Briefcase
+  if (label.includes("building") || label.includes("apt")) return Building2
+  return Home
+}
+
+const normalizeAddressText = (value) =>
+  String(value || "").trim().replace(/,\s*India$/i, "").trim()
+
+const isCoordinateAddressText = (value) =>
+  /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(normalizeAddressText(value))
+
+const hasCompleteAddress = ({ formattedAddress = "", street = "", area = "", postalCode = "" } = {}) => {
+  const text = normalizeAddressText(formattedAddress)
+  const parts = text.split(",").map((part) => part.trim()).filter(Boolean)
+  const hasPin = /\b\d{6}\b/.test(text) || Boolean(normalizeAddressText(postalCode))
+  const hasStreet = Boolean(normalizeAddressText(street) || normalizeAddressText(area))
+  return !isCoordinateAddressText(text) && text !== "Select location" && parts.length >= 4 && (hasPin || hasStreet)
+}
+
 export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const navigate = useNavigate()
   const inputRef = useRef(null)
@@ -1505,46 +1519,53 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         const backendData = response?.data?.data
         const result = backendData?.results?.[0] || backendData?.result?.[0] || null
 
-        let formattedAddress = result?.formatted_address || result?.formattedAddress || ''
-        const components = result?.address_components || {}
-        const city = components.city || ''
-        const state = components.state || ''
-        const area = components.area || ''
-        const postalCode = components.pincode || components.postalCode || ''
-        let street = components.street || components.locality || area || ''
-
-        if (formattedAddress && formattedAddress.endsWith(', India')) {
-          formattedAddress = formattedAddress.replace(', India', '').trim()
-        }
-
-        if (!formattedAddress) {
-          const parts = [street, city, state, postalCode].filter(Boolean)
-          formattedAddress = parts.join(', ')
-        }
-
-        if (!formattedAddress) {
-          formattedAddress = `${roundedLat.toFixed(6)}, ${roundedLng.toFixed(6)}`
-        }
-
-        if (!street) {
-          const firstPart = formattedAddress.split(',').map((p) => p.trim()).filter(Boolean)[0]
-          street = firstPart || ''
-        }
-
-        setCurrentAddress(formattedAddress)
-        setAddressFormData((prev) => ({
-          ...prev,
-          street: street || prev.street,
-          city: city || prev.city,
-          state: state || prev.state,
-          zipCode: postalCode || prev.zipCode,
-          additionalDetails: formattedAddress || prev.additionalDetails,
-        }))
-
-        lastReverseGeocodeCoordsRef.current = { lat: roundedLat, lng: roundedLng }
-        lastReverseGeocodeAtRef.current = Date.now()
-      } catch {
-        setCurrentAddress(`${roundedLat.toFixed(6)}, ${roundedLng.toFixed(6)}`)
+        let formattedAddress = result?.formatted_address || result?.formattedAddress || ''
+        const components = result?.address_components || {}
+        const city = components.city || ''
+        const state = components.state || ''
+        const area = components.area || ''
+        const postalCode = components.pincode || components.postalCode || ''
+        let street = components.street || components.locality || area || ''
+
+        formattedAddress = normalizeAddressText(formattedAddress)
+
+        if (!formattedAddress || isCoordinateAddressText(formattedAddress)) {
+          const parts = [street, area, city, state, postalCode]
+            .map((part) => normalizeAddressText(part))
+            .filter(Boolean)
+          formattedAddress = parts.join(', ')
+        }
+
+        if (!formattedAddress) {
+          formattedAddress = [city, state].map((part) => normalizeAddressText(part)).filter(Boolean).join(', ')
+        }
+
+        if (!formattedAddress) {
+          formattedAddress = 'Select location'
+        }
+
+        if (!street) {
+          const firstPart = formattedAddress.split(',').map((p) => p.trim()).filter(Boolean)[0]
+          street = firstPart || area || city || ''
+        }
+
+        setCurrentAddress(formattedAddress)
+        setAddressFormData((prev) => ({
+          ...prev,
+          street: normalizeAddressText(street) || prev.street,
+          city: normalizeAddressText(city) || prev.city,
+          state: normalizeAddressText(state) || prev.state,
+          zipCode: normalizeAddressText(postalCode) || prev.zipCode,
+          additionalDetails:
+            (hasCompleteAddress({ formattedAddress, street, area, postalCode })
+              ? normalizeAddressText(formattedAddress)
+              : normalizeAddressText(area) || normalizeAddressText(street) || prev.additionalDetails),
+        }))
+
+        lastReverseGeocodeCoordsRef.current = { lat: roundedLat, lng: roundedLng }
+        lastReverseGeocodeAtRef.current = Date.now()
+      } catch {
+        setCurrentAddress('Select location')
       } finally {
         setLoadingAddress(false)
       }
@@ -1880,7 +1901,22 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   }
 
   const handleSelectSavedAddress = async (address) => {
-    try {
+    try {
+      const fullFormattedAddress =
+        String(address?.formattedAddress || address?.fullAddress || "").trim() ||
+        [
+          address?.additionalDetails,
+          address?.street,
+          address?.city,
+          address?.state,
+          address?.zipCode,
+        ].filter(Boolean).join(", ")
+
+      const primaryAddressLine =
+        String(address?.street || "").trim() ||
+        String(address?.additionalDetails || "").trim() ||
+        String(address?.city || "").trim()
+
       // Get coordinates from address location
       const coordinates = address.location?.coordinates || []
       const longitude = coordinates[0]
@@ -1891,11 +1927,11 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         await userAPI.updateLocation({
           latitude,
           longitude,
-          address: `${address.street}, ${address.city}`,
+          address: primaryAddressLine,
           city: address.city,
           state: address.state,
           area: address.additionalDetails || "",
-          formattedAddress: `${address.street}, ${address.city}, ${address.state}`
+          formattedAddress: fullFormattedAddress
         })
       }
 
@@ -1903,14 +1939,15 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       const locationData = {
         city: address.city,
         state: address.state,
-        address: `${address.street}, ${address.city}`,
+        address: primaryAddressLine,
         area: address.additionalDetails || "",
         zipCode: address.zipCode,
         latitude,
         longitude,
-        formattedAddress: `${address.street}, ${address.city}, ${address.state}`
+        formattedAddress: fullFormattedAddress
       }
-      localStorage.setItem("userLocation", JSON.stringify(locationData))
+      localStorage.setItem("userLocation", JSON.stringify(locationData))
+      setCurrentAddress(fullFormattedAddress || primaryAddressLine)
       
       // Update map position to show selected address
       setMapPosition([latitude, longitude])
@@ -1921,7 +1958,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         city: address.city || "",
         state: address.state || "",
         zipCode: address.zipCode || "",
-        additionalDetails: address.additionalDetails || "",
+        additionalDetails: fullFormattedAddress || address.additionalDetails || "",
         label: address.label || "Home",
         phone: address.phone || "",
       })
@@ -2137,7 +2174,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                 Save address as
               </Label>
               <div className="flex gap-2">
-                {["Home", "Office", "Other"].map((label) => (
+                {["Home", "Office", "Other"].map((label) => (
                   <Button
                     key={label}
                     type="button"
@@ -2328,7 +2365,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                               {address.label || address.additionalDetails || "Home"}
                             </p>
                             <p className="text-sm text-gray-500 dark:text-gray-400">
-                              {[
+                              {String(address?.formattedAddress || "").trim() || [
                                 address.additionalDetails,
                                 address.street,
                                 address.city,
@@ -2443,3 +2480,6 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
 
 
+
+
+

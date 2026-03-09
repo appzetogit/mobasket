@@ -14,6 +14,73 @@ function calculateDistanceMeters(lat1, lng1, lat2, lng2) {
   return R * c
 }
 
+function normalizeAddressText(value) {
+  return String(value || "").trim()
+}
+
+function isCoordinateAddressText(value) {
+  return /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(normalizeAddressText(value))
+}
+
+function isIncompleteAddressData(locationLike = {}) {
+  const formatted = normalizeAddressText(
+    locationLike?.formattedAddress || locationLike?.address || ""
+  )
+  if (!formatted) return true
+  if (formatted === "Select location" || formatted === "Current Location") return true
+  if (isCoordinateAddressText(formatted)) return true
+
+  const parts = formatted.split(",").map((part) => part.trim()).filter(Boolean)
+  const hasPostalCode =
+    /\b\d{6}\b/.test(formatted) ||
+    Boolean(
+      normalizeAddressText(
+        locationLike?.postalCode || locationLike?.zipCode || locationLike?.pincode
+      )
+    )
+  const hasStreetLevel =
+    Boolean(normalizeAddressText(locationLike?.street)) ||
+    Boolean(normalizeAddressText(locationLike?.streetNumber)) ||
+    Boolean(normalizeAddressText(locationLike?.area)) ||
+    Boolean(normalizeAddressText(locationLike?.additionalDetails)) ||
+    /\broad\b|\bstreet\b|\blane\b|\bcolony\b|\bnagar\b|\bsector\b|\bphase\b|\bbuilding\b|\bfloor\b/i.test(formatted)
+  const hasDistrictOnly = /\bdistrict\b/i.test(formatted) && !hasPostalCode && !hasStreetLevel
+
+  if (hasDistrictOnly) return true
+  if (parts.length < 4 && !hasPostalCode && !hasStreetLevel) return true
+  return false
+}
+
+function mergeAddressFromPreferred(baseLocation = {}, preferredLocation = {}) {
+  if (!preferredLocation || typeof preferredLocation !== "object") return baseLocation
+  return {
+    ...baseLocation,
+    address: normalizeAddressText(preferredLocation?.address) || baseLocation?.address || "",
+    formattedAddress:
+      normalizeAddressText(preferredLocation?.formattedAddress) ||
+      normalizeAddressText(preferredLocation?.address) ||
+      baseLocation?.formattedAddress ||
+      baseLocation?.address ||
+      "",
+    area: normalizeAddressText(preferredLocation?.area) || baseLocation?.area || "",
+    city: normalizeAddressText(preferredLocation?.city) || baseLocation?.city || "",
+    state: normalizeAddressText(preferredLocation?.state) || baseLocation?.state || "",
+    postalCode:
+      normalizeAddressText(preferredLocation?.postalCode || preferredLocation?.zipCode || preferredLocation?.pincode) ||
+      baseLocation?.postalCode ||
+      baseLocation?.zipCode ||
+      "",
+    zipCode:
+      normalizeAddressText(preferredLocation?.zipCode || preferredLocation?.postalCode || preferredLocation?.pincode) ||
+      baseLocation?.zipCode ||
+      baseLocation?.postalCode ||
+      "",
+    street: normalizeAddressText(preferredLocation?.street) || baseLocation?.street || "",
+    streetNumber:
+      normalizeAddressText(preferredLocation?.streetNumber) || baseLocation?.streetNumber || "",
+  }
+}
+
 function getSavedAddressLocation() {
   try {
     const rawAddresses = localStorage.getItem("userAddresses")
@@ -155,7 +222,7 @@ export function useLocation() {
         locationData?.formattedAddress === "Select location" ||
         (!locationData?.city && !locationData?.address && !locationData?.formattedAddress);
       
-      if (hasPlaceholder) {
+      if (hasPlaceholder || isIncompleteAddressData(locationData)) {
         return;
       }
 
@@ -1403,13 +1470,38 @@ export function useLocation() {
       const res = await userAPI.getLocation()
       const loc = res?.data?.data?.location
       if (loc?.latitude && loc?.longitude) {
+        const savedPreferredLocation = getSavedAddressLocation()
+        if (
+          savedPreferredLocation &&
+          !isIncompleteAddressData(savedPreferredLocation) &&
+          Number.isFinite(Number(savedPreferredLocation?.latitude)) &&
+          Number.isFinite(Number(savedPreferredLocation?.longitude)) &&
+          calculateDistanceMeters(
+            Number(loc.latitude),
+            Number(loc.longitude),
+            Number(savedPreferredLocation.latitude),
+            Number(savedPreferredLocation.longitude)
+          ) <= 300
+        ) {
+          return mergeAddressFromPreferred(
+            {
+              ...loc,
+              latitude: Number(loc.latitude),
+              longitude: Number(loc.longitude),
+              lastUpdated: loc.lastUpdated || Date.now(),
+            },
+            savedPreferredLocation
+          )
+        }
+
         const looksLikeCoordinates = typeof loc?.formattedAddress === "string" &&
           /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(loc.formattedAddress.trim())
         const hasUsableStoredAddress =
           typeof loc?.formattedAddress === "string" &&
           loc.formattedAddress.trim() !== "" &&
           loc.formattedAddress !== "Select location" &&
-          !looksLikeCoordinates
+          !looksLikeCoordinates &&
+          !isIncompleteAddressData(loc)
         if (hasUsableStoredAddress) {
           return {
             ...loc,
@@ -1579,6 +1671,38 @@ export function useLocation() {
                 lastUpdated: timestamp,
                 address: displayAddress, // Locality parts for navbar display
                 formattedAddress: completeFormattedAddress || addr.formattedAddress || displayAddress // Complete detailed address
+              }
+
+              const savedPreferredLocation = getSavedAddressLocation()
+              const currentKnownLocation = location
+              if (isIncompleteAddressData(finalLoc)) {
+                if (
+                  savedPreferredLocation &&
+                  !isIncompleteAddressData(savedPreferredLocation) &&
+                  Number.isFinite(Number(savedPreferredLocation?.latitude)) &&
+                  Number.isFinite(Number(savedPreferredLocation?.longitude)) &&
+                  calculateDistanceMeters(
+                    latitude,
+                    longitude,
+                    Number(savedPreferredLocation.latitude),
+                    Number(savedPreferredLocation.longitude)
+                  ) <= 300
+                ) {
+                  Object.assign(finalLoc, mergeAddressFromPreferred(finalLoc, savedPreferredLocation))
+                } else if (
+                  currentKnownLocation &&
+                  !isIncompleteAddressData(currentKnownLocation) &&
+                  Number.isFinite(Number(currentKnownLocation?.latitude)) &&
+                  Number.isFinite(Number(currentKnownLocation?.longitude)) &&
+                  calculateDistanceMeters(
+                    latitude,
+                    longitude,
+                    Number(currentKnownLocation.latitude),
+                    Number(currentKnownLocation.longitude)
+                  ) <= 300
+                ) {
+                  Object.assign(finalLoc, mergeAddressFromPreferred(finalLoc, currentKnownLocation))
+                }
               }
               
               // Check if location has placeholder values - don't save placeholders
@@ -1920,9 +2044,40 @@ export function useLocation() {
               address: displayAddress, // Locality parts for navbar display (NEVER coordinates)
               formattedAddress: completeFormattedAddress // Complete detailed address (NEVER coordinates)
             }
+
+            const currentLoc = location
+            const savedPreferredLocation = getSavedAddressLocation()
+            if (isIncompleteAddressData(loc)) {
+              if (
+                savedPreferredLocation &&
+                !isIncompleteAddressData(savedPreferredLocation) &&
+                Number.isFinite(Number(savedPreferredLocation?.latitude)) &&
+                Number.isFinite(Number(savedPreferredLocation?.longitude)) &&
+                calculateDistanceMeters(
+                  latitude,
+                  longitude,
+                  Number(savedPreferredLocation.latitude),
+                  Number(savedPreferredLocation.longitude)
+                ) <= 300
+              ) {
+                Object.assign(loc, mergeAddressFromPreferred(loc, savedPreferredLocation))
+              } else if (
+                currentLoc &&
+                !isIncompleteAddressData(currentLoc) &&
+                Number.isFinite(Number(currentLoc?.latitude)) &&
+                Number.isFinite(Number(currentLoc?.longitude)) &&
+                calculateDistanceMeters(
+                  latitude,
+                  longitude,
+                  Number(currentLoc.latitude),
+                  Number(currentLoc.longitude)
+                ) <= 300
+              ) {
+                Object.assign(loc, mergeAddressFromPreferred(loc, currentLoc))
+              }
+            }
             
             // STABILITY: Only update if location changed significantly (>10m) OR address improved
-            const currentLoc = location
             if (currentLoc && currentLoc.latitude && currentLoc.longitude) {
               // Calculate distance in meters (Haversine formula simplified for small distances)
               const latDiff = latitude - currentLoc.latitude
@@ -1931,7 +2086,7 @@ export function useLocation() {
               
               // Check if address is better (more parts = more complete)
               const currentParts = (currentLoc.formattedAddress || "").split(',').filter(p => p.trim()).length
-              const newParts = completeFormattedAddress.split(',').filter(p => p.trim()).length
+              const newParts = (loc.formattedAddress || "").split(',').filter(p => p.trim()).length
               const addressImproved = newParts > currentParts
               
               // Only update if moved >10 meters OR address significantly improved

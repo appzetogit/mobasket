@@ -37,17 +37,31 @@ import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
 // Icons
 import imgBag3D from "@/assets/icons/shopping-bag_18008822.png";
 
+const normalizeAddressText = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/,\s*india\s*$/i, "")
+    .trim();
+
+const isCoarseLocationText = (value) => {
+  const text = normalizeAddressText(value);
+  if (!text) return true;
+
+  const parts = text.split(",").map((part) => part.trim()).filter(Boolean);
+  if (parts.length <= 2) return true;
+
+  const hasDistrict = /\bdistrict\b/i.test(text);
+  const hasPinCode = /\b\d{6}\b/.test(text);
+  if (hasDistrict && !hasPinCode) return true;
+
+  return false;
+};
+
 const formatSavedAddressForHeader = (address) => {
   if (!address || typeof address !== "object") return "";
 
-  const formattedAddress = String(
-    address?.formattedAddress ||
-    address?.address ||
-    "",
-  ).trim();
-  if (formattedAddress) return formattedAddress;
-
-  const fallbackParts = [
+  const detailedParts = [
+    address?.additionalDetails,
     address?.addressLine1,
     address?.street,
     address?.area || address?.location?.area,
@@ -55,10 +69,25 @@ const formatSavedAddressForHeader = (address) => {
     address?.state || address?.location?.state,
     address?.zipCode || address?.postalCode || address?.pincode,
   ]
-    .map((part) => (typeof part === "string" ? part.trim() : ""))
+    .map((part) => normalizeAddressText(part))
     .filter(Boolean);
 
-  return fallbackParts.join(", ");
+  if (detailedParts.length >= 3) {
+    return detailedParts.join(", ");
+  }
+
+  const formattedAddress = normalizeAddressText(
+    address?.formattedAddress ||
+    address?.address ||
+    ""
+  );
+  if (formattedAddress && !isCoarseLocationText(formattedAddress)) return formattedAddress;
+
+  if (detailedParts.length) {
+    return detailedParts.join(", ");
+  }
+
+  return formattedAddress;
 };
 
 const GroceryPage = () => {
@@ -318,7 +347,31 @@ const GroceryPage = () => {
 
   const findActiveTrackableOrder = (orders = []) => {
     const activeStatuses = new Set(["pending", "confirmed", "preparing", "ready", "out_for_delivery", "scheduled"]);
-    return orders.find((order) => activeStatuses.has(String(order?.status || "").toLowerCase())) || null;
+
+    const candidates = orders
+      .filter((order) => {
+        const status = String(order?.status || "").toLowerCase();
+        if (!activeStatuses.has(status)) return false;
+
+        const orderKey = String(order?._id || order?.orderId || "").trim();
+        if (!orderKey) return false;
+
+        const approvalStatus = String(order?.adminApproval?.status || "").toLowerCase();
+        if (approvalStatus === "rejected") return false;
+
+        const hasItems = Array.isArray(order?.items) && order.items.length > 0;
+        const hasAmount = Number(order?.totalAmount || order?.grandTotal || 0) > 0;
+        if (!hasItems && !hasAmount) return false;
+
+        return true;
+      })
+      .sort((a, b) => {
+        const aTs = new Date(a?.updatedAt || a?.createdAt || 0).getTime() || 0;
+        const bTs = new Date(b?.updatedAt || b?.createdAt || 0).getTime() || 0;
+        return bTs - aTs;
+      });
+
+    return candidates[0] || null;
   };
 
   const getOrderTrackerMeta = (order) => {
@@ -398,9 +451,9 @@ const GroceryPage = () => {
     () => (activeGroceryOrder ? getOrderTrackerMeta(activeGroceryOrder) : null),
     [activeGroceryOrder]
   );
-  const activeOrderTrackerKey = String(activeGroceryOrder?.orderId || activeGroceryOrder?._id || "");
+  const activeOrderTrackerKey = String(activeGroceryOrder?.orderId || activeGroceryOrder?._id || "").trim();
   const isOrderTrackerVisible =
-    Boolean(activeGroceryOrder && activeOrderMeta && !isMoGroceryPlanOrder(activeGroceryOrder)) &&
+    Boolean(activeOrderTrackerKey && activeGroceryOrder && activeOrderMeta && !isMoGroceryPlanOrder(activeGroceryOrder)) &&
     dismissedOrderTrackerFor !== activeOrderTrackerKey;
 
   // Snow effect timer
@@ -1553,13 +1606,8 @@ const GroceryPage = () => {
       return savedHeaderAddress;
     }
 
-    const formattedAddress = (userLocation?.formattedAddress || "").trim();
-    if (formattedAddress) {
-      return formattedAddress;
-    }
-
-    const address = (userLocation?.address || "").trim();
-    if (address) {
+    const address = normalizeAddressText(userLocation?.address);
+    if (address && !isCoarseLocationText(address)) {
       return address;
     }
 
@@ -1570,11 +1618,16 @@ const GroceryPage = () => {
       userLocation?.state,
       userLocation?.postalCode || userLocation?.zipCode,
     ]
-      .map((part) => (typeof part === "string" ? part.trim() : ""))
+      .map((part) => normalizeAddressText(part))
       .filter(Boolean);
 
     if (fallbackParts.length) {
       return fallbackParts.join(", ");
+    }
+
+    const formattedAddress = normalizeAddressText(userLocation?.formattedAddress);
+    if (formattedAddress) {
+      return formattedAddress;
     }
 
     return (
