@@ -1488,7 +1488,9 @@ export const adminAPI = {
 
   // Get transaction report
   getTransactionReport: (params = {}) => {
-    return apiClient.get(API_ENDPOINTS.ADMIN.ORDERS_TRANSACTION_REPORT, { params });
+    return apiClient.get(API_ENDPOINTS.ADMIN.ORDERS_TRANSACTION_REPORT, {
+      params: { ...params, platform: params.platform || getAdminPlatform() }
+    });
   },
 
   // Get restaurant report

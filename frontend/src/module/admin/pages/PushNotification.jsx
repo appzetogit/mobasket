@@ -1,29 +1,23 @@
 import { useEffect, useMemo, useState } from "react"
 import { Search, Download, ChevronDown, Bell, Edit, Trash2, Upload, Settings, Image as ImageIcon } from "lucide-react"
 import { adminAPI } from "@/lib/api"
+import { usePlatform } from "../context/PlatformContext"
 import { toast } from "sonner"
-// Using placeholders for notification images
-const notificationImage1 = "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&h=400&fit=crop"
-const notificationImage2 = "https://images.unsplash.com/photo-1559339352-11d035aa65de?w=800&h=400&fit=crop"
-const notificationImage3 = "https://images.unsplash.com/photo-1556910096-6f5e72db6803?w=800&h=400&fit=crop"
-
-const notificationImages = {
-  15: notificationImage1,
-  17: notificationImage2,
-  18: notificationImage3,
-}
 
 export default function PushNotification() {
+  const { platform } = usePlatform()
+  const sendToOptions = ["Customer", "All", "Restaurant", "Store"]
   const [formData, setFormData] = useState({
     title: "",
     zone: "All",
-    sendTo: "Restaurant",
+    sendTo: "Customer",
     description: "",
   })
   const [searchQuery, setSearchQuery] = useState("")
   const [notifications, setNotifications] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [loadingList, setLoadingList] = useState(true)
+  const [zones, setZones] = useState([])
 
   const filteredNotifications = useMemo(() => {
     if (!searchQuery.trim()) {
@@ -60,6 +54,27 @@ export default function PushNotification() {
     loadPushNotifications()
   }, [])
 
+  useEffect(() => {
+    setFormData((prev) => ({
+      ...prev,
+      sendTo: sendToOptions.includes(prev.sendTo) ? prev.sendTo : "Customer"
+    }))
+  }, [])
+
+  useEffect(() => {
+    const loadZones = async () => {
+      try {
+        const response = await adminAPI.getZones({ limit: 1000, platform })
+        const list = response?.data?.data?.zones || []
+        setZones(Array.isArray(list) ? list : [])
+      } catch (error) {
+        setZones([])
+        console.error("Failed to load zones:", error)
+      }
+    }
+    loadZones()
+  }, [platform])
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     const title = formData.title.trim()
@@ -77,15 +92,28 @@ export default function PushNotification() {
         description,
         zone: formData.zone,
         sendTo: formData.sendTo,
+        platform,
       })
 
       const created = response?.data?.data?.notification
       const recipientCount = response?.data?.data?.recipientCount || 0
+      const pushDelivery = response?.data?.data?.pushDelivery || null
       if (created) {
         setNotifications((prev) => [created, ...prev])
       }
 
-      toast.success(`Notification sent${formData.sendTo === "Restaurant" ? ` to ${recipientCount} recipients` : ""}`)
+      toast.success(`Notification sent to ${recipientCount} ${formData.sendTo.toLowerCase()} recipient(s)`)
+      if (pushDelivery) {
+        if (!pushDelivery.initialized && pushDelivery.reason === "no_tokens") {
+          toast.warning("No device tokens found. Popup notification cannot be shown until users log in and allow notifications.")
+        } else if (!pushDelivery.initialized) {
+          toast.error(`Push dispatch failed: ${pushDelivery.reason || "Firebase is not configured"}`)
+        } else if (pushDelivery.failureCount > 0) {
+          toast.warning(`Push delivered: ${pushDelivery.successCount}, failed: ${pushDelivery.failureCount}`)
+        } else if (pushDelivery.successCount > 0) {
+          toast.success(`Push popup delivered to ${pushDelivery.successCount} device(s)`)
+        }
+      }
       handleReset()
     } catch (error) {
       console.error("Failed to send notification:", error)
@@ -99,7 +127,7 @@ export default function PushNotification() {
     setFormData({
       title: "",
       zone: "All",
-      sendTo: "Restaurant",
+      sendTo: "Customer",
       description: "",
     })
   }
@@ -151,8 +179,9 @@ export default function PushNotification() {
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 >
                   <option value="All">All</option>
-                  <option value="Asia">Asia</option>
-                  <option value="Europe">Europe</option>
+                  {zones.map((zone) => (
+                    <option key={zone._id} value={zone.name}>{zone.name}</option>
+                  ))}
                 </select>
               </div>
 
@@ -165,9 +194,9 @@ export default function PushNotification() {
                   onChange={(e) => handleInputChange("sendTo", e.target.value)}
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 >
-                  <option value="Customer">Customer</option>
-                  <option value="Delivery Man">Delivery Man</option>
-                  <option value="Restaurant">Restaurant</option>
+                  {sendToOptions.map((target) => (
+                    <option key={target} value={target}>{target}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -286,7 +315,7 @@ export default function PushNotification() {
                       {notification.image ? (
                         <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-100">
                           <img
-                            src={notificationImages[notification.sl] || notificationImage1}
+                            src={notification.image}
                             alt={notification.title}
                             className="w-full h-full object-cover"
                             onError={(e) => {
@@ -304,7 +333,7 @@ export default function PushNotification() {
                       <span className="text-sm text-slate-700">{notification.zone || "All"}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm text-slate-700">{notification.sendTo || notification.target || "Restaurant"}</span>
+                      <span className="text-sm text-slate-700">{notification.sendTo || notification.target || "All"}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button

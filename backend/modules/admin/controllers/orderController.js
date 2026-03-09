@@ -1533,13 +1533,62 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
       zone,
       restaurant,
       fromDate,
-      toDate
+      toDate,
+      platform
     } = req.query;
     
-    console.log('📋 Query params:', { page, limit, search, zone, restaurant, fromDate, toDate });
+    console.log('📋 Query params:', { page, limit, search, zone, restaurant, fromDate, toDate, platform });
 
     // Build query for orders
     const query = {};
+    const addAndCondition = (condition) => {
+      if (!condition) return;
+      if (!query.$and) query.$and = [];
+      query.$and.push(condition);
+    };
+    const normalizedPlatform = platform ? normalizePlatform(platform) : null;
+    let platformRestaurantIds = null;
+    let selectedRestaurantIds = null;
+
+    if (normalizedPlatform) {
+      platformRestaurantIds = await getRestaurantIdsByPlatform(normalizedPlatform);
+
+      const platformOrderFilter =
+        normalizedPlatform === 'mogrocery'
+          ? {
+              $or: [
+                { restaurantPlatform: 'mogrocery' },
+                { platform: 'mogrocery' },
+                { restaurantName: { $regex: /grocery/i } }
+              ]
+            }
+          : {
+              $and: [
+                {
+                  $or: [
+                    { restaurantPlatform: 'mofood' },
+                    { platform: 'mofood' },
+                    { restaurantPlatform: { $exists: false } },
+                    { platform: { $exists: false } }
+                  ]
+                },
+                {
+                  restaurantName: { $not: /grocery/i }
+                }
+              ]
+            };
+
+      if (platformRestaurantIds.length > 0) {
+        addAndCondition({
+          $or: [
+            { restaurantId: { $in: platformRestaurantIds } },
+            platformOrderFilter
+          ]
+        });
+      } else {
+        addAndCondition(platformOrderFilter);
+      }
+    }
 
     // Date range filter
     if (fromDate || toDate) {
@@ -1558,17 +1607,40 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
 
     // Restaurant filter
     if (restaurant && restaurant !== 'All restaurants') {
-      const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
-      const restaurantDoc = await Restaurant.findOne({
-        $or: [
-          { name: { $regex: restaurant, $options: 'i' } },
-          { _id: mongoose.Types.ObjectId.isValid(restaurant) ? restaurant : null },
-          { restaurantId: restaurant }
-        ]
-      }).select('_id restaurantId').lean();
+      if (normalizedPlatform === 'mogrocery') {
+        const GroceryStore = (await import('../../grocery/models/GroceryStore.js')).default;
+        const stores = await GroceryStore.find({
+          $or: [
+            { name: { $regex: restaurant, $options: 'i' } },
+            { storeName: { $regex: restaurant, $options: 'i' } },
+            { _id: mongoose.Types.ObjectId.isValid(restaurant) ? restaurant : null },
+            { restaurantId: restaurant }
+          ]
+        }).select('_id restaurantId').lean();
 
-      if (restaurantDoc) {
-        query.restaurantId = restaurantDoc._id?.toString() || restaurantDoc.restaurantId;
+        selectedRestaurantIds = [...new Set(stores.flatMap((store) => {
+          const ids = [];
+          if (store?._id) ids.push(store._id.toString());
+          if (store?.restaurantId) ids.push(String(store.restaurantId));
+          return ids;
+        }))];
+      } else {
+        const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
+        const restaurantDoc = await Restaurant.findOne({
+          $or: [
+            { name: { $regex: restaurant, $options: 'i' } },
+            { _id: mongoose.Types.ObjectId.isValid(restaurant) ? restaurant : null },
+            { restaurantId: restaurant }
+          ]
+        }).select('_id restaurantId').lean();
+
+        if (restaurantDoc) {
+          selectedRestaurantIds = [restaurantDoc._id?.toString() || restaurantDoc.restaurantId];
+        }
+      }
+
+      if (selectedRestaurantIds?.length) {
+        query.restaurantId = { $in: selectedRestaurantIds };
       }
     }
 
@@ -1625,19 +1697,8 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
 
     // Build restaurant filter for summary
     let summaryRestaurantQuery = {};
-    if (restaurant && restaurant !== 'All restaurants') {
-      const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
-      const restaurantDoc = await Restaurant.findOne({
-        $or: [
-          { name: { $regex: restaurant, $options: 'i' } },
-          { _id: mongoose.Types.ObjectId.isValid(restaurant) ? restaurant : null },
-          { restaurantId: restaurant }
-        ]
-      }).select('_id restaurantId').lean();
-
-      if (restaurantDoc) {
-        summaryRestaurantQuery.restaurantId = restaurantDoc._id || restaurantDoc.restaurantId;
-      }
+    if (selectedRestaurantIds?.length) {
+      summaryRestaurantQuery.restaurantId = { $in: selectedRestaurantIds };
     }
 
     // Get all orders for summary calculation (without pagination)
@@ -1663,52 +1724,62 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
       sum + (order.pricing?.total || 0), 0
     );
 
-    // Get admin earning from AdminCommission
+    const summaryOrderIds = allOrdersForSummary
+      .map((order) => order?._id)
+      .filter(Boolean);
+
+    const settlements = summaryOrderIds.length > 0
+      ? await OrderSettlement.find({ orderId: { $in: summaryOrderIds } })
+          .select('adminEarning.totalEarning restaurantEarning.netEarning deliveryPartnerEarning.totalEarning')
+          .lean()
+      : [];
+
+    const hasSettlementData = settlements.length > 0;
+
     const adminCommissionQuery = {
       status: 'completed',
       ...summaryDateQuery,
       ...summaryRestaurantQuery
     };
-    const adminCommissions = await AdminCommission.find(adminCommissionQuery).lean();
-    const adminEarning = adminCommissions.reduce((sum, comm) => sum + (comm.commissionAmount || 0), 0);
+    const adminCommissions = !hasSettlementData
+      ? await AdminCommission.find(adminCommissionQuery).lean()
+      : [];
 
-    // Calculate restaurant earning (order total - admin commission - delivery commission)
-    // For simplicity, we'll use restaurantEarning from AdminCommission if available
-    const restaurantEarning = adminCommissions.reduce((sum, comm) => sum + (comm.restaurantEarning || 0), 0);
+    const adminEarning = hasSettlementData
+      ? settlements.reduce((sum, settlement) => sum + Number(settlement?.adminEarning?.totalEarning || 0), 0)
+      : adminCommissions.reduce((sum, comm) => sum + Number(comm?.commissionAmount || 0), 0);
 
-    // Calculate deliveryman earning (from delivery commissions)
-    // This would need to be calculated from delivery wallet transactions or order assignment info
-    // For now, we'll estimate based on delivery fee or use a placeholder
-    const deliverymanEarning = completedOrders.reduce((sum, order) => {
-      // Delivery commission is typically calculated from distance
-      // For now, we'll use a simple estimate or fetch from delivery wallet
-      return sum + (order.pricing?.deliveryFee || 0) * 0.8; // Estimate 80% of delivery fee goes to deliveryman
-    }, 0);
+    const restaurantEarning = hasSettlementData
+      ? settlements.reduce((sum, settlement) => sum + Number(settlement?.restaurantEarning?.netEarning || 0), 0)
+      : adminCommissions.reduce((sum, comm) => sum + Number(comm?.restaurantEarning || 0), 0);
+
+    const deliverymanEarning = hasSettlementData
+      ? settlements.reduce((sum, settlement) => sum + Number(settlement?.deliveryPartnerEarning?.totalEarning || 0), 0)
+      : 0;
 
     // Transform orders to match frontend format
     const transformedTransactions = orders.map((order, index) => {
-      const subtotal = order.pricing?.subtotal || 0;
-      const discount = order.pricing?.discount || 0;
-      const deliveryFee = order.pricing?.deliveryFee || 0;
-      const tax = order.pricing?.tax || 0;
-      const couponCode = order.pricing?.couponCode || null;
-      
-      // For report: itemDiscount is the discount applied to items
-      const itemDiscount = discount;
-      // Discounted amount is subtotal after discount
-      const discountedAmount = Math.max(0, subtotal - discount);
-      // Coupon discount (if coupon was applied, it's part of discount)
-      const couponDiscount = couponCode ? discount : 0;
-      // Referral discount (not currently in model, default to 0)
-      const referralDiscount = 0;
-      // VAT/Tax
-      const vatTax = tax;
-      // Delivery charge
-      const deliveryCharge = deliveryFee;
-      // Total item amount (subtotal before discounts)
+      const subtotal = Number(order?.pricing?.subtotal || 0);
+      const totalDiscount = Number(order?.pricing?.discount || 0);
+      const deliveryFee = Number(order?.pricing?.deliveryFee || 0);
+      const tax = Number(order?.pricing?.tax ?? order?.pricing?.gst ?? 0);
+      const breakdown = order?.pricing?.breakdown || {};
+      const couponDiscount = Number(
+        breakdown?.couponDiscountAmount ??
+        order?.pricing?.appliedCoupon?.discount ??
+        0
+      );
+      const referralDiscount = Number(
+        breakdown?.referralDiscountAmount ??
+        order?.pricing?.referralDiscount ??
+        0
+      );
+      const itemDiscount = Math.max(0, totalDiscount - couponDiscount - referralDiscount);
+      const discountedAmount = Math.max(0, subtotal - totalDiscount);
       const totalItemAmount = subtotal;
-      // Order amount (final total)
-      const orderAmount = order.pricing?.total || 0;
+      const orderAmount = Number(order?.pricing?.total || 0);
+      const vatTax = tax;
+      const deliveryCharge = deliveryFee;
 
       return {
         id: order._id.toString(),

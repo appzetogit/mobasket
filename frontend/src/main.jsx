@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import './index.css'
-import App from './App.jsx'
 import { getGoogleMapsApiKey } from './lib/utils/googleMapsApiKey.js'
 import { loadBusinessSettings } from './lib/utils/businessSettings.js'
 
@@ -249,11 +248,27 @@ if (!rootElement) {
   throw new Error('Root element not found')
 }
 
-createRoot(rootElement).render(
-  <StrictMode>
-    <BrowserRouter>
-      <App />
-      <Toaster position="top-center" richColors offset="80px" />
-    </BrowserRouter>
-  </StrictMode>,
-)
+const bootstrap = async () => {
+  try {
+    const response = await fetch('/api/env/public', { method: 'GET' })
+    if (response.ok) {
+      const payload = await response.json()
+      window.__PUBLIC_ENV = payload?.data || {}
+    }
+  } catch {
+    window.__PUBLIC_ENV = window.__PUBLIC_ENV || {}
+  }
+
+  const { default: App } = await import('./App.jsx')
+
+  createRoot(rootElement).render(
+    <StrictMode>
+      <BrowserRouter>
+        <App />
+        <Toaster position="top-center" richColors offset="80px" />
+      </BrowserRouter>
+    </StrictMode>,
+  )
+}
+
+bootstrap()

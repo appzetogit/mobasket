@@ -15437,12 +15437,13 @@ export default function DeliveryHome() {
 
         const orders = response.data.data.orders
 
-        // If backend already has an active assigned order for this rider, restore its slider flow.
-        // This covers refresh/reconnect when websocket event was missed.
+        // Restore only when the rider has already accepted and moved into active delivery flow.
+        // Assigned/preparing-ready orders must still show the accept slider.
         const activeAssignedOrder = orders.find((order) => {
           const orderStatus = String(order?.status || '').toLowerCase()
           const deliveryPhase = String(order?.deliveryState?.currentPhase || '').toLowerCase()
           const deliveryStateStatus = String(order?.deliveryState?.status || '').toLowerCase()
+          const notificationPhase = String(order?.assignmentInfo?.notificationPhase || '').toLowerCase()
 
           const isTerminal =
             orderStatus === 'cancelled' ||
@@ -15454,24 +15455,27 @@ export default function DeliveryHome() {
 
           if (isTerminal) return false
 
-          return (
-            orderStatus === 'accepted' ||
-            orderStatus === 'preparing' ||
-            orderStatus === 'ready' ||
-            orderStatus === 'out_for_delivery' ||
-            deliveryPhase === 'en_route_to_pickup' ||
-            deliveryPhase === 'at_pickup' ||
-            deliveryPhase === 'picked_up' ||
-            deliveryPhase === 'en_route_to_delivery' ||
-            deliveryPhase === 'en_route_to_drop' ||
-            deliveryPhase === 'at_delivery' ||
+          const hasAcceptedDeliveryState =
+            notificationPhase === 'accepted' ||
             deliveryStateStatus === 'accepted' ||
             deliveryStateStatus === 'reached_pickup' ||
             deliveryStateStatus === 'order_confirmed' ||
             deliveryStateStatus === 'en_route_to_delivery' ||
             deliveryStateStatus === 'reached_drop' ||
             deliveryStateStatus === 'at_delivery'
-          )
+
+          const hasAcceptedDeliveryPhase =
+            deliveryPhase === 'en_route_to_pickup' ||
+            deliveryPhase === 'at_pickup' ||
+            deliveryPhase === 'picked_up' ||
+            deliveryPhase === 'en_route_to_delivery' ||
+            deliveryPhase === 'en_route_to_drop' ||
+            deliveryPhase === 'at_delivery'
+
+          const isPostPickupOrderState =
+            orderStatus === 'out_for_delivery'
+
+          return hasAcceptedDeliveryState || hasAcceptedDeliveryPhase || isPostPickupOrderState
         })
 
         if (activeAssignedOrder && !selectedRestaurantRef.current) {
@@ -21269,6 +21273,9 @@ export default function DeliveryHome() {
 
 
           ).toLowerCase()
+          const restoredNotificationPhase = String(
+            restoredRestaurant?.assignmentInfo?.notificationPhase || ''
+          ).toLowerCase()
 
 
           const isRestoredDelivered =
@@ -21362,6 +21369,30 @@ export default function DeliveryHome() {
 
 
             )
+
+          const hasAcceptedFlowState =
+            restoredNotificationPhase === 'accepted' ||
+            restoredOrderStatus === 'out_for_delivery' ||
+            restoredDeliveryPhase === 'en_route_to_pickup' ||
+            restoredDeliveryPhase === 'at_pickup' ||
+            restoredDeliveryPhase === 'picked_up' ||
+            restoredDeliveryPhase === 'en_route_to_delivery' ||
+            restoredDeliveryPhase === 'en_route_to_drop' ||
+            restoredDeliveryPhase === 'at_delivery' ||
+            restoredDeliveryStateStatus === 'accepted' ||
+            restoredDeliveryStateStatus === 'reached_pickup' ||
+            restoredDeliveryStateStatus === 'order_confirmed' ||
+            restoredDeliveryStateStatus === 'en_route_to_delivery' ||
+            restoredDeliveryStateStatus === 'reached_drop' ||
+            restoredDeliveryStateStatus === 'at_delivery'
+
+          // Stale cache guard: if rider has not actually accepted yet, don't resume post-accept flow.
+          if (!hasAcceptedFlowState) {
+            localStorage.removeItem('deliveryActiveOrder')
+            setSelectedRestaurant(null)
+            selectedRestaurantRef.current = null
+            return
+          }
 
 
           const savedProgress = activeOrderData?.progress || {}

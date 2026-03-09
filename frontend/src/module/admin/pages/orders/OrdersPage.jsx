@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useRef } from "react"
+import { useLocation } from "react-router-dom"
 import { FileText, Calendar, Package, BellRing } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
@@ -32,6 +33,7 @@ const statusConfig = {
 export default function OrdersPage({ statusKey = "all", platformOverride }) {
   const config = statusConfig[statusKey] || statusConfig["all"]
   const { platform } = usePlatform()
+  const location = useLocation()
   const activePlatform = platformOverride || platform || "mofood"
   const [orders, setOrders] = useState([])
   const [isLoading, setIsLoading] = useState(true)
@@ -479,6 +481,12 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
     toggleColumn,
     resetColumns,
   } = useOrdersManagement(orders, statusKey, config.title)
+
+  useEffect(() => {
+    const prefillOrderSearch = location.state?.prefillOrderSearch
+    if (!prefillOrderSearch) return
+    setSearchQuery(String(prefillOrderSearch))
+  }, [location.state, setSearchQuery])
 
   const pendingApprovalCount = useMemo(() => {
     if (activePlatform !== "mogrocery") return 0

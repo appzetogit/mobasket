@@ -8,6 +8,8 @@ node_modules/
 
 # firebaseconfig.json
 firebaseconfig.json
+config/*firebase-adminsdk*.json
+config/*service-account*.json
 
 # Logs
 logs/
