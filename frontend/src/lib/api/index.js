@@ -471,9 +471,11 @@ export const restaurantAPI = {
 
   // Accept order
   acceptOrder: (id, preparationTime = null) => {
-    return apiClient.patch(API_ENDPOINTS.RESTAURANT.ORDER_ACCEPT.replace(':id', id), {
-      preparationTime
-    });
+    return apiClient.patch(
+      API_ENDPOINTS.RESTAURANT.ORDER_ACCEPT.replace(':id', id),
+      { preparationTime },
+      { timeout: 120000 }
+    );
   },
 
   // Reject order
@@ -814,9 +816,11 @@ export const groceryStoreAPI = {
   },
 
   acceptOrder: (id, preparationTime = null) => {
-    return apiClient.patch(API_ENDPOINTS.GROCERY_STORE.ORDER_ACCEPT.replace(':id', id), {
-      preparationTime
-    });
+    return apiClient.patch(
+      API_ENDPOINTS.GROCERY_STORE.ORDER_ACCEPT.replace(':id', id),
+      { preparationTime },
+      { timeout: 120000 }
+    );
   },
 
   rejectOrder: (id, reason = '') => {

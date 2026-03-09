@@ -233,7 +233,7 @@ function CompletedOrders({ onSelectOrder, orderAPI, searchQuery = "" }) {
                       <div className="flex items-baseline gap-1">
                         <span className="text-[11px] text-gray-500">Amount</span>
                         <span className="text-xs font-medium text-black">
-                          Γé╣{order.amount.toFixed(2)}
+                          ₹{order.amount.toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -461,7 +461,7 @@ function CancelledOrders({ onSelectOrder, orderAPI, isGroceryStore = false, sear
                       <div className="flex items-baseline gap-1">
                         <span className="text-[11px] text-gray-500">Amount</span>
                         <span className="text-xs font-medium text-black">
-                          Γé╣{order.amount.toFixed(2)}
+                          ₹{order.amount.toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -568,6 +568,7 @@ export default function OrdersMain() {
   const [countdown, setCountdown] = useState(240) // 4 minutes in seconds
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(true)
   const [showRejectPopup, setShowRejectPopup] = useState(false)
+  const [showAcceptConfirmPopup, setShowAcceptConfirmPopup] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
   const [showCancelPopup, setShowCancelPopup] = useState(false)
   const [cancelReason, setCancelReason] = useState("")
@@ -924,7 +925,11 @@ export default function OrdersMain() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
-  // Handle accept order
+  const handleAcceptClick = () => {
+    setShowAcceptConfirmPopup(true)
+  }
+
+  // Handle accept order (confirmed by user)
   const handleAcceptOrder = async () => {
     if (audioRef.current) {
       audioRef.current.pause()
@@ -942,10 +947,18 @@ export default function OrdersMain() {
         console.log('Γ£à Order accepted:', orderId)
         toast.success('Order accepted successfully')
       } catch (error) {
+        const isTimeoutError =
+          error?.code === 'ECONNABORTED' ||
+          String(error?.message || '').toLowerCase().includes('timeout')
+
         console.error('Γ¥î Error accepting order:', error)
-        const errorMessage = error.response?.data?.message ||
-          error.message ||
-          'Failed to accept order. Please try again.'
+        const errorMessage = isTimeoutError
+          ? 'Accept request timed out. Backend may be slow. Please check the order list and retry once.'
+          : (
+            error.response?.data?.message ||
+            error.message ||
+            'Failed to accept order. Please try again.'
+          )
 
         // Show specific error message
         if (error.response?.status === 400) {
@@ -960,6 +973,7 @@ export default function OrdersMain() {
     }
 
     setShowNewOrderPopup(false)
+    setShowAcceptConfirmPopup(false)
     setPopupOrder(null)
     clearNewOrder()
     setCountdown(240)
@@ -967,6 +981,10 @@ export default function OrdersMain() {
 
     // Note: PreparingOrders component will automatically refresh orders via its own useEffect
     // No need to manually refresh here as the component polls every 10 seconds
+  }
+
+  const handleAcceptCancel = () => {
+    setShowAcceptConfirmPopup(false)
   }
 
   // Handle reject order
@@ -1124,8 +1142,8 @@ export default function OrdersMain() {
         const tableData = orderToPrint.items.map(item => [
           item.name || 'Item',
           item.quantity || 1,
-          `Γé╣${(item.price || 0).toFixed(2)}`,
-          `Γé╣${((item.price || 0) * (item.quantity || 1)).toFixed(2)}`
+          `₹${(item.price || 0).toFixed(2)}`,
+          `₹${((item.price || 0) * (item.quantity || 1)).toFixed(2)}`
         ])
 
         autoTable(doc, {
@@ -1149,7 +1167,7 @@ export default function OrdersMain() {
       // Total
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(12)
-      doc.text(`Total: Γé╣${(orderToPrint.total || 0).toFixed(2)}`, 20, yPos)
+      doc.text(`Total: ₹${(orderToPrint.total || 0).toFixed(2)}`, 20, yPos)
 
       // Payment status
       yPos += 10
@@ -1679,7 +1697,7 @@ export default function OrdersMain() {
                                       {item.quantity} x {item.name}
                                     </p>
                                     <p className="text-xs text-gray-600 ml-2">
-                                      Γé╣{item.price * item.quantity}
+                                      ₹{item.price * item.quantity}
                                     </p>
                                   </div>
                                 </div>
@@ -1712,7 +1730,7 @@ export default function OrdersMain() {
                       <span className="text-sm font-semibold text-gray-900">Total bill</span>
                     </div>
                     <span className="text-base font-bold text-gray-900">
-                      Γé╣{(popupOrder || newOrder)?.total || 0}
+                      ₹{(popupOrder || newOrder)?.total || 0}
                     </span>
                   </div>
 
@@ -1759,7 +1777,7 @@ export default function OrdersMain() {
                     {/* Accept button with countdown */}
                     <div className="relative">
                       <button
-                        onClick={handleAcceptOrder}
+                        onClick={handleAcceptClick}
                         className="w-full bg-black text-white py-3.5 rounded-lg font-semibold text-sm hover:bg-gray-800 transition-colors relative overflow-hidden"
                       >
                         {/* Loading background */}
@@ -1800,6 +1818,62 @@ export default function OrdersMain() {
       </AnimatePresence>
 
       {/* Reject Order Popup */}
+      <AnimatePresence>
+        {showAcceptConfirmPopup && (
+          <>
+            <motion.div
+              className="fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={handleAcceptCancel}
+            >
+              <motion.div
+                className="w-[95%] max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="px-4 py-4 border-b border-gray-200">
+                  <h3 className="text-lg font-bold text-gray-900">Confirm order acceptance</h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    This order will be accepted only after you confirm.
+                  </p>
+                </div>
+
+                <div className="px-4 py-4">
+                  <div className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2">
+                    <span className="font-semibold">Order:</span>{" "}
+                    {(popupOrder || newOrder)?.orderId || "N/A"}
+                  </div>
+                  <div className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2 mt-2">
+                    <span className="font-semibold">Preparation time:</span> {prepTime} mins
+                  </div>
+                </div>
+
+                <div className="px-4 py-4 border-t border-gray-200 flex gap-3">
+                  <button
+                    onClick={handleAcceptCancel}
+                    className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-semibold text-sm hover:bg-gray-200 transition-colors"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={handleAcceptOrder}
+                    className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold text-sm hover:bg-blue-700 transition-colors"
+                  >
+                    Confirm Accept
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          </>
+        )}
+
+      </AnimatePresence>
+
       <AnimatePresence>
         {showRejectPopup && (
           <>

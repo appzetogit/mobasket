@@ -80,7 +80,7 @@ const resolveStoreForAssignment = async (storeIdentifier) => {
 const buildRestaurantIdVariations = (restaurant) => {
   const variations = new Set();
 
-  [restaurant?._id, restaurant?.restaurantId, restaurant?.id].forEach((value) => {
+  [restaurant?._id, restaurant?.restaurantId, restaurant?.id, restaurant?.slug].forEach((value) => {
     const normalized = String(value || '').trim();
     if (normalized) {
       variations.add(normalized);
@@ -102,7 +102,8 @@ export const getRestaurantOrders = asyncHandler(async (req, res) => {
     // Get restaurant ID - normalize to string (Order.restaurantId is String type)
     const restaurantIdString = restaurant._id?.toString() ||
       restaurant.restaurantId?.toString() ||
-      restaurant.id?.toString();
+      restaurant.id?.toString() ||
+      restaurant.slug?.toString();
 
     if (!restaurantIdString) {
       console.error('❌ No restaurant ID found:', restaurant);
@@ -110,8 +111,8 @@ export const getRestaurantOrders = asyncHandler(async (req, res) => {
     }
 
     // Query orders by restaurantId (stored as String in Order model)
-    // Try multiple restaurantId formats to handle different storage formats
-    const restaurantIdVariations = [restaurantIdString];
+    // Try multiple identifier formats to handle legacy/alias values.
+    const restaurantIdVariations = buildRestaurantIdVariations(restaurant);
     
     // Also add ObjectId string format if valid (both directions)
     if (mongoose.Types.ObjectId.isValid(restaurantIdString)) {
@@ -133,7 +134,9 @@ export const getRestaurantOrders = asyncHandler(async (req, res) => {
     }
     
     // Also try direct match without ObjectId conversion
-    restaurantIdVariations.push(restaurantIdString);
+    if (!restaurantIdVariations.includes(restaurantIdString)) {
+      restaurantIdVariations.push(restaurantIdString);
+    }
 
     // Build query - search for orders with any matching restaurantId variation
     // Use $in for multiple variations and also try direct match as fallback

@@ -29,6 +29,39 @@ const canShowErrorToast = (key) => {
   return true;
 };
 
+const shouldSuppressTimeoutToast = (config = {}) => {
+  if (!config || typeof config !== "object") return false;
+  if (config.suppressTimeoutToast === true) return true;
+
+  const url = String(config.url || "").toLowerCase();
+  // Delivery module has frequent background calls; avoid user-facing timeout spam for these.
+  return (
+    url.includes("/delivery/location") ||
+    url.includes("/delivery/orders") ||
+    url.includes("/delivery/earnings/active-offers") ||
+    url.includes("/grocery/store/orders") ||
+    url.includes("/restaurant/orders") ||
+    url.includes("/grocery/store/auth/me") ||
+    url.includes("/restaurant/auth/me")
+  );
+};
+
+const normalizeErrorMessage = (message = "") => {
+  const raw = String(message || "").trim();
+  if (!raw) return "An error occurred";
+  const lowered = raw.toLowerCase();
+
+  if (lowered.includes("timeout")) {
+    return "Request timed out. Backend may be slow. Please retry.";
+  }
+
+  if (lowered === "network error") {
+    return "Unable to connect to backend. Check server status.";
+  }
+
+  return raw;
+};
+
 // Validate API base URL on import
 if (import.meta.env.DEV) {
   const backendUrl = API_BASE_URL.replace("/api", "");
@@ -705,6 +738,7 @@ apiClient.interceptors.response.use(
       // Timeout errors are usually due to slow backend or network issues
       // Don't spam console with timeout errors, but handle them gracefully
       if (import.meta.env.DEV) {
+        const suppressToast = shouldSuppressTimeoutToast(originalRequest);
         const now = Date.now();
         const timeSinceLastError = now - networkErrorState.lastErrorTime;
         const timeSinceLastToast = now - networkErrorState.lastToastTime;
@@ -716,7 +750,7 @@ apiClient.interceptors.response.use(
         }
 
         // Only show toast if cooldown period has passed
-        if (timeSinceLastToast >= networkErrorState.TOAST_COOLDOWN_PERIOD) {
+        if (!suppressToast && timeSinceLastToast >= networkErrorState.TOAST_COOLDOWN_PERIOD) {
           networkErrorState.lastToastTime = now;
 
           // Show helpful error message (only once per minute)
@@ -850,15 +884,16 @@ apiClient.interceptors.response.use(
 
       // Show beautiful error toast for each error message
       errorMessages.forEach((errorMessage, index) => {
+        const safeErrorMessage = normalizeErrorMessage(errorMessage);
         const requestUrl = error.config?.url || "unknown";
         const requestMethod = String(error.config?.method || "get").toUpperCase();
         const statusCode = error.response?.status || "NA";
-        const toastKey = `${requestMethod}|${requestUrl}|${statusCode}|${errorMessage}`;
+        const toastKey = `${requestMethod}|${requestUrl}|${statusCode}|${safeErrorMessage}`;
         if (!canShowErrorToast(toastKey)) return;
 
         // Add slight delay for multiple toasts to appear sequentially
         setTimeout(() => {
-          toast.error(errorMessage, {
+          toast.error(safeErrorMessage, {
             duration: 5000,
             id: toastKey,
             style: {

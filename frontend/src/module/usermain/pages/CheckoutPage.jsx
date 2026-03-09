@@ -14,7 +14,6 @@ import {
   Plus,
   Minus,
   Sparkles,
-  LocateFixed,
   Wallet,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,7 +23,7 @@ import { useCart } from "../../user/context/CartContext";
 import { useProfile } from "../../user/context/ProfileContext";
 import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
-import api, { adminAPI, locationAPI, orderAPI, restaurantAPI, userAPI } from "@/lib/api";
+import api, { adminAPI, orderAPI, restaurantAPI, userAPI } from "@/lib/api";
 import { initRazorpayPayment } from "@/lib/utils/razorpay";
 import { Loader } from "@googlemaps/js-api-loader";
 import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey";
@@ -47,6 +46,7 @@ export default function CheckoutPage() {
 
   const [paymentMethod, setPaymentMethod] = useState("card");
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
+  const [postOrderRedirecting, setPostOrderRedirecting] = useState(false);
   const [addons, setAddons] = useState([]);
   const [loadingAddons, setLoadingAddons] = useState(false);
   const [availableCoupons, setAvailableCoupons] = useState([]);
@@ -71,7 +71,6 @@ export default function CheckoutPage() {
   });
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [showAddAddressForm, setShowAddAddressForm] = useState(false);
-  const [isDetectingAddress, setIsDetectingAddress] = useState(false);
   const [isSavingAddress, setIsSavingAddress] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
   const [walletLoading, setWalletLoading] = useState(false);
@@ -118,6 +117,12 @@ export default function CheckoutPage() {
     (!orderEditSession?.restaurantId ||
       String(orderEditSession.restaurantId) === String(restaurantId || ""));
   const hasSharedApp = Boolean(userProfile?.hasSharedApp || userProfile?.appSharedAt);
+
+  useEffect(() => {
+    if (foodItems.length > 0) return;
+    if (isPlacingOrder || postOrderRedirecting) return;
+    navigate("/cart", { replace: true });
+  }, [foodItems.length, isPlacingOrder, postOrderRedirecting, navigate]);
 
   useEffect(() => {
     const incomingSession = location.state?.orderEditSession;
@@ -217,37 +222,33 @@ export default function CheckoutPage() {
     const text = String(value || "").trim();
     if (!text) return false;
     const normalized = text.toLowerCase();
+    if (text.includes(",")) return false;
+    if (/^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(text)) return false;
+    if (!/[a-z]/i.test(text)) return false;
     const blocked = ["district", "state", "india"];
-    if (blocked.some((token) => normalized === token || normalized.endsWith(` ${token}`))) {
+    if (blocked.some((token) => normalized.includes(token))) {
       return false;
     }
     return text.length >= 3;
   }, []);
 
-  const selectBestReverseGeocodeResult = useCallback((results = []) => {
-    if (!Array.isArray(results) || results.length === 0) return null;
+  const resolveStreetForForm = useCallback((...candidates) => {
+    const cleaned = candidates
+      .map((candidate) => String(candidate || "").trim())
+      .filter(Boolean);
 
-    const scoreResult = (result) => {
-      const types = Array.isArray(result?.types) ? result.types : [];
-      let score = 0;
-      if (types.includes("street_address")) score += 120;
-      if (types.includes("premise")) score += 100;
-      if (types.includes("subpremise")) score += 90;
-      if (types.includes("establishment")) score += 80;
-      if (types.includes("route")) score += 60;
-      if (types.includes("point_of_interest")) score += 40;
-      if (types.includes("sublocality")) score += 20;
-      if (types.includes("locality")) score += 10;
-      if (types.includes("administrative_area_level_2")) score += 5;
+    const strict = cleaned.find((candidate) => hasMeaningfulStreet(candidate));
+    if (strict) return strict;
 
-      const formatted = String(result?.formatted_address || "");
-      if (/\b\d{6}\b/.test(formatted)) score += 15;
-      if (formatted.split(",").filter(Boolean).length >= 4) score += 10;
-      return score;
-    };
-
-    return [...results].sort((a, b) => scoreResult(b) - scoreResult(a))[0] || results[0];
-  }, []);
+    const relaxed = cleaned.find((candidate) => {
+      const lower = candidate.toLowerCase();
+      if (/^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(candidate)) return false;
+      if (lower === "india") return false;
+      if (lower.includes("district") || lower.includes("division") || lower.includes("zone")) return false;
+      return true;
+    });
+    return relaxed || "";
+  }, [hasMeaningfulStreet]);
 
   useEffect(() => {
     let isMounted = true;
@@ -359,7 +360,8 @@ export default function CheckoutPage() {
 
           setNewAddress((prev) => ({
             ...prev,
-            street: fallbackStreet || prev.street,
+            street: resolveStreetForForm(fallbackStreet, prev.street),
+            formattedAddress: formatted || prev.formattedAddress,
             additionalDetails: parsed.additionalDetails || prev.additionalDetails,
             city: parsed.city || prev.city,
             state: parsed.state || prev.state,
@@ -378,7 +380,7 @@ export default function CheckoutPage() {
         },
       );
     },
-    [parseAddressComponents],
+    [hasMeaningfulStreet, parseAddressComponents],
   );
 
   useEffect(() => {
@@ -399,101 +401,6 @@ export default function CheckoutPage() {
     ]
       .filter(Boolean)
       .join(", ");
-
-  const extractDetectedAddress = (response, latitude, longitude) => {
-    const results = response?.data?.data?.results || [];
-    const selectedResult = selectBestReverseGeocodeResult(results) || results[0] || {};
-    const components = selectedResult?.address_components || {};
-
-    const fromArray = Array.isArray(components)
-      ? {
-        city:
-          components.find((c) => c.types?.includes("locality"))?.long_name ||
-          components.find((c) => c.types?.includes("administrative_area_level_2"))?.long_name ||
-          "",
-        state:
-          components.find((c) => c.types?.includes("administrative_area_level_1"))?.long_name ||
-          "",
-        zipCode:
-          components.find((c) => c.types?.includes("postal_code"))?.long_name || "",
-      }
-      : {
-        city: components.city || "",
-        state: components.state || "",
-        zipCode: components.zipCode || components.postal_code || "",
-      };
-
-    const parsed = parseAddressComponents(Array.isArray(components) ? components : []);
-    const formattedAddress = selectedResult?.formatted_address || "";
-    const pincodeFromText =
-      formattedAddress.match(/\b\d{6}\b/)?.[0] ||
-      response?.data?.data?.formattedAddress?.match(/\b\d{6}\b/)?.[0] ||
-      "";
-    const parts = formattedAddress.split(",").map((part) => part.trim()).filter(Boolean);
-    const primaryStreetCandidate =
-      selectedResult?.street ||
-      parsed.street ||
-      parsed.premise ||
-      parsed.establishment ||
-      parts[0] ||
-      "";
-    const fallbackStreet = parts.slice(0, 2).join(", ");
-    const street = hasMeaningfulStreet(primaryStreetCandidate)
-      ? primaryStreetCandidate
-      : (fallbackStreet || formattedAddress || "Current location");
-
-    return {
-      street,
-      additionalDetails: [
-        selectedResult?.area,
-        selectedResult?.sublocality,
-        selectedResult?.neighborhood,
-        parsed.additionalDetails,
-        parts.length > 1 ? parts.slice(1, Math.min(parts.length - 2, 3)).join(", ") : "",
-      ]
-        .map((part) => String(part || "").trim())
-        .find(Boolean) || "",
-      city: fromArray.city,
-      state: fromArray.state,
-      zipCode: fromArray.zipCode || pincodeFromText,
-      latitude: String(latitude),
-      longitude: String(longitude),
-    };
-  };
-
-  const handleDetectCurrentLocationForAddress = async () => {
-    if (!navigator.geolocation) {
-      toast.error("Geolocation is not supported on this device.");
-      return;
-    }
-
-    setIsDetectingAddress(true);
-    try {
-      const position = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 0,
-        });
-      });
-
-      const latitude = Number(position?.coords?.latitude);
-      const longitude = Number(position?.coords?.longitude);
-      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        throw new Error("Unable to detect valid coordinates.");
-      }
-
-      const response = await locationAPI.reverseGeocode(latitude, longitude);
-      const detected = extractDetectedAddress(response, latitude, longitude);
-      setNewAddress((prev) => ({ ...prev, ...detected }));
-      toast.success("Address auto-filled from current location.");
-    } catch (error) {
-      console.error("Checkout address detection failed:", error);
-      toast.error("Unable to detect location. Fill address manually.");
-    } finally {
-      setIsDetectingAddress(false);
-    }
-  };
 
   const handleSaveNewAddress = async () => {
     const payload = {
@@ -1216,15 +1123,20 @@ export default function CheckoutPage() {
 
       const orderResponse = await orderAPI.createOrder(orderPayload);
       const { order, razorpay } = orderResponse?.data?.data || {};
-      const orderIdentifier = order?.orderId || order?.id;
+      const orderIdentifier = String(order?.orderId || order?.id || order?._id || "").trim();
 
       if (backendPaymentMethod === "cash" || backendPaymentMethod === "wallet") {
+        setPostOrderRedirecting(true);
         clearCart("mofood");
         if (backendPaymentMethod === "wallet") {
           setWalletBalance((prev) => Math.max(0, prev - Number(calculatedPricing?.total || 0)));
         }
         toast.success("Order placed successfully.");
-        navigate(`/orders/${orderIdentifier}?confirmed=true`);
+        if (orderIdentifier) {
+          navigate(`/orders/${encodeURIComponent(orderIdentifier)}?confirmed=true`, { replace: true });
+        } else {
+          navigate("/orders?confirmed=true", { replace: true });
+        }
         return;
       }
 
@@ -1263,10 +1175,15 @@ export default function CheckoutPage() {
                 razorpayPaymentId: response.razorpay_payment_id,
                 razorpaySignature: response.razorpay_signature,
               });
+              setPostOrderRedirecting(true);
               clearCart("mofood");
               setPendingOnlineOrder(null);
               toast.success("Payment successful. Order confirmed.");
-              navigate(`/orders/${orderIdentifier}?confirmed=true`);
+              if (orderIdentifier) {
+                navigate(`/orders/${encodeURIComponent(orderIdentifier)}?confirmed=true`, { replace: true });
+              } else {
+                navigate("/orders?confirmed=true", { replace: true });
+              }
               resolve();
             } catch (verifyError) {
               console.error("Payment verification failed:", verifyError);
@@ -1411,16 +1328,6 @@ export default function CheckoutPage() {
                         </button>
                       ))}
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={handleDetectCurrentLocationForAddress}
-                      disabled={isDetectingAddress}
-                      className="h-8 w-full rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-700 flex items-center justify-center gap-1"
-                    >
-                      <LocateFixed className={`w-3.5 h-3.5 ${isDetectingAddress ? "animate-spin" : ""}`} />
-                      {isDetectingAddress ? "Detecting..." : "Detect Current Location"}
-                    </button>
 
                     <div className="relative">
                       <input

@@ -10,6 +10,7 @@ const getStatusColor = (orderStatus, isGrocery = false) => {
       "Packing": "bg-orange-100 text-orange-700",
       "Out for Delivery": "bg-yellow-100 text-yellow-700",
       "Delivered": "bg-emerald-100 text-emerald-700",
+      "Not Accepted in Time": "bg-red-100 text-red-700",
       "Cancelled by Store": "bg-red-100 text-red-700",
       "Cancelled by User": "bg-orange-100 text-orange-700",
       "Payment Failed": "bg-red-100 text-red-700",
@@ -29,6 +30,7 @@ const getStatusColor = (orderStatus, isGrocery = false) => {
     "Accepted": "bg-green-100 text-green-700",
     "Processing": "bg-orange-100 text-orange-700",
     "Food On The Way": "bg-yellow-100 text-yellow-700",
+    "Not Accepted in Time": "bg-red-100 text-red-700",
     "Canceled": "bg-rose-100 text-rose-700",
     "Cancelled by Restaurant": "bg-red-100 text-red-700",
     "Cancelled by User": "bg-orange-100 text-orange-700",
@@ -471,6 +473,11 @@ export default function OrdersTable({
                       {isAwaitingAdminApproval(order) && (
                         <div className="text-[11px] font-semibold text-amber-700">
                           Awaiting Admin Approval
+                        </div>
+                      )}
+                      {order.timedOutByRestaurant && (
+                        <div className="text-[11px] font-semibold text-red-700">
+                          {isGrocery ? "Store did not accept in time" : "Restaurant did not accept in time"}
                         </div>
                       )}
                       {order.cancellationReason && (

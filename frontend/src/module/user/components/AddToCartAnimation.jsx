@@ -409,7 +409,10 @@ export default function AddToCartAnimation({
 
   // Get up to 3 most recently added items for thumbnails
   // Since items are added to the end of the array, we take the last 3
-  const thumbnailItems = animationItems.slice(-3).reverse();
+  const thumbnailItems = animationItems
+    .slice(-3)
+    .reverse()
+    .filter((item) => item?.product);
 
   const content = (
     <>
@@ -426,7 +429,7 @@ export default function AddToCartAnimation({
           {getSafeImageUrl(removedProduct.product?.imageUrl) ? (
             <img
               src={getSafeImageUrl(removedProduct.product.imageUrl)}
-              alt={removedProduct.product.name}
+              alt={removedProduct.product?.name || 'Product'}
               className="w-full h-full object-cover rounded-full"
             />
           ) : (
@@ -450,12 +453,12 @@ export default function AddToCartAnimation({
           {getSafeImageUrl(flyingProduct.product?.imageUrl) ? (
             <img
               src={getSafeImageUrl(flyingProduct.product.imageUrl)}
-              alt={flyingProduct.product.name}
+              alt={flyingProduct.product?.name || 'Product'}
               className="w-full h-full object-cover rounded-full"
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-neutral-200 text-neutral-400 text-xs font-semibold rounded-full">
-              {flyingProduct.product.name.charAt(0).toUpperCase()}
+              {flyingProduct.product?.name?.charAt(0)?.toUpperCase() || '?'}
             </div>
           )}
         </div>
@@ -495,7 +498,7 @@ export default function AddToCartAnimation({
               <div className="flex items-center -space-x-5">
                 {thumbnailItems.map((item, idx) => (
                   <motion.div
-                    key={item.product.id}
+                    key={item.product?.id || item.product?._id || `thumb-${idx}`}
                     initial={{ scale: 0, opacity: 0 }}
                     animate={{ scale: 1, opacity: 1 }}
                     transition={{
@@ -509,12 +512,12 @@ export default function AddToCartAnimation({
                     {getSafeImageUrl(item.product?.imageUrl) ? (
                       <img
                         src={getSafeImageUrl(item.product.imageUrl)}
-                        alt={item.product.name}
+                        alt={item.product?.name || 'Product'}
                         className="w-full h-full object-cover"
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-neutral-200 text-neutral-400 text-xs font-semibold">
-                        {item.product.name.charAt(0).toUpperCase()}
+                        {item.product?.name?.charAt(0)?.toUpperCase() || '?'}
                       </div>
                     )}
                   </motion.div>

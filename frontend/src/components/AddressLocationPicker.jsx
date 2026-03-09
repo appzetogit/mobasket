@@ -14,6 +14,140 @@ function toFiniteNumber(value) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
+function hasMeaningfulStreet(value) {
+  const text = String(value || "").trim();
+  if (!text) return false;
+  const normalized = text.toLowerCase();
+  if (text.includes(",")) return false;
+  if (/^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(text)) return false;
+  if (!/[a-z]/i.test(text)) return false;
+  if (["district", "state", "india"].some((token) => normalized.includes(token))) return false;
+  return text.length >= 3;
+}
+
+function resolveStreetForForm(...candidates) {
+  const cleaned = candidates
+    .map((candidate) => String(candidate || "").trim())
+    .filter(Boolean);
+
+  const strict = cleaned.find((candidate) => hasMeaningfulStreet(candidate));
+  if (strict) return strict;
+
+  const relaxed = cleaned.find((candidate) => {
+    const lower = candidate.toLowerCase();
+    if (/^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(candidate)) return false;
+    if (lower === "india") return false;
+    if (lower.includes("district") || lower.includes("division") || lower.includes("zone")) return false;
+    return true;
+  });
+  return relaxed || "";
+}
+
+function pickBestGoogleResult(results = []) {
+  if (!Array.isArray(results) || results.length === 0) return null;
+
+  const score = (entry) => {
+    const types = Array.isArray(entry?.types) ? entry.types : [];
+    let value = 0;
+    if (types.includes("street_address")) value += 100;
+    if (types.includes("premise")) value += 80;
+    if (types.includes("subpremise")) value += 70;
+    if (types.includes("route")) value += 60;
+    if (types.includes("point_of_interest")) value += 40;
+    if (types.includes("establishment")) value += 30;
+    if (types.includes("sublocality")) value += 20;
+    if (types.includes("locality")) value += 10;
+    return value;
+  };
+
+  return [...results].sort((a, b) => score(b) - score(a))[0] || results[0];
+}
+
+function extractAddressFromGoogleResult(result, latitude, longitude) {
+  const components = Array.isArray(result?.address_components) ? result.address_components : [];
+  const byType = (type) => components.find((component) => component?.types?.includes(type))?.long_name || "";
+
+  const streetNumber = byType("street_number");
+  const route = byType("route");
+  const premise = byType("premise") || byType("subpremise");
+  const neighborhood = byType("sublocality_level_1") || byType("sublocality") || byType("neighborhood");
+  const city = byType("locality") || byType("administrative_area_level_2");
+  const state = byType("administrative_area_level_1");
+  const zipCode = byType("postal_code");
+  const formattedAddress = String(result?.formatted_address || "").trim();
+
+  return {
+    street: resolveStreetForForm([streetNumber, route].filter(Boolean).join(" "), route, premise, neighborhood),
+    formattedAddress,
+    additionalDetails: resolveStreetForForm(neighborhood, premise, route, ""),
+    city,
+    state,
+    zipCode,
+    latitude: String(latitude),
+    longitude: String(longitude),
+  };
+}
+
+function hasDeepLocationData(address = {}) {
+  const street = String(address?.street || "").trim();
+  const additional = String(address?.additionalDetails || "").trim();
+  const zipCode = String(address?.zipCode || "").trim();
+  const formatted = String(address?.formattedAddress || "").trim();
+
+  return (
+    hasMeaningfulStreet(street) ||
+    (additional && !additional.toLowerCase().includes("district")) ||
+    Boolean(zipCode) ||
+    formatted.split(",").filter(Boolean).length >= 4
+  );
+}
+
+function scoreAddressDetail(address = {}) {
+  const street = String(address?.street || "").trim();
+  const additional = String(address?.additionalDetails || "").trim();
+  const city = String(address?.city || "").trim();
+  const state = String(address?.state || "").trim();
+  const zip = String(address?.zipCode || "").trim();
+  const formatted = String(address?.formattedAddress || "").trim();
+  return (
+    (street ? 4 : 0) +
+    (additional ? 3 : 0) +
+    (city ? 2 : 0) +
+    (state ? 2 : 0) +
+    (zip ? 2 : 0) +
+    (formatted.split(",").filter(Boolean).length >= 4 ? 3 : 0)
+  );
+}
+
+function mergeAddressDetails(primary = null, secondary = null) {
+  const first = primary || {};
+  const second = secondary || {};
+
+  const preferred = scoreAddressDetail(second) > scoreAddressDetail(first) ? second : first;
+  const fallback = preferred === first ? second : first;
+  const chosenStreet = resolveStreetForForm(preferred?.street, fallback?.street);
+  const chosenAdditional = resolveStreetForForm(
+    preferred?.additionalDetails,
+    fallback?.additionalDetails,
+  );
+
+  return {
+    street: chosenStreet,
+    additionalDetails:
+      chosenAdditional && chosenAdditional !== chosenStreet
+        ? chosenAdditional
+        : resolveStreetForForm(fallback?.additionalDetails, preferred?.formattedAddress),
+    city: String(preferred?.city || fallback?.city || "").trim(),
+    state: String(preferred?.state || fallback?.state || "").trim(),
+    zipCode: String(preferred?.zipCode || fallback?.zipCode || "").trim(),
+    formattedAddress: String(
+      preferred?.formattedAddress || fallback?.formattedAddress || "",
+    ).trim(),
+    latitude: String(preferred?.latitude || fallback?.latitude || ""),
+    longitude: String(preferred?.longitude || fallback?.longitude || ""),
+  };
+}
+
 function extractReverseGeocodedAddress(response, latitude, longitude) {
   const results = response?.data?.data?.results || [];
   const firstResult = results[0] || {};
@@ -42,14 +176,30 @@ function extractReverseGeocodedAddress(response, latitude, longitude) {
     response?.data?.data?.formattedAddress?.match(/\b\d{6}\b/)?.[0] ||
     "";
   const parts = formattedAddress.split(",").map((part) => part.trim()).filter(Boolean);
+  const route = Array.isArray(components)
+    ? components.find((c) => c.types?.includes("route"))?.long_name || ""
+    : "";
+  const premise = Array.isArray(components)
+    ? components.find((c) => c.types?.includes("premise"))?.long_name || ""
+    : "";
+  const fallbackStreet = resolveStreetForForm(
+    firstResult?.street,
+    route,
+    premise,
+    parts[0],
+    firstResult?.area,
+    firstResult?.sublocality,
+  );
 
   return {
-    street: firstResult?.street || parts[0] || "",
+    street: fallbackStreet,
+    formattedAddress,
     additionalDetails:
       firstResult?.area ||
       firstResult?.sublocality ||
       firstResult?.neighborhood ||
-      (parts.length > 1 ? parts.slice(1, Math.min(parts.length - 2, 3)).join(", ") : ""),
+      (parts.length > 1 ? parts.slice(1, Math.min(parts.length - 2, 3)).join(", ") : "") ||
+      formattedAddress,
     city: fromArray.city,
     state: fromArray.state,
     zipCode: fromArray.zipCode || pincodeFromText,
@@ -88,14 +238,33 @@ export default function AddressLocationPicker({
     return DEFAULT_CENTER;
   }, [latitude, longitude]);
 
-  const typedAddressQuery = useMemo(
-    () =>
-      [value?.street, value?.additionalDetails, value?.city, value?.state, value?.zipCode]
-        .map((part) => String(part || "").trim())
-        .filter(Boolean)
-        .join(", "),
-    [value?.street, value?.additionalDetails, value?.city, value?.state, value?.zipCode],
-  );
+  const typedAddressQuery = useMemo(() => {
+    const preferredFormattedAddress = String(value?.formattedAddress || "").trim();
+    if (preferredFormattedAddress && preferredFormattedAddress.length >= 8) {
+      return preferredFormattedAddress;
+    }
+
+    const street = String(value?.street || "").trim();
+    const additionalDetails = String(value?.additionalDetails || "").trim();
+    const city = String(value?.city || "").trim();
+    const state = String(value?.state || "").trim();
+    const zipCode = String(value?.zipCode || "").trim();
+
+    const parts = [
+      hasMeaningfulStreet(street) ? street : "",
+      hasMeaningfulStreet(additionalDetails) ? additionalDetails : "",
+      city,
+      state,
+      zipCode,
+    ]
+      .map((part) => String(part || "").trim())
+      .filter(Boolean);
+
+    return [...new Set(parts.map((part) => part.toLowerCase()))]
+      .map((normalized) => parts.find((part) => part.toLowerCase() === normalized))
+      .filter(Boolean)
+      .join(", ");
+  }, [value?.formattedAddress, value?.street, value?.additionalDetails, value?.city, value?.state, value?.zipCode]);
 
   const updateMarkerPosition = useCallback((position, shouldPan = true) => {
     if (!mapRef.current || !markerRef.current) return;
@@ -119,9 +288,58 @@ export default function AddressLocationPicker({
     async (lat, lng) => {
       setIsReadingMapLocation(true);
       try {
-        const response = await locationAPI.reverseGeocode(lat, lng);
-        const parsed = extractReverseGeocodedAddress(response, lat, lng);
-        syncLocationFields(parsed);
+        let googleParsed = null;
+        let backendParsed = null;
+
+        if (window.google?.maps?.Geocoder) {
+          try {
+            const geocoder = new window.google.maps.Geocoder();
+            const googleResult = await new Promise((resolve) => {
+              geocoder.geocode(
+                { location: { lat: Number(lat), lng: Number(lng) }, region: "in" },
+                (results, status) => {
+                  const ok = status === "OK" || status === window.google?.maps?.GeocoderStatus?.OK;
+                  if (!ok || !Array.isArray(results) || results.length === 0) {
+                    resolve(null);
+                    return;
+                  }
+                  resolve(pickBestGoogleResult(results));
+                },
+              );
+            });
+
+            if (googleResult) {
+              googleParsed = extractAddressFromGoogleResult(googleResult, lat, lng);
+            }
+          } catch (googleError) {
+            console.error("Google reverse geocoding from marker failed:", googleError);
+          }
+        }
+
+        try {
+          const response = await locationAPI.reverseGeocode(lat, lng);
+          backendParsed = extractReverseGeocodedAddress(response, lat, lng);
+        } catch (fallbackError) {
+          console.error("Backend reverse geocoding from marker failed:", fallbackError);
+        }
+
+        const parsed = mergeAddressDetails(googleParsed, backendParsed);
+        if (!hasDeepLocationData(parsed)) {
+          // Keep coordinates even when deep fields are unavailable.
+          parsed.latitude = String(lat);
+          parsed.longitude = String(lng);
+        }
+
+        onChange((prev) => ({
+          ...prev,
+          ...parsed,
+          // Keep manually typed street if reverse geocode gives only coarse locality text.
+          street: parsed.street || prev?.street || "",
+          additionalDetails: parsed.additionalDetails || prev?.additionalDetails || "",
+          city: parsed.city || prev?.city || "",
+          state: parsed.state || prev?.state || "",
+          zipCode: parsed.zipCode || prev?.zipCode || "",
+        }));
       } catch (error) {
         console.error("Map reverse geocoding failed:", error);
         syncLocationFields({
@@ -132,7 +350,7 @@ export default function AddressLocationPicker({
         setIsReadingMapLocation(false);
       }
     },
-    [syncLocationFields],
+    [onChange, syncLocationFields],
   );
 
   const scheduleReverseGeocode = useCallback(
