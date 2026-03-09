@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { groceryStoreAPI } from "@/lib/api"
@@ -8,6 +8,7 @@ import { redirectGroceryStoreAfterAuth } from "../../utils/onboardingUtils"
 
 export default function GroceryStoreOTP() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [otp, setOtp] = useState(["", "", "", "", "", ""])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
@@ -22,7 +23,7 @@ export default function GroceryStoreOTP() {
     if (stored) {
       const data = JSON.parse(stored)
       setStoredAuthData(data)
-      
+
       if (data.method === "email" && data.email) {
         setContactType("email")
         setContactInfo(data.email)
@@ -97,7 +98,7 @@ export default function GroceryStoreOTP() {
 
   const handleVerify = async (otpValue = null) => {
     const code = otpValue || otp.join("")
-    
+
     if (code.length !== 6) {
       setError("Please enter the complete 6-digit code")
       return
@@ -121,9 +122,9 @@ export default function GroceryStoreOTP() {
       const registerName =
         purpose === "register"
           ? (authData?.name || "").trim() ||
-            (email
-              ? `Grocery Store ${email.split("@")[0]}`
-              : `Grocery Store ${String(phone).replace(/\D/g, "").slice(-4) || "Partner"}`)
+          (email
+            ? `Grocery Store ${email.split("@")[0]}`
+            : `Grocery Store ${String(phone).replace(/\D/g, "").slice(-4) || "Partner"}`)
           : null
 
       const response = await groceryStoreAPI.verifyOTP(
@@ -147,7 +148,8 @@ export default function GroceryStoreOTP() {
       window.dispatchEvent(new Event("groceryStoreAuthChanged"))
 
       sessionStorage.removeItem("groceryStoreAuthData")
-      await redirectGroceryStoreAfterAuth(navigate, { replace: true })
+      const from = location.state?.from?.pathname || location.state?.from || null
+      await redirectGroceryStoreAfterAuth(navigate, { replace: true, redirectTo: from })
     } catch (err) {
       const message =
         err?.response?.data?.message ||

@@ -79,9 +79,20 @@ export default function Coupons({ platformOverride }) {
         : await adminAPI.getRestaurants({ page: 1, limit: 500, platform: "mofood", isActive: true })
 
       if (response?.data?.success) {
-        const restaurantList = isGroceryPlatform
+        let restaurantList = isGroceryPlatform
           ? response?.data?.data?.stores || response?.data?.stores || []
           : response?.data?.data?.restaurants || []
+
+        // Deduplicate stores by name to prevent multiple entries for the same store name
+        const uniqueNames = new Set()
+        restaurantList = restaurantList.filter((r) => {
+          const nameStr = r.name?.toLowerCase()?.trim()
+          if (!nameStr) return false
+          if (uniqueNames.has(nameStr)) return false
+          uniqueNames.add(nameStr)
+          return true
+        })
+
         setRestaurants(restaurantList)
       } else {
         setRestaurants([])
@@ -665,28 +676,47 @@ export default function Coupons({ platformOverride }) {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleCheckoutVisibility(offer)}
-                          className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                            offer.showAtCheckout !== false
-                              ? "bg-green-100 text-green-700 hover:bg-green-200"
-                              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                          }`}
-                        >
-                          {offer.showAtCheckout !== false ? "Visible" : "Hidden"}
-                        </button>
+                        {(() => {
+                          const isExpired = offer.status === "expired" || (offer.endDate && new Date(offer.endDate).setHours(23, 59, 59, 999) < new Date().getTime());
+                          if (isExpired) {
+                            return (
+                              <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-700">
+                                Expired
+                              </span>
+                            );
+                          }
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => handleToggleCheckoutVisibility(offer)}
+                              className={`px-2 py-1 rounded-full text-xs font-semibold ${offer.showAtCheckout !== false
+                                ? "bg-green-100 text-green-700 hover:bg-green-200"
+                                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                                }`}
+                            >
+                              {offer.showAtCheckout !== false ? "Visible" : "Hidden"}
+                            </button>
+                          );
+                        })()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          offer.status === "active"
-                            ? "bg-green-100 text-green-700"
-                            : offer.status === "paused"
-                              ? "bg-orange-100 text-orange-700"
-                              : "bg-gray-100 text-gray-700"
-                        }`}>
-                          {offer.status || "Inactive"}
-                        </span>
+                        {(() => {
+                          const isExpired = offer.status === "expired" || (offer.endDate && new Date(offer.endDate).setHours(23, 59, 59, 999) < new Date().getTime());
+                          const statusText = isExpired ? "expired" : (offer.status || "Inactive");
+
+                          return (
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${statusText === "active"
+                              ? "bg-green-100 text-green-700"
+                              : statusText === "paused"
+                                ? "bg-orange-100 text-orange-700"
+                                : statusText === "expired"
+                                  ? "bg-red-100 text-red-700"
+                                  : "bg-gray-100 text-gray-700"
+                              }`}>
+                              {statusText}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm text-slate-700">

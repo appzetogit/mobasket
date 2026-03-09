@@ -19,6 +19,7 @@ import {
   Monitor,
   X,
   Snowflake,
+  Store,
 } from "lucide-react";
 import { useNavigate, useLocation as useRouterLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -41,8 +42,8 @@ const formatSavedAddressForHeader = (address) => {
 
   const formattedAddress = String(
     address?.formattedAddress ||
-      address?.address ||
-      "",
+    address?.address ||
+    "",
   ).trim();
   if (formattedAddress) return formattedAddress;
 
@@ -1415,6 +1416,8 @@ const GroceryPage = () => {
           id: storeId,
           name: String(store?.name || "Store").trim() || "Store",
           count: counts.get(storeId) || 0,
+          image: store?.profileImage?.url || store?.logo || FALLBACK_IMAGE,
+          address: store?.location?.area || store?.location?.city || "",
         };
       })
       .filter(Boolean)
@@ -1736,8 +1739,9 @@ const GroceryPage = () => {
       restaurant: storeName || "MoGrocery",
       restaurantAddress: storeAddress || "",
       storeLocation: store?.location || null,
-      restaurantLocation: store?.location || null,
+      restaurantLocation: product?.storeLocation || product?.storeId?.location || null,
       platform: "mogrocery",
+      stockQuantity: product?.stockQuantity,
     }, sourcePosition);
   };
 
@@ -1941,7 +1945,7 @@ const GroceryPage = () => {
           </div>
 
           {!shouldShowShimmer && groceryStores.length > 0 && (
-            <div className="px-4 mt-1 mb-2 relative z-30">
+            <div className="px-4 mt-1 mb-2 relative z-30 md:hidden">
               <div className="flex items-center justify-between gap-3 mb-2">
                 <div>
                   <p className="text-[12px] font-black uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
@@ -1968,11 +1972,10 @@ const GroceryPage = () => {
                 <button
                   type="button"
                   onClick={() => setSelectedStoreId("all-stores")}
-                  className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold transition-colors ${
-                    selectedStoreId === "all-stores"
-                      ? "border-[#facc15] bg-[#fff4cc] text-slate-900 dark:border-cyan-400/70 dark:bg-[#152338] dark:text-cyan-100"
-                      : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-[#111a28] dark:text-slate-300"
-                  }`}
+                  className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold transition-colors ${selectedStoreId === "all-stores"
+                    ? "border-[#facc15] bg-[#fff4cc] text-slate-900 dark:border-cyan-400/70 dark:bg-[#152338] dark:text-cyan-100"
+                    : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-[#111a28] dark:text-slate-300"
+                    }`}
                 >
                   All Stores
                 </button>
@@ -1981,11 +1984,10 @@ const GroceryPage = () => {
                     type="button"
                     key={store.id}
                     onClick={() => setSelectedStoreId(store.id)}
-                    className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold transition-colors ${
-                      selectedStoreId === store.id
-                        ? "border-[#facc15] bg-[#fff4cc] text-slate-900 dark:border-cyan-400/70 dark:bg-[#152338] dark:text-cyan-100"
-                        : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-[#111a28] dark:text-slate-300"
-                    }`}
+                    className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold transition-colors ${selectedStoreId === store.id
+                      ? "border-[#facc15] bg-[#fff4cc] text-slate-900 dark:border-cyan-400/70 dark:bg-[#152338] dark:text-cyan-100"
+                      : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-[#111a28] dark:text-slate-300"
+                      }`}
                   >
                     {store.name}
                     {store.count > 0 && (
@@ -2068,58 +2070,77 @@ const GroceryPage = () => {
 
       {!shouldShowShimmer && groceryStores.length > 0 && (
         <div className="hidden md:block px-4 pt-1 pb-3 relative z-10 md:max-w-6xl md:mx-auto">
-          <div className="flex items-center justify-between gap-3 mb-2">
+          <div className="flex items-center justify-between gap-3 mb-4">
             <div>
-              <p className="text-[13px] font-black uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">
+              <p className="text-[12px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">
                 Filter By Store
               </p>
-              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              <h2 className="text-xl font-extrabold text-slate-800 dark:text-slate-100">
                 {selectedStoreId === "all-stores"
-                  ? `${storeFilterOptions.length} stores available`
+                  ? `${storeFilterOptions.length} Stores Available`
                   : `${storeFilterOptions.find((store) => store.id === selectedStoreId)?.name || "Store"} selected`}
-              </p>
+              </h2>
             </div>
             {selectedStoreId !== "all-stores" && (
-              <button
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 type="button"
                 onClick={() => setSelectedStoreId("all-stores")}
-                className="text-xs font-bold text-[#EF4F5F] dark:text-cyan-300"
+                className="px-4 py-2 rounded-xl text-xs font-bold text-[#EF4F5F] bg-[#EF4F5F]/10 hover:bg-[#EF4F5F]/20 transition-all"
               >
-                Clear
-              </button>
+                Clear Filters
+              </motion.button>
             )}
           </div>
 
-          <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
-            <button
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 pb-1">
+            <motion.button
+              whileHover={{ scale: 1.02, translateY: -2 }}
+              whileTap={{ scale: 0.98 }}
               type="button"
               onClick={() => setSelectedStoreId("all-stores")}
-              className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold transition-colors ${
-                selectedStoreId === "all-stores"
-                  ? "border-[#facc15] bg-[#fff4cc] text-slate-900 dark:border-cyan-400/70 dark:bg-[#152338] dark:text-cyan-100"
-                  : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-[#111a28] dark:text-slate-300"
-              }`}
+              className={`w-full h-auto min-h-[100px] rounded-2xl border-2 p-3 flex flex-col items-center justify-center text-center transition-all duration-300 shadow-sm ${selectedStoreId === "all-stores"
+                ? "border-[#facc15] bg-gradient-to-br from-[#fffdf0] to-[#fff4cc] text-slate-900 shadow-[#facc15]/20"
+                : "border-slate-100 bg-white text-slate-500 hover:border-[#facc15]/40 hover:text-slate-700 dark:border-slate-700 dark:bg-[#111a28] dark:text-slate-400"
+                }`}
             >
-              All Stores
-            </button>
+              <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mb-2">
+                <Store size={24} className={selectedStoreId === "all-stores" ? "text-[#facc15]" : "text-slate-400"} />
+              </div>
+              <span className="text-sm font-bold">All Stores</span>
+            </motion.button>
             {storeFilterOptions.map((store) => (
-              <button
+              <motion.button
+                whileHover={{ scale: 1.02, translateY: -2 }}
+                whileTap={{ scale: 0.98 }}
                 type="button"
                 key={store.id}
                 onClick={() => setSelectedStoreId(store.id)}
-                className={`shrink-0 rounded-full border px-4 py-2 text-sm font-bold transition-colors ${
-                  selectedStoreId === store.id
-                    ? "border-[#facc15] bg-[#fff4cc] text-slate-900 dark:border-cyan-400/70 dark:bg-[#152338] dark:text-cyan-100"
-                    : "border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-[#111a28] dark:text-slate-300"
-                }`}
+                className={`w-full h-auto min-h-[100px] rounded-2xl border-2 p-3 flex flex-col items-center justify-center text-center transition-all duration-300 shadow-sm ${selectedStoreId === store.id
+                  ? "border-[#facc15] bg-gradient-to-br from-[#fffdf0] to-[#fff4cc] text-slate-900 shadow-[#facc15]/20"
+                  : "border-slate-100 bg-white text-slate-500 hover:border-[#facc15]/40 hover:text-slate-700 dark:border-slate-700 dark:bg-[#111a28] dark:text-slate-300"
+                  }`}
               >
-                {store.name}
-                {store.count > 0 && (
-                  <span className="ml-2 text-[11px] font-extrabold text-slate-400 dark:text-slate-500">
-                    {store.count}
-                  </span>
+                <div className="relative w-12 h-12 mb-2">
+                  <img
+                    src={store.image}
+                    alt={store.name}
+                    className="w-full h-full rounded-full object-cover border border-slate-200 dark:border-slate-700"
+                  />
+                  {store.count > 0 && (
+                    <span className={`absolute -top-1 -right-1 px-1.5 py-0.5 rounded-lg text-[10px] font-black transition-colors ${selectedStoreId === store.id ? "bg-[#facc15] text-white" : "bg-slate-100 dark:bg-slate-800 text-slate-400"}`}>
+                      {store.count}
+                    </span>
+                  )}
+                </div>
+                <span className="text-xs font-bold line-clamp-2 leading-tight h-8 flex items-center justify-center">
+                  {store.name}
+                </span>
+                {store.address && (
+                  <span className="text-[10px] text-slate-400 mt-1 line-clamp-1">{store.address}</span>
                 )}
-              </button>
+              </motion.button>
             ))}
           </div>
         </div>

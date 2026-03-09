@@ -20,6 +20,7 @@ export default function CategoryDirectoryPage() {
   const [groceryStores, setGroceryStores] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const getStoreCoordinates = (store) => {
     const geoCoordinates = store?.location?.coordinates;
@@ -75,8 +76,8 @@ export default function CategoryDirectoryPage() {
           }),
           zoneId
             ? api.get("/grocery/products", {
-                params: { page: 1, limit: 2000, zoneId },
-              })
+              params: { page: 1, limit: 2000, zoneId },
+            })
             : Promise.resolve({ data: { data: [] } }),
         ]);
 
@@ -105,12 +106,12 @@ export default function CategoryDirectoryPage() {
         const zoneScopedProducts = rawProducts.filter((product) => {
           const productStoreId = String(
             product?.storeId?._id ||
-              product?.storeId?.id ||
-              product?.storeId ||
-              product?.restaurantId?._id ||
-              product?.restaurantId?.id ||
-              product?.restaurantId ||
-              ""
+            product?.storeId?.id ||
+            product?.storeId ||
+            product?.restaurantId?._id ||
+            product?.restaurantId?.id ||
+            product?.restaurantId ||
+            ""
           ).trim();
 
           if (allowedStoreIds.size === 0) return false;
@@ -238,16 +239,19 @@ export default function CategoryDirectoryPage() {
 
       {/* Search Bar */}
       <div className="px-4 mt-4 mb-2 md:max-w-xl md:mx-auto">
-        <div className="bg-gray-100 rounded-xl h-11 flex items-center px-4 shadow-sm w-full">
-          <Search className="text-slate-400 w-5 h-5 stroke-[2.5] mr-3" />
+        <div className="bg-gray-100 rounded-xl h-11 flex items-center px-4 shadow-sm w-full cursor-text relative">
+          <label htmlFor="category-search" className="cursor-text absolute inset-0 z-0"></label>
+          <Search className="text-slate-400 w-5 h-5 stroke-[2.5] mr-3 z-10 pointer-events-none" />
           <input
+            id="category-search"
             type="text"
-            placeholder='Search "milk"'
-            className="flex-1 bg-transparent text-slate-800 text-[14px] font-semibold outline-none placeholder:text-slate-400"
-            disabled
+            placeholder='Search categories...'
+            className="flex-1 bg-transparent text-slate-800 text-[14px] font-semibold outline-none placeholder:text-slate-400 z-10"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
           />
-          <div className="w-[1px] h-5 bg-slate-200 mx-2"></div>
-          <Mic className="text-slate-400 w-5 h-5 stroke-[2.5]" />
+          <div className="w-[1px] h-5 bg-slate-200 mx-2 z-10 pointer-events-none"></div>
+          <Mic className="text-slate-400 w-5 h-5 stroke-[2.5] z-10 pointer-events-none" />
         </div>
       </div>
 
@@ -263,42 +267,65 @@ export default function CategoryDirectoryPage() {
           <p className="text-sm text-slate-500 px-1 py-3">No categories available.</p>
         )}
 
-        {categories.map((section) => (
-          <div key={section._id} className="mb-6">
-            <h2 className="text-[15px] font-[800] text-slate-800 mb-3 ml-1">
-              {section.name}
-            </h2>
-            <div className="grid grid-cols-4 gap-x-2 gap-y-6 md:grid-cols-6 lg:grid-cols-8 md:gap-6">
-              {(section.subcategories || []).map((item) => (
-                <Link
-                  key={item._id}
-                  to={`/grocery/subcategory/${item._id}`}
-                  className="flex flex-col items-center gap-2 cursor-pointer group"
-                >
-                  <div className="w-full aspect-square bg-[#e6f7f5] rounded-2xl p-2.5 flex items-center justify-center relative overflow-hidden group-hover:bg-[#d8edd6] transition-colors">
-                    {item.image ? (
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="w-full h-full object-contain drop-shadow-[0_10px_8px_rgba(0,0,0,0.2)]"
-                      />
-                    ) : (
-                      <div className="w-full h-full rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-2xl font-black">
-                        {(item.name || "?").slice(0, 1).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-[10px] font-bold text-center text-slate-800 leading-tight px-1 break-words w-full">
-                    {item.name}
-                  </span>
-                </Link>
-              ))}
+        {categories.map((rawSection) => {
+          const query = searchQuery.toLowerCase().trim();
+          let section = rawSection;
+          let isSectionMatch = false;
+
+          if (query) {
+            isSectionMatch = (rawSection.name || "").toLowerCase().includes(query);
+            const matchingSubcategories = (rawSection.subcategories || []).filter((sub) =>
+              (sub.name || "").toLowerCase().includes(query)
+            );
+
+            if (!isSectionMatch && matchingSubcategories.length === 0) {
+              return null; // Skip this section fully if nothing matched
+            }
+
+            section = {
+              ...rawSection,
+              // If the main section name matches, show all its subcategories. Otherwise, show only matching subcategories.
+              subcategories: isSectionMatch ? rawSection.subcategories : matchingSubcategories,
+            };
+          }
+
+          return (
+            <div key={section._id} className="mb-6">
+              <h2 className="text-[15px] font-[800] text-slate-800 mb-3 ml-1">
+                {section.name}
+              </h2>
+              <div className="grid grid-cols-4 gap-x-2 gap-y-6 md:grid-cols-6 lg:grid-cols-8 md:gap-6">
+                {(section.subcategories || []).map((item) => (
+                  <Link
+                    key={item._id}
+                    to={`/grocery/subcategory/${item._id}`}
+                    className="flex flex-col items-center gap-2 cursor-pointer group"
+                  >
+                    <div className="w-full aspect-square bg-[#e6f7f5] rounded-2xl p-2.5 flex items-center justify-center relative overflow-hidden group-hover:bg-[#d8edd6] transition-colors">
+                      {item.image ? (
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-full h-full object-contain drop-shadow-[0_10px_8px_rgba(0,0,0,0.2)]"
+                        />
+                      ) : (
+                        <div className="w-full h-full rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-2xl font-black">
+                          {(item.name || "?").slice(0, 1).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[10px] font-bold text-center text-slate-800 leading-tight px-1 break-words w-full">
+                      {item.name}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+              {(!section.subcategories || section.subcategories.length === 0) && (
+                <p className="text-xs text-slate-500 ml-1">No subcategories available.</p>
+              )}
             </div>
-            {(!section.subcategories || section.subcategories.length === 0) && (
-              <p className="text-xs text-slate-500 ml-1">No subcategories available.</p>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Bottom Navigation */}

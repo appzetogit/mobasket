@@ -10,7 +10,7 @@ export const authenticate = async (req, res, next) => {
   try {
     // Get token from Authorization header
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return errorResponse(res, 401, 'No token provided');
     }
@@ -27,7 +27,7 @@ export const authenticate = async (req, res, next) => {
 
     // Get restaurant from database
     const restaurant = await Restaurant.findById(decoded.userId).select('-password');
-    
+
     if (!restaurant) {
       console.error('❌ Restaurant not found in database:', {
         userId: decoded.userId,
@@ -46,10 +46,10 @@ export const authenticate = async (req, res, next) => {
     const requestPath = req.originalUrl || req.url || '';
     const reqPath = req.path || '';
     const baseUrl = req.baseUrl || '';
-    
+
     // Check for onboarding routes (can be /onboarding or /api/restaurant/onboarding)
     const isOnboardingRoute = requestPath.includes('/onboarding') || reqPath === '/onboarding' || reqPath.includes('onboarding');
-    
+
     // Check for profile/auth routes
     // Note: /auth/me and /auth/reverify are handled by restaurantAuthRoutes mounted at /auth, so:
     // - Full path: /api/restaurant/auth/me or /api/restaurant/auth/reverify
@@ -60,27 +60,27 @@ export const authenticate = async (req, res, next) => {
     // - /api/restaurant/profile
     // - /api/restaurant/profile/image
     // - /api/restaurant/profile/menu-image
-    const isProfileRoute = requestPath.includes('/auth/me') || requestPath.includes('/auth/reverify') || 
-                          requestPath.includes('/profile') ||
-                          requestPath.includes('/owner/me') || 
-                          reqPath === '/me' || reqPath === '/reverify' || reqPath === '/owner/me' ||
-                          reqPath === '/profile' || reqPath.startsWith('/profile/') ||
-                          (baseUrl.includes('/auth') && (reqPath === '/me' || reqPath === '/reverify'));
-    
+    const isProfileRoute = requestPath.includes('/auth/me') || requestPath.includes('/auth/reverify') ||
+      requestPath.includes('/profile') ||
+      requestPath.includes('/owner/me') ||
+      reqPath === '/me' || reqPath === '/reverify' || reqPath === '/owner/me' ||
+      reqPath === '/profile' || reqPath.startsWith('/profile/') ||
+      (baseUrl.includes('/auth') && (reqPath === '/me' || reqPath === '/reverify'));
+
     // Check for menu routes - restaurants need to access menu even when inactive
     // They might need to set up menu during onboarding or after approval
     // Routes: /api/restaurant/menu, /api/restaurant/menu/section, /api/restaurant/menu/item/schedule, etc.
-    const isMenuRoute = requestPath.includes('/menu') || 
-                       reqPath === '/menu' || 
-                       reqPath.startsWith('/menu/') ||
-                       baseUrl.includes('/menu');
-    
+    const isMenuRoute = requestPath.includes('/menu') ||
+      reqPath === '/menu' ||
+      reqPath.startsWith('/menu/') ||
+      baseUrl.includes('/menu');
+
     // Check for inventory routes - restaurants need to manage inventory even when inactive
     // Routes: /api/restaurant/inventory
-    const isInventoryRoute = requestPath.includes('/inventory') || 
-                            reqPath === '/inventory' ||
-                            reqPath.startsWith('/inventory/');
-    
+    const isInventoryRoute = requestPath.includes('/inventory') ||
+      reqPath === '/inventory' ||
+      reqPath.startsWith('/inventory/');
+
     // Debug logging for inactive restaurants
     if (!restaurant.isActive) {
       console.log('🔍 Inactive restaurant route check:', {
@@ -99,7 +99,7 @@ export const authenticate = async (req, res, next) => {
         willAllow: isOnboardingRoute || isProfileRoute || isMenuRoute || isInventoryRoute
       });
     }
-    
+
     // Allow access to onboarding, profile, menu, and inventory routes even if inactive
     // These are essential for restaurant setup and management
     // Also allow access to getCurrentRestaurant endpoint (used to check status)
@@ -126,7 +126,7 @@ export const authenticate = async (req, res, next) => {
     // Attach restaurant to request
     req.restaurant = restaurant;
     req.token = decoded;
-    
+
     next();
   } catch (error) {
     return errorResponse(res, 401, error.message || 'Invalid token');

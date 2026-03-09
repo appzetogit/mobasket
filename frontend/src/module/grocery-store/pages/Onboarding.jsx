@@ -67,11 +67,14 @@ export default function GroceryStoreOnboarding() {
   const location = useLocation()
   const searchParams = useMemo(() => new URLSearchParams(location.search), [location.search])
   const isFreshStepOne = searchParams.get("step") === "1"
+  const isEditing = searchParams.get("edit") === "true"
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const [showBackPopup, setShowBackPopup] = useState(false)
   const [form, setForm] = useState(createInitialForm)
+  const [fieldErrors, setFieldErrors] = useState({})
+
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
   const markerRef = useRef(null)
@@ -398,10 +401,10 @@ export default function GroceryStoreOnboarding() {
           })
           setLocationSearch(
             source.location?.formattedAddress ||
-              store?.location?.formattedAddress ||
-              source.location?.address ||
-              store?.location?.address ||
-              ""
+            store?.location?.formattedAddress ||
+            source.location?.address ||
+            store?.location?.address ||
+            ""
           )
         }
 
@@ -421,6 +424,22 @@ export default function GroceryStoreOnboarding() {
     }
     fetchData()
   }, [isFreshStepOne])
+
+  const validateImage = (file) => {
+    if (!file) return "No file selected";
+
+    const validFormats = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
+    if (!validFormats.includes(file.type)) {
+      return "Only JPG, JPEG, PNG, or WEBP formats are allowed";
+    }
+
+    const maxSize = 2 * 1024 * 1024;
+    if (file.size > maxSize) {
+      return "Maximum file size is 2MB";
+    }
+
+    return "";
+  };
 
   useEffect(() => {
     if (!mapInstanceRef.current) return
@@ -488,6 +507,13 @@ export default function GroceryStoreOnboarding() {
     const file = e.target.files?.[0]
     if (!file) return
 
+    const imageError = validateImage(file);
+    if (imageError) {
+      toast.error(imageError);
+      e.target.value = "";
+      return;
+    }
+
     try {
       setSaving(true)
       const uploaded = await handleUpload(file, "mobasket/grocery-store/store")
@@ -504,6 +530,15 @@ export default function GroceryStoreOnboarding() {
   const handleAdditionalImageChange = async (e) => {
     const files = Array.from(e.target.files || [])
     if (!files.length) return
+
+    for (const file of files) {
+      const imageError = validateImage(file);
+      if (imageError) {
+        toast.error(imageError);
+        e.target.value = "";
+        return;
+      }
+    }
 
     try {
       setSaving(true)
@@ -524,8 +559,66 @@ export default function GroceryStoreOnboarding() {
     }
   }
 
+  const validateFieldRealTime = (field, value) => {
+    let error = "";
+    const val = value ? value.trim() : "";
+
+    switch (field) {
+      case "storeName":
+        if (!val) error = "Store name is required";
+        else if (val.length < 3) error = "Minimum 3 characters required";
+        else if (val.length > 100) error = "Maximum 100 characters allowed";
+        else if (!/^[a-zA-Z0-9\s&-]+$/.test(val)) error = "Only letters, numbers, spaces, &, and - allowed";
+        break;
+      case "ownerName":
+        if (!val) error = "Owner name is required";
+        else if (val.length < 3) error = "Minimum 3 characters required";
+        else if (val.length > 60) error = "Maximum 60 characters allowed";
+        else if (!/^[a-zA-Z\s]+$/.test(val)) error = "Only alphabets and spaces allowed";
+        break;
+      case "ownerEmail":
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!val) error = "Owner email is required";
+        else if (/\s/.test(val)) error = "No spaces allowed in email";
+        else if (!emailRegex.test(val)) error = "Please enter a valid email";
+        break;
+      case "ownerPhone":
+      case "primaryContactNumber":
+        if (!val) error = "Phone number is required";
+        else if (!/^\d+$/.test(val)) error = "Only digits allowed";
+        else if (val.length !== 10) error = "Must be exactly 10 digits";
+        break;
+      case "addressLine1":
+        if (!val) error = "Address line 1 is required";
+        else if (val.length < 5) error = "Minimum 5 characters required";
+        else if (val.length > 150) error = "Maximum 150 characters allowed";
+        break;
+      case "addressLine2":
+        if (val && val.length > 150) error = "Maximum 150 characters allowed";
+        break;
+      case "area":
+      case "city":
+      case "state":
+        if (!val) error = `${field.charAt(0).toUpperCase() + field.slice(1)} is required`;
+        else if (val.length < 2) error = "Minimum 2 characters required";
+        else if (val.length > 80) error = "Maximum 80 characters allowed";
+        else if (!/^[a-zA-Z\s]+$/.test(val)) error = "Only alphabets and spaces allowed";
+        break;
+      case "zipCode":
+        if (!val) error = "ZIP / postal code is required";
+        else if (!/^\d+$/.test(val)) error = "Only digits allowed";
+        else if (val.length !== 6) error = "Must be exactly 6 digits";
+        break;
+      case "landmark":
+        if (val && val.length > 120) error = "Maximum 120 characters allowed";
+        break;
+    }
+    setFieldErrors(prev => ({ ...prev, [field]: error }));
+  };
+
   const handleFieldChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }))
+    validateFieldRealTime(field, value);
   }
 
   const handleLocationChange = (field, value) => {
@@ -536,6 +629,7 @@ export default function GroceryStoreOnboarding() {
         [field]: value,
       },
     }))
+    validateFieldRealTime(field, value);
   }
 
   const removeStoreImage = () => {
@@ -550,20 +644,81 @@ export default function GroceryStoreOnboarding() {
   }
 
   const validate = () => {
-    if (!form.storeName.trim()) return "Store name is required"
-    if (!form.ownerName.trim()) return "Owner name is required"
-    if (!form.ownerEmail.trim()) return "Owner email is required"
-    if (!form.ownerPhone.trim()) return "Owner phone is required"
-    if (!form.primaryContactNumber.trim()) return "Primary contact number is required"
-    if (!form.location.addressLine1.trim()) return "Address line 1 is required"
-    if (!form.location.area.trim()) return "Area is required"
-    if (!form.location.city.trim()) return "City is required"
-    if (!form.location.state.trim()) return "State is required"
-    if (!form.location.zipCode.trim()) return "ZIP / postal code is required"
+    const errors = {};
+    const tr = (val) => val ? val.trim() : "";
+
+    const sName = tr(form.storeName);
+    if (!sName) errors.storeName = "Store name is required";
+    else if (sName.length < 3) errors.storeName = "Minimum 3 characters required";
+    else if (sName.length > 100) errors.storeName = "Maximum 100 characters allowed";
+    else if (!/^[a-zA-Z0-9\s&-]+$/.test(sName)) errors.storeName = "Only letters, numbers, spaces, &, and - allowed";
+
+    const oName = tr(form.ownerName);
+    if (!oName) errors.ownerName = "Owner name is required";
+    else if (oName.length < 3) errors.ownerName = "Minimum 3 characters required";
+    else if (oName.length > 60) errors.ownerName = "Maximum 60 characters allowed";
+    else if (!/^[a-zA-Z\s]+$/.test(oName)) errors.ownerName = "Only alphabets and spaces allowed";
+
+    const oEmail = tr(form.ownerEmail);
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!oEmail) errors.ownerEmail = "Owner email is required";
+    else if (/\s/.test(oEmail)) errors.ownerEmail = "No spaces allowed in email";
+    else if (!emailRegex.test(oEmail)) errors.ownerEmail = "Please enter a valid email";
+
+    const oPhone = tr(form.ownerPhone);
+    if (!oPhone) errors.ownerPhone = "Owner phone is required";
+    else if (!/^\d+$/.test(oPhone)) errors.ownerPhone = "Only digits allowed";
+    else if (oPhone.length !== 10) errors.ownerPhone = "Must be exactly 10 digits";
+
+    const pPhone = tr(form.primaryContactNumber);
+    if (!pPhone) errors.primaryContactNumber = "Primary contact number is required";
+    else if (!/^\d+$/.test(pPhone)) errors.primaryContactNumber = "Only digits allowed";
+    else if (pPhone.length !== 10) errors.primaryContactNumber = "Must be exactly 10 digits";
+
+    const addr1 = tr(form.location.addressLine1);
+    if (!addr1) errors.addressLine1 = "Address line 1 is required";
+    else if (addr1.length < 5) errors.addressLine1 = "Minimum 5 characters required";
+    else if (addr1.length > 150) errors.addressLine1 = "Maximum 150 characters allowed";
+
+    const addr2 = tr(form.location.addressLine2);
+    if (addr2 && addr2.length > 150) errors.addressLine2 = "Maximum 150 characters allowed";
+
+    const area = tr(form.location.area);
+    if (!area) errors.area = "Area is required";
+    else if (area.length < 2) errors.area = "Minimum 2 characters required";
+    else if (area.length > 80) errors.area = "Maximum 80 characters allowed";
+    else if (!/^[a-zA-Z\s]+$/.test(area)) errors.area = "Only alphabets and spaces allowed";
+
+    const city = tr(form.location.city);
+    if (!city) errors.city = "City is required";
+    else if (city.length < 2) errors.city = "Minimum 2 characters required";
+    else if (city.length > 80) errors.city = "Maximum 80 characters allowed";
+    else if (!/^[a-zA-Z\s]+$/.test(city)) errors.city = "Only alphabets and spaces allowed";
+
+    const state = tr(form.location.state);
+    if (!state) errors.state = "State is required";
+    else if (state.length < 2) errors.state = "Minimum 2 characters required";
+    else if (state.length > 80) errors.state = "Maximum 80 characters allowed";
+    else if (!/^[a-zA-Z\s]+$/.test(state)) errors.state = "Only alphabets and spaces allowed";
+
+    const zip = tr(form.location.zipCode);
+    if (!zip) errors.zipCode = "ZIP / postal code is required";
+    else if (!/^\d+$/.test(zip)) errors.zipCode = "Only digits allowed";
+    else if (zip.length !== 6) errors.zipCode = "Must be exactly 6 digits";
+
+    const landmark = tr(form.location.landmark);
+    if (landmark && landmark.length > 120) errors.landmark = "Maximum 120 characters allowed";
+
     if (!Number.isFinite(Number(form.location.latitude)) || !Number.isFinite(Number(form.location.longitude))) {
-      return "Please pinpoint the store location on the map"
+      errors.location = "Please pinpoint the store location on the map"
     }
-    return ""
+
+    setFieldErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      return Object.values(errors)[0]; // Return the first error string for the toast
+    }
+    return "";
   }
 
   const handleSubmit = async () => {
@@ -638,8 +793,8 @@ export default function GroceryStoreOnboarding() {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col">
       <header className="px-4 py-4 sm:px-6 sm:py-5 bg-white flex items-center justify-between">
-        <div className="text-sm font-semibold text-black">{companyName || "Grocery Store"} onboarding</div>
-        <div className="text-xs text-gray-600">Step 1 of 1</div>
+        <div className="text-sm font-semibold text-black">{isEditing ? "Edit Profile" : `${companyName || "Grocery Store"} onboarding`}</div>
+        <div className="text-xs text-gray-600">{!isEditing && "Step 1 of 1"}</div>
       </header>
 
       <main className="flex-1 px-4 sm:px-6 py-4 space-y-4">
@@ -658,33 +813,38 @@ export default function GroceryStoreOnboarding() {
                   <span className="text-xs font-medium text-gray-700">Store name <span className="text-red-500 ml-0.5">*</span></span>
                   <div className="relative">
                     <Store className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                    <Input value={form.storeName} onChange={(e) => handleFieldChange("storeName", e.target.value)} className="pl-10" />
+                    <Input value={form.storeName} onChange={(e) => handleFieldChange("storeName", e.target.value)} className={`pl-10 ${fieldErrors.storeName ? "border-red-500 focus-visible:ring-red-500" : ""}`} />
                   </div>
+                  {fieldErrors.storeName && <p className="text-xs text-red-500 mt-1">{fieldErrors.storeName}</p>}
                 </label>
                 <label className="space-y-2">
                   <span className="text-xs font-medium text-gray-700">Owner name <span className="text-red-500 ml-0.5">*</span></span>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                    <Input value={form.ownerName} onChange={(e) => handleFieldChange("ownerName", e.target.value)} className="pl-10" />
+                    <Input value={form.ownerName} onChange={(e) => handleFieldChange("ownerName", e.target.value)} className={`pl-10 ${fieldErrors.ownerName ? "border-red-500 focus-visible:ring-red-500" : ""}`} />
                   </div>
+                  {fieldErrors.ownerName && <p className="text-xs text-red-500 mt-1">{fieldErrors.ownerName}</p>}
                 </label>
                 <label className="space-y-2">
                   <span className="text-xs font-medium text-gray-700">Owner email <span className="text-red-500 ml-0.5">*</span></span>
-                  <Input type="email" value={form.ownerEmail} onChange={(e) => handleFieldChange("ownerEmail", e.target.value)} />
+                  <Input type="email" value={form.ownerEmail} onChange={(e) => handleFieldChange("ownerEmail", e.target.value)} className={fieldErrors.ownerEmail ? "border-red-500 focus-visible:ring-red-500" : ""} />
+                  {fieldErrors.ownerEmail && <p className="text-xs text-red-500 mt-1">{fieldErrors.ownerEmail}</p>}
                 </label>
                 <label className="space-y-2">
                   <span className="text-xs font-medium text-gray-700">Owner phone <span className="text-red-500 ml-0.5">*</span></span>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                    <Input value={form.ownerPhone} onChange={(e) => handleFieldChange("ownerPhone", e.target.value)} className="pl-10" />
+                    <Input value={form.ownerPhone} onChange={(e) => handleFieldChange("ownerPhone", e.target.value)} className={`pl-10 ${fieldErrors.ownerPhone ? "border-red-500 focus-visible:ring-red-500" : ""}`} />
                   </div>
+                  {fieldErrors.ownerPhone && <p className="text-xs text-red-500 mt-1">{fieldErrors.ownerPhone}</p>}
                 </label>
                 <label className="space-y-2 sm:col-span-2">
                   <span className="text-xs font-medium text-gray-700">Primary contact number <span className="text-red-500 ml-0.5">*</span></span>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                    <Input value={form.primaryContactNumber} onChange={(e) => handleFieldChange("primaryContactNumber", e.target.value)} className="pl-10" />
+                    <Input value={form.primaryContactNumber} onChange={(e) => handleFieldChange("primaryContactNumber", e.target.value)} className={`pl-10 ${fieldErrors.primaryContactNumber ? "border-red-500 focus-visible:ring-red-500" : ""}`} />
                   </div>
+                  {fieldErrors.primaryContactNumber && <p className="text-xs text-red-500 mt-1">{fieldErrors.primaryContactNumber}</p>}
                 </label>
               </div>
             </section>
@@ -696,32 +856,39 @@ export default function GroceryStoreOnboarding() {
                   <span className="text-xs font-medium text-gray-700">Address line 1 <span className="text-red-500 ml-0.5">*</span></span>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                    <Input value={form.location.addressLine1} onChange={(e) => handleLocationChange("addressLine1", e.target.value)} className="pl-10" />
+                    <Input value={form.location.addressLine1} onChange={(e) => handleLocationChange("addressLine1", e.target.value)} className={`pl-10 ${fieldErrors.addressLine1 ? "border-red-500 focus-visible:ring-red-500" : ""}`} />
                   </div>
+                  {fieldErrors.addressLine1 && <p className="text-xs text-red-500 mt-1">{fieldErrors.addressLine1}</p>}
                 </label>
                 <label className="space-y-2 sm:col-span-2">
                   <span className="text-xs font-medium text-gray-700">Address line 2</span>
-                  <Input value={form.location.addressLine2} onChange={(e) => handleLocationChange("addressLine2", e.target.value)} />
+                  <Input value={form.location.addressLine2} onChange={(e) => handleLocationChange("addressLine2", e.target.value)} className={fieldErrors.addressLine2 ? "border-red-500 focus-visible:ring-red-500" : ""} />
+                  {fieldErrors.addressLine2 && <p className="text-xs text-red-500 mt-1">{fieldErrors.addressLine2}</p>}
                 </label>
                 <label className="space-y-2">
                   <span className="text-xs font-medium text-gray-700">Area <span className="text-red-500 ml-0.5">*</span></span>
-                  <Input value={form.location.area} onChange={(e) => handleLocationChange("area", e.target.value)} />
+                  <Input value={form.location.area} onChange={(e) => handleLocationChange("area", e.target.value)} className={fieldErrors.area ? "border-red-500 focus-visible:ring-red-500" : ""} />
+                  {fieldErrors.area && <p className="text-xs text-red-500 mt-1">{fieldErrors.area}</p>}
                 </label>
                 <label className="space-y-2">
                   <span className="text-xs font-medium text-gray-700">City <span className="text-red-500 ml-0.5">*</span></span>
-                  <Input value={form.location.city} onChange={(e) => handleLocationChange("city", e.target.value)} />
+                  <Input value={form.location.city} onChange={(e) => handleLocationChange("city", e.target.value)} className={fieldErrors.city ? "border-red-500 focus-visible:ring-red-500" : ""} />
+                  {fieldErrors.city && <p className="text-xs text-red-500 mt-1">{fieldErrors.city}</p>}
                 </label>
                 <label className="space-y-2">
                   <span className="text-xs font-medium text-gray-700">State <span className="text-red-500 ml-0.5">*</span></span>
-                  <Input value={form.location.state} onChange={(e) => handleLocationChange("state", e.target.value)} />
+                  <Input value={form.location.state} onChange={(e) => handleLocationChange("state", e.target.value)} className={fieldErrors.state ? "border-red-500 focus-visible:ring-red-500" : ""} />
+                  {fieldErrors.state && <p className="text-xs text-red-500 mt-1">{fieldErrors.state}</p>}
                 </label>
                 <label className="space-y-2">
                   <span className="text-xs font-medium text-gray-700">ZIP / postal code <span className="text-red-500 ml-0.5">*</span></span>
-                  <Input value={form.location.zipCode} onChange={(e) => handleLocationChange("zipCode", e.target.value)} />
+                  <Input value={form.location.zipCode} onChange={(e) => handleLocationChange("zipCode", e.target.value)} className={fieldErrors.zipCode ? "border-red-500 focus-visible:ring-red-500" : ""} />
+                  {fieldErrors.zipCode && <p className="text-xs text-red-500 mt-1">{fieldErrors.zipCode}</p>}
                 </label>
                 <label className="space-y-2 sm:col-span-2">
                   <span className="text-xs font-medium text-gray-700">Landmark</span>
-                  <Input value={form.location.landmark} onChange={(e) => handleLocationChange("landmark", e.target.value)} />
+                  <Input value={form.location.landmark} onChange={(e) => handleLocationChange("landmark", e.target.value)} className={fieldErrors.landmark ? "border-red-500 focus-visible:ring-red-500" : ""} />
+                  {fieldErrors.landmark && <p className="text-xs text-red-500 mt-1">{fieldErrors.landmark}</p>}
                 </label>
               </div>
             </section>
@@ -836,7 +1003,7 @@ export default function GroceryStoreOnboarding() {
                     <Upload className="w-4 h-4" />
                     <span>{images.storeImage ? "Change" : "Upload"}</span>
                   </label>
-                  <input id="storeImageInput" type="file" accept="image/*" className="hidden" onChange={handleStoreImageChange} disabled={saving} />
+                  <input id="storeImageInput" type="file" accept="image/*" capture="environment" className="hidden" onChange={handleStoreImageChange} disabled={saving} />
                 </div>
               </div>
 
@@ -855,7 +1022,7 @@ export default function GroceryStoreOnboarding() {
                     <Upload className="w-6 h-6 text-gray-400 mb-1" />
                     <span className="text-xs text-gray-500">Add image</span>
                   </label>
-                  <input id="additionalImagesInput" type="file" accept="image/*" multiple className="hidden" onChange={handleAdditionalImageChange} disabled={saving} />
+                  <input id="additionalImagesInput" type="file" accept="image/*" capture="environment" className="hidden" onChange={handleAdditionalImageChange} disabled={saving} />
                 </div>
               </div>
             </section>
@@ -866,17 +1033,19 @@ export default function GroceryStoreOnboarding() {
       {error && <div className="px-4 sm:px-6 pb-2 text-xs text-red-600">{error}</div>}
 
       <footer className="px-4 sm:px-6 py-3 bg-white border-t border-gray-100">
-        <div className="flex justify-between items-center">
-          <Button
-            variant="ghost"
-            disabled={saving}
-            onClick={() => setShowBackPopup(true)}
-            className="text-sm text-gray-700 bg-transparent hover:bg-gray-50"
-          >
-            Back
-          </Button>
+        <div className={`flex ${isEditing ? 'justify-end' : 'justify-between'} items-center`}>
+          {!isEditing && (
+            <Button
+              variant="ghost"
+              disabled={saving}
+              onClick={() => setShowBackPopup(true)}
+              className="text-sm text-gray-700 bg-transparent hover:bg-gray-50"
+            >
+              Back
+            </Button>
+          )}
           <Button onClick={handleSubmit} disabled={saving} className="text-sm bg-black text-white px-6">
-            {saving ? "Saving..." : "Complete onboarding"}
+            {saving ? "Saving..." : (isEditing ? "Update" : "Complete onboarding")}
           </Button>
         </div>
       </footer>

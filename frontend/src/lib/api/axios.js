@@ -368,13 +368,13 @@ apiClient.interceptors.response.use(
       const token = response.data.accessToken;
       const role = getRoleFromToken(token);
 
-          // Only store the token if the role matches the current module
-          // For grocery stores, accept restaurant role since they use the same backend role
-          if (!role || (role !== expectedRole && !(currentModule === "grocery-store" && role === "restaurant"))) {
-            // Role mismatch - silently ignore
-          } else {
-            localStorage.setItem(tokenKey, token);
-          }
+      // Only store the token if the role matches the current module
+      // For grocery stores, accept restaurant role since they use the same backend role
+      if (!role || (role !== expectedRole && !(currentModule === "grocery-store" && role === "restaurant"))) {
+        // Role mismatch - silently ignore
+      } else {
+        localStorage.setItem(tokenKey, token);
+      }
     }
     return response;
   },
@@ -476,7 +476,7 @@ apiClient.interceptors.response.use(
           originalRequest.headers.Authorization = `Bearer ${accessToken}`;
           return apiClient(originalRequest);
         }
-        } catch (refreshError) {
+      } catch (refreshError) {
         // Show error toast in development mode for refresh errors
         if (import.meta.env.DEV) {
           const refreshErrorMessage =
@@ -663,12 +663,12 @@ apiClient.interceptors.response.use(
         const timeSinceLastError = now - networkErrorState.lastErrorTime;
         const timeSinceLastToast = now - networkErrorState.lastToastTime;
 
-          // Only log console errors if cooldown period has passed
-          if (timeSinceLastError >= networkErrorState.COOLDOWN_PERIOD) {
-            networkErrorState.errorCount++;
-            networkErrorState.lastErrorTime = now;
-            // Network error logging removed - errors handled via toast notifications
-          }
+        // Only log console errors if cooldown period has passed
+        if (timeSinceLastError >= networkErrorState.COOLDOWN_PERIOD) {
+          networkErrorState.errorCount++;
+          networkErrorState.lastErrorTime = now;
+          // Network error logging removed - errors handled via toast notifications
+        }
 
         // Only show toast if cooldown period has passed
         if (timeSinceLastToast >= networkErrorState.TOAST_COOLDOWN_PERIOD) {

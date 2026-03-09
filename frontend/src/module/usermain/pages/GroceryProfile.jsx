@@ -9,14 +9,11 @@ import {
   Moon,
   EyeOff,
   MapPin,
-  Bookmark,
   Heart,
   FileText,
   Gift,
   Pill,
   CreditCard,
-  Ticket,
-  Trophy,
   HeartHandshake,
   Share2,
   Info,
@@ -277,11 +274,6 @@ const GroceryProfile = () => {
             onClick={() => navigate("/profile")}
           />
           <MenuItem
-            icon={Bookmark}
-            title="Bookmarked recipes"
-            onClick={() => navigate("/profile/favorites")}
-          />
-          <MenuItem
             icon={Heart}
             title="Your wishlist"
             onClick={() => navigate("/wishlist")}
@@ -300,11 +292,7 @@ const GroceryProfile = () => {
 
         <div className="bg-white dark:bg-[#1a1a1a] mx-4 rounded-3xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-800 mb-6">
           <SectionTitle title="Payment and coupons" />
-          <MenuItem
-            icon={Wallet}
-            title="Wallet"
-            onClick={() => navigate("/wallet")}
-          />
+
           <MenuItem
             icon={Wallet}
             title="MoBasket Money"
@@ -316,12 +304,6 @@ const GroceryProfile = () => {
             title="Payment settings"
             onClick={() => navigate("/profile/payments")}
           />
-          <MenuItem
-            icon={Ticket}
-            title="Claim Gift card"
-            onClick={() => navigate("/gift-card")}
-          />
-          <MenuItem icon={Trophy} title="Your collected rewards" />
         </div>
 
         <div className="bg-white dark:bg-[#1a1a1a] mx-4 rounded-3xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-800 mb-8">

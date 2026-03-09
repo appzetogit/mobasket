@@ -27,20 +27,20 @@ const extractAddressCoordinates = (address) => {
 
   const latitude = Number(
     address?.latitude ??
-      address?.lat ??
-      address?.location?.latitude ??
-      address?.location?.lat ??
-      (locationCoordinates ? locationCoordinates[1] : undefined) ??
-      (directCoordinates ? directCoordinates[1] : undefined),
+    address?.lat ??
+    address?.location?.latitude ??
+    address?.location?.lat ??
+    (locationCoordinates ? locationCoordinates[1] : undefined) ??
+    (directCoordinates ? directCoordinates[1] : undefined),
   );
 
   const longitude = Number(
     address?.longitude ??
-      address?.lng ??
-      address?.location?.longitude ??
-      address?.location?.lng ??
-      (locationCoordinates ? locationCoordinates[0] : undefined) ??
-      (directCoordinates ? directCoordinates[0] : undefined),
+    address?.lng ??
+    address?.location?.longitude ??
+    address?.location?.lng ??
+    (locationCoordinates ? locationCoordinates[0] : undefined) ??
+    (directCoordinates ? directCoordinates[0] : undefined),
   );
 
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
@@ -302,23 +302,23 @@ const GroceryCartPage = () => {
         itemId,
         storeId: String(
           item?.storeId?._id ||
-            item?.storeId?.id ||
-            item?.storeId ||
-            item?.restaurantId?._id ||
-            item?.restaurantId?.id ||
-            item?.restaurantId ||
-            resolvedRestaurant?.restaurantId ||
-            "",
+          item?.storeId?.id ||
+          item?.storeId ||
+          item?.restaurantId?._id ||
+          item?.restaurantId?.id ||
+          item?.restaurantId ||
+          resolvedRestaurant?.restaurantId ||
+          "",
         ).trim(),
         restaurantId: String(
           item?.restaurantId?._id ||
-            item?.restaurantId?.id ||
-            item?.restaurantId ||
-            item?.storeId?._id ||
-            item?.storeId?.id ||
-            item?.storeId ||
-            resolvedRestaurant?.restaurantId ||
-            "",
+          item?.restaurantId?.id ||
+          item?.restaurantId ||
+          item?.storeId?._id ||
+          item?.storeId?.id ||
+          item?.storeId ||
+          resolvedRestaurant?.restaurantId ||
+          "",
         ).trim(),
         name: item.name,
         price: Number(item.price || 0),
@@ -472,7 +472,7 @@ const GroceryCartPage = () => {
   const shouldShowPlanAnimation = hasActivePlanSubscription || isMoGoldPlanApplied;
   const grandTotal = Number(
     calculatedPricing?.total ??
-      subtotal + summaryDeliveryFee + summaryPlatformFee + summaryTax - summaryDiscount,
+    subtotal + summaryDeliveryFee + summaryPlatformFee + summaryTax - summaryDiscount,
   );
   const isStoreOffline = !storeAvailability.isAvailable;
   const shouldDisableOrderNow =
@@ -643,7 +643,6 @@ const GroceryCartPage = () => {
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs">
               <div className="flex items-center gap-1.5 text-gray-600">
-                <span className="bg-gray-100 p-0.5 rounded text-[8px] border border-gray-200">BOX</span>
                 Items total
                 {totalSavings > 0 && (
                   <span className="text-yellow-700 bg-yellow-50 px-1.5 py-0.5 rounded-full text-[9px] font-bold">
@@ -732,11 +731,10 @@ const GroceryCartPage = () => {
           </div>
         )}
         <div
-          className={`rounded-xl flex items-center justify-between px-4 py-3 shadow-lg transition-all overflow-hidden border ${
-            shouldDisableOrderNow
+          className={`rounded-xl flex items-center justify-between px-4 py-3 shadow-lg transition-all overflow-hidden border ${shouldDisableOrderNow
               ? "bg-gray-200 border-gray-300 cursor-not-allowed"
               : "bg-[#facd01] border-yellow-400 active:scale-[0.98] cursor-pointer group"
-          }`}
+            }`}
         >
           <div className="flex flex-col">
             <span className="text-gray-900 font-bold text-sm">Rs {grandTotal}</span>
@@ -747,9 +745,8 @@ const GroceryCartPage = () => {
           <button
             type="button"
             disabled={shouldDisableOrderNow}
-            className={`flex items-center gap-1 font-bold text-base ${
-              shouldDisableOrderNow ? "text-gray-500 cursor-not-allowed" : "text-gray-900"
-            }`}
+            className={`flex items-center gap-1 font-bold text-base ${shouldDisableOrderNow ? "text-gray-500 cursor-not-allowed" : "text-gray-900"
+              }`}
             onClick={() => navigate("/grocery/checkout")}
           >
             {checkingStoreAvailability ? "Checking..." : "Order Now"} <ChevronRight size={20} />

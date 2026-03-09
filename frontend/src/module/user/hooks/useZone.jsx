@@ -39,17 +39,17 @@ export function useZone(location, platform = 'mofood') {
     try {
       setLoading(true)
       setError(null)
-      
+
       const response = await zoneAPI.detectZone(lat, lng, platform)
-      
+
       if (response.data?.success) {
         const data = response.data.data
-        
+
         if (data.status === 'IN_SERVICE' && data.zoneId) {
           setZoneId(data.zoneId)
           setZone(data.zone)
           setZoneStatus('IN_SERVICE')
-          
+
           // Store in localStorage for persistence
           localStorage.setItem(cacheKeysRef.current.zoneId, data.zoneId)
           localStorage.setItem(cacheKeysRef.current.zone, JSON.stringify(data.zone))
@@ -93,7 +93,7 @@ export function useZone(location, platform = 'mofood') {
       setZoneStatus('OUT_OF_SERVICE')
       setZoneId(null)
       setZone(null)
-      
+
       // Try to use cached zone if available
       const cachedZoneId = localStorage.getItem(cacheKeysRef.current.zoneId)
       if (cachedZoneId) {
@@ -114,7 +114,7 @@ export function useZone(location, platform = 'mofood') {
 
     // Check if coordinates have changed significantly (threshold: ~10 meters)
     const coordThreshold = 0.0001 // approximately 10 meters
-    const coordsChanged = 
+    const coordsChanged =
       !prevCoordsRef.current.latitude ||
       !prevCoordsRef.current.longitude ||
       Math.abs(prevCoordsRef.current.latitude - (lat || 0)) > coordThreshold ||

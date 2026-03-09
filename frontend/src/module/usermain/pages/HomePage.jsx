@@ -776,22 +776,22 @@ export default function HomePage() {
 
         const responses = zoneIdsToQuery.length > 0
           ? await Promise.all(
-              zoneIdsToQuery.map((currentZoneId) =>
-                restaurantAPI.getRestaurants({
-                  platform: "mofood",
-                  limit: 50,
-                  zoneId: currentZoneId,
-                  onlyZone: "true",
-                }),
-              ),
-            )
-          : [
-              await restaurantAPI.getRestaurants({
+            zoneIdsToQuery.map((currentZoneId) =>
+              restaurantAPI.getRestaurants({
                 platform: "mofood",
                 limit: 50,
-                ...(city && city !== "Current Location" ? { city } : {}),
+                zoneId: currentZoneId,
+                onlyZone: "true",
               }),
-            ];
+            ),
+          )
+          : [
+            await restaurantAPI.getRestaurants({
+              platform: "mofood",
+              limit: 50,
+              ...(city && city !== "Current Location" ? { city } : {}),
+            }),
+          ];
 
         const rawRestaurants = responses.flatMap((response) =>
           Array.isArray(response?.data?.data?.restaurants) ? response.data.data.restaurants : [],
@@ -1028,11 +1028,10 @@ export default function HomePage() {
               <button
                 key={index}
                 onClick={() => setCurrentSlide(index)}
-                className={`h-1.5 md:h-2 rounded-full transition-all duration-300 ${
-                  index === currentSlide
-                    ? "bg-[#ff8100] w-5 md:w-6"
-                    : "bg-white/50 w-1.5 md:w-2 hover:bg-white/70"
-                }`}
+                className={`h-1.5 md:h-2 rounded-full transition-all duration-300 ${index === currentSlide
+                  ? "bg-[#ff8100] w-5 md:w-6"
+                  : "bg-white/50 w-1.5 md:w-2 hover:bg-white/70"
+                  }`}
               />
             ))}
           </div>
@@ -1084,11 +1083,10 @@ export default function HomePage() {
                   }}
                 >
                   <Heart
-                    className={`w-4 h-4 transition-all ${
-                      isInWishlist(item, "food")
-                        ? "text-red-500 fill-red-500"
-                        : "text-gray-400 hover:text-red-500"
-                    }`}
+                    className={`w-4 h-4 transition-all ${isInWishlist(item, "food")
+                      ? "text-red-500 fill-red-500"
+                      : "text-gray-400 hover:text-red-500"
+                      }`}
                   />
                 </button>
               </div>
@@ -1139,25 +1137,25 @@ export default function HomePage() {
           </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
           {restaurantsLoading && (
-            <div className="col-span-full rounded-xl bg-white px-4 py-5 text-sm font-medium text-gray-500 shadow-sm">
+            <div className="col-span-full rounded-xl bg-white px-4 py-5 text-sm font-medium text-gray-500 shadow-sm text-center">
               Loading restaurants for your zones...
             </div>
           )}
           {!restaurantsLoading && popularRestaurants.length === 0 && (
-            <div className="col-span-full rounded-xl bg-white px-4 py-5 text-sm font-medium text-gray-500 shadow-sm">
+            <div className="col-span-full rounded-xl bg-white px-4 py-5 text-sm font-medium text-gray-500 shadow-sm text-center">
               No restaurants available in your zones right now.
             </div>
           )}
           {popularRestaurants.map((restaurant) => (
             <motion.div
               key={restaurant.id}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.4 }}
-              whileHover={{ y: -5 }}
-              className="w-full bg-white rounded-xl overflow-visible shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+              whileHover={{ y: -8, scale: 1.02 }}
+              className="w-full h-full bg-white rounded-2xl overflow-visible shadow-[0_4px_15px_rgba(0,0,0,0.05)] hover:shadow-xl transition-all duration-300 cursor-pointer flex flex-col"
               onClick={() => {
                 navigate(`/restaurants/${restaurant.slug}`);
               }}
@@ -1181,11 +1179,10 @@ export default function HomePage() {
                   }}
                 >
                   <Heart
-                    className={`w-4 h-4 transition-all ${
-                      isInWishlist(restaurant, "restaurant")
-                        ? "text-amber-700 fill-amber-700"
-                        : "text-gray-400 hover:text-amber-700"
-                    }`}
+                    className={`w-4 h-4 transition-all ${isInWishlist(restaurant, "restaurant")
+                      ? "text-amber-700 fill-amber-700"
+                      : "text-gray-400 hover:text-amber-700"
+                      }`}
                   />
                 </button>
                 {/* Distance Badge - Bottom Right (White Banner with Orange Border) */}
@@ -1197,35 +1194,37 @@ export default function HomePage() {
               </div>
 
               {/* Restaurant Details */}
-              <div className="p-3 pt-2 relative">
+              <div className="p-3 pt-4 relative flex-1 flex flex-col">
                 {/* Restaurant Icon - Half on image, half below (Overlapping) */}
-                <div className="absolute -top-5 left-3 w-10 h-10 bg-white border border-gray-300 rounded-lg flex items-center justify-center flex-shrink-0 shadow-md z-10">
+                <div className="absolute -top-6 left-4 w-12 h-12 bg-white border border-gray-100 rounded-xl flex items-center justify-center flex-shrink-0 shadow-[0_4px_10px_rgba(0,0,0,0.1)] z-10 transition-transform group-hover:scale-110">
                   {restaurant.restaurantIcon && (
-                    <restaurant.restaurantIcon className="w-5 h-5 text-[#ff8100]" />
+                    <restaurant.restaurantIcon className="w-6 h-6 text-[#ff8100]" />
                   )}
                 </div>
 
                 {/* Restaurant Name and Cuisines */}
-                <div className="ml-14 mb-2">
-                  <h4 className="text-sm font-bold text-gray-900 mb-1 line-clamp-1">
+                <div className="ml-16 mb-2 flex-1">
+                  <h4 className="text-base font-extrabold text-gray-900 mb-1 line-clamp-1 group-hover:text-[#ff8100] transition-colors">
                     {restaurant.name}
                   </h4>
-                  <p className="text-[10px] text-gray-600 line-clamp-2 leading-tight">
+                  <p className="text-[11px] text-gray-500 line-clamp-2 leading-relaxed">
                     {restaurant.cuisines}
                   </p>
                 </div>
 
                 {/* Rating and Time - Bottom Row with Orange Icons */}
-                <div className="flex items-center gap-3 mt-2 pt-2 border-t border-gray-100">
-                  <div className="flex items-center gap-1">
-                    <Star className="w-3.5 h-3.5 text-[#ff8100] fill-[#ff8100]" />
-                    <span className="text-xs font-semibold text-gray-900">
+                <div className="flex items-center gap-4 mt-auto pt-3 border-t border-gray-50">
+                  <div className="flex items-center gap-1.5">
+                    <div className="bg-orange-50 p-1 rounded-md">
+                      <Star className="w-3.5 h-3.5 text-[#ff8100] fill-[#ff8100]" />
+                    </div>
+                    <span className="text-xs font-bold text-gray-900">
                       {restaurant.rating}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1.5 ml-auto">
                     <Clock className="w-3.5 h-3.5 text-[#ff8100]" />
-                    <span className="text-xs text-gray-700">
+                    <span className="text-xs font-medium text-gray-600">
                       {restaurant.deliveryTime}
                     </span>
                   </div>

@@ -247,11 +247,11 @@ export default function GroceryBestSellerProductsPage() {
         variantName: defaultVariant?.name || "",
         selectedVariant: defaultVariant
           ? {
-              name: defaultVariant.name,
-              key: defaultVariant.key,
-              price: defaultVariant.price,
-              mrp: defaultVariant.mrp,
-            }
+            name: defaultVariant.name,
+            key: defaultVariant.key,
+            price: defaultVariant.price,
+            mrp: defaultVariant.mrp,
+          }
           : null,
         image,
         categoryId: String(
@@ -275,6 +275,7 @@ export default function GroceryBestSellerProductsPage() {
         restaurantAddress: storeAddress,
         restaurantLocation: storeLocation,
         platform: "mogrocery",
+        stockQuantity: product?.stockQuantity,
       }, sourcePosition);
       toast.success("Added to cart");
     } catch (err) {
@@ -358,46 +359,45 @@ export default function GroceryBestSellerProductsPage() {
             const alreadyInCart = cartItemId ? isInCart(cartItemId) : false;
 
             return (
-            <div
-              key={product._id}
-              className="rounded-2xl border border-slate-200 p-3 bg-white shadow-sm flex flex-col min-h-[240px] cursor-pointer hover:shadow-md transition-shadow"
-              onClick={() => handleProductCardClick(product)}
-            >
-              <div className="w-full aspect-square bg-slate-50 rounded-xl overflow-hidden mb-2 flex items-center justify-center">
-                <img
-                  src={Array.isArray(product.images) && product.images[0] ? product.images[0] : "https://via.placeholder.com/200"}
-                  alt={product.name}
-                  className="w-full h-full object-contain"
-                />
-              </div>
-              <p className="text-sm font-semibold text-slate-900 line-clamp-2">{product.name}</p>
-              <p className="text-xs text-[#2ca34a] font-semibold mt-1">{weight || "Unit not specified"}</p>
-              <div className="mt-auto pt-3">
-                <div className="flex items-end justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-slate-900">Rs {price}</p>
-                  {mrp > price && (
-                    <p className="text-xs text-slate-400 line-through">Rs {mrp}</p>
-                  )}
-                    {alreadyInCart && (
-                      <p className="text-[10px] font-semibold text-emerald-700 mt-1">Added to cart</p>
-                    )}
+              <div
+                key={product._id}
+                className="rounded-2xl border border-slate-200 p-3 bg-white shadow-sm flex flex-col min-h-[240px] cursor-pointer hover:shadow-md transition-shadow"
+                onClick={() => handleProductCardClick(product)}
+              >
+                <div className="w-full aspect-square bg-slate-50 rounded-xl overflow-hidden mb-2 flex items-center justify-center">
+                  <img
+                    src={Array.isArray(product.images) && product.images[0] ? product.images[0] : "https://via.placeholder.com/200"}
+                    alt={product.name}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <p className="text-sm font-semibold text-slate-900 line-clamp-2">{product.name}</p>
+                <p className="text-xs text-[#2ca34a] font-semibold mt-1">{weight || "Unit not specified"}</p>
+                <div className="mt-auto pt-3">
+                  <div className="flex items-end justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-900">Rs {price}</p>
+                      {mrp > price && (
+                        <p className="text-xs text-slate-400 line-through">Rs {mrp}</p>
+                      )}
+                      {alreadyInCart && (
+                        <p className="text-[10px] font-semibold text-emerald-700 mt-1">Added to cart</p>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={(event) => handleAddToCart(product, event)}
+                      className={`h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1 ${alreadyInCart
+                          ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                          : "bg-emerald-600 text-white"
+                        }`}
+                    >
+                      <ShoppingCart size={14} />
+                      {alreadyInCart ? "Added" : "Add"}
+                    </button>
                   </div>
-                <button
-                  type="button"
-                    onClick={(event) => handleAddToCart(product, event)}
-                  className={`h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1 ${
-                    alreadyInCart
-                      ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                      : "bg-emerald-600 text-white"
-                  }`}
-                >
-                  <ShoppingCart size={14} />
-                  {alreadyInCart ? "Added" : "Add"}
-                </button>
                 </div>
               </div>
-            </div>
             );
           })}
         </div>

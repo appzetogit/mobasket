@@ -19,21 +19,21 @@ import { isOpenFromOutletTimings } from '../utils/outletTimingStatus.js';
  */
 function isPointInZone(lat, lng, zoneCoordinates) {
   if (!zoneCoordinates || zoneCoordinates.length < 3) return false;
-  
+
   let inside = false;
   for (let i = 0, j = zoneCoordinates.length - 1; i < zoneCoordinates.length; j = i++) {
     const coordI = zoneCoordinates[i];
     const coordJ = zoneCoordinates[j];
-    
+
     const xi = typeof coordI === 'object' ? (coordI.latitude || coordI.lat) : null;
     const yi = typeof coordI === 'object' ? (coordI.longitude || coordI.lng) : null;
     const xj = typeof coordJ === 'object' ? (coordJ.latitude || coordJ.lat) : null;
     const yj = typeof coordJ === 'object' ? (coordJ.longitude || coordJ.lng) : null;
-    
+
     if (xi === null || yi === null || xj === null || yj === null) continue;
-    
-    const intersect = ((yi > lng) !== (yj > lng)) && 
-                     (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
+
+    const intersect = ((yi > lng) !== (yj > lng)) &&
+      (lat < (xj - xi) * (lng - yi) / (yj - yi) + xi);
     if (intersect) inside = !inside;
   }
   return inside;
@@ -48,22 +48,22 @@ function isPointInZone(lat, lng, zoneCoordinates) {
  */
 function isRestaurantInAnyZone(restaurantLat, restaurantLng, activeZones) {
   if (!restaurantLat || !restaurantLng) return false;
-  
+
   for (const zone of activeZones) {
     if (!zone.coordinates || zone.coordinates.length < 3) continue;
-    
+
     let isInZone = false;
     if (typeof zone.containsPoint === 'function') {
       isInZone = zone.containsPoint(restaurantLat, restaurantLng);
     } else {
       isInZone = isPointInZone(restaurantLat, restaurantLng, zone.coordinates);
     }
-    
+
     if (isInZone) {
       return true;
     }
   }
-  
+
   return false;
 }
 
@@ -179,8 +179,8 @@ function getActiveZoneQueryByPlatform(platform = 'mofood') {
 // Get all restaurants (for user module)
 export const getRestaurants = async (req, res) => {
   try {
-    const { 
-      limit = 50, 
+    const {
+      limit = 50,
       offset = 0,
       sortBy,
       cuisine,
@@ -194,7 +194,7 @@ export const getRestaurants = async (req, res) => {
       zoneId // User's zone ID (optional - used only for validation/metadata)
     } = req.query;
     const requestedPlatform = normalizePlatformFilter(platform);
-    
+
     // Optional: Zone lookup - if zoneId is provided, validate and enforce same-zone listing.
     let userZone = null;
     if (zoneId) {
@@ -210,7 +210,7 @@ export const getRestaurants = async (req, res) => {
         userZone = null;
       }
     }
-    
+
     const requestedZoneFilter = Boolean(zoneId);
     const userZoneIdNormalized = userZone?._id ? userZone._id.toString() : null;
     const strictZoneFilterRequested = req.query.onlyZone === 'true';
@@ -246,25 +246,25 @@ export const getRestaurants = async (req, res) => {
     if (city) {
       query['location.city'] = { $regex: new RegExp(String(city).trim(), 'i') };
     }
-    
+
     // Cuisine filter
     if (cuisine) {
       query.cuisines = { $in: [new RegExp(cuisine, 'i')] };
     }
-    
-      // Rating filter
-      if (minRating) {
-        query.rating = { $gte: parseFloat(minRating) };
-      }
-      
-      // Trust filters (top-rated = 4.5+, trusted = 4.0+ with high totalRatings)
-      if (req.query.topRated === 'true') {
-        query.rating = { $gte: 4.5 };
-      } else if (req.query.trusted === 'true') {
-        query.rating = { $gte: 4.0 };
-        query.totalRatings = { $gte: 100 }; // At least 100 ratings to be "trusted"
-      }
-    
+
+    // Rating filter
+    if (minRating) {
+      query.rating = { $gte: parseFloat(minRating) };
+    }
+
+    // Trust filters (top-rated = 4.5+, trusted = 4.0+ with high totalRatings)
+    if (req.query.topRated === 'true') {
+      query.rating = { $gte: 4.5 };
+    } else if (req.query.trusted === 'true') {
+      query.rating = { $gte: 4.0 };
+      query.totalRatings = { $gte: 100 }; // At least 100 ratings to be "trusted"
+    }
+
     // Delivery time filter (estimatedDeliveryTime contains time in format "25-30 mins")
     if (maxDeliveryTime) {
       const maxTime = parseInt(maxDeliveryTime);
@@ -273,7 +273,7 @@ export const getRestaurants = async (req, res) => {
       ];
       // We'll filter this in application logic since it's a string field
     }
-    
+
     // Distance filter (distance is stored as string like "1.2 km")
     if (maxDistance) {
       const maxDist = parseFloat(maxDistance);
@@ -282,7 +282,7 @@ export const getRestaurants = async (req, res) => {
       ];
       // We'll filter this in application logic since it's a string field
     }
-    
+
     // Price range filter
     if (maxPrice) {
       const priceMap = { 200: ['$'], 500: ['$', '$$'] };
@@ -290,7 +290,7 @@ export const getRestaurants = async (req, res) => {
         query.priceRange = { $in: priceMap[maxPrice] };
       }
     }
-    
+
     // Offers filter
     if (hasOffers === 'true') {
       query.$or = [
@@ -298,10 +298,10 @@ export const getRestaurants = async (req, res) => {
         { featuredPrice: { $exists: true } }
       ];
     }
-    
+
     // Build sort object
     let sortObj = { createdAt: -1 }; // Default: Latest first
-    
+
     if (sortBy) {
       switch (sortBy) {
         case 'price-low':
@@ -322,7 +322,7 @@ export const getRestaurants = async (req, res) => {
           break;
       }
     }
-    
+
     const isMogroceryRequest = requestedPlatform === 'mogrocery';
 
     // Fetch entities
@@ -412,7 +412,6 @@ export const getRestaurants = async (req, res) => {
 
       return true;
     });
-    
     if (!isMogroceryRequest && restaurants.length > 0) {
       const restaurantIds = restaurants
         .map((restaurant) => restaurant?._id)
@@ -450,7 +449,7 @@ export const getRestaurants = async (req, res) => {
         return timeMatch && parseInt(timeMatch[1]) <= maxTime;
       });
     }
-    
+
     if (maxDistance) {
       const maxDist = parseFloat(maxDistance);
       restaurants = restaurants.filter(r => {
@@ -459,7 +458,7 @@ export const getRestaurants = async (req, res) => {
         return distMatch && parseFloat(distMatch[1]) <= maxDist;
       });
     }
-    
+
     // Get total count (before filtering by string fields)
     const total = restaurants.length;
 
@@ -486,24 +485,24 @@ export const getRestaurants = async (req, res) => {
 export const getRestaurantById = async (req, res) => {
   try {
     const { id } = req.params;
-    
+
     // Build query conditions - only include _id if it's a valid ObjectId
     const queryConditions = {
       isActive: true,
     };
-    
+
     const orConditions = [
       { restaurantId: id },
       { slug: id },
     ];
-    
+
     // Only add _id condition if the id is a valid ObjectId
     if (mongoose.Types.ObjectId.isValid(id) && id.length === 24) {
       orConditions.push({ _id: new mongoose.Types.ObjectId(id) });
     }
-    
+
     queryConditions.$or = orConditions;
-    
+
     let restaurant = await Restaurant.findOne(queryConditions)
       .select('-owner -createdAt -updatedAt')
       .lean();
@@ -553,7 +552,7 @@ export const getRestaurantById = async (req, res) => {
 export const getRestaurantByOwner = async (req, res) => {
   try {
     const restaurantId = req.restaurant._id;
-    
+
     const restaurant = await Restaurant.findById(restaurantId)
       .lean();
 
@@ -584,7 +583,7 @@ export const getRestaurantByOwner = async (req, res) => {
 export const createRestaurantFromOnboarding = async (onboardingData, restaurantId) => {
   try {
     const { step1, step2, step4 } = onboardingData;
-    
+
     if (!step1 || !step2) {
       throw new Error('Incomplete onboarding data: Missing step1 or step2');
     }
@@ -596,7 +595,7 @@ export const createRestaurantFromOnboarding = async (onboardingData, restaurantI
 
     // Find existing restaurant
     const existing = await Restaurant.findById(restaurantId);
-    
+
     if (!existing) {
       throw new Error('Restaurant not found');
     }
@@ -626,7 +625,7 @@ export const createRestaurantFromOnboarding = async (onboardingData, restaurantI
     } else {
       slug = existing.slug; // Keep existing slug
     }
-    
+
     // Update existing restaurant with latest onboarding data
     existing.name = step1.restaurantName || existing.name;
     existing.slug = slug;
@@ -635,7 +634,7 @@ export const createRestaurantFromOnboarding = async (onboardingData, restaurantI
     existing.ownerPhone = step1.ownerPhone || existing.ownerPhone;
     existing.primaryContactNumber = step1.primaryContactNumber || existing.primaryContactNumber;
     if (step1.location) existing.location = step1.location;
-    
+
     // Update step2 data - always update even if empty arrays
     if (step2) {
       if (step2.profileImageUrl) {
@@ -654,7 +653,7 @@ export const createRestaurantFromOnboarding = async (onboardingData, restaurantI
         existing.openDays = step2.openDays; // Update even if empty array
       }
     }
-    
+
     // Update step4 data if available
     if (step4) {
       if (step4.estimatedDeliveryTime) existing.estimatedDeliveryTime = step4.estimatedDeliveryTime;
@@ -664,10 +663,10 @@ export const createRestaurantFromOnboarding = async (onboardingData, restaurantI
       if (step4.featuredPrice !== undefined) existing.featuredPrice = step4.featuredPrice;
       if (step4.offer) existing.offer = step4.offer;
     }
-    
+
     existing.isActive = true; // Ensure it's active
     existing.isAcceptingOrders = true; // Ensure it's accepting orders
-    
+
     try {
       await existing.save();
     } catch (saveError) {
@@ -743,7 +742,7 @@ export const updateRestaurantProfile = asyncHandler(async (req, res) => {
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, '-')
           .replace(/(^-|-$)/g, '');
-        
+
         // Check if slug already exists for another restaurant
         let slug = baseSlug;
         const existingBySlug = await Restaurant.findOne({ slug: baseSlug, _id: { $ne: restaurantId } });
@@ -771,13 +770,13 @@ export const updateRestaurantProfile = asyncHandler(async (req, res) => {
       if (location.latitude && location.longitude && !location.coordinates) {
         location.coordinates = [location.longitude, location.latitude]; // GeoJSON format: [lng, lat]
       }
-      
+
       // If coordinates array exists but no lat/lng, extract them
       if (location.coordinates && Array.isArray(location.coordinates) && location.coordinates.length >= 2) {
         if (!location.longitude) location.longitude = location.coordinates[0];
         if (!location.latitude) location.latitude = location.coordinates[1];
       }
-      
+
       updateData.location = location;
     }
 
@@ -924,13 +923,13 @@ export const uploadMenuImage = asyncHandler(async (req, res) => {
     if (!restaurant.menuImages) {
       restaurant.menuImages = [];
     }
-    
+
     // Replace the first menu image (main banner) instead of adding a new one
     const newMenuImage = {
       url: result.secure_url,
       publicId: result.public_id
     };
-    
+
     if (restaurant.menuImages.length > 0) {
       // Replace the first image (main banner)
       restaurant.menuImages[0] = newMenuImage;
@@ -938,7 +937,7 @@ export const uploadMenuImage = asyncHandler(async (req, res) => {
       // Add as first image if array is empty
       restaurant.menuImages.push(newMenuImage);
     }
-    
+
     await restaurant.save();
 
     return successResponse(res, 200, 'Menu image uploaded successfully', {
@@ -960,7 +959,7 @@ export const uploadMenuImage = asyncHandler(async (req, res) => {
       restaurantId: req.restaurant?._id,
       cloudinaryError: error.http_code || error.name === 'Error' ? error.message : null
     });
-    
+
     // Provide more specific error message
     let errorMessage = 'Failed to upload menu image';
     if (error.message) {
@@ -968,7 +967,7 @@ export const uploadMenuImage = asyncHandler(async (req, res) => {
     } else if (error.http_code) {
       errorMessage += `: Cloudinary error (${error.http_code})`;
     }
-    
+
     return errorResponse(res, 500, errorMessage);
   }
 });
@@ -1058,9 +1057,9 @@ export const deleteRestaurantAccount = asyncHandler(async (req, res) => {
     restaurant.rejectedAt = new Date();
     await restaurant.save();
 
-    console.log(`Restaurant account deactivated: ${restaurantId}`, { 
+    console.log(`Restaurant account deactivated: ${restaurantId}`, {
       restaurantId: restaurant.restaurantId,
-      name: restaurant.name 
+      name: restaurant.name
     });
 
     return successResponse(res, 200, 'Restaurant account deactivated successfully');
@@ -1074,7 +1073,7 @@ export const deleteRestaurantAccount = asyncHandler(async (req, res) => {
 export const getRestaurantsWithDishesUnder250 = async (req, res) => {
   try {
     const { zoneId } = req.query; // User's zone ID (optional - if provided, filters by zone)
-    
+
     // Optional: Zone-based filtering - if zoneId is provided, validate and filter by zone
     let userZone = null;
     if (zoneId) {
@@ -1086,7 +1085,7 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
     }
 
     const MAX_PRICE = 250;
-    
+
     // Helper function to calculate final price after discount
     const getFinalPrice = (item) => {
       // price is typically the current/discounted price
@@ -1118,9 +1117,9 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
     const processRestaurant = async (restaurant) => {
       try {
         // Get menu for this restaurant
-        const menu = await Menu.findOne({ 
+        const menu = await Menu.findOne({
           restaurant: restaurant._id,
-          isActive: true 
+          isActive: true
         }).lean();
 
         if (!menu || !menu.sections || menu.sections.length === 0) {
@@ -1162,8 +1161,8 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
             totalRatings: restaurant.totalRatings || 0,
             deliveryTime: restaurant.estimatedDeliveryTime || "25-30 mins",
             distance: restaurant.distance || "1.2 km",
-            cuisine: restaurant.cuisines && restaurant.cuisines.length > 0 
-              ? restaurant.cuisines.join(' • ') 
+            cuisine: restaurant.cuisines && restaurant.cuisines.length > 0
+              ? restaurant.cuisines.join(' • ')
               : "Multi-cuisine",
             price: restaurant.priceRange || "$$",
             image: restaurant.profileImage?.url || restaurant.menuImages?.[0]?.url || "",

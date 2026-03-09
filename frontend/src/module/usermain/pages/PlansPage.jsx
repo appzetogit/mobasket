@@ -770,8 +770,8 @@ const PlansPage = () => {
                     </div>
                     <span
                       className={`text-[11px] font-bold px-2 py-1 rounded-full ${plan.isActive
-                          ? "bg-green-100 text-green-700 border border-green-200"
-                          : "bg-slate-100 text-slate-600 border border-slate-200"
+                        ? "bg-green-100 text-green-700 border border-green-200"
+                        : "bg-slate-100 text-slate-600 border border-slate-200"
                         }`}
                     >
                       {plan.isActive ? "Active" : "Expired"}
@@ -807,11 +807,6 @@ const PlansPage = () => {
               </span>
             ) : null}
           </div>
-          {!activeBoughtPlan ? (
-            <span className="text-emerald-700 text-xs font-bold flex items-center cursor-pointer hover:underline">
-              All plans <ChevronRight size={14} />
-            </span>
-          ) : null}
         </div>
 
         {loading && <p className="text-sm text-slate-500">Loading plans...</p>}
@@ -1151,8 +1146,8 @@ const PlansPage = () => {
                             type="button"
                             onClick={() => toggleOfferSelection(normalizedOfferId)}
                             className={`w-full text-left rounded-xl border p-3 transition ${isSelected
-                                ? "border-amber-300 bg-amber-50"
-                                : "border-slate-200 bg-white hover:border-amber-200"
+                              ? "border-amber-300 bg-amber-50"
+                              : "border-slate-200 bg-white hover:border-amber-200"
                               }`}
                           >
                             <p className="font-semibold text-slate-900">{offer.name}</p>

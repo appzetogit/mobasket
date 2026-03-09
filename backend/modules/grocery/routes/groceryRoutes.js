@@ -51,8 +51,18 @@ import {
   createWithdrawalRequest,
   getWithdrawalRequests,
 } from '../controllers/groceryStoreWalletController.js';
+import {
+  addAddon as addStoreAddon,
+  getAddons as getStoreAddons,
+  updateAddon as updateStoreAddon,
+  deleteAddon as deleteStoreAddon,
+} from '../../restaurant/controllers/menuController.js';
 
 const router = express.Router();
+const attachStoreAsRestaurant = (req, _res, next) => {
+  req.restaurant = req.store;
+  next();
+};
 
 // Categories
 router.get('/categories', getCategories);
@@ -104,6 +114,12 @@ router.use('/store', groceryStoreOrderRoutes);
 
 // Grocery Store Product Routes (authenticated)
 router.use('/store', groceryStoreProductRoutes);
+
+// Grocery Store Add-on Routes (authenticated)
+router.post('/store/menu/addon', authenticate, attachStoreAsRestaurant, addStoreAddon);
+router.get('/store/menu/addons', authenticate, attachStoreAsRestaurant, getStoreAddons);
+router.put('/store/menu/addon/:id', authenticate, attachStoreAsRestaurant, updateStoreAddon);
+router.delete('/store/menu/addon/:id', authenticate, attachStoreAsRestaurant, deleteStoreAddon);
 
 // Grocery Store Category Request Routes (authenticated)
 router.use('/store', groceryStoreCategoryRequestRoutes);
