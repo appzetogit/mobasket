@@ -220,10 +220,10 @@ const toValidDeliveryPartner = (partner) => {
   const name = (partner.name || partner.fullName || "").trim()
   const phone = (partner.phone || partner.mobile || "").trim()
 
-  if (!name || !phone) return null
+  if (!name && !phone) return null
 
   return {
-    name,
+    name: name || "Delivery partner",
     phone,
     avatar: partner.avatar || null,
     availability: partner.availability || null
@@ -573,7 +573,13 @@ export default function OrderTracking() {
       )
     )
   }, [order?.deliveryState?.currentPhase, order?.deliveryState?.status, order?.status, riderInfo])
-  const riderDialNumber = sanitizePhoneForTel(riderInfo?.phone || "")
+  const hasAssignedRider = useMemo(() => {
+
+    return Boolean(riderInfo || order?.deliveryPartnerId || order?.assignmentInfo?.deliveryPartnerId)
+
+  }, [riderInfo, order?.deliveryPartnerId, order?.assignmentInfo?.deliveryPartnerId])
+
+  const riderDialNumber = sanitizePhoneForTel(riderInfo?.phone || "")
 
   const userLiveCoords = useMemo(() => {
     const toFinite = (value) => {
@@ -775,9 +781,14 @@ export default function OrderTracking() {
             syncModificationWindow(apiOrder);
           }
         }
-      } catch (err) {
-        console.error('Error polling order updates:', err);
-      }
+      } catch (err) {
+        if (err?.response?.status === 404) {
+          setOrder(null);
+          setError('This order is no longer available. It may have been deleted by the admin.');
+        } else {
+          console.error('Error polling order updates:', err);
+        }
+      }
     }, pollInterval);
     
     return () => clearInterval(interval);
@@ -917,12 +928,17 @@ export default function OrderTracking() {
         } else {
           throw new Error('Order not found')
         }
-      } catch (err) {
-        console.error('Error fetching order:', err)
-        setError(err.response?.data?.message || err.message || 'Failed to fetch order')
-      } finally {
-        setLoading(false)
-      }
+      } catch (err) {
+        if (err?.response?.status === 404) {
+          setOrder(null)
+          setError('This order is no longer available. It may have been deleted by the admin.')
+        } else {
+          console.error('Error fetching order:', err)
+          setError(err.response?.data?.message || err.message || 'Failed to fetch order')
+        }
+      } finally {
+        setLoading(false)
+      }
     }
 
     if (orderId) {
@@ -969,7 +985,19 @@ export default function OrderTracking() {
   }, [modificationWindowSeconds])
 
   useEffect(() => {
-    const handleDriverDistanceUpdate = (event) => {
+    const isDeliveryCompletedNow =
+      orderStatus === "delivered" ||
+      String(order?.status || "").toLowerCase() === "delivered" ||
+      String(order?.status || "").toLowerCase() === "completed" ||
+      String(order?.deliveryState?.status || "").toLowerCase() === "delivered" ||
+      String(order?.deliveryState?.currentPhase || "").toLowerCase() === "completed"
+
+    if (isDeliveryCompletedNow) {
+      setDriverDistanceKm(null)
+      return
+    }
+
+    const handleDriverDistanceUpdate = (event) => {
       const detail = event?.detail || {}
       const eventOrderId = detail.orderId ? String(detail.orderId) : ""
       const currentOrderId = String(orderId || "")
@@ -987,7 +1015,7 @@ export default function OrderTracking() {
 
     window.addEventListener("driverDistanceUpdate", handleDriverDistanceUpdate)
     return () => window.removeEventListener("driverDistanceUpdate", handleDriverDistanceUpdate)
-  }, [orderId, order?.id])
+  }, [orderId, order?.id, orderStatus, order?.status, order?.deliveryState?.status, order?.deliveryState?.currentPhase])
 
   // Refetch order (e.g. after socket status update) so map gets latest deliveryState for blue polyline
   const refetchOrder = useCallback(async () => {
@@ -1522,14 +1550,41 @@ export default function OrderTracking() {
         setOrderStatus(deriveUiOrderStatus(apiOrder.status, apiOrder))
         syncModificationWindow(apiOrder)
       }
-    } catch (err) {
-      console.error('Error refreshing order:', err)
-    } finally {
-      setIsRefreshing(false)
-    }
+    } catch (err) {
+      if (err?.response?.status === 404) {
+        setOrder(null)
+        setError('This order is no longer available. It may have been deleted by the admin.')
+      } else {
+        console.error('Error refreshing order:', err)
+      }
+    } finally {
+      setIsRefreshing(false)
+    }
   }
 
-  // Loading state
+  const isDeliveryCompleted =
+    orderStatus === "delivered" ||
+    String(order?.status || "").toLowerCase() === "delivered" ||
+    String(order?.status || "").toLowerCase() === "completed" ||
+    String(order?.deliveryState?.status || "").toLowerCase() === "delivered" ||
+    String(order?.deliveryState?.currentPhase || "").toLowerCase() === "completed"
+
+  const shouldBackToHome = isDeliveryCompleted
+
+  useEffect(() => {
+    if (!shouldBackToHome) return
+
+    const handlePopState = () => {
+      navigate("/home", { replace: true })
+    }
+
+    window.addEventListener("popstate", handlePopState)
+    return () => {
+      window.removeEventListener("popstate", handlePopState)
+    }
+  }, [shouldBackToHome, navigate])
+
+  // Loading state
   if (loading) {
     return (
       <AnimatedPage className="min-h-screen bg-gray-50 p-4">
@@ -1548,7 +1603,7 @@ export default function OrderTracking() {
         <div className="max-w-lg mx-auto text-center py-20">
           <h1 className="text-lg sm:text-xl md:text-2xl font-bold mb-4">Order Not Found</h1>
           <p className="text-gray-600 mb-6">{error || 'The order you\'re looking for doesn\'t exist.'}</p>
-          <Link to="/orders" replace>
+          <Link to={shouldBackToHome ? "/home" : "/orders"} replace>
             <Button>Back to Orders</Button>
           </Link>
         </div>
@@ -1613,9 +1668,9 @@ export default function OrderTracking() {
     color: orderStatus === "cancelled" ? "bg-red-600" : "bg-green-700"
   }
 
-  const currentStatus = isPlanSubscriptionOrder
-    ? planStatusConfig
-    : (statusConfig[orderStatus] || statusConfig.placed)
+  const currentStatus = isPlanSubscriptionOrder
+    ? planStatusConfig
+    : (statusConfig[orderStatus] || statusConfig.placed)
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-[#0a0a0a]">
@@ -1671,7 +1726,7 @@ export default function OrderTracking() {
       <div className={`${currentStatus.color} text-white sticky top-0 z-40`}>
         {/* Navigation bar */}
         <div className="flex items-center justify-between px-4 py-3">
-          <Link to="/orders" replace>
+          <Link to={shouldBackToHome ? "/home" : "/orders"} replace>
             <motion.button 
               className="w-10 h-10 flex items-center justify-center"
               whileTap={{ scale: 0.9 }}
@@ -1736,7 +1791,7 @@ export default function OrderTracking() {
       </div>
 
       {/* Map Section */}
-      {!isPlanSubscriptionOrder && (
+      {!isPlanSubscriptionOrder && !isDeliveryCompleted && (
         <DeliveryMap
           orderId={orderId}
           order={order}
@@ -1832,7 +1887,8 @@ export default function OrderTracking() {
         </motion.button>
 
         {/* Delivery Details Banner */}
-        <motion.div
+        {!isDeliveryCompleted && (
+        <motion.div 
           className="bg-yellow-50 rounded-xl p-4 text-center"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1843,7 +1899,8 @@ export default function OrderTracking() {
               ? `Driver is ${driverDistanceKm < 1 ? `${Math.round(driverDistanceKm * 1000)} m` : `${driverDistanceKm.toFixed(1)} km`} from your location`
               : 'All your delivery details in one place 👇'}
           </p>
-        </motion.div>
+        </motion.div>
+        )}
 
         {/* Contact & Address Section */}
         <motion.div 
@@ -1862,10 +1919,14 @@ export default function OrderTracking() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="font-semibold text-gray-900 truncate">
-                  {isRiderAccepted && riderInfo?.name ? riderInfo.name : "Delivery partner will be assigned soon"}
+                  {hasAssignedRider
+                    ? (riderInfo?.name || "Delivery partner assigned")
+                    : "Assigning delivery partner..."}
                 </p>
                 <p className="text-sm text-gray-500 truncate">
-                  {isRiderAccepted && riderInfo?.phone ? riderInfo.phone : "Phone number not available"}
+                  {hasAssignedRider
+                    ? (riderInfo?.phone || "Phone number not available")
+                    : "Phone number not available"}
                 </p>
               </div>
               <motion.button
@@ -2158,3 +2219,4 @@ export default function OrderTracking() {
     </div>
   )
 }
+

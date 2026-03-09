@@ -13,6 +13,10 @@ import AdminCommission from '../../admin/models/AdminCommission.js';
 import { calculateRoute } from '../../order/services/routeCalculationService.js';
 import { calculateDriverEarning } from '../../order/services/deliveryEarningService.js';
 import { validateCODLimitBeforeAssignment } from '../services/codLimitService.js';
+import {
+  getDeliveryEligibilityErrorMessage,
+  isDeliveryEligibleForOrders
+} from '../utils/deliveryEligibility.js';
 import { upsertActiveOrderTracking } from '../../../shared/services/firebaseRealtimeService.js';
 import mongoose from 'mongoose';
 import winston from 'winston';
@@ -26,6 +30,70 @@ const logger = winston.createLogger({
     })
   ]
 });
+
+const haversineDistanceKm = (lat1, lng1, lat2, lng2) => {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+           Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+           Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+};
+
+const getOrderDeliveryDistanceKm = (order) => {
+  if (order?.deliveryState?.routeToDelivery?.distance) {
+    return Number(order.deliveryState.routeToDelivery.distance) || 0;
+  }
+
+  if (order?.assignmentInfo?.distance) {
+    return Number(order.assignmentInfo.distance) || 0;
+  }
+
+  const restaurantCoords = order?.restaurantId?.location?.coordinates;
+  const customerCoords = order?.address?.location?.coordinates;
+
+  if (Array.isArray(restaurantCoords) && Array.isArray(customerCoords) && restaurantCoords.length >= 2 && customerCoords.length >= 2) {
+    const [restaurantLng, restaurantLat] = restaurantCoords;
+    const [customerLng, customerLat] = customerCoords;
+
+    if ([restaurantLat, restaurantLng, customerLat, customerLng].every((value) => Number.isFinite(Number(value)))) {
+      return haversineDistanceKm(
+        Number(restaurantLat),
+        Number(restaurantLng),
+        Number(customerLat),
+        Number(customerLng)
+      );
+    }
+  }
+
+  return 0;
+};
+
+const buildEstimatedEarnings = async (order) => {
+  const deliveryDistance = getOrderDeliveryDistanceKm(order);
+  const earningResult = await calculateDriverEarning(deliveryDistance, order?.platform || 'mofood');
+
+  return {
+    basePayout: Number(earningResult.baseAmount || 0),
+    distance: Number(earningResult.distanceKm || 0),
+    commissionPerKm: Number(earningResult.extraPerKmFee || 0),
+    distanceCommission: Number(earningResult.extraDistanceKm || 0) * Number(earningResult.extraPerKmFee || 0),
+    totalEarning: Number(earningResult.totalEarning || 0),
+    breakdown: {
+      basePayout: Number(earningResult.baseAmount || 0),
+      distance: Number(earningResult.distanceKm || 0),
+      commissionPerKm: Number(earningResult.extraPerKmFee || 0),
+      distanceCommission: Number(earningResult.extraDistanceKm || 0) * Number(earningResult.extraPerKmFee || 0),
+      minDistance: Number(earningResult.rangeStartKm || 0),
+      maxDistance: Number(earningResult.rangeEndKm || 0),
+      extraDistanceKm: Number(earningResult.extraDistanceKm || 0),
+      formula: earningResult.breakdownText || ''
+    },
+    source: earningResult.source || 'fee_settings'
+  };
+};
 
 const emitOrderTrackingUpdate = async (orderLike, payload = {}) => {
   try {
@@ -70,6 +138,15 @@ const terminalOrderActionMessage = (order, actionLabel) => {
     return `Order is already delivered. Cannot ${actionLabel}.`;
   }
   return `Order is not valid to ${actionLabel}.`;
+};
+
+const ensureDeliveryEligibleForOrders = (delivery, res) => {
+  if (isDeliveryEligibleForOrders(delivery)) {
+    return true;
+  }
+
+  errorResponse(res, 403, getDeliveryEligibilityErrorMessage(delivery));
+  return false;
 };
 
 const isPointInZoneBoundary = (lat, lng, zoneCoordinates = []) => {
@@ -152,6 +229,57 @@ const resolveStoreEntityByIdentifier = async (storeIdentifier) => {
   return { entity, source, platform };
 };
 
+const buildStoreAddress = (store, fallback = '') => {
+  if (!store || typeof store !== 'object') return fallback;
+
+  const location = store.location || {};
+  const composed = [
+    location.addressLine1 || location.street,
+    location.addressLine2,
+    location.area,
+    location.city,
+    location.state,
+    location.pincode || location.zipCode || location.postalCode
+  ]
+    .map((value) => (typeof value === 'string' ? value.trim() : ''))
+    .filter(Boolean)
+    .join(', ');
+
+  return (
+    (typeof location.formattedAddress === 'string' && location.formattedAddress.trim()) ||
+    (typeof location.address === 'string' && location.address.trim()) ||
+    (typeof store.address === 'string' && store.address.trim()) ||
+    composed ||
+    fallback
+  );
+};
+
+const buildStoreLocationPayload = (store, resolvedAddress = '') => {
+  const location = store?.location || null;
+  if (!location || typeof location !== 'object') return null;
+
+  const coords = Array.isArray(location.coordinates) ? location.coordinates : [];
+  const lngFromCoords = Number(coords[0]);
+  const latFromCoords = Number(coords[1]);
+  const latFromFields = Number(location.latitude);
+  const lngFromFields = Number(location.longitude);
+
+  const lat = Number.isFinite(latFromCoords) ? latFromCoords : (Number.isFinite(latFromFields) ? latFromFields : null);
+  const lng = Number.isFinite(lngFromCoords) ? lngFromCoords : (Number.isFinite(lngFromFields) ? lngFromFields : null);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  return {
+    latitude: Number(lat),
+    longitude: Number(lng),
+    address:
+      (typeof location.formattedAddress === 'string' && location.formattedAddress.trim()) ||
+      (typeof location.address === 'string' && location.address.trim()) ||
+      resolvedAddress ||
+      ''
+  };
+};
+
 const emitOrderClaimedToOtherPartners = async (orderLike, claimedByDeliveryId, assignmentInfo = {}) => {
   try {
     const serverModule = await import('../../../server.js');
@@ -188,6 +316,88 @@ const emitOrderClaimedToOtherPartners = async (orderLike, claimedByDeliveryId, a
   }
 };
 
+const normalizeZoneId = (value) => {
+  if (!value) return null;
+  if (typeof value === 'string') return value.trim() || null;
+  if (value.toString) return value.toString().trim() || null;
+  return String(value).trim() || null;
+};
+
+const normalizeDeliveryNotificationId = (value) => {
+  if (!value) return null;
+  if (typeof value === 'string') return value.trim() || null;
+  if (typeof value === 'object') {
+    return String(
+      value.deliveryPartnerId ||
+      value._id ||
+      value.id ||
+      value.deliveryId ||
+      ''
+    ).trim() || null;
+  }
+  if (value.toString) return value.toString().trim() || null;
+  return String(value).trim() || null;
+};
+
+const extractNotifiedDeliveryIds = (assignmentInfo = {}) => {
+  const priorityIds = Array.isArray(assignmentInfo?.priorityDeliveryPartnerIds)
+    ? assignmentInfo.priorityDeliveryPartnerIds
+    : [];
+  const expandedIds = Array.isArray(assignmentInfo?.expandedDeliveryPartnerIds)
+    ? assignmentInfo.expandedDeliveryPartnerIds
+    : [];
+
+  return {
+    priorityIds: priorityIds.map(normalizeDeliveryNotificationId).filter(Boolean),
+    expandedIds: expandedIds.map(normalizeDeliveryNotificationId).filter(Boolean),
+  };
+};
+
+const getCurrentDeliveryZoneIds = async (deliveryId) => {
+  const deliveryPartner = await Delivery.findById(deliveryId)
+    .select('availability.currentLocation availability.zones')
+    .lean();
+
+  if (!deliveryPartner) {
+    return [];
+  }
+
+  const savedZoneIds = (deliveryPartner.availability?.zones || [])
+    .map(normalizeZoneId)
+    .filter(Boolean);
+
+  if (savedZoneIds.length > 0) {
+    return Array.from(new Set(savedZoneIds));
+  }
+
+  const coordinates = deliveryPartner.availability?.currentLocation?.coordinates;
+  if (!Array.isArray(coordinates) || coordinates.length < 2) {
+    return [];
+  }
+
+  const [longitude, latitude] = coordinates;
+  if (!Number.isFinite(Number(latitude)) || !Number.isFinite(Number(longitude))) {
+    return [];
+  }
+
+  const activeZones = await Zone.find({
+    isActive: true,
+    $or: [
+      { platform: 'mofood' },
+      { platform: 'mogrocery' },
+      { platform: { $exists: false } },
+      { platform: null }
+    ]
+  })
+    .select('_id coordinates')
+    .lean();
+
+  return activeZones
+    .filter((zone) => isPointInZoneBoundary(Number(latitude), Number(longitude), zone.coordinates))
+    .map((zone) => normalizeZoneId(zone._id))
+    .filter(Boolean);
+};
+
 /**
  * Get Delivery Partner Orders
  * GET /api/delivery/orders
@@ -196,7 +406,11 @@ const emitOrderClaimedToOtherPartners = async (orderLike, claimedByDeliveryId, a
 export const getOrders = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
+    if (!ensureDeliveryEligibleForOrders(delivery, res)) {
+      return;
+    }
     const { status, page = 1, limit = 20, includeDelivered } = req.query;
+    const currentZoneIds = await getCurrentDeliveryZoneIds(delivery._id);
 
     const deliveryIdString = delivery._id.toString();
     const deliveryIdObject = mongoose.Types.ObjectId.isValid(deliveryIdString)
@@ -230,6 +444,17 @@ export const getOrders = asyncHandler(async (req, res) => {
                     $in: deliveryIdObject ? [deliveryIdString, deliveryIdObject] : [deliveryIdString]
                   }
                 }
+              ]
+            },
+            {
+              $or: [
+                {
+                  'assignmentInfo.zoneId': {
+                    $in: currentZoneIds
+                  }
+                },
+                { 'assignmentInfo.zoneId': { $exists: false } },
+                { 'assignmentInfo.zoneId': null }
               ]
             }
           ]
@@ -277,11 +502,59 @@ export const getOrders = asyncHandler(async (req, res) => {
       .populate('userId', 'name phone')
       .lean();
 
+    const ordersWithEstimatedEarnings = await Promise.all(
+      orders.map(async (order) => {
+        try {
+          let resolvedStore = order?.restaurantId && typeof order.restaurantId === 'object'
+            ? order.restaurantId
+            : null;
+          let resolvedPlatform = order?.restaurantPlatform || null;
+
+          if (!resolvedStore) {
+            const resolvedStoreInfo = await resolveStoreEntityByIdentifier(order?.restaurantId);
+            resolvedStore = resolvedStoreInfo?.entity || null;
+            resolvedPlatform = resolvedStoreInfo?.platform || resolvedPlatform;
+          }
+
+          const resolvedAddress = buildStoreAddress(
+            resolvedStore,
+            typeof order?.restaurantAddress === 'string' ? order.restaurantAddress : ''
+          );
+          const resolvedLocation = buildStoreLocationPayload(resolvedStore, resolvedAddress);
+
+          return {
+            ...order,
+            restaurantPlatform: resolvedPlatform || order?.restaurantPlatform || 'mofood',
+            restaurantName:
+              order?.restaurantName ||
+              resolvedStore?.name ||
+              (resolvedPlatform === 'mogrocery' ? 'Store' : 'Restaurant'),
+            restaurantAddress: resolvedAddress || order?.restaurantAddress || '',
+            restaurantLocation: resolvedLocation || order?.restaurantLocation || null,
+            restaurantId:
+              resolvedStore && typeof resolvedStore === 'object'
+                ? {
+                    ...(typeof order?.restaurantId === 'object' ? order.restaurantId : {}),
+                    _id: resolvedStore?._id || order?.restaurantId,
+                    name: resolvedStore?.name || order?.restaurantName || 'Store',
+                    address: resolvedAddress || resolvedStore?.address || '',
+                    location: resolvedStore?.location || order?.restaurantId?.location || null
+                  }
+                : order?.restaurantId,
+            estimatedEarnings: await buildEstimatedEarnings(order)
+          };
+        } catch (error) {
+          logger.warn(`Failed to calculate estimated earnings for order ${order?.orderId || order?._id}: ${error.message}`);
+          return order;
+        }
+      })
+    );
+
     // Get total count
     const total = await Order.countDocuments(query);
 
     return successResponse(res, 200, 'Orders retrieved successfully', {
-      orders,
+      orders: ordersWithEstimatedEarnings,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -302,6 +575,9 @@ export const getOrders = asyncHandler(async (req, res) => {
 export const getOrderDetails = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
+    if (!ensureDeliveryEligibleForOrders(delivery, res)) {
+      return;
+    }
     const { orderId } = req.params;
 
     // Build query to find order by either _id or orderId field
@@ -338,29 +614,18 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
       return String(id);
     };
     
-    // Valid statuses for order acceptance (unassigned orders in these statuses can be viewed by any delivery boy)
-    const validAcceptanceStatuses = ['preparing', 'ready'];
-    
     // If order is assigned to this delivery partner, allow access
     if (orderDeliveryPartnerId === currentDeliveryId) {
       // Order is assigned, proceed
       console.log(`✅ Order ${order.orderId} is assigned to current delivery partner ${currentDeliveryId}`);
     } else if (!orderDeliveryPartnerId) {
-      // Order not assigned yet - allow access if:
-      // 1. Order is in a valid status for acceptance (preparing/ready), OR
-      // 2. This delivery boy was notified about it
-      
-      const isInValidStatus = validAcceptanceStatuses.includes(order.status);
-      
-      // Check if this delivery boy was notified
+      // Order not assigned yet - allow access only if this delivery boy was explicitly notified.
       const assignmentInfo = order.assignmentInfo || {};
-      const priorityIds = assignmentInfo.priorityDeliveryPartnerIds || [];
-      const expandedIds = assignmentInfo.expandedDeliveryPartnerIds || [];
-      
-      // Normalize all IDs to strings for comparison
       const normalizedCurrentId = normalizeId(currentDeliveryId);
-      const normalizedPriorityIds = priorityIds.map(normalizeId).filter(Boolean);
-      const normalizedExpandedIds = expandedIds.map(normalizeId).filter(Boolean);
+      const {
+        priorityIds: normalizedPriorityIds,
+        expandedIds: normalizedExpandedIds,
+      } = extractNotifiedDeliveryIds(assignmentInfo);
       
       const wasNotified = normalizedPriorityIds.includes(normalizedCurrentId) || 
                          normalizedExpandedIds.includes(normalizedCurrentId);
@@ -368,15 +633,13 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
       console.log(`🔍 Checking access for order ${order.orderId}:`, {
         currentDeliveryId: normalizedCurrentId,
         orderStatus: order.status,
-        isInValidStatus,
         wasNotified,
         priorityIds: normalizedPriorityIds,
         expandedIds: normalizedExpandedIds
       });
       
-      // Allow access if order is in valid status OR delivery boy was notified
-      if (isInValidStatus || wasNotified) {
-        console.log(`✅ Allowing access to order ${order.orderId} - Status: ${order.status}, Notified: ${wasNotified}`);
+      if (wasNotified) {
+        console.log(`✅ Allowing access to order ${order.orderId} for notified delivery partner ${currentDeliveryId}`);
         // Allow access to view order details
       } else {
         console.warn(`⚠️ Delivery partner ${currentDeliveryId} cannot access order ${order.orderId} - Status: ${order.status}, Notified: ${wasNotified}`);
@@ -398,6 +661,12 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
     }
     const orderWithPayment = { ...order, paymentMethod };
 
+    try {
+      orderWithPayment.estimatedEarnings = await buildEstimatedEarnings(orderWithPayment);
+    } catch (error) {
+      logger.warn(`Failed to calculate estimated earnings for order details ${order?.orderId || order?._id}: ${error.message}`);
+    }
+
     return successResponse(res, 200, 'Order details retrieved successfully', {
       order: orderWithPayment
     });
@@ -414,6 +683,9 @@ export const getOrderDetails = asyncHandler(async (req, res) => {
 export const acceptOrder = asyncHandler(async (req, res) => {
   try {
     const delivery = req.delivery;
+    if (!ensureDeliveryEligibleForOrders(delivery, res)) {
+      return;
+    }
     const { orderId } = req.params;
     const { currentLat, currentLng } = req.body; // Delivery boy's current location
 
@@ -458,10 +730,6 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       
       // Check if this delivery boy was in the priority or expanded notification list
       const assignmentInfo = order.assignmentInfo || {};
-      const priorityIds = assignmentInfo.priorityDeliveryPartnerIds || [];
-      const expandedIds = assignmentInfo.expandedDeliveryPartnerIds || [];
-      const isInValidStatus = ['preparing', 'ready'].includes(String(order.status || '').toLowerCase());
-      
       // Helper function to normalize ID for comparison
       const normalizeId = (id) => {
         if (!id) return null;
@@ -472,22 +740,32 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       
       // Normalize all IDs to strings for comparison
       const normalizedCurrentId = normalizeId(currentDeliveryId);
-      const normalizedPriorityIds = priorityIds.map(normalizeId).filter(Boolean);
-      const normalizedExpandedIds = expandedIds.map(normalizeId).filter(Boolean);
+      const {
+        priorityIds: normalizedPriorityIds,
+        expandedIds: normalizedExpandedIds,
+      } = extractNotifiedDeliveryIds(assignmentInfo);
+      const hasExplicitNotificationLists =
+        normalizedPriorityIds.length > 0 || normalizedExpandedIds.length > 0;
+      const orderZoneId = normalizeZoneId(assignmentInfo?.zoneId);
+      const currentZoneIds = await getCurrentDeliveryZoneIds(delivery._id);
+      const isSameZoneEligible = !orderZoneId || currentZoneIds.includes(orderZoneId);
       
       console.log(`🔍 Checking notification status for order acceptance:`, {
         currentDeliveryId: normalizedCurrentId,
         priorityIds: normalizedPriorityIds,
         expandedIds: normalizedExpandedIds,
-          isInValidStatus,
         orderStatus: order.status,
         assignmentInfo: JSON.stringify(assignmentInfo)
       });
       
       const wasNotified = normalizedPriorityIds.includes(normalizedCurrentId) || 
                          normalizedExpandedIds.includes(normalizedCurrentId);
+      const allowSameZoneFallback =
+        !hasExplicitNotificationLists &&
+        isSameZoneEligible &&
+        ['preparing', 'ready'].includes(String(order.status || '').toLowerCase());
       
-      if (!wasNotified && !isInValidStatus) {
+      if (!wasNotified && !allowSameZoneFallback) {
         console.error(`❌ Order ${order.orderId} is not assigned and delivery partner ${currentDeliveryId} was not notified`);
         console.error(`❌ Full order details:`, {
           orderId: order.orderId,
@@ -496,7 +774,11 @@ export const acceptOrder = asyncHandler(async (req, res) => {
           assignmentInfo: JSON.stringify(order.assignmentInfo),
           priorityIds: normalizedPriorityIds,
           expandedIds: normalizedExpandedIds,
-          currentDeliveryId: normalizedCurrentId
+          currentDeliveryId: normalizedCurrentId,
+          hasExplicitNotificationLists,
+          orderZoneId,
+          currentZoneIds,
+          isSameZoneEligible
         });
         return errorResponse(res, 403, 'This order is not available for you. It may have been assigned to another delivery partner or you were not notified about it.');
       }
@@ -538,13 +820,14 @@ export const acceptOrder = asyncHandler(async (req, res) => {
 
       order = claimedOrder;
       claimedDuringThisRequest = true;
-      await emitOrderClaimedToOtherPartners(order, currentDeliveryId, order.assignmentInfo || {});
     } else if (orderDeliveryPartnerId !== currentDeliveryId) {
       console.error(`❌ Order ${order.orderId} is assigned to ${orderDeliveryPartnerId}, but current delivery partner is ${currentDeliveryId}`);
       return errorResponse(res, 409, 'Order was accepted by another delivery partner.');
     } else {
       console.log(`✅ Order ${order.orderId} is already assigned to current delivery partner`);
     }
+
+    const notifiedAssignmentInfoSnapshot = order.assignmentInfo || {};
 
     console.log(`✅ Order found: ${order.orderId}, Status: ${order.status}, Delivery Partner: ${order.deliveryPartnerId}`);
     console.log(`📍 Order details:`, {
@@ -858,6 +1141,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         orderMongoId,
         {
           $set: {
+            deliveryPartnerId: delivery._id,
             'assignmentInfo.deliveryPartnerId': String(delivery._id),
             'assignmentInfo.assignedBy': 'delivery_accept',
             'assignmentInfo.assignedAt': new Date(),
@@ -898,6 +1182,12 @@ export const acceptOrder = asyncHandler(async (req, res) => {
 
     console.log(`✅ Order ${order.orderId} accepted by delivery partner ${delivery._id}`);
     console.log(`📍 Route calculated: ${routeData.distance.toFixed(2)} km, ${routeData.duration.toFixed(1)} mins`);
+
+    try {
+      await emitOrderClaimedToOtherPartners(updatedOrder || order, currentDeliveryId, notifiedAssignmentInfoSnapshot);
+    } catch (emitClaimedError) {
+      logger.warn(`Failed to emit order_unavailable after accept for ${order.orderId}: ${emitClaimedError.message}`);
+    }
 
     try {
       const customerCoords = Array.isArray(updatedOrder?.address?.location?.coordinates)
@@ -2028,6 +2318,12 @@ export const completeDelivery = asyncHandler(async (req, res) => {
               { $inc: { cashInHand: codAmount, codCashCollected: codAmount } }
             );
             if (updateResult.modifiedCount > 0) {
+              await Delivery.updateOne(
+                { _id: delivery._id },
+                { $inc: { 'cod.cashCollected': codAmount } }
+              );
+              wallet.cashInHand = Math.max(0, Number(wallet.cashInHand || 0) + codAmount);
+              wallet.codCashCollected = wallet.cashInHand;
               console.log(`✅ Cash collected ₹${codAmount.toFixed(2)} (COD) added to cashInHand for order ${orderIdForLog}`);
             } else {
               console.warn(`⚠️ Wallet update for cashInHand had no effect (deliveryId: ${delivery._id})`);

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { Suspense, lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AuthRedirect from "@/components/AuthRedirect";
@@ -11,7 +11,6 @@ import Coffee from "../pages/Coffee";
 import Under250 from "../pages/Under250";
 import CategoryPage from "../pages/CategoryPage";
 import Restaurants from "../pages/restaurants/Restaurants";
-import RestaurantDetails from "../pages/restaurants/RestaurantDetails";
 import SearchResults from "../pages/SearchResults";
 import ProductDetail from "../pages/ProductDetail";
 
@@ -96,6 +95,19 @@ import WishlistPage from "@/module/usermain/pages/WishlistPage";
 import FoodDetailPage from "@/module/usermain/pages/FoodDetailPage";
 import WelcomeSelectionPage from "@/module/user/pages/WelcomeSelectionPage";
 
+const RestaurantDetails = lazy(() => import("../pages/restaurants/RestaurantDetails"));
+
+function RouteLoader({ label = "Loading..." }) {
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+      <div className="flex flex-col items-center gap-3 text-center">
+        <div className="h-8 w-8 rounded-full border-2 border-green-600 border-t-transparent animate-spin" />
+        <span className="text-sm text-gray-600">{label}</span>
+      </div>
+    </div>
+  );
+}
+
 export default function UserRouter() {
   return (
     <Routes>
@@ -121,7 +133,14 @@ export default function UserRouter() {
         <Route path="/under-250" element={<Under250 />} />
         <Route path="/category/:category" element={<CategoryPage />} />
         <Route path="/restaurants" element={<Restaurants />} />
-        <Route path="/restaurants/:slug" element={<RestaurantDetails />} />
+        <Route
+          path="/restaurants/:slug"
+          element={
+            <Suspense fallback={<RouteLoader label="Loading restaurant page..." />}>
+              <RestaurantDetails />
+            </Suspense>
+          }
+        />
         <Route path="/search" element={<SearchResults />} />
         <Route path="/product/:id" element={<ProductDetail />} />
 

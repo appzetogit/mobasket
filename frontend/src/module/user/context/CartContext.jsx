@@ -1,124 +1,68 @@
-// src/context/cart-context.jsx
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useContext, useState, useEffect, useMemo } from "react";
 import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
+import { resolveEntityId } from "@/lib/utils/entityIdResolver";
+
+const CartContext = createContext();
 
 const STORAGE_KEYS = {
-  food: "cart_mofood",
-  grocery: "cart_mogrocery",
-  legacy: "cart",
+  food: "cart_food", // Restaurant items
+  grocery: "cart_grocery", // Grocery store items
+  legacy: "cart", // For backward compatibility
 };
 
-// Default cart context value to prevent errors during initial render
-const defaultCartContext = {
-  _isProvider: false,
-  cart: [],
-  foodCart: [],
-  groceryCart: [],
-  items: [],
-  itemCount: 0,
-  total: 0,
-  lastAddEvent: null,
-  lastRemoveEvent: null,
-  foodItems: [],
-  groceryItems: [],
-  foodItemCount: 0,
-  groceryItemCount: 0,
-  foodTotal: 0,
-  groceryTotal: 0,
-  lastAddEventFood: null,
-  lastAddEventGrocery: null,
-  lastRemoveEventFood: null,
-  lastRemoveEventGrocery: null,
-  addToCart: () => {
-  },
-  removeFromCart: () => {
-  },
-  updateQuantity: () => {
-  },
-  getCartCount: () => 0,
-  isInCart: () => false,
-  getCartItem: () => null,
-  clearCart: () => {
-  },
-  cleanCartForRestaurant: () => {
-  },
-  getFoodCartCount: () => 0,
-  getGroceryCartCount: () => 0,
-  isGroceryCart: () => false,
-  isGroceryItem: () => false,
+// --- Utility Helpers ---
+
+const normalizeVariantKey = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
+
+const getGroceryCartItemId = (item) => {
+  const productId = String(item?._id || item?.id || item?.productId || "").trim();
+  if (!productId) return "";
+
+  const variantLabel =
+    item?.selectedVariant?.name ||
+    item?.variantName ||
+    item?.weight ||
+    item?.unit ||
+    "";
+  const variantKey = normalizeVariantKey(variantLabel);
+
+  return variantKey ? `${productId}::${variantKey}` : productId;
 };
 
-const CartContext = createContext(defaultCartContext);
-
-const normalizeName = (name) => (name ? String(name).trim().toLowerCase() : "");
-
-const resolveEntityId = (value) =>
-  String(
-    value?._id ||
-    value?.id ||
-    value?.restaurantId ||
-    value?.storeId ||
-    value ||
-    "",
+const resolveGroceryProductId = (item) => {
+  return String(
+    item?.productId || item?._id || item?.id || ""
   ).trim();
-
-const getRestaurantIdentity = (item) => {
-  const restaurantId = resolveEntityId(item?.restaurantId) || resolveEntityId(item?.storeId);
-  const restaurantName = normalizeName(item?.restaurant || item?.storeName || "");
-  const identityKey = restaurantId
-    ? `id:${restaurantId}`
-    : restaurantName
-      ? `name:${restaurantName}`
-      : "";
-
-  return {
-    restaurantId,
-    restaurantName,
-    identityKey,
-  };
 };
 
 const detectItemPlatform = (item) => {
-  const normalizedPlatform = String(
-    item?.platform || item?.restaurantPlatform || "",
-  ).toLowerCase();
+  if (item?.platform === "mogrocery" || item?.restaurantPlatform === "mogrocery") return "mogrocery";
+  if (item?.platform === "mofood" || item?.restaurantPlatform === "mofood") return "mofood";
 
-  if (normalizedPlatform === "mogrocery") return "mogrocery";
-  if (normalizedPlatform === "mofood") return "mofood";
+  const storeId = String(item?.storeId?._id || item?.storeId?.id || item?.storeId || "").trim();
+  const restaurantId = String(item?.restaurantId?._id || item?.restaurantId?.id || item?.restaurantId || "").trim();
 
-  // Backward-compatible fallback for old cart items.
-  if (
-    item?.restaurantId === "grocery-store" ||
-    String(item?.restaurant || "").toLowerCase().includes("mogrocery")
-  ) {
-    return "mogrocery";
-  }
-
+  if (storeId && storeId !== "grocery-store" && !restaurantId) return "mogrocery";
   return "mofood";
 };
 
-const isGroceryItem = (item) => detectItemPlatform(item) === "mogrocery";
-
-const isMongoObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || "").trim());
-
-const resolveGroceryProductId = (item) => {
-  const candidates = [
-    item?._id,
-    item?.itemId,
-    item?.productId,
-    item?.id,
-  ]
-    .map((value) => String(value || "").trim())
-    .filter(Boolean);
-
-  return candidates.find((id) => isMongoObjectId(id)) || "";
+const getRestaurantIdentity = (item) => {
+  const platform = detectItemPlatform(item);
+  const id = String(item?.restaurantId || item?.storeId || item?.restaurant?._id || "").trim();
+  const name = String(item?.restaurant || item?.storeName || "").trim();
+  return { identityKey: id || name, platform };
 };
 
 const normalizeGroceryCartItem = (item) => {
   const normalizedId = resolveGroceryProductId(item);
   if (!normalizedId) return null;
-  return { ...item, id: normalizedId };
+  return { ...item, id: getGroceryCartItemId(item), productId: normalizedId };
 };
 
 const normalizeFoodCartItem = (item) => {
@@ -310,7 +254,7 @@ export function CartProvider({ children }) {
 
     const normalizedItemId =
       itemPlatform === "mogrocery"
-        ? normalizedGroceryProductId
+        ? getGroceryCartItemId({ ...item, productId: normalizedGroceryProductId })
         : String(item?.itemId || item?.id || item?._id || "").trim();
 
     if (!normalizedItemId) {
@@ -322,6 +266,16 @@ export function CartProvider({ children }) {
     setTargetCart((prev) => {
       const existing = prev.find((i) => String(i.id) === normalizedItemId);
       if (existing) {
+        // Stock Validation
+        const stockAvailable = (item.stockQuantity !== undefined && item.stockQuantity !== null)
+          ? Number(item.stockQuantity)
+          : ((existing.stockQuantity !== undefined && existing.stockQuantity !== null) ? Number(existing.stockQuantity) : Infinity);
+
+        if (existing.quantity + 1 > stockAvailable) {
+          toast.error(`Only ${stockAvailable} units available in stock`);
+          return prev;
+        }
+
         if (sourcePosition) {
           const addEvent = {
             product: {
@@ -341,42 +295,31 @@ export function CartProvider({ children }) {
           }
           setTimeout(() => setLastAddEvent(null), 1500);
         }
-        return prev.map((i) => {
-          if (String(i.id) === normalizedItemId) {
-            const currentQty = i.quantity || 0;
-            const stockAvailable = (item.stockQuantity !== undefined && item.stockQuantity !== null)
-              ? Number(item.stockQuantity)
-              : ((i.stockQuantity !== undefined && i.stockQuantity !== null) ? Number(i.stockQuantity) : Infinity);
+        return prev.map((i) =>
+          String(i.id) === normalizedItemId ? { ...i, quantity: (i.quantity || 0) + 1 } : i,
+        );
+      }
 
-            if (currentQty + 1 > stockAvailable) {
-              toast.error(`Only ${stockAvailable} items available in stock`);
-              return i;
-            }
-            // Update metadata while incrementing quantity
-            return { ...i, ...item, quantity: currentQty + 1 };
-          }
-          return i;
-        });
+      // Stock Validation for first item
+      const stockAvailable = (item.stockQuantity !== undefined && item.stockQuantity !== null)
+        ? Number(item.stockQuantity)
+        : Infinity;
+
+      if (1 > stockAvailable) {
+        toast.error(`Only ${stockAvailable} units available in stock`);
+        return prev;
       }
 
       const newItem = {
         ...item,
-        ...(itemPlatform === "mogrocery" ? { id: normalizedGroceryProductId } : {}),
+        ...(itemPlatform === "mogrocery"
+          ? { id: normalizedItemId, cartItemId: normalizedItemId, productId: normalizedGroceryProductId }
+          : {}),
         ...(itemPlatform === "mofood" ? { id: normalizedItemId, itemId: normalizedItemId } : {}),
         platform: itemPlatform,
         restaurantPlatform: itemPlatform,
         quantity: 1,
       };
-
-      // Check stock before adding new item
-      const initialStock = (item.stockQuantity !== undefined && item.stockQuantity !== null)
-        ? Number(item.stockQuantity)
-        : Infinity;
-
-      if (initialStock <= 0 && itemPlatform === "mogrocery") {
-        toast.error("This item is currently out of stock");
-        return prev;
-      }
 
       if (sourcePosition) {
         const addEvent = {
@@ -412,7 +355,7 @@ export function CartProvider({ children }) {
     const setTargetCart = activePlatform === "mogrocery" ? setGroceryCart : setFoodCart;
 
     setTargetCart((prev) => {
-      const itemToRemove = prev.find((i) => String(i.id) === String(itemId));
+      const itemToRemove = prev.find((i) => i.id === itemId);
       if (itemToRemove && sourcePosition && productInfo) {
         const removeEvent = {
           product: {
@@ -436,7 +379,7 @@ export function CartProvider({ children }) {
         }
         setTimeout(() => setLastRemoveEvent(null), 1500);
       }
-      return prev.filter((i) => String(i.id) !== String(itemId));
+      return prev.filter((i) => i.id !== itemId);
     });
   };
 
@@ -450,7 +393,7 @@ export function CartProvider({ children }) {
 
     if (quantity <= 0) {
       setTargetCart((prev) => {
-        const itemToRemove = prev.find((i) => String(i.id) === String(itemId));
+        const itemToRemove = prev.find((i) => i.id === itemId);
         if (itemToRemove && sourcePosition && productInfo) {
           const removeEvent = {
             product: {
@@ -474,88 +417,44 @@ export function CartProvider({ children }) {
           }
           setTimeout(() => setLastRemoveEvent(null), 1500);
         }
-        return prev.filter((i) => String(i.id) !== String(itemId));
+        return prev.filter((i) => i.id !== itemId);
       });
       return;
     }
 
     setTargetCart((prev) => {
-      const existingItem = prev.find((i) => String(i.id) === String(itemId));
-      if (
-        existingItem &&
-        quantity < (existingItem.quantity || 0) &&
-        sourcePosition &&
-        productInfo
-      ) {
-        const removeEvent = {
-          product: {
-            id: productInfo.id || existingItem.id,
-            name: productInfo.name || existingItem.name,
-            imageUrl:
-              productInfo.imageUrl ||
-              productInfo.image ||
-              existingItem.image ||
-              existingItem.imageUrl,
-          },
-          sourcePosition,
-        };
-        setLastRemoveEvent(removeEvent);
-        if (activePlatform === "mogrocery") {
-          setLastRemoveEventGrocery(removeEvent);
-          setTimeout(() => setLastRemoveEventGrocery(null), 1500);
-        } else {
-          setLastRemoveEventFood(removeEvent);
-          setTimeout(() => setLastRemoveEventFood(null), 1500);
+      const existingItem = prev.find((i) => i.id === itemId);
+
+      if (existingItem) {
+        // Stock Validation
+        const stockAvailable = (productInfo?.stockQuantity !== undefined && productInfo?.stockQuantity !== null)
+          ? Number(productInfo.stockQuantity)
+          : ((existingItem.stockQuantity !== undefined && existingItem.stockQuantity !== null) ? Number(existingItem.stockQuantity) : Infinity);
+
+        if (quantity > stockAvailable) {
+          toast.error(`Only ${stockAvailable} units available in stock`);
+          return prev;
         }
-        setTimeout(() => setLastRemoveEvent(null), 1500);
-      }
-      return prev.map((i) => {
-        if (String(i.id) === String(itemId)) {
-          if (quantity > (i.quantity || 0)) {
-            const stockAvailable = (i.stockQuantity !== undefined && i.stockQuantity !== null)
-              ? Number(i.stockQuantity)
-              : Infinity;
 
-            if (quantity > stockAvailable) {
-              toast.error(`Only ${stockAvailable} items available in stock`);
-              return i;
-            }
-          }
-          return { ...i, quantity };
-        }
-        return i;
-      });
-    });
-  };
-
-  const updateQuantityByPlatform = (
-    itemId,
-    quantity,
-    platform = "mofood",
-    sourcePosition = null,
-    productInfo = null,
-  ) => {
-    const resolvedPlatform = platform === "mogrocery" ? "mogrocery" : "mofood";
-    const setTargetCart = resolvedPlatform === "mogrocery" ? setGroceryCart : setFoodCart;
-
-    if (quantity <= 0) {
-      setTargetCart((prev) => {
-        const itemToRemove = prev.find((i) => String(i.id) === String(itemId));
-        if (itemToRemove && sourcePosition && productInfo) {
+        if (
+          quantity < (existingItem.quantity || 0) &&
+          sourcePosition &&
+          productInfo
+        ) {
           const removeEvent = {
             product: {
-              id: productInfo.id || itemToRemove.id,
-              name: productInfo.name || itemToRemove.name,
+              id: productInfo.id || existingItem.id,
+              name: productInfo.name || existingItem.name,
               imageUrl:
                 productInfo.imageUrl ||
                 productInfo.image ||
-                itemToRemove.image ||
-                itemToRemove.imageUrl,
+                existingItem.image ||
+                existingItem.imageUrl,
             },
             sourcePosition,
           };
           setLastRemoveEvent(removeEvent);
-          if (resolvedPlatform === "mogrocery") {
+          if (activePlatform === "mogrocery") {
             setLastRemoveEventGrocery(removeEvent);
             setTimeout(() => setLastRemoveEventGrocery(null), 1500);
           } else {
@@ -564,229 +463,112 @@ export function CartProvider({ children }) {
           }
           setTimeout(() => setLastRemoveEvent(null), 1500);
         }
-        return prev.filter((i) => String(i.id) !== String(itemId));
-      });
+        return prev.map((i) =>
+          i.id === itemId ? { ...i, quantity } : i,
+        );
+      }
+      return prev;
+    });
+  };
+
+  const updateQuantityByPlatform = (itemId, quantity, platform) => {
+    const setTargetCart = platform === "mogrocery" ? setGroceryCart : setFoodCart;
+    const targetCart = platform === "mogrocery" ? groceryCart : foodCart;
+
+    if (quantity <= 0) {
+      setTargetCart((prev) => prev.filter((i) => i.id === itemId));
       return;
     }
 
     setTargetCart((prev) => {
-      const existingItem = prev.find((i) => String(i.id) === String(itemId));
-      if (
-        existingItem &&
-        quantity < (existingItem.quantity || 0) &&
-        sourcePosition &&
-        productInfo
-      ) {
-        const removeEvent = {
-          product: {
-            id: productInfo.id || existingItem.id,
-            name: productInfo.name || existingItem.name,
-            imageUrl:
-              productInfo.imageUrl ||
-              productInfo.image ||
-              existingItem.image ||
-              existingItem.imageUrl,
-          },
-          sourcePosition,
-        };
-        setLastRemoveEvent(removeEvent);
-        if (resolvedPlatform === "mogrocery") {
-          setLastRemoveEventGrocery(removeEvent);
-          setTimeout(() => setLastRemoveEventGrocery(null), 1500);
-        } else {
-          setLastRemoveEventFood(removeEvent);
-          setTimeout(() => setLastRemoveEventFood(null), 1500);
-        }
-        setTimeout(() => setLastRemoveEvent(null), 1500);
-      }
-      return prev.map((i) => {
-        if (String(i.id) === String(itemId)) {
-          if (quantity > (i.quantity || 0)) {
-            const stockAvailable = (i.stockQuantity !== undefined && i.stockQuantity !== null)
-              ? Number(i.stockQuantity)
-              : Infinity;
+      const existingItem = prev.find((i) => i.id === itemId);
+      if (existingItem) {
+        // Stock Validation
+        const stockAvailable = (existingItem.stockQuantity !== undefined && existingItem.stockQuantity !== null)
+          ? Number(existingItem.stockQuantity)
+          : Infinity;
 
-            if (quantity > stockAvailable) {
-              toast.error(`Only ${stockAvailable} items available in stock`);
-              return i;
-            }
-          }
-          return { ...i, quantity };
+        if (quantity > stockAvailable) {
+          toast.error(`Only ${stockAvailable} units available in stock`);
+          return prev;
         }
-        return i;
-      });
+        return prev.map((i) => (i.id === itemId ? { ...i, quantity } : i));
+      }
+      return prev;
     });
   };
 
-  const getCartCount = () =>
-    activeCart.reduce((total, item) => total + (item.quantity || 0), 0);
-
-  const getFoodCartCount = () =>
-    foodCart.reduce((total, item) => total + (item.quantity || 0), 0);
-
-  const getGroceryCartCount = () =>
-    groceryCart.reduce((total, item) => total + (item.quantity || 0), 0);
-
-  const isGroceryCart = () => activePlatform === "mogrocery" && groceryCart.length > 0;
-
-  const isInCart = (itemId) => activeCart.some((i) => String(i.id) === String(itemId));
-
-  const getCartItem = (itemId) => activeCart.find((i) => String(i.id) === String(itemId));
-
-  const clearCart = (platform = activePlatform) => {
-    if (platform === "mogrocery") {
-      setGroceryCart([]);
-      return;
-    }
-    if (platform === "mofood") {
-      setFoodCart([]);
-      return;
-    }
+  const clearCart = () => {
     setFoodCart([]);
     setGroceryCart([]);
   };
 
-  // Keeps only items from one restaurant in food cart.
-  const cleanCartForRestaurant = (restaurantId, restaurantName) => {
-    setFoodCart((prev) => {
-      if (prev.length === 0) return prev;
-
-      const targetIdentity = getRestaurantIdentity({
-        restaurantId,
-        restaurant: restaurantName,
-      });
-
-      const cleanedCart = prev.filter((item) => {
-        const itemIdentity = getRestaurantIdentity(item);
-        return (
-          Boolean(targetIdentity.identityKey) &&
-          itemIdentity.identityKey === targetIdentity.identityKey
-        );
-      });
-
-      if (cleanedCart.length !== prev.length) {
-        console.warn("Cleaned food cart: removed items from different restaurants", {
-          before: prev.length,
-          after: cleanedCart.length,
-          removed: prev.length - cleanedCart.length,
-        });
-      }
-
-      return cleanedCart;
-    });
+  const clearPlatformCart = (platform) => {
+    if (platform === "mogrocery") setGroceryCart([]);
+    else setFoodCart([]);
   };
 
-  // Transform active cart to match AddToCartAnimation expected structure
-  const cartForAnimation = useMemo(() => {
-    const items = activeCart.map((item) => ({
-      product: {
-        id: item.id,
-        name: item.name,
-        imageUrl: item.image || item.imageUrl,
-      },
-      quantity: item.quantity || 1,
-    }));
-
-    const itemCount = activeCart.reduce(
-      (total, item) => total + (item.quantity || 0),
-      0,
-    );
-    const total = activeCart.reduce(
-      (sum, item) => sum + (item.price || 0) * (item.quantity || 0),
-      0,
-    );
-
-    return {
-      items,
-      itemCount,
-      total,
-    };
-  }, [activeCart]);
-
-  const foodCartForAnimation = useMemo(() => {
-    const items = foodCart.map((item) => ({
-      product: {
-        id: item.id,
-        name: item.name,
-        imageUrl: item.image || item.imageUrl,
-      },
-      quantity: item.quantity || 1,
-    }));
-
-    return {
-      items,
-      itemCount: foodCart.reduce((total, item) => total + (item.quantity || 0), 0),
-      total: foodCart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0),
-    };
-  }, [foodCart]);
-
-  const groceryCartForAnimation = useMemo(() => {
-    const items = groceryCart.map((item) => ({
-      product: {
-        id: item.id,
-        name: item.name,
-        imageUrl: item.image || item.imageUrl,
-      },
-      quantity: item.quantity || 1,
-    }));
-
-    return {
-      items,
-      itemCount: groceryCart.reduce((total, item) => total + (item.quantity || 0), 0),
-      total: groceryCart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 0), 0),
-    };
-  }, [groceryCart]);
-
-  const value = {
-    _isProvider: true,
-    cart: activeCart,
-    foodCart,
-    groceryCart,
-    items: cartForAnimation.items,
-    itemCount: cartForAnimation.itemCount,
-    total: cartForAnimation.total,
-    lastAddEvent,
-    lastRemoveEvent,
-    foodItems: foodCartForAnimation.items,
-    groceryItems: groceryCartForAnimation.items,
-    foodItemCount: foodCartForAnimation.itemCount,
-    groceryItemCount: groceryCartForAnimation.itemCount,
-    foodTotal: foodCartForAnimation.total,
-    groceryTotal: groceryCartForAnimation.total,
-    lastAddEventFood,
-    lastAddEventGrocery,
-    lastRemoveEventFood,
-    lastRemoveEventGrocery,
-    addToCart,
-    removeFromCart,
-    updateQuantity,
-    updateQuantityByPlatform,
-    getCartCount,
-    isInCart,
-    getCartItem,
-    clearCart,
-    cleanCartForRestaurant,
-    getFoodCartCount,
-    getGroceryCartCount,
-    isGroceryCart,
-    isGroceryItem,
+  const getCartCount = () => {
+    return activeCart.reduce((total, item) => total + (item.quantity || 0), 0);
   };
+
+  const getCartTotal = () => {
+    return activeCart.reduce(
+      (total, item) => total + (item.price || 0) * (item.quantity || 0),
+      0,
+    );
+  };
+
+  const getPlatformCartTotal = (platform) => {
+    const cart = platform === "mogrocery" ? groceryCart : foodCart;
+    return cart.reduce(
+      (total, item) => total + (item.price || 0) * (item.quantity || 0),
+      0,
+    );
+  };
+
+  const isInCart = (itemId) => {
+    return activeCart.some((item) => item.id === itemId);
+  };
+
+  const getCartItem = (itemId) => {
+    return activeCart.find((item) => item.id === itemId);
+  };
+
+  const value = useMemo(
+    () => ({
+      foodCart,
+      groceryCart,
+      activeCart,
+      activePlatform,
+      addToCart,
+      removeFromCart,
+      updateQuantity,
+      updateQuantityByPlatform,
+      clearCart,
+      clearPlatformCart,
+      getCartCount,
+      getCartTotal,
+      getPlatformCartTotal,
+      isInCart,
+      getCartItem,
+      lastAddEvent,
+      lastRemoveEvent,
+      lastAddEventFood,
+      lastAddEventGrocery,
+      lastRemoveEventFood,
+      lastRemoveEventGrocery,
+    }),
+    [foodCart, groceryCart, activeCart, activePlatform, lastAddEvent, lastRemoveEvent],
+  );
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 
-export function useCart() {
+export const useCart = () => {
   const context = useContext(CartContext);
-  if (!context || context._isProvider !== true) {
-    if (import.meta.env.DEV) {
-      console.warn(
-        "useCart called outside CartProvider. Using default values.",
-      );
-      console.warn(
-        "Make sure the component is rendered inside UserLayout which provides CartProvider.",
-      );
-    }
-    return defaultCartContext;
+  if (!context) {
+    throw new Error("useCart must be used within a CartProvider");
   }
   return context;
-}
+};

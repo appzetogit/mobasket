@@ -600,7 +600,7 @@ export const getMenuByRestaurantId = async (req, res) => {
           : []),
       ],
       isActive: true,
-    });
+    }).lean();
 
     if (!restaurant) {
       return errorResponse(res, 404, 'Restaurant not found');
@@ -610,7 +610,7 @@ export const getMenuByRestaurantId = async (req, res) => {
     const menu = await Menu.findOne({
       restaurant: restaurant._id,
       isActive: true,
-    });
+    }).lean();
 
     if (!menu) {
       // Return empty menu if not found
@@ -621,7 +621,6 @@ export const getMenuByRestaurantId = async (req, res) => {
         },
       });
     }
-
     console.log('[USER MENU] Processing menu for restaurant:', restaurant._id);
     console.log('[USER MENU] Total sections:', menu.sections?.length || 0);
 
@@ -630,14 +629,9 @@ export const getMenuByRestaurantId = async (req, res) => {
       .filter(section => {
         // Only show sections where isEnabled is not explicitly false
         // If isEnabled is undefined/null, treat as enabled (default true)
-        const isEnabled = section.isEnabled !== false;
-        if (!isEnabled) {
-          console.log(`[USER MENU] Filtering out disabled section: "${section.name}"`);
-        }
-        return isEnabled;
+        return section.isEnabled !== false;
       })
       .map(section => {
-        console.log(`[USER MENU] Processing section: "${section.name}", items: ${section.items?.length || 0}`);
         // Filter direct items - only show available AND approved items
         // Items where isAvailable is not explicitly false AND approvalStatus is 'approved' should be shown
         const availableItems = (section.items || []).filter(item => {
@@ -692,7 +686,6 @@ export const getMenuByRestaurantId = async (req, res) => {
         // Include section if it has at least one available item OR at least one subsection with available items
         // This ensures category remains visible even if some items are unavailable
         if (availableItems.length > 0 || availableSubsections.length > 0) {
-          console.log(`[USER MENU] Section "${section.name}" included with ${availableItems.length} items and ${availableSubsections.length} subsections`);
           return {
             ...section,
             name: section.name || "Unnamed Section", // Ensure name is always present
@@ -700,19 +693,9 @@ export const getMenuByRestaurantId = async (req, res) => {
             subsections: availableSubsections,
           };
         }
-        // Return null only if section has no available items AND no subsections with available items
-        console.log(`[USER MENU] Section "${section.name}" excluded - no available/approved items`);
         return null;
       })
       .filter(section => section !== null); // Remove null sections (sections with no available items)
-
-    console.log('[USER MENU] Final filtered sections count:', filteredSections.length);
-    const totalItems = filteredSections.reduce((sum, section) => {
-      const sectionItems = (section.items || []).length;
-      const subsectionItems = (section.subsections || []).reduce((subSum, sub) => subSum + (sub.items || []).length, 0);
-      return sum + sectionItems + subsectionItems;
-    }, 0);
-    console.log('[USER MENU] Total items shown to user:', totalItems);
 
     return successResponse(res, 200, 'Menu retrieved successfully', {
       menu: {
@@ -869,11 +852,11 @@ export const getAddonsByRestaurantId = async (req, res) => {
     const filteredAddons = includeUnapproved
       ? allAddons
       : allAddons.filter((addon) => {
-          if (!addon || typeof addon !== 'object') return false;
-          const isAvailable = addon.isAvailable !== false;
-          const isApproved = addon.approvalStatus === 'approved' || !addon.approvalStatus;
-          return isAvailable && isApproved;
-        });
+        if (!addon || typeof addon !== 'object') return false;
+        const isAvailable = addon.isAvailable !== false;
+        const isApproved = addon.approvalStatus === 'approved' || !addon.approvalStatus;
+        return isAvailable && isApproved;
+      });
 
     // Log all addons for debugging
     console.log(`[ADDONS] Returning addons: ${filteredAddons.length} (includeUnapproved=${includeUnapproved})`);

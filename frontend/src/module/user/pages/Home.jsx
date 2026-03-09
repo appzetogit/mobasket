@@ -91,6 +91,31 @@ const placeholders = [
 
 const normalizeCityName = (value) => String(value || "").trim().toLowerCase();
 
+const matchesRestaurantCity = (restaurant, normalizedUserCity) => {
+  if (!normalizedUserCity) return true;
+
+  const candidates = [
+    restaurant?.location?.city,
+    restaurant?.city,
+    restaurant?.address?.city,
+    restaurant?.location?.area,
+    restaurant?.location?.formattedAddress,
+    restaurant?.location?.address,
+    extractRestaurantCity(restaurant),
+  ]
+    .map((value) => normalizeCityName(value))
+    .filter(Boolean);
+
+  if (candidates.length === 0) return true;
+
+  return candidates.some(
+    (candidate) =>
+      candidate === normalizedUserCity ||
+      candidate.includes(normalizedUserCity) ||
+      normalizedUserCity.includes(candidate),
+  );
+};
+
 const extractRestaurantCity = (restaurant) => {
   const directCity =
     restaurant?.location?.city ||
@@ -184,7 +209,7 @@ function RestaurantImageCarousel({
 
   if (!images || images.length === 0) {
     return (
-      <div className="relative h-48 sm:h-56 md:h-60 lg:h-64 xl:h-72 w-full overflow-hidden rounded-t-md flex-shrink-0 bg-gray-200">
+      <div className="relative h-full w-full overflow-hidden rounded-t-md flex-shrink-0 bg-gray-200">
         <OptimizedImage
           src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop"
           alt={restaurantName}
@@ -239,7 +264,7 @@ function RestaurantImageCarousel({
 
   return (
     <div
-      className="relative h-48 sm:h-56 md:h-60 lg:h-64 xl:h-72 w-full overflow-hidden rounded-t-md flex-shrink-0 group"
+      className="relative h-full w-full overflow-hidden rounded-t-md flex-shrink-0 group"
       onTouchStart={handleTouchStart}
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
@@ -409,11 +434,41 @@ export default function Home() {
   const [loadingRealCategories, setLoadingRealCategories] = useState(true);
   const [showAllCategoriesModal, setShowAllCategoriesModal] = useState(false);
   const isHandlingSwitchOff = useRef(false);
+  const backendAssetBaseUrl = API_BASE_URL.replace(/\/api\/?$/, "");
 
   const isLikelyImageUrl = (value) => {
     const src = String(value || "").trim();
     if (!src) return false;
-    return src.startsWith("http://") || src.startsWith("https://") || src.startsWith("/");
+    return (
+      src.startsWith("http://") ||
+      src.startsWith("https://") ||
+      src.startsWith("/") ||
+      src.startsWith("uploads/") ||
+      src.startsWith("./uploads/") ||
+      src.startsWith("../uploads/")
+    );
+  };
+
+  const resolveImageUrl = (value) => {
+    const src = String(value || "").trim();
+    if (!src) return "";
+
+    if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:")) {
+      return src;
+    }
+
+    if (src.startsWith("//")) {
+      return `https:${src}`;
+    }
+
+    const normalizedPath = src.replace(/^(\.\/|\.\.\/)+/, "").replace(/^\/+/, "");
+    if (!normalizedPath) return "";
+
+    if (src.startsWith("/") || normalizedPath.startsWith("uploads/")) {
+      return `${backendAssetBaseUrl}/${normalizedPath}`;
+    }
+
+    return "";
   };
 
   const fallbackImageBySeed = (seed) => {
@@ -434,7 +489,7 @@ export default function Home() {
   };
 
   const sanitizeImageSrc = (src, seed = "") =>
-    isLikelyImageUrl(src) ? src : fallbackImageBySeed(seed);
+    resolveImageUrl(src) || fallbackImageBySeed(seed);
 
   const isStorefrontLikeImage = (value) => {
     const src = String(value || "").toLowerCase();
@@ -445,7 +500,7 @@ export default function Home() {
   const extractImageUrl = (value) => {
     if (!value) return "";
     if (typeof value === "string") {
-      return isLikelyImageUrl(value) ? value : "";
+      return resolveImageUrl(value);
     }
     if (typeof value !== "object") return "";
 
@@ -462,8 +517,11 @@ export default function Home() {
     ];
 
     for (const candidate of candidates) {
-      if (typeof candidate === "string" && isLikelyImageUrl(candidate)) {
-        return candidate;
+      if (typeof candidate === "string") {
+        const resolvedUrl = resolveImageUrl(candidate);
+        if (resolvedUrl) {
+          return resolvedUrl;
+        }
       }
     }
     return "";
@@ -1064,10 +1122,7 @@ export default function Home() {
           const restaurantsArray = (restaurantsArrayRaw || []).filter((restaurant) => {
             const platform = String(restaurant?.platform || "").toLowerCase();
             if (platform && platform !== "mofood") return false;
-            if (!normalizedUserCity) return false;
-
-            const restaurantCity = normalizeCityName(extractRestaurantCity(restaurant));
-            return restaurantCity === normalizedUserCity;
+            return matchesRestaurantCity(restaurant, normalizedUserCity);
           });
 
           if (restaurantsArray.length === 0) {
@@ -2769,13 +2824,6 @@ export default function Home() {
                             {restaurant.isPromoted && (
                               <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white md:text-[8px] text-[7px] px-1.5 py-0.5 rounded flex items-center gap-1 z-10 font-medium uppercase tracking-wider">
                                 Promoted
-                              </div>
-                            )}
-
-                            {/* Offer Badge on Image */}
-                            {restaurant.offer && (
-                              <div className="absolute bottom-3 left-0 bg-[#2563eb] text-white text-[10px] font-bold px-2 py-1 shadow-lg z-10 leading-none">
-                                {restaurant.offer.toUpperCase()}
                               </div>
                             )}
 

@@ -4,6 +4,10 @@ import { API_BASE_URL, SOCKET_BASE_URL } from '@/lib/api/config';
 import { deliveryAPI } from '@/lib/api';
 import alertSound from '@/assets/audio/alert.mp3';
 import originalSound from '@/assets/audio/original.mp3';
+import {
+  requestBrowserNotificationPermission,
+  showBrowserNotification,
+} from '@/lib/browserNotifications';
 
 const DELIVERY_ORDER_SUPPRESSION_KEY = 'delivery_suppressed_order_ids';
 
@@ -28,7 +32,69 @@ const persistSuppressedOrderIds = (orderIds) => {
   }
 };
 
-export const useDeliveryNotifications = () => {
+const formatPolledOrderForNotification = (orderData = {}) => {
+  const customerCoords = orderData?.address?.location?.coordinates;
+  const storeCoords = orderData?.restaurantId?.location?.coordinates;
+
+  return {
+    orderId: orderData?.orderId || orderData?._id,
+    orderMongoId: orderData?._id?.toString?.() || orderData?._id || null,
+    mongoId: orderData?._id?.toString?.() || orderData?._id || null,
+    status: orderData?.status || 'preparing',
+    restaurantName: orderData?.restaurantName || orderData?.restaurantId?.name || 'Store',
+    restaurantAddress:
+      orderData?.restaurantId?.location?.formattedAddress ||
+      orderData?.restaurantId?.location?.address ||
+      orderData?.restaurantId?.address ||
+      'Restaurant address',
+    restaurantLocation: Array.isArray(storeCoords) && storeCoords.length >= 2
+      ? {
+          latitude: Number(storeCoords[1]),
+          longitude: Number(storeCoords[0]),
+          address:
+            orderData?.restaurantId?.location?.formattedAddress ||
+            orderData?.restaurantId?.location?.address ||
+            orderData?.restaurantId?.address ||
+            'Restaurant address',
+        }
+      : null,
+    customerName: orderData?.userId?.name || 'Customer',
+    customerPhone: orderData?.userId?.phone || '',
+    customerLocation: Array.isArray(customerCoords) && customerCoords.length >= 2
+      ? {
+          latitude: Number(customerCoords[1]),
+          longitude: Number(customerCoords[0]),
+          address:
+            orderData?.address?.formattedAddress ||
+            orderData?.address?.address ||
+            orderData?.address?.street ||
+            'Customer address',
+        }
+      : null,
+    items: Array.isArray(orderData?.items) ? orderData.items : [],
+    total: orderData?.pricing?.total || 0,
+    totalAmount: orderData?.pricing?.total || 0,
+    deliveryFee: orderData?.pricing?.deliveryFee || 0,
+    paymentMethod: orderData?.payment?.method || 'cash',
+    payment: orderData?.payment || null,
+    createdAt: orderData?.createdAt,
+    estimatedDeliveryTime: orderData?.estimatedDeliveryTime || 30,
+    note: orderData?.note || '',
+    pickupDistance: orderData?.pickupDistance || 'Distance not available',
+    deliveryDistance:
+      orderData?.dropDistance ||
+      (orderData?.assignmentInfo?.distance ? `${Number(orderData.assignmentInfo.distance).toFixed(2)} km` : 'Distance not available'),
+    estimatedEarnings: orderData?.estimatedEarnings || 0,
+    fullOrder: orderData,
+  };
+};
+
+export const useDeliveryNotifications = (options = {}) => {
+  const {
+    enabled = true,
+    enableSound = true,
+    enableBrowserNotification = true,
+  } = options;
   // CRITICAL: All hooks must be called unconditionally and in the same order every render
   // Order: useRef -> useState -> useEffect -> useCallback
   
@@ -42,6 +108,29 @@ export const useDeliveryNotifications = () => {
   const [orderReady, setOrderReady] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [deliveryPartnerId, setDeliveryPartnerId] = useState(null);
+  const enableSoundRef = useRef(enableSound);
+  const enableBrowserNotificationRef = useRef(enableBrowserNotification);
+
+  useEffect(() => {
+    enableSoundRef.current = enableSound;
+  }, [enableSound]);
+
+  useEffect(() => {
+    enableBrowserNotificationRef.current = enableBrowserNotification;
+  }, [enableBrowserNotification]);
+
+  useEffect(() => {
+    if (!enabled) {
+      setIsConnected(false);
+      setDeliveryPartnerId(null);
+      setNewOrder(null);
+      setOrderReady(null);
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+    }
+  }, [enabled]);
 
   // Step 3: All callbacks before effects (unconditional)
   // Track user interaction for autoplay policy
@@ -70,6 +159,10 @@ export const useDeliveryNotifications = () => {
       }
       
       if (audioRef.current) {
+        if (!enableSoundRef.current) {
+          return;
+        }
+
         // Only play if user has interacted with the page (browser autoplay policy)
         if (!userInteractedRef.current) {
           return;
@@ -88,6 +181,18 @@ export const useDeliveryNotifications = () => {
       if (!error.message?.includes('user didn\'t interact') && !error.name?.includes('NotAllowedError')) {
         console.warn('Error playing sound:', error);
       }
+    }
+  }, []);
+
+  const triggerOrderBuzz = useCallback(() => {
+    try {
+      if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') {
+        return;
+      }
+      // Two short pulses for new order alert.
+      navigator.vibrate([180, 120, 220]);
+    } catch (error) {
+      // Ignore vibration errors.
     }
   }, []);
 
@@ -133,9 +238,41 @@ export const useDeliveryNotifications = () => {
     return ids.some((id) => suppressedOrderIdsRef.current.has(id));
   }, [normalizeOrderIds]);
 
+  const isOrderAlreadyInProgress = (orderData = {}) => {
+    const status = String(orderData?.status || '').toLowerCase();
+    const phase = String(
+      orderData?.deliveryPhase ||
+      orderData?.deliveryState?.currentPhase ||
+      ''
+    ).toLowerCase();
+    const deliveryStateStatus = String(orderData?.deliveryState?.status || '').toLowerCase();
+    const notificationPhase = String(orderData?.assignmentInfo?.notificationPhase || '').toLowerCase();
+
+    return (
+      notificationPhase === 'accepted' ||
+      status === 'out_for_delivery' ||
+      status === 'picked_up' ||
+      status === 'delivered' ||
+      phase === 'en_route_to_pickup' ||
+      phase === 'at_pickup' ||
+      phase === 'en_route_to_delivery' ||
+      phase === 'picked_up' ||
+      phase === 'at_delivery' ||
+      phase === 'completed' ||
+      deliveryStateStatus === 'accepted' ||
+      deliveryStateStatus === 'reached_pickup' ||
+      deliveryStateStatus === 'order_confirmed' ||
+      deliveryStateStatus === 'en_route_to_delivery' ||
+      deliveryStateStatus === 'reached_drop' ||
+      deliveryStateStatus === 'delivered'
+    );
+  };
+
   // Step 4: All effects (unconditional hook calls, conditional logic inside)
   // Track user interaction for autoplay policy
   useEffect(() => {
+    requestBrowserNotificationPermission();
+
     const handleUserInteraction = () => {
       userInteractedRef.current = true;
       // Remove listeners after first interaction
@@ -158,6 +295,10 @@ export const useDeliveryNotifications = () => {
   
   // Initialize audio on mount - use selected preference from localStorage
   useEffect(() => {
+    if (!enabled) {
+      return undefined;
+    }
+
     // Get selected alert sound preference from localStorage
     const selectedSound = localStorage.getItem('delivery_alert_sound') || 'zomato_tone';
     const soundFile = selectedSound === 'original' ? originalSound : alertSound;
@@ -182,10 +323,14 @@ export const useDeliveryNotifications = () => {
         audioRef.current = null;
       }
     };
-  }, []); // Note: This runs once on mount. To update dynamically, we'd need to listen to storage events
+  }, [enabled]); // Note: This runs once on mount. To update dynamically, we'd need to listen to storage events
 
   // Fetch delivery partner ID
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     const fetchDeliveryPartnerId = async () => {
       try {
         const response = await deliveryAPI.getCurrentDelivery();
@@ -212,6 +357,10 @@ export const useDeliveryNotifications = () => {
 
   // Socket connection effect
   useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+
     if (!deliveryPartnerId) {
       return;
     }
@@ -329,30 +478,54 @@ export const useDeliveryNotifications = () => {
     });
 
     socketRef.current.on('new_order', (orderData) => {
-      if (shouldIgnoreOrderNotification(orderData)) {
+      if (shouldIgnoreOrderNotification(orderData) || isOrderAlreadyInProgress(orderData)) {
         return;
       }
       setNewOrder(orderData);
       playNotificationSound();
+      triggerOrderBuzz();
+      if (enableBrowserNotificationRef.current && document.hidden) {
+        showBrowserNotification({
+          title: 'New delivery order',
+          body: `Order ${orderData?.orderId || ''} is waiting for you.`.trim(),
+          tag: `delivery-new-order-${orderData?.orderId || orderData?.orderMongoId || orderData?.mongoId || 'latest'}`,
+        });
+      }
     });
 
     // Listen for priority-based order notifications (new_order_available)
     socketRef.current.on('new_order_available', (orderData) => {
-      if (shouldIgnoreOrderNotification(orderData)) {
+      if (shouldIgnoreOrderNotification(orderData) || isOrderAlreadyInProgress(orderData)) {
         return;
       }
       // Treat it the same as new_order for now - delivery boy can accept it
       setNewOrder(orderData);
       playNotificationSound();
+      triggerOrderBuzz();
+      if (enableBrowserNotificationRef.current && document.hidden) {
+        showBrowserNotification({
+          title: 'New delivery order',
+          body: `Order ${orderData?.orderId || ''} is waiting for you.`.trim(),
+          tag: `delivery-new-order-${orderData?.orderId || orderData?.orderMongoId || orderData?.mongoId || 'latest'}`,
+        });
+      }
     });
 
     socketRef.current.on('play_notification_sound', (data) => {
       playNotificationSound();
+      triggerOrderBuzz();
     });
 
     socketRef.current.on('order_ready', (orderData) => {
       setOrderReady(orderData);
       playNotificationSound();
+      if (enableBrowserNotificationRef.current && document.hidden) {
+        showBrowserNotification({
+          title: 'Order ready for pickup',
+          body: `Order ${orderData?.orderId || ''} is ready.`.trim(),
+          tag: `delivery-order-ready-${orderData?.orderId || orderData?.orderMongoId || orderData?.mongoId || 'latest'}`,
+        });
+      }
     });
 
     socketRef.current.on('order_unavailable', (payload) => {
@@ -374,7 +547,69 @@ export const useDeliveryNotifications = () => {
         socketRef.current = null;
       }
     };
-  }, [deliveryPartnerId, playNotificationSound, shouldIgnoreOrderNotification, suppressOrderNotifications]);
+  }, [deliveryPartnerId, enabled, playNotificationSound, shouldIgnoreOrderNotification, suppressOrderNotifications, triggerOrderBuzz]);
+
+  useEffect(() => {
+    if (!enabled || !deliveryPartnerId) {
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const syncAvailableOrders = async () => {
+      try {
+        const response = await deliveryAPI.getOrders({ page: 1, limit: 20 });
+        const orders = response?.data?.data?.orders;
+        if (!Array.isArray(orders) || cancelled) {
+          return;
+        }
+
+        const nextAvailableOrder = orders.find((orderData) => {
+          if (!orderData) return false;
+          if (!['preparing', 'ready'].includes(String(orderData.status || '').toLowerCase())) {
+            return false;
+          }
+          if (isOrderAlreadyInProgress(orderData)) {
+            return false;
+          }
+          return !shouldIgnoreOrderNotification(orderData);
+        });
+
+        if (!nextAvailableOrder) {
+          return;
+        }
+
+        const normalizedOrder = formatPolledOrderForNotification(nextAvailableOrder);
+        const incomingIds = normalizeOrderIds(normalizedOrder);
+        let shouldTriggerAlert = false;
+
+        setNewOrder((currentOrder) => {
+          const currentIds = normalizeOrderIds(currentOrder);
+          const isSameOrder =
+            currentIds.length > 0 &&
+            incomingIds.some((id) => currentIds.includes(id));
+
+          shouldTriggerAlert = !isSameOrder;
+          return isSameOrder ? currentOrder : normalizedOrder;
+        });
+
+        if (shouldTriggerAlert) {
+          playNotificationSound();
+          triggerOrderBuzz();
+        }
+      } catch (error) {
+        // Socket remains primary. Polling is only a fallback, so fail silently.
+      }
+    };
+
+    void syncAvailableOrders();
+    const intervalId = window.setInterval(syncAvailableOrders, 8000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [deliveryPartnerId, enabled, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, triggerOrderBuzz]);
 
   // Helper functions
   const clearNewOrder = () => {

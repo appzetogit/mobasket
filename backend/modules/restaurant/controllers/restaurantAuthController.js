@@ -1,10 +1,12 @@
 import Restaurant from '../models/Restaurant.js';
+import OutletTimings from '../models/OutletTimings.js';
 import otpService from '../../auth/services/otpService.js';
 import jwtService from '../../auth/services/jwtService.js';
 import firebaseAuthService from '../../auth/services/firebaseAuthService.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
+import { isOpenFromOutletTimings } from '../utils/outletTimingStatus.js';
 import winston from 'winston';
 
 /**
@@ -903,11 +905,40 @@ export const logout = asyncHandler(async (req, res) => {
   return successResponse(res, 200, 'Logged out successfully');
 });
 
+const normalizeRestaurantOnboardingState = (restaurant) => {
+  const onboarding = restaurant?.onboarding?.toObject
+    ? restaurant.onboarding.toObject()
+    : { ...(restaurant?.onboarding || {}) };
+
+  const status = String(restaurant?.status || '').trim().toLowerCase();
+  const isProvisioned =
+    restaurant?.isActive === true ||
+    Boolean(restaurant?.approvedAt) ||
+    Boolean(restaurant?.rejectedAt) ||
+    Boolean(restaurant?.rejectionReason) ||
+    (status && status !== 'onboarding') ||
+    Number(onboarding?.completedSteps || 0) >= 4;
+
+  if (isProvisioned && Number(onboarding?.completedSteps || 0) < 4) {
+    onboarding.completedSteps = 4;
+  }
+
+  return onboarding;
+};
+
 /**
  * Get current restaurant
  * GET /api/restaurant/auth/me
  */
 export const getCurrentRestaurant = asyncHandler(async (req, res) => {
+  const normalizedOnboarding = normalizeRestaurantOnboardingState(req.restaurant);
+  const outletTimings = await OutletTimings.findOne({
+    restaurantId: req.restaurant._id,
+    isActive: true,
+  }).lean();
+  const isAcceptingOrders = outletTimings?.timings
+    ? isOpenFromOutletTimings(outletTimings.timings)
+    : req.restaurant.isAcceptingOrders;
   // Restaurant is attached by authenticate middleware
   return successResponse(res, 200, 'Restaurant retrieved successfully', {
     restaurant: {
@@ -920,7 +951,8 @@ export const getCurrentRestaurant = asyncHandler(async (req, res) => {
       signupMethod: req.restaurant.signupMethod,
       profileImage: req.restaurant.profileImage,
       isActive: req.restaurant.isActive,
-      onboarding: req.restaurant.onboarding,
+      status: req.restaurant.status,
+      onboarding: normalizedOnboarding,
       ownerName: req.restaurant.ownerName,
       ownerEmail: req.restaurant.ownerEmail,
       ownerPhone: req.restaurant.ownerPhone,
@@ -932,7 +964,7 @@ export const getCurrentRestaurant = asyncHandler(async (req, res) => {
       deliveryTimings: req.restaurant.deliveryTimings,
       menuImages: req.restaurant.menuImages,
       slug: req.restaurant.slug,
-      isAcceptingOrders: req.restaurant.isAcceptingOrders,
+      isAcceptingOrders,
       // Include verification status
       rejectionReason: req.restaurant.rejectionReason || null,
       approvedAt: req.restaurant.approvedAt || null,

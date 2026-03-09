@@ -88,6 +88,9 @@ import {
 
 } from "lucide-react"
 
+const DELIVERY_SWIPE_CONFIRM_THRESHOLD = 0.18
+const DELIVERY_SWIPE_START_THRESHOLD_PX = 1
+
 
 import BottomPopup from "../components/BottomPopup"
 
@@ -1035,6 +1038,9 @@ function resolveStoreAddressFromOrder(order, fallback = "Restaurant address") {
 
 
   const orderRestaurantLocation = order?.restaurantLocation || {}
+  const fullOrder = order?.fullOrder && typeof order?.fullOrder === "object" ? order.fullOrder : null
+  const fullOrderStore = fullOrder?.restaurantId && typeof fullOrder?.restaurantId === "object" ? fullOrder.restaurantId : null
+  const fullOrderStoreLocation = fullOrderStore?.location || {}
 
 
 
@@ -1076,7 +1082,15 @@ function resolveStoreAddressFromOrder(order, fallback = "Restaurant address") {
     buildAddressFromLocation(orderRestaurantLocation),
 
 
-    order?.restaurantAddress
+    order?.restaurantAddress,
+    fullOrderStoreLocation?.formattedAddress,
+    fullOrderStoreLocation?.address,
+    buildAddressFromLocation(fullOrderStoreLocation),
+    fullOrderStore?.address,
+    fullOrder?.restaurantAddress,
+    fullOrder?.restaurantLocation?.formattedAddress,
+    fullOrder?.restaurantLocation?.address,
+    buildAddressFromLocation(fullOrder?.restaurantLocation || {})
 
 
   ]
@@ -1122,6 +1136,9 @@ function resolveStoreCoordsFromOrder(order) {
 
 
   const orderRestaurantLocation = order?.restaurantLocation || {}
+  const fullOrder = order?.fullOrder && typeof order?.fullOrder === "object" ? order.fullOrder : null
+  const fullOrderStore = fullOrder?.restaurantId && typeof fullOrder?.restaurantId === "object" ? fullOrder.restaurantId : null
+  const fullOrderStoreLocation = fullOrderStore?.location || {}
 
 
 
@@ -1194,6 +1211,54 @@ function resolveStoreCoordsFromOrder(order) {
 
 
       lng: Number(orderRestaurantLocation.longitude)
+
+
+    }
+
+
+  }
+
+
+
+
+
+  if (Array.isArray(fullOrderStoreLocation?.coordinates) && fullOrderStoreLocation.coordinates.length >= 2) {
+
+
+    const lat = Number(fullOrderStoreLocation.coordinates[1])
+
+
+    const lng = Number(fullOrderStoreLocation.coordinates[0])
+
+
+    if (Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng }
+
+
+  }
+
+
+
+
+
+  if (
+
+
+    Number.isFinite(Number(fullOrderStoreLocation?.latitude)) &&
+
+
+    Number.isFinite(Number(fullOrderStoreLocation?.longitude))
+
+
+  ) {
+
+
+    return {
+
+
+      lat: Number(fullOrderStoreLocation.latitude),
+
+
+      lng: Number(fullOrderStoreLocation.longitude)
 
 
     }
@@ -1769,7 +1834,10 @@ export default function DeliveryHome() {
   // Delivery notifications hook
 
 
-  const { newOrder, clearNewOrder, orderReady, clearOrderReady, isConnected, suppressOrderNotifications } = useDeliveryNotifications()
+  const { newOrder, clearNewOrder, orderReady, clearOrderReady, isConnected, suppressOrderNotifications } = useDeliveryNotifications({
+    enableSound: false,
+    enableBrowserNotification: false,
+  })
 
 
 
@@ -1981,6 +2049,9 @@ export default function DeliveryHome() {
 
 
   const directionsRouteCacheRef = useRef(new Map()) // Cache directions responses by rounded origin/destination
+
+
+  const isRestoringActiveOrderRef = useRef(false) // Prevent route cleanup races during refresh restore
 
 
   const fetchedOrderDetailsForDropRef = useRef(null) // Prevent re-fetching order details for Reached Drop customer coords
@@ -2776,6 +2847,7 @@ export default function DeliveryHome() {
 
 
   const newOrderAcceptButtonIsSwiping = useRef(false)
+  const newOrderAcceptButtonProgressRef = useRef(0)
 
 
   const [newOrderAcceptButtonProgress, setNewOrderAcceptButtonProgress] = useState(0)
@@ -3012,6 +3084,67 @@ export default function DeliveryHome() {
   const autoShowTimerRef = useRef(null)
 
 
+
+  const persistDeliveryFlowProgress = useCallback((overrides = {}) => {
+    try {
+      const raw = localStorage.getItem('deliveryActiveOrder')
+      if (!raw) return
+      const current = JSON.parse(raw)
+
+      const resolvedOrderId =
+        overrides.orderId ||
+        selectedRestaurant?.id ||
+        selectedRestaurant?.orderId ||
+        current.orderId
+
+      if (!resolvedOrderId) return
+
+      const next = {
+        ...current,
+        ...overrides,
+        orderId: resolvedOrderId,
+        restaurantInfo: overrides.restaurantInfo || selectedRestaurant || current.restaurantInfo,
+        progress: {
+          ...(current.progress || {}),
+          ...(overrides.progress || {}),
+          billImageUrl:
+            overrides.progress?.billImageUrl ??
+            overrides.billImageUrl ??
+            billImageUrl ??
+            current.progress?.billImageUrl ??
+            current.billImageUrl ??
+            null,
+          billImageUploaded:
+            overrides.progress?.billImageUploaded ??
+            overrides.billImageUploaded ??
+            billImageUploaded ??
+            current.progress?.billImageUploaded ??
+            current.billImageUploaded ??
+            false,
+          showreachedPickupPopup:
+            overrides.progress?.showreachedPickupPopup ?? showreachedPickupPopup,
+          showOrderIdConfirmationPopup:
+            overrides.progress?.showOrderIdConfirmationPopup ?? showOrderIdConfirmationPopup,
+          showReachedDropPopup:
+            overrides.progress?.showReachedDropPopup ?? showReachedDropPopup,
+          showOrderDeliveredAnimation:
+            overrides.progress?.showOrderDeliveredAnimation ?? showOrderDeliveredAnimation
+        }
+      }
+
+      localStorage.setItem('deliveryActiveOrder', JSON.stringify(next))
+    } catch (error) {
+      console.warn('Failed to persist delivery flow progress:', error)
+    }
+  }, [
+    selectedRestaurant,
+    billImageUrl,
+    billImageUploaded,
+    showreachedPickupPopup,
+    showOrderIdConfirmationPopup,
+    showReachedDropPopup,
+    showOrderDeliveredAnimation
+  ])
 
 
 
@@ -4054,7 +4187,8 @@ export default function DeliveryHome() {
     Number.isFinite(Number(walletState?.availableCashLimit))
       ? Number(walletState.availableCashLimit)
       : Math.max(0, totalCashLimit - cashInHand)
-  const isCashInHandLimitReached = cashInHand >= totalCashLimit
+  const isCashInHandLimitReached =
+    totalCashLimit > 0 && cashInHand >= totalCashLimit
   const isMapLockedForOrderEligibility = isCashInHandLimitReached
 
 
@@ -5588,6 +5722,12 @@ export default function DeliveryHome() {
       setCountdownSeconds(300)
 
 
+      setNewOrderAcceptButtonProgress(0)
+
+
+      setNewOrderIsAnimatingToComplete(false)
+
+
     }
 
 
@@ -7067,10 +7207,10 @@ export default function DeliveryHome() {
 
 
 
-            // Send location every 5 seconds even if not smoothed
+            // Send location every 3 seconds even if not smoothed
 
 
-            if (timeSinceLastSend >= 5000) {
+            if (timeSinceLastSend >= 3000) {
 
 
               if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
@@ -7529,16 +7669,16 @@ export default function DeliveryHome() {
 
 
 
-          // Send location every 5 seconds OR if location changed significantly (>50m)
+          // Send location every 3 seconds OR if location changed significantly (>10m)
 
 
-          const shouldSend = timeSinceLastSend >= 5000 ||
+          const shouldSend = timeSinceLastSend >= 3000 ||
 
 
             (lastSentLocation &&
 
 
-              calculateDistance(lastSentLocation[0], lastSentLocation[1], smoothedLat, smoothedLng) > 0.05);
+              calculateDistance(lastSentLocation[0], lastSentLocation[1], smoothedLat, smoothedLng) > 0.01);
 
 
 
@@ -7785,19 +7925,13 @@ export default function DeliveryHome() {
 
 
     newOrderAcceptButtonIsSwiping.current = false
+    newOrderAcceptButtonProgressRef.current = 0
 
 
     setNewOrderIsAnimatingToComplete(false)
 
 
-    setNewOrderAcceptButtonProgress(0)
-
-
   }
-
-
-
-
 
   const handleNewOrderAcceptTouchMove = (e) => {
 
@@ -7811,10 +7945,8 @@ export default function DeliveryHome() {
 
 
 
-    // Only handle horizontal swipes (swipe right)
-
-
-    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+    // Be tolerant of slight vertical movement; only require right swipe.
+    if (deltaX > DELIVERY_SWIPE_START_THRESHOLD_PX) {
 
 
       newOrderAcceptButtonIsSwiping.current = true
@@ -7850,6 +7982,9 @@ export default function DeliveryHome() {
       const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
 
 
+      newOrderAcceptButtonProgressRef.current = progress
+
+
       setNewOrderAcceptButtonProgress(progress)
 
 
@@ -7865,10 +8000,11 @@ export default function DeliveryHome() {
   const handleNewOrderAcceptTouchEnd = (e) => {
 
 
-    if (!newOrderAcceptButtonIsSwiping.current) {
+    if (!newOrderAcceptButtonIsSwiping.current && newOrderAcceptButtonProgressRef.current < DELIVERY_SWIPE_CONFIRM_THRESHOLD) {
 
 
       setNewOrderAcceptButtonProgress(0)
+      newOrderAcceptButtonProgressRef.current = 0
 
 
       return
@@ -7880,7 +8016,8 @@ export default function DeliveryHome() {
 
 
 
-    const deltaX = e.changedTouches[0].clientX - newOrderAcceptButtonSwipeStartX.current
+    const endTouchX = e?.changedTouches?.[0]?.clientX ?? (newOrderAcceptButtonSwipeStartX.current + ((newOrderAcceptButtonProgressRef.current || 0) * (newOrderAcceptButtonRef.current?.offsetWidth || 300)))
+    const deltaX = endTouchX - newOrderAcceptButtonSwipeStartX.current
 
 
     const buttonWidth = newOrderAcceptButtonRef.current?.offsetWidth || 300
@@ -7895,13 +8032,15 @@ export default function DeliveryHome() {
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
 
 
-    const threshold = maxSwipe * 0.7 // 70% of max swipe
+    const threshold = maxSwipe * DELIVERY_SWIPE_CONFIRM_THRESHOLD
+    const rawProgress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
+    const finalProgress = Math.max(rawProgress, newOrderAcceptButtonProgressRef.current)
 
 
 
 
 
-    if (deltaX > threshold) {
+    if (finalProgress >= DELIVERY_SWIPE_CONFIRM_THRESHOLD || deltaX > threshold) {
 
 
       // Stop audio immediately when user accepts
@@ -8073,19 +8212,11 @@ export default function DeliveryHome() {
             } catch (geoError) {
 
 
-              console.error('❌ Could not get current location:', geoError)
+              console.error('❌ Could not get current location, proceeding with backend fallback:', geoError)
 
-
-              toast.error('Location not available. Please enable location services.')
-
-
-              // Ensure currentLocation is set to null before returning
-
+              toast.warning('Live GPS unavailable. Trying profile location...')
 
               currentLocation = null
-
-
-              return
 
 
             }
@@ -8097,20 +8228,9 @@ export default function DeliveryHome() {
 
 
 
-          // Validate currentLocation before proceeding
-
-
           if (!currentLocation || currentLocation.length !== 2) {
 
-
-            console.error('❌ No valid location available')
-
-
-            toast.error('Location not available. Please enable location services.')
-
-
-            return
-
+            console.warn('⚠️ No valid live location in client, relying on backend fallback location')
 
           }
 
@@ -8148,16 +8268,15 @@ export default function DeliveryHome() {
           // Backend expects currentLat and currentLng
 
 
-          const response = await deliveryAPI.acceptOrder(orderId, {
-
-
-            lat: currentLocation[0], // latitude
-
-
-            lng: currentLocation[1]  // longitude
-
-
-          })
+          const response = await deliveryAPI.acceptOrder(
+            orderId,
+            (currentLocation && currentLocation.length === 2)
+              ? {
+                lat: currentLocation[0], // latitude
+                lng: currentLocation[1]  // longitude
+              }
+              : {}
+          )
 
 
 
@@ -8841,10 +8960,10 @@ export default function DeliveryHome() {
                 address: normalizeAddressLabel(restaurantAddress, 'Restaurant address not available'), // Restaurant address from backend
 
 
-                lat: restaurantLat || selectedRestaurant?.lat,
+                lat: restaurantLat ?? selectedRestaurant?.lat,
 
 
-                lng: restaurantLng || selectedRestaurant?.lng,
+                lng: restaurantLng ?? selectedRestaurant?.lng,
 
 
                 distance: selectedRestaurant?.distance || '0 km',
@@ -8866,6 +8985,7 @@ export default function DeliveryHome() {
 
 
                 customerName: order.userId?.name || selectedRestaurant?.customerName,
+                customerPhone: order.userId?.phone || selectedRestaurant?.customerPhone || null,
 
 
                 customerAddress: order.address?.formattedAddress ||
@@ -8981,6 +9101,13 @@ export default function DeliveryHome() {
 
               setRoutePolyline(routeCoordinates);
 
+              // Render backend pickup route immediately as fallback while Directions/GPS settle.
+              try {
+                updateRoutePolyline(routeCoordinates);
+              } catch (polylineFallbackError) {
+                console.warn('⚠️ Could not render fallback pickup polyline:', polylineFallbackError);
+              }
+
 
             }
 
@@ -8997,7 +9124,29 @@ export default function DeliveryHome() {
             // Use restaurantInfo directly (not selectedRestaurant) since state update is async
 
 
-            if (restaurantInfo && restaurantInfo.lat && restaurantInfo.lng && currentLocation) {
+            const hasValidRestaurantCoords =
+              Number.isFinite(Number(restaurantInfo?.lat)) &&
+              Number.isFinite(Number(restaurantInfo?.lng))
+
+            const riderPositionForPickupRoute =
+              (Array.isArray(currentLocation) &&
+                currentLocation.length === 2 &&
+                Number.isFinite(Number(currentLocation[0])) &&
+                Number.isFinite(Number(currentLocation[1])))
+                ? [Number(currentLocation[0]), Number(currentLocation[1])]
+                : (Array.isArray(riderLocation) &&
+                  riderLocation.length === 2 &&
+                  Number.isFinite(Number(riderLocation[0])) &&
+                  Number.isFinite(Number(riderLocation[1])))
+                  ? [Number(riderLocation[0]), Number(riderLocation[1])]
+                  : (Array.isArray(lastLocationRef.current) &&
+                    lastLocationRef.current.length === 2 &&
+                    Number.isFinite(Number(lastLocationRef.current[0])) &&
+                    Number.isFinite(Number(lastLocationRef.current[1])))
+                    ? [Number(lastLocationRef.current[0]), Number(lastLocationRef.current[1])]
+                    : null
+
+            if (hasValidRestaurantCoords && riderPositionForPickupRoute) {
 
 
               console.log('🗺️ Calculating route with Google Maps Directions API...');
@@ -9015,7 +9164,7 @@ export default function DeliveryHome() {
                 const directionsResult = await calculateRouteWithDirectionsAPI(
 
 
-                  currentLocation, // Delivery boy's current live location
+                  riderPositionForPickupRoute, // Delivery boy's current live location
 
 
                   { lat: restaurantInfo.lat, lng: restaurantInfo.lng } // Restaurant location
@@ -9069,7 +9218,7 @@ export default function DeliveryHome() {
                   // Initialize live tracking polyline with full route (Delivery Boy → Restaurant)
 
 
-                  if (currentLocation) {
+                  if (riderPositionForPickupRoute) {
 
 
                     // Ensure map is ready before updating polyline
@@ -9078,7 +9227,7 @@ export default function DeliveryHome() {
                     if (window.deliveryMapInstance) {
 
 
-                      updateLiveTrackingPolyline(directionsResult, currentLocation);
+                      updateLiveTrackingPolyline(directionsResult, riderPositionForPickupRoute);
 
 
                     } else {
@@ -9090,10 +9239,10 @@ export default function DeliveryHome() {
                       setTimeout(() => {
 
 
-                        if (window.deliveryMapInstance && currentLocation) {
+                        if (window.deliveryMapInstance && riderPositionForPickupRoute) {
 
 
-                          updateLiveTrackingPolyline(directionsResult, currentLocation);
+                          updateLiveTrackingPolyline(directionsResult, riderPositionForPickupRoute);
 
 
                         }
@@ -9843,7 +9992,17 @@ export default function DeliveryHome() {
                   acceptedAt: new Date().toISOString(),
 
 
-                  hasDirectionsAPI: !!directionsResultForMap // Flag to indicate we should recalculate with Directions API
+                  hasDirectionsAPI: !!directionsResultForMap, // Flag to indicate we should recalculate with Directions API
+                  billImageUrl: billImageUrl || null,
+                  billImageUploaded: Boolean(billImageUploaded),
+                  progress: {
+                    billImageUrl: billImageUrl || null,
+                    billImageUploaded: Boolean(billImageUploaded),
+                    showreachedPickupPopup: false,
+                    showOrderIdConfirmationPopup: false,
+                    showReachedDropPopup: false,
+                    showOrderDeliveredAnimation: false
+                  }
 
 
                 };
@@ -10093,6 +10252,7 @@ export default function DeliveryHome() {
 
 
       setNewOrderAcceptButtonProgress(0)
+      newOrderAcceptButtonProgressRef.current = 0
 
 
     }
@@ -10108,6 +10268,7 @@ export default function DeliveryHome() {
 
 
     newOrderAcceptButtonIsSwiping.current = false
+    newOrderAcceptButtonProgressRef.current = 0
 
 
   }
@@ -10494,7 +10655,7 @@ export default function DeliveryHome() {
     // Only handle horizontal swipes (swipe right)
 
 
-    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+    if (Math.abs(deltaX) > DELIVERY_SWIPE_START_THRESHOLD_PX && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
 
 
       reachedPickupIsSwiping.current = true
@@ -10593,7 +10754,7 @@ export default function DeliveryHome() {
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
 
 
-    const threshold = maxSwipe * 0.7 // 70% of max swipe
+    const threshold = maxSwipe * DELIVERY_SWIPE_CONFIRM_THRESHOLD
 
 
 
@@ -11181,7 +11342,7 @@ export default function DeliveryHome() {
     // Only handle horizontal swipes (swipe right)
 
 
-    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+    if (Math.abs(deltaX) > DELIVERY_SWIPE_START_THRESHOLD_PX && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
 
 
       reachedDropIsSwiping.current = true
@@ -11280,7 +11441,7 @@ export default function DeliveryHome() {
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
 
 
-    const threshold = maxSwipe * 0.7 // 70% of max swipe
+    const threshold = maxSwipe * DELIVERY_SWIPE_CONFIRM_THRESHOLD
 
 
 
@@ -11637,7 +11798,7 @@ export default function DeliveryHome() {
     // Only handle horizontal swipes (swipe right)
 
 
-    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+    if (Math.abs(deltaX) > DELIVERY_SWIPE_START_THRESHOLD_PX && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
 
 
       orderIdConfirmIsSwiping.current = true
@@ -12109,6 +12270,14 @@ export default function DeliveryHome() {
 
 
           setBillImageUploaded(true)
+          persistDeliveryFlowProgress({
+            billImageUrl: imageUrl,
+            billImageUploaded: true,
+            progress: {
+              billImageUrl: imageUrl,
+              billImageUploaded: true
+            }
+          })
 
 
           toast.success('Bill image uploaded! You can now confirm order ID.')
@@ -12191,6 +12360,26 @@ export default function DeliveryHome() {
 
   }
 
+  useEffect(() => {
+    if (!selectedRestaurant) return
+    persistDeliveryFlowProgress()
+  }, [
+    selectedRestaurant?.id,
+    selectedRestaurant?.orderId,
+    selectedRestaurant?.orderStatus,
+    selectedRestaurant?.status,
+    selectedRestaurant?.deliveryPhase,
+    selectedRestaurant?.deliveryState?.currentPhase,
+    selectedRestaurant?.deliveryState?.status,
+    billImageUrl,
+    billImageUploaded,
+    showreachedPickupPopup,
+    showOrderIdConfirmationPopup,
+    showReachedDropPopup,
+    showOrderDeliveredAnimation,
+    persistDeliveryFlowProgress
+  ])
+
 
 
 
@@ -12267,7 +12456,7 @@ export default function DeliveryHome() {
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
 
 
-    const threshold = maxSwipe * 0.7 // 70% of max swipe
+    const threshold = maxSwipe * DELIVERY_SWIPE_CONFIRM_THRESHOLD
 
 
 
@@ -12658,6 +12847,7 @@ export default function DeliveryHome() {
 
 
                   customerName: order.userId?.name || selectedRestaurant.customerName,
+                  customerPhone: order.userId?.phone || selectedRestaurant.customerPhone || null,
 
 
                   customerAddress: order.address?.formattedAddress ||
@@ -13224,7 +13414,7 @@ export default function DeliveryHome() {
     // Only handle horizontal swipes (swipe right)
 
 
-    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+    if (Math.abs(deltaX) > DELIVERY_SWIPE_START_THRESHOLD_PX && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
 
 
       orderDeliveredIsSwiping.current = true
@@ -13305,7 +13495,7 @@ export default function DeliveryHome() {
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
 
 
-    const threshold = maxSwipe * 0.7 // 70% of max swipe
+    const threshold = maxSwipe * DELIVERY_SWIPE_CONFIRM_THRESHOLD
 
 
 
@@ -13428,9 +13618,6 @@ export default function DeliveryHome() {
     setIsAnimatingToComplete(false)
 
 
-    setAcceptButtonProgress(0)
-
-
   }
 
 
@@ -13452,7 +13639,7 @@ export default function DeliveryHome() {
     // Only handle horizontal swipes (swipe right)
 
 
-    if (Math.abs(deltaX) > 5 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+    if (Math.abs(deltaX) > DELIVERY_SWIPE_START_THRESHOLD_PX && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
 
 
       acceptButtonIsSwiping.current = true
@@ -13533,7 +13720,7 @@ export default function DeliveryHome() {
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
 
 
-    const threshold = maxSwipe * 0.7 // 70% of max swipe
+    const threshold = maxSwipe * DELIVERY_SWIPE_CONFIRM_THRESHOLD
 
 
 
@@ -14064,6 +14251,29 @@ export default function DeliveryHome() {
 
 
       const orderId = newOrder.orderMongoId || newOrder.orderId;
+      const currentSelectedOrder = selectedRestaurantRef.current || selectedRestaurant;
+
+      const activeOrderId = currentSelectedOrder?.id || currentSelectedOrder?.orderId || null;
+      const activeOrderStatus = String(currentSelectedOrder?.orderStatus || currentSelectedOrder?.status || '').toLowerCase();
+      const activeOrderPhase = String(currentSelectedOrder?.deliveryPhase || currentSelectedOrder?.deliveryState?.currentPhase || '').toLowerCase();
+      const activeDeliveryStateStatus = String(currentSelectedOrder?.deliveryState?.status || '').toLowerCase();
+      const hasActiveOrderInProgress =
+        activeOrderStatus === 'out_for_delivery' ||
+        activeOrderStatus === 'picked_up' ||
+        activeOrderStatus === 'accepted' ||
+        activeOrderPhase === 'en_route_to_pickup' ||
+        activeOrderPhase === 'at_pickup' ||
+        activeOrderPhase === 'en_route_to_delivery' ||
+        activeOrderPhase === 'picked_up' ||
+        activeDeliveryStateStatus === 'accepted' ||
+        activeDeliveryStateStatus === 'order_confirmed' ||
+        activeDeliveryStateStatus === 'en_route_to_delivery';
+
+      if (hasActiveOrderInProgress && (!activeOrderId || !orderId || String(activeOrderId) === String(orderId))) {
+        markOrderAsAccepted(orderId, newOrder?.orderMongoId, newOrder?.orderId);
+        clearNewOrder();
+        return;
+      }
 
 
 
@@ -14366,13 +14576,38 @@ export default function DeliveryHome() {
         items: newOrder.items || [],
 
 
-        total: newOrder.total || 0
+        total: newOrder.total || 0,
+        orderStatus: newOrder.status || currentSelectedOrder?.orderStatus || currentSelectedOrder?.status || null,
+        deliveryState: {
+          ...(newOrder.deliveryState || {}),
+          currentPhase:
+            newOrder.deliveryState?.currentPhase ||
+            newOrder.deliveryPhase ||
+            currentSelectedOrder?.deliveryState?.currentPhase ||
+            currentSelectedOrder?.deliveryPhase ||
+            null,
+          status:
+            newOrder.deliveryState?.status ||
+            currentSelectedOrder?.deliveryState?.status ||
+            null
+        },
+        deliveryPhase:
+          newOrder.deliveryState?.currentPhase ||
+          newOrder.deliveryPhase ||
+          currentSelectedOrder?.deliveryPhase ||
+          null
 
 
       }
 
 
 
+
+
+      setNewOrderAcceptButtonProgress(0)
+
+
+      setNewOrderIsAnimatingToComplete(false)
 
 
       setSelectedRestaurant(restaurantData)
@@ -14411,7 +14646,8 @@ export default function DeliveryHome() {
     isOrderAlreadyAccepted,
 
 
-    markOrderAsAccepted
+    markOrderAsAccepted,
+    clearNewOrder
 
 
   ])
@@ -14793,10 +15029,6 @@ export default function DeliveryHome() {
 
 
   const [showBookGigsPopup, setShowBookGigsPopup] = useState(false)
-
-
-
-
 
   // Drop location selection popup state
 
@@ -15205,6 +15437,153 @@ export default function DeliveryHome() {
 
         const orders = response.data.data.orders
 
+        // If backend already has an active assigned order for this rider, restore its slider flow.
+        // This covers refresh/reconnect when websocket event was missed.
+        const activeAssignedOrder = orders.find((order) => {
+          const orderStatus = String(order?.status || '').toLowerCase()
+          const deliveryPhase = String(order?.deliveryState?.currentPhase || '').toLowerCase()
+          const deliveryStateStatus = String(order?.deliveryState?.status || '').toLowerCase()
+
+          const isTerminal =
+            orderStatus === 'cancelled' ||
+            orderStatus === 'delivered' ||
+            orderStatus === 'completed' ||
+            deliveryPhase === 'delivered' ||
+            deliveryPhase === 'completed' ||
+            deliveryStateStatus === 'delivered'
+
+          if (isTerminal) return false
+
+          return (
+            orderStatus === 'accepted' ||
+            orderStatus === 'preparing' ||
+            orderStatus === 'ready' ||
+            orderStatus === 'out_for_delivery' ||
+            deliveryPhase === 'en_route_to_pickup' ||
+            deliveryPhase === 'at_pickup' ||
+            deliveryPhase === 'picked_up' ||
+            deliveryPhase === 'en_route_to_delivery' ||
+            deliveryPhase === 'en_route_to_drop' ||
+            deliveryPhase === 'at_delivery' ||
+            deliveryStateStatus === 'accepted' ||
+            deliveryStateStatus === 'reached_pickup' ||
+            deliveryStateStatus === 'order_confirmed' ||
+            deliveryStateStatus === 'en_route_to_delivery' ||
+            deliveryStateStatus === 'reached_drop' ||
+            deliveryStateStatus === 'at_delivery'
+          )
+        })
+
+        if (activeAssignedOrder && !selectedRestaurantRef.current) {
+          const restaurantAddress = resolveStoreAddressFromOrder(activeAssignedOrder, "Restaurant address")
+          const customerCoords = extractCustomerCoordsFromOrder(activeAssignedOrder)
+          const estimatedEarnings = activeAssignedOrder.estimatedEarnings || 0
+          const estimatedEarningValue =
+            typeof estimatedEarnings === 'object' && estimatedEarnings?.totalEarning != null
+              ? Number(estimatedEarnings.totalEarning) || 0
+              : Number(estimatedEarnings) || 0
+
+          const restoredAssignedRestaurant = {
+            id: activeAssignedOrder._id?.toString() || activeAssignedOrder.orderId,
+            orderId: activeAssignedOrder.orderId,
+            name: activeAssignedOrder.restaurantId?.name || 'Restaurant',
+            address: normalizeAddressLabel(restaurantAddress, 'Restaurant address not available'),
+            lat: activeAssignedOrder.restaurantId?.location?.coordinates?.[1],
+            lng: activeAssignedOrder.restaurantId?.location?.coordinates?.[0],
+            distance:
+              formatDistanceKm(activeAssignedOrder?.assignmentInfo?.distance) ||
+              normalizeDistanceLabel(activeAssignedOrder?.pickupDistance) ||
+              'Distance not available',
+            timeAway: 'N/A',
+            dropDistance:
+              formatDistanceKm(activeAssignedOrder?.assignmentInfo?.distance || activeAssignedOrder?.deliveryState?.routeToDelivery?.distance) ||
+              normalizeDistanceLabel(activeAssignedOrder?.dropDistance) ||
+              'Distance not available',
+            pickupDistance:
+              formatDistanceKm(activeAssignedOrder?.assignmentInfo?.distance) ||
+              normalizeDistanceLabel(activeAssignedOrder?.pickupDistance) ||
+              'Distance not available',
+            estimatedEarnings: estimatedEarnings,
+            customerName: activeAssignedOrder.userId?.name || 'Customer',
+            customerPhone: activeAssignedOrder.userId?.phone || null,
+            customerAddress:
+              activeAssignedOrder.address?.formattedAddress ||
+              (activeAssignedOrder.address?.street
+                ? `${activeAssignedOrder.address.street}, ${activeAssignedOrder.address.city || ''}, ${activeAssignedOrder.address.state || ''}`.trim()
+                : 'Customer address'),
+            customerLat: customerCoords?.lat,
+            customerLng: customerCoords?.lng,
+            items: activeAssignedOrder.items || [],
+            total: activeAssignedOrder.pricing?.total || 0,
+            payment: activeAssignedOrder.payment?.method || 'COD',
+            amount: estimatedEarningValue,
+            orderStatus: activeAssignedOrder.status || '',
+            status: activeAssignedOrder.status || '',
+            deliveryState: activeAssignedOrder.deliveryState || {},
+            deliveryPhase: activeAssignedOrder.deliveryState?.currentPhase || ''
+          }
+
+          const orderStatus = String(restoredAssignedRestaurant?.orderStatus || restoredAssignedRestaurant?.status || '').toLowerCase()
+          const deliveryPhase = String(restoredAssignedRestaurant?.deliveryPhase || restoredAssignedRestaurant?.deliveryState?.currentPhase || '').toLowerCase()
+          const deliveryStateStatus = String(restoredAssignedRestaurant?.deliveryState?.status || '').toLowerCase()
+
+          const isAtDelivery =
+            deliveryPhase === 'at_delivery' ||
+            deliveryStateStatus === 'reached_drop' ||
+            deliveryStateStatus === 'at_delivery'
+
+          const isInDeliveryPhase =
+            orderStatus === 'out_for_delivery' ||
+            deliveryPhase === 'en_route_to_delivery' ||
+            deliveryPhase === 'en_route_to_drop' ||
+            deliveryPhase === 'picked_up' ||
+            deliveryStateStatus === 'order_confirmed' ||
+            deliveryStateStatus === 'en_route_to_delivery'
+
+          const isAtPickup =
+            deliveryPhase === 'at_pickup' ||
+            deliveryStateStatus === 'reached_pickup'
+
+          const isPickupPhase =
+            !isAtDelivery &&
+            !isInDeliveryPhase &&
+            !isAtPickup &&
+            (
+              orderStatus === 'accepted' ||
+              orderStatus === 'preparing' ||
+              orderStatus === 'ready' ||
+              deliveryStateStatus === 'accepted' ||
+              deliveryPhase === 'en_route_to_pickup'
+            )
+
+          setSelectedRestaurant(restoredAssignedRestaurant)
+          selectedRestaurantRef.current = restoredAssignedRestaurant
+          setShowNewOrderPopup(false)
+          setShowreachedPickupPopup(isPickupPhase)
+          setShowOrderIdConfirmationPopup(isAtPickup)
+          setShowReachedDropPopup(isInDeliveryPhase)
+          setShowOrderDeliveredAnimation(isAtDelivery)
+
+          try {
+            localStorage.setItem('deliveryActiveOrder', JSON.stringify({
+              orderId: restoredAssignedRestaurant.id || restoredAssignedRestaurant.orderId,
+              restaurantInfo: restoredAssignedRestaurant,
+              acceptedAt: activeAssignedOrder?.deliveryState?.acceptedAt || new Date().toISOString(),
+              progress: {
+                showreachedPickupPopup: isPickupPhase,
+                showOrderIdConfirmationPopup: isAtPickup,
+                showReachedDropPopup: isInDeliveryPhase,
+                showOrderDeliveredAnimation: isAtDelivery
+              }
+            }))
+          } catch (storageError) {
+            console.warn('Failed to persist assigned order restore:', storageError)
+          }
+
+          console.log('✅ Restored assigned order flow from API:', restoredAssignedRestaurant.orderId)
+          return
+        }
+
 
         console.log(`✅ Found ${orders.length} assigned order(s)`)
 
@@ -15449,6 +15828,12 @@ export default function DeliveryHome() {
 
 
 
+          const estimatedEarnings = firstOrder.estimatedEarnings || 0
+          const estimatedEarningValue =
+            typeof estimatedEarnings === 'object' && estimatedEarnings?.totalEarning != null
+              ? Number(estimatedEarnings.totalEarning) || 0
+              : Number(estimatedEarnings) || 0
+
           const restaurantData = {
 
 
@@ -15477,10 +15862,11 @@ export default function DeliveryHome() {
               normalizeDistanceLabel(firstOrder?.dropDistance) ||
               'Distance not available',
             pickupDistance: pickupDistance,
-            estimatedEarnings: firstOrder.pricing?.deliveryFee || 0,
+            estimatedEarnings: estimatedEarnings,
 
 
             customerName: firstOrder.userId?.name || 'Customer',
+            customerPhone: firstOrder.userId?.phone || null,
 
 
             customerAddress: firstOrder.address?.formattedAddress ||
@@ -15510,7 +15896,7 @@ export default function DeliveryHome() {
             payment: firstOrder.payment?.method || 'COD',
 
 
-            amount: firstOrder.pricing?.deliveryFee || 0
+            amount: estimatedEarningValue
 
 
           }
@@ -18212,7 +18598,20 @@ export default function DeliveryHome() {
       !(customerLat === 0 && customerLng === 0);
 
 
-    const shouldShowCustomerMarker = navigationMode === 'customer' && hasCustomerCoords;
+    const orderStatus = String(selectedRestaurant?.orderStatus || selectedRestaurant?.status || '').toLowerCase();
+    const deliveryPhase = String(selectedRestaurant?.deliveryPhase || selectedRestaurant?.deliveryState?.currentPhase || '').toLowerCase();
+    const deliveryStateStatus = String(selectedRestaurant?.deliveryState?.status || '').toLowerCase();
+    const isDeliveredOrCompleted =
+      orderStatus === 'delivered' ||
+      orderStatus === 'completed' ||
+      deliveryPhase === 'delivered' ||
+      deliveryPhase === 'completed' ||
+      deliveryStateStatus === 'delivered';
+
+    const shouldShowCustomerMarker =
+      navigationMode === 'customer' &&
+      hasCustomerCoords &&
+      !isDeliveredOrCompleted;
 
 
 
@@ -18341,7 +18740,22 @@ export default function DeliveryHome() {
     selectedRestaurant?.customerLng,
 
 
-    selectedRestaurant?.customerName
+    selectedRestaurant?.customerName,
+
+
+    selectedRestaurant?.orderStatus,
+
+
+    selectedRestaurant?.status,
+
+
+    selectedRestaurant?.deliveryPhase,
+
+
+    selectedRestaurant?.deliveryState?.currentPhase,
+
+
+    selectedRestaurant?.deliveryState?.status
 
 
   ])
@@ -18581,7 +18995,7 @@ export default function DeliveryHome() {
   const updateLiveTrackingPolyline = useCallback((directionsResult, riderPosition) => {
 
 
-    if (!directionsResult || !riderPosition || !window.google || !window.google.maps) {
+    if (!directionsResult || !window.google || !window.google.maps) {
 
 
       return;
@@ -18644,10 +19058,34 @@ export default function DeliveryHome() {
 
 
 
-      // Convert rider position to object format
+      // Resolve rider position with robust fallbacks so route still renders on refresh/reconnect.
+      // Priority:
+      // 1) explicit riderPosition arg
+      // 2) last known location ref
+      // 3) first point of full polyline (so route is still visible even before GPS resolves)
+      const riderPositionArray =
+        Array.isArray(riderPosition) &&
+        riderPosition.length === 2 &&
+        Number.isFinite(Number(riderPosition[0])) &&
+        Number.isFinite(Number(riderPosition[1]))
+          ? [Number(riderPosition[0]), Number(riderPosition[1])]
+          : (Array.isArray(lastLocationRef.current) &&
+            lastLocationRef.current.length === 2 &&
+            Number.isFinite(Number(lastLocationRef.current[0])) &&
+            Number.isFinite(Number(lastLocationRef.current[1])))
+            ? [Number(lastLocationRef.current[0]), Number(lastLocationRef.current[1])]
+            : null;
 
+      const riderPos = riderPositionArray
+        ? { lat: riderPositionArray[0], lng: riderPositionArray[1] }
+        : {
+            lat: Number(fullPolyline?.[0]?.lat ?? 0),
+            lng: Number(fullPolyline?.[0]?.lng ?? 0),
+          };
 
-      const riderPos = { lat: riderPosition[0], lng: riderPosition[1] };
+      if (!Number.isFinite(riderPos.lat) || !Number.isFinite(riderPos.lng)) {
+        return;
+      }
 
 
 
@@ -20468,6 +20906,9 @@ export default function DeliveryHome() {
     const restoreActiveOrder = async () => {
 
 
+      isRestoringActiveOrderRef.current = true;
+
+
       try {
 
 
@@ -20739,6 +21180,7 @@ export default function DeliveryHome() {
 
 
             customerName: order?.userId?.name || savedRestaurant?.customerName,
+            customerPhone: order?.userId?.phone || savedRestaurant?.customerPhone || null,
 
 
             customerAddress:
@@ -20802,6 +21244,179 @@ export default function DeliveryHome() {
 
 
 
+          const restoredOrderStatus = String(
+
+
+            restoredRestaurant?.orderStatus || restoredRestaurant?.status || ''
+
+
+          ).toLowerCase()
+
+
+          const restoredDeliveryPhase = String(
+
+
+            restoredRestaurant?.deliveryPhase || restoredRestaurant?.deliveryState?.currentPhase || ''
+
+
+          ).toLowerCase()
+
+
+          const restoredDeliveryStateStatus = String(
+
+
+            restoredRestaurant?.deliveryState?.status || ''
+
+
+          ).toLowerCase()
+
+
+          const isRestoredDelivered =
+
+
+            restoredOrderStatus === 'delivered' ||
+
+
+            restoredOrderStatus === 'completed' ||
+
+
+            restoredDeliveryPhase === 'completed' ||
+
+
+            restoredDeliveryPhase === 'delivered' ||
+
+
+            restoredDeliveryStateStatus === 'delivered'
+
+
+          const isRestoredAtDelivery =
+
+
+            restoredDeliveryPhase === 'at_delivery' ||
+
+
+            restoredDeliveryStateStatus === 'reached_drop' ||
+
+
+            restoredDeliveryStateStatus === 'at_delivery'
+
+
+          const isRestoredAtPickup =
+
+
+            restoredDeliveryPhase === 'at_pickup' ||
+
+
+            restoredDeliveryStateStatus === 'reached_pickup'
+
+
+          const isRestoredInDeliveryPhase =
+
+
+            restoredOrderStatus === 'out_for_delivery' ||
+
+
+            restoredDeliveryPhase === 'picked_up' ||
+
+
+            restoredDeliveryPhase === 'en_route_to_delivery' ||
+
+
+            restoredDeliveryStateStatus === 'order_confirmed' ||
+
+
+            restoredDeliveryStateStatus === 'en_route_to_delivery'
+
+
+          const isRestoredPickupPhase =
+
+
+            !isRestoredDelivered &&
+
+
+            !isRestoredAtDelivery &&
+
+
+            !isRestoredAtPickup &&
+
+
+            !isRestoredInDeliveryPhase &&
+
+
+            (
+
+
+              restoredOrderStatus === 'accepted' ||
+
+
+              restoredOrderStatus === 'preparing' ||
+
+
+              restoredOrderStatus === 'ready' ||
+
+
+              restoredDeliveryStateStatus === 'accepted' ||
+
+
+              restoredDeliveryPhase === 'en_route_to_pickup'
+
+
+            )
+
+
+          const savedProgress = activeOrderData?.progress || {}
+          const savedShowReachedPickup = Boolean(savedProgress?.showreachedPickupPopup)
+          const savedShowOrderIdConfirmation = Boolean(savedProgress?.showOrderIdConfirmationPopup)
+          const savedShowReachedDrop = Boolean(savedProgress?.showReachedDropPopup)
+          const savedShowOrderDelivered = Boolean(savedProgress?.showOrderDeliveredAnimation)
+
+          const shouldShowOrderDelivered = isRestoredAtDelivery || savedShowOrderDelivered
+          const shouldShowReachedDrop =
+            !shouldShowOrderDelivered &&
+            (isRestoredInDeliveryPhase || savedShowReachedDrop)
+          const shouldShowOrderIdConfirmation =
+            !shouldShowOrderDelivered &&
+            !shouldShowReachedDrop &&
+            (isRestoredAtPickup || savedShowOrderIdConfirmation)
+          const shouldShowReachedPickup =
+            !shouldShowOrderDelivered &&
+            !shouldShowReachedDrop &&
+            !shouldShowOrderIdConfirmation &&
+            (
+              isRestoredPickupPhase ||
+              savedShowReachedPickup ||
+              restoredOrderStatus === 'accepted' ||
+              restoredDeliveryStateStatus === 'accepted'
+            )
+
+          setShowNewOrderPopup(false)
+
+
+          setShowreachedPickupPopup(shouldShowReachedPickup)
+
+
+          setShowOrderIdConfirmationPopup(shouldShowOrderIdConfirmation)
+
+
+          setShowReachedDropPopup(shouldShowReachedDrop)
+
+
+          setShowOrderDeliveredAnimation(shouldShowOrderDelivered)
+
+          const restoredBillImageUrl =
+            activeOrderData?.progress?.billImageUrl ||
+            activeOrderData?.billImageUrl ||
+            null
+          const restoredBillImageUploaded = Boolean(
+            activeOrderData?.progress?.billImageUploaded ||
+            activeOrderData?.billImageUploaded ||
+            restoredBillImageUrl
+          )
+          setBillImageUrl(restoredBillImageUrl)
+          setBillImageUploaded(restoredBillImageUploaded)
+
+
+
 
 
           try {
@@ -20819,7 +21434,18 @@ export default function DeliveryHome() {
               restaurantInfo: restoredRestaurant,
 
 
-              acceptedAt: activeOrderData.acceptedAt || new Date().toISOString()
+              acceptedAt: activeOrderData.acceptedAt || new Date().toISOString(),
+              billImageUrl: restoredBillImageUrl,
+              billImageUploaded: restoredBillImageUploaded,
+              progress: {
+                ...(activeOrderData.progress || {}),
+                billImageUrl: restoredBillImageUrl,
+                billImageUploaded: restoredBillImageUploaded,
+                showreachedPickupPopup: shouldShowReachedPickup,
+                showOrderIdConfirmationPopup: shouldShowOrderIdConfirmation,
+                showReachedDropPopup: shouldShowReachedDrop,
+                showOrderDeliveredAnimation: shouldShowOrderDelivered
+              }
 
 
             }))
@@ -20927,16 +21553,31 @@ export default function DeliveryHome() {
 
 
 
+          const fallbackRouteCoordinates =
+            (isPickedUpPhase
+              ? restoredOrder?.deliveryState?.routeToDelivery?.coordinates
+              : restoredOrder?.deliveryState?.routeToPickup?.coordinates) ||
+            restoredOrder?.deliveryState?.routeToPickup?.coordinates ||
+            restoredOrder?.deliveryState?.routeToDelivery?.coordinates ||
+            activeOrderData?.routeCoordinates ||
+            [];
+
           const destinationForRestore = isPickedUpPhase && hasCustomerLocation
 
 
             ? { lat: Number(restoredOrder.customerLat), lng: Number(restoredOrder.customerLng) }
 
 
-            : (activeOrderData.restaurantInfo && activeOrderData.restaurantInfo.lat && activeOrderData.restaurantInfo.lng)
+            : (Number.isFinite(Number(restoredOrder?.lat)) && Number.isFinite(Number(restoredOrder?.lng)))
 
 
-              ? { lat: activeOrderData.restaurantInfo.lat, lng: activeOrderData.restaurantInfo.lng }
+              ? { lat: Number(restoredOrder.lat), lng: Number(restoredOrder.lng) }
+
+
+              : (activeOrderData.restaurantInfo && activeOrderData.restaurantInfo.lat && activeOrderData.restaurantInfo.lng)
+
+
+                ? { lat: activeOrderData.restaurantInfo.lat, lng: activeOrderData.restaurantInfo.lng }
 
 
               : null
@@ -20996,10 +21637,16 @@ export default function DeliveryHome() {
                   // Fallback to coordinates if Directions API fails
 
 
-                  if (activeOrderData.routeCoordinates && activeOrderData.routeCoordinates.length > 0) {
+                  if (fallbackRouteCoordinates.length > 0) {
 
 
-                    setRoutePolyline(activeOrderData.routeCoordinates);
+                    setRoutePolyline(fallbackRouteCoordinates);
+
+
+                    updateRoutePolyline(fallbackRouteCoordinates);
+
+
+                    setShowRoutePath(true);
 
 
                   }
@@ -21017,10 +21664,16 @@ export default function DeliveryHome() {
                 // Fallback to coordinates
 
 
-                if (activeOrderData.routeCoordinates && activeOrderData.routeCoordinates.length > 0) {
+                if (fallbackRouteCoordinates.length > 0) {
 
 
-                  setRoutePolyline(activeOrderData.routeCoordinates);
+                  setRoutePolyline(fallbackRouteCoordinates);
+
+
+                  updateRoutePolyline(fallbackRouteCoordinates);
+
+
+                  setShowRoutePath(true);
 
 
                   console.log('✅ Using fallback route coordinates from localStorage');
@@ -21032,25 +21685,37 @@ export default function DeliveryHome() {
               });
 
 
-            } else if (activeOrderData.routeCoordinates && activeOrderData.routeCoordinates.length > 0) {
+            } else if (fallbackRouteCoordinates.length > 0) {
 
 
               // Use saved coordinates if we don't have Directions API flag
 
 
-              setRoutePolyline(activeOrderData.routeCoordinates);
+              setRoutePolyline(fallbackRouteCoordinates);
+
+
+              updateRoutePolyline(fallbackRouteCoordinates);
+
+
+              setShowRoutePath(true);
 
 
             }
 
 
-          } else if (activeOrderData.routeCoordinates && activeOrderData.routeCoordinates.length > 0) {
+          } else if (fallbackRouteCoordinates.length > 0) {
 
 
             // Fallback: Use coordinates if restaurant info or rider location not available
 
 
-            setRoutePolyline(activeOrderData.routeCoordinates);
+            setRoutePolyline(fallbackRouteCoordinates);
+
+
+            updateRoutePolyline(fallbackRouteCoordinates);
+
+
+            setShowRoutePath(true);
 
 
           }
@@ -21090,6 +21755,12 @@ export default function DeliveryHome() {
 
 
         setShowPaymentPage(false);
+
+
+      } finally {
+
+
+        isRestoringActiveOrderRef.current = false;
 
 
       }
@@ -21233,22 +21904,13 @@ export default function DeliveryHome() {
       shouldUseCurrentDirections &&
 
 
-      currentRiderLocation &&
-
-
-      currentRiderLocation.length === 2 &&
-
-
       !liveTrackingPolylineRef.current) {
 
 
-      updateLiveTrackingPolyline(currentDirectionsResponse, currentRiderLocation);
+      updateLiveTrackingPolyline(currentDirectionsResponse, currentRiderLocation || null);
 
 
     } else if (currentDirectionsResponse &&
-
-
-      currentRiderLocation &&
 
 
       liveTrackingPolylineRef.current &&
@@ -21332,7 +21994,7 @@ export default function DeliveryHome() {
     // Clear immediately on mount if no active order
 
 
-    if (!selectedRestaurant && window.deliveryMapInstance) {
+    if (!selectedRestaurant && window.deliveryMapInstance && !isRestoringActiveOrderRef.current) {
 
 
       // Clear route polyline
@@ -21410,7 +22072,7 @@ export default function DeliveryHome() {
     const timer = setTimeout(() => {
 
 
-      if (!selectedRestaurant && window.deliveryMapInstance) {
+      if (!selectedRestaurant && window.deliveryMapInstance && !isRestoringActiveOrderRef.current) {
 
 
         // Clear route polyline
@@ -21528,6 +22190,12 @@ export default function DeliveryHome() {
 
 
     setShowPaymentPage(false);
+
+
+    setBillImageUrl(null);
+
+
+    setBillImageUploaded(false);
 
 
     setShowNewOrderPopup(false);
@@ -23006,6 +23674,9 @@ export default function DeliveryHome() {
       setShowreachedPickupPopup(false)
 
 
+      setShowOrderIdConfirmationPopup(false)
+
+
       setShowReachedDropPopup(false)
 
 
@@ -23039,10 +23710,44 @@ export default function DeliveryHome() {
 
 
 
+    const isAtPickup = deliveryPhase === 'at_pickup' ||
+
+
+      deliveryPhase === 'picked_up' ||
+
+
+      deliveryStateStatus === 'reached_pickup'
+
+
+    if (isAtPickup) {
+
+
+      setShowreachedPickupPopup(false)
+
+
+      setShowReachedDropPopup(false)
+
+
+      setShowOrderDeliveredAnimation(false)
+
+
+      setShowOrderIdConfirmationPopup(true)
+
+
+      return
+
+
+    }
+
+
+
     if (isInDeliveryPhase) {
 
 
       setShowreachedPickupPopup(false)
+
+
+      setShowOrderIdConfirmationPopup(false)
 
 
       setShowReachedDropPopup(true)
@@ -23084,6 +23789,94 @@ export default function DeliveryHome() {
     showCustomerReviewPopup
 
 
+  ])
+
+
+
+  // Safety restore: if an active order exists but all action popups are closed after refresh,
+  // open the correct popup based on persisted delivery phase/status.
+  useEffect(() => {
+    if (!selectedRestaurant) return
+
+    const hasAnyActionPopupOpen =
+      showNewOrderPopup ||
+      showreachedPickupPopup ||
+      showOrderIdConfirmationPopup ||
+      showReachedDropPopup ||
+      showOrderDeliveredAnimation ||
+      showCustomerReviewPopup ||
+      showPaymentPage
+
+    if (hasAnyActionPopupOpen) return
+
+    const orderStatus = String(selectedRestaurant?.orderStatus || selectedRestaurant?.status || '').toLowerCase()
+    const deliveryPhase = String(selectedRestaurant?.deliveryPhase || selectedRestaurant?.deliveryState?.currentPhase || '').toLowerCase()
+    const deliveryStateStatus = String(selectedRestaurant?.deliveryState?.status || '').toLowerCase()
+
+    const isDelivered =
+      orderStatus === 'delivered' ||
+      orderStatus === 'completed' ||
+      deliveryPhase === 'completed' ||
+      deliveryPhase === 'delivered' ||
+      deliveryStateStatus === 'delivered'
+
+    if (isDelivered) return
+
+    const isAtDelivery =
+      deliveryPhase === 'at_delivery' ||
+      deliveryStateStatus === 'reached_drop' ||
+      deliveryStateStatus === 'at_delivery'
+
+    if (isAtDelivery) {
+      setShowOrderDeliveredAnimation(true)
+      return
+    }
+
+    const isInDeliveryPhase =
+      orderStatus === 'out_for_delivery' ||
+      deliveryPhase === 'en_route_to_delivery' ||
+      deliveryPhase === 'picked_up' ||
+      deliveryStateStatus === 'order_confirmed' ||
+      deliveryStateStatus === 'en_route_to_delivery'
+
+    if (isInDeliveryPhase) {
+      setShowReachedDropPopup(true)
+      return
+    }
+
+    const isAtPickup =
+      deliveryPhase === 'at_pickup' ||
+      deliveryStateStatus === 'reached_pickup'
+
+    if (isAtPickup) {
+      setShowOrderIdConfirmationPopup(true)
+      return
+    }
+
+    const isPickupPhase =
+      orderStatus === 'accepted' ||
+      orderStatus === 'preparing' ||
+      orderStatus === 'ready' ||
+      deliveryPhase === 'en_route_to_pickup' ||
+      deliveryStateStatus === 'accepted'
+
+    if (isPickupPhase) {
+      setShowNewOrderPopup(false)
+      setShowreachedPickupPopup(true)
+    }
+  }, [
+    selectedRestaurant?.orderStatus,
+    selectedRestaurant?.status,
+    selectedRestaurant?.deliveryPhase,
+    selectedRestaurant?.deliveryState?.currentPhase,
+    selectedRestaurant?.deliveryState?.status,
+    showNewOrderPopup,
+    showreachedPickupPopup,
+    showOrderIdConfirmationPopup,
+    showReachedDropPopup,
+    showOrderDeliveredAnimation,
+    showCustomerReviewPopup,
+    showPaymentPage
   ])
 
 
@@ -28835,7 +29628,7 @@ export default function DeliveryHome() {
                 }}
 
 
-                transition={isDraggingSwipeBar ? { duration: 0 } : { type: "spring", damping: 30, stiffness: 300 }}
+                transition={isDraggingSwipeBar ? { duration: 0 } : { type: "spring", damping: 36, stiffness: 180, mass: 0.9 }}
 
 
                 onTouchStart={handleSwipeBarTouchStart}
@@ -29027,7 +29820,7 @@ export default function DeliveryHome() {
             exit={{ y: "100%" }}
 
 
-            transition={isDraggingSwipeBar ? { duration: 0 } : { type: "spring", damping: 30, stiffness: 300 }}
+            transition={isDraggingSwipeBar ? { duration: 0 } : { type: "spring", damping: 36, stiffness: 180, mass: 0.9 }}
 
 
             onTouchStart={handleSwipeBarTouchStart}
@@ -31272,9 +32065,10 @@ export default function DeliveryHome() {
 
 
                       onTouchEnd={handleNewOrderAcceptTouchEnd}
+                      onTouchCancel={handleNewOrderAcceptTouchEnd}
 
 
-                      whileTap={{ scale: 0.98 }}
+                      whileTap={{ scale: 0.995 }}
 
 
                     >
@@ -31304,10 +32098,13 @@ export default function DeliveryHome() {
                           type: "spring",
 
 
-                          stiffness: 200,
+                          stiffness: 150,
 
 
-                          damping: 25
+                          damping: 22,
+
+
+                          mass: 0.9
 
 
                         } : { duration: 0 }}
@@ -31385,10 +32182,10 @@ export default function DeliveryHome() {
                             animate={{
 
 
-                              opacity: newOrderAcceptButtonProgress > 0.5 ? Math.max(0.2, 1 - newOrderAcceptButtonProgress * 0.8) : 1,
+                              opacity: newOrderAcceptButtonProgress > DELIVERY_SWIPE_CONFIRM_THRESHOLD ? Math.max(0.2, 1 - newOrderAcceptButtonProgress * 0.8) : 1,
 
 
-                              x: newOrderAcceptButtonProgress > 0.5 ? newOrderAcceptButtonProgress * 15 : 0
+                              x: newOrderAcceptButtonProgress > DELIVERY_SWIPE_CONFIRM_THRESHOLD ? newOrderAcceptButtonProgress * 15 : 0
 
 
                             }}
@@ -31412,7 +32209,7 @@ export default function DeliveryHome() {
                           >
 
 
-                            {newOrderAcceptButtonProgress > 0.5 ? 'Release to Accept' : 'Accept order'}
+                            {newOrderAcceptButtonProgress > DELIVERY_SWIPE_CONFIRM_THRESHOLD ? 'Release to Accept' : 'Accept order'}
 
 
                           </motion.span>
@@ -32792,7 +33589,7 @@ export default function DeliveryHome() {
                       ? 'Order Cancelled'
 
 
-                      : (reachedPickupButtonProgress > 0.5 ? 'Release to Confirm' : 'Reached Pickup')}
+                      : (reachedPickupButtonProgress > DELIVERY_SWIPE_CONFIRM_THRESHOLD ? 'Release to Confirm' : 'Reached Pickup')}
 
 
                   </motion.span>
@@ -33398,7 +34195,58 @@ export default function DeliveryHome() {
           <div className="flex gap-3 mb-6">
 
 
-            <button className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            <button
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              onClick={async () => {
+                try {
+                  let customerPhone =
+                    selectedRestaurant?.customerPhone ||
+                    selectedRestaurant?.customer?.phone ||
+                    selectedRestaurant?.userPhone ||
+                    ''
+
+                  if (!customerPhone) {
+                    const orderIdForLookup =
+                      selectedRestaurant?.orderId ||
+                      selectedRestaurant?.id ||
+                      newOrder?.orderId ||
+                      newOrder?.orderMongoId
+
+                    if (orderIdForLookup) {
+                      const response = await deliveryAPI.getOrderDetails(orderIdForLookup)
+                      const order = response?.data?.data?.order || response?.data?.data || null
+                      customerPhone =
+                        order?.userId?.phone ||
+                        order?.customerPhone ||
+                        order?.phone ||
+                        ''
+
+                      if (customerPhone) {
+                        setSelectedRestaurant((prev) =>
+                          prev
+                            ? {
+                                ...prev,
+                                customerPhone
+                              }
+                            : prev
+                        )
+                      }
+                    }
+                  }
+
+                  const cleanPhone = String(customerPhone || '').replace(/[^\d+]/g, '')
+                  if (!cleanPhone) {
+                    toast.error('Customer phone number not available.')
+                    return
+                  }
+
+                  window.location.href = `tel:${cleanPhone}`
+                } catch (error) {
+                  console.error('Failed to call customer from Reached Drop:', error)
+                  toast.error('Unable to fetch customer phone number.')
+                }
+              }}
+            >
 
 
               <Phone className="w-5 h-5 text-gray-700" />
@@ -33602,7 +34450,7 @@ export default function DeliveryHome() {
                       ? 'Order Cancelled'
 
 
-                      : (reachedDropButtonProgress > 0.5 ? 'Release to Confirm' : 'Reached Drop')}
+                      : (reachedDropButtonProgress > DELIVERY_SWIPE_CONFIRM_THRESHOLD ? 'Release to Confirm' : 'Reached Drop')}
 
 
                   </motion.span>
@@ -34037,7 +34885,7 @@ export default function DeliveryHome() {
                   >
 
 
-                    {orderDeliveredButtonProgress > 0.5 ? 'Release to Confirm' : 'Order Delivered'}
+                    {orderDeliveredButtonProgress > DELIVERY_SWIPE_CONFIRM_THRESHOLD ? 'Release to Confirm' : 'Order Delivered'}
 
 
                   </motion.span>
@@ -34824,5 +35672,7 @@ export default function DeliveryHome() {
 
 
 }
+
+
 
 

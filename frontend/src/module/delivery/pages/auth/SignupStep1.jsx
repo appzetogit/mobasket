@@ -5,6 +5,15 @@ import { deliveryAPI } from "@/lib/api"
 import { toast } from "sonner"
 import { clearDeliverySignupSession } from "@/lib/utils/auth"
 
+const getCachedDeliveryUser = () => {
+  try {
+    const rawUser = localStorage.getItem("delivery_user")
+    return rawUser ? JSON.parse(rawUser) : null
+  } catch {
+    return null
+  }
+}
+
 export default function SignupStep1() {
   const navigate = useNavigate()
 
@@ -26,6 +35,7 @@ export default function SignupStep1() {
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showBackPopup, setShowBackPopup] = useState(false)
+  const cachedUser = useMemo(() => getCachedDeliveryUser(), [])
 
   const handleBack = () => {
     setShowBackPopup(true)
@@ -37,12 +47,32 @@ export default function SignupStep1() {
   }
 
   useEffect(() => {
+    if (cachedUser?.status && cachedUser.status !== "onboarding") {
+      navigate("/delivery", { replace: true })
+      return
+    }
+
+    let isMounted = true
+
     const fetchProfile = async () => {
       try {
         const response = await deliveryAPI.getProfile()
         const user = response?.data?.data?.user || response?.data?.user || response?.data?.data?.profile || response?.data?.profile
 
+        if (!isMounted) return
+
         if (user) {
+          try {
+            localStorage.setItem("delivery_user", JSON.stringify(user))
+          } catch {
+            // Ignore localStorage write failures here; route logic should still proceed.
+          }
+
+          if (user.status && user.status !== "onboarding") {
+            navigate("/delivery", { replace: true })
+            return
+          }
+
           setFormData({
             name: user.name || "",
             email: user.email || "",
@@ -57,14 +87,22 @@ export default function SignupStep1() {
           })
         }
       } catch (error) {
+        if (!isMounted) return
         console.error("Error fetching delivery profile:", error)
-        // toast.error("Failed to load existing details")
       } finally {
-        setIsLoadingProfile(false)
+        if (isMounted) {
+          setIsLoadingProfile(false)
+        }
       }
     }
 
     fetchProfile()
+    return () => {
+      isMounted = false
+    }
+    // `navigate` is stable from react-router; keep an empty dependency list so
+    // HMR does not swap this hook between [] and [navigate] on live edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleChange = (e) => {

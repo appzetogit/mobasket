@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { Search, Menu, ChevronRight, MapPin, X, Bell } from "lucide-react"
 import { restaurantAPI, groceryStoreAPI } from "@/lib/api"
+import { isOpenFromOutletTimingsMap } from "@/lib/utils/outletTimingsStatus"
 
 export default function RestaurantNavbar({
   restaurantName: propRestaurantName,
@@ -130,7 +131,7 @@ export default function RestaurantNavbar({
       .trim() || "Store")
     : restaurantName
 
-  const [location, setLocation] = useState("")
+  const [locationValue, setLocationValue] = useState("")
 
   // Update location when restaurantData or propLocation changes
   useEffect(() => {
@@ -147,97 +148,41 @@ export default function RestaurantNavbar({
         if (restaurantData.location.formattedAddress &&
           restaurantData.location.formattedAddress.trim() !== "" &&
           restaurantData.location.formattedAddress !== "Select location") {
-          // Check if it's just coordinates (latitude, longitude format)
-          const isCoordinates = /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(restaurantData.location.formattedAddress.trim())
-          if (!isCoordinates) {
-            newLocation = restaurantData.location.formattedAddress.trim()
-          }
+          newLocation = restaurantData.location.formattedAddress.trim()
         }
-
-        // If formattedAddress is not available or is coordinates, try formatAddress function
-        if (!newLocation) {
-          const formatted = formatAddress(restaurantData.location)
-          if (formatted && formatted.trim() !== "") {
-            newLocation = formatted.trim()
-          }
+        // Fallback: Use coordinate fields if address is coordinates
+        else if (restaurantData.location.latitude && restaurantData.location.longitude) {
+          // If it's a raw object with coordinates, use our formatAddress helper
+          newLocation = formatAddress(restaurantData.location)
         }
-
-        // Additional fallback: check if address is directly on location
-        if (!newLocation && restaurantData.location.address && restaurantData.location.address.trim() !== "") {
-          newLocation = restaurantData.location.address.trim()
+        // Fallback: Build from components
+        else {
+          newLocation = formatAddress(restaurantData.location)
         }
       }
-
-      // Priority 3: Fallback - check if address is directly on restaurantData (not in location object)
-      if (!newLocation && restaurantData.address && restaurantData.address.trim() !== "") {
+      // Priority 3: Check deprecated top-level address fields
+      else if (restaurantData.address && restaurantData.address.trim() !== "") {
         newLocation = restaurantData.address.trim()
       }
     }
 
-    setLocation(newLocation)
+    setLocationValue(newLocation)
   }, [restaurantData, propLocation])
 
-  // Load status from localStorage on mount and listen for changes
+  // Update status based on outletTimings
   useEffect(() => {
-    const updateStatus = () => {
-      try {
-        if (typeof restaurantData?.isAcceptingOrders === "boolean") {
-          const backendOnline = restaurantData.isAcceptingOrders;
-          setStatus(backendOnline ? "Online" : "Offline");
-          const statusKey = isGroceryStore ? 'grocery-store_online_status' : 'restaurant_online_status';
-          localStorage.setItem(statusKey, JSON.stringify(backendOnline));
-          return;
-        }
-
-        const statusKey = isGroceryStore ? 'grocery-store_online_status' : 'restaurant_online_status'
-        const savedStatus = localStorage.getItem(statusKey)
-        if (savedStatus !== null) {
-          const isOnline = JSON.parse(savedStatus)
-          setStatus(isOnline ? "Online" : "Offline")
-        } else {
-          // Default to Offline if not set
-          setStatus("Offline")
-        }
-      } catch (error) {
-        console.error("Error loading restaurant/store status:", error)
-        setStatus("Offline")
-      }
+    if (restaurantData) {
+      const isOpen = isOpenFromOutletTimingsMap(restaurantData.outletTimings)
+      setStatus(isOpen ? "Online" : "Offline")
     }
+  }, [restaurantData])
 
-    // Load initial status
-    updateStatus()
-
-    // Listen for status changes from RestaurantStatus/StoreStatus page
-    const handleStatusChange = (event) => {
-      const isOnline = event.detail?.isOnline ?? false
-      setStatus(isOnline ? "Online" : "Offline")
+  const handleSearchToggle = () => {
+    setIsSearchActive(!isSearchActive)
+    if (isSearchActive) {
+      setSearchValue("")
+      if (onSearchChange) onSearchChange("")
     }
-
-    const statusEventName = isGroceryStore ? 'groceryStoreStatusChanged' : 'restaurantStatusChanged'
-    window.addEventListener(statusEventName, handleStatusChange)
-
-    // Also check localStorage periodically to catch direct changes
-    const interval = setInterval(updateStatus, 1000)
-
-    return () => {
-      const statusEventName = isGroceryStore ? 'groceryStoreStatusChanged' : 'restaurantStatusChanged'
-      window.removeEventListener(statusEventName, handleStatusChange)
-      clearInterval(interval)
-    }
-  }, [isGroceryStore, restaurantData?.isAcceptingOrders])
-
-  const handleStatusClick = () => {
-    navigate(isGroceryStore ? "/store/status" : "/restaurant/status")
-  }
-
-  const handleSearchClick = () => {
-    setIsSearchActive(true)
-  }
-
-  const handleSearchClose = () => {
-    setIsSearchActive(false)
-    setSearchValue("")
-    if (onSearchChange) onSearchChange("")
   }
 
   const handleSearchChange = (e) => {
@@ -246,115 +191,93 @@ export default function RestaurantNavbar({
     if (onSearchChange) onSearchChange(value)
   }
 
-  const handleMenuClick = () => {
-    navigate(isGroceryStore ? "/store/explore" : "/restaurant/explore")
-  }
-
-  const handleNotificationsClick = () => {
-    navigate(isGroceryStore ? "/store/notifications" : "/restaurant/notifications")
-  }
-
-  // Show search input when search is active
-  if (isSearchActive) {
-    return (
-      <div className="w-full bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
-        {/* Search Input */}
-        <div className="flex-1 relative">
-          <input
-            type="text"
-            value={searchValue}
-            onChange={handleSearchChange}
-            placeholder="Search by order ID"
-            className="w-full px-4 py-2 text-gray-900 placeholder-gray-500 focus:outline-none"
-            autoFocus
-          />
+  return (
+    <nav className="sticky top-0 z-50 bg-white border-b border-gray-100 flex flex-col px-4 py-3 gap-2">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate(isGroceryStore ? "/store" : "/restaurant")}
+            className="flex items-center gap-2 group transition-all"
+          >
+            <div className="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-lg p-1.5 shadow-sm group-hover:shadow-md transition-all">
+              <Menu size={18} className="text-white" />
+            </div>
+            <div className="flex flex-col items-start -space-y-0.5">
+              <span className="font-bold text-gray-900 leading-tight">
+                {displayName}
+              </span>
+              <div className="flex items-center text-[10px] text-gray-500 font-medium tracking-wide">
+                <span>DASHBOARD</span>
+                <ChevronRight size={10} className="mx-0.5 opacity-50" />
+              </div>
+            </div>
+          </button>
         </div>
 
-        {/* Close Button */}
-        <button
-          onClick={handleSearchClose}
-          className="w-6 h-6 bg-black rounded-full flex items-center justify-center shrink-0"
-          aria-label="Close search"
-        >
-          <X className="w-3 h-3 text-white" />
-        </button>
+        <div className="flex items-center gap-2.5">
+          {showNotifications && (
+            <button
+              onClick={() => navigate(isGroceryStore ? "/store/notifications" : "/restaurant/notifications")}
+              className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all relative group"
+            >
+              <Bell size={20} className="group-hover:scale-110 transition-transform" />
+              <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 border-2 border-white rounded-full"></span>
+            </button>
+          )}
+
+          {showSearch && (
+            <button
+              onClick={handleSearchToggle}
+              className={`p-2 rounded-full transition-all ${isSearchActive ? "bg-indigo-50 text-indigo-600" : "text-gray-400 hover:bg-gray-50"
+                }`}
+            >
+              {isSearchActive ? <X size={20} /> : <Search size={20} />}
+            </button>
+          )}
+
+          <div className="h-7 w-px bg-gray-200 mx-0.5" />
+
+          {showOfflineOnlineTag && (
+            <div
+              className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider shadow-sm transition-all border ${status === "Online"
+                ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                : "bg-red-50 text-red-600 border-red-100"
+                }`}
+            >
+              <div className="flex items-center gap-1.5">
+                <span className={`w-1.5 h-1.5 rounded-full ${status === "Online" ? "bg-emerald-500 animate-pulse" : "bg-red-500"
+                  }`} />
+                {status}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    )
-  }
 
-  return (
-    <div className="w-full bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-      {/* Left Side - Store/Restaurant Info */}
-      <div className="flex-1 min-w-0 pr-4">
-        {/* Store/Restaurant Name */}
-        <h1 className="text-base font-bold text-gray-900 truncate">
-          {loading ? "Loading..." : displayName}
-        </h1>
-
-        {/* Location */}
-        {!loading && location && location.trim() !== "" && (
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <MapPin className="w-3 h-3 text-gray-500 shrink-0" />
-            <p className="text-xs text-gray-600 truncate" title={location}>
-              {location}
+      <div className="flex items-center gap-4">
+        {locationValue && (
+          <div className="flex items-center gap-1.5 text-gray-400 overflow-hidden group">
+            <MapPin size={12} className="flex-shrink-0 group-hover:text-amber-500 transition-colors" />
+            <p className="text-[11px] font-medium truncate tracking-tight text-gray-500 group-hover:text-gray-900 transition-colors">
+              {locationValue}
             </p>
           </div>
         )}
       </div>
 
-      {/* Right Side - Interactive Elements */}
-      <div className="flex items-center">
-        {/* Offline/Online Status Tag */}
-        {showOfflineOnlineTag && (
-          <button
-            onClick={handleStatusClick}
-            className={`flex items-center gap-1.5 px-2 py-1 border rounded-full hover:opacity-80 transition-all ${status === "Online"
-              ? "bg-green-50 border-green-300"
-              : "bg-gray-100 border-gray-300"
-              }`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${status === "Online" ? "bg-green-500" : "bg-gray-500"
-              }`}></span>
-            <span className={`text-sm font-medium ${status === "Online" ? "text-green-700" : "text-gray-700"
-              }`}>
-              {status}
-            </span>
-            <ChevronRight className={`w-4 h-4 ${status === "Online" ? "text-green-700" : "text-gray-700"
-              }`} />
-          </button>
-        )}
-
-        {/* Search Icon */}
-        {showSearch && (
-          <button
-            onClick={handleSearchClick}
-            className="p-2 ml-1 hover:bg-gray-100 rounded-full transition-colors"
-            aria-label="Search"
-          >
-            <Search className="w-5 h-5 text-gray-700" />
-          </button>
-        )}
-
-        {/* Notifications Icon */}
-        {showNotifications && (
-          <button
-            onClick={handleNotificationsClick}
-            className="p-2 ml-1 hover:bg-gray-100 rounded-full transition-colors"
-            aria-label="Notifications"
-          >
-            <Bell className="w-5 h-5 text-gray-700" />
-          </button>
-        )}
-
-        {/* Hamburger Menu Icon */}
-        <button
-          onClick={handleMenuClick}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-          aria-label="Menu"
-        >
-          <Menu className="w-5 h-5 text-gray-700" />
-        </button>
-      </div>
-    </div>
+      {isSearchActive && (
+        <div className="mt-1 relative animate-in slide-in-from-top-2 duration-200">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+          <input
+            autoFocus
+            type="text"
+            value={searchValue}
+            onChange={handleSearchChange}
+            placeholder={`Search ${isGroceryStore ? "products" : "orders"}...`}
+            className="w-full pl-10 pr-4 py-2 bg-gray-50 border-0 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 transition-all font-medium"
+          />
+        </div>
+      )}
+    </nav>
   )
 }

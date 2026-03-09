@@ -28,7 +28,8 @@ export const resolveCODLimitForDelivery = async (deliveryId) => {
     try {
       const delivery = await Delivery.findById(deliveryId).select('cod.limitOverride').lean();
       const override = Number(delivery?.cod?.limitOverride);
-      if (Number.isFinite(override) && override >= 0) {
+      // Treat 0/null as "no rider-specific override" so accounts fall back to admin cash limit.
+      if (Number.isFinite(override) && override > 0) {
         return override;
       }
     } catch (_) {

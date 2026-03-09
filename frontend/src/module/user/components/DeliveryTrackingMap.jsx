@@ -60,31 +60,59 @@ const DeliveryTrackingMap = ({
   const mapInitializedRef = useRef(false);
   const directionsCacheRef = useRef(new Map()); // Cache for locally generated route paths
   const lastRouteRequestRef = useRef({ start: null, end: null, timestamp: 0 });
+  const SOCKET_LOCATION_REFRESH_INTERVAL_MS = 1500;
+  const SOCKET_LOCATION_STALE_THRESHOLD_MS = 2000;
+  const ROUTE_RECALC_MIN_INTERVAL_MS = 2500;
 
   const backendUrl = SOCKET_BASE_URL;
   const [GOOGLE_MAPS_API_KEY, setGOOGLE_MAPS_API_KEY] = useState("");
   const [hasFirebaseRoute, setHasFirebaseRoute] = useState(false);
   const [firebaseCustomerCoords, setFirebaseCustomerCoords] = useState(null);
 
+  const normalizeCustomerCoords = useCallback((source) => {
+    if (!source || typeof source !== "object") return null;
+    const lat = Number(source.lat ?? source.latitude);
+    const lng = Number(source.lng ?? source.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    return { lat, lng };
+  }, []);
+
+  const savedOrderCustomerCoords = useMemo(() => {
+    const fromGeoJson = Array.isArray(order?.address?.location?.coordinates) && order.address.location.coordinates.length >= 2
+      ? { lat: Number(order.address.location.coordinates[1]), lng: Number(order.address.location.coordinates[0]) }
+      : Array.isArray(order?.address?.coordinates) && order.address.coordinates.length >= 2
+        ? { lat: Number(order.address.coordinates[1]), lng: Number(order.address.coordinates[0]) }
+        : null;
+
+    if (fromGeoJson && Number.isFinite(fromGeoJson.lat) && Number.isFinite(fromGeoJson.lng)) {
+      return fromGeoJson;
+    }
+
+    return normalizeCustomerCoords(order?.address?.location) || normalizeCustomerCoords(order?.address);
+  }, [order?.address, normalizeCustomerCoords]);
+
   const effectiveCustomerCoords = useMemo(() => {
-    if (
-      firebaseCustomerCoords &&
-      typeof firebaseCustomerCoords.lat === 'number' &&
-      typeof firebaseCustomerCoords.lng === 'number'
-    ) {
-      return firebaseCustomerCoords;
-    }
+    return (
+      savedOrderCustomerCoords ||
+      normalizeCustomerCoords(customerCoords) ||
+      normalizeCustomerCoords(firebaseCustomerCoords) ||
+      null
+    );
+  }, [savedOrderCustomerCoords, customerCoords, firebaseCustomerCoords, normalizeCustomerCoords]);
 
-    if (
-      customerCoords &&
-      typeof customerCoords.lat === 'number' &&
-      typeof customerCoords.lng === 'number'
-    ) {
-      return customerCoords;
-    }
-
-    return null;
-  }, [firebaseCustomerCoords, customerCoords]);
+  const isDeliveryCompleted = useMemo(() => {
+    const orderStatus = String(order?.status || '').toLowerCase();
+    const deliveryStatus = String(order?.deliveryState?.status || '').toLowerCase();
+    const deliveryPhase = String(order?.deliveryState?.currentPhase || '').toLowerCase();
+    return (
+      orderStatus === 'delivered' ||
+      orderStatus === 'completed' ||
+      deliveryStatus === 'delivered' ||
+      deliveryPhase === 'completed' ||
+      deliveryPhase === 'delivered'
+    );
+  }, [order?.status, order?.deliveryState?.status, order?.deliveryState?.currentPhase]);
 
   const renderPolylinePath = useCallback((points, isCustomerLeg = false) => {
     if (!mapInstance.current || !window.google?.maps || !Array.isArray(points) || points.length === 0) {
@@ -112,8 +140,8 @@ const DeliveryTrackingMap = ({
       path: normalizedPath,
       geodesic: true,
       strokeColor: activeColor,
-      strokeOpacity: 0.8,
-      strokeWeight: 4,
+      strokeOpacity: 0.95,
+      strokeWeight: 6,
       icons: [{
         icon: {
           path: 'M 0,-1 0,1',
@@ -126,7 +154,7 @@ const DeliveryTrackingMap = ({
         repeat: '15px'
       }],
       map: mapInstance.current,
-      zIndex: 1
+      zIndex: 10
     });
 
     if (bikeMarkerRef.current && !animationControllerRef.current) {
@@ -226,7 +254,7 @@ const DeliveryTrackingMap = ({
     }
   }, [getInitialRiderLocationFromOrder, deliveryBoyLocation?.lat, deliveryBoyLocation?.lng, currentLocation?.lat, currentLocation?.lng]);
 
-  // Draw route from start/end coordinates using local interpolation (no Directions API calls).
+  // Draw road-snapped route from start/end coordinates, with interpolation fallback.
   const drawRoute = useCallback((start, end) => {
     if (!mapInstance.current || !window.google?.maps) return;
 
@@ -278,30 +306,71 @@ const DeliveryTrackingMap = ({
       timestamp: now
     };
 
-    const routeDistanceMeters = calculateHaversineDistance(startLat, startLng, endLat, endLng);
-    const segmentCount = Math.max(1, Math.min(120, Math.ceil(routeDistanceMeters / 30)));
-    const points = [];
-    for (let i = 0; i <= segmentCount; i += 1) {
-      const t = i / segmentCount;
-      points.push({
-        lat: startLat + (endLat - startLat) * t,
-        lng: startLng + (endLng - startLng) * t
-      });
-    }
-
-    directionsCacheRef.current.set(cacheKey, {
-      points,
-      timestamp: now
-    });
-
-    const tenMinutesAgo = now - 600000;
-    for (const [key, value] of directionsCacheRef.current.entries()) {
-      if (value.timestamp < tenMinutesAgo) {
-        directionsCacheRef.current.delete(key);
+    const fallbackToInterpolatedPath = () => {
+      const routeDistanceMeters = calculateHaversineDistance(startLat, startLng, endLat, endLng);
+      const segmentCount = Math.max(1, Math.min(120, Math.ceil(routeDistanceMeters / 30)));
+      const points = [];
+      for (let i = 0; i <= segmentCount; i += 1) {
+        const t = i / segmentCount;
+        points.push({
+          lat: startLat + (endLat - startLat) * t,
+          lng: startLng + (endLng - startLng) * t
+        });
       }
+
+      directionsCacheRef.current.set(cacheKey, {
+        points,
+        timestamp: Date.now()
+      });
+      renderPolylinePath(points, isCustomerLegRef.current);
+    };
+
+    if (!window.google?.maps?.DirectionsService || !window.google?.maps?.TravelMode) {
+      fallbackToInterpolatedPath();
+      return;
     }
 
-    renderPolylinePath(points, isCustomerLegRef.current);
+    const directionsService = new window.google.maps.DirectionsService();
+    directionsService.route(
+      {
+        origin: { lat: startLat, lng: startLng },
+        destination: { lat: endLat, lng: endLng },
+        travelMode: window.google.maps.TravelMode.DRIVING,
+        provideRouteAlternatives: false,
+      },
+      (result, status) => {
+        if (status === 'OK' && result?.routes?.[0]) {
+          const route = result.routes[0];
+          const points = Array.isArray(route.overview_path)
+            ? route.overview_path
+                .map((point) => ({
+                  lat: Number(point?.lat?.() ?? point?.lat),
+                  lng: Number(point?.lng?.() ?? point?.lng)
+                }))
+                .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng))
+            : [];
+
+          if (points.length > 1) {
+            directionsCacheRef.current.set(cacheKey, {
+              points,
+              timestamp: Date.now()
+            });
+
+            const tenMinutesAgo = Date.now() - 600000;
+            for (const [key, value] of directionsCacheRef.current.entries()) {
+              if (value.timestamp < tenMinutesAgo) {
+                directionsCacheRef.current.delete(key);
+              }
+            }
+
+            renderPolylinePath(points, isCustomerLegRef.current);
+            return;
+          }
+        }
+
+        fallbackToInterpolatedPath();
+      }
+    );
   }, [renderPolylinePath]);
   // Check if delivery partner is assigned (memoized to avoid dependency issues)
   // MUST be defined BEFORE any useEffect that uses it
@@ -398,13 +467,13 @@ const DeliveryTrackingMap = ({
       return { start: null, end: null };
     }
 
-    // Initial stage: before rider accepts, show customer <-> store route.
+    // Initial stage: before rider accepts, show store -> saved order address route.
     if (
       !order ||
       (!hasRiderLocation && status === 'pending' && currentPhase === 'assigned' && orderStatus !== 'out_for_delivery')
     ) {
       if (hasRestaurantCoords) {
-        return { start: effectiveCustomerCoords, end: restaurantCoords };
+        return { start: restaurantCoords, end: effectiveCustomerCoords };
       }
       return { start: null, end: null };
     }
@@ -596,9 +665,16 @@ const DeliveryTrackingMap = ({
               nearest.segmentIndex
             );
             if (routePolylineRef.current && Array.isArray(trimmedRoute) && trimmedRoute.length > 0) {
-              visibleRoutePolylinePointsRef.current = trimmedRoute;
+              let visibleRoute = trimmedRoute;
+              if (visibleRoute.length < 2 && routePolylinePointsRef.current.length > 1) {
+                const lastPoint = routePolylinePointsRef.current[routePolylinePointsRef.current.length - 1];
+                if (lastPoint && (Number(lastPoint.lat) !== Number(visibleRoute[0]?.lat) || Number(lastPoint.lng) !== Number(visibleRoute[0]?.lng))) {
+                  visibleRoute = [visibleRoute[0], lastPoint];
+                }
+              }
+              visibleRoutePolylinePointsRef.current = visibleRoute;
               routePolylineRef.current.setPath(
-                trimmedRoute.map((point) => ({
+                visibleRoute.map((point) => ({
                   lat: Number(point?.lat),
                   lng: Number(point?.lng)
                 }))
@@ -763,17 +839,16 @@ const DeliveryTrackingMap = ({
         socketRef.current.emit('request-current-location', alias);
       });
 
-      // Fallback sync: only when live updates are stale and Firebase stream is not active.
+      // Fallback sync: aggressively request current location so user map stays in sync with rider app.
       const locationRequestInterval = setInterval(() => {
         const now = Date.now();
-        const isLiveUpdateStale = (now - (lastLiveLocationUpdateAtRef.current || 0)) > 20000;
-        const hasFirebaseStream = Boolean(activeFirebaseAliasRef.current);
-        if (socketRef.current && socketRef.current.connected && isLiveUpdateStale && !hasFirebaseStream) {
+        const isLiveUpdateStale = (now - (lastLiveLocationUpdateAtRef.current || 0)) > SOCKET_LOCATION_STALE_THRESHOLD_MS;
+        if (socketRef.current && socketRef.current.connected && isLiveUpdateStale) {
           orderAliases.forEach((alias) => {
             socketRef.current.emit('request-current-location', alias);
           });
         }
-      }, 20000);
+      }, SOCKET_LOCATION_REFRESH_INTERVAL_MS);
 
       socketRef.current._locationRequestInterval = locationRequestInterval;
     });
@@ -913,7 +988,11 @@ const DeliveryTrackingMap = ({
         const value = snapshot.val();
         if (!value || typeof value !== 'object') return;
 
-        activeFirebaseAliasRef.current = alias;
+        const firebaseLastUpdated = Number(value?.last_updated || 0);
+        const isFreshFirebaseStream =
+          Number.isFinite(firebaseLastUpdated) &&
+          (Date.now() - firebaseLastUpdated) <= 15000;
+        activeFirebaseAliasRef.current = isFreshFirebaseStream ? alias : null;
 
         const isCustomerLeg =
           value?.status === 'en_route_to_delivery' ||
@@ -970,7 +1049,7 @@ const DeliveryTrackingMap = ({
             ? { lat: customerLat, lng: customerLng }
             : null;
         const expectedDestination = isCustomerLeg
-          ? (firebaseCustomerCoordsValue || effectiveCustomerCoords || null)
+          ? (effectiveCustomerCoords || firebaseCustomerCoordsValue || null)
           : (firebaseRestaurantCoords || restaurantCoords || null);
 
         let pointsToRender = normalizedPoints;
@@ -1271,7 +1350,7 @@ const DeliveryTrackingMap = ({
         }
 
         // Add customer marker with clean user pin icon (MoFood-style)
-        if (!mapInstance.current._customerMarker) {
+        if (!isDeliveryCompleted && !mapInstance.current._customerMarker) {
           const customerUserPinIconUrl = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(`
             <svg xmlns="http://www.w3.org/2000/svg" width="36" height="46" viewBox="0 0 36 46">
               <!-- Pin shape -->
@@ -1293,11 +1372,14 @@ const DeliveryTrackingMap = ({
             },
             zIndex: window.google.maps.Marker.MAX_ZINDEX + 1
           });
-        } else {
+        } else if (!isDeliveryCompleted && mapInstance.current._customerMarker) {
           mapInstance.current._customerMarker.setPosition({
             lat: effectiveCustomerCoords.lat,
             lng: effectiveCustomerCoords.lng
           });
+        } else if (isDeliveryCompleted && mapInstance.current._customerMarker) {
+          mapInstance.current._customerMarker.setMap(null);
+          mapInstance.current._customerMarker = null;
         }
         // Draw route based on order phase
         mapInstance.current.addListener('tilesloaded', () => {
@@ -1358,7 +1440,7 @@ const DeliveryTrackingMap = ({
         console.error('❌ Map initialization error:', error);
       }
     }
-  }, [restaurantCoords, effectiveCustomerCoords]); // Removed dependencies that cause re-initialization
+  }, [restaurantCoords, effectiveCustomerCoords, isDeliveryCompleted]); // Removed dependencies that cause re-initialization
 
   // Memoize restaurant and customer coordinates to avoid dependency issues
   const restaurantLat = restaurantCoords?.lat;
@@ -1371,14 +1453,24 @@ const DeliveryTrackingMap = ({
 
   // Keep customer marker pinned to saved order destination (Firebase coords preferred).
   useEffect(() => {
-    if (!isMapLoaded || !mapInstance.current || !effectiveCustomerCoords) return;
+    if (!isMapLoaded || !mapInstance.current) return;
+
+    if (isDeliveryCompleted) {
+      if (mapInstance.current._customerMarker) {
+        mapInstance.current._customerMarker.setMap(null);
+        mapInstance.current._customerMarker = null;
+      }
+      return;
+    }
+
+    if (!effectiveCustomerCoords) return;
     if (mapInstance.current._customerMarker) {
       mapInstance.current._customerMarker.setPosition({
         lat: effectiveCustomerCoords.lat,
         lng: effectiveCustomerCoords.lng
       });
     }
-  }, [isMapLoaded, effectiveCustomerCoords?.lat, effectiveCustomerCoords?.lng]);
+  }, [isMapLoaded, effectiveCustomerCoords?.lat, effectiveCustomerCoords?.lng, isDeliveryCompleted]);
 
   // Update route when delivery boy location or order phase changes
   useEffect(() => {
@@ -1402,7 +1494,7 @@ const DeliveryTrackingMap = ({
     
     // Throttle route updates to avoid too many API calls
     const now = Date.now();
-    if (lastRouteUpdateRef.current && (now - lastRouteUpdateRef.current) < 10000) {
+    if (lastRouteUpdateRef.current && (now - lastRouteUpdateRef.current) < ROUTE_RECALC_MIN_INTERVAL_MS) {
       return; // Skip if updated less than 10 seconds ago
     }
     
@@ -1433,10 +1525,8 @@ const DeliveryTrackingMap = ({
 
     const route = getRouteToShow();
     if (!route.start || !route.end) {
-      if (routePolylineRef.current) {
-        routePolylineRef.current.setMap(null);
-        routePolylineRef.current = null;
-      }
+      // Keep the previously drawn route during transient location/state gaps.
+      // This prevents rider->customer polyline flicker/disappearance while zooming/refreshing.
       return;
     }
     if (route.start && route.end) {

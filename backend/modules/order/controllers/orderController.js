@@ -222,6 +222,37 @@ const findContainingZone = (zones, latitude, longitude) => {
   return zones.find((zone) => isPointInsideZone(zone, latitude, longitude)) || null;
 };
 
+const resolveEntityZoneFromActiveZones = (entity, activeZones = []) => {
+  const explicitZoneId = String(
+    entity?.zoneId?._id ||
+    entity?.zoneId?.id ||
+    entity?.zoneId ||
+    ''
+  ).trim();
+
+  if (explicitZoneId) {
+    const explicitZone = activeZones.find((zone) => String(zone?._id || '') === explicitZoneId);
+    if (explicitZone) return explicitZone;
+  }
+
+  const entityIdCandidates = new Set([
+    String(entity?._id || '').trim(),
+    String(entity?.restaurantId || '').trim()
+  ].filter(Boolean));
+
+  const linkedZone = activeZones.find((zone) => {
+    const linkedRestaurantId = String(zone?.restaurantId?._id || zone?.restaurantId || '').trim();
+    return linkedRestaurantId && entityIdCandidates.has(linkedRestaurantId);
+  });
+  if (linkedZone) return linkedZone;
+
+  const entityLat = Number(entity?.location?.latitude ?? entity?.location?.coordinates?.[1]);
+  const entityLng = Number(entity?.location?.longitude ?? entity?.location?.coordinates?.[0]);
+  if (!Number.isFinite(entityLat) || !Number.isFinite(entityLng)) return null;
+
+  return findContainingZone(activeZones, entityLat, entityLng);
+};
+
 const parseTimeToMinutes = (timeValue) => {
   if (!timeValue || typeof timeValue !== 'string') return null;
   const normalized = timeValue.trim().toUpperCase();
@@ -1167,7 +1198,7 @@ export const createOrder = async (req, res) => {
       };
 
     const activeZones = await Zone.find(activeZoneQuery).lean();
-    const restaurantZone = findContainingZone(activeZones, Number(restaurantLat), Number(restaurantLng));
+    const restaurantZone = resolveEntityZoneFromActiveZones(restaurant, activeZones);
     const restaurantInZone = Boolean(restaurantZone);
 
     if (!restaurantInZone) {

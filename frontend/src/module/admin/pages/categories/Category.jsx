@@ -5,6 +5,7 @@ import { Search, Download, ChevronDown, Plus, Edit, Trash2, Info, MapPin, Slider
 import { Button } from "@/components/ui/button"
 import { adminAPI, uploadAPI } from "@/lib/api"
 import { API_BASE_URL } from "@/lib/api/config"
+import { buildImageFallback } from "@/lib/utils/imageFallback"
 import { toast } from "sonner"
 import jsPDF from "jspdf"
 import autoTable from "jspdf-autotable"
@@ -16,7 +17,43 @@ const GROCERY_ENTITY_OPTIONS = [
   { value: "subcategories", label: "Subcategories" },
   { value: "products", label: "Products" },
 ]
-const DEFAULT_CATEGORY_IMAGE = "https://via.placeholder.com/40"
+const DEFAULT_CATEGORY_IMAGE = buildImageFallback(40, "CAT")
+const createEmptyProductVariant = () => ({
+  name: "",
+  mrp: "",
+  sellingPrice: "",
+  stockQuantity: 0,
+  inStock: true,
+  isDefault: false,
+})
+
+const normalizeProductVariantsForForm = (variants = []) => {
+  if (!Array.isArray(variants) || variants.length === 0) {
+    return []
+  }
+
+  const normalized = variants
+    .map((variant, index) => ({
+      name: variant?.name || "",
+      mrp: variant?.mrp ?? "",
+      sellingPrice: variant?.sellingPrice ?? "",
+      stockQuantity: variant?.stockQuantity ?? 0,
+      inStock: variant?.inStock !== false,
+      isDefault: variant?.isDefault === true,
+      order: variant?.order ?? index,
+    }))
+    .filter((variant) => String(variant.name || "").trim())
+
+  if (normalized.length === 0) return []
+
+  const defaultIndex = normalized.findIndex((variant) => variant.isDefault)
+  const resolvedDefaultIndex = defaultIndex >= 0 ? defaultIndex : 0
+
+  return normalized.map((variant, index) => ({
+    ...variant,
+    isDefault: index === resolvedDefaultIndex,
+  }))
+}
 
 const getInitialFormData = () => ({
   name: "",
@@ -33,10 +70,12 @@ const getInitialFormData = () => ({
   unit: "",
   stockQuantity: 0,
   inStock: true,
+  variants: [],
 })
 
 export default function Category({ scope = "food", defaultGroceryEntity = "categories" }) {
   const isGroceryScope = scope === "grocery"
+  const ITEMS_PER_PAGE = 25
   const [searchQuery, setSearchQuery] = useState("")
   const [categories, setCategories] = useState([])
   const [loading, setLoading] = useState(true)
@@ -63,6 +102,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
   const [inlineProductSubcategoryNamesText, setInlineProductSubcategoryNamesText] = useState("")
   const [isCustomTypeMode, setIsCustomTypeMode] = useState(false)
   const [customTypeValue, setCustomTypeValue] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
 
   useEffect(() => {
     if (isGroceryScope) {
@@ -152,6 +192,58 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
         productStoreIds: exists
           ? current.filter((id) => id !== storeId)
           : [...current, storeId],
+      }
+    })
+  }
+
+  const addProductVariant = () => {
+    setFormData((prev) => {
+      const nextVariants = [...(Array.isArray(prev.variants) ? prev.variants : []), createEmptyProductVariant()]
+      if (nextVariants.length === 1) {
+        nextVariants[0].isDefault = true
+      }
+      return {
+        ...prev,
+        variants: nextVariants,
+      }
+    })
+  }
+
+  const updateProductVariant = (index, key, value) => {
+    setFormData((prev) => ({
+      ...prev,
+      variants: (Array.isArray(prev.variants) ? prev.variants : []).map((variant, variantIndex) => {
+        if (variantIndex !== index) return variant
+        return {
+          ...variant,
+          [key]: value,
+        }
+      }),
+    }))
+  }
+
+  const setDefaultProductVariant = (index) => {
+    setFormData((prev) => ({
+      ...prev,
+      variants: (Array.isArray(prev.variants) ? prev.variants : []).map((variant, variantIndex) => ({
+        ...variant,
+        isDefault: variantIndex === index,
+      })),
+    }))
+  }
+
+  const removeProductVariant = (index) => {
+    setFormData((prev) => {
+      const nextVariants = (Array.isArray(prev.variants) ? prev.variants : []).filter((_, variantIndex) => variantIndex !== index)
+      if (nextVariants.length > 0 && !nextVariants.some((variant) => variant.isDefault)) {
+        nextVariants[0] = {
+          ...nextVariants[0],
+          isDefault: true,
+        }
+      }
+      return {
+        ...prev,
+        variants: nextVariants,
       }
     })
   }
@@ -261,6 +353,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                 image: firstImage || DEFAULT_CATEGORY_IMAGE,
                 status: item.isActive !== false,
                 type: `${categoryName}${item?.unit ? ` (${item.unit})` : ""}${storeName ? ` - ${storeName}` : ""}`,
+                variants: normalizeProductVariantsForForm(item?.variants),
                 productCategoryId: item?.category?._id || "",
                 productSubcategoryIds: Array.isArray(item?.subcategories)
                   ? item.subcategories.map((sub) => sub?._id || sub).filter(Boolean)
@@ -435,6 +528,26 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     return result
   }, [categories, searchQuery])
 
+  const totalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(filteredCategories.length / ITEMS_PER_PAGE))
+  }, [filteredCategories.length, ITEMS_PER_PAGE])
+
+  const paginatedCategories = useMemo(() => {
+    const safePage = Math.min(currentPage, totalPages)
+    const startIndex = (safePage - 1) * ITEMS_PER_PAGE
+    return filteredCategories.slice(startIndex, startIndex + ITEMS_PER_PAGE)
+  }, [currentPage, filteredCategories, totalPages, ITEMS_PER_PAGE])
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, activeGroceryEntity, isGroceryScope])
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
+
   const handleToggleStatus = async (id) => {
     try {
       const currentCategory = categories.find(cat => cat.id === id)
@@ -529,6 +642,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
         unit: category.unit || "",
         stockQuantity: category.stockQuantity ?? 0,
         inStock: category.inStock !== false,
+        variants: normalizeProductVariantsForForm(category.variants),
       })
     } else {
       setFormData({
@@ -836,6 +950,15 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
         }
 
         const uniqueResolvedSubcategoryIds = [...new Set(resolvedSubcategoryIds)]
+        const normalizedVariants = normalizeProductVariantsForForm(formData.variants).map((variant, index) => ({
+          name: String(variant.name || "").trim(),
+          mrp: Number(variant.mrp || 0),
+          sellingPrice: Number(variant.sellingPrice || 0),
+          stockQuantity: Number(variant.stockQuantity || 0),
+          inStock: variant.inStock !== false,
+          isDefault: variant.isDefault === true,
+          order: Number(variant.order ?? index) || index,
+        }))
 
         const payload = {
           category: resolvedCategoryId,
@@ -847,6 +970,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
           unit: formData.unit || "",
           stockQuantity: Number(formData.stockQuantity || 0),
           inStock: Boolean(formData.inStock),
+          variants: normalizedVariants,
           isActive: Boolean(formData.status),
           images: resolvedImageValue && resolvedImageValue !== DEFAULT_CATEGORY_IMAGE ? [resolvedImageValue] : [],
         }
@@ -1046,13 +1170,15 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                   </td>
                 </tr>
               ) : (
-                filteredCategories.map((category, index) => (
+                paginatedCategories.map((category, index) => (
                   <tr
                     key={category.id}
                     className="hover:bg-slate-50 transition-colors"
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-medium text-slate-700">{category.sl || index + 1}</span>
+                      <span className="text-sm font-medium text-slate-700">
+                        {category.sl || (currentPage - 1) * ITEMS_PER_PAGE + index + 1}
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center">
@@ -1061,7 +1187,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                           alt={category.name}
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            e.target.src = "https://via.placeholder.com/40"
+                                  e.target.src = DEFAULT_CATEGORY_IMAGE
                           }}
                         />
                       </div>
@@ -1115,6 +1241,64 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
           </table>
         </div>
       </div>
+
+      {!loading && filteredCategories.length > 0 && totalPages > 1 && (
+        <div className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-slate-600">
+            Showing <span className="font-semibold">{(currentPage - 1) * ITEMS_PER_PAGE + 1}</span> to{" "}
+            <span className="font-semibold">{Math.min(currentPage * ITEMS_PER_PAGE, filteredCategories.length)}</span> of{" "}
+            <span className="font-semibold">{filteredCategories.length}</span> {activeEntityLabel.toLowerCase()}
+          </p>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+              disabled={currentPage === 1}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Previous
+            </button>
+
+            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+              let pageNum
+              if (totalPages <= 5) {
+                pageNum = i + 1
+              } else if (currentPage <= 3) {
+                pageNum = i + 1
+              } else if (currentPage >= totalPages - 2) {
+                pageNum = totalPages - 4 + i
+              } else {
+                pageNum = currentPage - 2 + i
+              }
+
+              return (
+                <button
+                  key={pageNum}
+                  type="button"
+                  onClick={() => setCurrentPage(pageNum)}
+                  className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                    currentPage === pageNum
+                      ? "bg-blue-600 text-white"
+                      : "border border-slate-300 text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {pageNum}
+                </button>
+              )
+            })}
+
+            <button
+              type="button"
+              onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+              disabled={currentPage === totalPages}
+              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Filter Modal - Removed */}
       {false && typeof window !== "undefined" &&
@@ -1701,6 +1885,117 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
 
                     {isGroceryScope && activeGroceryEntity === "products" && (
                       <>
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700">
+                                Product Variants
+                              </label>
+                              <p className="text-xs text-slate-500 mt-1">
+                                Add pack sizes or custom options like 500gm, 1kg, Family Pack. Default variant syncs the main product pricing.
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={addProductVariant}
+                              className="px-3 py-1.5 rounded-lg bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+                            >
+                              Add Variant
+                            </button>
+                          </div>
+
+                          {formData.variants.length === 0 ? (
+                            <p className="text-xs text-slate-500">
+                              No variants added yet. You can still use the base pricing fields below for a single-size product.
+                            </p>
+                          ) : (
+                            <div className="space-y-3">
+                              {formData.variants.map((variant, index) => (
+                                <div key={`variant-${index}`} className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <p className="text-sm font-semibold text-slate-800">Variant {index + 1}</p>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeProductVariant(index)}
+                                      className="text-xs font-medium text-red-600 hover:text-red-700"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+
+                                  <div>
+                                    <label className="block text-xs font-medium text-slate-600 mb-1">Variant Name</label>
+                                    <input
+                                      type="text"
+                                      value={variant.name}
+                                      onChange={(e) => updateProductVariant(index, "name", e.target.value)}
+                                      placeholder="e.g. 500gm, 1kg, Bucket Pack"
+                                      className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                      <label className="block text-xs font-medium text-slate-600 mb-1">MRP</label>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        value={variant.mrp}
+                                        onChange={(e) => updateProductVariant(index, "mrp", e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="block text-xs font-medium text-slate-600 mb-1">Selling Price</label>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        value={variant.sellingPrice}
+                                        onChange={(e) => updateProductVariant(index, "sellingPrice", e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                      <label className="block text-xs font-medium text-slate-600 mb-1">Stock Qty</label>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        value={variant.stockQuantity}
+                                        onChange={(e) => updateProductVariant(index, "stockQuantity", e.target.value)}
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                      />
+                                    </div>
+                                    <div className="flex items-center gap-4 pt-6">
+                                      <label className="inline-flex items-center gap-2 text-xs text-slate-700">
+                                        <input
+                                          type="checkbox"
+                                          checked={variant.inStock}
+                                          onChange={(e) => updateProductVariant(index, "inStock", e.target.checked)}
+                                          className="w-4 h-4 text-blue-600 border-slate-300 rounded focus:ring-blue-500"
+                                        />
+                                        In stock
+                                      </label>
+                                      <label className="inline-flex items-center gap-2 text-xs text-slate-700">
+                                        <input
+                                          type="radio"
+                                          name="default-product-variant"
+                                          checked={variant.isDefault}
+                                          onChange={() => setDefaultProductVariant(index)}
+                                          className="w-4 h-4 text-blue-600 border-slate-300 focus:ring-blue-500"
+                                        />
+                                        Default
+                                      </label>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
                         <div className="grid grid-cols-2 gap-3">
                           <div>
                             <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -1795,7 +2090,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                               alt="Category preview"
                               className="w-full h-full object-cover"
                               onError={(e) => {
-                                e.target.src = "https://via.placeholder.com/128"
+                                e.target.src = buildImageFallback(128, "CAT")
                               }}
                             />
                             {imagePreview && (

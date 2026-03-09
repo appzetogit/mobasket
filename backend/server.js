@@ -820,7 +820,7 @@ io.on('connection', (socket) => {
       ? { $or: [{ _id: input }, { orderId: input }] }
       : { orderId: input };
 
-    let orderQuery = Order.findOne(query).select('_id orderId deliveryPartnerId');
+    let orderQuery = Order.findOne(query).select('_id orderId deliveryPartnerId assignmentInfo.deliveryPartnerId');
     if (includeDeliveryLocation) {
       orderQuery = orderQuery.populate({
         path: 'deliveryPartnerId',
@@ -833,9 +833,35 @@ io.on('connection', (socket) => {
       return { order: null, aliases: [input] };
     }
 
+    if (
+      includeDeliveryLocation &&
+      !order?.deliveryPartnerId?.availability?.currentLocation &&
+      order?.assignmentInfo?.deliveryPartnerId
+    ) {
+      try {
+        const { default: Delivery } = await import('./modules/delivery/models/Delivery.js');
+        const fallbackPartner = await Delivery.findById(order.assignmentInfo.deliveryPartnerId)
+          .select('availability.currentLocation')
+          .lean();
+        if (fallbackPartner?.availability?.currentLocation) {
+          order.deliveryPartnerResolvedLocation = fallbackPartner.availability.currentLocation;
+        }
+      } catch (fallbackLookupError) {
+        console.warn('Fallback delivery-partner location lookup failed:', fallbackLookupError.message);
+      }
+    }
+
     const aliases = Array.from(new Set([input, order._id?.toString(), order.orderId].filter(Boolean)));
     setCachedAliases(aliases);
     return { order, aliases };
+  };
+
+  const getOrderCurrentLocation = (orderDoc) => {
+    return (
+      orderDoc?.deliveryPartnerId?.availability?.currentLocation ||
+      orderDoc?.deliveryPartnerResolvedLocation ||
+      null
+    );
   };
 
   const resolveAliasesFast = async (rawOrderId) => {
@@ -918,8 +944,9 @@ io.on('connection', (socket) => {
 
       // Send current location immediately when customer joins
       try {
-        if (order?.deliveryPartnerId?.availability?.currentLocation) {
-          const coords = order.deliveryPartnerId.availability.currentLocation.coordinates;
+        const currentLocation = getOrderCurrentLocation(order);
+        if (currentLocation) {
+          const coords = currentLocation.coordinates;
           const baseLocationData = {
             lat: coords[1],
             lng: coords[0],
@@ -948,8 +975,9 @@ io.on('connection', (socket) => {
     try {
       const { order, aliases } = await resolveOrderByAnyId(orderId, true);
 
-      if (order?.deliveryPartnerId?.availability?.currentLocation) {
-        const coords = order.deliveryPartnerId.availability.currentLocation.coordinates;
+      const currentLocation = getOrderCurrentLocation(order);
+      if (currentLocation) {
+        const coords = currentLocation.coordinates;
         const baseLocationData = {
           lat: coords[1],
           lng: coords[0],

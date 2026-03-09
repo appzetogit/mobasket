@@ -56,8 +56,11 @@ export default function ProtectedRoute({ children, requiredRole, loginPath, modu
     const user = rawUser ? JSON.parse(rawUser) : null;
 
     if (user) {
+      const normalizedStatus = String(user.status || '').trim().toLowerCase();
+      const isApprovedAndActive = user.isActive === true;
+
       // Handle onboarding status
-      if (user.status === 'onboarding') {
+      if (!isApprovedAndActive && normalizedStatus === 'onboarding') {
         const isOnboardingPage = location.pathname.startsWith(`/${modulePrefix}/onboarding`) ||
           location.pathname.includes('/otp') ||
           location.pathname.includes('/login');
@@ -67,7 +70,7 @@ export default function ProtectedRoute({ children, requiredRole, loginPath, modu
         }
       }
       // Handle pending status
-      else if (user.status === 'pending') {
+      else if (!isApprovedAndActive && normalizedStatus === 'pending') {
         const isPendingPage = location.pathname === `/${modulePrefix}/pending-approval`;
         const isAuthPage = location.pathname.includes('/login') || location.pathname.includes('/otp');
 

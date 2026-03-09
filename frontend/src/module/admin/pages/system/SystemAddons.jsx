@@ -29,6 +29,8 @@ export default function SystemAddons() {
     FIREBASE_CLIENT_EMAIL: "",
     FIREBASE_PRIVATE_KEY: "",
     FIREBASE_DATABASE_URL: "",
+    FIREBASE_VAPID_KEY: "",
+    FIREBASE_VAPID_SECRET_KEY: "",
     
     // SMTP
     SMTP_HOST: "",
@@ -219,6 +221,8 @@ export default function SystemAddons() {
               <InputField label="Firebase Project ID" fieldKey="FIREBASE_PROJECT_ID" />
               <InputField label="Firebase Client Email" fieldKey="FIREBASE_CLIENT_EMAIL" type="email" />
               <InputField label="Firebase Database URL" fieldKey="FIREBASE_DATABASE_URL" placeholder="https://<project>-default-rtdb.<region>.firebasedatabase.app/" />
+              <InputField label="Firebase VAPID Public Key" fieldKey="FIREBASE_VAPID_KEY" placeholder="Public key for web push getToken({ vapidKey })" />
+              <InputField label="Firebase VAPID Secret Key" fieldKey="FIREBASE_VAPID_SECRET_KEY" type="password" placeholder="Keep secret, backend only" />
               <div className="md:col-span-2">
                 <InputField 
                   label="Firebase Private Key" 

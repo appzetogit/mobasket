@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { Search, Download, ChevronDown, Eye, Settings, ArrowUpDown, Loader2, X, MapPin, Phone, Mail, Clock, Star, Building2, User, FileText, CreditCard, Calendar, Image as ImageIcon, ExternalLink, ShieldX, AlertTriangle, Trash2, Plus } from "lucide-react"
 import { adminAPI, restaurantAPI, uploadAPI } from "../../../../lib/api"
 import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey"
+import { buildImageFallback } from "@/lib/utils/imageFallback"
 import { Loader as GoogleMapsLoader } from "@googlemaps/js-api-loader"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { exportRestaurantsToPDF } from "../../components/restaurants/restaurantsExportUtils"
@@ -210,7 +211,7 @@ export default function RestaurantsList() {
               : (restaurant.cuisine || "N/A"),
             status: restaurant.isActive !== false, // Default to true if not set (matches backend behavior)
             rating: restaurant.ratings?.average || restaurant.rating || 0,
-            logo: restaurant.profileImage?.url || restaurant.logo || "https://via.placeholder.com/40",
+            logo: restaurant.profileImage?.url || restaurant.logo || buildImageFallback(40, "RES"),
             address: formatRestaurantAddress(restaurant),
             // Preserve original restaurant data for details modal
             originalData: normalizeRestaurantRecord(restaurant),
@@ -1020,7 +1021,7 @@ export default function RestaurantsList() {
                                 alt={restaurant.name}
                                 className="w-full h-full object-cover"
                                 onError={(e) => {
-                                  e.target.src = "https://via.placeholder.com/40"
+                                  e.target.src = buildImageFallback(40, "RES")
                                 }}
                               />
                             </div>
@@ -1141,11 +1142,11 @@ export default function RestaurantsList() {
                   <div className="flex items-start gap-6 pb-6 border-b border-slate-200">
                     <div className="w-24 h-24 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0">
                       <img
-                        src={restaurantDetails?.profileImage?.url || restaurantDetails?.logo || selectedRestaurant?.logo || selectedRestaurant?.originalData?.profileImage?.url || "https://via.placeholder.com/96"}
+                        src={restaurantDetails?.profileImage?.url || restaurantDetails?.logo || selectedRestaurant?.logo || selectedRestaurant?.originalData?.profileImage?.url || buildImageFallback(96, "RES")}
                         alt={restaurantDetails?.name || selectedRestaurant?.name || "Restaurant"}
                         className="w-full h-full object-cover"
                         onError={(e) => {
-                          e.target.src = "https://via.placeholder.com/96"
+                          e.target.src = buildImageFallback(96, "RES")
                         }}
                       />
                     </div>
@@ -1481,7 +1482,7 @@ export default function RestaurantsList() {
                                 alt="Profile"
                                 className="w-32 h-32 rounded-lg object-cover border border-slate-200 hover:border-blue-500 transition-colors"
                                 onError={(e) => {
-                                  e.target.src = "https://via.placeholder.com/128"
+                                  e.target.src = buildImageFallback(128, "RES")
                                 }}
                               />
                             </a>

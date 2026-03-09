@@ -61,7 +61,8 @@ export const getPublicEnvVariables = asyncHandler(async (req, res) => {
       VITE_FIREBASE_APP_ID: envData.FIREBASE_APP_ID || '',
       VITE_FIREBASE_MEASUREMENT_ID: envData.MEASUREMENT_ID || '',
       VITE_FIREBASE_PROJECT_ID: envData.FIREBASE_PROJECT_ID || '',
-      VITE_FIREBASE_DATABASE_URL: envData.FIREBASE_DATABASE_URL || ''
+      VITE_FIREBASE_DATABASE_URL: envData.FIREBASE_DATABASE_URL || '',
+      VITE_FIREBASE_VAPID_KEY: envData.FIREBASE_VAPID_KEY || ''
     };
     
     return successResponse(res, 200, 'Public environment variables retrieved successfully', publicEnvData);
@@ -77,7 +78,8 @@ export const getPublicEnvVariables = asyncHandler(async (req, res) => {
       VITE_FIREBASE_APP_ID: '',
       VITE_FIREBASE_MEASUREMENT_ID: '',
       VITE_FIREBASE_PROJECT_ID: '',
-      VITE_FIREBASE_DATABASE_URL: ''
+      VITE_FIREBASE_DATABASE_URL: '',
+      VITE_FIREBASE_VAPID_KEY: ''
     });
   }
 });

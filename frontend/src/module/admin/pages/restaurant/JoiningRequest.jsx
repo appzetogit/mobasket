@@ -4,6 +4,7 @@ import {
   FileText, Image as ImageIcon, ExternalLink, CreditCard, Calendar, Star, Building2, User, Phone, Mail, MapPin, Clock
 } from "lucide-react"
 import { adminAPI, restaurantAPI } from "../../../../lib/api"
+import { buildImageFallback } from "@/lib/utils/imageFallback"
 
 export default function JoiningRequest() {
   const [activeTab, setActiveTab] = useState("pending")
@@ -421,7 +422,7 @@ export default function JoiningRequest() {
                               alt={request.restaurantName}
                               className="w-full h-full object-cover"
                               onError={(e) => {
-                                e.target.src = "https://via.placeholder.com/40"
+                                e.target.src = buildImageFallback(40, "RES")
                               }}
                             />
                           </div>
@@ -692,11 +693,11 @@ export default function JoiningRequest() {
                   <div className="flex items-start gap-6 pb-6 border-b border-slate-200">
                     <div className="w-24 h-24 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0">
                       <img
-                        src={restaurantDetails?.profileImage?.url || restaurantDetails?.profileImageUrl?.url || selectedRequest?.restaurantImage || "https://via.placeholder.com/96"}
+                        src={restaurantDetails?.profileImage?.url || restaurantDetails?.profileImageUrl?.url || selectedRequest?.restaurantImage || buildImageFallback(96, "RES")}
                         alt={restaurantDetails?.name || selectedRequest?.restaurantName || "Restaurant"}
                         className="w-full h-full object-cover"
                         onError={(e) => {
-                          e.target.src = "https://via.placeholder.com/96"
+                          e.target.src = buildImageFallback(96, "RES")
                         }}
                       />
                     </div>
@@ -1077,7 +1078,7 @@ export default function JoiningRequest() {
                                 alt={`Menu ${idx + 1}`}
                                 className="w-full h-32 object-cover"
                                 onError={(e) => {
-                                  e.target.src = "https://via.placeholder.com/200"
+                                  e.target.src = buildImageFallback(200, "RES")
                                 }}
                               />
                             </a>

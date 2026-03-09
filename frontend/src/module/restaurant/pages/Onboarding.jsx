@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Image as ImageIcon, Upload, Clock, Calendar as CalendarIcon, Sparkles, ArrowLeft, Camera } from "lucide-react"
+import { Image as ImageIcon, Upload, Clock, Calendar as CalendarIcon, Sparkles, ArrowLeft, Camera, Search, Loader2, MapPin } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -35,70 +35,56 @@ const cuisinesOptions = [
 const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 const DEFAULT_OPENING_TIME = "09:00"
 const DEFAULT_CLOSING_TIME = "22:00"
+const GOOGLE_MAP_ID = String(import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "").trim()
 
-const ONBOARDING_STORAGE_KEY = "restaurant_onboarding_data"
-
-// Helper functions for localStorage
-const saveOnboardingToLocalStorage = (step1, step2, step3, step4, currentStep) => {
-  try {
-    // Convert File objects to a serializable format (we'll store file names/paths if available)
-    const serializableStep2 = {
-      ...step2,
-      menuImages: step2.menuImages.map((file) => {
-        if (file instanceof File) {
-          return { name: file.name, size: file.size, type: file.type }
-        }
-        return file
-      }),
-      profileImage: step2.profileImage instanceof File
-        ? { name: step2.profileImage.name, size: step2.profileImage.size, type: step2.profileImage.type }
-        : step2.profileImage,
+const waitForGoogleMaps = (timeoutMs = 12000) =>
+  new Promise((resolve, reject) => {
+    if (window.google?.maps?.Map) {
+      resolve(window.google)
+      return
     }
 
-    const serializableStep3 = {
-      ...step3,
-      panImage: step3.panImage instanceof File
-        ? { name: step3.panImage.name, size: step3.panImage.size, type: step3.panImage.type }
-        : step3.panImage,
-      gstImage: step3.gstImage instanceof File
-        ? { name: step3.gstImage.name, size: step3.gstImage.size, type: step3.gstImage.type }
-        : step3.gstImage,
-      fssaiImage: step3.fssaiImage instanceof File
-        ? { name: step3.fssaiImage.name, size: step3.fssaiImage.size, type: step3.fssaiImage.type }
-        : step3.fssaiImage,
-    }
+    const startedAt = Date.now()
+    const interval = window.setInterval(() => {
+      if (window.google?.maps?.Map) {
+        window.clearInterval(interval)
+        resolve(window.google)
+        return
+      }
 
-    const dataToSave = {
-      step1,
-      step2: serializableStep2,
-      step3: serializableStep3,
-      step4: step4 || {},
-      currentStep,
-      timestamp: Date.now(),
-    }
-    localStorage.setItem(ONBOARDING_STORAGE_KEY, JSON.stringify(dataToSave))
-  } catch (error) {
-    console.error("Failed to save onboarding data to localStorage:", error)
-  }
-}
+      if (Date.now() - startedAt >= timeoutMs) {
+        window.clearInterval(interval)
+        reject(new Error("Google Maps failed to load"))
+      }
+    }, 150)
+  })
 
-const loadOnboardingFromLocalStorage = () => {
-  try {
-    const stored = localStorage.getItem(ONBOARDING_STORAGE_KEY)
-    if (stored) {
-      return JSON.parse(stored)
-    }
-  } catch (error) {
-    console.error("Failed to load onboarding data from localStorage:", error)
-  }
-  return null
-}
+const parseAddressComponents = (components = []) => {
+  const byType = (type) => components.find((component) => component.types?.includes(type))
+  const streetNumber = byType("street_number")?.long_name || ""
+  const route = byType("route")?.long_name || ""
+  const sublocality =
+    byType("sublocality_level_1")?.long_name ||
+    byType("sublocality")?.long_name ||
+    byType("neighborhood")?.long_name ||
+    ""
+  const city =
+    byType("locality")?.long_name ||
+    byType("administrative_area_level_2")?.long_name ||
+    byType("administrative_area_level_3")?.long_name ||
+    ""
+  const state = byType("administrative_area_level_1")?.long_name || ""
+  const zipCode = byType("postal_code")?.long_name || ""
+  const landmark = byType("point_of_interest")?.long_name || ""
 
-const clearOnboardingFromLocalStorage = () => {
-  try {
-    localStorage.removeItem(ONBOARDING_STORAGE_KEY)
-  } catch (error) {
-    console.error("Failed to clear onboarding data from localStorage:", error)
+  return {
+    addressLine1: [streetNumber, route].filter(Boolean).join(" ").trim(),
+    addressLine2: "",
+    area: sublocality || city,
+    city,
+    state,
+    landmark,
+    zipCode,
   }
 }
 
@@ -183,6 +169,14 @@ export default function RestaurantOnboarding() {
   const [error, setError] = useState("")
   const [signedInPhone, setSignedInPhone] = useState("")
   const [showBackPopup, setShowBackPopup] = useState(false)
+  const mapRef = useRef(null)
+  const mapInstanceRef = useRef(null)
+  const markerRef = useRef(null)
+  const [mapLoading, setMapLoading] = useState(true)
+  const [mapError, setMapError] = useState("")
+  const [locationSearch, setLocationSearch] = useState("")
+  const [detectingLocation, setDetectingLocation] = useState(false)
+  const hasResolvedInitialMapCenterRef = useRef(false)
 
   const [step1, setStep1] = useState({
     restaurantName: "",
@@ -195,7 +189,14 @@ export default function RestaurantOnboarding() {
       addressLine2: "",
       area: "",
       city: "",
+      state: "",
       landmark: "",
+      zipCode: "",
+      formattedAddress: "",
+      address: "",
+      latitude: "",
+      longitude: "",
+      coordinates: [],
     },
   })
 
@@ -234,11 +235,321 @@ export default function RestaurantOnboarding() {
     offer: "",
   })
 
+  const getVerificationRedirectPath = (restaurant) => {
+    const normalizedStatus = String(restaurant?.status || "").trim().toLowerCase()
+    const completedSteps = Number(restaurant?.onboarding?.completedSteps || 0)
+
+    if (restaurant?.isActive === true) {
+      return "/restaurant"
+    }
+
+    if (normalizedStatus && normalizedStatus !== "onboarding") {
+      return "/restaurant"
+    }
+
+    if (completedSteps >= 4) {
+      return "/restaurant"
+    }
+
+    return null
+  }
+
   const normalizePhoneDigits = (value) => String(value || "").replace(/\D/g, "")
 
-  // Load from localStorage on mount and check URL parameter
+  const getMarkerCoordinates = (marker) => {
+    if (!marker) return null
+
+    const position =
+      marker.position ||
+      marker?.getPosition?.() ||
+      null
+
+    const lat =
+      typeof position?.lat === "function"
+        ? position.lat()
+        : Number(position?.lat)
+    const lng =
+      typeof position?.lng === "function"
+        ? position.lng()
+        : Number(position?.lng)
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      return null
+    }
+
+    return { lat, lng }
+  }
+
+  const updateStep1Location = (updater) => {
+    setStep1((prev) => ({
+      ...prev,
+      location: updater(prev.location || {}),
+    }))
+  }
+
+  const updateSelectedLocation = (lat, lng, address, components = []) => {
+    const parsedAddress = parseAddressComponents(components)
+    const normalizedLat = Number(Number(lat).toFixed(6))
+    const normalizedLng = Number(Number(lng).toFixed(6))
+    const resolvedAddress = String(address || "").trim() || `${normalizedLat}, ${normalizedLng}`
+
+    setLocationSearch(resolvedAddress)
+    updateStep1Location((prevLocation) => ({
+      ...prevLocation,
+      addressLine1: parsedAddress.addressLine1 || prevLocation.addressLine1 || "",
+      addressLine2: parsedAddress.addressLine2 || prevLocation.addressLine2 || "",
+      area: parsedAddress.area || prevLocation.area || "",
+      city: parsedAddress.city || prevLocation.city || "",
+      state: parsedAddress.state || prevLocation.state || "",
+      landmark: parsedAddress.landmark || prevLocation.landmark || "",
+      zipCode: parsedAddress.zipCode || prevLocation.zipCode || "",
+      formattedAddress: resolvedAddress,
+      address: resolvedAddress,
+      latitude: normalizedLat,
+      longitude: normalizedLng,
+      coordinates: [normalizedLng, normalizedLat],
+    }))
+
+    if (mapInstanceRef.current) {
+      mapInstanceRef.current.panTo({ lat: normalizedLat, lng: normalizedLng })
+      if (mapInstanceRef.current.getZoom() < 16) {
+        mapInstanceRef.current.setZoom(16)
+      }
+    }
+
+    if (!window.google?.maps || !mapInstanceRef.current) return
+
+    if (!markerRef.current) {
+      const canUseAdvancedMarker = Boolean(GOOGLE_MAP_ID)
+      const AdvancedMarkerConstructor =
+        canUseAdvancedMarker ? window.google?.maps?.marker?.AdvancedMarkerElement : null
+      if (AdvancedMarkerConstructor) {
+        markerRef.current = new AdvancedMarkerConstructor({
+          map: mapInstanceRef.current,
+          position: { lat: normalizedLat, lng: normalizedLng },
+          title: resolvedAddress,
+          gmpDraggable: true,
+        })
+      } else {
+        markerRef.current = new window.google.maps.Marker({
+          map: mapInstanceRef.current,
+          draggable: true,
+          animation: window.google.maps.Animation.DROP,
+        })
+      }
+
+      markerRef.current.addListener("dragend", (event) => {
+        const newLat = event.latLng.lat()
+        const newLng = event.latLng.lng()
+        const geocoder = new window.google.maps.Geocoder()
+        geocoder.geocode({ location: { lat: newLat, lng: newLng } }, (results, status) => {
+          if (status === "OK" && results?.length) {
+            updateSelectedLocation(newLat, newLng, results[0].formatted_address, results[0].address_components || [])
+          } else {
+            updateSelectedLocation(newLat, newLng, `${newLat.toFixed(6)}, ${newLng.toFixed(6)}`)
+          }
+        })
+      })
+    }
+
+    if (typeof markerRef.current.setPosition === "function") {
+      markerRef.current.setPosition({ lat: normalizedLat, lng: normalizedLng })
+    } else {
+      markerRef.current.position = { lat: normalizedLat, lng: normalizedLng }
+    }
+
+    if (typeof markerRef.current.setTitle === "function") {
+      markerRef.current.setTitle(resolvedAddress)
+    } else {
+      markerRef.current.title = resolvedAddress
+    }
+  }
+
+  const initializeMap = async (google) => {
+    const mapElement = mapRef.current
+    if (!(mapElement instanceof HTMLElement)) {
+      return false
+    }
+
+    const MapConstructor = google?.maps?.Map
+    if (
+      GOOGLE_MAP_ID &&
+      !google?.maps?.marker?.AdvancedMarkerElement &&
+      typeof google?.maps?.importLibrary === "function"
+    ) {
+      await google.maps.importLibrary("marker")
+    }
+    if (!MapConstructor) {
+      throw new Error("Google Maps Map library is unavailable")
+    }
+
+    if (!(mapElement instanceof HTMLElement)) {
+      return false
+    }
+
+    const initialLat = Number(step1.location?.latitude)
+    const initialLng = Number(step1.location?.longitude)
+    const center =
+      Number.isFinite(initialLat) && Number.isFinite(initialLng)
+        ? { lat: initialLat, lng: initialLng }
+        : { lat: 20.5937, lng: 78.9629 }
+
+    const map = new MapConstructor(mapElement, {
+      center,
+      zoom: Number.isFinite(initialLat) && Number.isFinite(initialLng) ? 16 : 5,
+      mapTypeControl: false,
+      streetViewControl: false,
+      fullscreenControl: true,
+      zoomControl: true,
+      gestureHandling: "greedy",
+      ...(GOOGLE_MAP_ID ? { mapId: GOOGLE_MAP_ID } : {}),
+    })
+
+    mapInstanceRef.current = map
+    map.addListener("click", (event) => {
+      const lat = event.latLng.lat()
+      const lng = event.latLng.lng()
+      const geocoder = new google.maps.Geocoder()
+      geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+        if (status === "OK" && results?.length) {
+          updateSelectedLocation(lat, lng, results[0].formatted_address, results[0].address_components || [])
+        } else {
+          updateSelectedLocation(lat, lng, `${lat.toFixed(6)}, ${lng.toFixed(6)}`)
+        }
+      })
+    })
+
+    if (Number.isFinite(initialLat) && Number.isFinite(initialLng)) {
+      updateSelectedLocation(
+        initialLat,
+        initialLng,
+        step1.location?.formattedAddress || step1.location?.address || `${initialLat}, ${initialLng}`
+      )
+    }
+
+    setMapLoading(false)
+    return true
+  }
+
+  const reverseGeocodeCurrentLocation = (lat, lng) => {
+    if (!window.google?.maps) {
+      updateSelectedLocation(lat, lng, `${lat.toFixed(6)}, ${lng.toFixed(6)}`)
+      return
+    }
+
+    const geocoder = new window.google.maps.Geocoder()
+    geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+      if (status === "OK" && results?.length) {
+        updateSelectedLocation(lat, lng, results[0].formatted_address, results[0].address_components || [])
+      } else {
+        updateSelectedLocation(lat, lng, `${lat.toFixed(6)}, ${lng.toFixed(6)}`)
+      }
+    })
+  }
+
+  const handleSavePinnedLocation = () => {
+    const markerPosition = getMarkerCoordinates(markerRef.current)
+    const mapCenter = mapInstanceRef.current?.getCenter?.()
+
+    const lat = Number(
+      markerPosition?.lat ??
+      mapCenter?.lat?.() ??
+      step1.location?.latitude
+    )
+    const lng = Number(
+      markerPosition?.lng ??
+      mapCenter?.lng?.() ??
+      step1.location?.longitude
+    )
+
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      toast.error("Move the map pin first, then save the location")
+      return
+    }
+
+    reverseGeocodeCurrentLocation(lat, lng)
+    toast.success("Pinned location saved")
+  }
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("Geolocation is not supported on this device/browser")
+      return
+    }
+
+    setDetectingLocation(true)
+    setMapError("")
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = Number(position?.coords?.latitude)
+        const lng = Number(position?.coords?.longitude)
+
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+          setDetectingLocation(false)
+          toast.error("Unable to detect your current location")
+          return
+        }
+
+        reverseGeocodeCurrentLocation(lat, lng)
+        setDetectingLocation(false)
+        toast.success("Current location selected")
+      },
+      (geoError) => {
+        setDetectingLocation(false)
+        const message =
+          geoError?.code === 1
+            ? "Location permission denied"
+            : geoError?.code === 2
+              ? "Current location is unavailable"
+              : "Timed out while fetching current location"
+        toast.error(message)
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 10000,
+        maximumAge: 30000,
+      }
+    )
+  }
+
+  const handleSearchLocation = () => {
+    const query = String(locationSearch || "").trim()
+    if (!query) {
+      toast.error("Enter a location to search")
+      return
+    }
+
+    if (!window.google?.maps) {
+      toast.error("Google Maps is still loading")
+      return
+    }
+
+    const geocoder = new window.google.maps.Geocoder()
+    geocoder.geocode({ address: query, region: "IN" }, (results, status) => {
+      if (status === "OK" && results?.length) {
+        const location = results[0]?.geometry?.location
+        if (!location) {
+          toast.error("Could not resolve that location")
+          return
+        }
+
+        updateSelectedLocation(
+          location.lat(),
+          location.lng(),
+          results[0].formatted_address,
+          results[0].address_components || []
+        )
+        toast.success("Location found")
+        return
+      }
+
+      toast.error("No matching location found")
+    })
+  }
+
+  // Read step only from URL/API, not from localStorage cache
   useEffect(() => {
-    // Check if step is specified in URL (from OTP login redirect)
     const stepParam = requestedStepParam
     if (stepParam) {
       const stepNum = parseInt(stepParam, 10)
@@ -248,87 +559,30 @@ export default function RestaurantOnboarding() {
     }
 
     if (isFreshStepOne) {
-      clearOnboardingFromLocalStorage()
       return
-    }
-
-    const localData = loadOnboardingFromLocalStorage()
-    if (localData) {
-      if (localData.step1) {
-        setStep1({
-          restaurantName: localData.step1.restaurantName || "",
-          ownerName: localData.step1.ownerName || "",
-          ownerEmail: localData.step1.ownerEmail || "",
-          ownerPhone: localData.step1.ownerPhone || "",
-          primaryContactNumber: localData.step1.primaryContactNumber || "",
-          location: {
-            addressLine1: localData.step1.location?.addressLine1 || "",
-            addressLine2: localData.step1.location?.addressLine2 || "",
-            area: localData.step1.location?.area || "",
-            city: localData.step1.location?.city || "",
-            landmark: localData.step1.location?.landmark || "",
-          },
-        })
-      }
-      if (localData.step2) {
-        setStep2({
-          menuImages: localData.step2.menuImages || [],
-          profileImage: localData.step2.profileImage || null,
-          cuisines: localData.step2.cuisines || [],
-          openingTime: localData.step2.openingTime || DEFAULT_OPENING_TIME,
-          closingTime: localData.step2.closingTime || DEFAULT_CLOSING_TIME,
-          openDays: localData.step2.openDays || [],
-        })
-      }
-      if (localData.step3) {
-        setStep3({
-          panNumber: localData.step3.panNumber || "",
-          nameOnPan: localData.step3.nameOnPan || "",
-          panImage: localData.step3.panImage || null,
-          gstRegistered: localData.step3.gstRegistered || false,
-          gstNumber: localData.step3.gstNumber || "",
-          gstLegalName: localData.step3.gstLegalName || "",
-          gstAddress: localData.step3.gstAddress || "",
-          gstImage: localData.step3.gstImage || null,
-          fssaiNumber: localData.step3.fssaiNumber || "",
-          fssaiExpiry: localData.step3.fssaiExpiry || "",
-          fssaiImage: localData.step3.fssaiImage || null,
-          accountNumber: localData.step3.accountNumber || "",
-          confirmAccountNumber: localData.step3.confirmAccountNumber || "",
-          ifscCode: localData.step3.ifscCode || "",
-          accountHolderName: localData.step3.accountHolderName || "",
-          accountType: localData.step3.accountType || "",
-        })
-      }
-      if (localData.step4) {
-        setStep4({
-          estimatedDeliveryTime: localData.step4.estimatedDeliveryTime || "",
-          featuredDish: localData.step4.featuredDish || "",
-          featuredPrice: localData.step4.featuredPrice || "",
-          offer: localData.step4.offer || "",
-        })
-      }
-      // Only set step from localStorage if URL doesn't have a step parameter
-      if (localData.currentStep && !stepParam) {
-        setStep(localData.currentStep)
-      }
     }
   }, [isFreshStepOne, requestedStepParam, searchParams])
 
-  // Save to localStorage whenever step data changes
-  useEffect(() => {
-    saveOnboardingToLocalStorage(step1, step2, step3, step4, step)
-  }, [step1, step2, step3, step4, step])
-
   useEffect(() => {
     const fetchData = async () => {
-      if (isFreshStepOne) {
-        setLoading(false)
-        return
-      }
-
       try {
         setLoading(true)
+        const profileResponse = await restaurantAPI.getCurrentRestaurant()
+        const currentRestaurant =
+          profileResponse?.data?.data?.restaurant ||
+          profileResponse?.data?.restaurant ||
+          null
+        const redirectPath = getVerificationRedirectPath(currentRestaurant)
+
+        if (redirectPath) {
+          navigate(redirectPath, { replace: true })
+          return
+        }
+
+        if (isFreshStepOne) {
+          return
+        }
+
         const res = await api.get("/restaurant/onboarding")
         const data = res?.data?.data?.onboarding
         if (data) {
@@ -344,9 +598,21 @@ export default function RestaurantOnboarding() {
                 addressLine2: data.step1.location?.addressLine2 || "",
                 area: data.step1.location?.area || "",
                 city: data.step1.location?.city || "",
+                state: data.step1.location?.state || "",
                 landmark: data.step1.location?.landmark || "",
+                zipCode: data.step1.location?.zipCode || "",
+                formattedAddress: data.step1.location?.formattedAddress || "",
+                address: data.step1.location?.address || "",
+                latitude: data.step1.location?.latitude ?? "",
+                longitude: data.step1.location?.longitude ?? "",
+                coordinates: data.step1.location?.coordinates || [],
               },
             }))
+            setLocationSearch(
+              data.step1.location?.formattedAddress ||
+              data.step1.location?.address ||
+              ""
+            )
           }
           if (data.step2) {
             setStep2({
@@ -394,7 +660,12 @@ export default function RestaurantOnboarding() {
 
           // Determine which step to show based on completeness
           const stepToShow = determineStepToShow(data)
-          setStep(stepToShow)
+          if (stepToShow) {
+            setStep(stepToShow)
+          } else {
+            navigate("/restaurant", { replace: true })
+            return
+          }
         }
       } catch (err) {
         // Handle error gracefully - if it's a 401 (unauthorized), the user might need to login again
@@ -469,6 +740,101 @@ export default function RestaurantOnboarding() {
       return changed ? next : prev
     })
   }, [isFreshStepOne, signedInPhone])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadMap = async () => {
+      if (loading || step !== 1) {
+        setMapLoading(false)
+        return
+      }
+
+      try {
+        setMapLoading(true)
+        setMapError("")
+
+        const googleLib = await waitForGoogleMaps()
+
+        if (!cancelled) {
+          const initialized = await initializeMap(googleLib)
+          if (!initialized && !cancelled) {
+            window.setTimeout(() => {
+              if (!cancelled) {
+                loadMap()
+              }
+            }, 50)
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error("Failed to load onboarding map:", err)
+          setMapError(err?.message || "Failed to load map")
+          setMapLoading(false)
+        }
+      }
+    }
+
+    loadMap()
+
+    return () => {
+      cancelled = true
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, step])
+
+  useEffect(() => {
+    if (!mapInstanceRef.current) return
+
+    const lat = Number(step1.location?.latitude)
+    const lng = Number(step1.location?.longitude)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+
+    updateSelectedLocation(
+      lat,
+      lng,
+      step1.location?.formattedAddress || step1.location?.address || `${lat}, ${lng}`
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step1.location?.latitude, step1.location?.longitude, step1.location?.formattedAddress, step1.location?.address])
+
+  useEffect(() => {
+    if (!mapInstanceRef.current || hasResolvedInitialMapCenterRef.current) return
+
+    const existingLat = Number(step1.location?.latitude)
+    const existingLng = Number(step1.location?.longitude)
+    if (Number.isFinite(existingLat) && Number.isFinite(existingLng)) {
+      hasResolvedInitialMapCenterRef.current = true
+      return
+    }
+
+    if (!navigator.geolocation) {
+      hasResolvedInitialMapCenterRef.current = true
+      return
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        if (hasResolvedInitialMapCenterRef.current) return
+        hasResolvedInitialMapCenterRef.current = true
+
+        const lat = Number(position?.coords?.latitude)
+        const lng = Number(position?.coords?.longitude)
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) return
+
+        reverseGeocodeCurrentLocation(lat, lng)
+      },
+      () => {
+        hasResolvedInitialMapCenterRef.current = true
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 8000,
+        maximumAge: 60000,
+      }
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step1.location?.latitude, step1.location?.longitude])
 
   const handleUpload = async (file, folder) => {
     try {
@@ -547,6 +913,9 @@ export default function RestaurantOnboarding() {
     }
     if (!step1.location?.city?.trim()) {
       errors.push("City is required")
+    }
+    if (!Number.isFinite(Number(step1.location?.latitude)) || !Number.isFinite(Number(step1.location?.longitude))) {
+      errors.push("Please pinpoint the restaurant location on the map")
     }
 
     return errors
@@ -885,32 +1254,9 @@ export default function RestaurantOnboarding() {
           throw new Error('Invalid response from server')
         }
 
-        try {
-          const cachedRaw = localStorage.getItem("restaurant_user")
-          const cachedRestaurant = cachedRaw ? JSON.parse(cachedRaw) : {}
-          const responseRestaurant = response?.data?.data?.restaurant || {}
-          const responseOnboarding = response?.data?.data?.onboarding || {}
-
-          localStorage.setItem(
-            "restaurant_user",
-            JSON.stringify({
-              ...cachedRestaurant,
-              ...responseRestaurant,
-              onboarding: {
-                ...(cachedRestaurant?.onboarding || {}),
-                ...responseOnboarding,
-                completedSteps: 4,
-              },
-            }),
-          )
-          window.dispatchEvent(new Event("restaurantAuthChanged"))
-          window.dispatchEvent(new Event("restaurantProfileRefresh"))
-        } catch (storageError) {
-          console.error("Failed to update cached restaurant after onboarding:", storageError)
-        }
-
-        // Clear localStorage when onboarding is complete
-        clearOnboardingFromLocalStorage()
+        window.dispatchEvent(new Event("restaurantAuthChanged"))
+        window.dispatchEvent(new Event("restaurantProfileRefresh"))
+        toast.success("Onboarding submitted. Verification is pending.")
 
         // Show success message briefly, then navigate
         console.log('Onboarding completed successfully, redirecting to restaurant home...')
@@ -929,6 +1275,7 @@ export default function RestaurantOnboarding() {
         err?.message ||
         "Failed to save onboarding data"
       setError(msg)
+      toast.error(msg)
     } finally {
       setSaving(false)
     }
@@ -984,7 +1331,6 @@ export default function RestaurantOnboarding() {
             <Input
               value={step1.ownerName || ""}
               onChange={(e) => {
-                // Allow only letters, spaces, hyphens
                 const val = e.target.value.replace(/[^A-Za-z\s-]/g, "")
                 setStep1({ ...step1, ownerName: val })
               }}
@@ -1009,7 +1355,6 @@ export default function RestaurantOnboarding() {
               inputMode="numeric"
               value={step1.ownerPhone || ""}
               onChange={(e) => {
-                // Allow digits only
                 const val = e.target.value.replace(/\D/g, "")
                 setStep1({ ...step1, ownerPhone: val })
               }}
@@ -1029,7 +1374,6 @@ export default function RestaurantOnboarding() {
             inputMode="numeric"
             value={step1.primaryContactNumber || ""}
             onChange={(e) => {
-              // Allow digits only
               const val = e.target.value.replace(/\D/g, "")
               setStep1({ ...step1, primaryContactNumber: val })
             }}
@@ -1037,72 +1381,166 @@ export default function RestaurantOnboarding() {
             placeholder="Restaurant's primary contact number"
           />
           <p className="text-[11px] text-gray-500 mt-1">
-            Customers, delivery partners and {companyName} may call on this number for order
-            support.
+            Customers, delivery partners and {companyName} may call on this number for order support.
           </p>
         </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Label className="text-xs text-gray-700">Area / Sector / Locality*</Label>
+            <Input
+              value={step1.location?.area || ""}
+              onChange={(e) => updateStep1Location((prev) => ({ ...prev, area: e.target.value }))}
+              className="mt-1 bg-white text-sm"
+              placeholder="Area / Sector / Locality"
+            />
+          </div>
+          <div>
+            <Label className="text-xs text-gray-700">City*</Label>
+            <Input
+              value={step1.location?.city || ""}
+              onChange={(e) => updateStep1Location((prev) => ({ ...prev, city: e.target.value }))}
+              className="mt-1 bg-white text-sm"
+              placeholder="City"
+            />
+          </div>
+          <div>
+            <Label className="text-xs text-gray-700">State</Label>
+            <Input
+              value={step1.location?.state || ""}
+              onChange={(e) => updateStep1Location((prev) => ({ ...prev, state: e.target.value }))}
+              className="mt-1 bg-white text-sm"
+              placeholder="State"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <Label className="text-xs text-gray-700">Address line 1</Label>
+            <Input
+              value={step1.location?.addressLine1 || ""}
+              onChange={(e) => updateStep1Location((prev) => ({ ...prev, addressLine1: e.target.value }))}
+              className="mt-1 bg-white text-sm"
+              placeholder="Shop no. / building no."
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <Label className="text-xs text-gray-700">Address line 2</Label>
+            <Input
+              value={step1.location?.addressLine2 || ""}
+              onChange={(e) => updateStep1Location((prev) => ({ ...prev, addressLine2: e.target.value }))}
+              className="mt-1 bg-white text-sm"
+              placeholder="Floor / tower"
+            />
+          </div>
+          <div>
+            <Label className="text-xs text-gray-700">ZIP / postal code</Label>
+            <Input
+              value={step1.location?.zipCode || ""}
+              onChange={(e) => updateStep1Location((prev) => ({ ...prev, zipCode: e.target.value }))}
+              className="mt-1 bg-white text-sm"
+              placeholder="Postal code"
+            />
+          </div>
+          <div>
+            <Label className="text-xs text-gray-700">Nearby landmark</Label>
+            <Input
+              value={step1.location?.landmark || ""}
+              onChange={(e) => updateStep1Location((prev) => ({ ...prev, landmark: e.target.value }))}
+              className="mt-1 bg-white text-sm"
+              placeholder="Nearby landmark"
+            />
+          </div>
+          <div className="sm:col-span-2">
+            <p className="text-[11px] text-gray-500 mt-1">
+              Please ensure that this address is the same as mentioned on your FSSAI license.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white p-4 sm:p-6 rounded-md space-y-5">
+        <div>
+          <h2 className="text-lg font-semibold text-black">Pinpoint restaurant location</h2>
+          <p className="text-xs text-gray-500 mt-1">
+            Search for your restaurant, click on the map, or drag the pin to set the exact location.
+          </p>
+        </div>
+
         <div className="space-y-3">
-          <p className="text-sm text-gray-700">
-            Add your restaurant's location for order pick-up.
-          </p>
-          <Input
-            value={step1.location?.area || ""}
-            onChange={(e) =>
-              setStep1({
-                ...step1,
-                location: { ...step1.location, area: e.target.value },
-              })
-            }
-            className="bg-white text-sm"
-            placeholder="Area / Sector / Locality*"
-          />
-          <Input
-            value={step1.location?.city || ""}
-            onChange={(e) =>
-              setStep1({
-                ...step1,
-                location: { ...step1.location, city: e.target.value },
-              })
-            }
-            className="bg-white text-sm"
-            placeholder="City"
-          />
-          <Input
-            value={step1.location?.addressLine1 || ""}
-            onChange={(e) =>
-              setStep1({
-                ...step1,
-                location: { ...step1.location, addressLine1: e.target.value },
-              })
-            }
-            className="bg-white text-sm"
-            placeholder="Shop no. / building no. (optional)"
-          />
-          <Input
-            value={step1.location?.addressLine2 || ""}
-            onChange={(e) =>
-              setStep1({
-                ...step1,
-                location: { ...step1.location, addressLine2: e.target.value },
-              })
-            }
-            className="bg-white text-sm"
-            placeholder="Floor / tower (optional)"
-          />
-          <Input
-            value={step1.location?.landmark || ""}
-            onChange={(e) =>
-              setStep1({
-                ...step1,
-                location: { ...step1.location, landmark: e.target.value },
-              })
-            }
-            className="bg-white text-sm"
-            placeholder="Nearby landmark (optional)"
-          />
-          <p className="text-[11px] text-gray-500 mt-1">
-            Please ensure that this address is the same as mentioned on your FSSAI license.
-          </p>
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                value={locationSearch}
+                onChange={(e) => setLocationSearch(e.target.value)}
+                placeholder="Search for your restaurant location"
+                className="pl-10"
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleSearchLocation}
+              className="sm:min-w-[120px]"
+            >
+              Search
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleUseCurrentLocation}
+              disabled={detectingLocation}
+              className="sm:min-w-[180px]"
+            >
+              {detectingLocation ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Fetching...
+                </>
+              ) : (
+                <>
+                  <MapPin className="mr-2 h-4 w-4" />
+                  Use current location
+                </>
+              )}
+            </Button>
+          </div>
+
+          {(step1.location?.formattedAddress || (Number.isFinite(Number(step1.location?.latitude)) && Number.isFinite(Number(step1.location?.longitude)))) && (
+            <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-800">
+              <div className="font-medium">{step1.location?.formattedAddress || "Pinned location selected"}</div>
+              {Number.isFinite(Number(step1.location?.latitude)) && Number.isFinite(Number(step1.location?.longitude)) && (
+                <div className="mt-1 text-green-700">
+                  Coordinates: {Number(step1.location.latitude).toFixed(6)}, {Number(step1.location.longitude).toFixed(6)}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="relative overflow-hidden rounded-md border border-gray-200 bg-gray-50">
+            <div ref={mapRef} className="h-[320px] w-full" />
+            {mapLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-white/80">
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Loading map...</span>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="text-xs text-gray-500">
+            Tap anywhere on the map to drop a pin. You can drag the marker if the spot needs adjustment.
+          </div>
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              onClick={handleSavePinnedLocation}
+              variant="outline"
+              className="sm:min-w-[160px]"
+            >
+              Save location
+            </Button>
+          </div>
+          {mapError && <div className="text-xs text-red-600">{mapError}</div>}
         </div>
       </section>
     </div>
@@ -1114,13 +1552,13 @@ export default function RestaurantOnboarding() {
       <section className="bg-white p-4 sm:p-6 rounded-md space-y-5">
         <h2 className="text-lg font-semibold text-black">Menu & photos</h2>
         <p className="text-xs text-gray-500">
-          Add clear photos of your printed menu and a primary profile image. This helps customers
-          understand what you serve.
+          Add clear photos of your printed menu and a primary profile image if you have them. All
+          image uploads on this onboarding flow are optional.
         </p>
 
         {/* Menu images */}
         <div className="space-y-2">
-          <Label className="text-xs font-medium text-gray-700">Menu images</Label>
+          <Label className="text-xs font-medium text-gray-700">Menu images (optional)</Label>
           <div className="mt-1 border border-dashed border-gray-300 rounded-md bg-gray-50/70 px-4 py-3 flex items-center justify-between flex-col gap-3">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-md bg-white flex items-center justify-center">
@@ -1129,7 +1567,7 @@ export default function RestaurantOnboarding() {
               <div className="flex flex-col">
                 <span className="text-xs font-medium text-gray-900">Upload menu images</span>
                 <span className="text-[11px] text-gray-500">
-                  JPG, PNG, WebP
+                  JPG, PNG, WebP. You can skip this for now.
                 </span>
               </div>
             </div>
@@ -1232,7 +1670,7 @@ export default function RestaurantOnboarding() {
 
         {/* Profile image */}
         <div className="space-y-2">
-          <Label className="text-xs font-medium text-gray-700">Restaurant profile image</Label>
+          <Label className="text-xs font-medium text-gray-700">Restaurant profile image (optional)</Label>
           <div className="flex items-center gap-4">
             <div className="h-16 w-16 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
               {step2.profileImage ? (
@@ -1267,7 +1705,7 @@ export default function RestaurantOnboarding() {
               <div className="flex flex-col">
                 <span className="text-xs font-medium text-gray-900">Upload profile image</span>
                 <span className="text-[11px] text-gray-500">
-                  This will be shown on your listing card and restaurant page.
+                  This will be shown on your listing card and restaurant page if you upload one.
                 </span>
               </div>
 
@@ -1462,7 +1900,7 @@ export default function RestaurantOnboarding() {
           <h2 className="text-lg font-semibold text-black">PAN details</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <Label className="text-xs text-gray-700">PAN number*</Label>
+              <Label className="text-xs text-gray-700">PAN number (optional)</Label>
               <Input
                 value={step3.panNumber || ""}
                 onChange={(e) => {
@@ -1476,7 +1914,7 @@ export default function RestaurantOnboarding() {
               />
             </div>
             <div>
-              <Label className="text-xs text-gray-700">Name on PAN*</Label>
+              <Label className="text-xs text-gray-700">Name on PAN (optional)</Label>
               <Input
                 value={step3.nameOnPan || ""}
                 onChange={(e) => {
@@ -1491,7 +1929,7 @@ export default function RestaurantOnboarding() {
           </div>
           <FileUploadBox
             id="panImageInput"
-            label="PAN image*"
+            label="PAN image (optional)"
             file={step3.panImage}
             onFileChange={(f) => setStep3({ ...step3, panImage: f })}
           />
@@ -1540,7 +1978,7 @@ export default function RestaurantOnboarding() {
               />
               <FileUploadBox
                 id="gstImageInput"
-                label="GST certificate image*"
+                label="GST certificate image (optional)"
                 file={step3.gstImage}
                 onFileChange={(f) => setStep3({ ...step3, gstImage: f })}
               />
@@ -1552,7 +1990,7 @@ export default function RestaurantOnboarding() {
           <h2 className="text-lg font-semibold text-black">FSSAI details</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <Label className="text-xs text-gray-700">FSSAI number*</Label>
+              <Label className="text-xs text-gray-700">FSSAI number (optional)</Label>
               <Input
                 value={step3.fssaiNumber || ""}
                 onChange={(e) => {
@@ -1567,7 +2005,7 @@ export default function RestaurantOnboarding() {
               />
             </div>
             <div>
-              <Label className="text-xs text-gray-700 mb-1 block">FSSAI expiry date*</Label>
+              <Label className="text-xs text-gray-700 mb-1 block">FSSAI expiry date (optional)</Label>
               <Popover>
                 <PopoverTrigger asChild>
                   <button
@@ -1616,7 +2054,7 @@ export default function RestaurantOnboarding() {
           <h2 className="text-lg font-semibold text-black">Bank account details</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <Label className="text-xs text-gray-700">Account number*</Label>
+              <Label className="text-xs text-gray-700">Account number (optional)</Label>
               <Input
                 inputMode="numeric"
                 value={step3.accountNumber || ""}
@@ -1630,7 +2068,7 @@ export default function RestaurantOnboarding() {
               />
             </div>
             <div>
-              <Label className="text-xs text-gray-700">Re-enter account number*</Label>
+              <Label className="text-xs text-gray-700">Re-enter account number (optional)</Label>
               <Input
                 inputMode="numeric"
                 value={step3.confirmAccountNumber || ""}
@@ -1645,7 +2083,7 @@ export default function RestaurantOnboarding() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <Label className="text-xs text-gray-700">IFSC code*</Label>
+              <Label className="text-xs text-gray-700">IFSC code (optional)</Label>
               <Input
                 value={step3.ifscCode || ""}
                 onChange={(e) => {
@@ -1659,7 +2097,7 @@ export default function RestaurantOnboarding() {
               />
             </div>
             <div>
-              <Label className="text-xs text-gray-700">Account type*</Label>
+              <Label className="text-xs text-gray-700">Account type (optional)</Label>
               <Select
                 value={step3.accountType || ""}
                 onValueChange={(val) => setStep3({ ...step3, accountType: val })}
@@ -1675,7 +2113,7 @@ export default function RestaurantOnboarding() {
             </div>
           </div>
           <div>
-            <Label className="text-xs text-gray-700">Account holder name*</Label>
+            <Label className="text-xs text-gray-700">Account holder name (optional)</Label>
             <Input
               value={step3.accountHolderName || ""}
               onChange={(e) => {
@@ -1702,7 +2140,7 @@ export default function RestaurantOnboarding() {
         </p>
 
         <div>
-          <Label className="text-xs text-gray-700">Estimated Delivery Time*</Label>
+          <Label className="text-xs text-gray-700">Estimated Delivery Time (optional)</Label>
           <Input
             value={step4.estimatedDeliveryTime || ""}
             onChange={(e) => setStep4({ ...step4, estimatedDeliveryTime: e.target.value })}
@@ -1712,7 +2150,7 @@ export default function RestaurantOnboarding() {
         </div>
 
         <div>
-          <Label className="text-xs text-gray-700">Featured Dish Name*</Label>
+          <Label className="text-xs text-gray-700">Featured Dish Name (optional)</Label>
           <Input
             value={step4.featuredDish || ""}
             onChange={(e) => setStep4({ ...step4, featuredDish: e.target.value })}
@@ -1722,7 +2160,7 @@ export default function RestaurantOnboarding() {
         </div>
 
         <div>
-          <Label className="text-xs text-gray-700">Featured Dish Price (Rs)*</Label>
+          <Label className="text-xs text-gray-700">Featured Dish Price (Rs) (optional)</Label>
           <Input
             type="number"
             value={step4.featuredPrice || ""}
@@ -1734,7 +2172,7 @@ export default function RestaurantOnboarding() {
         </div>
 
         <div>
-          <Label className="text-xs text-gray-700">Special Offer/Promotion*</Label>
+          <Label className="text-xs text-gray-700">Special Offer/Promotion (optional)</Label>
           <Input
             value={step4.offer || ""}
             onChange={(e) => setStep4({ ...step4, offer: e.target.value })}

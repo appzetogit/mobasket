@@ -274,7 +274,7 @@ export const getRestaurantOrderById = asyncHandler(async (req, res) => {
     if (!order) {
       return errorResponse(res, 404, 'Order not found');
     }
-
+    const orderStoreIdentifier = String(order?.restaurantId || restaurantId || '').trim() || restaurantId;
     return successResponse(res, 200, 'Order retrieved successfully', {
       order
     });
@@ -323,12 +323,20 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     if (!order) {
       return errorResponse(res, 404, 'Order not found');
     }
+    const orderStoreIdentifier = String(order?.restaurantId || restaurantId || '').trim() || restaurantId;
 
-    // Allow accepting orders with status 'pending' or 'confirmed'
-    // 'confirmed' status means payment is verified, restaurant can still accept
-    if (!['pending', 'confirmed'].includes(order.status)) {
-      return errorResponse(res, 400, `Order cannot be accepted. Current status: ${order.status}`);
-    }
+    // Accept should be idempotent from the restaurant UI.
+    // Stale popups or a second click can hit this endpoint after the order already moved
+    // to preparing/ready, and that should be treated as a successful accept.
+    const alreadyAcceptedStatuses = ['preparing', 'ready'];
+    const wasAlreadyAccepted = alreadyAcceptedStatuses.includes(order.status);
+
+    if (!wasAlreadyAccepted) {
+      // Allow accepting orders with status 'pending' or 'confirmed'
+      // 'confirmed' status means payment is verified, restaurant can still accept
+      if (!['pending', 'confirmed'].includes(order.status)) {
+        return errorResponse(res, 400, `Order cannot be accepted. Current status: ${order.status}`);
+      }
 
     // When restaurant accepts order, it means they're starting to prepare it
     // So set status to 'preparing' and mark as confirmed if it was pending
@@ -399,26 +407,29 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       console.error('Error sending notification:', notifError);
     }
 
-    // Notify user tracking room that restaurant accepted the order
-    try {
-      await emitOrderTrackingUpdate(order, {
-        status: 'preparing',
-        message: 'Restaurant accepted your order'
-      });
-    } catch (userNotifError) {
-      console.error('Error sending user accepted notification:', userNotifError);
+      // Notify user tracking room that restaurant accepted the order
+      try {
+        await emitOrderTrackingUpdate(order, {
+          status: 'preparing',
+          message: 'Restaurant accepted your order'
+        });
+      } catch (userNotifError) {
+        console.error('Error sending user accepted notification:', userNotifError);
+      }
+    } else {
+      console.log(`ℹ️ Order ${order.orderId} already in accepted state (${order.status}), re-running rider dispatch sync.`);
     }
 
     // Direct assignment fallback from restaurant accept flow.
     // This restores the expected behavior where accepting from /restaurant immediately pushes to a delivery partner.
     if (!order.deliveryPartnerId) {
       try {
-        const restaurantDoc = await resolveStoreForAssignment(restaurantId);
+        const restaurantDoc = await resolveStoreForAssignment(orderStoreIdentifier);
         const hasValidRestaurantCoords = hasValidStoreCoordinates(restaurantDoc);
 
         if (hasValidRestaurantCoords) {
           const [restaurantLng, restaurantLat] = restaurantDoc.location.coordinates;
-          const assignmentResult = await assignOrderToDeliveryBoy(order, restaurantLat, restaurantLng, restaurantId);
+          const assignmentResult = await assignOrderToDeliveryBoy(order, restaurantLat, restaurantLng, orderStoreIdentifier);
 
           if (assignmentResult?.success && assignmentResult.deliveryPartnerId) {
             const assignedOrder = await Order.findById(order._id)
@@ -449,7 +460,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
 
         // Get restaurant location
         let restaurantDoc = null;
-        restaurantDoc = await resolveStoreForAssignment(restaurantId);
+        restaurantDoc = await resolveStoreForAssignment(orderStoreIdentifier);
 
         if (!restaurantDoc) {
           console.error(`❌ Restaurant not found for restaurantId: ${restaurantId}`);
@@ -468,7 +479,8 @@ export const acceptOrder = asyncHandler(async (req, res) => {
           } else if (freshOrder.deliveryPartnerId) {
             console.log(`⚠️ Order ${order.orderId} already has delivery partner: ${freshOrder.deliveryPartnerId}`);
           } else {
-            // Step 1: Find nearest delivery boys (within 5km priority distance)
+            // Step 1: Find nearest delivery boys (within 20km priority distance)
+            // Keep this aligned with manual resend so initial accept behaves the same.
             const requiredZoneId = freshOrder?.assignmentInfo?.zoneId ? String(freshOrder.assignmentInfo.zoneId) : null;
             const incomingCodAmount = ['cash', 'cod'].includes(String(freshOrder?.payment?.method || '').toLowerCase())
               ? Math.max(0, Number(freshOrder?.pricing?.total) || 0)
@@ -476,8 +488,8 @@ export const acceptOrder = asyncHandler(async (req, res) => {
             const priorityDeliveryBoys = await findNearestDeliveryBoys(
               restaurantLat,
               restaurantLng,
-              restaurantId,
-              5,
+              orderStoreIdentifier,
+              20,
               { requiredZoneId, incomingCodAmount }
             );
             
@@ -522,7 +534,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
                     const allDeliveryBoys = await findNearestDeliveryBoys(
                       restaurantLat, 
                       restaurantLng, 
-                      restaurantId, 
+                      orderStoreIdentifier, 
                       50, // Max distance 50km
                       { requiredZoneId, incomingCodAmount }
                     );
@@ -569,7 +581,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
               const anyDeliveryBoy = await findNearestDeliveryBoy(
                 restaurantLat,
                 restaurantLng,
-                restaurantId,
+                orderStoreIdentifier,
                 50,
                 [],
                 { requiredZoneId, incomingCodAmount }
@@ -597,9 +609,24 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       }
     } else {
       console.log(`ℹ️ Order ${order.orderId} already has delivery partner assigned: ${order.deliveryPartnerId}`);
+      // Ensure assigned delivery partner gets notification immediately from accept flow.
+      // This prevents cases where assignment succeeded but first emit failed, forcing manual resend.
+      try {
+        const assignedOrder = await Order.findById(order._id)
+          .populate('userId', 'name phone')
+          .populate('restaurantId', 'name address location phone ownerPhone')
+          .lean();
+
+        if (assignedOrder) {
+          await notifyDeliveryBoyNewOrder(assignedOrder, order.deliveryPartnerId);
+          console.log(`✅ Ensured notification for assigned delivery partner ${order.deliveryPartnerId} on order ${order.orderId}`);
+        }
+      } catch (assignedNotifyError) {
+        console.error(`❌ Failed to ensure assigned delivery notification for order ${order.orderId}:`, assignedNotifyError);
+      }
     }
 
-    return successResponse(res, 200, 'Order accepted successfully', {
+    return successResponse(res, 200, wasAlreadyAccepted ? 'Order already accepted' : 'Order accepted successfully', {
       order
     });
   } catch (error) {
@@ -767,6 +794,7 @@ export const markOrderPreparing = asyncHandler(async (req, res) => {
     if (!order) {
       return errorResponse(res, 404, 'Order not found');
     }
+    const orderStoreIdentifier = String(order?.restaurantId || restaurantId || '').trim() || restaurantId;
 
     // Allow marking as preparing if status is 'confirmed', 'pending', or already 'preparing' (for retry scenarios)
     // If already preparing, we allow it to retry delivery assignment if no delivery partner is assigned
@@ -824,7 +852,7 @@ export const markOrderPreparing = asyncHandler(async (req, res) => {
         console.log(`🔄 Attempting to assign order ${freshOrder.orderId} to delivery boy (status: ${freshOrder.status})...`);
 
         // Get restaurant location
-        const restaurantDoc = await resolveStoreForAssignment(restaurantId);
+        const restaurantDoc = await resolveStoreForAssignment(orderStoreIdentifier);
 
         if (!restaurantDoc) {
           console.error(`❌ Restaurant not found for restaurantId: ${restaurantId}`);
@@ -902,7 +930,7 @@ export const markOrderPreparing = asyncHandler(async (req, res) => {
         }
 
         // Assign to nearest delivery boy
-        const assignmentResult = await assignOrderToDeliveryBoy(freshOrder, restaurantLat, restaurantLng, restaurantId);
+        const assignmentResult = await assignOrderToDeliveryBoy(freshOrder, restaurantLat, restaurantLng, orderStoreIdentifier);
 
         if (assignmentResult && assignmentResult.deliveryPartnerId) {
           // Reload order with populated userId after assignment
@@ -1115,7 +1143,7 @@ export const resendDeliveryNotification = asyncHandler(async (req, res) => {
     }
 
     // Get restaurant location
-    const restaurantDoc = await resolveStoreForAssignment(restaurantId);
+    const restaurantDoc = await resolveStoreForAssignment(orderStoreIdentifier);
 
     if (!restaurantDoc || !restaurantDoc.location || !restaurantDoc.location.coordinates) {
       return errorResponse(res, 400, 'Restaurant location not found. Please update restaurant location.');
@@ -1128,7 +1156,7 @@ export const resendDeliveryNotification = asyncHandler(async (req, res) => {
     const priorityDeliveryBoys = await findNearestDeliveryBoys(
       restaurantLat,
       restaurantLng,
-      restaurantId,
+      orderStoreIdentifier,
       20, // 20km radius for priority
       { requiredZoneId }
     );
@@ -1138,7 +1166,7 @@ export const resendDeliveryNotification = asyncHandler(async (req, res) => {
       const allDeliveryBoys = await findNearestDeliveryBoys(
         restaurantLat,
         restaurantLng,
-        restaurantId,
+        orderStoreIdentifier,
         50, // 50km radius
         { requiredZoneId }
       );

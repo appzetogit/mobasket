@@ -1,10 +1,11 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { useLocation } from "@/module/user/hooks/useLocation";
+import { useProfile } from "@/module/user/context/ProfileContext";
 import { useZone } from "@/module/user/hooks/useZone";
-import { restaurantAPI } from "@/lib/api";
+import { restaurantAPI, zoneAPI } from "@/lib/api";
 import {
   MapPin,
   Bell,
@@ -28,15 +29,86 @@ import { Button } from "@/components/ui/button";
 export default function HomePage() {
   const navigate = useNavigate();
   const { location, loading: locationLoading } = useLocation();
+  const { addresses, getDefaultAddress } = useProfile();
+  const [persistedAddresses, setPersistedAddresses] = useState(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem("userAddresses") || "[]");
+      return Array.isArray(stored) ? stored : [];
+    } catch {
+      return [];
+    }
+  });
   const [currentSlide, setCurrentSlide] = useState(0);
   const [currentPlaceholderIndex, setCurrentPlaceholderIndex] = useState(0);
   const [popularRestaurants, setPopularRestaurants] = useState([]);
   const [restaurantsLoading, setRestaurantsLoading] = useState(true);
+  const [matchingZoneIds, setMatchingZoneIds] = useState([]);
   const [wishlist, setWishlist] = useState(() => {
     // Load wishlist from localStorage
     const saved = localStorage.getItem("wishlist");
     return saved ? JSON.parse(saved) : [];
   });
+
+  const extractAddressCoordinates = (address) => {
+    if (!address) return null;
+
+    const geoJsonCoordinates =
+      Array.isArray(address?.location?.coordinates) && address.location.coordinates.length >= 2
+        ? address.location.coordinates
+        : null;
+
+    if (
+      geoJsonCoordinates &&
+      Number.isFinite(Number(geoJsonCoordinates[1])) &&
+      Number.isFinite(Number(geoJsonCoordinates[0])) &&
+      !(Number(geoJsonCoordinates[0]) === 0 && Number(geoJsonCoordinates[1]) === 0)
+    ) {
+      return {
+        latitude: Number(geoJsonCoordinates[1]),
+        longitude: Number(geoJsonCoordinates[0]),
+      };
+    }
+
+    if (
+      Number.isFinite(Number(address?.latitude)) &&
+      Number.isFinite(Number(address?.longitude)) &&
+      !(Number(address.latitude) === 0 && Number(address.longitude) === 0)
+    ) {
+      return {
+        latitude: Number(address.latitude),
+        longitude: Number(address.longitude),
+      };
+    }
+
+    return null;
+  };
+
+  const resolveSavedAddress = () => {
+    const defaultAddress = getDefaultAddress?.();
+    const defaultAddressId = String(defaultAddress?._id || defaultAddress?.id || "").trim();
+
+    if (defaultAddressId && Array.isArray(addresses) && addresses.length > 0) {
+      const hydratedDefault = addresses.find(
+        (address) => String(address?._id || address?.id || "").trim() === defaultAddressId,
+      );
+      if (hydratedDefault) return hydratedDefault;
+    }
+
+    if (defaultAddress) return defaultAddress;
+
+    if (Array.isArray(persistedAddresses) && persistedAddresses.length > 0) {
+      return (
+        persistedAddresses.find((address) => address?.isDefault) ||
+        persistedAddresses[0]
+      );
+    }
+
+    if (Array.isArray(addresses) && addresses.length > 0) {
+      return addresses.find((address) => address?.isDefault) || addresses[0];
+    }
+
+    return null;
+  };
 
   // Function to extract location parts for display
   // Main location: First 2 parts only (e.g., "Mama Loca, G-2")
@@ -116,20 +188,173 @@ export default function HomePage() {
     }
   }, []);
 
-  // Use location from hook, fallback to stored location
-  const currentLocation = location || storedLocation;
-  const { zoneId, isOutOfService } = useZone(currentLocation, "mofood");
+  useEffect(() => {
+    if (Array.isArray(addresses) && addresses.length > 0) {
+      setPersistedAddresses(addresses);
+    }
+  }, [addresses]);
+
+  const selectedAddress = useMemo(() => {
+    return resolveSavedAddress();
+  }, [addresses, getDefaultAddress, persistedAddresses]);
+
+  useEffect(() => {
+    if (!selectedAddress) return;
+
+    try {
+      const nextLocation = {
+        ...(selectedAddress.location && typeof selectedAddress.location === "object"
+          ? selectedAddress.location
+          : {}),
+        ...selectedAddress,
+        address:
+          selectedAddress.address ||
+          selectedAddress.formattedAddress ||
+          selectedAddress.street ||
+          "",
+        formattedAddress:
+          selectedAddress.formattedAddress ||
+          selectedAddress.address ||
+          "",
+        city: selectedAddress.city || selectedAddress.location?.city || "",
+        state: selectedAddress.state || selectedAddress.location?.state || "",
+        area:
+          selectedAddress.area ||
+          selectedAddress.location?.area ||
+          selectedAddress.label ||
+          "",
+      };
+
+      const coords = extractAddressCoordinates(selectedAddress);
+      if (coords) {
+        nextLocation.latitude = coords.latitude;
+        nextLocation.longitude = coords.longitude;
+      }
+
+      localStorage.setItem("userLocation", JSON.stringify(nextLocation));
+    } catch {
+      // Ignore localStorage sync issues.
+    }
+  }, [selectedAddress]);
+
+  const effectiveLocation = useMemo(() => {
+    if (!selectedAddress) return null;
+
+    const coords = extractAddressCoordinates(selectedAddress);
+    return {
+      ...(selectedAddress.location && typeof selectedAddress.location === "object"
+        ? selectedAddress.location
+        : {}),
+      ...selectedAddress,
+      latitude:
+        coords?.latitude ??
+        (Number.isFinite(Number(selectedAddress?.location?.latitude))
+          ? Number(selectedAddress?.location?.latitude)
+          : undefined),
+      longitude:
+        coords?.longitude ??
+        (Number.isFinite(Number(selectedAddress?.location?.longitude))
+          ? Number(selectedAddress?.location?.longitude)
+          : undefined),
+      address:
+        selectedAddress.address ||
+        selectedAddress.formattedAddress ||
+        selectedAddress.street ||
+        "",
+      formattedAddress:
+        selectedAddress.formattedAddress ||
+        selectedAddress.address ||
+        "",
+      city: selectedAddress.city || selectedAddress.location?.city || "",
+      state: selectedAddress.state || selectedAddress.location?.state || "",
+      area:
+        selectedAddress.area ||
+        selectedAddress.location?.area ||
+        selectedAddress.label ||
+        "",
+    };
+  }, [selectedAddress]);
+
+  const { zoneId, isOutOfService } = useZone(effectiveLocation, "mofood");
+
+  const savedAddressDisplay = useMemo(() => {
+    if (!selectedAddress) return null;
+
+    const formattedAddress = String(
+      selectedAddress?.formattedAddress ||
+      selectedAddress?.address ||
+      ""
+    ).trim();
+
+    const fullAddressParts = [
+      selectedAddress?.addressLine1,
+      selectedAddress?.street,
+      selectedAddress?.area || selectedAddress?.location?.area,
+      selectedAddress?.city || selectedAddress?.location?.city,
+      selectedAddress?.state || selectedAddress?.location?.state,
+      selectedAddress?.zipCode || selectedAddress?.pincode || selectedAddress?.postalCode,
+    ]
+      .map((part) => String(part || "").trim())
+      .filter(Boolean);
+
+    const fullAddress = formattedAddress || fullAddressParts.join(", ");
+    const addressSegments = fullAddress
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    const main = addressSegments.slice(0, 2).join(", ") || "Saved address";
+    const sub = addressSegments.slice(2).join(", ");
+
+    return { main, sub };
+  }, [selectedAddress]);
+
+  useEffect(() => {
+    const resolveMatchingZones = async () => {
+      const latitude = Number(effectiveLocation?.latitude);
+      const longitude = Number(effectiveLocation?.longitude);
+
+      if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+        setMatchingZoneIds(zoneId ? [zoneId] : []);
+        return;
+      }
+
+      try {
+        const response = await zoneAPI.detectAllZones(latitude, longitude, "mofood");
+        const matchedZoneIds = (
+          Array.isArray(response?.data?.data?.zoneIds)
+            ? response.data.data.zoneIds.map((value) => String(value || "").trim())
+            : []
+        ).filter(Boolean);
+
+        if (matchedZoneIds.length > 0) {
+          setMatchingZoneIds(Array.from(new Set(matchedZoneIds)));
+          return;
+        }
+
+        setMatchingZoneIds(zoneId ? [zoneId] : []);
+      } catch {
+        setMatchingZoneIds(zoneId ? [zoneId] : []);
+      }
+    };
+
+    resolveMatchingZones();
+  }, [effectiveLocation?.latitude, effectiveLocation?.longitude, zoneId]);
 
   // Get display location parts
   // Priority: formattedAddress > address > area/city
   // IMPORTANT: Sub location ALWAYS uses city and state from location object, never from address parts
   const locationDisplay = (() => {
+    if (savedAddressDisplay) {
+      return savedAddressDisplay;
+    }
+
     let mainLocation = "";
     let subLocation = "";
 
     // Get main location from address (first 2 parts)
-    if (currentLocation?.formattedAddress) {
-      const parts = currentLocation.formattedAddress
+    if (effectiveLocation?.formattedAddress) {
+      const parts = effectiveLocation.formattedAddress
         .split(",")
         .map((part) => part.trim())
         .filter((part) => part.length > 0);
@@ -138,8 +363,8 @@ export default function HomePage() {
       } else if (parts.length >= 1) {
         mainLocation = parts[0];
       }
-    } else if (currentLocation?.address) {
-      const parts = currentLocation.address
+    } else if (effectiveLocation?.address) {
+      const parts = effectiveLocation.address
         .split(",")
         .map((part) => part.trim())
         .filter((part) => part.length > 0);
@@ -148,10 +373,10 @@ export default function HomePage() {
       } else if (parts.length >= 1) {
         mainLocation = parts[0];
       }
-    } else if (currentLocation?.area) {
-      mainLocation = currentLocation.area;
-    } else if (currentLocation?.city) {
-      mainLocation = currentLocation.city;
+    } else if (effectiveLocation?.area) {
+      mainLocation = effectiveLocation.area;
+    } else if (effectiveLocation?.city) {
+      mainLocation = effectiveLocation.city;
     } else {
       mainLocation = "Select location";
     }
@@ -159,23 +384,23 @@ export default function HomePage() {
     // Sub location: ALWAYS use city and state from location object (never from address parts)
     // Check if city and state exist in location object
     const hasCity =
-      currentLocation?.city &&
-      currentLocation.city.trim() !== "" &&
-      currentLocation.city !== "Unknown City";
+      effectiveLocation?.city &&
+      effectiveLocation.city.trim() !== "" &&
+      effectiveLocation.city !== "Unknown City";
     const hasState =
-      currentLocation?.state && currentLocation.state.trim() !== "";
+      effectiveLocation?.state && effectiveLocation.state.trim() !== "";
 
     if (hasCity && hasState) {
-      subLocation = `${currentLocation.city}, ${currentLocation.state}`;
+      subLocation = `${effectiveLocation.city}, ${effectiveLocation.state}`;
     } else if (hasCity) {
-      subLocation = currentLocation.city;
+      subLocation = effectiveLocation.city;
     } else if (hasState) {
-      subLocation = currentLocation.state;
+      subLocation = effectiveLocation.state;
     } else {
       // If city/state not available in location object, try to extract from formattedAddress
       // This is a fallback - formattedAddress format: "Mama Loca, G-2, Princess Center 6/3, Opposite Manpasand Garden, New Palasia, Indore, 452001, India"
-      if (currentLocation?.formattedAddress) {
-        const parts = currentLocation.formattedAddress
+      if (effectiveLocation?.formattedAddress) {
+        const parts = effectiveLocation.formattedAddress
           .split(",")
           .map((part) => part.trim())
           .filter((part) => part.length > 0);
@@ -295,7 +520,7 @@ export default function HomePage() {
   // Debug: Log location data
   useEffect(() => {
     // Intentionally left empty after removing verbose console logging
-  }, [location, storedLocation, currentLocation, locationDisplay]);
+  }, [location, storedLocation, effectiveLocation, locationDisplay]);
 
   // Show toast notification
   // Show toast notification
@@ -540,31 +765,50 @@ export default function HomePage() {
       try {
         setRestaurantsLoading(true);
 
-        const city = currentLocation?.city;
-        if (!city || city === "Current Location") {
+        const city = effectiveLocation?.city;
+        const normalizedCurrentCity = normalizeCity(city);
+        if ((!city || city === "Current Location") && matchingZoneIds.length === 0) {
           setPopularRestaurants([]);
           return;
         }
 
-        const params = {
-          platform: "mofood",
-          limit: 20,
-          city,
-        };
+        const zoneIdsToQuery = matchingZoneIds.length > 0 ? matchingZoneIds : zoneId ? [zoneId] : [];
 
-        if (zoneId) {
-          params.zoneId = zoneId;
-          params.onlyZone = "true";
-        }
+        const responses = zoneIdsToQuery.length > 0
+          ? await Promise.all(
+              zoneIdsToQuery.map((currentZoneId) =>
+                restaurantAPI.getRestaurants({
+                  platform: "mofood",
+                  limit: 50,
+                  zoneId: currentZoneId,
+                  onlyZone: "true",
+                }),
+              ),
+            )
+          : [
+              await restaurantAPI.getRestaurants({
+                platform: "mofood",
+                limit: 50,
+                ...(city && city !== "Current Location" ? { city } : {}),
+              }),
+            ];
 
-        const response = await restaurantAPI.getRestaurants(params);
-        const rawRestaurants = Array.isArray(response?.data?.data?.restaurants)
-          ? response.data.data.restaurants
-          : [];
+        const rawRestaurants = responses.flatMap((response) =>
+          Array.isArray(response?.data?.data?.restaurants) ? response.data.data.restaurants : [],
+        );
 
-        const normalizedCurrentCity = normalizeCity(city);
-        const cityFilteredRestaurants = rawRestaurants.filter((restaurant) => {
+        const dedupedRestaurants = Array.from(
+          new Map(
+            rawRestaurants.map((restaurant) => [
+              String(restaurant?._id || restaurant?.restaurantId || restaurant?.slug || restaurant?.name),
+              restaurant,
+            ]),
+          ).values(),
+        );
+
+        const cityFilteredRestaurants = dedupedRestaurants.filter((restaurant) => {
           if (String(restaurant?.platform || "").toLowerCase() !== "mofood") return false;
+          if (zoneIdsToQuery.length > 0) return true;
           if (!normalizedCurrentCity) return true;
 
           const restaurantCity = normalizeCity(
@@ -629,7 +873,7 @@ export default function HomePage() {
     };
 
     fetchPopularRestaurants();
-  }, [currentLocation?.city, zoneId]);
+  }, [effectiveLocation?.city, matchingZoneIds, zoneId]);
 
   return (
     <div className="min-h-screen bg-[#f6e9dc] overflow-x-hidden pb-20">
@@ -640,11 +884,11 @@ export default function HomePage() {
             <MapPin className="w-4 h-4 text-white flex-shrink-0" fill="red" />
             <div className="flex-1 min-w-0">
               <p className="text-white text-xs font-medium mb-0.5">
-                Your Location
+                {selectedAddress ? "Saved Address" : "Your Location"}
               </p>
               <div className="flex items-center gap-1">
                 <div className="flex-1 min-w-0">
-                  {locationLoading && !location ? (
+                  {!savedAddressDisplay && locationLoading && !location ? (
                     <p className="text-white text-sm font-bold truncate">
                       Loading...
                     </p>
@@ -884,7 +1128,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Popular Restaurants Section - Horizontal Scrollable */}
+      {/* Popular Restaurants Section */}
       <div className="px-4 mb-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-gray-900">
@@ -895,15 +1139,15 @@ export default function HomePage() {
           </button>
         </div>
 
-        <div className="flex gap-4 overflow-x-auto scrollbar-hide -mx-4 px-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {restaurantsLoading && (
-            <div className="w-full rounded-xl bg-white px-4 py-5 text-sm font-medium text-gray-500 shadow-sm">
-              Loading restaurants for your city...
+            <div className="col-span-full rounded-xl bg-white px-4 py-5 text-sm font-medium text-gray-500 shadow-sm">
+              Loading restaurants for your zones...
             </div>
           )}
           {!restaurantsLoading && popularRestaurants.length === 0 && (
-            <div className="w-full rounded-xl bg-white px-4 py-5 text-sm font-medium text-gray-500 shadow-sm">
-              No restaurants available in your city right now.
+            <div className="col-span-full rounded-xl bg-white px-4 py-5 text-sm font-medium text-gray-500 shadow-sm">
+              No restaurants available in your zones right now.
             </div>
           )}
           {popularRestaurants.map((restaurant) => (
@@ -913,7 +1157,7 @@ export default function HomePage() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.4 }}
               whileHover={{ y: -5 }}
-              className="flex-shrink-0 w-[200px] bg-white rounded-xl overflow-visible shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+              className="w-full bg-white rounded-xl overflow-visible shadow-sm hover:shadow-md transition-shadow cursor-pointer"
               onClick={() => {
                 navigate(`/restaurants/${restaurant.slug}`);
               }}

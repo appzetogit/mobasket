@@ -94,7 +94,7 @@ async function resolveRestaurantPlatformAndZone(restaurantId) {
         .lean();
       if (!restaurant) {
         restaurant = await GroceryStore.findById(restaurantIdString)
-          .select('_id restaurantId platform slug location')
+          .select('_id restaurantId platform slug location zoneId')
           .lean();
       }
     }
@@ -109,7 +109,7 @@ async function resolveRestaurantPlatformAndZone(restaurantId) {
         restaurant = await GroceryStore.findOne({
           $or: [{ restaurantId: restaurantIdString }, { slug: restaurantIdString }]
         })
-          .select('_id restaurantId platform slug location')
+          .select('_id restaurantId platform slug location zoneId')
           .lean();
       }
     }
@@ -129,9 +129,20 @@ async function resolveRestaurantPlatformAndZone(restaurantId) {
   const restaurantIdCandidates = new Set([restaurantIdString]);
   if (restaurant?._id) restaurantIdCandidates.add(String(restaurant._id));
   if (restaurant?.restaurantId) restaurantIdCandidates.add(String(restaurant.restaurantId));
+  const explicitZoneId = String(
+    restaurant?.zoneId?._id ||
+    restaurant?.zoneId?.id ||
+    restaurant?.zoneId ||
+    ''
+  ).trim();
 
-  zone =
-    activeZones.find((z) => restaurantIdCandidates.has(String(z.restaurantId || ''))) || null;
+  if (explicitZoneId) {
+    zone = activeZones.find((z) => String(z._id) === explicitZoneId) || null;
+  }
+
+  if (!zone) {
+    zone = activeZones.find((z) => restaurantIdCandidates.has(String(z.restaurantId || ''))) || null;
+  }
 
   if (!zone && restaurant?.location?.coordinates?.length >= 2) {
     const [restaurantLng, restaurantLat] = restaurant.location.coordinates;

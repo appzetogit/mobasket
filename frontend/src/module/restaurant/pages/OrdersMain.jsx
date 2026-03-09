@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react"
+﻿import { useState, useEffect, useRef, useMemo } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { checkOnboardingStatus } from "../utils/onboardingUtils"
 import { checkGroceryStoreOnboardingStatus } from "@/module/grocery-store/utils/onboardingUtils"
@@ -233,7 +233,7 @@ function CompletedOrders({ onSelectOrder, orderAPI, searchQuery = "" }) {
                       <div className="flex items-baseline gap-1">
                         <span className="text-[11px] text-gray-500">Amount</span>
                         <span className="text-xs font-medium text-black">
-                          ₹{order.amount.toFixed(2)}
+                          Γé╣{order.amount.toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -461,7 +461,7 @@ function CancelledOrders({ onSelectOrder, orderAPI, isGroceryStore = false, sear
                       <div className="flex items-baseline gap-1">
                         <span className="text-[11px] text-gray-500">Amount</span>
                         <span className="text-xs font-medium text-black">
-                          ₹{order.amount.toFixed(2)}
+                          Γé╣{order.amount.toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -581,16 +581,19 @@ export default function OrdersMain() {
     isLoading: true
   })
   const [isReverifying, setIsReverifying] = useState(false)
-  const hasCompletedRestaurantOnboarding =
-    !isGroceryStore && restaurantStatus.onboarding?.completedSteps === 4
+  const completedOnboardingSteps = Number(restaurantStatus.onboarding?.completedSteps || 0)
+  const normalizedVerificationStatus = String(restaurantStatus.status || "").trim().toLowerCase()
+  const hasCompletedVerificationSubmission = isGroceryStore
+    ? completedOnboardingSteps >= 1
+    : completedOnboardingSteps === 4 || (normalizedVerificationStatus && normalizedVerificationStatus !== "onboarding")
   const hasRejectedVerification = Boolean(
-    !isGroceryStore && String(restaurantStatus.rejectionReason || "").trim()
+    String(restaurantStatus.rejectionReason || "").trim()
   )
   const canAccessLiveOrders =
-    isGroceryStore || restaurantStatus.isActive === true
+    restaurantStatus.isActive === true
   const shouldShowVerificationState =
     !restaurantStatus.isLoading &&
-    (hasCompletedRestaurantOnboarding || hasRejectedVerification) &&
+    (hasCompletedVerificationSubmission || hasRejectedVerification) &&
     restaurantStatus.isActive !== true
 
   useEffect(() => {
@@ -653,12 +656,19 @@ export default function OrdersMain() {
           ? (response?.data?.data?.store || response?.data?.store || response?.data?.data?.restaurant || response?.data?.restaurant)
           : (response?.data?.data?.restaurant || response?.data?.restaurant)
         if (restaurant) {
+          const normalizedStatus = String(restaurant.status || "").trim().toLowerCase()
           setRestaurantStatus({
             isActive: restaurant.isActive,
+            status: restaurant.status || null,
             rejectionReason: restaurant.rejectionReason || null,
             onboarding: restaurant.onboarding || null,
             isLoading: false
           })
+
+          // Once the restaurant has moved past onboarding, keep them on /restaurant.
+          if (normalizedStatus && normalizedStatus !== "onboarding") {
+            return
+          }
 
           // Restaurant onboarding redirection should be based on computed status,
           // not only onboarding.completedSteps (which can be stale/missing for old accounts).
@@ -700,7 +710,7 @@ export default function OrdersMain() {
 
     window.addEventListener('restaurantProfileRefresh', handleProfileRefresh)
 
-    // Auto-poll store status every 30 s — ONLY for /store (grocery store)
+    // Auto-poll store status every 30 s ΓÇö ONLY for /store (grocery store)
     // Restaurant status is fetched once on mount; this interval does NOT affect it
     let statusPollInterval = null
     if (isGroceryStore) {
@@ -736,6 +746,7 @@ export default function OrdersMain() {
       if (restaurant) {
         setRestaurantStatus({
           isActive: restaurant.isActive,
+          status: restaurant.status || null,
           rejectionReason: restaurant.rejectionReason || null,
           onboarding: restaurant.onboarding || null,
           isLoading: false
@@ -929,10 +940,10 @@ export default function OrdersMain() {
       try {
         const orderId = orderToAccept.orderMongoId || orderToAccept.orderId
         const response = await orderAPI.acceptOrder(orderId, prepTime)
-        console.log('✅ Order accepted:', orderId)
+        console.log('Γ£à Order accepted:', orderId)
         toast.success('Order accepted successfully')
       } catch (error) {
-        console.error('❌ Error accepting order:', error)
+        console.error('Γ¥î Error accepting order:', error)
         const errorMessage = error.response?.data?.message ||
           error.message ||
           'Failed to accept order. Please try again.'
@@ -975,9 +986,9 @@ export default function OrdersMain() {
       try {
         const orderId = orderToReject.orderMongoId || orderToReject.orderId
         await orderAPI.rejectOrder(orderId, rejectReason)
-        console.log('✅ Order rejected:', orderId)
+        console.log('Γ£à Order rejected:', orderId)
       } catch (error) {
-        console.error('❌ Error rejecting order:', error)
+        console.error('Γ¥î Error rejecting order:', error)
         alert('Failed to reject order. Please try again.')
         return
       }
@@ -1022,7 +1033,7 @@ export default function OrdersMain() {
       setOrderToCancel(null)
       setCancelReason("")
     } catch (error) {
-      console.error('❌ Error cancelling order:', error)
+      console.error('Γ¥î Error cancelling order:', error)
       toast.error(error.response?.data?.message || 'Failed to cancel order')
     }
   }
@@ -1114,8 +1125,8 @@ export default function OrdersMain() {
         const tableData = orderToPrint.items.map(item => [
           item.name || 'Item',
           item.quantity || 1,
-          `₹${(item.price || 0).toFixed(2)}`,
-          `₹${((item.price || 0) * (item.quantity || 1)).toFixed(2)}`
+          `Γé╣${(item.price || 0).toFixed(2)}`,
+          `Γé╣${((item.price || 0) * (item.quantity || 1)).toFixed(2)}`
         ])
 
         autoTable(doc, {
@@ -1139,7 +1150,7 @@ export default function OrdersMain() {
       // Total
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(12)
-      doc.text(`Total: ₹${(orderToPrint.total || 0).toFixed(2)}`, 20, yPos)
+      doc.text(`Total: Γé╣${(orderToPrint.total || 0).toFixed(2)}`, 20, yPos)
 
       // Payment status
       yPos += 10
@@ -1167,7 +1178,7 @@ export default function OrdersMain() {
       if (orderToPrint.sendCutlery) {
         yPos += 15
         doc.setFont('helvetica', 'normal')
-        doc.text('✓ Send cutlery requested', 20, yPos)
+        doc.text('Γ£ô Send cutlery requested', 20, yPos)
       }
 
       // Footer
@@ -1185,7 +1196,7 @@ export default function OrdersMain() {
       const fileName = `Order-${orderToPrint.orderId || 'Receipt'}-${Date.now()}.pdf`
       doc.save(fileName)
     } catch (error) {
-      console.error('❌ Error generating PDF:', error)
+      console.error('Γ¥î Error generating PDF:', error)
       alert('Failed to generate PDF. Please try again.')
     }
   }
@@ -1651,7 +1662,7 @@ export default function OrdersMain() {
                                       {item.quantity} x {item.name}
                                     </p>
                                     <p className="text-xs text-gray-600 ml-2">
-                                      ₹{item.price * item.quantity}
+                                      Γé╣{item.price * item.quantity}
                                     </p>
                                   </div>
                                 </div>
@@ -1684,7 +1695,7 @@ export default function OrdersMain() {
                       <span className="text-sm font-semibold text-gray-900">Total bill</span>
                     </div>
                     <span className="text-base font-bold text-gray-900">
-                      ₹{(popupOrder || newOrder)?.total || 0}
+                      Γé╣{(popupOrder || newOrder)?.total || 0}
                     </span>
                   </div>
 
@@ -1975,7 +1986,7 @@ export default function OrdersMain() {
                   <p className="text-[11px] text-gray-500 mt-1">
                     {selectedOrder.type}
                     {selectedOrder.tableOrToken
-                      ? ` • ${selectedOrder.tableOrToken}`
+                      ? ` ΓÇó ${selectedOrder.tableOrToken}`
                       : ""}
                   </p>
                 </div>
@@ -2212,7 +2223,7 @@ function OrderCard({
             <div className="flex flex-col gap-1">
               <p className="text-[11px] text-gray-500">
                 {type}
-                {tableOrToken ? ` • ${tableOrToken}` : ""}
+                {tableOrToken ? ` ΓÇó ${tableOrToken}` : ""}
               </p>
               {/* Delivery Assignment Status - Only show for preparing orders */}
               {normalizedStatus === 'preparing' && (
@@ -2437,7 +2448,7 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "" }
               if (status === 400 && (msg.includes('cannot be marked as ready') || msg.includes('current status'))) {
                 // Keep in markedReadyOrdersRef so we don't retry; order will disappear on next fetch
               } else {
-                console.error(`❌ Failed to auto-mark order ${order.orderId} as ready:`, error)
+                console.error(`Γ¥î Failed to auto-mark order ${order.orderId} as ready:`, error)
                 markedReadyOrdersRef.current.delete(orderKey)
               }
               // Don't show error toast - it will retry on next check (for non-idempotent errors)

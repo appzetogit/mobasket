@@ -6,6 +6,7 @@ import { successResponse, errorResponse } from '../../../shared/utils/response.j
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
 import winston from 'winston';
+import mongoose from 'mongoose';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -157,6 +158,44 @@ const hydrateMissingLegacyGroceryStores = async ({ search, status }) => {
   }
 };
 
+const isLegacyGroceryRestaurant = async (restaurantId) => {
+  if (!restaurantId) return false;
+
+  const restaurant = await Restaurant.findById(restaurantId)
+    .select('_id platform')
+    .lean();
+
+  if (!restaurant) return false;
+  if (restaurant.platform === 'mogrocery' || restaurant.platform === 'grocery') {
+    return true;
+  }
+
+  const [hasGroceryOrders, hasGroceryProducts] = await Promise.all([
+    Order.exists({
+      restaurantId: restaurant._id,
+      $or: [
+        { restaurantPlatform: 'mogrocery' },
+        { platform: 'mogrocery' }
+      ]
+    }),
+    GroceryProduct.exists({ restaurant: restaurant._id })
+  ]);
+
+  return Boolean(hasGroceryOrders || hasGroceryProducts);
+};
+
+const syncLegacyRestaurantStoreState = async (restaurantId, update) => {
+  if (!restaurantId) return null;
+  const isLegacyGrocery = await isLegacyGroceryRestaurant(restaurantId);
+  if (!isLegacyGrocery) return null;
+
+  return Restaurant.findOneAndUpdate(
+    { _id: restaurantId },
+    { $set: update },
+    { new: true }
+  );
+};
+
 /**
  * Get All Grocery Stores
  * GET /api/grocery/stores
@@ -288,13 +327,22 @@ export const updateGroceryStore = asyncHandler(async (req, res) => {
 export const updateGroceryStoreStatus = asyncHandler(async (req, res) => {
   try {
     const { isActive } = req.body;
+    const statusUpdate = {
+      isActive,
+      isAcceptingOrders: Boolean(isActive),
+      rejectionReason: isActive ? null : 'Archived',
+      rejectedAt: isActive ? null : new Date()
+    };
+
     const store = await GroceryStore.findOneAndUpdate(
       { _id: req.params.id },
-      { isActive },
+      { $set: statusUpdate },
       { new: true }
     ).select('-password');
 
-    if (!store) {
+    const legacyStore = await syncLegacyRestaurantStoreState(req.params.id, statusUpdate);
+
+    if (!store && !legacyStore) {
       return errorResponse(res, 404, 'Grocery store not found');
     }
 
@@ -310,34 +358,39 @@ export const updateGroceryStoreStatus = asyncHandler(async (req, res) => {
  */
 export const deleteGroceryStore = asyncHandler(async (req, res) => {
   try {
-    const store = await GroceryStore.findOneAndUpdate(
-      { _id: req.params.id },
-      {
-        $set: {
-          isActive: false,
-          isAcceptingOrders: false,
-          rejectionReason: 'Archived',
-          rejectedAt: new Date()
-        }
-      },
-      { new: true }
-    );
+    const { id } = req.params;
 
-    const legacyStore = await Restaurant.findOneAndUpdate(
-      { _id: req.params.id, platform: 'mogrocery' },
-      {
-        $set: {
-          isActive: false,
-          isAcceptingOrders: false,
-          rejectionReason: 'Archived',
-          rejectedAt: new Date()
-        }
-      },
-      { new: true }
-    );
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return errorResponse(res, 400, 'Invalid grocery store id');
+    }
+
+    const storeObjectId = new mongoose.Types.ObjectId(id);
+    const isLegacyStore = await isLegacyGroceryRestaurant(storeObjectId);
+
+    const [store, legacyStore] = await Promise.all([
+      GroceryStore.findById(storeObjectId).select('name').lean(),
+      isLegacyStore
+        ? Restaurant.findById(storeObjectId).select('name').lean()
+        : Promise.resolve(null)
+    ]);
 
     if (!store && !legacyStore) {
       return errorResponse(res, 404, 'Grocery store not found');
+    }
+
+    const [groceryDeleteResult, legacyDeleteResult] = await Promise.all([
+      GroceryStore.collection.deleteOne({ _id: storeObjectId }),
+      isLegacyStore
+        ? Restaurant.collection.deleteOne({ _id: storeObjectId })
+        : Promise.resolve({ deletedCount: 0 })
+    ]);
+
+    const deletedAny =
+      Boolean(groceryDeleteResult?.deletedCount) ||
+      Boolean(legacyDeleteResult?.deletedCount);
+
+    if (!deletedAny) {
+      return errorResponse(res, 500, 'Failed to remove grocery store');
     }
 
     return successResponse(res, 200, 'Grocery store removed successfully');

@@ -2,6 +2,24 @@ import Restaurant from '../models/Restaurant.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { createRestaurantFromOnboarding } from './restaurantController.js';
 
+const normalizeRestaurantOnboardingState = (restaurant) => {
+  const onboarding = { ...(restaurant?.onboarding || {}) };
+  const status = String(restaurant?.status || '').trim().toLowerCase();
+  const isProvisioned =
+    restaurant?.isActive === true ||
+    Boolean(restaurant?.approvedAt) ||
+    Boolean(restaurant?.rejectedAt) ||
+    Boolean(restaurant?.rejectionReason) ||
+    (status && status !== 'onboarding') ||
+    Number(onboarding?.completedSteps || 0) >= 4;
+
+  if (isProvisioned && Number(onboarding?.completedSteps || 0) < 4) {
+    onboarding.completedSteps = 4;
+  }
+
+  return onboarding;
+};
+
 // Get current restaurant's onboarding data
 export const getOnboarding = async (req, res) => {
   try {
@@ -12,14 +30,14 @@ export const getOnboarding = async (req, res) => {
 
     const restaurantId = req.restaurant._id;
     const restaurant = await Restaurant.findById(restaurantId)
-      .select('onboarding profileImage menuImages cuisines openDays deliveryTimings')
+      .select('onboarding profileImage menuImages cuisines openDays deliveryTimings isActive status approvedAt rejectedAt rejectionReason')
       .lean();
 
     if (!restaurant) {
       return errorResponse(res, 404, 'Restaurant not found');
     }
 
-    const onboarding = restaurant.onboarding || {};
+    const onboarding = normalizeRestaurantOnboardingState(restaurant);
     const step1 = onboarding.step1 || {};
     const step2 = onboarding.step2 || {};
 

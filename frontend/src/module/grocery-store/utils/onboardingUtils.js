@@ -1,13 +1,39 @@
 import { groceryStoreAPI } from "@/lib/api"
 
-const GROCERY_ONBOARDING_STORAGE_KEY = "grocery-store_onboarding"
-
 export const determineGroceryStoreStepToShow = (onboarding) => {
   if (!onboarding || typeof onboarding !== "object") {
     return 1
   }
 
   return Number(onboarding.completedSteps || 0) >= 1 ? null : 1
+}
+
+const hasProvisionedGroceryStoreProfile = (store) => {
+  if (!store || typeof store !== "object") return false
+  if (store.isActive === true) return true
+
+  if (store.approvedAt || store.rejectedAt || store.rejectionReason) {
+    return true
+  }
+
+  if (Number(store?.onboarding?.completedSteps || 0) >= 1) {
+    return true
+  }
+
+  const hasBasicInfo = Boolean(
+    store.name &&
+    store.ownerName &&
+    (store.ownerEmail || store.email) &&
+    (store.ownerPhone || store.phone || store.primaryContactNumber),
+  )
+  const hasLocation = Boolean(
+    store.location?.formattedAddress ||
+    store.location?.address ||
+    store.location?.area ||
+    store.location?.city
+  )
+
+  return hasBasicInfo && hasLocation
 }
 
 export const checkGroceryStoreOnboardingStatus = async () => {
@@ -26,6 +52,10 @@ export const checkGroceryStoreOnboardingStatus = async () => {
         ? profileResult.value?.data?.data?.store || profileResult.value?.data?.store
         : null
 
+    if (hasProvisionedGroceryStoreProfile(storeProfile)) {
+      return null
+    }
+
     if (onboardingData) {
       return determineGroceryStoreStepToShow(onboardingData)
     }
@@ -36,16 +66,6 @@ export const checkGroceryStoreOnboardingStatus = async () => {
 
     return 1
   } catch {
-    try {
-      const localData = localStorage.getItem(GROCERY_ONBOARDING_STORAGE_KEY)
-      if (localData) {
-        const parsed = JSON.parse(localData)
-        return determineGroceryStoreStepToShow(parsed)
-      }
-    } catch {
-      // Ignore malformed local onboarding cache.
-    }
-
     return 1
   }
 }
@@ -55,15 +75,7 @@ export const getGroceryStoreOnboardingStepFromPayload = (store) => {
 }
 
 export const getPostAuthGroceryStorePathFromCachedData = () => {
-  try {
-    const raw = localStorage.getItem("grocery-store_user")
-    if (!raw) return "/store/onboarding"
-    const store = JSON.parse(raw)
-    const step = getGroceryStoreOnboardingStepFromPayload(store)
-    return step ? `/store/onboarding?step=${step}` : "/store"
-  } catch {
-    return "/store/onboarding"
-  }
+  return "/store"
 }
 
 export const redirectGroceryStoreAfterAuth = async (navigate, { replace = true, redirectTo = null } = {}) => {

@@ -11,6 +11,10 @@ import {
   upsertActiveOrderTracking,
   updateActiveOrderLocation
 } from '../../../shared/services/firebaseRealtimeService.js';
+import {
+  getDeliveryEligibilityErrorMessage,
+  isDeliveryEligibleForOrders
+} from '../utils/deliveryEligibility.js';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -21,6 +25,57 @@ const logger = winston.createLogger({
     })
   ]
 });
+
+const normalizeZonePlatform = (rawPlatform) => {
+  const value = String(rawPlatform || '').trim().toLowerCase();
+  return value === 'mogrocery' ? 'mogrocery' : 'mofood';
+};
+
+const isPointInsideZoneBoundary = (pointLat, pointLng, zoneCoordinates = []) => {
+  if (!Array.isArray(zoneCoordinates) || zoneCoordinates.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = zoneCoordinates.length - 1; i < zoneCoordinates.length; j = i++) {
+    const xi = Number(zoneCoordinates[i]?.longitude ?? zoneCoordinates[i]?.lng);
+    const yi = Number(zoneCoordinates[i]?.latitude ?? zoneCoordinates[i]?.lat);
+    const xj = Number(zoneCoordinates[j]?.longitude ?? zoneCoordinates[j]?.lng);
+    const yj = Number(zoneCoordinates[j]?.latitude ?? zoneCoordinates[j]?.lat);
+    if (
+      Number.isNaN(xi) ||
+      Number.isNaN(yi) ||
+      Number.isNaN(xj) ||
+      Number.isNaN(yj)
+    ) {
+      continue;
+    }
+    const intersects =
+      yi > pointLat !== yj > pointLat &&
+      pointLng < ((xj - xi) * (pointLat - yi)) / ((yj - yi) || Number.EPSILON) + xi;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+};
+
+const resolveActiveZonesForPoint = async (latitude, longitude) => {
+  const zones = await Zone.find({
+    isActive: true,
+    $or: [
+      { platform: 'mofood' },
+      { platform: 'mogrocery' },
+      { platform: { $exists: false } },
+      { platform: null }
+    ]
+  })
+    .select('_id platform coordinates')
+    .lean();
+
+  return zones
+    .filter((zone) => isPointInsideZoneBoundary(latitude, longitude, zone.coordinates))
+    .map((zone) => ({
+      ...zone,
+      _id: zone._id,
+      platform: normalizeZonePlatform(zone?.platform)
+    }));
+};
 
 /**
  * Update Delivery Partner Location
@@ -70,6 +125,8 @@ export const updateLocation = asyncHandler(async (req, res) => {
 
     const updateData = {};
 
+    let resolvedZones = null;
+
     // Update location only if both latitude and longitude are provided
     if (typeof latitude === 'number' && typeof longitude === 'number') {
       updateData['availability.currentLocation'] = {
@@ -77,10 +134,15 @@ export const updateLocation = asyncHandler(async (req, res) => {
         coordinates: [longitude, latitude] // MongoDB uses [longitude, latitude]
       };
       updateData['availability.lastLocationUpdate'] = new Date();
+      resolvedZones = await resolveActiveZonesForPoint(latitude, longitude);
+      updateData['availability.zones'] = resolvedZones.map((zone) => zone._id);
     }
 
     // Update online status if provided
     if (typeof isOnline === 'boolean') {
+      if (isOnline && !isDeliveryEligibleForOrders(delivery)) {
+        return errorResponse(res, 403, getDeliveryEligibilityErrorMessage(delivery));
+      }
       updateData['availability.isOnline'] = isOnline;
     }
 
@@ -107,7 +169,10 @@ export const updateLocation = asyncHandler(async (req, res) => {
         isOnline: !!updatedDelivery.availability?.isOnline,
         lat: typeof latitude === 'number' ? latitude : undefined,
         lng: typeof longitude === 'number' ? longitude : undefined,
-        zones: updatedDelivery.availability?.zones || []
+        zones: resolvedZones?.map((zone) => ({
+          _id: zone._id?.toString?.() || String(zone._id),
+          platform: zone.platform
+        })) || updatedDelivery.availability?.zones || []
       });
     } catch (firebaseErr) {
       logger.warn(`Firebase presence sync failed: ${firebaseErr.message}`);
@@ -118,11 +183,38 @@ export const updateLocation = asyncHandler(async (req, res) => {
       const io = req.app.get('io');
       if (io) {
         try {
+          const deliveryPartnerObjectId = delivery._id;
+          const deliveryPartnerStringId = String(delivery._id);
+
           const activeOrder = await Order.findOne({
-            deliveryPartnerId: delivery._id,
-            status: { $in: ['accepted', 'preparing', 'ready', 'out_for_delivery'] }
+            $and: [
+              {
+                $or: [
+                  { deliveryPartnerId: deliveryPartnerObjectId },
+                  { deliveryPartnerId: deliveryPartnerStringId },
+                  { 'assignmentInfo.deliveryPartnerId': deliveryPartnerStringId },
+                  { 'assignmentInfo.deliveryPartnerId': deliveryPartnerObjectId }
+                ]
+              },
+              {
+                $or: [
+              { status: { $in: ['confirmed', 'preparing', 'ready', 'out_for_delivery'] } },
+              {
+                'deliveryState.status': {
+                  $in: ['accepted', 'reached_pickup', 'order_confirmed', 'en_route_to_delivery', 'reached_drop']
+                }
+              },
+              {
+                'deliveryState.currentPhase': {
+                  $in: ['en_route_to_pickup', 'at_pickup', 'picked_up', 'en_route_to_delivery', 'at_delivery']
+                }
+              }
+                ]
+              }
+            ]
           })
             .select('_id orderId')
+            .sort({ updatedAt: -1, createdAt: -1 })
             .lean();
           if (activeOrder) {
             const aliases = [
@@ -244,35 +336,6 @@ export const getZonesInRadius = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, 'Radius must be a positive number');
     }
 
-    const normalizePlatform = (rawPlatform) => {
-      const value = String(rawPlatform || '').trim().toLowerCase();
-      return value === 'mogrocery' ? 'mogrocery' : 'mofood';
-    };
-
-    const isPointInsideZoneBoundary = (pointLat, pointLng, zoneCoordinates = []) => {
-      if (!Array.isArray(zoneCoordinates) || zoneCoordinates.length < 3) return false;
-      let inside = false;
-      for (let i = 0, j = zoneCoordinates.length - 1; i < zoneCoordinates.length; j = i++) {
-        const xi = Number(zoneCoordinates[i]?.longitude ?? zoneCoordinates[i]?.lng);
-        const yi = Number(zoneCoordinates[i]?.latitude ?? zoneCoordinates[i]?.lat);
-        const xj = Number(zoneCoordinates[j]?.longitude ?? zoneCoordinates[j]?.lng);
-        const yj = Number(zoneCoordinates[j]?.latitude ?? zoneCoordinates[j]?.lat);
-        if (
-          Number.isNaN(xi) ||
-          Number.isNaN(yi) ||
-          Number.isNaN(xj) ||
-          Number.isNaN(yj)
-        ) {
-          continue;
-        }
-        const intersects =
-          yi > pointLat !== yj > pointLat &&
-          pointLng < ((xj - xi) * (pointLat - yi)) / ((yj - yi) || Number.EPSILON) + xi;
-        if (intersects) inside = !inside;
-      }
-      return inside;
-    };
-
     // Fetch all active zones for both mofood and mogrocery
     const zones = await Zone.find({
       isActive: true,
@@ -326,7 +389,7 @@ export const getZonesInRadius = asyncHandler(async (req, res) => {
       return distance <= radiusKm;
     }).map((zone) => ({
       ...zone,
-      platform: normalizePlatform(zone?.platform)
+      platform: normalizeZonePlatform(zone?.platform)
     }));
 
     return successResponse(res, 200, 'Zones retrieved successfully', {

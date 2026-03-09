@@ -4,6 +4,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { exportReportsToCSV, exportReportsToExcel, exportReportsToPDF, exportReportsToJSON } from "../../components/reports/reportsExportUtils"
 import { adminAPI } from "@/lib/api"
+import { buildImageFallback } from "@/lib/utils/imageFallback"
 import { toast } from "sonner"
 
 export default function RestaurantReport({ platformOverride = "mofood", entityLabel = "Restaurant" }) {
@@ -408,7 +409,7 @@ export default function RestaurantReport({ platformOverride = "mofood", entityLa
                                 alt={safeName}
                                 className="w-full h-full object-cover"
                                 onError={(e) => {
-                                  e.target.src = "https://via.placeholder.com/32"
+                                  e.target.src = buildImageFallback(32, "RES")
                                 }}
                               />
                             ) : (

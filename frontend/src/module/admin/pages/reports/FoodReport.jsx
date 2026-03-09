@@ -4,6 +4,7 @@ import { foodReportDummy, yearlySalesData } from "../../data/foodReportDummy"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { exportReportsToCSV, exportReportsToExcel, exportReportsToPDF, exportReportsToJSON } from "../../components/reports/reportsExportUtils"
+import { buildImageFallback } from "@/lib/utils/imageFallback"
 
 export default function FoodReport() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -449,7 +450,7 @@ export default function FoodReport() {
                               alt={food.name}
                               className="w-full h-full object-cover"
                               onError={(e) => {
-                                e.target.src = "https://via.placeholder.com/40"
+                                  e.target.src = buildImageFallback(40, "FOO")
                               }}
                             />
                           </div>

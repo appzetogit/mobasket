@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import Lenis from "lenis"
 import { ArrowLeft, Settings, ChevronRight } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent } from "@/components/ui/card"
 import { groceryStoreAPI, restaurantAPI } from "@/lib/api"
+import { parseTimeToMinutes, isOpenFromOutletTimingsMap } from "@/lib/utils/outletTimingsStatus"
 import {
   Dialog,
   DialogContent,
@@ -32,32 +33,7 @@ export default function RestaurantStatus() {
   const [showOutsideTimingsDialog, setShowOutsideTimingsDialog] = useState(false)
   const [isDayClosed, setIsDayClosed] = useState(false)
   const [outletTimings, setOutletTimings] = useState(null)
-
-  const parseTimeToMinutes = (timeValue) => {
-    if (!timeValue || typeof timeValue !== "string") return null
-
-    const normalized = timeValue.trim().toUpperCase()
-    // Supports: "09:00", "9:00", "9:00 AM", "09:00 PM"
-    const match = normalized.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/)
-    if (!match) return null
-
-    let hours = Number(match[1])
-    const minutes = Number(match[2])
-    const period = match[3] || null
-
-    if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null
-    if (minutes < 0 || minutes > 59) return null
-
-    if (period) {
-      if (hours < 1 || hours > 12) return null
-      if (period === "PM" && hours !== 12) hours += 12
-      if (period === "AM" && hours === 12) hours = 0
-    } else if (hours < 0 || hours > 23) {
-      return null
-    }
-
-    return hours * 60 + minutes
-  }
+  const lastSyncedStatusRef = useRef(null)
 
   // Update current date/time every minute
   useEffect(() => {
@@ -145,40 +121,13 @@ export default function RestaurantStatus() {
         console.error("Error loading outlet timings:", error)
       }
 
-      // Check if current day is closed in outlet timings
-      if (outletTimingsData && outletTimingsData[currentDayFull]) {
-        const dayData = outletTimingsData[currentDayFull]
-        if (dayData.isOpen === false) {
-          // Day is closed in outlet timings
-          setIsDayClosed(true)
-          setIsWithinTimings(false)
-          setShowOutletClosedDialog(true)
-          return
-        }
-        
-        // Check time range if day is open and has timings
-        if (dayData.isOpen && dayData.openingTime && dayData.closingTime) {
-          const openingTimeInMinutes = parseTimeToMinutes(dayData.openingTime)
-          const closingTimeInMinutes = parseTimeToMinutes(dayData.closingTime)
-          if (!Number.isFinite(openingTimeInMinutes) || !Number.isFinite(closingTimeInMinutes)) {
-            // Avoid false "outside timings" if saved timing format is unexpected.
-            setIsWithinTimings(true)
-            setIsDayClosed(false)
-            return
-          }
-
-          // Handle case where closing time is next day (e.g., 22:00 to 02:00)
-          let isWithin = false
-          if (closingTimeInMinutes > openingTimeInMinutes) {
-            // Normal case: same day
-            isWithin = currentTimeInMinutes >= openingTimeInMinutes && currentTimeInMinutes <= closingTimeInMinutes
-          } else {
-            // Overnight case: closing time is next day
-            isWithin = currentTimeInMinutes >= openingTimeInMinutes || currentTimeInMinutes <= closingTimeInMinutes
-          }
-
-          setIsWithinTimings(isWithin)
-          setIsDayClosed(false)
+      // For restaurant, outlet timings are the only source of truth.
+      if (!isGroceryStore && outletTimingsData) {
+        const scheduledOpen = isOpenFromOutletTimingsMap(outletTimingsData, now)
+        if (typeof scheduledOpen === "boolean") {
+          const dayData = outletTimingsData[currentDayFull]
+          setIsDayClosed(Boolean(dayData && dayData.isOpen === false))
+          setIsWithinTimings(scheduledOpen)
           return
         }
       }
@@ -241,7 +190,7 @@ export default function RestaurantStatus() {
       clearInterval(interval)
       window.removeEventListener("outletTimingsUpdated", handleOutletTimingsUpdate)
     }
-  }, [restaurantData, currentDateTime])
+  }, [restaurantData, currentDateTime, isGroceryStore])
 
   // Note: Delivery status is now manually controlled by user via toggle
   // We don't automatically set it based on timings anymore
@@ -250,6 +199,26 @@ export default function RestaurantStatus() {
   // Load delivery status from backend and sync with localStorage
   useEffect(() => {
     const loadDeliveryStatus = async () => {
+      if (!isGroceryStore) {
+        if (typeof isWithinTimings === "boolean") {
+          setDeliveryStatus(isWithinTimings)
+          localStorage.setItem(statusStorageKey, JSON.stringify(isWithinTimings))
+          window.dispatchEvent(new CustomEvent(statusEventName, {
+            detail: { isOnline: isWithinTimings }
+          }))
+
+          if (lastSyncedStatusRef.current !== isWithinTimings) {
+            lastSyncedStatusRef.current = isWithinTimings
+            try {
+              await restaurantAPI.updateDeliveryStatus(isWithinTimings)
+            } catch (apiError) {
+              console.error("Error syncing timing-based delivery status:", apiError)
+            }
+          }
+        }
+        return
+      }
+
       try {
         // First try to get from backend
         const response = isGroceryStore
@@ -315,10 +284,15 @@ export default function RestaurantStatus() {
     }
 
     loadDeliveryStatus()
-  }, [isGroceryStore, statusEventName, statusStorageKey])
+  }, [isGroceryStore, isWithinTimings, statusEventName, statusStorageKey])
 
   // Handle delivery status change
   const handleDeliveryStatusChange = async (checked) => {
+    if (!isGroceryStore) {
+      navigate("/restaurant/outlet-timings")
+      return
+    }
+
     // If day is closed in outlet timings, don't allow turning on
     if (checked && isDayClosed) {
       setShowOutletClosedDialog(true)
@@ -513,6 +487,7 @@ export default function RestaurantStatus() {
             <Switch
               checked={deliveryStatus}
               onCheckedChange={handleDeliveryStatusChange}
+              disabled={!isGroceryStore}
               className="ml-4 data-[state=unchecked]:bg-gray-300 data-[state=checked]:bg-green-600"
             />
           </div>

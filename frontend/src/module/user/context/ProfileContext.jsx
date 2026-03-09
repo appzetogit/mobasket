@@ -55,7 +55,15 @@ export function ProfileProvider({ children }) {
   
   const [loading, setLoading] = useState(true)
 
-  const [addresses, setAddresses] = useState([])
+  const [addresses, setAddresses] = useState(() => {
+    try {
+      const saved = localStorage.getItem("userAddresses")
+      const parsed = saved ? JSON.parse(saved) : []
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  })
 
   const [paymentMethods, setPaymentMethods] = useState(() => {
     const saved = localStorage.getItem("userPaymentMethods")
@@ -127,6 +135,7 @@ export function ProfileProvider({ children }) {
 
   useEffect(() => {
     localStorage.setItem("userAddresses", JSON.stringify(addresses))
+    window.dispatchEvent(new Event("userAddressesChanged"))
   }, [addresses])
 
   useEffect(() => {

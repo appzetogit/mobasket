@@ -27,6 +27,7 @@ import { useCart } from "../../user/context/CartContext";
 import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
 import { useLocationSelector } from "../../user/components/UserLayout";
+import { useProfile } from "../../user/context/ProfileContext";
 import { CategoryFoodsContent } from "./CategoryFoodsPage";
 import AddToCartAnimation from "../../user/components/AddToCartAnimation";
 import api, { restaurantAPI, userAPI } from "@/lib/api";
@@ -35,11 +36,36 @@ import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
 // Icons
 import imgBag3D from "@/assets/icons/shopping-bag_18008822.png";
 
+const formatSavedAddressForHeader = (address) => {
+  if (!address || typeof address !== "object") return "";
+
+  const formattedAddress = String(
+    address?.formattedAddress ||
+      address?.address ||
+      "",
+  ).trim();
+  if (formattedAddress) return formattedAddress;
+
+  const fallbackParts = [
+    address?.addressLine1,
+    address?.street,
+    address?.area || address?.location?.area,
+    address?.city || address?.location?.city,
+    address?.state || address?.location?.state,
+    address?.zipCode || address?.postalCode || address?.pincode,
+  ]
+    .map((part) => (typeof part === "string" ? part.trim() : ""))
+    .filter(Boolean);
+
+  return fallbackParts.join(", ");
+};
+
 const GroceryPage = () => {
   const FALLBACK_IMAGE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
   const navigate = useNavigate();
   const routerLocation = useRouterLocation();
   const { getGroceryCartCount, addToCart, isInCart } = useCart();
+  const { addresses, getDefaultAddress } = useProfile();
   const { location: userLocation, loading: locationLoading } = useUserLocation();
   const { openLocationSelector } = useLocationSelector();
   const { zoneId, refreshZone, loading: zoneLoading } = useZone(userLocation, "mogrocery");
@@ -442,9 +468,14 @@ const GroceryPage = () => {
   const openCategorySheet = (categoryId = "all") => {
     const normalizedCategoryId =
       typeof categoryId === "object" && categoryId !== null ? "all" : String(categoryId || "all");
+    const selectedStoreState =
+      selectedStoreId && selectedStoreId !== "all-stores"
+        ? { storeId: String(selectedStoreId) }
+        : {};
     navigate("/grocery/categories", {
       state: {
         categoryId: normalizedCategoryId,
+        ...selectedStoreState,
       },
     });
   };
@@ -650,7 +681,7 @@ const GroceryPage = () => {
             restaurant?.zone ||
             "",
           ).trim();
-          if (effectiveZoneId && storeZoneId && storeZoneId !== String(effectiveZoneId)) return false;
+          if (effectiveZoneId && storeZoneId !== String(effectiveZoneId)) return false;
 
           if (restaurant?.isActive === false) return false;
           if (restaurant?.isOnline === false) return false;
@@ -780,6 +811,7 @@ const GroceryPage = () => {
   const shouldShowShimmer =
     !hasActiveSearch &&
     (isCategoriesLoading || isProductsLoading || isBestSellersLoading || isBannersLoading || isStoresLoading);
+  const shouldShowUnavailableMap = !shouldShowShimmer && isGroceryUnavailable;
 
   // Auto-slide carousel
   useEffect(() => {
@@ -881,7 +913,14 @@ const GroceryPage = () => {
       return true;
     }
 
-    navigate("/grocery/categories");
+    navigate("/grocery/categories", {
+      state: {
+        categoryId: "all",
+        ...(selectedStoreId && selectedStoreId !== "all-stores"
+          ? { storeId: String(selectedStoreId) }
+          : {}),
+      },
+    });
     return true;
   };
 
@@ -1463,13 +1502,54 @@ const GroceryPage = () => {
     return nearestDistance;
   }, [groceryStores, userLocation?.latitude, userLocation?.longitude]);
 
+  const selectedStoreDistanceKm = useMemo(() => {
+    if (selectedStoreId === "all-stores") return null;
+
+    const userLat = Number(userLocation?.latitude);
+    const userLng = Number(userLocation?.longitude);
+    if (!Number.isFinite(userLat) || !Number.isFinite(userLng)) {
+      return null;
+    }
+
+    const selectedStore = groceryStores.find(
+      (store) => getNormalizedStoreId(store) === String(selectedStoreId)
+    );
+    const coords = getStoreCoordinates(selectedStore);
+    if (!coords) return null;
+
+    const distanceKm = calculateDistanceKm(userLat, userLng, coords.lat, coords.lng);
+    return Number.isFinite(distanceKm) ? distanceKm : null;
+  }, [groceryStores, selectedStoreId, userLocation?.latitude, userLocation?.longitude]);
+
   const deliveryEtaMinutes = useMemo(() => {
-    if (!Number.isFinite(nearestStoreDistanceKm)) return 8;
+    const activeDistanceKm =
+      selectedStoreId === "all-stores" ? nearestStoreDistanceKm : selectedStoreDistanceKm;
+
+    if (!Number.isFinite(activeDistanceKm)) return 8;
     // Base prep/packing + travel estimate (~4 min per km)
-    return Math.max(8, Math.min(60, Math.round(8 + nearestStoreDistanceKm * 4)));
-  }, [nearestStoreDistanceKm]);
+    return Math.max(8, Math.min(60, Math.round(8 + activeDistanceKm * 4)));
+  }, [nearestStoreDistanceKm, selectedStoreDistanceKm, selectedStoreId]);
+
+  const savedHeaderAddress = useMemo(() => {
+    const defaultAddress = getDefaultAddress?.();
+    const defaultAddressId = String(defaultAddress?._id || defaultAddress?.id || "").trim();
+
+    if (defaultAddressId && Array.isArray(addresses)) {
+      const hydratedDefault = addresses.find(
+        (address) => String(address?._id || address?.id || "").trim() === defaultAddressId,
+      );
+      const hydratedDisplay = formatSavedAddressForHeader(hydratedDefault);
+      if (hydratedDisplay) return hydratedDisplay;
+    }
+
+    return formatSavedAddressForHeader(defaultAddress);
+  }, [addresses, getDefaultAddress]);
 
   const topAddress = useMemo(() => {
+    if (savedHeaderAddress) {
+      return savedHeaderAddress;
+    }
+
     const formattedAddress = (userLocation?.formattedAddress || "").trim();
     if (formattedAddress) {
       return formattedAddress;
@@ -1497,7 +1577,7 @@ const GroceryPage = () => {
     return (
       "Select your location"
     );
-  }, [userLocation]);
+  }, [savedHeaderAddress, userLocation]);
 
   const handleBestSellerClick = (item) => {
     if (item.itemType === "category" && item.itemId) {
@@ -1671,7 +1751,14 @@ const GroceryPage = () => {
       }
       return;
     }
-    navigate("/grocery/categories");
+    navigate("/grocery/categories", {
+      state: {
+        categoryId: "all",
+        ...(selectedStoreId && selectedStoreId !== "all-stores"
+          ? { storeId: String(selectedStoreId) }
+          : {}),
+      },
+    });
   };
 
   const handleHomeNavClick = () => {
@@ -1692,18 +1779,8 @@ const GroceryPage = () => {
   return (
     // Main Container with White Background
     <div
-      className={`min-h-screen text-slate-800 dark:text-slate-100 pb-24 font-sans w-full shadow-none overflow-x-hidden relative bg-white dark:bg-[radial-gradient(120%_90%_at_50%_-10%,#1f2937_0%,#0b0f17_45%,#070b12_100%)] ${isGroceryUnavailable ? "grayscale-[0.95] opacity-70" : ""
-        }`}
+      className="min-h-screen text-slate-800 dark:text-slate-100 pb-24 font-sans w-full shadow-none overflow-x-hidden relative bg-white dark:bg-[radial-gradient(120%_90%_at_50%_-10%,#1f2937_0%,#0b0f17_45%,#070b12_100%)]"
     >
-      {isGroceryUnavailable && (
-        <div className="fixed top-[88px] left-1/2 -translate-x-1/2 z-[95] px-4">
-          <div className="rounded-xl border border-slate-300 dark:border-slate-700 bg-white/95 dark:bg-[#1a1a1a]/95 backdrop-blur px-4 py-2 shadow-sm">
-            <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 text-center">
-              MoGrocery is currently unavailable. Store is offline or closed.
-            </p>
-          </div>
-        </div>
-      )}
       {/* Snow Effect Overlay */}
       <AnimatePresence>
         {showSnow && (
@@ -2087,7 +2164,51 @@ const GroceryPage = () => {
         </div>
       )}
 
-      {!shouldShowShimmer && !hasActiveSearch && activeCategoryId === "all" && bannerImages.length > 0 && (
+      {shouldShowUnavailableMap && (
+        <div className="px-4 pt-6 pb-16 relative z-10 md:max-w-4xl md:mx-auto">
+          <div className="rounded-[32px] border border-slate-200 bg-slate-50/95 px-5 py-6 shadow-sm dark:border-slate-800 dark:bg-[#0f1724]/95">
+            <div className="relative overflow-hidden rounded-[28px] border border-slate-300 bg-gradient-to-br from-slate-200 via-slate-100 to-slate-300 p-4 dark:border-slate-700 dark:from-slate-800 dark:via-slate-900 dark:to-slate-800">
+              <div className="relative h-[280px] rounded-[24px] bg-[linear-gradient(135deg,rgba(255,255,255,0.5)_0%,rgba(226,232,240,0.95)_100%)] dark:bg-[linear-gradient(135deg,rgba(30,41,59,0.95)_0%,rgba(15,23,42,1)_100%)]">
+                <div className="absolute inset-0 opacity-60">
+                  <div className="absolute left-[8%] top-[16%] h-12 w-20 rounded-2xl bg-slate-300/90 dark:bg-slate-700/80" />
+                  <div className="absolute right-[10%] top-[14%] h-10 w-16 rounded-2xl bg-slate-300/90 dark:bg-slate-700/80" />
+                  <div className="absolute left-[18%] bottom-[18%] h-14 w-24 rounded-3xl bg-slate-300/90 dark:bg-slate-700/80" />
+                  <div className="absolute right-[16%] bottom-[22%] h-12 w-20 rounded-3xl bg-slate-300/90 dark:bg-slate-700/80" />
+                  <div className="absolute left-[28%] top-0 h-full w-[14px] -rotate-[28deg] rounded-full bg-white/70 dark:bg-slate-600/80" />
+                  <div className="absolute left-[52%] top-0 h-full w-[14px] rotate-[24deg] rounded-full bg-white/70 dark:bg-slate-600/80" />
+                  <div className="absolute left-0 top-[42%] h-[14px] w-full -rotate-[9deg] rounded-full bg-white/75 dark:bg-slate-600/80" />
+                  <div className="absolute left-0 top-[64%] h-[14px] w-full rotate-[7deg] rounded-full bg-white/75 dark:bg-slate-600/80" />
+                </div>
+                <div className="absolute left-1/2 top-1/2 flex h-16 w-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-slate-400/70 bg-slate-500/85 shadow-[0_8px_24px_rgba(71,85,105,0.25)] dark:border-slate-500 dark:bg-slate-700">
+                  <div className="h-5 w-5 rounded-full bg-white/90 dark:bg-slate-300" />
+                </div>
+                <div className="absolute left-1/2 top-[58%] h-16 w-[2px] -translate-x-1/2 bg-slate-500/70 dark:bg-slate-500" />
+              </div>
+            </div>
+
+            <div className="pt-5 text-center">
+              <p className="text-sm font-black uppercase tracking-[0.22em] text-slate-400 dark:text-slate-500">
+                Service Unavailable
+              </p>
+              <h2 className="mt-2 text-xl font-black text-slate-900 dark:text-slate-100">
+                No grocery available in your area
+              </h2>
+              <p className="mt-2 text-sm font-medium text-slate-500 dark:text-slate-400">
+                We only show stores mapped to your zone. Change your location to check another area.
+              </p>
+              <button
+                type="button"
+                onClick={openLocationSelector}
+                className="mt-5 inline-flex items-center justify-center rounded-full bg-slate-900 px-5 py-3 text-sm font-bold text-white transition-colors hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-white"
+              >
+                Change Location
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && bannerImages.length > 0 && (
         <div className="relative z-0 -mt-1 animate-fade-in-up px-4 pt-2 pb-1 md:max-w-6xl mx-auto">
           <div className="relative w-full aspect-[2.3/1] md:aspect-[3.6/1] bg-white/20 backdrop-blur-sm rounded-2xl shadow-lg border border-white/30 overflow-hidden">
             {bannerImages.map((bannerImg, index) => (
@@ -2117,7 +2238,7 @@ const GroceryPage = () => {
         </div>
       )}
 
-      {!shouldShowShimmer && !hasActiveSearch && activeCategoryId === "all" && visibleBestSellers.length > 0 && (
+      {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && visibleBestSellers.length > 0 && (
         <div className="px-4 pt-4 pb-2 relative z-10 md:max-w-6xl md:mx-auto">
           <h3 className="text-lg font-[800] text-[#3e2723] dark:text-slate-100 mb-4">Bestsellers</h3>
 
@@ -2159,7 +2280,7 @@ const GroceryPage = () => {
         </div>
       )}
 
-      {!shouldShowShimmer && !hasActiveSearch && activeCategoryId !== "all" && (
+      {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId !== "all" && (
         <div className="px-2 sm:px-4 pb-24 pt-2 relative z-10 md:max-w-6xl md:mx-auto">
           <div className="flex gap-2 sm:gap-3">
             <aside className="w-[86px] sm:w-[100px] shrink-0 border-r border-slate-200 dark:border-slate-700/80 pr-2">
@@ -2280,7 +2401,7 @@ const GroceryPage = () => {
         </div>
       )}
 
-      {!shouldShowShimmer && hasActiveSearch && (
+      {!shouldShowShimmer && !shouldShowUnavailableMap && hasActiveSearch && (
         <div className="px-4 pt-4 pb-2 relative z-10 md:max-w-6xl md:mx-auto">
           <h3 className="text-lg font-[800] text-[#3e2723] dark:text-slate-100">
             Search results for "{searchQuery.trim()}"
@@ -2288,7 +2409,7 @@ const GroceryPage = () => {
         </div>
       )}
 
-      {!shouldShowShimmer && hasActiveSearch && visibleBestSellers.length > 0 && (
+      {!shouldShowShimmer && !shouldShowUnavailableMap && hasActiveSearch && visibleBestSellers.length > 0 && (
         <div className="px-4 pt-2 pb-2 relative z-10 md:max-w-6xl md:mx-auto">
           <h4 className="text-base font-[800] text-[#3e2723] dark:text-slate-100 mb-3">Related Bestsellers</h4>
           <div className="grid grid-cols-3 gap-2.5">
@@ -2327,7 +2448,7 @@ const GroceryPage = () => {
         </div>
       )}
 
-      {!shouldShowShimmer && hasActiveSearch && visibleSearchProducts.length > 0 && (
+      {!shouldShowShimmer && !shouldShowUnavailableMap && hasActiveSearch && visibleSearchProducts.length > 0 && (
         <div className="px-4 pt-2 pb-2 relative z-10 md:max-w-6xl md:mx-auto">
           <h4 className="text-base font-[800] text-[#3e2723] dark:text-slate-100 mb-3">Products</h4>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -2374,13 +2495,13 @@ const GroceryPage = () => {
         </div>
       )}
 
-      {!shouldShowShimmer && hasActiveSearch && !hasAnySearchMatch && (
+      {!shouldShowShimmer && !shouldShowUnavailableMap && hasActiveSearch && !hasAnySearchMatch && (
         <div className="px-4 pt-4 pb-24 relative z-10 md:max-w-6xl md:mx-auto">
           <p className="text-sm text-slate-500 dark:text-slate-400">No matching results found.</p>
         </div>
       )}
 
-      {!shouldShowShimmer && !hasActiveSearch && activeCategoryId === "all" && homepageCategoryDisplaySections.map((category, sectionIndex) => (
+      {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && homepageCategoryDisplaySections.map((category, sectionIndex) => (
         <div
           key={category._id || category.slug || category.name}
           className={`px-4 relative z-10 md:max-w-6xl md:mx-auto ${sectionIndex === homepageCategoryDisplaySections.length - 1 ? "pb-8" : "pb-6"
@@ -2449,7 +2570,7 @@ const GroceryPage = () => {
         </div>
       ))}
 
-      {!shouldShowShimmer && !hasActiveSearch && activeCategoryId === "all" && orderedBestSellerProductSections.length > 0 && (
+      {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && orderedBestSellerProductSections.length > 0 && (
         <div className="px-4 pb-24 relative z-10 md:max-w-6xl md:mx-auto space-y-6">
           {orderedBestSellerProductSections.map((section) => (
             <div key={section.id}>

@@ -3,6 +3,7 @@ import RestaurantCategory from '../../restaurant/models/RestaurantCategory.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
+import { DEFAULT_IMAGE_FALLBACK_40 } from '../../../shared/utils/imageFallback.js';
 import winston from 'winston';
 
 const logger = winston.createLogger({
@@ -63,7 +64,7 @@ export const getPublicCategories = asyncHandler(async (req, res) => {
       formattedCategories.push({
         id: category._id.toString(),
         name: normalizedName,
-        image: category.image || 'https://via.placeholder.com/40',
+        image: category.image || DEFAULT_IMAGE_FALLBACK_40,
         type: category.type || null,
         slug
       });
@@ -143,7 +144,7 @@ export const getCategories = asyncHandler(async (req, res) => {
           ...category,
           id: category._id?.toString(),
           status: category.isActive !== false,
-          image: category.icon || 'https://via.placeholder.com/40',
+          image: category.icon || DEFAULT_IMAGE_FALLBACK_40,
           type: 'Global',
           source: 'restaurant',
           readOnly: false
@@ -216,7 +217,7 @@ export const getCategoryById = asyncHandler(async (req, res) => {
         ...restaurantCategory,
         id: restaurantCategory._id.toString(),
         status: restaurantCategory.isActive !== false,
-        image: restaurantCategory.icon || 'https://via.placeholder.com/40',
+        image: restaurantCategory.icon || DEFAULT_IMAGE_FALLBACK_40,
         type: 'Global',
         source: 'restaurant'
       }
@@ -249,7 +250,7 @@ export const createCategory = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, 'Category with this name already exists');
     }
 
-    let imageUrl = 'https://via.placeholder.com/40';
+    let imageUrl = DEFAULT_IMAGE_FALLBACK_40;
 
     // Handle image upload if file is provided (priority: file > URL string)
     if (req.file) {
@@ -424,7 +425,7 @@ export const updateCategory = asyncHandler(async (req, res) => {
         ...restaurantCategory.toObject(),
         id: restaurantCategory._id.toString(),
         status: restaurantCategory.isActive !== false,
-        image: restaurantCategory.icon || 'https://via.placeholder.com/40',
+        image: restaurantCategory.icon || DEFAULT_IMAGE_FALLBACK_40,
         type: 'Global',
         source: 'restaurant'
       }
@@ -538,7 +539,7 @@ export const toggleCategoryStatus = asyncHandler(async (req, res) => {
         ...restaurantCategory.toObject(),
         id: restaurantCategory._id.toString(),
         status: restaurantCategory.isActive !== false,
-        image: restaurantCategory.icon || 'https://via.placeholder.com/40',
+        image: restaurantCategory.icon || DEFAULT_IMAGE_FALLBACK_40,
         type: 'Global',
         source: 'restaurant'
       }

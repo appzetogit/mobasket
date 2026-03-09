@@ -128,6 +128,7 @@ export const API_ENDPOINTS = {
   // Zone endpoints
   ZONE: {
     DETECT: '/zones/detect', // Public endpoint for zone detection
+    DETECT_ALL: '/zones/detect-all',
     ACTIVE: '/zones/active',
   },
   // Restaurant endpoints

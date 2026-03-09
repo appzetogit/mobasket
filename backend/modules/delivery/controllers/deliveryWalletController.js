@@ -11,6 +11,7 @@ import { createOrder as createRazorpayOrder } from '../../payment/services/razor
 import { verifyPayment } from '../../payment/services/razorpayService.js';
 import { getRazorpayCredentials } from '../../../shared/utils/envService.js';
 import { getDeliveryCODSummary } from '../services/codLimitService.js';
+import Delivery from '../models/Delivery.js';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -918,6 +919,16 @@ export const verifyDepositPayment = asyncHandler(async (req, res) => {
   });
   wallet.markModified('transactions');
   await wallet.save();
+
+  await Delivery.updateOne(
+    { _id: delivery._id },
+    {
+      $set: {
+        'cod.cashCollected': Math.max(0, Number(wallet.cashInHand) || 0),
+        'cod.lastSettledAt': new Date()
+      }
+    }
+  );
 
   const cashInHandNow = getDepositEligibleCashInHand(wallet);
   const codSummary = await getDeliveryCODSummary(delivery._id);

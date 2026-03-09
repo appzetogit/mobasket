@@ -18,6 +18,39 @@ const findRestaurantByIdentifier = async (restaurantId) => {
   return Restaurant.findOne({ $or: orConditions });
 };
 
+const extractNonEmptyImages = (value) => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => {
+      if (typeof entry === 'string') return entry.trim();
+      if (entry && typeof entry === 'object') {
+        return String(entry.url || entry.image || entry.imageUrl || '').trim();
+      }
+      return '';
+    })
+    .filter(Boolean);
+};
+
+const findMenuItemById = (sections = [], itemId) => {
+  for (const section of sections || []) {
+    const sectionItems = Array.isArray(section?.items) ? section.items : [];
+    const directItem = sectionItems.find((item) => String(item?.id) === String(itemId));
+    if (directItem) {
+      return { item: directItem, section, subsection: null };
+    }
+
+    for (const subsection of section?.subsections || []) {
+      const subsectionItems = Array.isArray(subsection?.items) ? subsection.items : [];
+      const nestedItem = subsectionItems.find((item) => String(item?.id) === String(itemId));
+      if (nestedItem) {
+        return { item: nestedItem, section, subsection };
+      }
+    }
+  }
+
+  return null;
+};
+
 export const getRestaurantMenuForAdmin = asyncHandler(async (req, res) => {
   const { restaurantId } = req.params;
 
@@ -185,5 +218,64 @@ export const addRestaurantMenuItemByAdmin = asyncHandler(async (req, res) => {
       addons: menu.addons,
       isActive: menu.isActive
     }
+  });
+});
+
+export const updateRestaurantMenuItemByAdmin = asyncHandler(async (req, res) => {
+  const { restaurantId, itemId } = req.params;
+  const { item = {} } = req.body || {};
+
+  if (!itemId) {
+    return errorResponse(res, 400, 'Item ID is required');
+  }
+  if (!item?.name || !String(item.name).trim()) {
+    return errorResponse(res, 400, 'Item name is required');
+  }
+  if (item?.price === undefined || Number.isNaN(Number(item.price))) {
+    return errorResponse(res, 400, 'Valid item price is required');
+  }
+
+  const restaurant = await findRestaurantByIdentifier(String(restaurantId || '').trim());
+  if (!restaurant) {
+    return errorResponse(res, 404, 'Restaurant not found');
+  }
+
+  const menu = await Menu.findOne({ restaurant: restaurant._id });
+  if (!menu) {
+    return errorResponse(res, 404, 'Restaurant menu not found');
+  }
+
+  const found = findMenuItemById(menu.sections, String(itemId));
+  if (!found?.item) {
+    return errorResponse(res, 404, 'Menu item not found');
+  }
+
+  const nextImages = extractNonEmptyImages(item.images);
+  const nextImage =
+    String(item.image || '').trim() ||
+    nextImages[0] ||
+    String(found.item.image || '').trim() ||
+    '';
+
+  found.item.name = String(item.name).trim();
+  found.item.price = Number(item.price);
+  found.item.foodType = item.foodType === 'Veg' ? 'Veg' : 'Non-Veg';
+  found.item.description = String(item.description || '').trim();
+  found.item.image = nextImage;
+  found.item.images = nextImages.length > 0 ? nextImages : (nextImage ? [nextImage] : []);
+  found.item.isAvailable = item.isAvailable !== false;
+  found.item.category = String(item.category || found.section?.name || found.item.category || '').trim() || found.item.category;
+  found.item.approvalStatus = found.item.approvalStatus || 'approved';
+
+  menu.markModified('sections');
+  await menu.save();
+
+  return successResponse(res, 200, 'Menu item updated successfully', {
+    restaurant: {
+      _id: restaurant._id,
+      name: restaurant.name,
+      restaurantId: restaurant.restaurantId
+    },
+    item: found.item
   });
 });

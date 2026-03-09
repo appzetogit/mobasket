@@ -199,6 +199,8 @@ export default function CheckoutPage() {
       findByType("administrative_area_level_2");
     const state = findByType("administrative_area_level_1");
     const zipCode = findByType("postal_code");
+    const premise = findByType("premise") || findByType("subpremise");
+    const establishment = findByType("establishment");
 
     return {
       street: [streetNumber, route].filter(Boolean).join(" ").trim(),
@@ -206,7 +208,45 @@ export default function CheckoutPage() {
       city,
       state,
       zipCode,
+      premise,
+      establishment,
     };
+  }, []);
+
+  const hasMeaningfulStreet = useCallback((value) => {
+    const text = String(value || "").trim();
+    if (!text) return false;
+    const normalized = text.toLowerCase();
+    const blocked = ["district", "state", "india"];
+    if (blocked.some((token) => normalized === token || normalized.endsWith(` ${token}`))) {
+      return false;
+    }
+    return text.length >= 3;
+  }, []);
+
+  const selectBestReverseGeocodeResult = useCallback((results = []) => {
+    if (!Array.isArray(results) || results.length === 0) return null;
+
+    const scoreResult = (result) => {
+      const types = Array.isArray(result?.types) ? result.types : [];
+      let score = 0;
+      if (types.includes("street_address")) score += 120;
+      if (types.includes("premise")) score += 100;
+      if (types.includes("subpremise")) score += 90;
+      if (types.includes("establishment")) score += 80;
+      if (types.includes("route")) score += 60;
+      if (types.includes("point_of_interest")) score += 40;
+      if (types.includes("sublocality")) score += 20;
+      if (types.includes("locality")) score += 10;
+      if (types.includes("administrative_area_level_2")) score += 5;
+
+      const formatted = String(result?.formatted_address || "");
+      if (/\b\d{6}\b/.test(formatted)) score += 15;
+      if (formatted.split(",").filter(Boolean).length >= 4) score += 10;
+      return score;
+    };
+
+    return [...results].sort((a, b) => scoreResult(b) - scoreResult(a))[0] || results[0];
   }, []);
 
   useEffect(() => {
@@ -362,8 +402,8 @@ export default function CheckoutPage() {
 
   const extractDetectedAddress = (response, latitude, longitude) => {
     const results = response?.data?.data?.results || [];
-    const firstResult = results[0] || {};
-    const components = firstResult?.address_components || {};
+    const selectedResult = selectBestReverseGeocodeResult(results) || results[0] || {};
+    const components = selectedResult?.address_components || {};
 
     const fromArray = Array.isArray(components)
       ? {
@@ -383,20 +423,36 @@ export default function CheckoutPage() {
         zipCode: components.zipCode || components.postal_code || "",
       };
 
-    const formattedAddress = firstResult?.formatted_address || "";
+    const parsed = parseAddressComponents(Array.isArray(components) ? components : []);
+    const formattedAddress = selectedResult?.formatted_address || "";
     const pincodeFromText =
       formattedAddress.match(/\b\d{6}\b/)?.[0] ||
       response?.data?.data?.formattedAddress?.match(/\b\d{6}\b/)?.[0] ||
       "";
     const parts = formattedAddress.split(",").map((part) => part.trim()).filter(Boolean);
+    const primaryStreetCandidate =
+      selectedResult?.street ||
+      parsed.street ||
+      parsed.premise ||
+      parsed.establishment ||
+      parts[0] ||
+      "";
+    const fallbackStreet = parts.slice(0, 2).join(", ");
+    const street = hasMeaningfulStreet(primaryStreetCandidate)
+      ? primaryStreetCandidate
+      : (fallbackStreet || formattedAddress || "Current location");
 
     return {
-      street: firstResult?.street || parts[0] || "",
-      additionalDetails:
-        firstResult?.area ||
-        firstResult?.sublocality ||
-        firstResult?.neighborhood ||
-        (parts.length > 1 ? parts.slice(1, Math.min(parts.length - 2, 3)).join(", ") : ""),
+      street,
+      additionalDetails: [
+        selectedResult?.area,
+        selectedResult?.sublocality,
+        selectedResult?.neighborhood,
+        parsed.additionalDetails,
+        parts.length > 1 ? parts.slice(1, Math.min(parts.length - 2, 3)).join(", ") : "",
+      ]
+        .map((part) => String(part || "").trim())
+        .find(Boolean) || "",
       city: fromArray.city,
       state: fromArray.state,
       zipCode: fromArray.zipCode || pincodeFromText,

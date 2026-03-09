@@ -1,4 +1,5 @@
 import Restaurant from '../models/Restaurant.js';
+import OutletTimings from '../models/OutletTimings.js';
 import GroceryStore from '../../grocery/models/GroceryStore.js';
 import Menu from '../models/Menu.js';
 import Zone from '../../admin/models/Zone.js';
@@ -7,6 +8,7 @@ import { uploadToCloudinary, deleteFromCloudinary } from '../../../shared/utils/
 import { initializeCloudinary } from '../../../config/cloudinary.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 import mongoose from 'mongoose';
+import { isOpenFromOutletTimings } from '../utils/outletTimingStatus.js';
 
 /**
  * Check if a point is within a zone polygon using ray casting algorithm
@@ -72,8 +74,10 @@ function isRestaurantInAnyZone(restaurantLat, restaurantLng, activeZones) {
  * @param {Array} activeZones - Array of active zones
  * @returns {string|null} Zone ID or null
  */
-function getRestaurantZoneId(restaurantLat, restaurantLng, activeZones) {
-  if (!restaurantLat || !restaurantLng) return null;
+function getRestaurantZoneIds(restaurantLat, restaurantLng, activeZones) {
+  if (!Number.isFinite(restaurantLat) || !Number.isFinite(restaurantLng)) return [];
+
+  const zoneIds = [];
 
   for (const zone of activeZones) {
     if (!zone.coordinates || zone.coordinates.length < 3) continue;
@@ -85,12 +89,49 @@ function getRestaurantZoneId(restaurantLat, restaurantLng, activeZones) {
       isInZone = isPointInZone(restaurantLat, restaurantLng, zone.coordinates);
     }
 
-    if (isInZone) {
-      return zone._id.toString();
+    if (isInZone && zone?._id) {
+      zoneIds.push(zone._id.toString());
     }
   }
 
-  return null;
+  return zoneIds;
+}
+
+function getNormalizedEntityZoneIds(restaurant, activeZones = []) {
+  const resolvedZoneIds = new Set();
+  const explicitZoneId = String(
+    restaurant?.zoneId?._id ||
+    restaurant?.zoneId?.id ||
+    restaurant?.zoneId ||
+    ''
+  ).trim();
+
+  if (explicitZoneId) {
+    const explicitZone = activeZones.find((zone) => String(zone?._id || '') === explicitZoneId);
+    if (explicitZone?._id) {
+      resolvedZoneIds.add(String(explicitZone._id));
+    }
+  }
+
+  const entityIdCandidates = new Set([
+    String(restaurant?._id || '').trim(),
+    String(restaurant?.restaurantId || '').trim()
+  ].filter(Boolean));
+
+  activeZones.forEach((zone) => {
+    const linkedRestaurantId = String(zone?.restaurantId?._id || zone?.restaurantId || '').trim();
+    if (linkedRestaurantId && entityIdCandidates.has(linkedRestaurantId)) {
+      resolvedZoneIds.add(String(zone._id));
+    }
+  });
+
+  const lat = Number(restaurant?.location?.latitude ?? restaurant?.location?.coordinates?.[1]);
+  const lng = Number(restaurant?.location?.longitude ?? restaurant?.location?.coordinates?.[0]);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    getRestaurantZoneIds(lat, lng, activeZones).forEach((zoneId) => resolvedZoneIds.add(zoneId));
+  }
+
+  return Array.from(resolvedZoneIds);
 }
 
 function getRestaurantPlatform(restaurant) {
@@ -354,20 +395,50 @@ export const getRestaurants = async (req, res) => {
       const restaurantPlatform = getRestaurantPlatform(restaurant);
       if (requestedPlatform && restaurantPlatform !== requestedPlatform) return false;
 
-      const lat = Number(restaurant?.location?.latitude ?? restaurant?.location?.coordinates?.[1]);
-      const lng = Number(restaurant?.location?.longitude ?? restaurant?.location?.coordinates?.[0]);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return !strictZoneFilterResolved;
-
       const platformZones = restaurantPlatform === 'mogrocery' ? mogroceryZones : mofoodZones;
-      const restaurantZoneId = getRestaurantZoneId(lat, lng, platformZones);
-      if (!restaurantZoneId) return !strictZoneFilterResolved;
+      const restaurantZoneIds = getNormalizedEntityZoneIds(restaurant, platformZones);
+      if (restaurantZoneIds.length === 0) return !strictZoneFilterResolved;
 
-      if (strictZoneFilterResolved && restaurantZoneId !== userZoneIdNormalized) {
+      if (strictZoneFilterResolved && !restaurantZoneIds.includes(userZoneIdNormalized)) {
         return false;
       }
 
+      const preferredZoneId =
+        (userZoneIdNormalized && restaurantZoneIds.includes(userZoneIdNormalized) && userZoneIdNormalized) ||
+        restaurantZoneIds[0] ||
+        null;
+      restaurant.zoneId = preferredZoneId;
+      restaurant.zoneIds = restaurantZoneIds;
+
       return true;
     });
+    if (!isMogroceryRequest && restaurants.length > 0) {
+      const restaurantIds = restaurants
+        .map((restaurant) => restaurant?._id)
+        .filter(Boolean);
+
+      if (restaurantIds.length > 0) {
+        const outletTimingDocs = await OutletTimings.find({
+          restaurantId: { $in: restaurantIds },
+          isActive: true,
+        })
+          .select('restaurantId timings')
+          .lean();
+
+        const timingByRestaurantId = new Map(
+          outletTimingDocs.map((doc) => [String(doc.restaurantId), doc.timings || []])
+        );
+
+        restaurants = restaurants.map((restaurant) => {
+          const timing = timingByRestaurantId.get(String(restaurant._id));
+          if (!timing) return restaurant;
+          return {
+            ...restaurant,
+            isAcceptingOrders: isOpenFromOutletTimings(timing),
+          };
+        });
+      }
+    }
 
     // Apply string-based filters that can't be done in MongoDB query
     if (maxDeliveryTime) {
@@ -437,6 +508,7 @@ export const getRestaurantById = async (req, res) => {
       .lean();
 
     // Fallback for mogrocery store entities migrated to dedicated GroceryStore collection.
+    const isRestaurantEntity = Boolean(restaurant);
     if (!restaurant) {
       const groceryConditions = [{ restaurantId: id }, { slug: id }];
       if (mongoose.Types.ObjectId.isValid(id) && id.length === 24) {
@@ -453,6 +525,18 @@ export const getRestaurantById = async (req, res) => {
 
     if (!restaurant) {
       return errorResponse(res, 404, 'Restaurant not found');
+    }
+
+    if (isRestaurantEntity && restaurant?._id) {
+      const outletTimings = await OutletTimings.findOne({
+        restaurantId: restaurant._id,
+        isActive: true,
+      })
+        .select('timings')
+        .lean();
+      if (outletTimings?.timings) {
+        restaurant.isAcceptingOrders = isOpenFromOutletTimings(outletTimings.timings);
+      }
     }
 
     return successResponse(res, 200, 'Restaurant retrieved successfully', {
@@ -474,6 +558,16 @@ export const getRestaurantByOwner = async (req, res) => {
 
     if (!restaurant) {
       return errorResponse(res, 404, 'Restaurant not found');
+    }
+
+    const outletTimings = await OutletTimings.findOne({
+      restaurantId: restaurant._id,
+      isActive: true,
+    })
+      .select('timings')
+      .lean();
+    if (outletTimings?.timings) {
+      restaurant.isAcceptingOrders = isOpenFromOutletTimings(outletTimings.timings);
     }
 
     return successResponse(res, 200, 'Restaurant retrieved successfully', {
