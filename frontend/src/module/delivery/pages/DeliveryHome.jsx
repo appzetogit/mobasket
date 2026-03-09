@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo, useCallback } from "react"
+﻿import { useEffect, useState, useRef, useMemo, useCallback } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 
 
@@ -602,7 +602,7 @@ function shouldAcceptLocation(position, lastValidLocation, lastLocationTime) {
     if (accuracy > 1000) {
 
 
-      console.log('🚫 First location rejected: accuracy extremely poor', { accuracy: accuracy.toFixed(2) + 'm' })
+      console.log('ðŸš« First location rejected: accuracy extremely poor', { accuracy: accuracy.toFixed(2) + 'm' })
 
 
       return false
@@ -611,7 +611,7 @@ function shouldAcceptLocation(position, lastValidLocation, lastLocationTime) {
     }
 
 
-    console.log('✅ Accepting first location (will be used for admin map):', {
+    console.log('âœ… Accepting first location (will be used for admin map):', {
 
 
       accuracy: accuracy.toFixed(2) + 'm',
@@ -644,7 +644,7 @@ function shouldAcceptLocation(position, lastValidLocation, lastLocationTime) {
   if (accuracy > 200) {
 
 
-    console.log('🚫 Location rejected: accuracy too poor', { accuracy: accuracy.toFixed(2) + 'm' })
+    console.log('ðŸš« Location rejected: accuracy too poor', { accuracy: accuracy.toFixed(2) + 'm' })
 
 
     return false
@@ -680,7 +680,7 @@ function shouldAcceptLocation(position, lastValidLocation, lastLocationTime) {
     if (distance > 50 && timeDiff < 2) {
 
 
-      console.log('🚫 Location rejected: distance jump too large', {
+      console.log('ðŸš« Location rejected: distance jump too large', {
 
 
         distance: distance.toFixed(2) + 'm',
@@ -713,7 +713,7 @@ function shouldAcceptLocation(position, lastValidLocation, lastLocationTime) {
       if (speedKmh > 60) {
 
 
-        console.log('🚫 Location rejected: speed too high', {
+        console.log('ðŸš« Location rejected: speed too high', {
 
 
           speed: speedKmh.toFixed(2) + ' km/h'
@@ -2117,7 +2117,7 @@ export default function DeliveryHome() {
       } catch (error) {
 
 
-        console.warn("⚠️ Failed to import Google Maps 'maps' library:", error)
+        console.warn("âš ï¸ Failed to import Google Maps 'maps' library:", error)
 
 
       }
@@ -4525,7 +4525,7 @@ export default function DeliveryHome() {
   // Earnings Guarantee - Use active earning addon if available, otherwise show 0
 
 
-  // When no offer is active, show 0 of 0 and ₹0
+  // When no offer is active, show 0 of 0 and â‚¹0
 
 
   const earningsGuaranteeTarget = activeEarningAddon?.earningAmount || 0
@@ -5002,7 +5002,7 @@ export default function DeliveryHome() {
     if (!userInteractedRef.current) {
 
 
-      console.log('🔇 Audio playback skipped - user has not interacted with page yet')
+      console.log('ðŸ”‡ Audio playback skipped - user has not interacted with page yet')
 
 
       return null
@@ -5029,7 +5029,7 @@ export default function DeliveryHome() {
 
 
 
-      console.log('🔊 Playing alert sound:', {
+      console.log('ðŸ”Š Playing alert sound:', {
 
 
         selectedSound,
@@ -5059,7 +5059,7 @@ export default function DeliveryHome() {
       if (!soundFile) {
 
 
-        console.error('❌ Sound file is undefined!', { selectedSound, soundFile })
+        console.error('âŒ Sound file is undefined!', { selectedSound, soundFile })
 
 
         return null
@@ -5086,7 +5086,7 @@ export default function DeliveryHome() {
       audio.addEventListener('loadeddata', () => {
 
 
-        console.log('✅ Audio file loaded successfully:', soundFile)
+        console.log('âœ… Audio file loaded successfully:', soundFile)
 
 
       })
@@ -5098,7 +5098,7 @@ export default function DeliveryHome() {
       audio.addEventListener('canplay', () => {
 
 
-        console.log('✅ Audio can play:', soundFile)
+        console.log('âœ… Audio can play:', soundFile)
 
 
       })
@@ -5197,7 +5197,7 @@ export default function DeliveryHome() {
         }
 
 
-        console.log('✅ Alert sound started playing successfully', {
+        console.log('âœ… Alert sound started playing successfully', {
 
 
           src: audio.src,
@@ -5221,7 +5221,7 @@ export default function DeliveryHome() {
       } catch (playError) {
 
 
-        console.error('❌ Audio play error:', {
+        console.error('âŒ Audio play error:', {
 
 
           error: playError,
@@ -5263,7 +5263,7 @@ export default function DeliveryHome() {
           !playError.message?.includes('timeout')) {
 
 
-          console.error('❌ Could not play alert sound:', playError)
+          console.error('âŒ Could not play alert sound:', playError)
 
 
         }
@@ -5296,7 +5296,7 @@ export default function DeliveryHome() {
           }
 
 
-          console.log('✅ Alert sound started playing after retry')
+          console.log('âœ… Alert sound started playing after retry')
 
 
           return audio
@@ -5314,7 +5314,7 @@ export default function DeliveryHome() {
             !retryError.name?.includes('NotAllowedError')) {
 
 
-            console.error('❌ Could not play alert sound after retry:', retryError)
+            console.error('âŒ Could not play alert sound after retry:', retryError)
 
 
           }
@@ -5332,7 +5332,7 @@ export default function DeliveryHome() {
     } catch (error) {
 
 
-      console.error('❌ Could not create audio:', error)
+      console.error('âŒ Could not create audio:', error)
 
 
       return null
@@ -5485,7 +5485,7 @@ export default function DeliveryHome() {
           const currentPreference = localStorage.getItem('delivery_alert_sound') || 'zomato_tone'
 
 
-          console.log('[NewOrder] 🎵 Attempting to play audio...', {
+          console.log('[NewOrder] ðŸŽµ Attempting to play audio...', {
 
 
             preference: currentPreference,
@@ -5506,7 +5506,7 @@ export default function DeliveryHome() {
             alertAudioRef.current = audio
 
 
-            console.log('[NewOrder] 🔊 Audio started playing, looping:', audio.loop)
+            console.log('[NewOrder] ðŸ”Š Audio started playing, looping:', audio.loop)
 
 
 
@@ -5518,7 +5518,7 @@ export default function DeliveryHome() {
             audio.onplaying = () => {
 
 
-              console.log('[NewOrder] ✅ Audio is now playing')
+              console.log('[NewOrder] âœ… Audio is now playing')
 
 
             }
@@ -5533,7 +5533,7 @@ export default function DeliveryHome() {
             audio.onended = () => {
 
 
-              console.log('[NewOrder] ℹ️ Audio ended')
+              console.log('[NewOrder] â„¹ï¸ Audio ended')
 
 
             }
@@ -5545,7 +5545,7 @@ export default function DeliveryHome() {
             audio.onerror = (e) => {
 
 
-              console.error('[NewOrder] ❌ Audio error:', e)
+              console.error('[NewOrder] âŒ Audio error:', e)
 
 
             }
@@ -5563,7 +5563,7 @@ export default function DeliveryHome() {
               audio.loop = true
 
 
-              console.log('[NewOrder] 🔧 Loop was false, enabled it')
+              console.log('[NewOrder] ðŸ”§ Loop was false, enabled it')
 
 
             }
@@ -5572,7 +5572,7 @@ export default function DeliveryHome() {
           } else {
 
 
-            console.log('[NewOrder] ⚠️ playAlertSound returned null')
+            console.log('[NewOrder] âš ï¸ playAlertSound returned null')
 
 
           }
@@ -5581,7 +5581,7 @@ export default function DeliveryHome() {
         } catch (error) {
 
 
-          console.error('[NewOrder] ⚠️ Audio failed to play:', error)
+          console.error('[NewOrder] âš ï¸ Audio failed to play:', error)
 
 
         }
@@ -6097,7 +6097,7 @@ export default function DeliveryHome() {
 
 
 
-  // Get rider location - App open होते ही location fetch करें
+  // Get rider location - App open à¤¹à¥‹à¤¤à¥‡ à¤¹à¥€ location fetch à¤•à¤°à¥‡à¤‚
 
 
   useEffect(() => {
@@ -6130,7 +6130,7 @@ export default function DeliveryHome() {
       }]
 
 
-      console.log('📍 Restored recent cached location:', cachedLocation)
+      console.log('ðŸ“ Restored recent cached location:', cachedLocation)
 
 
     }
@@ -6142,10 +6142,10 @@ export default function DeliveryHome() {
     if (navigator.geolocation) {
 
 
-      // Get current position first - App open होते ही location लें
+      // Get current position first - App open à¤¹à¥‹à¤¤à¥‡ à¤¹à¥€ location à¤²à¥‡à¤‚
 
 
-      console.log('📍 Fetching current location on app open...')
+      console.log('ðŸ“ Fetching current location on app open...')
 
 
       navigator.geolocation.getCurrentPosition(
@@ -6184,7 +6184,7 @@ export default function DeliveryHome() {
             longitude < -180 || longitude > 180) {
 
 
-            console.warn("⚠️ Invalid coordinates received:", { latitude, longitude })
+            console.warn("âš ï¸ Invalid coordinates received:", { latitude, longitude })
 
 
             // Don't use default location - keep trying or use saved location
@@ -6232,7 +6232,7 @@ export default function DeliveryHome() {
                   },
 
 
-                  (err) => console.warn("⚠️ Retry failed:", err),
+                  (err) => console.warn("âš ï¸ Retry failed:", err),
 
 
                   { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -6265,7 +6265,7 @@ export default function DeliveryHome() {
           if ((latitude > 90 || latitude < -90) || (longitude > 180 || longitude < -180)) {
 
 
-            console.error("❌ Coordinates out of valid range - possible swap:", { latitude, longitude })
+            console.error("âŒ Coordinates out of valid range - possible swap:", { latitude, longitude })
 
 
             // Don't use default location - retry
@@ -6310,7 +6310,7 @@ export default function DeliveryHome() {
                   },
 
 
-                  (err) => console.warn("⚠️ Retry failed:", err),
+                  (err) => console.warn("âš ï¸ Retry failed:", err),
 
 
                   { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
@@ -6337,7 +6337,7 @@ export default function DeliveryHome() {
           // Validate coordinates are reasonable for India (basic sanity check)
 
 
-          // India: Latitude 8.4° to 37.6°, Longitude 68.7° to 97.25°
+          // India: Latitude 8.4Â° to 37.6Â°, Longitude 68.7Â° to 97.25Â°
 
 
           const isInIndiaRange = latitude >= 8 && latitude <= 38 && longitude >= 68 && longitude <= 98
@@ -6346,7 +6346,7 @@ export default function DeliveryHome() {
           if (!isInIndiaRange) {
 
 
-            console.warn("⚠️ Coordinates outside India range - might be incorrect:", {
+            console.warn("âš ï¸ Coordinates outside India range - might be incorrect:", {
 
 
               latitude,
@@ -6394,7 +6394,7 @@ export default function DeliveryHome() {
           if (!shouldAccept) {
 
 
-            console.log('🚫 Initial location rejected by filter, will wait for better GPS signal')
+            console.log('ðŸš« Initial location rejected by filter, will wait for better GPS signal')
 
 
             return
@@ -6493,7 +6493,7 @@ export default function DeliveryHome() {
           if (!window.deliveryMapInstance && window.google && window.google.maps && mapContainerRef.current) {
 
 
-            console.log('📍 Map not initialized yet, will initialize with GPS location')
+            console.log('ðŸ“ Map not initialized yet, will initialize with GPS location')
 
 
             // Map will be initialized in the map initialization useEffect with this location
@@ -6532,7 +6532,7 @@ export default function DeliveryHome() {
             updateRoutePolyline()
 
 
-            console.log('📍 Map recentered to GPS location')
+            console.log('ðŸ“ Map recentered to GPS location')
 
 
           }
@@ -6541,7 +6541,7 @@ export default function DeliveryHome() {
 
 
 
-          console.log("📍 Current location obtained on app open (filtered):", {
+          console.log("ðŸ“ Current location obtained on app open (filtered):", {
 
 
             raw: { lat: latitude, lng: longitude },
@@ -6571,7 +6571,7 @@ export default function DeliveryHome() {
         (error) => {
 
 
-          console.warn("⚠️ Error getting current location:", error)
+          console.warn("âš ï¸ Error getting current location:", error)
 
 
           if (error?.code === 1) {
@@ -6604,7 +6604,7 @@ export default function DeliveryHome() {
               if (navigator.geolocation) {
 
 
-                console.log('🔄 Retrying location fetch...')
+                console.log('ðŸ”„ Retrying location fetch...')
 
 
                 navigator.geolocation.getCurrentPosition(
@@ -6649,7 +6649,7 @@ export default function DeliveryHome() {
                       saveCachedDeliveryLocation(newLocation)
 
 
-                      console.log('✅ Location obtained on retry:', newLocation)
+                      console.log('âœ… Location obtained on retry:', newLocation)
 
 
 
@@ -6682,7 +6682,7 @@ export default function DeliveryHome() {
                         }
 
 
-                        console.log('📍 Recentered map to GPS location')
+                        console.log('ðŸ“ Recentered map to GPS location')
 
 
 
@@ -6718,7 +6718,7 @@ export default function DeliveryHome() {
                   (err) => {
 
 
-                    console.warn("⚠️ Retry also failed:", err)
+                    console.warn("âš ï¸ Retry also failed:", err)
 
 
                     // Show toast to user to enable location
@@ -6745,7 +6745,7 @@ export default function DeliveryHome() {
           } else {
 
 
-            console.log('📍 Using saved location from previous session')
+            console.log('ðŸ“ Using saved location from previous session')
 
 
           }
@@ -6775,7 +6775,7 @@ export default function DeliveryHome() {
       // Geolocation not available - show error
 
 
-      console.error('❌ Geolocation API not available in this browser')
+      console.error('âŒ Geolocation API not available in this browser')
 
 
       toast.error('Location services not available. Please use a device with GPS.')
@@ -6832,7 +6832,7 @@ export default function DeliveryHome() {
     // But only send location to backend when online (for order assignment)
 
 
-    console.log('📍 Starting live location tracking (offline/online)')
+    console.log('ðŸ“ Starting live location tracking (offline/online)')
 
 
 
@@ -6877,7 +6877,7 @@ export default function DeliveryHome() {
           longitude < -180 || longitude > 180) {
 
 
-          console.warn("⚠️ Invalid coordinates received:", { latitude, longitude })
+          console.warn("âš ï¸ Invalid coordinates received:", { latitude, longitude })
 
 
           return
@@ -6958,7 +6958,7 @@ export default function DeliveryHome() {
               if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
 
 
-                console.log('📤 Sending fallback location to backend (filter rejected new location):', {
+                console.log('ðŸ“¤ Sending fallback location to backend (filter rejected new location):', {
 
 
                   lat,
@@ -6994,7 +6994,7 @@ export default function DeliveryHome() {
                     if (error.code !== 'ERR_NETWORK' && error.message !== 'Network Error') {
 
 
-                      console.error('❌ Error sending fallback location:', error);
+                      console.error('âŒ Error sending fallback location:', error);
 
 
                     }
@@ -7126,7 +7126,7 @@ export default function DeliveryHome() {
               const [lat, lng] = newLocation
 
 
-              console.log('📍 Updating bike marker with first location:', { lat, lng })
+              console.log('ðŸ“ Updating bike marker with first location:', { lat, lng })
 
 
 
@@ -7150,7 +7150,7 @@ export default function DeliveryHome() {
                   bikeMarkerRef.current.setPosition({ lat, lng })
 
 
-                  console.log('✅ Bike marker position updated to first location')
+                  console.log('âœ… Bike marker position updated to first location')
 
 
                 } else {
@@ -7162,7 +7162,7 @@ export default function DeliveryHome() {
                   createOrUpdateBikeMarker(lat, lng, null, true)
 
 
-                  console.log('✅ Bike marker created with first location')
+                  console.log('âœ… Bike marker created with first location')
 
 
                 }
@@ -7171,7 +7171,7 @@ export default function DeliveryHome() {
               } else {
 
 
-                console.error('❌ Invalid coordinates for bike marker:', { lat, lng })
+                console.error('âŒ Invalid coordinates for bike marker:', { lat, lng })
 
 
               }
@@ -7216,7 +7216,7 @@ export default function DeliveryHome() {
               if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
 
 
-                console.log('📤 Sending raw location to backend (not smoothed yet):', { lat, lng })
+                console.log('ðŸ“¤ Sending raw location to backend (not smoothed yet):', { lat, lng })
 
 
                 deliveryAPI.updateLocation(lat, lng, true)
@@ -7231,7 +7231,7 @@ export default function DeliveryHome() {
                     window.lastSentLocation = newLocation;
 
 
-                    console.log('✅ Raw location sent to backend successfully')
+                    console.log('âœ… Raw location sent to backend successfully')
 
 
                   })
@@ -7243,7 +7243,7 @@ export default function DeliveryHome() {
                     if (error.code !== 'ERR_NETWORK' && error.message !== 'Network Error') {
 
 
-                      console.error('❌ Error sending raw location to backend:', error);
+                      console.error('âŒ Error sending raw location to backend:', error);
 
 
                     }
@@ -7549,7 +7549,7 @@ export default function DeliveryHome() {
             // Marker doesn't exist yet, create it immediately with correct location
 
 
-            console.log('📍 Creating bike marker with smoothed location:', { lat: smoothedLat, lng: smoothedLng })
+            console.log('ðŸ“ Creating bike marker with smoothed location:', { lat: smoothedLat, lng: smoothedLng })
 
 
             createOrUpdateBikeMarker(smoothedLat, smoothedLng, heading, !isUserPanningRef.current)
@@ -7573,7 +7573,7 @@ export default function DeliveryHome() {
 
 
 
-        console.log("📍 Live location updated (smoothed):", {
+        console.log("ðŸ“ Live location updated (smoothed):", {
 
 
           raw: { lat: latitude, lng: longitude },
@@ -7696,7 +7696,7 @@ export default function DeliveryHome() {
             if (smoothedLat >= -90 && smoothedLat <= 90 && smoothedLng >= -180 && smoothedLng <= 180) {
 
 
-              console.log('📤 Sending smoothed location to backend:', {
+              console.log('ðŸ“¤ Sending smoothed location to backend:', {
 
 
                 smoothed: { lat: smoothedLat, lng: smoothedLng },
@@ -7729,7 +7729,7 @@ export default function DeliveryHome() {
                   window.lastSentLocation = smoothedLocation; // Store last sent location
 
 
-                  console.log('✅ Smoothed location sent to backend successfully:', {
+                  console.log('âœ… Smoothed location sent to backend successfully:', {
 
 
                     latitude: smoothedLat,
@@ -7759,7 +7759,7 @@ export default function DeliveryHome() {
                   if (error.code !== 'ERR_NETWORK' && error.message !== 'Network Error') {
 
 
-                    console.error('❌ Error sending location to backend:', error);
+                    console.error('âŒ Error sending location to backend:', error);
 
 
                   } else {
@@ -7780,7 +7780,7 @@ export default function DeliveryHome() {
             } else {
 
 
-              console.error('❌ Invalid smoothed coordinates - not sending to backend:', {
+              console.error('âŒ Invalid smoothed coordinates - not sending to backend:', {
 
 
                 smoothedLat,
@@ -7810,7 +7810,7 @@ export default function DeliveryHome() {
       (error) => {
 
 
-        console.warn("⚠️ Error watching location:", error)
+        console.warn("âš ï¸ Error watching location:", error)
 
 
         if (error?.code === 1) {
@@ -8073,14 +8073,14 @@ export default function DeliveryHome() {
         // Get order ID from selectedRestaurant or newOrder (define outside try-catch for error handling)
 
 
-        const orderId = selectedRestaurant?.id || newOrder?.orderMongoId || newOrder?.orderId
+        const orderId = selectedRestaurant?.id || selectedRestaurant?.orderId || newOrder?.orderMongoId || newOrder?.orderId || (() => { try { const raw = localStorage.getItem('deliveryActiveOrder'); const parsed = raw ? JSON.parse(raw) : null; return parsed?.orderId || parsed?.restaurantInfo?.id || parsed?.restaurantInfo?.orderId || null } catch { return null } })()
         const normalizedOrderId = normalizeOrderId(orderId)
 
 
 
 
 
-        console.log('🔍 Order ID lookup:', {
+        console.log('ðŸ” Order ID lookup:', {
 
 
           selectedRestaurantId: selectedRestaurant?.id,
@@ -8104,7 +8104,7 @@ export default function DeliveryHome() {
         if (!orderId) {
 
 
-          console.error('❌ No order ID found to accept')
+          console.error('âŒ No order ID found to accept')
 
 
           toast.error('Order ID not found. Please try again.')
@@ -8206,13 +8206,13 @@ export default function DeliveryHome() {
               currentLocation = position
 
 
-              console.log('📍 Got fresh location from geolocation API')
+              console.log('ðŸ“ Got fresh location from geolocation API')
 
 
             } catch (geoError) {
 
 
-              console.error('❌ Could not get current location, proceeding with backend fallback:', geoError)
+              console.error('âŒ Could not get current location, proceeding with backend fallback:', geoError)
 
               toast.warning('Live GPS unavailable. Trying profile location...')
 
@@ -8230,7 +8230,7 @@ export default function DeliveryHome() {
 
           if (!currentLocation || currentLocation.length !== 2) {
 
-            console.warn('⚠️ No valid live location in client, relying on backend fallback location')
+            console.warn('âš ï¸ No valid live location in client, relying on backend fallback location')
 
           }
 
@@ -8238,13 +8238,13 @@ export default function DeliveryHome() {
 
 
 
-          console.log('📦 Accepting order:', orderId)
+          console.log('ðŸ“¦ Accepting order:', orderId)
 
 
-          console.log('📍 Current LIVE location:', currentLocation)
+          console.log('ðŸ“ Current LIVE location:', currentLocation)
 
 
-          console.log('📋 Order details:', {
+          console.log('ðŸ“‹ Order details:', {
 
 
             orderId: orderId,
@@ -8282,7 +8282,7 @@ export default function DeliveryHome() {
 
 
 
-          console.log('📡 API Response:', response.data)
+          console.log('ðŸ“¡ API Response:', response.data)
 
 
 
@@ -8312,16 +8312,16 @@ export default function DeliveryHome() {
 
 
 
-            console.log('✅ Order accepted successfully')
+            console.log('âœ… Order accepted successfully')
 
 
-            console.log('📍 Route data:', routeData)
+            console.log('ðŸ“ Route data:', routeData)
 
 
-            console.log('📋 Full order data from backend:', JSON.stringify(order, null, 2))
+            console.log('ðŸ“‹ Full order data from backend:', JSON.stringify(order, null, 2))
 
 
-            console.log('🏪 Restaurant name from backend:', {
+            console.log('ðŸª Restaurant name from backend:', {
 
 
               restaurantName: order.restaurantName,
@@ -8408,7 +8408,7 @@ export default function DeliveryHome() {
               // Debug: Log order structure to understand data format
 
 
-              console.log('🔍 Order structure for address extraction:', {
+              console.log('ðŸ” Order structure for address extraction:', {
 
 
                 hasRestaurantId: !!order.restaurantId,
@@ -8456,7 +8456,7 @@ export default function DeliveryHome() {
                 restaurantAddress = restaurantLocation.formattedAddress
 
 
-                console.log('✅ Using location.formattedAddress:', restaurantAddress)
+                console.log('âœ… Using location.formattedAddress:', restaurantAddress)
 
 
               }
@@ -8471,7 +8471,7 @@ export default function DeliveryHome() {
                 restaurantAddress = restaurantLocation.address
 
 
-                console.log('✅ Using location.address:', restaurantAddress)
+                console.log('âœ… Using location.address:', restaurantAddress)
 
 
               }
@@ -8510,7 +8510,7 @@ export default function DeliveryHome() {
                 restaurantAddress = addressParts.join(', ')
 
 
-                console.log('✅ Built address from addressLine1 with zone and pin:', restaurantAddress)
+                console.log('âœ… Built address from addressLine1 with zone and pin:', restaurantAddress)
 
 
               }
@@ -8546,7 +8546,7 @@ export default function DeliveryHome() {
                 restaurantAddress = addressParts.join(', ')
 
 
-                console.log('✅ Built address from street components with zone and pin:', restaurantAddress)
+                console.log('âœ… Built address from street components with zone and pin:', restaurantAddress)
 
 
               }
@@ -8561,7 +8561,7 @@ export default function DeliveryHome() {
                 restaurantAddress = order.restaurantId.address
 
 
-                console.log('✅ Using restaurantId.address:', restaurantAddress)
+                console.log('âœ… Using restaurantId.address:', restaurantAddress)
 
 
               }
@@ -8597,7 +8597,7 @@ export default function DeliveryHome() {
                 restaurantAddress = addressParts.join(', ')
 
 
-                console.log('✅ Built address from restaurantId fields:', restaurantAddress)
+                console.log('âœ… Built address from restaurantId fields:', restaurantAddress)
 
 
               }
@@ -8612,7 +8612,7 @@ export default function DeliveryHome() {
                 restaurantAddress = order.restaurantAddress
 
 
-                console.log('✅ Using order.restaurantAddress:', restaurantAddress)
+                console.log('âœ… Using order.restaurantAddress:', restaurantAddress)
 
 
               }
@@ -8627,13 +8627,13 @@ export default function DeliveryHome() {
                 restaurantAddress = `${restaurantLat}, ${restaurantLng}`
 
 
-                console.log('⚠️ Using coordinates as address:', restaurantAddress)
+                console.log('âš ï¸ Using coordinates as address:', restaurantAddress)
 
 
               } else {
 
 
-                console.warn('⚠️ Restaurant address not found in order, will try to fetch from restaurant API')
+                console.warn('âš ï¸ Restaurant address not found in order, will try to fetch from restaurant API')
 
 
                 // Try to fetch restaurant address by ID if available
@@ -8666,7 +8666,7 @@ export default function DeliveryHome() {
                     try {
 
 
-                      console.log('🔄 Fetching restaurant address by ID:', restaurantIdString)
+                      console.log('ðŸ”„ Fetching restaurant address by ID:', restaurantIdString)
 
 
                       const restaurantResponse = await restaurantAPI.getRestaurantById(restaurantIdString)
@@ -8681,7 +8681,7 @@ export default function DeliveryHome() {
                         const restLocation = restaurant.location
 
 
-                        console.log('✅ Fetched restaurant data:', { restaurant, restLocation })
+                        console.log('âœ… Fetched restaurant data:', { restaurant, restLocation })
 
 
 
@@ -8696,7 +8696,7 @@ export default function DeliveryHome() {
                           restaurantAddress = restLocation.formattedAddress
 
 
-                          console.log('✅ Fetched restaurant.location.formattedAddress:', restaurantAddress)
+                          console.log('âœ… Fetched restaurant.location.formattedAddress:', restaurantAddress)
 
 
                         } else if (restLocation?.address) {
@@ -8705,7 +8705,7 @@ export default function DeliveryHome() {
                           restaurantAddress = restLocation.address
 
 
-                          console.log('✅ Fetched restaurant.location.address:', restaurantAddress)
+                          console.log('âœ… Fetched restaurant.location.address:', restaurantAddress)
 
 
                         } else if (restaurant.address) {
@@ -8714,7 +8714,7 @@ export default function DeliveryHome() {
                           restaurantAddress = restaurant.address
 
 
-                          console.log('✅ Fetched restaurant.address:', restaurantAddress)
+                          console.log('âœ… Fetched restaurant.address:', restaurantAddress)
 
 
                         } else if (restLocation?.addressLine1) {
@@ -8747,7 +8747,7 @@ export default function DeliveryHome() {
                           restaurantAddress = addressParts.join(', ')
 
 
-                          console.log('✅ Built address from restaurant location addressLine1 with zone and pin:', restaurantAddress)
+                          console.log('âœ… Built address from restaurant location addressLine1 with zone and pin:', restaurantAddress)
 
 
                         } else if (restLocation?.street) {
@@ -8777,7 +8777,7 @@ export default function DeliveryHome() {
                           restaurantAddress = addressParts.join(', ')
 
 
-                          console.log('✅ Built address from restaurant location components with zone and pin:', restaurantAddress)
+                          console.log('âœ… Built address from restaurant location components with zone and pin:', restaurantAddress)
 
 
                         }
@@ -8789,7 +8789,7 @@ export default function DeliveryHome() {
                     } catch (restaurantError) {
 
 
-                      console.error('❌ Error fetching restaurant address:', restaurantError)
+                      console.error('âŒ Error fetching restaurant address:', restaurantError)
 
 
                     }
@@ -8807,7 +8807,7 @@ export default function DeliveryHome() {
                 if (restaurantAddress === 'Restaurant Address') {
 
 
-                  console.warn('⚠️ Restaurant address not found in any location, using default')
+                  console.warn('âš ï¸ Restaurant address not found in any location, using default')
 
 
                 }
@@ -8840,7 +8840,7 @@ export default function DeliveryHome() {
                 restaurantName = order.restaurantName.trim()
 
 
-                console.log('✅ Using restaurantName from order:', restaurantName)
+                console.log('âœ… Using restaurantName from order:', restaurantName)
 
 
               }
@@ -8855,7 +8855,7 @@ export default function DeliveryHome() {
                 restaurantName = order.restaurantId.name.trim()
 
 
-                console.log('✅ Using restaurantId.name:', restaurantName)
+                console.log('âœ… Using restaurantId.name:', restaurantName)
 
 
               }
@@ -8870,7 +8870,7 @@ export default function DeliveryHome() {
                 restaurantName = selectedRestaurant.name
 
 
-                console.warn('⚠️ Restaurant name not found in order, using selectedRestaurant.name:', restaurantName)
+                console.warn('âš ï¸ Restaurant name not found in order, using selectedRestaurant.name:', restaurantName)
 
 
               }
@@ -8885,7 +8885,7 @@ export default function DeliveryHome() {
                 restaurantName = 'Restaurant'
 
 
-                console.error('❌ Restaurant name not found anywhere, using default:', restaurantName)
+                console.error('âŒ Restaurant name not found anywhere, using default:', restaurantName)
 
 
               }
@@ -8894,7 +8894,7 @@ export default function DeliveryHome() {
 
 
 
-              console.log('🏪 Final extracted restaurant name:', restaurantName)
+              console.log('ðŸª Final extracted restaurant name:', restaurantName)
 
 
 
@@ -8918,7 +8918,7 @@ export default function DeliveryHome() {
 
 
 
-              console.log('💰 Earnings from backend:', {
+              console.log('ðŸ’° Earnings from backend:', {
 
 
                 backendEarnings,
@@ -9045,7 +9045,7 @@ export default function DeliveryHome() {
 
 
 
-              console.log('🏪 Updated restaurant info from backend:', restaurantInfo)
+              console.log('ðŸª Updated restaurant info from backend:', restaurantInfo)
 
 
               // Update state immediately
@@ -9066,7 +9066,7 @@ export default function DeliveryHome() {
             if (!restaurantInfo) {
 
 
-              console.error('❌ Restaurant info not available, cannot proceed');
+              console.error('âŒ Restaurant info not available, cannot proceed');
 
 
               return;
@@ -9105,7 +9105,7 @@ export default function DeliveryHome() {
               try {
                 updateRoutePolyline(routeCoordinates);
               } catch (polylineFallbackError) {
-                console.warn('⚠️ Could not render fallback pickup polyline:', polylineFallbackError);
+                console.warn('âš ï¸ Could not render fallback pickup polyline:', polylineFallbackError);
               }
 
 
@@ -9149,7 +9149,7 @@ export default function DeliveryHome() {
             if (hasValidRestaurantCoords && riderPositionForPickupRoute) {
 
 
-              console.log('🗺️ Calculating route with Google Maps Directions API...');
+              console.log('ðŸ—ºï¸ Calculating route with Google Maps Directions API...');
 
 
 
@@ -9215,7 +9215,7 @@ export default function DeliveryHome() {
 
 
 
-                  // Initialize live tracking polyline with full route (Delivery Boy → Restaurant)
+                  // Initialize live tracking polyline with full route (Delivery Boy â†’ Restaurant)
 
 
                   if (riderPositionForPickupRoute) {
@@ -9305,7 +9305,7 @@ export default function DeliveryHome() {
                     } catch (osrmError) {
 
 
-                      console.error('❌ Error calculating route with OSRM:', osrmError);
+                      console.error('âŒ Error calculating route with OSRM:', osrmError);
 
 
                       setRoutePolyline([]);
@@ -9329,13 +9329,13 @@ export default function DeliveryHome() {
                 if (directionsError.message?.includes('REQUEST_DENIED') || directionsError.message?.includes('not available')) {
 
 
-                  console.warn('⚠️ Google Maps Directions API not available (billing/API key issue). Using fallback route.');
+                  console.warn('âš ï¸ Google Maps Directions API not available (billing/API key issue). Using fallback route.');
 
 
                 } else {
 
 
-                  console.error('❌ Error calculating route with Directions API:', directionsError);
+                  console.error('âŒ Error calculating route with Directions API:', directionsError);
 
 
                 }
@@ -9377,13 +9377,13 @@ export default function DeliveryHome() {
                       setRoutePolyline(routeCoordinates);
 
 
-                      console.log('✅ Route calculated with OSRM fallback:', routeCoordinates.length, 'points');
+                      console.log('âœ… Route calculated with OSRM fallback:', routeCoordinates.length, 'points');
 
 
                     } else {
 
 
-                      console.warn('⚠️ OSRM fallback returned no route, skipping straight-line fallback');
+                      console.warn('âš ï¸ OSRM fallback returned no route, skipping straight-line fallback');
 
 
                       setRoutePolyline([]);
@@ -9395,7 +9395,7 @@ export default function DeliveryHome() {
                   } catch (osrmError) {
 
 
-                    console.warn('⚠️ OSRM fallback failed, skipping straight-line fallback');
+                    console.warn('âš ï¸ OSRM fallback failed, skipping straight-line fallback');
 
 
                     setRoutePolyline([]);
@@ -9413,7 +9413,7 @@ export default function DeliveryHome() {
             } else {
 
 
-              console.error('❌ Cannot calculate route: missing restaurant info or location', {
+              console.error('âŒ Cannot calculate route: missing restaurant info or location', {
 
 
                 restaurantInfo: !!restaurantInfo,
@@ -9464,7 +9464,7 @@ export default function DeliveryHome() {
             );
 
 
-            console.log('✅ Added order to accepted list:', {
+            console.log('âœ… Added order to accepted list:', {
 
 
               ids: [restaurantInfo?.id, restaurantInfo?.orderId, newOrder?.orderMongoId, newOrder?.orderId].filter(Boolean),
@@ -9665,7 +9665,7 @@ export default function DeliveryHome() {
                     if (!directionsResult || typeof directionsResult !== 'object' || !directionsResult.routes || !Array.isArray(directionsResult.routes) || directionsResult.routes.length === 0) {
 
 
-                      console.error('❌ Invalid directionsResult:', directionsResult);
+                      console.error('âŒ Invalid directionsResult:', directionsResult);
 
 
                       return;
@@ -9683,7 +9683,7 @@ export default function DeliveryHome() {
                     if (!directionsResult.request || !directionsResult.routes[0]?.legs || !Array.isArray(directionsResult.routes[0].legs)) {
 
 
-                      console.error('❌ directionsResult is not a valid Google Maps DirectionsResult');
+                      console.error('âŒ directionsResult is not a valid Google Maps DirectionsResult');
 
 
                       return;
@@ -9695,7 +9695,7 @@ export default function DeliveryHome() {
 
 
 
-                    console.log('📍 Route details:', {
+                    console.log('ðŸ“ Route details:', {
 
 
                       routes: directionsResult.routes?.length || 0,
@@ -9755,7 +9755,7 @@ export default function DeliveryHome() {
                     } catch (e) {
 
 
-                      console.warn('⚠️ Error cleaning up polyline:', e);
+                      console.warn('âš ï¸ Error cleaning up polyline:', e);
 
 
                     }
@@ -9821,13 +9821,13 @@ export default function DeliveryHome() {
                   } catch (error) {
 
 
-                    console.error('❌ Error extracting route path:', error);
+                    console.error('âŒ Error extracting route path:', error);
 
 
-                    console.error('❌ directionsResult type:', typeof directionsResult);
+                    console.error('âŒ directionsResult type:', typeof directionsResult);
 
 
-                    console.error('❌ directionsResult:', directionsResult);
+                    console.error('âŒ directionsResult:', directionsResult);
 
 
                   }
@@ -10014,7 +10014,7 @@ export default function DeliveryHome() {
               } catch (storageError) {
 
 
-                console.error('❌ Error saving active order to localStorage:', storageError);
+                console.error('âŒ Error saving active order to localStorage:', storageError);
 
 
               }
@@ -10038,7 +10038,7 @@ export default function DeliveryHome() {
           } else {
 
 
-            console.error('❌ Failed to accept order:', response.data)
+            console.error('âŒ Failed to accept order:', response.data)
 
 
             // Show error message to user
@@ -10065,10 +10065,10 @@ export default function DeliveryHome() {
         } catch (error) {
 
 
-          console.error('❌ Error accepting order:', error)
+          console.error('âŒ Error accepting order:', error)
 
 
-          console.error('❌ Error details:', {
+          console.error('âŒ Error details:', {
 
 
             message: error.message,
@@ -10134,7 +10134,7 @@ export default function DeliveryHome() {
           if (error.response?.data) {
 
 
-            console.error('❌ Backend error response:', JSON.stringify(error.response.data, null, 2))
+            console.error('âŒ Backend error response:', JSON.stringify(error.response.data, null, 2))
 
 
           }
@@ -10167,7 +10167,7 @@ export default function DeliveryHome() {
             if (error.response.data.error) {
 
 
-              console.error('❌ Backend error details:', error.response.data.error)
+              console.error('âŒ Backend error details:', error.response.data.error)
 
 
             }
@@ -10793,13 +10793,13 @@ export default function DeliveryHome() {
         // Backend accepts both _id and orderId, but orderId is more reliable
 
 
-        const orderId = selectedRestaurant?.orderId || selectedRestaurant?.id || newOrder?.orderId || newOrder?.orderMongoId
+        const orderId = selectedRestaurant?.orderId || selectedRestaurant?.id || newOrder?.orderId || newOrder?.orderMongoId || (() => { try { const raw = localStorage.getItem('deliveryActiveOrder'); const parsed = raw ? JSON.parse(raw) : null; return parsed?.orderId || parsed?.restaurantInfo?.orderId || parsed?.restaurantInfo?.id || null } catch { return null } })()
 
 
 
 
 
-        console.log('🔍 Order ID lookup for reached pickup:', {
+        console.log('ðŸ” Order ID lookup for reached pickup:', {
 
 
           selectedRestaurantId: selectedRestaurant?.id,
@@ -10856,7 +10856,7 @@ export default function DeliveryHome() {
         if (isDelivered) {
 
 
-          console.warn('⚠️ Order is already delivered, skipping reached pickup confirmation')
+          console.warn('âš ï¸ Order is already delivered, skipping reached pickup confirmation')
 
 
           toast.error('Order is already delivered. Cannot confirm reached pickup.')
@@ -10901,7 +10901,7 @@ export default function DeliveryHome() {
         if (isPastPickupPhase) {
 
 
-          console.warn('⚠️ Order is already past pickup phase, skipping reached pickup confirmation:', {
+          console.warn('âš ï¸ Order is already past pickup phase, skipping reached pickup confirmation:', {
 
 
             orderStatus,
@@ -10967,10 +10967,10 @@ export default function DeliveryHome() {
             // Call backend API to confirm reached pickup and save status in database
 
 
-            console.log('📦 Confirming reached pickup for order:', orderId)
+            console.log('ðŸ“¦ Confirming reached pickup for order:', orderId)
 
 
-            console.log('📦 API endpoint: /delivery/orders/:orderId/reached-pickup')
+            console.log('ðŸ“¦ API endpoint: /delivery/orders/:orderId/reached-pickup')
 
 
             const riderPos = (riderLocation && riderLocation.length === 2)
@@ -11000,7 +11000,7 @@ export default function DeliveryHome() {
 
 
 
-            console.log('📦 Reached pickup API response:', response.data)
+            console.log('ðŸ“¦ Reached pickup API response:', response.data)
 
 
 
@@ -11009,7 +11009,7 @@ export default function DeliveryHome() {
             if (response.data?.success) {
 
 
-              console.log('✅ Reached pickup confirmed and status saved in database')
+              console.log('âœ… Reached pickup confirmed and status saved in database')
 
 
               toast.success('Reached pickup confirmed!')
@@ -11069,7 +11069,7 @@ export default function DeliveryHome() {
                 setShowOrderIdConfirmationPopup(true)
 
 
-                console.log('✅ Showing Order ID confirmation popup')
+                console.log('âœ… Showing Order ID confirmation popup')
 
 
               }, 300) // 300ms delay for smooth transition
@@ -11078,7 +11078,7 @@ export default function DeliveryHome() {
             } else {
 
 
-              console.error('❌ Failed to confirm reached pickup:', response.data)
+              console.error('âŒ Failed to confirm reached pickup:', response.data)
 
 
               toast.error(response.data?.message || 'Failed to confirm reached pickup. Please try again.')
@@ -11099,7 +11099,7 @@ export default function DeliveryHome() {
                 setShowOrderIdConfirmationPopup(true)
 
 
-                console.log('⚠️ Showing Order ID confirmation popup despite API failure')
+                console.log('âš ï¸ Showing Order ID confirmation popup despite API failure')
 
 
               }, 300)
@@ -11111,10 +11111,10 @@ export default function DeliveryHome() {
           } catch (error) {
 
 
-            console.error('❌ Error confirming reached pickup:', error)
+            console.error('âŒ Error confirming reached pickup:', error)
 
 
-            console.error('❌ Error details:', {
+            console.error('âŒ Error details:', {
 
 
               message: error.message,
@@ -11189,7 +11189,7 @@ export default function DeliveryHome() {
               setShowOrderIdConfirmationPopup(true)
 
 
-              console.log('⚠️ Showing Order ID confirmation popup despite error')
+              console.log('âš ï¸ Showing Order ID confirmation popup despite error')
 
 
             }, 300)
@@ -11201,7 +11201,7 @@ export default function DeliveryHome() {
         } else {
 
 
-          console.error('❌ No order ID found for reached pickup confirmation')
+          console.error('âŒ No order ID found for reached pickup confirmation')
 
 
           toast.error('Order ID not found. Please refresh and try again.')
@@ -11222,7 +11222,7 @@ export default function DeliveryHome() {
             setShowOrderIdConfirmationPopup(true)
 
 
-            console.log('⚠️ Showing Order ID confirmation popup without order ID (fallback)')
+            console.log('âš ï¸ Showing Order ID confirmation popup without order ID (fallback)')
 
 
           }, 300)
@@ -11477,7 +11477,7 @@ export default function DeliveryHome() {
       // Show Order Delivered popup instantly after Reached Drop is confirmed
 
 
-      console.log('✅ Showing Order Delivered popup instantly after Reached Drop confirmation')
+      console.log('âœ… Showing Order Delivered popup instantly after Reached Drop confirmation')
 
 
       setShowOrderDeliveredAnimation(true)
@@ -11519,7 +11519,7 @@ export default function DeliveryHome() {
 
 
 
-          console.log('🔍 Order ID lookup for reached drop:', {
+          console.log('ðŸ” Order ID lookup for reached drop:', {
 
 
             selectedRestaurantId: selectedRestaurant?.id,
@@ -11555,7 +11555,7 @@ export default function DeliveryHome() {
               // Use MongoDB _id for API call to avoid ObjectId casting errors
 
 
-              console.log('📦 Confirming reached drop for order:', orderIdForApi)
+              console.log('ðŸ“¦ Confirming reached drop for order:', orderIdForApi)
 
 
               const response = await deliveryAPI.confirmReachedDrop(orderIdForApi)
@@ -11567,13 +11567,13 @@ export default function DeliveryHome() {
               if (response.data?.success) {
 
 
-                console.log('✅ Reached drop confirmed')
+                console.log('âœ… Reached drop confirmed')
 
 
               } else {
 
 
-                console.error('❌ Failed to confirm reached drop:', response.data)
+                console.error('âŒ Failed to confirm reached drop:', response.data)
 
 
                 toast.error(response.data?.message || 'Failed to confirm reached drop. Please try again.')
@@ -11621,7 +11621,7 @@ export default function DeliveryHome() {
                 // For 500 errors, just log warning - popup is already shown, backend will sync later
 
 
-                console.warn('⚠️ Server error confirming reached drop (500), but popup is shown. Backend will sync status automatically.', {
+                console.warn('âš ï¸ Server error confirming reached drop (500), but popup is shown. Backend will sync status automatically.', {
 
 
                   orderIdForApi: orderIdForApi || 'unknown',
@@ -11648,10 +11648,10 @@ export default function DeliveryHome() {
               // For other errors, log and show error message
 
 
-              console.error('❌ Error confirming reached drop:', error)
+              console.error('âŒ Error confirming reached drop:', error)
 
 
-              console.error('❌ Error details:', {
+              console.error('âŒ Error details:', {
 
 
                 message: error.message,
@@ -11912,7 +11912,7 @@ export default function DeliveryHome() {
       if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === 'function') {
 
 
-        console.log('📸 Using Flutter InAppWebView camera handler')
+        console.log('ðŸ“¸ Using Flutter InAppWebView camera handler')
 
 
 
@@ -11942,7 +11942,7 @@ export default function DeliveryHome() {
 
 
 
-        console.log('📸 Flutter handler response:', result)
+        console.log('ðŸ“¸ Flutter handler response:', result)
 
 
 
@@ -11969,7 +11969,7 @@ export default function DeliveryHome() {
             file = result.file
 
 
-            console.log('✅ Received File object from Flutter')
+            console.log('âœ… Received File object from Flutter')
 
 
           } else if (result.base64) {
@@ -11978,7 +11978,7 @@ export default function DeliveryHome() {
             // If Flutter returns base64, convert to File
 
 
-            console.log('📸 Converting base64 to File object')
+            console.log('ðŸ“¸ Converting base64 to File object')
 
 
             let base64Data = result.base64
@@ -12032,13 +12032,13 @@ export default function DeliveryHome() {
               file = new File([blob], result.fileName || `bill-image-${Date.now()}.jpg`, { type: mimeType })
 
 
-              console.log('✅ Converted base64 to File:', { name: file.name, size: file.size, type: file.type })
+              console.log('âœ… Converted base64 to File:', { name: file.name, size: file.size, type: file.type })
 
 
             } catch (base64Error) {
 
 
-              console.error('❌ Error converting base64 to File:', base64Error)
+              console.error('âŒ Error converting base64 to File:', base64Error)
 
 
               toast.error('Failed to process image. Please try again.')
@@ -12059,7 +12059,7 @@ export default function DeliveryHome() {
             // This would require additional Flutter handler to read file
 
 
-            console.warn('⚠️ File path returned, but file reading not implemented')
+            console.warn('âš ï¸ File path returned, but file reading not implemented')
 
 
             toast.error('File path handling not implemented. Please use base64 or File object.')
@@ -12086,7 +12086,7 @@ export default function DeliveryHome() {
           } else {
 
 
-            console.error('❌ No file data in Flutter response:', result)
+            console.error('âŒ No file data in Flutter response:', result)
 
 
             toast.error('Failed to get image from camera')
@@ -12098,7 +12098,7 @@ export default function DeliveryHome() {
         } else {
 
 
-          console.log('ℹ️ Camera cancelled by user or failed')
+          console.log('â„¹ï¸ Camera cancelled by user or failed')
 
 
         }
@@ -12110,7 +12110,7 @@ export default function DeliveryHome() {
         // Fallback to standard file input for web browsers
 
 
-        console.log('📸 Flutter handler not available, using standard file input')
+        console.log('ðŸ“¸ Flutter handler not available, using standard file input')
 
 
         if (cameraInputRef.current) {
@@ -12128,7 +12128,7 @@ export default function DeliveryHome() {
     } catch (error) {
 
 
-      console.error('❌ Error opening camera:', error)
+      console.error('âŒ Error opening camera:', error)
 
 
       toast.error('Failed to open camera. Please try again.')
@@ -12215,7 +12215,7 @@ export default function DeliveryHome() {
     try {
 
 
-      console.log('📸 Uploading bill image to Cloudinary...')
+      console.log('ðŸ“¸ Uploading bill image to Cloudinary...')
 
 
 
@@ -12251,7 +12251,7 @@ export default function DeliveryHome() {
         if (imageUrl) {
 
 
-          console.log('✅ Bill image uploaded to Cloudinary:', imageUrl)
+          console.log('âœ… Bill image uploaded to Cloudinary:', imageUrl)
 
 
           setBillImageUrl(imageUrl)
@@ -12266,7 +12266,7 @@ export default function DeliveryHome() {
           // The bill image URL will be sent when confirming order ID
 
 
-          console.log('✅ Bill image uploaded to Cloudinary, ready to save to database')
+          console.log('âœ… Bill image uploaded to Cloudinary, ready to save to database')
 
 
           setBillImageUploaded(true)
@@ -12304,7 +12304,7 @@ export default function DeliveryHome() {
     } catch (error) {
 
 
-      console.error('❌ Error uploading bill image:', error)
+      console.error('âŒ Error uploading bill image:', error)
 
 
       toast.error('Failed to upload bill image. Please try again.')
@@ -12492,10 +12492,10 @@ export default function DeliveryHome() {
         // Get order ID from selectedRestaurant
 
 
-        const orderId = selectedRestaurant?.id || selectedRestaurant?.orderId
+        const orderId = selectedRestaurant?.id || selectedRestaurant?.orderId || newOrder?.orderMongoId || newOrder?.orderId || (() => { try { const raw = localStorage.getItem('deliveryActiveOrder'); const parsed = raw ? JSON.parse(raw) : null; return parsed?.orderId || parsed?.restaurantInfo?.id || parsed?.restaurantInfo?.orderId || null } catch { return null } })()
 
 
-        const confirmedOrderId = selectedRestaurant?.orderId
+        const confirmedOrderId = selectedRestaurant?.orderId || newOrder?.orderId || (() => { try { const raw = localStorage.getItem('deliveryActiveOrder'); const parsed = raw ? JSON.parse(raw) : null; return parsed?.restaurantInfo?.orderId || parsed?.orderId || null } catch { return null } })()
 
 
 
@@ -12534,7 +12534,7 @@ export default function DeliveryHome() {
         if (isDelivered) {
 
 
-          console.warn('⚠️ Order is already delivered, skipping order ID confirmation')
+          console.warn('âš ï¸ Order is already delivered, skipping order ID confirmation')
 
 
           toast.error('Order is already delivered. Cannot confirm order ID.')
@@ -12576,7 +12576,7 @@ export default function DeliveryHome() {
         if (isOrderIdAlreadyConfirmed) {
 
 
-          console.warn('⚠️ Order ID is already confirmed, skipping confirmation:', {
+          console.warn('âš ï¸ Order ID is already confirmed, skipping confirmation:', {
 
 
             orderStatus,
@@ -12648,7 +12648,7 @@ export default function DeliveryHome() {
         if (!orderId) {
 
 
-          console.error('❌ No order ID found to confirm')
+          console.error('âŒ No order ID found to confirm')
 
 
           toast.error('Order ID not found. Please try again.')
@@ -12714,7 +12714,7 @@ export default function DeliveryHome() {
           } catch (geoError) {
 
 
-            console.error('❌ Could not get current location:', geoError)
+            console.error('âŒ Could not get current location:', geoError)
 
 
             toast.error('Location not available. Please enable location services.')
@@ -12750,7 +12750,7 @@ export default function DeliveryHome() {
           // Call backend API to confirm order ID with bill image
 
 
-          console.log('📦 Confirming order ID:', {
+          console.log('ðŸ“¦ Confirming order ID:', {
 
 
             orderIdForApi,
@@ -12798,7 +12798,7 @@ export default function DeliveryHome() {
 
 
 
-          console.log('✅ Order ID confirmed, response:', response.data)
+          console.log('âœ… Order ID confirmed, response:', response.data)
 
 
 
@@ -12877,13 +12877,13 @@ export default function DeliveryHome() {
                 // Calculate route from delivery boy's live location to customer using Directions API
 
 
-                console.log('🗺️ Calculating route to customer using Directions API...')
+                console.log('ðŸ—ºï¸ Calculating route to customer using Directions API...')
 
 
-                console.log('📍 From (Delivery Boy Live Location):', currentLocation)
+                console.log('ðŸ“ From (Delivery Boy Live Location):', currentLocation)
 
 
-                console.log('📍 To (Customer):', { lat: customerLat, lng: customerLng })
+                console.log('ðŸ“ To (Customer):', { lat: customerLat, lng: customerLng })
 
 
 
@@ -12910,7 +12910,7 @@ export default function DeliveryHome() {
                   if (directionsResult) {
 
 
-                    console.log('✅ Route to customer calculated with Directions API')
+                    console.log('âœ… Route to customer calculated with Directions API')
 
 
 
@@ -12949,7 +12949,7 @@ export default function DeliveryHome() {
                     setTripTime(totalTime);
 
 
-                    console.log('📊 Total trip calculated:', {
+                    console.log('ðŸ“Š Total trip calculated:', {
 
 
                       totalDistance: totalDistance,
@@ -12991,7 +12991,7 @@ export default function DeliveryHome() {
                     updateLiveTrackingPolyline(directionsResult, currentLocation)
 
 
-                    console.log('✅ Live tracking polyline initialized for customer delivery route')
+                    console.log('âœ… Live tracking polyline initialized for customer delivery route')
 
 
 
@@ -13063,7 +13063,7 @@ export default function DeliveryHome() {
                       } catch (e) {
 
 
-                        console.warn('⚠️ Error cleaning up polyline:', e);
+                        console.warn('âš ï¸ Error cleaning up polyline:', e);
 
 
                       }
@@ -13147,13 +13147,13 @@ export default function DeliveryHome() {
                   if (routeError.message?.includes('REQUEST_DENIED') || routeError.message?.includes('not available')) {
 
 
-                    console.log('⚠️ Directions API not available, using backend route fallback')
+                    console.log('âš ï¸ Directions API not available, using backend route fallback')
 
 
                   } else {
 
 
-                    console.error('❌ Error calculating route to customer:', routeError)
+                    console.error('âŒ Error calculating route to customer:', routeError)
 
 
                   }
@@ -13255,7 +13255,7 @@ export default function DeliveryHome() {
             // Use setTimeout to ensure state updates are processed and useEffect doesn't block it
 
 
-            console.log('✅ Showing Reached Drop popup instantly after Order Picked Up confirmation')
+            console.log('âœ… Showing Reached Drop popup instantly after Order Picked Up confirmation')
 
 
             setTimeout(() => {
@@ -13264,7 +13264,7 @@ export default function DeliveryHome() {
               setShowReachedDropPopup(true)
 
 
-              console.log('✅ Reached Drop popup state set to true')
+              console.log('âœ… Reached Drop popup state set to true')
 
 
             }, 100) // Small delay to ensure showOrderIdConfirmationPopup state is updated
@@ -13276,7 +13276,7 @@ export default function DeliveryHome() {
           } else {
 
 
-            console.error('❌ Failed to confirm order ID:', response.data)
+            console.error('âŒ Failed to confirm order ID:', response.data)
 
 
             toast.error(response.data?.message || 'Failed to confirm order ID. Please try again.')
@@ -13294,7 +13294,7 @@ export default function DeliveryHome() {
           const msg = error.response?.data?.message || error.message || ''
 
 
-          console.error('❌ Error confirming order ID:', { status, message: msg, data: error.response?.data })
+          console.error('âŒ Error confirming order ID:', { status, message: msg, data: error.response?.data })
 
 
           if (isCancelledConflictError(error)) {
@@ -14175,7 +14175,7 @@ export default function DeliveryHome() {
       if (isCashInHandLimitReached) {
 
 
-        toast.error(`Cash in hand limit reached (₹${totalCashLimit.toFixed(2)}). Deposit cash in hand to continue receiving orders.`)
+        toast.error(`Cash in hand limit reached (â‚¹${totalCashLimit.toFixed(2)}). Deposit cash in hand to continue receiving orders.`)
 
 
         clearNewOrder()
@@ -14232,7 +14232,7 @@ export default function DeliveryHome() {
         toast.error(
 
 
-          `COD limit exceeded. Current cash in hand ₹${cashInHand.toFixed(2)}, incoming COD ₹${incomingCodAmount.toFixed(2)}, limit ₹${totalCashLimit.toFixed(2)}. Deposit cash to receive this order.`,
+          `COD limit exceeded. Current cash in hand â‚¹${cashInHand.toFixed(2)}, incoming COD â‚¹${incomingCodAmount.toFixed(2)}, limit â‚¹${totalCashLimit.toFixed(2)}. Deposit cash to receive this order.`,
 
 
         )
@@ -14345,7 +14345,7 @@ export default function DeliveryHome() {
 
 
 
-      console.log('📦 New order received from Socket.IO:', newOrder)
+      console.log('ðŸ“¦ New order received from Socket.IO:', newOrder)
 
 
 
@@ -14411,7 +14411,7 @@ export default function DeliveryHome() {
 
 
 
-      console.log('💰 Earnings from notification:', {
+      console.log('ðŸ’° Earnings from notification:', {
 
 
         earned,
@@ -14737,7 +14737,7 @@ export default function DeliveryHome() {
 
 
 
-      console.log('📍 Recalculated pickup distance:', pickupDistance)
+      console.log('ðŸ“ Recalculated pickup distance:', pickupDistance)
 
 
 
@@ -14794,7 +14794,7 @@ export default function DeliveryHome() {
       const orderId = selectedRestaurant.orderId || selectedRestaurant.id
 
 
-      console.log('🔄 Fetching restaurant address for order:', orderId)
+      console.log('ðŸ”„ Fetching restaurant address for order:', orderId)
 
 
 
@@ -14839,7 +14839,7 @@ export default function DeliveryHome() {
               }))
 
 
-              console.log('✅ Restaurant address fetched and updated:', restaurantAddress)
+              console.log('âœ… Restaurant address fetched and updated:', restaurantAddress)
 
 
             }
@@ -14851,7 +14851,7 @@ export default function DeliveryHome() {
         } catch (error) {
 
 
-          console.error('❌ Error fetching restaurant address:', error)
+          console.error('âŒ Error fetching restaurant address:', error)
 
 
         }
@@ -15584,12 +15584,12 @@ export default function DeliveryHome() {
             console.warn('Failed to persist assigned order restore:', storageError)
           }
 
-          console.log('✅ Restored assigned order flow from API:', restoredAssignedRestaurant.orderId)
+          console.log('âœ… Restored assigned order flow from API:', restoredAssignedRestaurant.orderId)
           return
         }
 
 
-        console.log(`✅ Found ${orders.length} assigned order(s)`)
+        console.log(`âœ… Found ${orders.length} assigned order(s)`)
 
 
 
@@ -15670,7 +15670,7 @@ export default function DeliveryHome() {
         if (pendingOrders.length > 0) {
 
 
-          console.log(`📦 Found ${pendingOrders.length} new pending order(s) to show`)
+          console.log(`ðŸ“¦ Found ${pendingOrders.length} new pending order(s) to show`)
 
 
 
@@ -15694,7 +15694,7 @@ export default function DeliveryHome() {
           if (isOrderAlreadyAccepted(orderId, firstOrder?.orderId, firstOrder?._id?.toString())) {
 
 
-            console.log('⚠️ Order already accepted, skipping:', orderId)
+            console.log('âš ï¸ Order already accepted, skipping:', orderId)
 
 
             return
@@ -15718,7 +15718,7 @@ export default function DeliveryHome() {
 
 
 
-          console.log('📍 Restaurant address extracted from assigned order:', {
+          console.log('ðŸ“ Restaurant address extracted from assigned order:', {
 
 
             address: normalizeAddressLabel(restaurantAddress, 'Restaurant address not available'),
@@ -15917,7 +15917,7 @@ export default function DeliveryHome() {
         } else {
 
 
-          console.log('ℹ️ No pending orders found')
+          console.log('â„¹ï¸ No pending orders found')
 
 
         }
@@ -15926,7 +15926,7 @@ export default function DeliveryHome() {
       } else {
 
 
-        console.log('ℹ️ No orders in response or response format unexpected')
+        console.log('â„¹ï¸ No orders in response or response format unexpected')
 
 
       }
@@ -15935,7 +15935,7 @@ export default function DeliveryHome() {
     } catch (error) {
 
 
-      console.error('❌ Error fetching assigned orders:', error)
+      console.error('âŒ Error fetching assigned orders:', error)
 
 
       // Don't show error to user, just log it
@@ -16424,7 +16424,7 @@ export default function DeliveryHome() {
         // Map div check failed, will re-initialize
 
 
-        console.log('📍 Map container check failed, will re-initialize');
+        console.log('ðŸ“ Map container check failed, will re-initialize');
 
 
       }
@@ -16502,7 +16502,7 @@ export default function DeliveryHome() {
       } catch (error) {
 
 
-        console.warn('⚠️ Error preserving map state:', error);
+        console.warn('âš ï¸ Error preserving map state:', error);
 
 
         preservedState = null;
@@ -16541,7 +16541,7 @@ export default function DeliveryHome() {
       } catch (error) {
 
 
-        console.warn('⚠️ Error removing markers from old map:', error);
+        console.warn('âš ï¸ Error removing markers from old map:', error);
 
 
       }
@@ -16817,7 +16817,7 @@ export default function DeliveryHome() {
           if (!mapContainerRef.current) {
 
 
-            console.error('❌ Map container ref is still null after waiting');
+            console.error('âŒ Map container ref is still null after waiting');
 
 
             setMapLoading(false);
@@ -16841,7 +16841,7 @@ export default function DeliveryHome() {
         if (!window.google || !window.google.maps || !constructorsReady) {
 
 
-          console.error('❌ Google Maps API not available');
+          console.error('âŒ Google Maps API not available');
 
 
           setMapLoading(false);
@@ -16943,7 +16943,7 @@ export default function DeliveryHome() {
 
 
 
-        console.log('📍 Google Maps API check:', {
+        console.log('ðŸ“ Google Maps API check:', {
 
 
           google: !!window.google,
@@ -17018,10 +17018,10 @@ export default function DeliveryHome() {
         } catch (mapError) {
 
 
-          console.error('❌ Error creating Google Map:', mapError);
+          console.error('âŒ Error creating Google Map:', mapError);
 
 
-          console.error('❌ Error details:', {
+          console.error('âŒ Error details:', {
 
 
             message: mapError.message,
@@ -17078,7 +17078,7 @@ export default function DeliveryHome() {
         } catch (eventError) {
 
 
-          console.warn('⚠️ Could not add map event listeners:', eventError);
+          console.warn('âš ï¸ Could not add map event listeners:', eventError);
 
 
         }
@@ -17105,7 +17105,7 @@ export default function DeliveryHome() {
         window.google.maps.event.addListener(map, 'error', (error) => {
 
 
-          console.error('❌ Google Map error:', error);
+          console.error('âŒ Google Map error:', error);
 
 
         });
@@ -17540,7 +17540,7 @@ export default function DeliveryHome() {
       } catch (error) {
 
 
-        console.error('❌ Error initializing Google Map:', error);
+        console.error('âŒ Error initializing Google Map:', error);
 
 
         setMapLoading(false);
@@ -17768,7 +17768,7 @@ export default function DeliveryHome() {
 
 
 
-    console.log('📍 Rider location available, initializing map...')
+    console.log('ðŸ“ Rider location available, initializing map...')
 
 
     // Map initialization will happen in the main useEffect, but we can trigger it
@@ -17786,7 +17786,7 @@ export default function DeliveryHome() {
         const initialCenter = { lat: riderLocation[0], lng: riderLocation[1] }
 
 
-        console.log('📍 Initializing map with rider location:', initialCenter)
+        console.log('ðŸ“ Initializing map with rider location:', initialCenter)
 
 
 
@@ -17855,7 +17855,7 @@ export default function DeliveryHome() {
         window.deliveryMapInstance = map
 
 
-        console.log('✅ Map initialized with rider location')
+        console.log('âœ… Map initialized with rider location')
 
 
 
@@ -17873,7 +17873,7 @@ export default function DeliveryHome() {
       } catch (error) {
 
 
-        console.error('❌ Error initializing map with rider location:', error)
+        console.error('âŒ Error initializing map with rider location:', error)
 
 
         setMapLoading(false)
@@ -17903,7 +17903,7 @@ export default function DeliveryHome() {
   useEffect(() => {
 
 
-    console.log('🔄 Online status effect triggered:', {
+    console.log('ðŸ”„ Online status effect triggered:', {
 
 
       isOnline,
@@ -17969,7 +17969,7 @@ export default function DeliveryHome() {
 
 
 
-      // Create or update bike marker IMMEDIATELY (blue dot की जगह bike icon)
+      // Create or update bike marker IMMEDIATELY (blue dot à¤•à¥€ à¤œà¤—à¤¹ bike icon)
 
 
       createOrUpdateBikeMarker(riderLocation[0], riderLocation[1], heading, true);
@@ -18089,7 +18089,7 @@ export default function DeliveryHome() {
       if (cachedLocation) {
 
 
-        console.log('📍 Using recent cached location:', cachedLocation)
+        console.log('ðŸ“ Using recent cached location:', cachedLocation)
 
 
         createOrUpdateBikeMarker(cachedLocation[0], cachedLocation[1], null, true)
@@ -19299,7 +19299,7 @@ export default function DeliveryHome() {
     } catch (error) {
 
 
-      console.error('❌ Error updating live tracking polyline:', error);
+      console.error('âŒ Error updating live tracking polyline:', error);
 
 
     }
@@ -19584,7 +19584,7 @@ export default function DeliveryHome() {
         if (!currentLocation) {
 
 
-          console.warn('⚠️ No location available for navigation')
+          console.warn('âš ï¸ No location available for navigation')
 
 
           return
@@ -19827,7 +19827,7 @@ export default function DeliveryHome() {
           } catch (e) {
 
 
-            console.warn('⚠️ Error cleaning up polyline:', e);
+            console.warn('âš ï¸ Error cleaning up polyline:', e);
 
 
           }
@@ -20082,10 +20082,10 @@ export default function DeliveryHome() {
       } catch (error) {
 
 
-        console.error('❌ Error initializing directions map:', error);
+        console.error('âŒ Error initializing directions map:', error);
 
 
-        console.error('❌ Error stack:', error.stack);
+        console.error('âŒ Error stack:', error.stack);
 
 
         setDirectionsMapLoading(false);
@@ -20112,7 +20112,7 @@ export default function DeliveryHome() {
         } catch (fallbackError) {
 
 
-          console.error('❌ Fallback also failed:', fallbackError);
+          console.error('âŒ Fallback also failed:', fallbackError);
 
 
         }
@@ -20181,7 +20181,7 @@ export default function DeliveryHome() {
         } catch (cleanupError) {
 
 
-          console.error('❌ Error during cleanup:', cleanupError);
+          console.error('âŒ Error during cleanup:', cleanupError);
 
 
         }
@@ -20406,7 +20406,7 @@ export default function DeliveryHome() {
               } catch (e) {
 
 
-                console.warn('⚠️ Could not create custom polyline:', e);
+                console.warn('âš ï¸ Could not create custom polyline:', e);
 
 
               }
@@ -20424,13 +20424,13 @@ export default function DeliveryHome() {
             if (err.message?.includes('REQUEST_DENIED') || err.message?.includes('not available')) {
 
 
-              console.log('⚠️ Directions API not available, route update skipped');
+              console.log('âš ï¸ Directions API not available, route update skipped');
 
 
             } else {
 
 
-              console.warn('⚠️ Route recalculation failed:', err);
+              console.warn('âš ï¸ Route recalculation failed:', err);
 
 
             }
@@ -20685,7 +20685,7 @@ export default function DeliveryHome() {
       if (!directionsResponse || typeof directionsResponse !== 'object' || !directionsResponse.routes || !Array.isArray(directionsResponse.routes) || directionsResponse.routes.length === 0) {
 
 
-        console.error('❌ Invalid directionsResponse:', directionsResponse);
+        console.error('âŒ Invalid directionsResponse:', directionsResponse);
 
 
         return;
@@ -20703,7 +20703,7 @@ export default function DeliveryHome() {
       if (!directionsResponse.request || !directionsResponse.routes[0]?.legs) {
 
 
-        console.error('❌ directionsResponse is not a valid Google Maps DirectionsResult');
+        console.error('âŒ directionsResponse is not a valid Google Maps DirectionsResult');
 
 
         return;
@@ -20766,7 +20766,7 @@ export default function DeliveryHome() {
 
 
 
-          console.log('📍 Route details:', {
+          console.log('ðŸ“ Route details:', {
 
 
             routes: directionsResponse.routes?.length || 0,
@@ -20805,7 +20805,7 @@ export default function DeliveryHome() {
       } catch (e) {
 
 
-        console.warn('⚠️ Could not create custom polyline:', e);
+        console.warn('âš ï¸ Could not create custom polyline:', e);
 
 
       }
@@ -20883,13 +20883,13 @@ export default function DeliveryHome() {
     } catch (error) {
 
 
-      console.error('❌ Error setting directions on renderer:', error);
+      console.error('âŒ Error setting directions on renderer:', error);
 
 
-      console.error('❌ directionsResponse type:', typeof directionsResponse);
+      console.error('âŒ directionsResponse type:', typeof directionsResponse);
 
 
-      console.error('❌ directionsResponse:', directionsResponse);
+      console.error('âŒ directionsResponse:', directionsResponse);
 
 
     }
@@ -21042,13 +21042,13 @@ export default function DeliveryHome() {
           // If order doesn't exist (404) or any other error, clear localStorage
 
 
-          console.log('⚠️ Error verifying order or order not found:', verifyError.response?.status || verifyError.message);
+          console.log('âš ï¸ Error verifying order or order not found:', verifyError.response?.status || verifyError.message);
 
 
           if (verifyError.response?.status === 404 || verifyError.response?.status === 403) {
 
 
-            console.log('⚠️ Order not found or not assigned, removing from localStorage');
+            console.log('âš ï¸ Order not found or not assigned, removing from localStorage');
 
 
             localStorage.removeItem('deliveryActiveOrder');
@@ -21066,7 +21066,7 @@ export default function DeliveryHome() {
           // For other errors (network, etc.), still try to restore but log warning
 
 
-          console.warn('⚠️ Could not verify order, but restoring anyway:', verifyError.message);
+          console.warn('âš ï¸ Could not verify order, but restoring anyway:', verifyError.message);
 
 
         }
@@ -21485,7 +21485,7 @@ export default function DeliveryHome() {
           } catch (storageError) {
 
 
-            console.warn('⚠️ Failed to persist refreshed active order:', storageError)
+            console.warn('âš ï¸ Failed to persist refreshed active order:', storageError)
 
 
           }
@@ -21689,7 +21689,7 @@ export default function DeliveryHome() {
               }).catch(err => {
 
 
-                console.error('❌ Error recalculating route with Directions API:', err);
+                console.error('âŒ Error recalculating route with Directions API:', err);
 
 
                 // Fallback to coordinates
@@ -21707,7 +21707,7 @@ export default function DeliveryHome() {
                   setShowRoutePath(true);
 
 
-                  console.log('✅ Using fallback route coordinates from localStorage');
+                  console.log('âœ… Using fallback route coordinates from localStorage');
 
 
                 }
@@ -21764,7 +21764,7 @@ export default function DeliveryHome() {
       } catch (error) {
 
 
-        console.error('❌ Error restoring active order:', error);
+        console.error('âŒ Error restoring active order:', error);
 
 
         // Clear localStorage and state if there's an error
@@ -22433,7 +22433,7 @@ export default function DeliveryHome() {
         if (error.response?.status === 404 || error.response?.status === 403) {
 
 
-          console.log('⚠️ Order not found or not assigned, clearing data');
+          console.log('âš ï¸ Order not found or not assigned, clearing data');
 
 
           clearOrderData();
@@ -22649,7 +22649,7 @@ export default function DeliveryHome() {
     if (!orderReady) return
 
 
-    console.log('✅ Order ready event received:', orderReady)
+    console.log('âœ… Order ready event received:', orderReady)
 
 
 
@@ -22718,7 +22718,7 @@ export default function DeliveryHome() {
       setSelectedRestaurant(restaurantInfo)
 
 
-      console.log('🏪 Updated restaurant info from orderReady event:', restaurantInfo)
+      console.log('ðŸª Updated restaurant info from orderReady event:', restaurantInfo)
 
 
     } else if (selectedRestaurant) {
@@ -22796,7 +22796,7 @@ export default function DeliveryHome() {
     // Order is ready: show Reached Pickup popup immediately (no 500m check)
 
 
-    console.log('✅ Order ready – showing Reached Pickup popup')
+    console.log('âœ… Order ready â€“ showing Reached Pickup popup')
 
 
     setShowreachedPickupPopup(true)
@@ -22823,7 +22823,7 @@ export default function DeliveryHome() {
     // Always log to see if useEffect is running
 
 
-    console.log('🔍 Reached Pickup popup useEffect triggered:', {
+    console.log('ðŸ” Reached Pickup popup useEffect triggered:', {
 
 
       showreachedPickupPopup,
@@ -22856,7 +22856,7 @@ export default function DeliveryHome() {
     if (!showreachedPickupPopup) {
 
 
-      console.log('⏭️ Skipping fetch - popup not shown')
+      console.log('â­ï¸ Skipping fetch - popup not shown')
 
 
       return
@@ -22874,7 +22874,7 @@ export default function DeliveryHome() {
     if (!orderId) {
 
 
-      console.log('⏭️ Skipping fetch - no orderId or id found')
+      console.log('â­ï¸ Skipping fetch - no orderId or id found')
 
 
       return
@@ -22901,7 +22901,7 @@ export default function DeliveryHome() {
       selectedRestaurant.address.length > 20) { // Valid address should be longer than default
 
 
-      console.log('⏭️ Skipping fetch - address already exists and seems valid:', selectedRestaurant.address)
+      console.log('â­ï¸ Skipping fetch - address already exists and seems valid:', selectedRestaurant.address)
 
 
       return
@@ -22919,7 +22919,7 @@ export default function DeliveryHome() {
       try {
 
 
-        console.log('📋 Fetching order details for restaurant address, orderId:', orderId)
+        console.log('ðŸ“‹ Fetching order details for restaurant address, orderId:', orderId)
 
 
 
@@ -22946,13 +22946,13 @@ export default function DeliveryHome() {
           // Debug: Log full order structure
 
 
-          console.log('🔍 Full order structure:', JSON.stringify(order, null, 2))
+          console.log('ðŸ” Full order structure:', JSON.stringify(order, null, 2))
 
 
-          console.log('🔍 order.restaurantId:', order.restaurantId)
+          console.log('ðŸ” order.restaurantId:', order.restaurantId)
 
 
-          console.log('🔍 order.restaurantId?.location:', order.restaurantId?.location)
+          console.log('ðŸ” order.restaurantId?.location:', order.restaurantId?.location)
 
 
 
@@ -22994,7 +22994,7 @@ export default function DeliveryHome() {
               }
 
 
-              console.log('✅ Updated selectedRestaurant with fetched address:', {
+              console.log('âœ… Updated selectedRestaurant with fetched address:', {
 
 
                 oldAddress: prev?.address,
@@ -23030,7 +23030,7 @@ export default function DeliveryHome() {
               const restaurantIdString = typeof restaurantId === 'string' ? restaurantId : (restaurantId._id || restaurantId.id || restaurantId.toString())
 
 
-              console.log('🔄 Address not found in order, fetching restaurant details by ID:', restaurantIdString)
+              console.log('ðŸ”„ Address not found in order, fetching restaurant details by ID:', restaurantIdString)
 
 
 
@@ -23048,7 +23048,7 @@ export default function DeliveryHome() {
                   const restaurant = restaurantResponse.data.data.restaurant || restaurantResponse.data.data
 
 
-                  console.log('✅ Fetched restaurant details:', restaurant)
+                  console.log('âœ… Fetched restaurant details:', restaurant)
 
 
 
@@ -23072,7 +23072,7 @@ export default function DeliveryHome() {
                     fetchedAddress = restLocation.formattedAddress
 
 
-                    console.log('✅ Using restaurant.location.formattedAddress:', fetchedAddress)
+                    console.log('âœ… Using restaurant.location.formattedAddress:', fetchedAddress)
 
 
                   } else if (restaurant.address) {
@@ -23081,7 +23081,7 @@ export default function DeliveryHome() {
                     fetchedAddress = restaurant.address
 
 
-                    console.log('✅ Using restaurant.address:', fetchedAddress)
+                    console.log('âœ… Using restaurant.address:', fetchedAddress)
 
 
                   } else if (restLocation?.address) {
@@ -23090,7 +23090,7 @@ export default function DeliveryHome() {
                     fetchedAddress = restLocation.address
 
 
-                    console.log('✅ Using restaurant.location.address:', fetchedAddress)
+                    console.log('âœ… Using restaurant.location.address:', fetchedAddress)
 
 
                   } else if (restLocation?.street) {
@@ -23120,7 +23120,7 @@ export default function DeliveryHome() {
                     fetchedAddress = addressParts.join(', ')
 
 
-                    console.log('✅ Built address from restaurant location components:', fetchedAddress)
+                    console.log('âœ… Built address from restaurant location components:', fetchedAddress)
 
 
                   } else if (restLocation?.addressLine1) {
@@ -23147,7 +23147,7 @@ export default function DeliveryHome() {
                     fetchedAddress = addressParts.join(', ')
 
 
-                    console.log('✅ Built address from restaurant location addressLine1:', fetchedAddress)
+                    console.log('âœ… Built address from restaurant location addressLine1:', fetchedAddress)
 
 
                   } else if (restaurant.street || restaurant.city) {
@@ -23177,7 +23177,7 @@ export default function DeliveryHome() {
                     fetchedAddress = addressParts.join(', ')
 
 
-                    console.log('✅ Built address from restaurant fields:', fetchedAddress)
+                    console.log('âœ… Built address from restaurant fields:', fetchedAddress)
 
 
                   }
@@ -23219,7 +23219,7 @@ export default function DeliveryHome() {
                     updates.ownerPhone = restaurant.ownerPhone || restaurantPhone
 
 
-                    console.log('✅ Fetched restaurant phone:', restaurantPhone)
+                    console.log('âœ… Fetched restaurant phone:', restaurantPhone)
 
 
                   }
@@ -23243,7 +23243,7 @@ export default function DeliveryHome() {
                     }))
 
 
-                    console.log('✅ Updated selectedRestaurant with restaurant API data:', updates)
+                    console.log('âœ… Updated selectedRestaurant with restaurant API data:', updates)
 
 
                     return // Exit early since we got the data
@@ -23252,7 +23252,7 @@ export default function DeliveryHome() {
                   } else {
 
 
-                    console.warn('⚠️ Could not extract address or phone from restaurant data:', {
+                    console.warn('âš ï¸ Could not extract address or phone from restaurant data:', {
 
 
                       restaurantKeys: Object.keys(restaurant),
@@ -23285,7 +23285,7 @@ export default function DeliveryHome() {
               } catch (restaurantError) {
 
 
-                console.error('❌ Error fetching restaurant details:', restaurantError)
+                console.error('âŒ Error fetching restaurant details:', restaurantError)
 
 
               }
@@ -23297,7 +23297,7 @@ export default function DeliveryHome() {
 
 
 
-            console.warn('⚠️ Could not extract restaurant address from order or restaurant API:', {
+            console.warn('âš ï¸ Could not extract restaurant address from order or restaurant API:', {
 
 
               orderKeys: Object.keys(order),
@@ -23324,7 +23324,7 @@ export default function DeliveryHome() {
       } catch (error) {
 
 
-        console.error('❌ Error fetching order details for restaurant address:', error)
+        console.error('âŒ Error fetching order details for restaurant address:', error)
 
 
       }
@@ -23492,7 +23492,7 @@ export default function DeliveryHome() {
       if (showreachedPickupPopup) {
 
 
-        console.log('🚫 Order ID already confirmed, closing Reached Pickup popup')
+        console.log('ðŸš« Order ID already confirmed, closing Reached Pickup popup')
 
 
         setShowreachedPickupPopup(false)
@@ -23546,7 +23546,7 @@ export default function DeliveryHome() {
     if (!showreachedPickupPopup) {
 
 
-      console.log('✅ Order is in pickup phase, showing Reached Pickup popup immediately')
+      console.log('âœ… Order is in pickup phase, showing Reached Pickup popup immediately')
 
 
       setShowreachedPickupPopup(true)
@@ -23968,7 +23968,7 @@ export default function DeliveryHome() {
       if (showreachedPickupPopup) {
 
 
-        console.log('🚫 Order is delivered, closing Reached Pickup popup')
+        console.log('ðŸš« Order is delivered, closing Reached Pickup popup')
 
 
         setShowreachedPickupPopup(false)
@@ -23980,7 +23980,7 @@ export default function DeliveryHome() {
       if (showOrderIdConfirmationPopup) {
 
 
-        console.log('🚫 Order is delivered, closing Order ID Confirmation popup')
+        console.log('ðŸš« Order is delivered, closing Order ID Confirmation popup')
 
 
         setShowOrderIdConfirmationPopup(false)
@@ -23992,7 +23992,7 @@ export default function DeliveryHome() {
       if (showReachedDropPopup && !showOrderDeliveredAnimation && !showCustomerReviewPopup) {
 
 
-        console.log('🚫 Order is delivered, closing Reached Drop popup')
+        console.log('ðŸš« Order is delivered, closing Reached Drop popup')
 
 
         setShowReachedDropPopup(false)
@@ -24010,7 +24010,7 @@ export default function DeliveryHome() {
       if (!showPaymentPage && !showCustomerReviewPopup && !showOrderDeliveredAnimation && selectedRestaurant) {
 
 
-        console.log('✅ Order is delivered and payment completed, clearing selectedRestaurant')
+        console.log('âœ… Order is delivered and payment completed, clearing selectedRestaurant')
 
 
         setSelectedRestaurant(null)
@@ -24454,7 +24454,7 @@ export default function DeliveryHome() {
             if (riderPos && window.deliveryMapInstance) {
 
 
-              // Update live tracking polyline with route to customer (Restaurant → Customer)
+              // Update live tracking polyline with route to customer (Restaurant â†’ Customer)
 
 
               updateLiveTrackingPolyline(directionsResult, riderPos);
@@ -24526,7 +24526,7 @@ export default function DeliveryHome() {
               } catch (e) {
 
 
-                console.warn('⚠️ Error cleaning up old polyline:', e);
+                console.warn('âš ï¸ Error cleaning up old polyline:', e);
 
 
               }
@@ -24616,7 +24616,7 @@ export default function DeliveryHome() {
         }).catch(error => {
 
 
-          console.warn('⚠️ Error calculating route to customer after pickup:', error);
+          console.warn('âš ï¸ Error calculating route to customer after pickup:', error);
 
 
           // Fallback on route calculation error
@@ -24634,7 +24634,7 @@ export default function DeliveryHome() {
             updateRoutePolyline(fallbackDeliveryRoute);
 
 
-            console.log('✅ Using rider-to-customer fallback polyline after pickup error');
+            console.log('âœ… Using rider-to-customer fallback polyline after pickup error');
 
 
           }
@@ -24784,7 +24784,7 @@ export default function DeliveryHome() {
           setSelectedRestaurant(prev => prev ? { ...prev, customerLat: lat, customerLng: lng } : null)
 
 
-          console.log('✅ Reached Drop: customer location loaded from getOrderDetails', { lat, lng })
+          console.log('âœ… Reached Drop: customer location loaded from getOrderDetails', { lat, lng })
 
 
         }
@@ -24796,7 +24796,7 @@ export default function DeliveryHome() {
       .catch(err => {
 
 
-        console.warn('⚠️ Reached Drop: getOrderDetails failed for customer coords:', err?.response?.data?.message || err.message)
+        console.warn('âš ï¸ Reached Drop: getOrderDetails failed for customer coords:', err?.response?.data?.message || err.message)
 
 
       })
@@ -25087,7 +25087,7 @@ export default function DeliveryHome() {
     if (distanceInMeters <= 600) { // Log when within 600m (slightly more than threshold)
 
 
-      console.log(`📍 Distance to customer: ${distanceInMeters.toFixed(2)} meters`, {
+      console.log(`ðŸ“ Distance to customer: ${distanceInMeters.toFixed(2)} meters`, {
 
 
         riderPos: riderPos,
@@ -25153,7 +25153,7 @@ export default function DeliveryHome() {
     if (distanceInMeters <= 1000) {
 
 
-      console.log(`📍 Distance to customer: ${distanceInMeters.toFixed(2)} meters (popup shown instantly, not based on distance)`, {
+      console.log(`ðŸ“ Distance to customer: ${distanceInMeters.toFixed(2)} meters (popup shown instantly, not based on distance)`, {
 
 
         orderId: selectedRestaurant?.orderId || selectedRestaurant?.id,
@@ -25468,7 +25468,7 @@ export default function DeliveryHome() {
         } catch (error) {
 
 
-          console.warn('⚠️ Error rotating bike icon:', error);
+          console.warn('âš ï¸ Error rotating bike icon:', error);
 
 
           // Fallback to original image if rotation fails
@@ -25858,7 +25858,7 @@ export default function DeliveryHome() {
 
 
 
-      console.log('✅ Bike marker created:', {
+      console.log('âœ… Bike marker created:', {
 
 
         position: { lat: latitude, lng: longitude },
@@ -25954,7 +25954,7 @@ export default function DeliveryHome() {
       if (currentMap === null || currentMap !== map) {
 
 
-        console.warn('⚠️ Bike marker not on correct map, re-adding...', {
+        console.warn('âš ï¸ Bike marker not on correct map, re-adding...', {
 
 
           currentMap: currentMap,
@@ -25981,7 +25981,7 @@ export default function DeliveryHome() {
       // Verify coordinates are correct before setting
 
 
-      console.log('📍 Updating bike marker position:', {
+      console.log('ðŸ“ Updating bike marker position:', {
 
 
         lat: latitude,
@@ -26026,7 +26026,7 @@ export default function DeliveryHome() {
       } else {
 
 
-        console.error('❌ Invalid coordinates for bike marker:', { latitude, longitude });
+        console.error('âŒ Invalid coordinates for bike marker:', { latitude, longitude });
 
 
         return; // Don't update if coordinates are invalid
@@ -28945,7 +28945,7 @@ export default function DeliveryHome() {
                       <p className="text-xs text-gray-700 mt-1">
 
 
-                        Cash in hand has reached the delivery cash limit (₹{totalCashLimit.toFixed(2)}). Deposit cash in hand to continue receiving orders.
+                        Cash in hand has reached the delivery cash limit (â‚¹{totalCashLimit.toFixed(2)}). Deposit cash in hand to continue receiving orders.
 
 
                       </p>
@@ -29035,7 +29035,7 @@ export default function DeliveryHome() {
                         longitude < -180 || longitude > 180) {
 
 
-                        console.warn("⚠️ Invalid coordinates received:", { latitude, longitude })
+                        console.warn("âš ï¸ Invalid coordinates received:", { latitude, longitude })
 
 
                         setIsRefreshingLocation(false)
@@ -29134,7 +29134,7 @@ export default function DeliveryHome() {
 
 
 
-                      // Update bike marker (only if online - blue dot नहीं, bike icon)
+                      // Update bike marker (only if online - blue dot à¤¨à¤¹à¥€à¤‚, bike icon)
 
 
                       if (window.deliveryMapInstance) {
@@ -29200,7 +29200,7 @@ export default function DeliveryHome() {
 
 
 
-                      console.log("📍 Location refreshed:", {
+                      console.log("ðŸ“ Location refreshed:", {
 
 
                         latitude,
@@ -30025,7 +30025,7 @@ export default function DeliveryHome() {
                 <div className="relative z-10">
 
 
-                  <div className="text-white text-3xl font-bold mb-1">₹6,000                 <span className="text-white/90 text-base font-medium mb-1">referral bonus</span>
+                  <div className="text-white text-3xl font-bold mb-1">â‚¹6,000                 <span className="text-white/90 text-base font-medium mb-1">referral bonus</span>
 
 
                   </div>
@@ -30067,7 +30067,7 @@ export default function DeliveryHome() {
                 <div className="flex items-center text-center justify-center gap-2 mb-2">
 
 
-                  <div className="text-4xl font-bold text-center">₹100</div>
+                  <div className="text-4xl font-bold text-center">â‚¹100</div>
 
 
                   <Lock className="w-5 h-5 text-white" />
@@ -30076,7 +30076,7 @@ export default function DeliveryHome() {
                 </div>
 
 
-                <p className="text-white/90 text-center text-sm mb-4">Complete 1 order to unlock ₹100</p>
+                <p className="text-white/90 text-center text-sm mb-4">Complete 1 order to unlock â‚¹100</p>
 
 
                 <div className="flex items-center text-center justify-center gap-2 text-white/70 text-xs mb-4">
@@ -30214,7 +30214,7 @@ export default function DeliveryHome() {
                     <div className="bg-black text-white px-4 py-3 rounded-lg text-center min-w-[80px]">
 
 
-                      <div className="text-2xl font-bold">₹{earningsGuaranteeTarget.toFixed(0)}</div>
+                      <div className="text-2xl font-bold">â‚¹{earningsGuaranteeTarget.toFixed(0)}</div>
 
 
                       <div className="text-xs text-white/80 mt-1">{hasActiveOffer ? `${earningsGuaranteeOrdersTarget} orders` : "This week"}</div>
@@ -30472,7 +30472,7 @@ export default function DeliveryHome() {
                         <div className="absolute inset-0 flex items-center justify-center">
 
 
-                          <span className="text-lg font-bold text-gray-900">₹{earningsGuaranteeCurrentEarnings.toFixed(2)}</span>
+                          <span className="text-lg font-bold text-gray-900">â‚¹{earningsGuaranteeCurrentEarnings.toFixed(2)}</span>
 
 
                         </div>
@@ -31768,7 +31768,7 @@ export default function DeliveryHome() {
                     <p className="text-4xl font-bold text-gray-900 mb-2">
 
 
-                      ₹{(() => {
+                      â‚¹{(() => {
 
 
                         const earnings = newOrder?.estimatedEarnings || selectedRestaurant?.estimatedEarnings || 0;
@@ -31783,7 +31783,7 @@ export default function DeliveryHome() {
 
 
 
-                        console.log('💰 Display earnings calculation:', {
+                        console.log('ðŸ’° Display earnings calculation:', {
 
 
                           earnings,
@@ -31897,13 +31897,13 @@ export default function DeliveryHome() {
                             <p className="text-green-700 text-xs">
 
 
-                              Base: ₹{earnings.basePayout?.toFixed(0) || '0'}
+                              Base: â‚¹{earnings.basePayout?.toFixed(0) || '0'}
 
 
                               {earnings.distanceCommission > 0 && (
 
 
-                                <> + Distance ({earnings.distance?.toFixed(1)} km × ₹{earnings.commissionPerKm?.toFixed(0)}/km) = ₹{earnings.distanceCommission?.toFixed(0)}</>
+                                <> + Distance ({earnings.distance?.toFixed(1)} km Ã— â‚¹{earnings.commissionPerKm?.toFixed(0)}/km) = â‚¹{earnings.distanceCommission?.toFixed(0)}</>
 
 
                               )}
@@ -31918,7 +31918,7 @@ export default function DeliveryHome() {
                               <p className="text-green-600 text-xs mt-1">
 
 
-                                Note: Distance {earnings.distance?.toFixed(1)} km ≤ {earnings.minDistance} km, per km commission not applicable
+                                Note: Distance {earnings.distance?.toFixed(1)} km â‰¤ {earnings.minDistance} km, per km commission not applicable
 
 
                               </p>
@@ -32870,7 +32870,7 @@ export default function DeliveryHome() {
 
 
 
-                console.log('📞 Checking phone in selectedRestaurant:', {
+                console.log('ðŸ“ž Checking phone in selectedRestaurant:', {
 
 
                   phone: selectedRestaurant?.phone,
@@ -32903,13 +32903,13 @@ export default function DeliveryHome() {
                   try {
 
 
-                    console.log('📞 [CALL] Phone not found in selectedRestaurant, fetching order details from backend...')
+                    console.log('ðŸ“ž [CALL] Phone not found in selectedRestaurant, fetching order details from backend...')
 
 
                     const orderId = selectedRestaurant.orderId || selectedRestaurant.id
 
 
-                    console.log('📞 [CALL] Fetching order details for orderId:', orderId)
+                    console.log('ðŸ“ž [CALL] Fetching order details for orderId:', orderId)
 
 
 
@@ -32918,7 +32918,7 @@ export default function DeliveryHome() {
                     const response = await deliveryAPI.getOrderDetails(orderId)
 
 
-                    console.log('📞 [CALL] Order details API response:', JSON.stringify(response.data, null, 2))
+                    console.log('ðŸ“ž [CALL] Order details API response:', JSON.stringify(response.data, null, 2))
 
 
 
@@ -32936,7 +32936,7 @@ export default function DeliveryHome() {
                     if (order) {
 
 
-                      console.log('📞 [CALL] Order data extracted from API:', {
+                      console.log('ðŸ“ž [CALL] Order data extracted from API:', {
 
 
                         hasRestaurantId: !!order.restaurantId,
@@ -32990,7 +32990,7 @@ export default function DeliveryHome() {
 
 
 
-                      console.log('📞 [CALL] Phone extracted from order:', restaurantPhone)
+                      console.log('ðŸ“ž [CALL] Phone extracted from order:', restaurantPhone)
 
 
 
@@ -33017,7 +33017,7 @@ export default function DeliveryHome() {
                         })
 
 
-                        console.log('✅ [CALL] Updated selectedRestaurant with phone:', restaurantPhone)
+                        console.log('âœ… [CALL] Updated selectedRestaurant with phone:', restaurantPhone)
 
 
                       }
@@ -33050,7 +33050,7 @@ export default function DeliveryHome() {
                           try {
 
 
-                            console.log('📞 [CALL] Trying restaurant API directly with ID:', restaurantId)
+                            console.log('ðŸ“ž [CALL] Trying restaurant API directly with ID:', restaurantId)
 
 
                             const restaurantResponse = await restaurantAPI.getRestaurantById(restaurantId)
@@ -33086,7 +33086,7 @@ export default function DeliveryHome() {
                                 })
 
 
-                                console.log('✅ [CALL] Updated selectedRestaurant with phone from restaurant API:', restaurantPhone)
+                                console.log('âœ… [CALL] Updated selectedRestaurant with phone from restaurant API:', restaurantPhone)
 
 
                               }
@@ -33098,7 +33098,7 @@ export default function DeliveryHome() {
                           } catch (restaurantError) {
 
 
-                            console.error('❌ [CALL] Error fetching restaurant by ID:', restaurantError)
+                            console.error('âŒ [CALL] Error fetching restaurant by ID:', restaurantError)
 
 
                           }
@@ -33116,7 +33116,7 @@ export default function DeliveryHome() {
                       if (!restaurantPhone) {
 
 
-                        console.warn('⚠️ [CALL] Phone not found in order.restaurantId object:', order.restaurantId)
+                        console.warn('âš ï¸ [CALL] Phone not found in order.restaurantId object:', order.restaurantId)
 
 
                       }
@@ -33125,7 +33125,7 @@ export default function DeliveryHome() {
                     } else {
 
 
-                      console.warn('⚠️ [CALL] Order details API response format unexpected - order not found in response:', {
+                      console.warn('âš ï¸ [CALL] Order details API response format unexpected - order not found in response:', {
 
 
                         responseKeys: Object.keys(response.data || {}),
@@ -33143,16 +33143,16 @@ export default function DeliveryHome() {
                   } catch (error) {
 
 
-                    console.error('❌ [CALL] Error fetching order details for phone:', error)
+                    console.error('âŒ [CALL] Error fetching order details for phone:', error)
 
 
-                    console.error('❌ [CALL] Error message:', error.message)
+                    console.error('âŒ [CALL] Error message:', error.message)
 
 
-                    console.error('❌ [CALL] Error response:', error.response?.data)
+                    console.error('âŒ [CALL] Error response:', error.response?.data)
 
 
-                    console.error('❌ [CALL] Error status:', error.response?.status)
+                    console.error('âŒ [CALL] Error status:', error.response?.status)
 
 
                   }
@@ -33161,7 +33161,7 @@ export default function DeliveryHome() {
                 } else if (!selectedRestaurant?.orderId) {
 
 
-                  console.warn('⚠️ [CALL] Cannot fetch phone - orderId not found in selectedRestaurant:', selectedRestaurant)
+                  console.warn('âš ï¸ [CALL] Cannot fetch phone - orderId not found in selectedRestaurant:', selectedRestaurant)
 
 
                 }
@@ -33179,7 +33179,7 @@ export default function DeliveryHome() {
                   const cleanPhone = restaurantPhone.replace(/[^\d+]/g, '')
 
 
-                  console.log('📞 Calling restaurant:', { original: restaurantPhone, clean: cleanPhone })
+                  console.log('ðŸ“ž Calling restaurant:', { original: restaurantPhone, clean: cleanPhone })
 
 
                   window.location.href = `tel:${cleanPhone}`
@@ -33191,7 +33191,7 @@ export default function DeliveryHome() {
                   toast.error('Restaurant phone number not available. Please contact support.')
 
 
-                  console.error('❌ Restaurant phone not found in any path:', {
+                  console.error('âŒ Restaurant phone not found in any path:', {
 
 
                     selectedRestaurant,
@@ -33257,7 +33257,7 @@ export default function DeliveryHome() {
                   toast.error('Restaurant location not available')
 
 
-                  console.error('❌ Restaurant coordinates not found:', {
+                  console.error('âŒ Restaurant coordinates not found:', {
 
 
                     lat: restaurantLat,
@@ -33281,7 +33281,7 @@ export default function DeliveryHome() {
 
 
 
-                console.log('🗺️ Opening Google Maps navigation to restaurant:', {
+                console.log('ðŸ—ºï¸ Opening Google Maps navigation to restaurant:', {
 
 
                   lat: restaurantLat,
@@ -33413,7 +33413,7 @@ export default function DeliveryHome() {
                 // Show success message
 
 
-                toast.success('Opening Google Maps navigation 🗺️', {
+                toast.success('Opening Google Maps navigation ðŸ—ºï¸', {
 
 
                   duration: 2000
@@ -33740,7 +33740,7 @@ export default function DeliveryHome() {
               <p className="text-gray-600 text-sm mb-3 text-center">
 
 
-                {billImageUploaded ? '✅ Bill image uploaded' : 'Please capture bill image'}
+                {billImageUploaded ? 'âœ… Bill image uploaded' : 'Please capture bill image'}
 
 
               </p>
@@ -34577,7 +34577,7 @@ export default function DeliveryHome() {
             <h1 className="text-2xl font-bold text-gray-900 mb-2">
 
 
-              Great job! Delivery complete 👍
+              Great job! Delivery complete ðŸ‘
 
 
             </h1>
@@ -34730,7 +34730,7 @@ export default function DeliveryHome() {
                   <span className={`text-lg font-bold ${isCod ? 'text-amber-700' : 'text-emerald-700'}`}>
 
 
-                    ₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    â‚¹{total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
 
 
                   </span>
@@ -35024,13 +35024,13 @@ export default function DeliveryHome() {
                   {star <= customerRating ? (
 
 
-                    <span className="text-yellow-400">★</span>
+                    <span className="text-yellow-400">â˜…</span>
 
 
                   ) : (
 
 
-                    <span className="text-gray-300">★</span>
+                    <span className="text-gray-300">â˜…</span>
 
 
                   )}
@@ -35129,7 +35129,7 @@ export default function DeliveryHome() {
                   try {
 
 
-                    console.log('📝 Submitting review and completing delivery:', {
+                    console.log('ðŸ“ Submitting review and completing delivery:', {
 
 
                       orderId: orderIdForApi,
@@ -35192,10 +35192,10 @@ export default function DeliveryHome() {
 
 
 
-                      console.log('✅ Delivery completed and earnings added to wallet:', earnings)
+                      console.log('âœ… Delivery completed and earnings added to wallet:', earnings)
 
 
-                      console.log('✅ Wallet transaction:', response.data.data?.walletTransaction)
+                      console.log('âœ… Wallet transaction:', response.data.data?.walletTransaction)
 
 
 
@@ -35216,7 +35216,7 @@ export default function DeliveryHome() {
                       if (earnings > 0) {
 
 
-                        toast.success(`₹${earnings.toFixed(2)} added to your wallet! 💰`)
+                        toast.success(`â‚¹${earnings.toFixed(2)} added to your wallet! ðŸ’°`)
 
 
                       }
@@ -35237,7 +35237,7 @@ export default function DeliveryHome() {
                     } else {
 
 
-                      console.error('❌ Failed to submit review:', response.data)
+                      console.error('âŒ Failed to submit review:', response.data)
 
 
                       toast.error(response.data?.message || 'Failed to submit review. Please try again.')
@@ -35249,7 +35249,7 @@ export default function DeliveryHome() {
                   } catch (error) {
 
 
-                    console.error('❌ Error submitting review:', error)
+                    console.error('âŒ Error submitting review:', error)
 
 
                     if (isCancelledConflictError(error)) {
@@ -35381,7 +35381,7 @@ export default function DeliveryHome() {
               <p className="text-5xl font-bold text-gray-900">
 
 
-                ₹{(() => {
+                â‚¹{(() => {
 
 
                   if (orderEarnings > 0) {
@@ -35417,7 +35417,7 @@ export default function DeliveryHome() {
               </p>
 
 
-              <p className="text-green-600 text-sm mt-2">💰 Added to your wallet</p>
+              <p className="text-green-600 text-sm mt-2">ðŸ’° Added to your wallet</p>
 
 
             </div>
@@ -35450,7 +35450,7 @@ export default function DeliveryHome() {
                     <span className="text-gray-600">Trip pay</span>
 
 
-                    <span className="text-gray-900 font-semibold">₹{(() => {
+                    <span className="text-gray-900 font-semibold">â‚¹{(() => {
 
 
                       let earnings = 0;
@@ -35504,7 +35504,7 @@ export default function DeliveryHome() {
                     <span className="text-gray-600">Long distance return pay</span>
 
 
-                    <span className="text-gray-900 font-semibold">₹5.00</span>
+                    <span className="text-gray-900 font-semibold">â‚¹5.00</span>
 
 
                   </div>
@@ -35519,7 +35519,7 @@ export default function DeliveryHome() {
                     <span className="text-lg font-bold text-gray-900">Total Earnings</span>
 
 
-                    <span className="text-lg font-bold text-gray-900">₹{(() => {
+                    <span className="text-lg font-bold text-gray-900">â‚¹{(() => {
 
 
                       if (orderEarnings > 0) {
@@ -35703,6 +35703,8 @@ export default function DeliveryHome() {
 
 
 }
+
+
 
 
 
