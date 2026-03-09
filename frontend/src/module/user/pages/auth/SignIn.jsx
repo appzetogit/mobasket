@@ -78,6 +78,14 @@ export default function SignIn() {
   })
   const redirectHandledRef = useRef(false)
 
+  const getFirebaseAuthInstance = () => {
+    const isInitialized = ensureFirebaseInitialized()
+    if (!isInitialized || !firebaseAuth) {
+      return null
+    }
+    return firebaseAuth
+  }
+
   // Helper function to process signed-in user
   const processSignedInUser = async (user, source = "unknown") => {
     if (redirectHandledRef.current) {
@@ -144,13 +152,13 @@ export default function SignIn() {
         const hasQueryParams = window.location.search.length > 0
 
 
-        const { getRedirectResult, onAuthStateChanged } = await import("firebase/auth")
+        const { getRedirectResult } = await import("firebase/auth")
 
-        // Ensure Firebase is initialized
-        ensureFirebaseInitialized()
-
-        // Check current user immediately (before getRedirectResult)
-        const immediateUser = firebaseAuth.currentUser
+        const auth = getFirebaseAuthInstance()
+        if (!auth) {
+          setIsLoading(false)
+          return
+        }
 
         // First, try to get redirect result (non-blocking with timeout)
         // Note: getRedirectResult returns null if there's no redirect result (normal on first load)
@@ -159,7 +167,7 @@ export default function SignIn() {
         try {
           // Use a short timeout (3 seconds) - if it hangs, auth state listener will handle it
           result = await Promise.race([
-            getRedirectResult(firebaseAuth),
+            getRedirectResult(auth),
             new Promise((resolve) =>
               setTimeout(() => {
                 resolve(null)
@@ -176,7 +184,7 @@ export default function SignIn() {
           await processSignedInUser(result.user, "redirect-result")
         } else {
           // No redirect result - check if user is already signed in
-          const currentUser = firebaseAuth.currentUser
+          const currentUser = auth.currentUser
 
           if (currentUser && !redirectHandledRef.current) {
             // Process current user
@@ -290,9 +298,12 @@ export default function SignIn() {
     const setupAuthListener = async () => {
       try {
         const { onAuthStateChanged } = await import("firebase/auth")
-        ensureFirebaseInitialized()
+        const auth = getFirebaseAuthInstance()
+        if (!auth) {
+          return
+        }
 
-        unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
+        unsubscribe = onAuthStateChanged(auth, async (user) => {
           // If user signed in and we haven't handled it yet
           if (user && !redirectHandledRef.current) {
             await processSignedInUser(user, "auth-state-listener")
@@ -312,8 +323,11 @@ export default function SignIn() {
     // Also check current user immediately (in case redirect already completed)
     const checkCurrentUser = async () => {
       try {
-        ensureFirebaseInitialized()
-        const currentUser = firebaseAuth.currentUser
+        const auth = getFirebaseAuthInstance()
+        if (!auth) {
+          return
+        }
+        const currentUser = auth.currentUser
         if (currentUser && !redirectHandledRef.current) {
           await processSignedInUser(currentUser, "immediate-check")
         }
@@ -532,16 +546,15 @@ export default function SignIn() {
     redirectHandledRef.current = false // Reset flag when starting new sign-in
 
     try {
-      ensureFirebaseInitialized()
-
-      if (!firebaseAuth) {
+      const auth = getFirebaseAuthInstance()
+      if (!auth) {
         throw new Error("Firebase Auth is not initialized. Please check your Firebase configuration.")
       }
 
       const { signInWithPopup, signInWithRedirect } = await import("firebase/auth")
 
       try {
-        const popupResult = await signInWithPopup(firebaseAuth, googleProvider)
+        const popupResult = await signInWithPopup(auth, googleProvider)
         if (popupResult?.user) {
           await processSignedInUser(popupResult.user, "google-popup")
           return
@@ -558,7 +571,7 @@ export default function SignIn() {
           throw popupError
         }
 
-        await signInWithRedirect(firebaseAuth, googleProvider)
+        await signInWithRedirect(auth, googleProvider)
         return
       }
     } catch (error) {
