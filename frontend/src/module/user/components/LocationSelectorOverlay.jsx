@@ -54,6 +54,25 @@ const hasCompleteAddress = ({ formattedAddress = "", street = "", area = "", pos
   return !isCoordinateAddressText(text) && text !== "Select location" && parts.length >= 4 && (hasPin || hasStreet)
 }
 
+const isGenericLocalityText = (value, city = "", state = "") => {
+  const text = normalizeAddressText(value).toLowerCase()
+  if (!text) return true
+  if (text.includes("district") || text.includes("division") || text.includes("zone")) return true
+  const cityText = normalizeAddressText(city).toLowerCase()
+  const stateText = normalizeAddressText(state).toLowerCase()
+  return text === cityText || text === stateText
+}
+
+const getPreferredAddressDetail = ({ street = "", area = "", city = "", state = "" } = {}) => {
+  const safeStreet = normalizeAddressText(street)
+  if (safeStreet && !isGenericLocalityText(safeStreet, city, state)) return safeStreet
+
+  const safeArea = normalizeAddressText(area)
+  if (safeArea && !isGenericLocalityText(safeArea, city, state)) return safeArea
+
+  return [normalizeAddressText(city), normalizeAddressText(state)].filter(Boolean).join(", ")
+}
+
 export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const navigate = useNavigate()
   const inputRef = useRef(null)
@@ -791,36 +810,52 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         return
       }
 
-      console.log("✅ Fresh location received:", {
-        formattedAddress: locationData?.formattedAddress,
-        address: locationData?.address,
-        city: locationData?.city,
-        state: locationData?.state,
-        area: locationData?.area,
-        coordinates: locationData?.latitude && locationData?.longitude ? 
-          `${locationData.latitude.toFixed(8)}, ${locationData.longitude.toFixed(8)}` : "N/A",
-        hasCompleteAddress: locationData?.formattedAddress && 
-          locationData.formattedAddress.split(',').length >= 4
-      })
-      
-      // Verify we got complete address (but don't fail if incomplete - still use the location)
-      if (!locationData?.formattedAddress || 
-          locationData.formattedAddress === "Select location" ||
-          locationData.formattedAddress.split(',').length < 4) {
-        console.warn("⚠️ Location received but address is incomplete. Will try to get better address from map...")
-        // Don't retry immediately - let the map handle address fetching
-        // The address will be fetched when map moves to the location
-      }
+      const normalizedFormattedAddress = normalizeAddressText(
+        locationData?.formattedAddress || locationData?.address || ""
+      )
+      const fallbackAddressText = getPreferredAddressDetail({
+        street: locationData?.street,
+        area: locationData?.area,
+        city: locationData?.city,
+        state: locationData?.state,
+      })
+      const locationIsComplete = hasCompleteAddress({
+        formattedAddress: normalizedFormattedAddress,
+        street: locationData?.street,
+        area: locationData?.area,
+        postalCode: locationData?.postalCode,
+      })
+      const sanitizedAddressForSave =
+        (locationIsComplete ? normalizedFormattedAddress : fallbackAddressText) || ""
+      const sanitizedFormattedAddressForSave =
+        locationIsComplete ? normalizedFormattedAddress : ""
+
+      console.log("✅ Fresh location received:", {
+        formattedAddress: locationData?.formattedAddress,
+        address: locationData?.address,
+        city: locationData?.city,
+        state: locationData?.state,
+        area: locationData?.area,
+        coordinates: locationData?.latitude && locationData?.longitude ? 
+          `${locationData.latitude.toFixed(8)}, ${locationData.longitude.toFixed(8)}` : "N/A",
+        hasCompleteAddress: locationIsComplete
+      })
+      
+      // Verify we got complete address (but don't fail if incomplete - still use the location)
+      if (!locationIsComplete) {
+        console.warn("⚠️ Location received but address is incomplete. Will try to get better address from map...")
+        // Don't retry immediately - let the map handle address fetching
+        // The address will be fetched when map moves to the location
+      }
       
       // CRITICAL: Ensure location state is updated in the hook
       // The requestLocation function already updates the state, but we verify here
-      console.log("✅✅✅ Final location data to be saved:", {
-        formattedAddress: locationData?.formattedAddress,
-        address: locationData?.address,
-        mainTitle: locationData?.mainTitle,
-        hasCompleteAddress: locationData?.formattedAddress && 
-          locationData.formattedAddress.split(',').length >= 4
-      })
+      console.log("✅✅✅ Final location data to be saved:", {
+        formattedAddress: locationData?.formattedAddress,
+        address: locationData?.address,
+        mainTitle: locationData?.mainTitle,
+        hasCompleteAddress: locationIsComplete
+      })
       
       // Save location to backend with ALL fields
       if (locationData?.latitude && locationData?.longitude) {
@@ -828,11 +863,11 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           await userAPI.updateLocation({
             latitude: locationData.latitude,
             longitude: locationData.longitude,
-            address: locationData.address || locationData.formattedAddress || "",
+            address: sanitizedAddressForSave,
             city: locationData.city || "",
             state: locationData.state || "",
             area: locationData.area || "",
-            formattedAddress: locationData.formattedAddress || locationData.address || "",
+            formattedAddress: sanitizedFormattedAddressForSave,
             accuracy: locationData.accuracy,
             postalCode: locationData.postalCode,
             street: locationData.street,
@@ -859,17 +894,52 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         // setShowAddressForm(true)
         
         // Update address form data with complete address (for when user opens form)
-        if (locationData.formattedAddress) {
-          setCurrentAddress(locationData.formattedAddress)
-          setAddressFormData(prev => ({
-            ...prev,
-            street: locationData.street || locationData.area || prev.street,
-            city: locationData.city || prev.city,
-            state: locationData.state || prev.state,
-            zipCode: locationData.postalCode || prev.zipCode,
-            additionalDetails: locationData.formattedAddress || prev.additionalDetails,
-          }))
-        }
+        if (locationData.formattedAddress || locationData.address) {
+          const effectiveFormattedAddress = normalizeAddressText(
+            locationData.formattedAddress || locationData.address || ""
+          )
+          const completeFormAddress = hasCompleteAddress({
+            formattedAddress: effectiveFormattedAddress,
+            street: locationData.street,
+            area: locationData.area,
+            postalCode: locationData.postalCode,
+          })
+          const fallbackDetails = getPreferredAddressDetail({
+            street: locationData.street,
+            area: locationData.area,
+            city: locationData.city,
+            state: locationData.state,
+          })
+
+          const displayAddress = completeFormAddress
+            ? effectiveFormattedAddress
+            : (fallbackDetails || [locationData.city, locationData.state].map((part) => normalizeAddressText(part)).filter(Boolean).join(", "))
+
+          if (displayAddress && !isCoordinateAddressText(displayAddress)) {
+            setCurrentAddress(displayAddress)
+          }
+          setAddressFormData((prev) => {
+            const previousDetails = normalizeAddressText(prev.additionalDetails)
+            const safePreviousDetails =
+              previousDetails &&
+              !isCoordinateAddressText(previousDetails) &&
+              previousDetails !== "Select location" &&
+              !isGenericLocalityText(previousDetails, prev.city, prev.state)
+                ? previousDetails
+                : ""
+
+            return {
+              ...prev,
+              street: locationData.street || locationData.area || prev.street,
+              city: locationData.city || prev.city,
+              state: locationData.state || prev.state,
+              zipCode: locationData.postalCode || prev.zipCode,
+              additionalDetails: completeFormAddress
+                ? effectiveFormattedAddress
+                : (fallbackDetails || safePreviousDetails),
+            }
+          })
+        }
         
         // Update map if it's initialized
         if (googleMapRef.current && window.google && window.google.maps) {
@@ -897,7 +967,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       }
       
       // Success toast with address preview
-      const addressPreview = locationData?.formattedAddress || locationData?.address || "Location updated"
+      const addressPreview = sanitizedAddressForSave || "Location updated"
       toast.success(`Location updated: ${addressPreview.split(',').slice(0, 2).join(', ')}`, {
         id: "location-request",
         duration: 2000,
@@ -1549,18 +1619,34 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           street = firstPart || area || city || ''
         }
 
-        setCurrentAddress(formattedAddress)
-        setAddressFormData((prev) => ({
-          ...prev,
-          street: normalizeAddressText(street) || prev.street,
-          city: normalizeAddressText(city) || prev.city,
-          state: normalizeAddressText(state) || prev.state,
-          zipCode: normalizeAddressText(postalCode) || prev.zipCode,
-          additionalDetails:
-            (hasCompleteAddress({ formattedAddress, street, area, postalCode })
-              ? normalizeAddressText(formattedAddress)
-              : normalizeAddressText(area) || normalizeAddressText(street) || prev.additionalDetails),
-        }))
+        const isCompleteMapAddress = hasCompleteAddress({ formattedAddress, street, area, postalCode })
+        const mapDisplayAddress = isCompleteMapAddress
+          ? normalizeAddressText(formattedAddress)
+          : getPreferredAddressDetail({ street, area, city, state }) || "Select location"
+
+        setCurrentAddress(mapDisplayAddress)
+        setAddressFormData((prev) => {
+          const previousDetails = normalizeAddressText(prev.additionalDetails)
+          const safePreviousDetails =
+            previousDetails &&
+            !isCoordinateAddressText(previousDetails) &&
+            previousDetails !== "Select location" &&
+            !isGenericLocalityText(previousDetails, prev.city, prev.state)
+              ? previousDetails
+              : ""
+
+          return {
+            ...prev,
+            street: normalizeAddressText(street) || prev.street,
+            city: normalizeAddressText(city) || prev.city,
+            state: normalizeAddressText(state) || prev.state,
+            zipCode: normalizeAddressText(postalCode) || prev.zipCode,
+            additionalDetails:
+              (isCompleteMapAddress
+                ? normalizeAddressText(formattedAddress)
+                : getPreferredAddressDetail({ street, area, city, state }) || safePreviousDetails),
+          }
+        })
 
         lastReverseGeocodeCoordsRef.current = { lat: roundedLat, lng: roundedLng }
         lastReverseGeocodeAtRef.current = Date.now()
@@ -1902,19 +1988,45 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
   const handleSelectSavedAddress = async (address) => {
     try {
+      const rawFormattedAddress = normalizeAddressText(
+        String(address?.formattedAddress || address?.fullAddress || "").trim()
+      )
+      const normalizedAdditionalDetails = normalizeAddressText(address?.additionalDetails || "")
+      const sanitizedArea = !isGenericLocalityText(
+        normalizedAdditionalDetails,
+        address?.city || "",
+        address?.state || ""
+      )
+        ? normalizedAdditionalDetails
+        : ""
+      const preferredAddressDetail = getPreferredAddressDetail({
+        street: address?.street || "",
+        area: sanitizedArea,
+        city: address?.city || "",
+        state: address?.state || "",
+      })
       const fullFormattedAddress =
-        String(address?.formattedAddress || address?.fullAddress || "").trim() ||
+        rawFormattedAddress ||
         [
-          address?.additionalDetails,
+          preferredAddressDetail,
           address?.street,
           address?.city,
           address?.state,
           address?.zipCode,
-        ].filter(Boolean).join(", ")
+        ].map((part) => normalizeAddressText(part)).filter(Boolean).join(", ")
+      const hasCompleteSavedAddress = hasCompleteAddress({
+        formattedAddress: fullFormattedAddress,
+        street: address?.street || "",
+        area: sanitizedArea,
+        postalCode: address?.zipCode || "",
+      })
+      const sanitizedSavedDisplayAddress = hasCompleteSavedAddress
+        ? fullFormattedAddress
+        : (preferredAddressDetail || [address?.city, address?.state].map((part) => normalizeAddressText(part)).filter(Boolean).join(", "))
 
       const primaryAddressLine =
+        preferredAddressDetail ||
         String(address?.street || "").trim() ||
-        String(address?.additionalDetails || "").trim() ||
         String(address?.city || "").trim()
 
       // Get coordinates from address location
@@ -1930,8 +2042,8 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           address: primaryAddressLine,
           city: address.city,
           state: address.state,
-          area: address.additionalDetails || "",
-          formattedAddress: fullFormattedAddress
+          area: sanitizedArea,
+          formattedAddress: hasCompleteSavedAddress ? fullFormattedAddress : ""
         })
       }
 
@@ -1940,14 +2052,14 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         city: address.city,
         state: address.state,
         address: primaryAddressLine,
-        area: address.additionalDetails || "",
+        area: sanitizedArea,
         zipCode: address.zipCode,
         latitude,
         longitude,
-        formattedAddress: fullFormattedAddress
+        formattedAddress: hasCompleteSavedAddress ? fullFormattedAddress : ""
       }
       localStorage.setItem("userLocation", JSON.stringify(locationData))
-      setCurrentAddress(fullFormattedAddress || primaryAddressLine)
+      setCurrentAddress(sanitizedSavedDisplayAddress || primaryAddressLine)
       
       // Update map position to show selected address
       setMapPosition([latitude, longitude])
@@ -1958,7 +2070,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         city: address.city || "",
         state: address.state || "",
         zipCode: address.zipCode || "",
-        additionalDetails: fullFormattedAddress || address.additionalDetails || "",
+        additionalDetails: sanitizedSavedDisplayAddress || "",
         label: address.label || "Home",
         phone: address.phone || "",
       })
@@ -2480,6 +2592,11 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
 
 
+
+
+
+
+
 
 
 
