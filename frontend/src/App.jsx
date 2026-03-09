@@ -360,6 +360,17 @@ export default function App() {
           }
         />
         <Route
+          path="/store/orders/:orderId"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <OrderDetails />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/store/feedback"
           element={
             <ProtectedRoute
@@ -525,6 +536,17 @@ export default function App() {
           }
         />
         <Route
+          path="/store/conversation/:conversationId"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <ChatDetailPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/store/privacy"
           element={
             <ProtectedRoute
@@ -547,6 +569,17 @@ export default function App() {
           }
         />
         <Route
+          path="/store/content-policy"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <ContentPolicyPublic />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/store/coupon"
           element={
             <ProtectedRoute
@@ -554,6 +587,28 @@ export default function App() {
               loginPath="/store/login"
             >
               <CouponListPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/store/coupon/new"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <AddCouponPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/store/coupon/:id/edit"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <EditCouponPage />
             </ProtectedRoute>
           }
         />
@@ -858,6 +913,17 @@ export default function App() {
               loginPath="/restaurant/login"
             >
               <TermsAndConditionsPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/restaurant/content-policy"
+          element={
+            <ProtectedRoute
+              requiredRole="restaurant"
+              loginPath="/restaurant/login"
+            >
+              <ContentPolicyPublic />
             </ProtectedRoute>
           }
         />

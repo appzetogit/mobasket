@@ -381,6 +381,11 @@ export default function GroceryStoreLogin() {
   }, [companyName])
 
   const openPolicyModal = async (type) => {
+    if (type === "content") {
+      navigate("/store/content-policy")
+      return
+    }
+
     const modalTitleByType = {
       terms: "Terms of Service",
       privacy: "Privacy Policy",
@@ -392,13 +397,8 @@ export default function GroceryStoreLogin() {
       title: modalTitleByType[type] || "Policy",
       loading: true,
       content: "",
-      fallbackUrl: type === "content" ? policyLinks.contentPolicyUrl : "",
+      fallbackUrl: "",
     })
-
-    if (type === "content") {
-      setPolicyModal((prev) => ({ ...prev, loading: false }))
-      return
-    }
 
     try {
       const endpoint = type === "terms" ? API_ENDPOINTS.ADMIN.TERMS_PUBLIC : API_ENDPOINTS.ADMIN.PRIVACY_PUBLIC

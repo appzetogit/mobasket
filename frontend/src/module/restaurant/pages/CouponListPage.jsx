@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
 import Lenis from "lenis"
 import { 
   ArrowLeft,
@@ -15,6 +15,9 @@ import { formatCurrency, usdToInr } from "../utils/currency"
 
 export default function CouponListPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const isStore = location.pathname.startsWith("/store")
+  const baseRoute = isStore ? "/store" : "/restaurant"
   const [showMenu, setShowMenu] = useState(false)
   const [openMenuId, setOpenMenuId] = useState(null)
 
@@ -128,7 +131,7 @@ export default function CouponListPage() {
                             {[
                               { 
                                 label: "Edit Coupon", 
-                                action: () => navigate(`/restaurant/coupon/${coupon.id}/edit`) 
+                                action: () => navigate(`${baseRoute}/coupon/${coupon.id}/edit`) 
                               },
                               { label: "Delete Coupon", action: () => console.log("Delete:", coupon.id), isDanger: true }
                             ].map((option, idx) => (
@@ -222,7 +225,7 @@ export default function CouponListPage() {
         whileHover={{ scale: 1.1 }}
         whileTap={{ scale: 0.9 }}
         onClick={() => {
-          navigate("/restaurant/coupon/new")
+          navigate(`${baseRoute}/coupon/new`)
         }}
         className="fixed bottom-20 md:bottom-6 right-4 md:right-6 w-14 h-14 bg-[#ff8100] hover:bg-[#e67300] text-white rounded-full shadow-lg flex items-center justify-center z-40 transition-colors"
       >

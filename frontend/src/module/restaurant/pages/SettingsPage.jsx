@@ -68,7 +68,7 @@ export default function SettingsPage() {
       id: "preferences",
       title: "Preferences",
       items: [
-        { id: "language", label: "Language", icon: Globe, route: "/restaurant/language", value: "English" },
+        { id: "language", label: "Language", icon: Globe, route: `${prefix}/language`, value: "English" },
         { id: "theme", label: "Theme", icon: darkMode ? Moon : Sun, hasToggle: true, toggleValue: darkMode, onToggle: setDarkMode },
       ]
     },

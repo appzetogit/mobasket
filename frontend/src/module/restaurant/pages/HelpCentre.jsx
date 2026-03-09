@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import { motion } from "framer-motion"
 import { 
   ChevronLeft, 
@@ -15,47 +15,50 @@ import {
 } from "lucide-react"
 import BottomNavOrders from "../components/BottomNavOrders"
 
-const helpTopics = [
-  {
-    id: 1,
-    icon: Power,
-    title: "Outlet online / offline status",
-    subtitle: "Current status & details",
-    path: "/restaurant/delivery-settings"
-  },
-  {
-    id: 2,
-    icon: Utensils,
-    title: "Order related issues",
-    subtitle: "Cancellations & delivery related concerns",
-    path: "/restaurant/orders/all"
-  },
-  {
-    id: 3,
-    icon: Building2,
-    title: "Restaurant",
-    subtitle: "Timings, contacts, FSSAI, bank details, location etc.",
-    path: "/restaurant/outlet-info"
-  },
-  {
-    id: 5,
-    icon: FileText,
-    title: "Menu",
-    subtitle: "Items, photos, prices, charges etc.",
-    path: "/restaurant/hub-menu"
-  },
-  {
-    id: 6,
-    icon: Wallet,
-    title: "Payments",
-    subtitle: "Statement of account, invoices etc.",
-    path: "/restaurant/hub-finance"
-  }
-]
-
 export default function HelpCentre() {
+  const location = useLocation()
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState("")
+  const isStore = location.pathname.startsWith("/store")
+  const baseRoute = isStore ? "/store" : "/restaurant"
+
+  const helpTopics = [
+    {
+      id: 1,
+      icon: Power,
+      title: "Outlet online / offline status",
+      subtitle: "Current status & details",
+      path: `${baseRoute}/delivery-settings`
+    },
+    {
+      id: 2,
+      icon: Utensils,
+      title: "Order related issues",
+      subtitle: "Cancellations & delivery related concerns",
+      path: `${baseRoute}/orders/all`
+    },
+    {
+      id: 3,
+      icon: Building2,
+      title: isStore ? "Store" : "Restaurant",
+      subtitle: "Timings, contacts, FSSAI, bank details, location etc.",
+      path: `${baseRoute}/outlet-info`
+    },
+    {
+      id: 5,
+      icon: FileText,
+      title: "Menu",
+      subtitle: "Items, photos, prices, charges etc.",
+      path: isStore ? "/store/products/all" : "/restaurant/hub-menu"
+    },
+    {
+      id: 6,
+      icon: Wallet,
+      title: "Payments",
+      subtitle: "Statement of account, invoices etc.",
+      path: isStore ? "/store/wallet" : "/restaurant/hub-finance"
+    }
+  ]
 
   const filteredTopics = helpTopics.filter(topic =>
     topic.title.toLowerCase().includes(searchQuery.toLowerCase()) ||

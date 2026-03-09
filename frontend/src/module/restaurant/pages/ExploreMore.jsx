@@ -1208,7 +1208,7 @@ export default function ExploreMore() {
                     className="hover:text-gray-700 transition-colors border-b border-dotted border-gray-400"
                     onClick={(e) => {
                       e.preventDefault()
-                      navigate("/legal/content-policy")
+                      navigate(isGroceryStore ? "/store/content-policy" : "/restaurant/content-policy")
                     }}
                   >
                     Code of Conduct

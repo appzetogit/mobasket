@@ -34,6 +34,7 @@ export default function OutletInfo() {
   const navigate = useNavigate()
   const location = useLocation()
   const isGroceryStoreRoute = location.pathname.startsWith("/store")
+  const baseRoute = isGroceryStoreRoute ? "/store" : "/restaurant"
   
   // State management
   const [restaurantData, setRestaurantData] = useState(null)
@@ -751,7 +752,7 @@ export default function OutletInfo() {
           <div className="flex flex-col gap-2">
             {/* Delivery Reviews */}
             <button
-              onClick={() => navigate("/restaurant/ratings-reviews")}
+              onClick={() => navigate(`${baseRoute}/ratings-reviews`)}
               className="flex items-center gap-2 text-left w-full"
             >
               <div className="bg-green-700 px-2.5 py-1.5 rounded flex items-center gap-1 shrink-0">
@@ -824,7 +825,7 @@ export default function OutletInfo() {
               </p>
             </div>
             <button
-              onClick={() => navigate("/restaurant/edit-cuisines")}
+              onClick={() => navigate(`${baseRoute}/edit-cuisines`)}
               disabled={isGroceryStoreRoute}
               className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0 self-start"
             >
@@ -851,7 +852,7 @@ export default function OutletInfo() {
               </div>
             </div>
             <button
-              onClick={() => navigate("/restaurant/edit-address")}
+              onClick={() => navigate(`${baseRoute}/edit-address`)}
               disabled={isGroceryStoreRoute}
               className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0 self-start"
             >
@@ -869,7 +870,7 @@ export default function OutletInfo() {
         >
           {/* Outlet Timings Card */}
           <button
-            onClick={() => navigate(isGroceryStoreRoute ? "/store/outlet-timings" : "/restaurant/outlet-timings")}
+            onClick={() => navigate(`${baseRoute}/outlet-timings`)}
             className="w-full bg-blue-100/50 rounded-lg p-4 border border-blue-300 flex items-center justify-between hover:bg-gray-50 transition-colors"
           >
             <div className="flex items-center gap-3">
@@ -881,7 +882,7 @@ export default function OutletInfo() {
 
           {/* Contact Details Card */}
           <button
-            onClick={() => navigate("/restaurant/contact-details")}
+            onClick={() => navigate(`${baseRoute}/contact-details`)}
             disabled={isGroceryStoreRoute}
             className="w-full bg-blue-100/50 rounded-lg p-4 border border-blue-300 flex items-center justify-between hover:bg-gray-50 transition-colors"
           >

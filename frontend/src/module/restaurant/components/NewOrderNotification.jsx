@@ -1,6 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { Bell, X, ShoppingBag, MapPin, Clock, IndianRupee } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 /**
  * New Order Notification Component
@@ -8,6 +8,9 @@ import { useNavigate } from 'react-router-dom';
  */
 export default function NewOrderNotification({ order, onClose, onViewOrder }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const isStore = location.pathname.startsWith('/store');
+  const baseRoute = isStore ? '/store' : '/restaurant';
 
   if (!order) return null;
 
@@ -15,7 +18,7 @@ export default function NewOrderNotification({ order, onClose, onViewOrder }) {
     if (onViewOrder) {
       onViewOrder(order);
     } else {
-      navigate(`/restaurant/orders/${order.orderMongoId || order.orderId}`);
+      navigate(`${baseRoute}/orders/${order.orderMongoId || order.orderId}`);
     }
     onClose();
   };
