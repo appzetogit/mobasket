@@ -784,6 +784,10 @@ export const groceryStoreAPI = {
     return apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.FCM_TOKEN, { token, platform });
   },
 
+  reverify: () => {
+    return apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.REVERIFY);
+  },
+
   // Onboarding
   getOnboarding: () => {
     return apiClient.get(API_ENDPOINTS.GROCERY_STORE.ONBOARDING);
