@@ -21,8 +21,8 @@ const adminPushNotificationSchema = new mongoose.Schema(
     },
     sendTo: {
       type: String,
-      enum: ['Customer', 'Delivery Man', 'Restaurant'],
-      default: 'Restaurant',
+      enum: ['Customer', 'All', 'Restaurant', 'Store'],
+      default: 'Customer',
     },
     platform: {
       type: String,

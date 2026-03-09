@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from "react"
-import { BarChart3, ChevronDown, Info, Settings, FileText, FileSpreadsheet, Code, Loader2 } from "lucide-react"
+import { useNavigate } from "react-router-dom"
+import { BarChart3, ChevronDown, Info, FileText, FileSpreadsheet, Code, Loader2 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { exportTransactionReportToCSV, exportTransactionReportToExcel, exportTransactionReportToPDF, exportTransactionReportToJSON } from "../../components/reports/reportsExportUtils"
 import { adminAPI } from "@/lib/api"
+import { usePlatform } from "../../context/PlatformContext"
 import { toast } from "sonner"
 
 // Import icons from Transaction-report-icons
@@ -18,8 +19,18 @@ import searchIcon from "../../assets/Dashboard-icons/image8.png"
 import exportIcon from "../../assets/Dashboard-icons/image9.png"
 
 export default function TransactionReport() {
+  const PAGE_SIZE = 25
+  const navigate = useNavigate()
+  const { platform } = usePlatform()
   const [searchQuery, setSearchQuery] = useState("")
   const [transactions, setTransactions] = useState([])
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pagination, setPagination] = useState({
+    page: 1,
+    limit: PAGE_SIZE,
+    total: 0,
+    pages: 1
+  })
   const [loading, setLoading] = useState(true)
   const [summary, setSummary] = useState({
     completedTransaction: 0,
@@ -30,34 +41,51 @@ export default function TransactionReport() {
   })
   const [filters, setFilters] = useState({
     zone: "All Zones",
-    restaurant: "All restaurants",
+    restaurant: `All ${platform === "mogrocery" ? "stores" : "restaurants"}`,
     time: "All Time",
   })
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [zones, setZones] = useState([])
   const [restaurants, setRestaurants] = useState([])
+  const isGroceryPlatform = platform === "mogrocery"
+  const outletLabel = isGroceryPlatform ? "stores" : "restaurants"
+
+  useEffect(() => {
+    setFilters((prev) => ({
+      ...prev,
+      restaurant: `All ${outletLabel}`
+    }))
+    setCurrentPage(1)
+  }, [outletLabel])
 
   // Fetch zones and restaurants for filters
   useEffect(() => {
     const fetchFilterData = async () => {
       try {
         // Fetch zones
-        const zonesResponse = await adminAPI.getZones({ limit: 1000 })
+        const zonesResponse = await adminAPI.getZones({ limit: 1000, platform })
         if (zonesResponse?.data?.success && zonesResponse.data.data?.zones) {
           setZones(zonesResponse.data.data.zones)
         }
 
-        // Fetch restaurants
-        const restaurantsResponse = await adminAPI.getRestaurants({ limit: 1000 })
-        if (restaurantsResponse?.data?.success && restaurantsResponse.data.data?.restaurants) {
-          setRestaurants(restaurantsResponse.data.data.restaurants)
+        if (isGroceryPlatform) {
+          const storesResponse = await adminAPI.getGroceryStores({ limit: 1000, isActive: true })
+          const stores = storesResponse?.data?.data?.stores || storesResponse?.data?.stores || []
+          setRestaurants(Array.isArray(stores) ? stores : [])
+        } else {
+          const restaurantsResponse = await adminAPI.getRestaurants({ limit: 1000, platform: "mofood" })
+          if (restaurantsResponse?.data?.success && restaurantsResponse.data.data?.restaurants) {
+            setRestaurants(restaurantsResponse.data.data.restaurants)
+          } else {
+            setRestaurants([])
+          }
         }
       } catch (error) {
         console.error("Error fetching filter data:", error)
+        setRestaurants([])
       }
     }
     fetchFilterData()
-  }, [])
+  }, [platform, isGroceryPlatform])
 
   // Fetch transaction report data
   useEffect(() => {
@@ -86,16 +114,24 @@ export default function TransactionReport() {
         const params = {
           search: searchQuery || undefined,
           zone: filters.zone !== "All Zones" ? filters.zone : undefined,
-          restaurant: filters.restaurant !== "All restaurants" ? filters.restaurant : undefined,
+          restaurant: filters.restaurant !== `All ${outletLabel}` ? filters.restaurant : undefined,
           fromDate: fromDate ? fromDate.toISOString() : undefined,
           toDate: toDate ? toDate.toISOString() : undefined,
-          limit: 1000
+          platform,
+          page: currentPage,
+          limit: PAGE_SIZE
         }
 
         const response = await adminAPI.getTransactionReport(params)
 
         if (response?.data?.success && response.data.data) {
           setTransactions(response.data.data.transactions || [])
+          setPagination(response.data.data.pagination || {
+            page: currentPage,
+            limit: PAGE_SIZE,
+            total: 0,
+            pages: 1
+          })
           setSummary(response.data.data.summary || {
             completedTransaction: 0,
             refundedTransaction: 0,
@@ -113,17 +149,24 @@ export default function TransactionReport() {
         console.error("Error fetching transaction report:", error)
         toast.error("Failed to fetch transaction report")
         setTransactions([])
+        setPagination({
+          page: 1,
+          limit: PAGE_SIZE,
+          total: 0,
+          pages: 1
+        })
       } finally {
         setLoading(false)
       }
     }
 
     fetchTransactionReport()
-  }, [searchQuery, filters])
+  }, [searchQuery, filters, platform, currentPage])
 
   const filteredTransactions = useMemo(() => {
     return transactions // Backend already filters, so just return transactions
   }, [transactions])
+  const totalPages = Math.max(1, Number(pagination?.pages || 1))
 
   const handleExport = (format) => {
     if (filteredTransactions.length === 0) {
@@ -145,22 +188,42 @@ export default function TransactionReport() {
   const handleResetFilters = () => {
     setFilters({
       zone: "All Zones",
-      restaurant: "All restaurants",
+      restaurant: `All ${outletLabel}`,
       time: "All Time",
+    })
+    setCurrentPage(1)
+  }
+  const handlePageChange = (newPage) => {
+    if (newPage < 1 || newPage > totalPages || newPage === currentPage) return
+    setCurrentPage(newPage)
+  }
+
+  const activeFiltersCount = (filters.zone !== "All Zones" ? 1 : 0) + (filters.restaurant !== `All ${outletLabel}` ? 1 : 0) + (filters.time !== "All Time" ? 1 : 0)
+
+  const formatCurrency = (amount = 0) => {
+    if (amount >= 1000) {
+      return `${(amount / 1000).toFixed(2)}K`
+    }
+    return Number(amount || 0).toFixed(2)
+  }
+
+  const formatFullCurrency = (amount = 0) => {
+    return Number(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  }
+
+  const getPlatformOrdersPath = () => (
+    platform === "mogrocery" ? "/admin/grocery-orders/all" : "/admin/orders/all"
+  )
+
+  const handleOrderIdClick = (orderId) => {
+    navigate(getPlatformOrdersPath(), {
+      state: { prefillOrderSearch: orderId }
     })
   }
 
-  const activeFiltersCount = (filters.zone !== "All Zones" ? 1 : 0) + (filters.restaurant !== "All restaurants" ? 1 : 0) + (filters.time !== "All Time" ? 1 : 0)
-
-  const formatCurrency = (amount) => {
-    if (amount >= 1000) {
-      return `$ ${(amount / 1000).toFixed(2)}K`
-    }
-    return `$ ${amount.toFixed(2)}`
-  }
-
-  const formatFullCurrency = (amount) => {
-    return `$ ${amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const goToOrdersStatus = (statusKey = "all") => {
+    const basePath = platform === "mogrocery" ? "/admin/grocery-orders" : "/admin/orders"
+    navigate(`${basePath}/${statusKey}`)
   }
 
   if (loading) {
@@ -193,7 +256,10 @@ export default function TransactionReport() {
             <div className="relative flex-1 min-w-0">
               <select
                 value={filters.zone}
-                onChange={(e) => setFilters(prev => ({ ...prev, zone: e.target.value }))}
+                onChange={(e) => {
+                  setFilters(prev => ({ ...prev, zone: e.target.value }))
+                  setCurrentPage(1)
+                }}
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
                 <option value="All Zones">All Zones</option>
@@ -207,12 +273,17 @@ export default function TransactionReport() {
             <div className="relative flex-1 min-w-0">
               <select
                 value={filters.restaurant}
-                onChange={(e) => setFilters(prev => ({ ...prev, restaurant: e.target.value }))}
+                onChange={(e) => {
+                  setFilters(prev => ({ ...prev, restaurant: e.target.value }))
+                  setCurrentPage(1)
+                }}
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
-                <option value="All restaurants">All restaurants</option>
+                <option value={`All ${outletLabel}`}>{`All ${outletLabel}`}</option>
                 {restaurants.map(restaurant => (
-                  <option key={restaurant._id} value={restaurant.name}>{restaurant.name}</option>
+                  <option key={restaurant._id || restaurant.id || restaurant.restaurantId} value={restaurant.name || restaurant.storeName}>
+                    {restaurant.name || restaurant.storeName}
+                  </option>
                 ))}
               </select>
               <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-500 pointer-events-none" />
@@ -221,7 +292,10 @@ export default function TransactionReport() {
             <div className="relative flex-1 min-w-0">
               <select
                 value={filters.time}
-                onChange={(e) => setFilters(prev => ({ ...prev, time: e.target.value }))}
+                onChange={(e) => {
+                  setFilters(prev => ({ ...prev, time: e.target.value }))
+                  setCurrentPage(1)
+                }}
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
                 <option value="All Time">All Time</option>
@@ -259,7 +333,12 @@ export default function TransactionReport() {
           {/* Left Column - Large Cards */}
           <div className="space-y-3">
             {/* Completed Transaction - Green */}
-            <div className="rounded-lg shadow-sm border border-slate-200 p-4" style={{ backgroundColor: '#f1f5f9' }}>
+            <button
+              type="button"
+              onClick={() => goToOrdersStatus("delivered")}
+              className="w-full rounded-lg shadow-sm border border-slate-200 p-4 text-left hover:bg-slate-100 transition-colors cursor-pointer"
+              style={{ backgroundColor: '#f1f5f9' }}
+            >
               <div className="relative mb-3 flex justify-center">
                 <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center">
                   <img src={completedIcon} alt="Completed" className="w-12 h-12" />
@@ -272,10 +351,15 @@ export default function TransactionReport() {
                 <p className="text-xl font-bold text-green-600 mb-1">{formatCurrency(summary.completedTransaction)}</p>
                 <p className="text-sm text-slate-600 leading-tight">Completed Transaction</p>
               </div>
-            </div>
+            </button>
 
             {/* Refunded Transaction - Red */}
-            <div className="rounded-lg shadow-sm border border-slate-200 p-4" style={{ backgroundColor: '#f1f5f9' }}>
+            <button
+              type="button"
+              onClick={() => goToOrdersStatus("refunded")}
+              className="w-full rounded-lg shadow-sm border border-slate-200 p-4 text-left hover:bg-slate-100 transition-colors cursor-pointer"
+              style={{ backgroundColor: '#f1f5f9' }}
+            >
               <div className="relative mb-3 flex justify-center">
                 <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center">
                   <img src={refundedIcon} alt="Refunded" className="w-12 h-12" />
@@ -288,13 +372,18 @@ export default function TransactionReport() {
                 <p className="text-xl font-bold text-red-600 mb-1">{formatFullCurrency(summary.refundedTransaction)}</p>
                 <p className="text-sm text-slate-600 leading-tight">Refunded Transaction</p>
               </div>
-            </div>
+            </button>
           </div>
 
           {/* Right Column - Small Cards */}
           <div className="space-y-3">
             {/* Admin Earning */}
-            <div className="rounded-lg shadow-sm border border-slate-200 p-3" style={{ backgroundColor: '#f1f5f9' }}>
+            <button
+              type="button"
+              onClick={() => goToOrdersStatus("all")}
+              className="w-full rounded-lg shadow-sm border border-slate-200 p-3 text-left hover:bg-slate-100 transition-colors cursor-pointer"
+              style={{ backgroundColor: '#f1f5f9' }}
+            >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
@@ -309,10 +398,15 @@ export default function TransactionReport() {
                 </div>
                 <p className="text-base font-bold text-slate-900">{formatCurrency(summary.adminEarning)}</p>
               </div>
-            </div>
+            </button>
 
             {/* Restaurant Earning */}
-            <div className="rounded-lg shadow-sm border border-slate-200 p-3" style={{ backgroundColor: '#f1f5f9' }}>
+            <button
+              type="button"
+              onClick={() => goToOrdersStatus("all")}
+              className="w-full rounded-lg shadow-sm border border-slate-200 p-3 text-left hover:bg-slate-100 transition-colors cursor-pointer"
+              style={{ backgroundColor: '#f1f5f9' }}
+            >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
@@ -327,10 +421,15 @@ export default function TransactionReport() {
                 </div>
                 <p className="text-base font-bold text-green-600">{formatCurrency(summary.restaurantEarning)}</p>
               </div>
-            </div>
+            </button>
 
             {/* Deliveryman Earning */}
-            <div className="rounded-lg shadow-sm border border-slate-200 p-3" style={{ backgroundColor: '#f1f5f9' }}>
+            <button
+              type="button"
+              onClick={() => goToOrdersStatus("all")}
+              className="w-full rounded-lg shadow-sm border border-slate-200 p-3 text-left hover:bg-slate-100 transition-colors cursor-pointer"
+              style={{ backgroundColor: '#f1f5f9' }}
+            >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
@@ -345,14 +444,14 @@ export default function TransactionReport() {
                 </div>
                 <p className="text-base font-bold text-orange-600">{formatCurrency(summary.deliverymanEarning)}</p>
               </div>
-            </div>
+            </button>
           </div>
         </div>
 
         {/* Order Transactions Section */}
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
-            <h2 className="text-base font-bold text-slate-900">Order Transactions {filteredTransactions.length}</h2>
+            <h2 className="text-base font-bold text-slate-900">Order Transactions {pagination.total || 0}</h2>
 
             <div className="flex items-center gap-2">
               <div className="relative flex-1 sm:flex-initial min-w-[180px]">
@@ -360,7 +459,10 @@ export default function TransactionReport() {
                   type="text"
                   placeholder="Search by Order ID"
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value)
+                    setCurrentPage(1)
+                  }}
                   className="pl-7 pr-2 py-1.5 w-full text-[11px] rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <img src={searchIcon} alt="Search" className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3" />
@@ -395,12 +497,6 @@ export default function TransactionReport() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
-              <button 
-                onClick={() => setIsSettingsOpen(true)}
-                className="p-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-all"
-              >
-                <Settings className="w-3 h-3" />
-              </button>
             </div>
           </div>
 
@@ -440,10 +536,16 @@ export default function TransactionReport() {
                       className="hover:bg-slate-50 transition-colors"
                     >
                       <td className="px-1.5 py-1">
-                        <span className="text-[10px] font-medium text-slate-700">{index + 1}</span>
+                        <span className="text-[10px] font-medium text-slate-700">{((currentPage - 1) * PAGE_SIZE) + index + 1}</span>
                       </td>
                       <td className="px-1.5 py-1">
-                        <span className="text-[10px] text-slate-700">{transaction.orderId}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleOrderIdClick(transaction.orderId)}
+                          className="text-[10px] text-blue-600 hover:underline cursor-pointer"
+                        >
+                          {transaction.orderId}
+                        </button>
                       </td>
                       <td className="px-1.5 py-1">
                         <span className="text-[10px] text-slate-700 truncate block">{transaction.restaurant}</span>
@@ -492,33 +594,51 @@ export default function TransactionReport() {
               </tbody>
             </table>
           </div>
+
+          <div className="flex items-center justify-between mt-3">
+            <p className="text-[10px] text-slate-500">
+              Showing{" "}
+              <span className="font-semibold text-slate-700">
+                {filteredTransactions.length === 0 ? 0 : ((currentPage - 1) * PAGE_SIZE) + 1}
+                {" - "}
+                {((currentPage - 1) * PAGE_SIZE) + filteredTransactions.length}
+              </span>{" "}
+              of <span className="font-semibold text-slate-700">{pagination.total || 0}</span> transactions
+            </p>
+
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => handlePageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="px-2 py-1 text-[10px] rounded border border-slate-300 text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
+              >
+                Prev
+              </button>
+              {Array.from({ length: totalPages }).map((_, idx) => (
+                <button
+                  key={idx + 1}
+                  onClick={() => handlePageChange(idx + 1)}
+                  className={`w-6 h-6 text-[10px] rounded border ${
+                    currentPage === idx + 1
+                      ? "bg-blue-600 border-blue-600 text-white"
+                      : "border-slate-300 text-slate-700 hover:bg-slate-50"
+                  }`}
+                >
+                  {idx + 1}
+                </button>
+              ))}
+              <button
+                onClick={() => handlePageChange(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                className="px-2 py-1 text-[10px] rounded border border-slate-300 text-slate-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Settings Dialog */}
-      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
-        <DialogContent className="max-w-md bg-white p-0 opacity-0 data-[state=open]:opacity-100 data-[state=closed]:opacity-0 transition-opacity duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0 data-[state=open]:scale-100 data-[state=closed]:scale-100">
-          <DialogHeader className="px-6 pt-6 pb-4">
-            <DialogTitle className="flex items-center gap-2">
-              <Settings className="w-5 h-5" />
-              Report Settings
-            </DialogTitle>
-          </DialogHeader>
-          <div className="px-6 pb-6">
-            <p className="text-sm text-slate-700">
-              Transaction report settings and preferences will be available here.
-            </p>
-          </div>
-          <div className="px-6 pb-6 flex items-center justify-end">
-            <button
-              onClick={() => setIsSettingsOpen(false)}
-              className="px-4 py-2 text-sm font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-all shadow-md"
-            >
-              Close
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

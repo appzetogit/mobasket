@@ -786,6 +786,10 @@ export const groceryStoreAPI = {
     return apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.FCM_TOKEN, { token, platform });
   },
 
+  reverify: () => {
+    return apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.REVERIFY);
+  },
+
   // Onboarding
   getOnboarding: () => {
     return apiClient.get(API_ENDPOINTS.GROCERY_STORE.ONBOARDING);
@@ -1504,7 +1508,9 @@ export const adminAPI = {
 
   // Get transaction report
   getTransactionReport: (params = {}) => {
-    return apiClient.get(API_ENDPOINTS.ADMIN.ORDERS_TRANSACTION_REPORT, { params });
+    return apiClient.get(API_ENDPOINTS.ADMIN.ORDERS_TRANSACTION_REPORT, {
+      params: { ...params, platform: params.platform || getAdminPlatform() }
+    });
   },
 
   // Get restaurant report

@@ -34,7 +34,7 @@ export default function OutletInfo() {
   const navigate = useNavigate()
   const location = useLocation()
   const isGroceryStoreRoute = location.pathname.startsWith("/store")
-
+  const baseRoute = isGroceryStoreRoute ? "/store" : "/restaurant"
   // State management
   const [restaurantData, setRestaurantData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -756,28 +756,27 @@ export default function OutletInfo() {
       {/* Thumbnail and Reviews Section */}
       <div className="px-4 pt-[50px] pb-4 bg-white">
         <div className="flex items-start gap-4">
-
           {/* Reviews Section - Left Aligned */}
-          {!isGroceryStoreRoute && (
-            <div className="flex flex-col gap-2">
-              {/* Delivery Reviews */}
-              <button
-                onClick={() => navigate("/restaurant/ratings-reviews")}
-                className="flex items-center gap-2 text-left w-full"
-              >
-                <div className="bg-green-700 px-2.5 py-1.5 rounded flex items-center gap-1 shrink-0">
-                  <span className="text-white text-sm font-bold">
-                    {restaurantData?.rating?.toFixed(1) || "0.0"}
-                  </span>
-                  <Star className="w-3.5 h-3.5 text-white fill-white" />
-                </div>
-                <span className="text-gray-800 text-sm font-normal">
-                  {restaurantData?.totalRatings || 0} DELIVERY REVIEWS
+          <div className="flex flex-col gap-2">
+            {/* Delivery Reviews */}
+            <button
+              onClick={() => navigate(`${baseRoute}/ratings-reviews`)}
+              className="flex items-center gap-2 text-left w-full"
+            >
+              <div className="bg-green-700 px-2.5 py-1.5 rounded flex items-center gap-1 shrink-0">
+                <span className="text-white text-sm font-bold">
+                  {restaurantData?.rating?.toFixed(1) || "0.0"}
                 </span>
-                <ChevronRight className="w-4 h-4 text-gray-400 shrink-0 ml-auto" />
-              </button>
+                <Star className="w-3.5 h-3.5 text-white fill-white" />
+              </div>
+              <span className="text-gray-800 text-sm font-normal">
+                {restaurantData?.totalRatings || 0} DELIVERY REVIEWS
+              </span>
+              <ChevronRight className="w-4 h-4 text-gray-400 shrink-0 ml-auto" />
+            </button>
 
-              {/* Dining Reviews */}
+            {/* Dining Reviews - Only for restaurants */}
+            {!isGroceryStoreRoute && (
               <div className="flex items-center gap-2">
                 <div className="bg-gray-300 px-2.5 py-1.5 rounded flex items-center gap-1 shrink-0">
                   <span className="text-white text-sm font-normal">-</span>
@@ -785,8 +784,8 @@ export default function OutletInfo() {
                 </div>
                 <span className="text-gray-800 text-sm font-normal">NOT ENOUGH DINING REVIEWS</span>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 
@@ -850,24 +849,6 @@ export default function OutletInfo() {
                 </div>
               </div>
             </motion.div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.15 }}
-              className="space-y-3 pt-2"
-            >
-              <button
-                onClick={() => navigate(isGroceryStoreRoute ? "/store/outlet-timings" : "/restaurant/outlet-timings")}
-                className="w-full bg-blue-100/50 rounded-lg p-4 border border-blue-300 flex items-center justify-between hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <Clock className="w-5 h-5 text-blue-600" />
-                  <span className="text-base font-semibold text-gray-900">Outlet Timings</span>
-                </div>
-                <ChevronRight className="w-5 h-5 text-blue-600" />
-              </button>
-            </motion.div>
           </>
         ) : (
           <>
@@ -910,7 +891,7 @@ export default function OutletInfo() {
                   </p>
                 </div>
                 <button
-                  onClick={() => navigate("/restaurant/edit-cuisines")}
+                  onClick={() => navigate(`${baseRoute}/edit-cuisines`)}
                   disabled={isGroceryStoreRoute}
                   className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0 self-start"
                 >
@@ -937,7 +918,7 @@ export default function OutletInfo() {
                   </div>
                 </div>
                 <button
-                  onClick={() => navigate("/restaurant/edit-address")}
+                  onClick={() => navigate(`${baseRoute}/edit-address`)}
                   disabled={isGroceryStoreRoute}
                   className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors ml-4 shrink-0 self-start"
                 >
@@ -945,41 +926,41 @@ export default function OutletInfo() {
                 </button>
               </div>
             </motion.div>
-
-            {/* Action Cards */}
-            <motion.div
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, delay: 0.15 }}
-              className="space-y-3 pt-2"
-            >
-              {/* Outlet Timings Card */}
-              <button
-                onClick={() => navigate(isGroceryStoreRoute ? "/store/outlet-timings" : "/restaurant/outlet-timings")}
-                className="w-full bg-blue-100/50 rounded-lg p-4 border border-blue-300 flex items-center justify-between hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <Clock className="w-5 h-5 text-blue-600" />
-                  <span className="text-base font-semibold text-gray-900">Outlet Timings</span>
-                </div>
-                <ChevronRight className="w-5 h-5 text-blue-600" />
-              </button>
-
-              {/* Contact Details Card */}
-              <button
-                onClick={() => navigate("/restaurant/contact-details")}
-                disabled={isGroceryStoreRoute}
-                className="w-full bg-blue-100/50 rounded-lg p-4 border border-blue-300 flex items-center justify-between hover:bg-gray-50 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <Phone className="w-5 h-5 text-blue-600" />
-                  <span className="text-base font-semibold text-gray-900">Contact Details</span>
-                </div>
-                <ChevronRight className="w-5 h-5 text-blue-600" />
-              </button>
-            </motion.div>
           </>
         )}
+
+        {/* Action Cards */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.15 }}
+          className="space-y-3 pt-2"
+        >
+          {/* Outlet Timings Card */}
+          <button
+            onClick={() => navigate(`${baseRoute}/outlet-timings`)}
+            className="w-full bg-blue-100/50 rounded-lg p-4 border border-blue-300 flex items-center justify-between hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <Clock className="w-5 h-5 text-blue-600" />
+              <span className="text-base font-semibold text-gray-900">Outlet Timings</span>
+            </div>
+            <ChevronRight className="w-5 h-5 text-blue-600" />
+          </button>
+
+          {/* Contact Details Card */}
+          <button
+            onClick={() => navigate(`${baseRoute}/contact-details`)}
+            disabled={isGroceryStoreRoute}
+            className="w-full bg-blue-100/50 rounded-lg p-4 border border-blue-300 flex items-center justify-between hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <Phone className="w-5 h-5 text-blue-600" />
+              <span className="text-base font-semibold text-gray-900">Contact Details</span>
+            </div>
+            <ChevronRight className="w-5 h-5 text-blue-600" />
+          </button>
+        </motion.div>
       </div>
 
 
@@ -1019,3 +1000,4 @@ export default function OutletInfo() {
     </div>
   )
 }
+

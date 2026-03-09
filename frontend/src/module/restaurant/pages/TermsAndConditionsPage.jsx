@@ -9,6 +9,7 @@ import { useState } from "react"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 
 export default function TermsAndConditionsPage() {
+  const companyName = useCompanyName()
   const navigate = useNavigate()
   const [showMenu, setShowMenu] = useState(false)
 

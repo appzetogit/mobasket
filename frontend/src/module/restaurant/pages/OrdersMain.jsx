@@ -729,11 +729,10 @@ export default function OrdersMain() {
   const handleReverify = async () => {
     try {
       setIsReverifying(true)
-      if (!isGroceryStore) {
-        await restaurantAPI.reverify()
+      if (isGroceryStore) {
+        await groceryStoreAPI.reverify()
       } else {
-        // Grocery stores might not have reverify, skip for now
-        console.warn('Reverify not available for grocery stores')
+        await restaurantAPI.reverify()
       }
 
       // Refresh restaurant/store status
@@ -1513,8 +1512,18 @@ export default function OrdersMain() {
                   </div>
                 </div>
                 <p className="text-sm text-gray-700 mb-3">
-                  Please correct the above issues and click "Reverify" to resubmit your request for approval.
+                  {isGroceryStore
+                    ? "Please correct rejected store details and submit again for re-verification."
+                    : 'Please correct the above issues and click "Reverify" to resubmit your request for approval.'}
                 </p>
+                {isGroceryStore && (
+                  <button
+                    onClick={() => navigate("/store/onboarding?step=1")}
+                    className="w-full mb-2 px-6 py-2.5 border border-blue-200 bg-blue-50 text-blue-700 rounded-lg font-semibold text-sm hover:bg-blue-100 transition-all"
+                  >
+                    Submit details again
+                  </button>
+                )}
                 <button
                   onClick={handleReverify}
                   disabled={isReverifying}
@@ -1526,9 +1535,17 @@ export default function OrdersMain() {
                       Submitting...
                     </>
                   ) : (
-                    "Reverify"
+                    isGroceryStore ? "Send for Re-verification" : "Reverify"
                   )}
                 </button>
+                {!isGroceryStore && (
+                  <button
+                    onClick={() => navigate("/restaurant/onboarding?step=1")}
+                    className="w-full mt-2 px-6 py-2.5 border border-slate-200 bg-slate-50 text-slate-700 rounded-lg font-semibold text-sm hover:bg-slate-100 transition-all"
+                  >
+                    Edit submitted details
+                  </button>
+                )}
               </>
             ) : (
               <>

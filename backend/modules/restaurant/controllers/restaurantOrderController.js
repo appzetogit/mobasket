@@ -964,8 +964,109 @@ export const markOrderPreparing = asyncHandler(async (req, res) => {
             });
           }
         } else {
-          console.warn(`⚠️ Could not assign order ${freshOrder.orderId} to delivery boy - no available delivery partners`);
-          // Return success but warn about no delivery partners
+          console.warn(`⚠️ Direct assignment failed for order ${freshOrder.orderId}. Falling back to immediate priority notifications.`);
+
+          // Match accept flow behavior: notify priority riders immediately, then expand after 30s.
+          const requiredZoneId = freshOrder?.assignmentInfo?.zoneId ? String(freshOrder.assignmentInfo.zoneId) : null;
+          const incomingCodAmount = ['cash', 'cod'].includes(String(freshOrder?.payment?.method || '').toLowerCase())
+            ? Math.max(0, Number(freshOrder?.pricing?.total) || 0)
+            : 0;
+          const priorityDeliveryBoys = await findNearestDeliveryBoys(
+            restaurantLat,
+            restaurantLng,
+            orderStoreIdentifier,
+            20,
+            { requiredZoneId, incomingCodAmount }
+          );
+
+          if (priorityDeliveryBoys && priorityDeliveryBoys.length > 0) {
+            const priorityIds = priorityDeliveryBoys.map((db) => db.deliveryPartnerId);
+            freshOrder.assignmentInfo = {
+              ...(freshOrder.assignmentInfo || {}),
+              priorityNotifiedAt: new Date(),
+              priorityDeliveryPartnerIds: priorityIds,
+              notificationPhase: 'priority'
+            };
+            await freshOrder.save();
+
+            const populatedOrder = await Order.findById(freshOrder._id)
+              .populate('userId', 'name phone')
+              .populate('restaurantId', 'name address location phone ownerPhone')
+              .lean();
+
+            if (populatedOrder) {
+              await notifyMultipleDeliveryBoys(populatedOrder, priorityIds, 'priority');
+            }
+
+            setTimeout(async () => {
+              try {
+                const checkOrder = await Order.findById(freshOrder._id);
+                if (!checkOrder || checkOrder.deliveryPartnerId) return;
+
+                const allDeliveryBoys = await findNearestDeliveryBoys(
+                  restaurantLat,
+                  restaurantLng,
+                  orderStoreIdentifier,
+                  50,
+                  { requiredZoneId, incomingCodAmount }
+                );
+                const expandedDeliveryBoys = allDeliveryBoys.filter(
+                  (db) => !priorityIds.includes(db.deliveryPartnerId)
+                );
+                if (!expandedDeliveryBoys.length) return;
+
+                const expandedIds = expandedDeliveryBoys.map((db) => db.deliveryPartnerId);
+                checkOrder.assignmentInfo = {
+                  ...(checkOrder.assignmentInfo || {}),
+                  expandedNotifiedAt: new Date(),
+                  expandedDeliveryPartnerIds: expandedIds,
+                  notificationPhase: 'expanded'
+                };
+                await checkOrder.save();
+
+                const expandedOrder = await Order.findById(checkOrder._id)
+                  .populate('userId', 'name phone')
+                  .populate('restaurantId', 'name address location phone ownerPhone')
+                  .lean();
+
+                if (expandedOrder) {
+                  await notifyMultipleDeliveryBoys(expandedOrder, expandedIds, 'expanded');
+                }
+              } catch (expandError) {
+                console.error(`❌ Error in expanded notification for order ${freshOrder.orderId}:`, expandError);
+              }
+            }, 30000);
+
+            const finalOrder = await Order.findById(freshOrder._id);
+            return successResponse(res, 200, 'Order marked as preparing and notified to delivery partners', {
+              order: finalOrder,
+              notifiedCount: priorityIds.length
+            });
+          }
+
+          const anyDeliveryBoy = await findNearestDeliveryBoy(
+            restaurantLat,
+            restaurantLng,
+            orderStoreIdentifier,
+            50,
+            [],
+            { requiredZoneId, incomingCodAmount }
+          );
+          if (anyDeliveryBoy) {
+            const populatedOrder = await Order.findById(freshOrder._id)
+              .populate('userId', 'name phone')
+              .populate('restaurantId', 'name address location phone ownerPhone')
+              .lean();
+            if (populatedOrder) {
+              await notifyMultipleDeliveryBoys(populatedOrder, [anyDeliveryBoy.deliveryPartnerId], 'immediate');
+            }
+            const finalOrder = await Order.findById(freshOrder._id);
+            return successResponse(res, 200, 'Order marked as preparing and notified to delivery partner', {
+              order: finalOrder,
+              notifiedCount: 1
+            });
+          }
+
           const finalOrder = await Order.findById(freshOrder._id);
           return successResponse(res, 200, 'Order marked as preparing, but no delivery partners available', {
             order: finalOrder,
@@ -983,6 +1084,18 @@ export const markOrderPreparing = asyncHandler(async (req, res) => {
       }
     } else {
       console.log(`ℹ️ Order ${freshOrder.orderId} already has delivery partner assigned: ${freshOrder.deliveryPartnerId}`);
+      // Ensure assigned rider still receives notification from preparing flow.
+      try {
+        const populatedOrder = await Order.findById(freshOrder._id)
+          .populate('userId', 'name phone')
+          .populate('restaurantId', 'name address location phone ownerPhone')
+          .lean();
+        if (populatedOrder) {
+          await notifyDeliveryBoyNewOrder(populatedOrder, freshOrder.deliveryPartnerId);
+        }
+      } catch (assignedNotifyError) {
+        console.error(`❌ Failed to notify assigned delivery partner for order ${freshOrder.orderId}:`, assignedNotifyError);
+      }
       // Reload full order for response
       const finalOrder = await Order.findById(freshOrder._id);
       return successResponse(res, 200, 'Order marked as preparing', {

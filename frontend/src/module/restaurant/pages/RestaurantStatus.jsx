@@ -20,6 +20,7 @@ export default function RestaurantStatus() {
   const navigate = useNavigate()
   const routeLocation = useLocation()
   const isGroceryStore = routeLocation.pathname.startsWith("/store")
+  const baseRoute = isGroceryStore ? "/store" : "/restaurant"
   const statusStorageKey = isGroceryStore ? "grocery-store_online_status" : "restaurant_online_status"
   const statusEventName = isGroceryStore ? "groceryStoreStatusChanged" : "restaurantStatusChanged"
   const entityLabel = isGroceryStore ? "store" : "restaurant"
@@ -289,7 +290,7 @@ export default function RestaurantStatus() {
   // Handle delivery status change
   const handleDeliveryStatusChange = async (checked) => {
     if (!isGroceryStore) {
-      navigate("/restaurant/outlet-timings")
+      navigate(`${baseRoute}/outlet-timings`)
       return
     }
 

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { useNavigate, useParams } from "react-router-dom"
+import { useNavigate, useParams, useLocation } from "react-router-dom"
 import Lenis from "lenis"
 import { ArrowLeft, Send, MoreVertical } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -8,7 +8,10 @@ import { Button } from "@/components/ui/button"
 
 export default function ChatDetailPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { conversationId } = useParams()
+  const isStore = location.pathname.startsWith("/store")
+  const baseRoute = isStore ? "/store" : "/restaurant"
   const [message, setMessage] = useState("")
   const messagesEndRef = useRef(null)
 
@@ -76,7 +79,7 @@ export default function ChatDetailPage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-4 md:py-3 flex items-center gap-4 rounded-b-3xl md:rounded-b-none fixed top-0 left-0 right-0 z-50">
         <button
-          onClick={() => navigate("/restaurant/conversation")}
+          onClick={() => navigate(`${baseRoute}/conversation`)}
           className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
         >
           <ArrowLeft className="w-5 h-5 text-gray-600" />

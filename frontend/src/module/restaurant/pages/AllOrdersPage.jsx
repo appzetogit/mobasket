@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useLocation } from "react-router-dom"
 import {
   ArrowLeft,
   Search,
@@ -230,6 +230,9 @@ const filterOptions = {
 
 export default function AllOrdersPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const isStore = location.pathname.startsWith("/store")
+  const baseRoute = isStore ? "/store" : "/restaurant"
   const [searchQuery, setSearchQuery] = useState("")
   const [showCalendar, setShowCalendar] = useState(false)
   const [showDateRangePopup, setShowDateRangePopup] = useState(false)
@@ -715,7 +718,7 @@ export default function AllOrdersPage() {
                 delay: Math.min(index * 0.05, 0.3),
                 layout: { duration: 0.3 }
               }}
-              onClick={() => navigate(`/restaurant/orders/${order.id}`)}
+              onClick={() => navigate(`${baseRoute}/orders/${order.id}`)}
               className="bg-white border border-gray-200 rounded-lg p-4 cursor-pointer hover:shadow-md transition-shadow"
             >
             {/* Status and Order ID Row */}

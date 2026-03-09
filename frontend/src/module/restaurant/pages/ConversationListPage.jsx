@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import Lenis from "lenis"
 import { ArrowLeft, Search, Utensils, User, ShoppingBag, X, Truck } from "lucide-react"
 import { Input } from "@/components/ui/input"
@@ -8,7 +8,10 @@ import BottomNavbar from "../components/BottomNavbar"
 import MenuOverlay from "../components/MenuOverlay"
 
 export default function ConversationListPage() {
+  const location = useLocation()
   const navigate = useNavigate()
+  const isStore = location.pathname.startsWith("/store")
+  const baseRoute = isStore ? "/store" : "/restaurant"
   const [searchQuery, setSearchQuery] = useState("")
   const [activeTab, setActiveTab] = useState("Customer")
   const [showMenu, setShowMenu] = useState(false)
@@ -78,7 +81,7 @@ export default function ConversationListPage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-4 md:py-3 flex items-center gap-4 rounded-b-3xl md:rounded-b-none fixed top-0 left-0 right-0 z-50">
         <button
-          onClick={() => navigate("/restaurant")}
+          onClick={() => navigate(baseRoute)}
           className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
         >
           <ArrowLeft className="w-5 h-5 text-gray-600" />
@@ -163,7 +166,7 @@ export default function ConversationListPage() {
               transition={{ duration: 0.3, delay: index * 0.1 }}
               className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 cursor-pointer hover:shadow-md transition-shadow"
               onClick={() => {
-                navigate(`/restaurant/conversation/${conversation.id}`)
+                navigate(`${baseRoute}/conversation/${conversation.id}`)
               }}
             >
               <div className="flex items-start gap-3">
