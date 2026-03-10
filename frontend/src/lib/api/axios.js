@@ -300,7 +300,6 @@ const apiClient = axios.create({
   withCredentials: true, // Include cookies for refresh token
 });
 
-<<<<<<< HEAD
 const API_METRICS_MAX_RECENT_CALLS = 500;
 const apiCallMetrics = {
   startedAt: new Date().toISOString(),
@@ -492,8 +491,6 @@ if (typeof window !== "undefined") {
     return reportToCsv(report);
   };
 }
-
-=======
 const baseApiClientRequest = apiClient.request.bind(apiClient);
 
 apiClient.request = function requestWithTrafficControl(configOrUrl, maybeConfig) {
@@ -550,8 +547,6 @@ apiClient.request = function requestWithTrafficControl(configOrUrl, maybeConfig)
 
   return requestPromise;
 };
-
->>>>>>> 93a2a556a71a427064504ad03fac382da5fcd894
 const DEFAULT_REQUEST_TIMEOUT_MS = 60000;
 const MEDIA_UPLOAD_TIMEOUT_MS = 180000;
 

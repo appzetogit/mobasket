@@ -4530,7 +4530,7 @@ export default function DeliveryHome() {
   // Earnings Guarantee - Use active earning addon if available, otherwise show 0
 
 
-  // When no offer is active, show 0 of 0 and ?0
+  // When no offer is active, show 0 of 0 and &#8377;0
 
 
   const earningsGuaranteeTarget = activeEarningAddon?.earningAmount || 0
@@ -8102,7 +8102,15 @@ export default function DeliveryHome() {
 
       setNewOrderIsAnimatingToComplete(true)
 
-
+      // Lock slider at completion and prevent a queued RAF from restoring
+      // an older mid-swipe progress value.
+      if (newOrderAcceptButtonRafRef.current !== null) {
+        cancelAnimationFrame(newOrderAcceptButtonRafRef.current)
+        newOrderAcceptButtonRafRef.current = null
+      }
+      newOrderAcceptButtonPendingProgressRef.current = 1
+      newOrderAcceptButtonProgressRef.current = 1
+      newOrderAcceptButtonMaxProgressRef.current = 1
       newOrderAcceptButtonRenderedProgressRef.current = 1
       setNewOrderAcceptButtonProgress(1)
 
@@ -29085,7 +29093,7 @@ export default function DeliveryHome() {
                       <p className="text-xs text-gray-700 mt-1">
 
 
-                        Cash in hand has reached the delivery cash limit (?{totalCashLimit.toFixed(2)}). Deposit cash in hand to continue receiving orders.
+                        Cash in hand has reached the delivery cash limit (&#8377;{totalCashLimit.toFixed(2)}). Deposit cash in hand to continue receiving orders.
 
 
                       </p>
@@ -30165,7 +30173,7 @@ export default function DeliveryHome() {
                 <div className="relative z-10">
 
 
-                  <div className="text-white text-3xl font-bold mb-1">?6,000                 <span className="text-white/90 text-base font-medium mb-1">referral bonus</span>
+                  <div className="text-white text-3xl font-bold mb-1">&#8377;6,000                 <span className="text-white/90 text-base font-medium mb-1">referral bonus</span>
 
 
                   </div>
@@ -30207,7 +30215,7 @@ export default function DeliveryHome() {
                 <div className="flex items-center text-center justify-center gap-2 mb-2">
 
 
-                  <div className="text-4xl font-bold text-center">?100</div>
+                  <div className="text-4xl font-bold text-center">&#8377;100</div>
 
 
                   <Lock className="w-5 h-5 text-white" />
@@ -30216,7 +30224,7 @@ export default function DeliveryHome() {
                 </div>
 
 
-                <p className="text-white/90 text-center text-sm mb-4">Complete 1 order to unlock ?100</p>
+                <p className="text-white/90 text-center text-sm mb-4">Complete 1 order to unlock &#8377;100</p>
 
 
                 <div className="flex items-center text-center justify-center gap-2 text-white/70 text-xs mb-4">
@@ -30354,7 +30362,7 @@ export default function DeliveryHome() {
                     <div className="bg-black text-white px-4 py-3 rounded-lg text-center min-w-[80px]">
 
 
-                      <div className="text-2xl font-bold">?{earningsGuaranteeTarget.toFixed(0)}</div>
+                      <div className="text-2xl font-bold">&#8377;{earningsGuaranteeTarget.toFixed(0)}</div>
 
 
                       <div className="text-xs text-white/80 mt-1">{hasActiveOffer ? `${earningsGuaranteeOrdersTarget} orders` : "This week"}</div>
@@ -30620,7 +30628,7 @@ export default function DeliveryHome() {
                         <div className="absolute inset-0 flex items-center justify-center">
 
 
-                          <span className="text-lg font-bold text-gray-900">?{earningsGuaranteeCurrentEarnings.toFixed(2)}</span>
+                          <span className="text-lg font-bold text-gray-900">&#8377;{earningsGuaranteeCurrentEarnings.toFixed(2)}</span>
 
 
                         </div>
@@ -31916,7 +31924,7 @@ export default function DeliveryHome() {
                     <p className="text-4xl font-bold text-gray-900 mb-2">
 
 
-                      ?{(() => {
+                      &#8377;{(() => {
 
 
                         const earnings = newOrder?.estimatedEarnings || selectedRestaurant?.estimatedEarnings || 0;
@@ -32045,13 +32053,13 @@ export default function DeliveryHome() {
                             <p className="text-green-700 text-xs">
 
 
-                              Base: ?{earnings.basePayout?.toFixed(0) || '0'}
+                              Base: &#8377;{earnings.basePayout?.toFixed(0) || '0'}
 
 
                               {earnings.distanceCommission > 0 && (
 
 
-                                <> + Distance ({earnings.distance?.toFixed(1)} km × ?{earnings.commissionPerKm?.toFixed(0)}/km) = ?{earnings.distanceCommission?.toFixed(0)}</>
+                                <> + Distance ({earnings.distance?.toFixed(1)} km × &#8377;{earnings.commissionPerKm?.toFixed(0)}/km) = &#8377;{earnings.distanceCommission?.toFixed(0)}</>
 
 
                               )}
@@ -34845,7 +34853,7 @@ export default function DeliveryHome() {
                   <span className={`text-lg font-bold ${isCod ? 'text-amber-700' : 'text-emerald-700'}`}>
 
 
-                    ?{total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    &#8377;{total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
 
 
                   </span>
@@ -35496,7 +35504,7 @@ export default function DeliveryHome() {
               <p className="text-5xl font-bold text-gray-900">
 
 
-                ?{(() => {
+                &#8377;{(() => {
 
 
                   if (orderEarnings > 0) {
@@ -35565,7 +35573,7 @@ export default function DeliveryHome() {
                     <span className="text-gray-600">Trip pay</span>
 
 
-                    <span className="text-gray-900 font-semibold">?{(() => {
+                    <span className="text-gray-900 font-semibold">&#8377;{(() => {
 
 
                       let earnings = 0;
@@ -35619,7 +35627,7 @@ export default function DeliveryHome() {
                     <span className="text-gray-600">Long distance return pay</span>
 
 
-                    <span className="text-gray-900 font-semibold">?5.00</span>
+                    <span className="text-gray-900 font-semibold">&#8377;5.00</span>
 
 
                   </div>
@@ -35634,7 +35642,7 @@ export default function DeliveryHome() {
                     <span className="text-lg font-bold text-gray-900">Total Earnings</span>
 
 
-                    <span className="text-lg font-bold text-gray-900">?{(() => {
+                    <span className="text-lg font-bold text-gray-900">&#8377;{(() => {
 
 
                       if (orderEarnings > 0) {
@@ -35818,6 +35826,8 @@ export default function DeliveryHome() {
 
 
 }
+
+
 
 
 

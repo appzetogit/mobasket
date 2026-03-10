@@ -38,7 +38,7 @@ export const normalizeExportCurrencyText = (value) => {
   }
 
   return value
-    .replace(/â‚¹|₹|\$|Rs\.?/gi, "INR ")
+    .replace(/\u20B9|\$|Rs\.?/gi, "INR ")
     .replace(/\bINR\s+INR\b/gi, "INR")
     .replace(/\s{2,}/g, " ")
     .trim()
