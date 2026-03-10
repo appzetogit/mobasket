@@ -44,7 +44,7 @@ const filterTabs = [
 ]
 
 // Completed Orders List Component
-function CompletedOrders({ onSelectOrder, orderAPI, searchQuery = "" }) {
+function CompletedOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 0 }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -254,7 +254,7 @@ function CompletedOrders({ onSelectOrder, orderAPI, searchQuery = "" }) {
 }
 
 // Cancelled Orders List Component
-function CancelledOrders({ onSelectOrder, orderAPI, isGroceryStore = false, searchQuery = "" }) {
+function CancelledOrders({ onSelectOrder, orderAPI, isGroceryStore = false, searchQuery = "", refreshTick = 0 }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -552,6 +552,7 @@ export default function OrdersMain() {
     }
   })
   const [searchQuery, setSearchQuery] = useState("")
+  const [ordersRefreshTick, setOrdersRefreshTick] = useState(0)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [isSheetOpen, setIsSheetOpen] = useState(false)
@@ -1115,6 +1116,8 @@ export default function OrdersMain() {
     clearNewOrder()
     setCountdown(240)
     setPrepTime(11)
+    setActiveFilter("preparing")
+    setOrdersRefreshTick((prev) => prev + 1)
 
     // Pull next pending confirmed order immediately instead of waiting for fallback interval.
     setTimeout(() => {
@@ -1637,17 +1640,17 @@ export default function OrdersMain() {
 
     switch (activeFilter) {
       case "preparing":
-        return <PreparingOrders onSelectOrder={handleSelectOrder} onCancel={handleCancelClick} orderAPI={orderAPI} searchQuery={searchQuery} />
+        return <PreparingOrders onSelectOrder={handleSelectOrder} onCancel={handleCancelClick} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
       case "ready":
-        return <ReadyOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} searchQuery={searchQuery} />
+        return <ReadyOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
       case "out-for-delivery":
-        return <OutForDeliveryOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} searchQuery={searchQuery} />
+        return <OutForDeliveryOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
       case "scheduled":
-        return <ScheduledOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} searchQuery={searchQuery} />
+        return <ScheduledOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
       case "completed":
-        return <CompletedOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} searchQuery={searchQuery} />
+        return <CompletedOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
       case "cancelled":
-        return <CancelledOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} isGroceryStore={isGroceryStore} searchQuery={searchQuery} />
+        return <CancelledOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} isGroceryStore={isGroceryStore} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
       default:
         return <EmptyState />
     }
@@ -2690,7 +2693,7 @@ function OrderCard({
 }
 
 // Preparing Orders List
-function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "" }) {
+function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "", refreshTick = 0 }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date())
@@ -2800,7 +2803,7 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "" }
         clearInterval(countdownIntervalId)
       }
     }
-  }, []) // Empty dependency array is correct here - we want this to run once on mount
+  }, [orderAPI, refreshTick])
 
   // Track which orders have been marked as ready to avoid duplicate API calls
   const markedReadyOrdersRef = useRef(new Set())
@@ -2969,7 +2972,7 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "" }
 }
 
 // Ready Orders List
-function ReadyOrders({ onSelectOrder, orderAPI, searchQuery = "" }) {
+function ReadyOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 0 }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -3052,7 +3055,7 @@ function ReadyOrders({ onSelectOrder, orderAPI, searchQuery = "" }) {
         clearInterval(intervalId)
       }
     }
-  }, []) // Empty dependency array is correct here - we want this to run once on mount
+  }, [orderAPI, refreshTick])
 
   if (loading) {
     return (
@@ -3095,7 +3098,7 @@ function ReadyOrders({ onSelectOrder, orderAPI, searchQuery = "" }) {
 }
 
 // Out for Delivery Orders List
-const OutForDeliveryOrders = ({ onSelectOrder, orderAPI, searchQuery = "" }) => {
+const OutForDeliveryOrders = ({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 0 }) => {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -3178,7 +3181,7 @@ const OutForDeliveryOrders = ({ onSelectOrder, orderAPI, searchQuery = "" }) => 
         clearInterval(intervalId)
       }
     }
-  }, []) // Empty dependency array is correct here - we want this to run once on mount
+  }, [orderAPI, refreshTick])
 
   if (loading) {
     return (
@@ -3221,7 +3224,7 @@ const OutForDeliveryOrders = ({ onSelectOrder, orderAPI, searchQuery = "" }) => 
 }
 
 // Scheduled Orders List
-function ScheduledOrders({ onSelectOrder, orderAPI, searchQuery = "" }) {
+function ScheduledOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 0 }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
 
@@ -3310,7 +3313,7 @@ function ScheduledOrders({ onSelectOrder, orderAPI, searchQuery = "" }) {
         clearInterval(intervalId)
       }
     }
-  }, [])
+  }, [orderAPI, refreshTick])
 
   if (loading) {
     return (

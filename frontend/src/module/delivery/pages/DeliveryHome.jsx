@@ -90,9 +90,18 @@ import {
 
 const DELIVERY_SWIPE_CONFIRM_THRESHOLD = 0.14
 const DELIVERY_SWIPE_START_THRESHOLD_PX = 1
+const DELIVERY_SWIPE_MIN_TRAVEL_PX = 52
 const DELIVERY_ACCEPT_SWIPE_CONFIRM_THRESHOLD = 0.55
 const DELIVERY_ACCEPT_SWIPE_START_THRESHOLD_PX = 12
 const DELIVERY_ACCEPT_MIN_TRAVEL_PX = 72
+const FETCH_ASSIGNED_ORDERS_MIN_INTERVAL_MS = 15000
+const ACTIVE_EARNING_ADDON_MIN_INTERVAL_MS = 20000
+const DELIVERY_LOCATION_SEND_INTERVAL_ACTIVE_MS = 5000
+const DELIVERY_LOCATION_SEND_INTERVAL_IDLE_MS = 20000
+const DELIVERY_LOCATION_FALLBACK_INTERVAL_ACTIVE_MS = 15000
+const DELIVERY_LOCATION_FALLBACK_INTERVAL_IDLE_MS = 60000
+const DELIVERY_LOCATION_DISTANCE_THRESHOLD_ACTIVE_KM = 0.01
+const DELIVERY_LOCATION_DISTANCE_THRESHOLD_IDLE_KM = 0.03
 
 
 import BottomPopup from "../components/BottomPopup"
@@ -1981,6 +1990,10 @@ export default function DeliveryHome() {
 
   const acceptedOrderIdsRef = useRef(new Set()) // Track accepted order IDs to prevent duplicate notifications
   const acceptingOrderIdsRef = useRef(new Set()) // Prevent duplicate accept requests for the same order
+  const fetchAssignedOrdersInFlightRef = useRef(false)
+  const fetchAssignedOrdersLastRunRef = useRef(0)
+  const activeEarningAddonInFlightRef = useRef(false)
+  const activeEarningAddonLastRunRef = useRef(0)
 
 
   const normalizeOrderId = useCallback((value) => {
@@ -2884,10 +2897,12 @@ export default function DeliveryHome() {
   const newOrderAcceptButtonPendingProgressRef = useRef(0)
   const newOrderAcceptButtonRafRef = useRef(null)
   const newOrderAcceptButtonRenderedProgressRef = useRef(0)
+  const [isAcceptingNewOrder, setIsAcceptingNewOrder] = useState(false)
+  const isAcceptingNewOrderRef = useRef(false)
+  const isDraggingNewOrderAcceptButtonRef = useRef(false)
 
 
   const [newOrderAcceptButtonProgress, setNewOrderAcceptButtonProgress] = useState(0)
-  const [isDraggingNewOrderAcceptButton, setIsDraggingNewOrderAcceptButton] = useState(false)
 
 
   const [newOrderIsAnimatingToComplete, setNewOrderIsAnimatingToComplete] = useState(false)
@@ -2990,6 +3005,7 @@ export default function DeliveryHome() {
 
 
   const reachedPickupIsSwiping = useRef(false)
+  const reachedPickupMaxProgressRef = useRef(0)
 
 
   const [reachedDropButtonProgress, setReachedDropButtonProgress] = useState(0)
@@ -3008,6 +3024,7 @@ export default function DeliveryHome() {
 
 
   const reachedDropIsSwiping = useRef(false)
+  const reachedDropMaxProgressRef = useRef(0)
 
 
   const [orderIdConfirmButtonProgress, setOrderIdConfirmButtonProgress] = useState(0)
@@ -3026,6 +3043,7 @@ export default function DeliveryHome() {
 
 
   const orderIdConfirmIsSwiping = useRef(false)
+  const orderIdConfirmMaxProgressRef = useRef(0)
 
 
   // Bill image upload state
@@ -3050,6 +3068,7 @@ export default function DeliveryHome() {
 
 
   const [orderDeliveredIsAnimatingToComplete, setOrderDeliveredIsAnimatingToComplete] = useState(false)
+  const orderDeliveredMaxProgressRef = useRef(0)
 
 
   const orderDeliveredButtonRef = useRef(null)
@@ -3116,6 +3135,7 @@ export default function DeliveryHome() {
 
 
   const acceptButtonIsSwiping = useRef(false)
+  const acceptOrdersMaxProgressRef = useRef(0)
 
 
   const autoShowTimerRef = useRef(null)
@@ -3234,6 +3254,10 @@ export default function DeliveryHome() {
 
 
   }, [])
+
+  useEffect(() => {
+    isAcceptingNewOrderRef.current = isAcceptingNewOrder
+  }, [isAcceptingNewOrder])
 
 
 
@@ -3597,6 +3621,35 @@ export default function DeliveryHome() {
 
 
   }, [selectedRestaurant])
+
+  const getLocationSendPolicy = () => {
+    const activeOrder = selectedRestaurantRef.current
+    const orderStatus = String(activeOrder?.orderStatus || activeOrder?.status || '').toLowerCase()
+    const deliveryPhase = String(activeOrder?.deliveryPhase || activeOrder?.deliveryState?.currentPhase || '').toLowerCase()
+    const deliveryStateStatus = String(activeOrder?.deliveryState?.status || '').toLowerCase()
+    const hasActiveOrder =
+      Boolean(activeOrder?.id || activeOrder?.orderId) &&
+      orderStatus !== 'cancelled' &&
+      orderStatus !== 'delivered' &&
+      orderStatus !== 'completed' &&
+      deliveryPhase !== 'completed' &&
+      deliveryPhase !== 'delivered' &&
+      deliveryStateStatus !== 'delivered'
+
+    if (hasActiveOrder) {
+      return {
+        sendIntervalMs: DELIVERY_LOCATION_SEND_INTERVAL_ACTIVE_MS,
+        fallbackIntervalMs: DELIVERY_LOCATION_FALLBACK_INTERVAL_ACTIVE_MS,
+        minDistanceKm: DELIVERY_LOCATION_DISTANCE_THRESHOLD_ACTIVE_KM
+      }
+    }
+
+    return {
+      sendIntervalMs: DELIVERY_LOCATION_SEND_INTERVAL_IDLE_MS,
+      fallbackIntervalMs: DELIVERY_LOCATION_FALLBACK_INTERVAL_IDLE_MS,
+      minDistanceKm: DELIVERY_LOCATION_DISTANCE_THRESHOLD_IDLE_KM
+    }
+  }
 
 
 
@@ -4247,7 +4300,19 @@ export default function DeliveryHome() {
   useEffect(() => {
 
 
-    const fetchActiveEarningAddons = async () => {
+    const fetchActiveEarningAddons = async (options = {}) => {
+      const force = options?.force === true
+      const now = Date.now()
+      if (!force) {
+        if (activeEarningAddonInFlightRef.current) {
+          return
+        }
+        if (now - activeEarningAddonLastRunRef.current < ACTIVE_EARNING_ADDON_MIN_INTERVAL_MS) {
+          return
+        }
+      }
+      activeEarningAddonInFlightRef.current = true
+      activeEarningAddonLastRunRef.current = now
 
 
       try {
@@ -4361,6 +4426,8 @@ export default function DeliveryHome() {
         setActiveEarningAddon(null)
 
 
+      } finally {
+        activeEarningAddonInFlightRef.current = false
       }
 
 
@@ -4373,7 +4440,7 @@ export default function DeliveryHome() {
     // Fetch immediately on mount
 
 
-    fetchActiveEarningAddons()
+    fetchActiveEarningAddons({ force: true })
 
 
 
@@ -6989,10 +7056,9 @@ export default function DeliveryHome() {
 
 
 
-            // Fallback: Send last valid location every 30 seconds even if new location is rejected
-
-
-            if (timeSinceLastSend >= 30000) {
+            const locationPolicy = getLocationSendPolicy()
+            // Fallback cadence is relaxed when no active order to reduce API load.
+            if (timeSinceLastSend >= locationPolicy.fallbackIntervalMs) {
 
 
               const [lat, lng] = lastValidLocationRef.current;
@@ -7250,10 +7316,8 @@ export default function DeliveryHome() {
 
 
 
-            // Send location every 3 seconds even if not smoothed
-
-
-            if (timeSinceLastSend >= 3000) {
+            const locationPolicy = getLocationSendPolicy()
+            if (timeSinceLastSend >= locationPolicy.sendIntervalMs) {
 
 
               if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
@@ -7712,16 +7776,14 @@ export default function DeliveryHome() {
 
 
 
-          // Send location every 3 seconds OR if location changed significantly (>10m)
-
-
-          const shouldSend = timeSinceLastSend >= 3000 ||
+          const locationPolicy = getLocationSendPolicy()
+          const shouldSend = timeSinceLastSend >= locationPolicy.sendIntervalMs ||
 
 
             (lastSentLocation &&
 
 
-              calculateDistance(lastSentLocation[0], lastSentLocation[1], smoothedLat, smoothedLng) > 0.01);
+              calculateDistance(lastSentLocation[0], lastSentLocation[1], smoothedLat, smoothedLng) > locationPolicy.minDistanceKm);
 
 
 
@@ -7986,6 +8048,7 @@ export default function DeliveryHome() {
 
 
   const handleNewOrderAcceptTouchStart = (e) => {
+    if (isAcceptingNewOrderRef.current) return
 
     e.stopPropagation()
 
@@ -8005,6 +8068,7 @@ export default function DeliveryHome() {
   }
 
   const handleNewOrderAcceptTouchMove = (e) => {
+    if (isAcceptingNewOrderRef.current) return
 
     e.stopPropagation()
 
@@ -8076,6 +8140,7 @@ export default function DeliveryHome() {
 
 
   const handleNewOrderAcceptTouchEnd = (e) => {
+    if (isAcceptingNewOrderRef.current) return
 
     e.stopPropagation()
 
@@ -8122,6 +8187,7 @@ export default function DeliveryHome() {
       deltaX >= DELIVERY_ACCEPT_MIN_TRAVEL_PX &&
       deltaX > threshold
     ) {
+      setIsAcceptingNewOrder(true)
 
 
       // Stop audio immediately when user accepts
@@ -8149,6 +8215,13 @@ export default function DeliveryHome() {
       newOrderAcceptButtonMaxProgressRef.current = 1
       newOrderAcceptButtonRenderedProgressRef.current = 1
       setNewOrderAcceptButtonProgress(1)
+      setShowNewOrderPopup(false)
+      setIsNewOrderPopupMinimized(false)
+      setNewOrderDragY(0)
+      setShowOrderIdConfirmationPopup(false)
+      setShowReachedDropPopup(false)
+      setShowOrderDeliveredAnimation(false)
+      setShowreachedPickupPopup(true)
 
 
 
@@ -8163,7 +8236,30 @@ export default function DeliveryHome() {
         // Get order ID from selectedRestaurant or newOrder (define outside try-catch for error handling)
 
 
-        const orderId = selectedRestaurant?.id || selectedRestaurant?.orderId || newOrder?.orderMongoId || newOrder?.orderId || (() => { try { const raw = localStorage.getItem('deliveryActiveOrder'); const parsed = raw ? JSON.parse(raw) : null; return parsed?.orderId || parsed?.restaurantInfo?.id || parsed?.restaurantInfo?.orderId || null } catch { return null } })()
+        const orderId =
+          selectedRestaurant?.id ||
+          selectedRestaurant?._id ||
+          selectedRestaurant?.orderId ||
+          newOrder?.orderMongoId ||
+          newOrder?.mongoId ||
+          newOrder?._id ||
+          newOrder?.id ||
+          newOrder?.orderId ||
+          (() => {
+            try {
+              const raw = localStorage.getItem('deliveryActiveOrder')
+              const parsed = raw ? JSON.parse(raw) : null
+              return (
+                parsed?.orderId ||
+                parsed?.restaurantInfo?.id ||
+                parsed?.restaurantInfo?._id ||
+                parsed?.restaurantInfo?.orderId ||
+                null
+              )
+            } catch {
+              return null
+            }
+          })()
         const normalizedOrderId = normalizeOrderId(orderId)
 
 
@@ -8198,6 +8294,7 @@ export default function DeliveryHome() {
 
 
           toast.error('Order ID not found. Please try again.')
+          setIsAcceptingNewOrder(false)
 
 
           return
@@ -8210,6 +8307,7 @@ export default function DeliveryHome() {
 
 
         if (normalizedOrderId && acceptingOrderIdsRef.current.has(normalizedOrderId)) {
+          setIsAcceptingNewOrder(false)
 
 
           return
@@ -8263,55 +8361,10 @@ export default function DeliveryHome() {
 
 
 
-          // If still not available, try to get current position
-
-
+          // If still not available, skip extra GPS wait to keep accept fast.
           if (!currentLocation || currentLocation.length !== 2) {
-
-
-            try {
-
-
-              const position = await new Promise((resolve, reject) => {
-
-
-                navigator.geolocation.getCurrentPosition(
-
-
-                  (pos) => resolve([pos.coords.latitude, pos.coords.longitude]),
-
-
-                  reject,
-
-
-                  { timeout: 5000, enableHighAccuracy: true }
-
-
-                )
-
-
-              })
-
-
-              currentLocation = position
-
-
-              console.log('[LOC] Got fresh location from geolocation API')
-
-
-            } catch (geoError) {
-
-
-              console.error('[ERROR] Could not get current location, proceeding with backend fallback:', geoError)
-
-              toast.warning('Live GPS unavailable. Trying profile location...')
-
-              currentLocation = null
-
-
-            }
-
-
+            currentLocation = null
+            console.warn('[WARN] No live rider location cached, accepting with backend fallback')
           }
 
 
@@ -10208,17 +10261,10 @@ export default function DeliveryHome() {
 
             toast.error(response.data?.message || 'Failed to accept order. Please try again.')
 
-
-            // Still close popup
-
-
-            setShowNewOrderPopup(false)
-
-
-            setIsNewOrderPopupMinimized(false) // Reset minimized state
-
-
-            setNewOrderDragY(0) // Reset drag position
+            setShowreachedPickupPopup(false)
+            setShowNewOrderPopup(true)
+            setIsNewOrderPopupMinimized(false)
+            setNewOrderDragY(0)
 
 
           }
@@ -10282,6 +10328,8 @@ export default function DeliveryHome() {
 
 
             clearNewOrder()
+            setShowreachedPickupPopup(false)
+            setShowNewOrderPopup(false)
 
 
           }
@@ -10353,16 +10401,12 @@ export default function DeliveryHome() {
 
 
 
-          // Close popup even on error
-
-
-          setShowNewOrderPopup(false)
-
-
-          setIsNewOrderPopupMinimized(false) // Reset minimized state
-
-
-          setNewOrderDragY(0) // Reset drag position
+          if (!(conflictStatus === 409 && (conflictMessage.includes('accepted by another') || conflictMessage.includes('no longer available')))) {
+            setShowreachedPickupPopup(false)
+            setShowNewOrderPopup(true)
+            setIsNewOrderPopupMinimized(false)
+            setNewOrderDragY(0)
+          }
 
 
         } finally {
@@ -10387,6 +10431,7 @@ export default function DeliveryHome() {
 
 
             setNewOrderIsAnimatingToComplete(false)
+            setIsAcceptingNewOrder(false)
 
 
           }, 500)
@@ -10434,6 +10479,7 @@ export default function DeliveryHome() {
   }
 
   const handleNewOrderAcceptTouchCancel = (e) => {
+    if (isAcceptingNewOrderRef.current) return
     e.stopPropagation()
     newOrderAcceptButtonSwipeStartX.current = 0
     newOrderAcceptButtonSwipeStartY.current = 0
@@ -10442,7 +10488,13 @@ export default function DeliveryHome() {
     resetNewOrderAcceptProgress()
   }
 
+  const detachNewOrderAcceptMouseListeners = () => {
+    document.removeEventListener('mousemove', handleNewOrderAcceptMouseMove)
+    document.removeEventListener('mouseup', handleNewOrderAcceptMouseUp)
+  }
+
   const handleNewOrderAcceptMouseDown = (e) => {
+    if (isAcceptingNewOrderRef.current) return
     if (e.button !== 0) return
     e.preventDefault()
     e.stopPropagation()
@@ -10451,10 +10503,13 @@ export default function DeliveryHome() {
     newOrderAcceptButtonIsSwiping.current = false
     resetNewOrderAcceptProgress()
     setNewOrderIsAnimatingToComplete(false)
-    setIsDraggingNewOrderAcceptButton(true)
+    isDraggingNewOrderAcceptButtonRef.current = true
+    document.addEventListener('mousemove', handleNewOrderAcceptMouseMove)
+    document.addEventListener('mouseup', handleNewOrderAcceptMouseUp)
   }
   const handleNewOrderAcceptMouseMove = (e) => {
-    if (!isDraggingNewOrderAcceptButton) return
+    if (!isDraggingNewOrderAcceptButtonRef.current) return
+    if (isAcceptingNewOrderRef.current) return
     const deltaX = e.clientX - newOrderAcceptButtonSwipeStartX.current
     const deltaY = e.clientY - newOrderAcceptButtonSwipeStartY.current
     if (
@@ -10476,8 +10531,9 @@ export default function DeliveryHome() {
     }
   }
   const handleNewOrderAcceptMouseUp = (e) => {
-    if (!isDraggingNewOrderAcceptButton) return
-    setIsDraggingNewOrderAcceptButton(false)
+    if (!isDraggingNewOrderAcceptButtonRef.current) return
+    isDraggingNewOrderAcceptButtonRef.current = false
+    detachNewOrderAcceptMouseListeners()
     handleNewOrderAcceptTouchEnd({
       stopPropagation: () => { },
       changedTouches: [
@@ -10489,14 +10545,10 @@ export default function DeliveryHome() {
     })
   }
   useEffect(() => {
-    if (!isDraggingNewOrderAcceptButton) return undefined
-    document.addEventListener('mousemove', handleNewOrderAcceptMouseMove)
-    document.addEventListener('mouseup', handleNewOrderAcceptMouseUp)
     return () => {
-      document.removeEventListener('mousemove', handleNewOrderAcceptMouseMove)
-      document.removeEventListener('mouseup', handleNewOrderAcceptMouseUp)
+      detachNewOrderAcceptMouseListeners()
     }
-  }, [isDraggingNewOrderAcceptButton])
+  }, [])
 
 
 
@@ -10851,6 +10903,7 @@ export default function DeliveryHome() {
 
 
     reachedPickupIsSwiping.current = false
+    reachedPickupMaxProgressRef.current = 0
 
 
     setreachedPickupIsAnimatingToComplete(false)
@@ -10917,8 +10970,7 @@ export default function DeliveryHome() {
 
 
       const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
-
-
+      reachedPickupMaxProgressRef.current = Math.max(reachedPickupMaxProgressRef.current, progress)
       setreachedPickupButtonProgress(progress)
 
 
@@ -10983,12 +11035,18 @@ export default function DeliveryHome() {
 
 
     const threshold = maxSwipe * DELIVERY_SWIPE_CONFIRM_THRESHOLD
+    const finalProgress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
+    const acceptedProgress = Math.max(finalProgress, reachedPickupMaxProgressRef.current)
 
 
 
 
 
-    if (deltaX > threshold) {
+    if (
+      acceptedProgress >= DELIVERY_SWIPE_CONFIRM_THRESHOLD &&
+      deltaX >= DELIVERY_SWIPE_MIN_TRAVEL_PX &&
+      deltaX > threshold
+    ) {
 
 
       // Animate to completion
@@ -11508,6 +11566,7 @@ export default function DeliveryHome() {
 
 
     reachedPickupIsSwiping.current = false
+    reachedPickupMaxProgressRef.current = 0
 
 
   }
@@ -11541,6 +11600,7 @@ export default function DeliveryHome() {
 
 
     reachedDropIsSwiping.current = false
+    reachedDropMaxProgressRef.current = 0
 
 
     setReachedDropIsAnimatingToComplete(false)
@@ -11607,8 +11667,7 @@ export default function DeliveryHome() {
 
 
       const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
-
-
+      reachedDropMaxProgressRef.current = Math.max(reachedDropMaxProgressRef.current, progress)
       setReachedDropButtonProgress(progress)
 
 
@@ -11673,12 +11732,18 @@ export default function DeliveryHome() {
 
 
     const threshold = maxSwipe * DELIVERY_SWIPE_CONFIRM_THRESHOLD
+    const finalProgress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
+    const acceptedProgress = Math.max(finalProgress, reachedDropMaxProgressRef.current)
 
 
 
 
 
-    if (deltaX > threshold) {
+    if (
+      acceptedProgress >= DELIVERY_SWIPE_CONFIRM_THRESHOLD &&
+      deltaX >= DELIVERY_SWIPE_MIN_TRAVEL_PX &&
+      deltaX > threshold
+    ) {
 
 
       // Animate to completion
@@ -11967,6 +12032,7 @@ export default function DeliveryHome() {
 
 
     reachedDropIsSwiping.current = false
+    reachedDropMaxProgressRef.current = 0
 
 
   }
@@ -12000,6 +12066,7 @@ export default function DeliveryHome() {
 
 
     orderIdConfirmIsSwiping.current = false
+    orderIdConfirmMaxProgressRef.current = 0
 
 
     setOrderIdConfirmIsAnimatingToComplete(false)
@@ -12066,8 +12133,7 @@ export default function DeliveryHome() {
 
 
       const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
-
-
+      orderIdConfirmMaxProgressRef.current = Math.max(orderIdConfirmMaxProgressRef.current, progress)
       setOrderIdConfirmButtonProgress(progress)
 
 
@@ -12691,12 +12757,18 @@ export default function DeliveryHome() {
 
 
     const threshold = maxSwipe * DELIVERY_SWIPE_CONFIRM_THRESHOLD
+    const finalProgress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
+    const acceptedProgress = Math.max(finalProgress, orderIdConfirmMaxProgressRef.current)
 
 
 
 
 
-    if (deltaX > threshold) {
+    if (
+      acceptedProgress >= DELIVERY_SWIPE_CONFIRM_THRESHOLD &&
+      deltaX >= DELIVERY_SWIPE_MIN_TRAVEL_PX &&
+      deltaX > threshold
+    ) {
 
 
       // Animate to completion
@@ -13598,6 +13670,7 @@ export default function DeliveryHome() {
 
 
     orderIdConfirmIsSwiping.current = false
+    orderIdConfirmMaxProgressRef.current = 0
 
 
   }
@@ -13619,6 +13692,7 @@ export default function DeliveryHome() {
 
 
     orderDeliveredIsSwiping.current = false
+    orderDeliveredMaxProgressRef.current = 0
 
 
     setOrderDeliveredIsAnimatingToComplete(false)
@@ -13685,8 +13759,7 @@ export default function DeliveryHome() {
 
 
       const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
-
-
+      orderDeliveredMaxProgressRef.current = Math.max(orderDeliveredMaxProgressRef.current, progress)
       setOrderDeliveredButtonProgress(progress)
 
 
@@ -13733,12 +13806,18 @@ export default function DeliveryHome() {
 
 
     const threshold = maxSwipe * DELIVERY_SWIPE_CONFIRM_THRESHOLD
+    const finalProgress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
+    const acceptedProgress = Math.max(finalProgress, orderDeliveredMaxProgressRef.current)
 
 
 
 
 
-    if (deltaX > threshold) {
+    if (
+      acceptedProgress >= DELIVERY_SWIPE_CONFIRM_THRESHOLD &&
+      deltaX >= DELIVERY_SWIPE_MIN_TRAVEL_PX &&
+      deltaX > threshold
+    ) {
 
 
       // Animate to completion
@@ -13829,6 +13908,7 @@ export default function DeliveryHome() {
 
 
     orderDeliveredIsSwiping.current = false
+    orderDeliveredMaxProgressRef.current = 0
 
 
   }
@@ -13850,6 +13930,7 @@ export default function DeliveryHome() {
 
 
     acceptButtonIsSwiping.current = false
+    acceptOrdersMaxProgressRef.current = 0
 
 
     setIsAnimatingToComplete(false)
@@ -13913,8 +13994,7 @@ export default function DeliveryHome() {
 
 
       const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
-
-
+      acceptOrdersMaxProgressRef.current = Math.max(acceptOrdersMaxProgressRef.current, progress)
       setAcceptButtonProgress(progress)
 
 
@@ -13961,12 +14041,18 @@ export default function DeliveryHome() {
 
 
     const threshold = maxSwipe * DELIVERY_SWIPE_CONFIRM_THRESHOLD
+    const finalProgress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
+    const acceptedProgress = Math.max(finalProgress, acceptOrdersMaxProgressRef.current)
 
 
 
 
 
-    if (deltaX > threshold) {
+    if (
+      acceptedProgress >= DELIVERY_SWIPE_CONFIRM_THRESHOLD &&
+      deltaX >= DELIVERY_SWIPE_MIN_TRAVEL_PX &&
+      deltaX > threshold
+    ) {
 
 
       // Animate to completion
@@ -14042,6 +14128,7 @@ export default function DeliveryHome() {
 
 
     acceptButtonIsSwiping.current = false
+    acceptOrdersMaxProgressRef.current = 0
 
 
   }
@@ -14410,6 +14497,9 @@ export default function DeliveryHome() {
 
 
     if (newOrder) {
+      if (isAcceptingNewOrderRef.current) {
+        return
+      }
 
 
       if (isCashInHandLimitReached) {
@@ -15618,15 +15708,26 @@ export default function DeliveryHome() {
   // Fetch assigned orders from API when delivery person goes online
 
 
-  const fetchAssignedOrders = useCallback(async () => {
+  const fetchAssignedOrders = useCallback(async (options = {}) => {
+    const force = options?.force === true
+    const now = Date.now()
+    if (!force) {
+      if (fetchAssignedOrdersInFlightRef.current) {
+        return
+      }
+      if (now - fetchAssignedOrdersLastRunRef.current < FETCH_ASSIGNED_ORDERS_MIN_INTERVAL_MS) {
+        return
+      }
+    }
+    fetchAssignedOrdersInFlightRef.current = true
+    fetchAssignedOrdersLastRunRef.current = now
 
 
     if (!isOnline) {
 
 
       console.log('Delivery person is offline, skipping order fetch')
-
-
+      fetchAssignedOrdersInFlightRef.current = false
       return
 
 
@@ -15637,8 +15738,7 @@ export default function DeliveryHome() {
 
 
       console.log('Cash-in-hand limit reached, skipping new order notifications')
-
-
+      fetchAssignedOrdersInFlightRef.current = false
       return
 
 
@@ -15684,6 +15784,12 @@ export default function DeliveryHome() {
           const deliveryPhase = String(order?.deliveryState?.currentPhase || '').toLowerCase()
           const deliveryStateStatus = String(order?.deliveryState?.status || '').toLowerCase()
           const notificationPhase = String(order?.assignmentInfo?.notificationPhase || '').toLowerCase()
+          const hasExplicitAcceptanceMarker = Boolean(
+            order?.deliveryState?.acceptedAt ||
+            order?.deliveryState?.acceptedBy ||
+            order?.assignmentInfo?.acceptedAt ||
+            notificationPhase === 'accepted'
+          )
 
           const isTerminal =
             orderStatus === 'cancelled' ||
@@ -15697,7 +15803,7 @@ export default function DeliveryHome() {
 
           const hasAcceptedDeliveryState =
             notificationPhase === 'accepted' ||
-            deliveryStateStatus === 'accepted' ||
+            (deliveryStateStatus === 'accepted' && hasExplicitAcceptanceMarker) ||
             deliveryStateStatus === 'reached_pickup' ||
             deliveryStateStatus === 'order_confirmed' ||
             deliveryStateStatus === 'en_route_to_delivery' ||
@@ -15715,7 +15821,7 @@ export default function DeliveryHome() {
           const isPostPickupOrderState =
             orderStatus === 'out_for_delivery'
 
-          return hasAcceptedDeliveryState || hasAcceptedDeliveryPhase || isPostPickupOrderState
+          return hasExplicitAcceptanceMarker || hasAcceptedDeliveryState || hasAcceptedDeliveryPhase || isPostPickupOrderState
         })
 
         if (activeAssignedOrder && !selectedRestaurantRef.current) {
@@ -15865,10 +15971,15 @@ export default function DeliveryHome() {
 
 
 
-          // Skip if already accepted (has deliveryState with accepted status)
+          const hasExplicitAcceptanceMarker = Boolean(
+            order?.deliveryState?.acceptedAt ||
+            order?.deliveryState?.acceptedBy ||
+            order?.assignmentInfo?.acceptedAt ||
+            String(order?.assignmentInfo?.notificationPhase || '').toLowerCase() === 'accepted'
+          )
 
-
-          if (order.deliveryState?.status === 'accepted' ||
+          // Skip only when order is in post-accept flow.
+          if ((order.deliveryState?.status === 'accepted' && hasExplicitAcceptanceMarker) ||
 
 
             order.deliveryState?.status === 'reached_pickup' ||
@@ -16181,6 +16292,8 @@ export default function DeliveryHome() {
       // Don't show error to user, just log it
 
 
+    } finally {
+      fetchAssignedOrdersInFlightRef.current = false
     }
 
 
@@ -31914,7 +32027,7 @@ export default function DeliveryHome() {
                         animate={{
 
 
-                          strokeDashoffset: `${450 * (1 - countdownSeconds / 300)}`
+                          strokeDashoffset: Math.max(0, Math.min(450, 450 * (1 - countdownSeconds / 300)))
 
 
                         }}
@@ -32490,7 +32603,11 @@ export default function DeliveryHome() {
                           >
 
 
-                            {newOrderAcceptButtonProgress > DELIVERY_ACCEPT_SWIPE_CONFIRM_THRESHOLD ? 'Release to Accept' : 'Accept order'}
+                            {isAcceptingNewOrder
+                              ? 'Accepting...'
+                              : (newOrderAcceptButtonProgress > DELIVERY_ACCEPT_SWIPE_CONFIRM_THRESHOLD
+                                ? 'Release to Accept'
+                                : 'Accept order')}
 
 
                           </motion.span>
