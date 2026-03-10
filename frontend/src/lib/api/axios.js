@@ -92,6 +92,198 @@ const apiClient = axios.create({
   withCredentials: true, // Include cookies for refresh token
 });
 
+const API_METRICS_MAX_RECENT_CALLS = 500;
+const apiCallMetrics = {
+  startedAt: new Date().toISOString(),
+  totalCalls: 0,
+  successCalls: 0,
+  errorCalls: 0,
+  byEndpoint: new Map(),
+  recentCalls: [],
+};
+
+function toAbsoluteUrl(url = "") {
+  const raw = String(url || "");
+  if (!raw) return "";
+  try {
+    if (/^https?:\/\//i.test(raw)) return raw;
+    return new URL(raw, API_BASE_URL).toString();
+  } catch {
+    return raw;
+  }
+}
+
+function normalizeMetricPath(url = "") {
+  try {
+    const absolute = toAbsoluteUrl(url);
+    const parsed = new URL(absolute);
+    let path = parsed.pathname || "/";
+    if (path.startsWith("/api/")) path = path.slice(4);
+    return path.startsWith("/") ? path : `/${path}`;
+  } catch {
+    return String(url || "");
+  }
+}
+
+function getMetricEndpointKey(config = {}) {
+  const method = String(config?.method || "get").toUpperCase();
+  const path = normalizeMetricPath(config?.url || "");
+  return `${method} ${path}`;
+}
+
+function ensureEndpointMetric(metricKey = "") {
+  if (!apiCallMetrics.byEndpoint.has(metricKey)) {
+    apiCallMetrics.byEndpoint.set(metricKey, {
+      endpoint: metricKey,
+      count: 0,
+      successCount: 0,
+      errorCount: 0,
+      totalDurationMs: 0,
+      minDurationMs: null,
+      maxDurationMs: 0,
+      avgDurationMs: 0,
+      lastCalledAt: null,
+      firstCalledAt: null,
+      lastStatus: null,
+      statusCounts: {},
+      sampleUrls: new Set(),
+    });
+  }
+  return apiCallMetrics.byEndpoint.get(metricKey);
+}
+
+function trackApiCall(config = {}, { status = null, isError = false, durationMs = 0 } = {}) {
+  const metricKey = config.__metricKey || getMetricEndpointKey(config);
+  const metric = ensureEndpointMetric(metricKey);
+  const safeDuration = Number.isFinite(Number(durationMs)) ? Math.max(0, Number(durationMs)) : 0;
+  const nowIso = new Date().toISOString();
+  const absoluteUrl = toAbsoluteUrl(config?.url || "");
+
+  apiCallMetrics.totalCalls += 1;
+  if (isError) apiCallMetrics.errorCalls += 1;
+  else apiCallMetrics.successCalls += 1;
+
+  metric.count += 1;
+  if (isError) metric.errorCount += 1;
+  else metric.successCount += 1;
+  metric.totalDurationMs += safeDuration;
+  metric.avgDurationMs = Number((metric.totalDurationMs / metric.count).toFixed(2));
+  metric.minDurationMs = metric.minDurationMs == null ? safeDuration : Math.min(metric.minDurationMs, safeDuration);
+  metric.maxDurationMs = Math.max(metric.maxDurationMs, safeDuration);
+  metric.lastCalledAt = nowIso;
+  if (!metric.firstCalledAt) metric.firstCalledAt = nowIso;
+  metric.lastStatus = status;
+
+  const statusKey = status == null ? "NA" : String(status);
+  metric.statusCounts[statusKey] = (metric.statusCounts[statusKey] || 0) + 1;
+  if (absoluteUrl) metric.sampleUrls.add(absoluteUrl);
+
+  apiCallMetrics.recentCalls.push({
+    at: nowIso,
+    endpoint: metricKey,
+    method: String(config?.method || "get").toUpperCase(),
+    url: absoluteUrl || String(config?.url || ""),
+    status: statusKey,
+    ok: !isError,
+    durationMs: Number(safeDuration.toFixed(2)),
+  });
+
+  if (apiCallMetrics.recentCalls.length > API_METRICS_MAX_RECENT_CALLS) {
+    apiCallMetrics.recentCalls.splice(0, apiCallMetrics.recentCalls.length - API_METRICS_MAX_RECENT_CALLS);
+  }
+}
+
+function buildApiCallReport({ sortBy = "count" } = {}) {
+  const rows = Array.from(apiCallMetrics.byEndpoint.values()).map((entry) => ({
+    endpoint: entry.endpoint,
+    count: entry.count,
+    successCount: entry.successCount,
+    errorCount: entry.errorCount,
+    avgDurationMs: Number(entry.avgDurationMs.toFixed(2)),
+    minDurationMs: Number((entry.minDurationMs || 0).toFixed(2)),
+    maxDurationMs: Number(entry.maxDurationMs.toFixed(2)),
+    lastStatus: entry.lastStatus == null ? "NA" : entry.lastStatus,
+    firstCalledAt: entry.firstCalledAt,
+    lastCalledAt: entry.lastCalledAt,
+    statusCounts: { ...entry.statusCounts },
+    sampleUrls: Array.from(entry.sampleUrls).slice(0, 5),
+  }));
+
+  const sorters = {
+    count: (a, b) => b.count - a.count,
+    avgDurationMs: (a, b) => b.avgDurationMs - a.avgDurationMs,
+    maxDurationMs: (a, b) => b.maxDurationMs - a.maxDurationMs,
+    errorCount: (a, b) => b.errorCount - a.errorCount,
+  };
+
+  rows.sort(sorters[sortBy] || sorters.count);
+
+  return {
+    startedAt: apiCallMetrics.startedAt,
+    generatedAt: new Date().toISOString(),
+    totalCalls: apiCallMetrics.totalCalls,
+    successCalls: apiCallMetrics.successCalls,
+    errorCalls: apiCallMetrics.errorCalls,
+    endpointCount: rows.length,
+    rows,
+    recentCalls: [...apiCallMetrics.recentCalls],
+  };
+}
+
+function reportToCsv(report) {
+  const header = [
+    "endpoint",
+    "count",
+    "successCount",
+    "errorCount",
+    "avgDurationMs",
+    "minDurationMs",
+    "maxDurationMs",
+    "lastStatus",
+    "firstCalledAt",
+    "lastCalledAt",
+    "statusCounts",
+    "sampleUrls",
+  ];
+  const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const lines = [header.map(escapeCsv).join(",")];
+  report.rows.forEach((row) => {
+    lines.push(
+      [
+        row.endpoint,
+        row.count,
+        row.successCount,
+        row.errorCount,
+        row.avgDurationMs,
+        row.minDurationMs,
+        row.maxDurationMs,
+        row.lastStatus,
+        row.firstCalledAt,
+        row.lastCalledAt,
+        JSON.stringify(row.statusCounts),
+        row.sampleUrls.join(" | "),
+      ]
+        .map(escapeCsv)
+        .join(","),
+    );
+  });
+  return lines.join("\n");
+}
+
+if (typeof window !== "undefined") {
+  window.__apiCallMetrics = apiCallMetrics;
+  window.getApiCallReport = (options = {}) => buildApiCallReport(options);
+  window.printApiCallReport = (options = {}) => {
+    const report = buildApiCallReport(options);
+    console.table(report.rows);
+    return report;
+  };
+  window.exportApiCallReportCsv = (options = {}) => {
+    const report = buildApiCallReport(options);
+    return reportToCsv(report);
+  };
+}
+
 const DEFAULT_REQUEST_TIMEOUT_MS = 60000;
 const MEDIA_UPLOAD_TIMEOUT_MS = 180000;
 
@@ -234,6 +426,10 @@ function getTokenForCurrentRoute() {
  */
 apiClient.interceptors.request.use(
   async (config) => {
+    const metricStart = typeof performance !== "undefined" ? performance.now() : Date.now();
+    config.__requestStartedAt = metricStart;
+    config.__metricKey = getMetricEndpointKey(config);
+
     // Apply a sane default timeout and relax it for media uploads.
     if (!Number.isFinite(Number(config.timeout)) || Number(config.timeout) <= 0) {
       config.timeout = DEFAULT_REQUEST_TIMEOUT_MS;
@@ -420,6 +616,15 @@ apiClient.interceptors.request.use(
  */
 apiClient.interceptors.response.use(
   (response) => {
+    const startedAt = Number(response?.config?.__requestStartedAt || 0);
+    const endedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const durationMs = startedAt > 0 ? endedAt - startedAt : 0;
+    trackApiCall(response?.config || {}, {
+      status: response?.status || 200,
+      isError: false,
+      durationMs,
+    });
+
     // Reset network error state on successful response (backend is back online)
     if (networkErrorState.errorCount > 0) {
       networkErrorState.errorCount = 0;
@@ -448,6 +653,15 @@ apiClient.interceptors.response.use(
   },
   async (error) => {
     const originalRequest = error.config || {};
+    const startedAt = Number(originalRequest?.__requestStartedAt || 0);
+    const endedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const durationMs = startedAt > 0 ? endedAt - startedAt : 0;
+    trackApiCall(originalRequest, {
+      status: error?.response?.status || error?.code || "ERR",
+      isError: true,
+      durationMs,
+    });
+
     const requestUrl = String(originalRequest.url || "");
     const isRefreshRequest = requestUrl.includes("/refresh-token");
 

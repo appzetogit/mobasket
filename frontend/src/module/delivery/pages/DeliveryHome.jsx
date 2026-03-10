@@ -88,7 +88,7 @@ import {
 
 } from "lucide-react"
 
-const DELIVERY_SWIPE_CONFIRM_THRESHOLD = 0.18
+const DELIVERY_SWIPE_CONFIRM_THRESHOLD = 0.14
 const DELIVERY_SWIPE_START_THRESHOLD_PX = 1
 
 
@@ -9555,19 +9555,49 @@ export default function DeliveryHome() {
             // Show Reached Pickup popup immediately after order acceptance (no distance check)
 
 
-            // But only if order is not already past pickup phase
+            // But only if order is not already delivered
 
 
             setTimeout(() => {
 
 
-              const currentOrderStatus = selectedRestaurant?.orderStatus || selectedRestaurant?.status || '';
+              const currentOrderStatus = String(selectedRestaurant?.orderStatus || selectedRestaurant?.status || '').toLowerCase();
 
 
-              const currentDeliveryPhase = selectedRestaurant?.deliveryPhase || selectedRestaurant?.deliveryState?.currentPhase || '';
+              const currentDeliveryPhase = String(selectedRestaurant?.deliveryPhase || selectedRestaurant?.deliveryState?.currentPhase || '').toLowerCase();
 
 
-              const isAlreadyPastPickup = currentOrderStatus === 'out_for_delivery' ||
+              const currentDeliveryStateStatus = String(selectedRestaurant?.deliveryState?.status || '').toLowerCase();
+
+
+
+
+
+              const isDelivered =
+
+
+                currentOrderStatus === 'delivered' ||
+
+
+                currentDeliveryStateStatus === 'delivered' ||
+
+
+                currentDeliveryPhase === 'completed';
+
+
+
+
+
+              const shouldShowReachedDrop =
+
+
+                currentOrderStatus === 'out_for_delivery' ||
+
+
+                currentDeliveryStateStatus === 'order_confirmed' ||
+
+
+                currentDeliveryStateStatus === 'en_route_to_delivery' ||
 
 
                 currentDeliveryPhase === 'en_route_to_delivery' ||
@@ -9582,22 +9612,64 @@ export default function DeliveryHome() {
 
 
 
-              if (!isAlreadyPastPickup) {
+              const shouldShowOrderIdConfirmation =
 
 
-                setShowreachedPickupPopup(true);
+                currentDeliveryStateStatus === 'reached_pickup' ||
 
 
-                // Close directions map if open
+                currentDeliveryPhase === 'at_pickup';
 
 
-                setShowDirectionsMap(false);
 
 
-              } else {
+
+              if (!isDelivered) {
+
+
+                setShowreachedPickupPopup(false);
+
+
+                setShowOrderIdConfirmationPopup(false);
+
+
+                setShowReachedDropPopup(false);
+
+
+
+
+
+                if (shouldShowReachedDrop) {
+
+
+                  setShowReachedDropPopup(true);
+
+
+                } else if (shouldShowOrderIdConfirmation) {
+
+
+                  setShowOrderIdConfirmationPopup(true);
+
+
+                } else {
+
+
+                  setShowreachedPickupPopup(true);
+
+
+                }
 
 
               }
+
+
+
+
+
+              // Close directions map if open
+
+
+              setShowDirectionsMap(false);
 
 
             }, 500); // Wait 500ms for state to update
@@ -10708,7 +10780,10 @@ export default function DeliveryHome() {
     // Only handle horizontal swipes (swipe right)
 
 
-    if (Math.abs(deltaX) > DELIVERY_SWIPE_START_THRESHOLD_PX && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+    if (
+      deltaX > DELIVERY_SWIPE_START_THRESHOLD_PX &&
+      (Math.abs(deltaX) > Math.abs(deltaY) * 0.45 || Math.abs(deltaY) < 24)
+    ) {
 
 
       reachedPickupIsSwiping.current = true
@@ -11395,7 +11470,10 @@ export default function DeliveryHome() {
     // Only handle horizontal swipes (swipe right)
 
 
-    if (Math.abs(deltaX) > DELIVERY_SWIPE_START_THRESHOLD_PX && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+    if (
+      deltaX > DELIVERY_SWIPE_START_THRESHOLD_PX &&
+      (Math.abs(deltaX) > Math.abs(deltaY) * 0.45 || Math.abs(deltaY) < 24)
+    ) {
 
 
       reachedDropIsSwiping.current = true
@@ -11851,7 +11929,10 @@ export default function DeliveryHome() {
     // Only handle horizontal swipes (swipe right)
 
 
-    if (Math.abs(deltaX) > DELIVERY_SWIPE_START_THRESHOLD_PX && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+    if (
+      deltaX > DELIVERY_SWIPE_START_THRESHOLD_PX &&
+      (Math.abs(deltaX) > Math.abs(deltaY) * 0.45 || Math.abs(deltaY) < 24)
+    ) {
 
 
       orderIdConfirmIsSwiping.current = true
@@ -13467,7 +13548,10 @@ export default function DeliveryHome() {
     // Only handle horizontal swipes (swipe right)
 
 
-    if (Math.abs(deltaX) > DELIVERY_SWIPE_START_THRESHOLD_PX && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+    if (
+      deltaX > DELIVERY_SWIPE_START_THRESHOLD_PX &&
+      (Math.abs(deltaX) > Math.abs(deltaY) * 0.45 || Math.abs(deltaY) < 24)
+    ) {
 
 
       orderDeliveredIsSwiping.current = true
@@ -13692,7 +13776,10 @@ export default function DeliveryHome() {
     // Only handle horizontal swipes (swipe right)
 
 
-    if (Math.abs(deltaX) > DELIVERY_SWIPE_START_THRESHOLD_PX && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+    if (
+      deltaX > DELIVERY_SWIPE_START_THRESHOLD_PX &&
+      (Math.abs(deltaX) > Math.abs(deltaY) * 0.45 || Math.abs(deltaY) < 24)
+    ) {
 
 
       acceptButtonIsSwiping.current = true
