@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo, useCallback } from "react"
+ï»¿import { useEffect, useState, useRef, useMemo, useCallback } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 
 
@@ -90,6 +90,9 @@ import {
 
 const DELIVERY_SWIPE_CONFIRM_THRESHOLD = 0.14
 const DELIVERY_SWIPE_START_THRESHOLD_PX = 1
+const DELIVERY_ACCEPT_SWIPE_CONFIRM_THRESHOLD = 0.55
+const DELIVERY_ACCEPT_SWIPE_START_THRESHOLD_PX = 12
+const DELIVERY_ACCEPT_MIN_TRAVEL_PX = 72
 
 
 import BottomPopup from "../components/BottomPopup"
@@ -134,7 +137,7 @@ import { getAllDeliveryOrders } from "../utils/deliveryOrderStatus"
 import { getUnreadDeliveryNotificationCount } from "../utils/deliveryNotifications"
 
 
-import { deliveryAPI, restaurantAPI, uploadAPI } from "@/lib/api"
+import { deliveryAPI, restaurantAPI, groceryStoreAPI, uploadAPI } from "@/lib/api"
 
 
 import { useDeliveryNotifications } from "../hooks/useDeliveryNotifications"
@@ -1279,9 +1282,37 @@ function resolveStoreCoordsFromOrder(order) {
 
 
 
+async function fetchStoreById(storeId) {
+  if (!storeId) return null
+  const normalizedStoreId =
+    typeof storeId === "string"
+      ? storeId
+      : (storeId._id || storeId.id || storeId.toString?.() || "")
+  if (!normalizedStoreId) return null
+  const extractEntity = (response) => {
+    const data = response?.data
+    if (!data) return null
+    const payload = data.data ?? data
+    if (!payload) return null
+    return payload.restaurant || payload.store || payload.groceryStore || payload
+  }
+  try {
+    const response = await restaurantAPI.getRestaurantById(normalizedStoreId)
+    const store = extractEntity(response)
+    if (store) return { store, source: "restaurant" }
+  } catch {
+    // Ignore and fall through to grocery lookup.
+  }
+  try {
+    const response = await groceryStoreAPI.getGroceryStoreById(normalizedStoreId)
+    const store = extractEntity(response)
+    if (store) return { store, source: "grocery" }
+  } catch {
+    // Ignore; caller handles null.
+  }
+  return null
+}
 /**
-
-
  * Animate marker smoothly from current position to new position
 
 
@@ -2856,6 +2887,7 @@ export default function DeliveryHome() {
 
 
   const [newOrderAcceptButtonProgress, setNewOrderAcceptButtonProgress] = useState(0)
+  const [isDraggingNewOrderAcceptButton, setIsDraggingNewOrderAcceptButton] = useState(false)
 
 
   const [newOrderIsAnimatingToComplete, setNewOrderIsAnimatingToComplete] = useState(false)
@@ -7987,7 +8019,7 @@ export default function DeliveryHome() {
 
     // Smoother swipe detection: accept horizontal-first gestures even with slight vertical jitter.
     if (
-      deltaX > DELIVERY_SWIPE_START_THRESHOLD_PX &&
+      deltaX > DELIVERY_ACCEPT_SWIPE_START_THRESHOLD_PX &&
       (Math.abs(deltaX) > Math.abs(deltaY) * 0.45 || Math.abs(deltaY) < 24)
     ) {
 
@@ -8077,7 +8109,7 @@ export default function DeliveryHome() {
     const maxSwipe = buttonWidth - circleWidth - (padding * 2)
 
 
-    const threshold = maxSwipe * DELIVERY_SWIPE_CONFIRM_THRESHOLD
+    const threshold = maxSwipe * DELIVERY_ACCEPT_SWIPE_CONFIRM_THRESHOLD
     const finalProgress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
     const acceptedProgress = Math.max(finalProgress, newOrderAcceptButtonMaxProgressRef.current)
 
@@ -8085,7 +8117,11 @@ export default function DeliveryHome() {
 
 
 
-    if (acceptedProgress >= DELIVERY_SWIPE_CONFIRM_THRESHOLD || deltaX > threshold) {
+    if (
+      acceptedProgress >= DELIVERY_ACCEPT_SWIPE_CONFIRM_THRESHOLD &&
+      deltaX >= DELIVERY_ACCEPT_MIN_TRAVEL_PX &&
+      deltaX > threshold
+    ) {
 
 
       // Stop audio immediately when user accepts
@@ -8723,13 +8759,13 @@ export default function DeliveryHome() {
                       console.log('[SYNC] Fetching restaurant address by ID:', restaurantIdString)
 
 
-                      const restaurantResponse = await restaurantAPI.getRestaurantById(restaurantIdString)
+                      const storeLookup = await fetchStoreById(restaurantIdString)
 
 
-                      if (restaurantResponse.data?.success && restaurantResponse.data.data) {
+                      if (storeLookup?.store) {
 
 
-                        const restaurant = restaurantResponse.data.data.restaurant || restaurantResponse.data.data
+                        const restaurant = storeLookup.store
 
 
                         const restLocation = restaurant.location
@@ -10405,6 +10441,62 @@ export default function DeliveryHome() {
     setNewOrderIsAnimatingToComplete(false)
     resetNewOrderAcceptProgress()
   }
+
+  const handleNewOrderAcceptMouseDown = (e) => {
+    if (e.button !== 0) return
+    e.preventDefault()
+    e.stopPropagation()
+    newOrderAcceptButtonSwipeStartX.current = e.clientX
+    newOrderAcceptButtonSwipeStartY.current = e.clientY
+    newOrderAcceptButtonIsSwiping.current = false
+    resetNewOrderAcceptProgress()
+    setNewOrderIsAnimatingToComplete(false)
+    setIsDraggingNewOrderAcceptButton(true)
+  }
+  const handleNewOrderAcceptMouseMove = (e) => {
+    if (!isDraggingNewOrderAcceptButton) return
+    const deltaX = e.clientX - newOrderAcceptButtonSwipeStartX.current
+    const deltaY = e.clientY - newOrderAcceptButtonSwipeStartY.current
+    if (
+      deltaX > DELIVERY_ACCEPT_SWIPE_START_THRESHOLD_PX &&
+      (Math.abs(deltaX) > Math.abs(deltaY) * 0.45 || Math.abs(deltaY) < 24)
+    ) {
+      newOrderAcceptButtonIsSwiping.current = true
+      const buttonWidth = newOrderAcceptButtonRef.current?.offsetWidth || 300
+      const circleWidth = 56
+      const padding = 16
+      const maxSwipe = buttonWidth - circleWidth - (padding * 2)
+      const progress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
+      newOrderAcceptButtonProgressRef.current = progress
+      newOrderAcceptButtonMaxProgressRef.current = Math.max(
+        newOrderAcceptButtonMaxProgressRef.current,
+        progress
+      )
+      scheduleNewOrderAcceptProgress(progress)
+    }
+  }
+  const handleNewOrderAcceptMouseUp = (e) => {
+    if (!isDraggingNewOrderAcceptButton) return
+    setIsDraggingNewOrderAcceptButton(false)
+    handleNewOrderAcceptTouchEnd({
+      stopPropagation: () => { },
+      changedTouches: [
+        {
+          clientX: e.clientX,
+          clientY: e.clientY
+        }
+      ]
+    })
+  }
+  useEffect(() => {
+    if (!isDraggingNewOrderAcceptButton) return undefined
+    document.addEventListener('mousemove', handleNewOrderAcceptMouseMove)
+    document.addEventListener('mouseup', handleNewOrderAcceptMouseUp)
+    return () => {
+      document.removeEventListener('mousemove', handleNewOrderAcceptMouseMove)
+      document.removeEventListener('mouseup', handleNewOrderAcceptMouseUp)
+    }
+  }, [isDraggingNewOrderAcceptButton])
 
 
 
@@ -23187,13 +23279,13 @@ export default function DeliveryHome() {
               try {
 
 
-                const restaurantResponse = await restaurantAPI.getRestaurantById(restaurantIdString)
+                const storeLookup = await fetchStoreById(restaurantIdString)
 
 
-                if (restaurantResponse.data?.success && restaurantResponse.data.data) {
+                if (storeLookup?.store) {
 
 
-                  const restaurant = restaurantResponse.data.data.restaurant || restaurantResponse.data.data
+                  const restaurant = storeLookup.store
 
 
                   console.log('[OK] Fetched restaurant details:', restaurant)
@@ -32059,7 +32151,7 @@ export default function DeliveryHome() {
                               {earnings.distanceCommission > 0 && (
 
 
-                                <> + Distance ({earnings.distance?.toFixed(1)} km × &#8377;{earnings.commissionPerKm?.toFixed(0)}/km) = &#8377;{earnings.distanceCommission?.toFixed(0)}</>
+                                <> + Distance ({earnings.distance?.toFixed(1)} km ï¿½ &#8377;{earnings.commissionPerKm?.toFixed(0)}/km) = &#8377;{earnings.distanceCommission?.toFixed(0)}</>
 
 
                               )}
@@ -32254,6 +32346,7 @@ export default function DeliveryHome() {
                       onTouchEnd={handleNewOrderAcceptTouchEnd}
 
                       onTouchCancel={handleNewOrderAcceptTouchCancel}
+                      onMouseDown={handleNewOrderAcceptMouseDown}
 
 
                       whileTap={{ scale: 0.98 }}
@@ -32397,7 +32490,7 @@ export default function DeliveryHome() {
                           >
 
 
-                            {newOrderAcceptButtonProgress > DELIVERY_SWIPE_CONFIRM_THRESHOLD ? 'Release to Accept' : 'Accept order'}
+                            {newOrderAcceptButtonProgress > DELIVERY_ACCEPT_SWIPE_CONFIRM_THRESHOLD ? 'Release to Accept' : 'Accept order'}
 
 
                           </motion.span>
@@ -33166,13 +33259,13 @@ export default function DeliveryHome() {
                             console.log('[CALL] [CALL] Trying restaurant API directly with ID:', restaurantId)
 
 
-                            const restaurantResponse = await restaurantAPI.getRestaurantById(restaurantId)
+                            const storeLookup = await fetchStoreById(restaurantId)
 
 
-                            if (restaurantResponse.data?.success && restaurantResponse.data.data) {
+                            if (storeLookup?.store) {
 
 
-                              const restaurant = restaurantResponse.data.data.restaurant || restaurantResponse.data.data
+                              const restaurant = storeLookup.store
 
 
                               restaurantPhone = restaurant.phone || restaurant.ownerPhone || restaurant.primaryContactNumber
