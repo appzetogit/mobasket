@@ -55,8 +55,6 @@ import subscriptionRoutes from './modules/subscription/index.js';
 import uploadModuleRoutes from './modules/upload/index.js';
 import locationRoutes from './modules/location/index.js';
 import heroBannerRoutes from './modules/heroBanner/index.js';
-import diningRoutes from './modules/dining/index.js';
-import diningAdminRoutes from './modules/dining/routes/diningAdminRoutes.js';
 import groceryRoutes from './modules/grocery/index.js';
 
 
@@ -177,7 +175,7 @@ const configuredOrigins = [
     process.env.CORS_ORIGIN,
     process.env.FRONTEND_URL
   ),
-  
+
   'https://mobasket.in',
   'https://www.mobasket.in',
   'http://localhost:3000',
@@ -333,7 +331,7 @@ restaurantNamespace.on('connection', (socket) => {
         room: room,
         socketId: socket.id
       });
-      
+
       // Log all rooms this socket is now in
       const socketRooms = Array.from(socket.rooms).filter(r => r.startsWith('restaurant:'));
       console.log(`📋 Socket ${socket.id} is now in restaurant rooms:`, socketRooms);
@@ -742,8 +740,6 @@ app.use('/api/subscription', subscriptionRoutes);
 app.use('/api', uploadModuleRoutes);
 app.use('/api/location', locationRoutes);
 app.use('/api', heroBannerRoutes);
-app.use('/api/dining', diningRoutes);
-app.use('/api/admin/dining', diningAdminRoutes);
 app.use('/api/grocery', groceryRoutes);
 
 // 404 handler - but skip Socket.IO paths
