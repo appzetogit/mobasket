@@ -817,12 +817,32 @@ export default function OrdersMain() {
     }
   }, [])
 
+  const getPopupOrderIdentifiers = (order) => {
+    return [
+      order?.orderMongoId,
+      order?._id,
+      order?.orderId,
+      order?.id,
+    ]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  }
+
+  const hasOrderBeenShown = (order) => {
+    const identifiers = getPopupOrderIdentifiers(order)
+    return identifiers.some((id) => shownOrdersRef.current.has(id))
+  }
+
+  const markOrderAsShown = (order) => {
+    const identifiers = getPopupOrderIdentifiers(order)
+    identifiers.forEach((id) => shownOrdersRef.current.add(id))
+  }
+
   // Show new order popup when real order notification arrives from Socket.IO
   useEffect(() => {
     if (newOrder) {
-      const orderId = newOrder.orderId || newOrder.orderMongoId
-      if (orderId && !shownOrdersRef.current.has(orderId)) {
-        shownOrdersRef.current.add(orderId)
+      if (!hasOrderBeenShown(newOrder)) {
+        markOrderAsShown(newOrder)
         setPopupOrder(newOrder)
         setShowNewOrderPopup(true)
         setCountdown(240) // Reset countdown to 4 minutes
@@ -858,13 +878,12 @@ export default function OrdersMain() {
           // Find confirmed orders that haven't been shown yet
           const confirmedOrders = response.data.data.orders.filter(
             order => order.status === 'confirmed' &&
-              !shownOrdersRef.current.has(order.orderId || order._id)
+              !hasOrderBeenShown(order)
           )
 
           // Show the most recent confirmed order in popup (double-check state)
           if (confirmedOrders.length > 0 && !showNewOrderPopupRef.current && !newOrderRef.current) {
             const latestConfirmedOrder = confirmedOrders[0]
-            const orderId = latestConfirmedOrder.orderId || latestConfirmedOrder._id
 
             // Transform order to match newOrder format (include payment so COD shows correctly)
             const orderForPopup = {
@@ -883,7 +902,7 @@ export default function OrdersMain() {
               paymentMethod: latestConfirmedOrder.paymentMethod ?? latestConfirmedOrder.payment?.method,
               payment: latestConfirmedOrder.payment
             }
-            shownOrdersRef.current.add(orderId)
+            markOrderAsShown(orderForPopup)
             setPopupOrder(orderForPopup)
             setShowNewOrderPopup(true)
             setCountdown(240)
