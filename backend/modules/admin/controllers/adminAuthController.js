@@ -15,6 +15,30 @@ const logger = winston.createLogger({
   ]
 });
 
+const setAdminRefreshCookies = (res, token) => {
+  const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  };
+
+  // Keep legacy cookie + module-specific cookie to avoid cross-module collisions.
+  res.cookie('refreshToken', token, cookieOptions);
+  res.cookie('adminRefreshToken', token, cookieOptions);
+};
+
+const clearAdminRefreshCookies = (res) => {
+  const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict'
+  };
+
+  res.clearCookie('refreshToken', cookieOptions);
+  res.clearCookie('adminRefreshToken', cookieOptions);
+};
+
 /**
  * Admin Login
  * POST /api/admin/auth/login
@@ -55,13 +79,7 @@ export const adminLogin = asyncHandler(async (req, res) => {
     adminRole: admin.role
   });
 
-  // Set refresh token in httpOnly cookie
-  res.cookie('refreshToken', tokens.refreshToken, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-  });
+  setAdminRefreshCookies(res, tokens.refreshToken);
 
   // Remove password from response
   const adminResponse = admin.toObject();
@@ -71,6 +89,7 @@ export const adminLogin = asyncHandler(async (req, res) => {
 
   return successResponse(res, 200, 'Login successful', {
     accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
     admin: adminResponse
   });
 });
@@ -104,16 +123,52 @@ export const getCurrentAdmin = asyncHandler(async (req, res) => {
  * POST /api/admin/auth/logout
  */
 export const adminLogout = asyncHandler(async (req, res) => {
-  // Clear refresh token cookie
-  res.cookie('refreshToken', '', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict',
-    maxAge: 0
-  });
+  clearAdminRefreshCookies(res);
 
   logger.info(`Admin logged out: ${req.user?._id || req.user?.userId}`);
 
   return successResponse(res, 200, 'Logout successful');
+});
+
+/**
+ * Refresh Access Token
+ * POST /api/admin/auth/refresh-token
+ */
+export const refreshAdminToken = asyncHandler(async (req, res) => {
+  const refreshToken =
+    req.cookies?.adminRefreshToken ||
+    req.cookies?.refreshToken ||
+    req.body?.refreshToken ||
+    req.headers['x-refresh-token'];
+
+  if (!refreshToken) {
+    return errorResponse(res, 401, 'Refresh token not found');
+  }
+
+  try {
+    const decoded = jwtService.verifyRefreshToken(refreshToken);
+
+    if (decoded.role !== 'admin') {
+      return errorResponse(res, 401, 'Invalid token for admin');
+    }
+
+    const admin = await Admin.findById(decoded.userId).select('-password');
+    if (!admin || !admin.isActive) {
+      return errorResponse(res, 401, 'Admin not found or inactive');
+    }
+
+    const accessToken = jwtService.generateAccessToken({
+      userId: admin._id.toString(),
+      role: 'admin',
+      email: admin.email,
+      adminRole: admin.role
+    });
+
+    return successResponse(res, 200, 'Token refreshed successfully', {
+      accessToken
+    });
+  } catch (error) {
+    return errorResponse(res, 401, error.message || 'Invalid refresh token');
+  }
 });
 

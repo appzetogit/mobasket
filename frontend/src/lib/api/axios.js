@@ -202,6 +202,8 @@ function isHardRefreshAuthFailure(refreshError) {
     "",
   ).toLowerCase();
 
+  // Any 401 from refresh endpoint means session recovery failed and should force re-auth.
+  if (refreshStatus === 401) return true;
   if (refreshStatus !== 401) return false;
 
   return (

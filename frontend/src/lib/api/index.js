@@ -1152,6 +1152,10 @@ export const adminAPI = {
     return apiClient.post(API_ENDPOINTS.ADMIN.AUTH.LOGIN, { email, password });
   },
 
+  refreshToken: () => {
+    return apiClient.post(API_ENDPOINTS.ADMIN.AUTH.REFRESH_TOKEN);
+  },
+
   logout: () => {
     return apiClient.post(API_ENDPOINTS.ADMIN.AUTH.LOGOUT);
   },
