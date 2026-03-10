@@ -201,9 +201,34 @@ export function useLocation() {
       stopWatchingLocation()
     }
 
+    const applyManualLocationSelection = (event) => {
+      try {
+        const detailLocation = event?.detail && typeof event.detail === "object" ? event.detail : null
+        const storedLocation = detailLocation || JSON.parse(localStorage.getItem("userLocation") || "null")
+        if (!storedLocation || typeof storedLocation !== "object") return
+
+        setLocation(storedLocation)
+        setPermissionGranted(true)
+        setLoading(false)
+        setError(null)
+        stopWatchingLocation()
+      } catch {
+        // Ignore malformed payloads or storage parsing issues.
+      }
+    }
+
+    const applyStorageLocationUpdate = (event) => {
+      if (event?.key && event.key !== "userLocation") return
+      applyManualLocationSelection()
+    }
+
     window.addEventListener("userAddressesChanged", applySavedAddressLocation)
+    window.addEventListener("userLocationChanged", applyManualLocationSelection)
+    window.addEventListener("storage", applyStorageLocationUpdate)
     return () => {
       window.removeEventListener("userAddressesChanged", applySavedAddressLocation)
+      window.removeEventListener("userLocationChanged", applyManualLocationSelection)
+      window.removeEventListener("storage", applyStorageLocationUpdate)
     }
   }, [])
 

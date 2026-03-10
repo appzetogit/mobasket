@@ -2048,17 +2048,18 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       }
 
       // Update the location in localStorage with this address
-      const locationData = {
-        city: address.city,
-        state: address.state,
-        address: primaryAddressLine,
-        area: sanitizedArea,
+      const locationData = {
+        city: address.city,
+        state: address.state,
+        address: primaryAddressLine,
+        area: sanitizedArea,
         zipCode: address.zipCode,
         latitude,
-        longitude,
-        formattedAddress: hasCompleteSavedAddress ? fullFormattedAddress : ""
-      }
+        longitude,
+        formattedAddress: hasCompleteSavedAddress ? fullFormattedAddress : ""
+      }
       localStorage.setItem("userLocation", JSON.stringify(locationData))
+      window.dispatchEvent(new CustomEvent("userLocationChanged", { detail: locationData }))
       setCurrentAddress(sanitizedSavedDisplayAddress || primaryAddressLine)
       
       // Update map position to show selected address
