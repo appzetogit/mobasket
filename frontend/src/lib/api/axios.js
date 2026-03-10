@@ -18,6 +18,214 @@ const errorToastState = {
   COOLDOWN_PERIOD: 12000, // Avoid repeating identical error toasts for 12s
 };
 
+const inflightRequestState = new Map();
+const responseCacheState = new Map();
+const MAX_RESPONSE_CACHE_ENTRIES = 80;
+
+const HOT_REQUEST_POLICIES = [
+  {
+    methods: ["get"],
+    match: (path) =>
+      path === "/order" ||
+      path === "/restaurant/orders" ||
+      path === "/grocery/store/orders" ||
+      path === "/delivery/orders",
+    cacheTtlMs: 1500,
+    hiddenCacheTtlMs: 60000,
+  },
+  {
+    methods: ["get"],
+    match: (path) => /^\/order\/[^/]+$/.test(path),
+    cacheTtlMs: 1500,
+    hiddenCacheTtlMs: 20000,
+  },
+  {
+    methods: ["get"],
+    match: (path) =>
+      /^\/restaurant\/[^/]+$/.test(path) &&
+      !path.startsWith("/restaurant/orders") &&
+      !path.startsWith("/restaurant/auth") &&
+      !path.startsWith("/restaurant/menu") &&
+      !path.startsWith("/restaurant/profile") &&
+      !path.startsWith("/restaurant/staff") &&
+      !path.startsWith("/restaurant/offers") &&
+      !path.startsWith("/restaurant/inventory") &&
+      !path.startsWith("/restaurant/categories") &&
+      !path.startsWith("/restaurant/onboarding") &&
+      !path.startsWith("/restaurant/delivery-status") &&
+      !path.startsWith("/restaurant/finance") &&
+      !path.startsWith("/restaurant/wallet") &&
+      !path.startsWith("/restaurant/analytics") &&
+      !path.startsWith("/restaurant/complaints") &&
+      !path.startsWith("/restaurant/notifications"),
+    cacheTtlMs: 30000,
+    hiddenCacheTtlMs: 120000,
+  },
+  {
+    methods: ["post"],
+    match: (path) => path === "/order/calculate",
+    dedupeInFlight: true,
+  },
+  {
+    methods: ["post"],
+    match: (path) => path === "/delivery/location",
+    dedupeInFlight: true,
+  },
+];
+
+const normalizeRequestPath = (url = "", baseUrl = API_BASE_URL) => {
+  const rawUrl = String(url || "").trim();
+  if (!rawUrl) return "/";
+
+  let path = rawUrl;
+
+  try {
+    if (/^https?:\/\//i.test(rawUrl)) {
+      path = new URL(rawUrl).pathname || "/";
+    } else if (String(baseUrl || "").trim()) {
+      path = new URL(rawUrl, baseUrl).pathname || rawUrl;
+    }
+  } catch {
+    path = rawUrl;
+  }
+
+  if (!path.startsWith("/")) {
+    path = `/${path}`;
+  }
+
+  if (path === "/api") {
+    return "/";
+  }
+
+  if (path.startsWith("/api/")) {
+    path = path.slice(4) || "/";
+  }
+
+  return path.length > 1 ? path.replace(/\/+$/, "") : path;
+};
+
+const stableSerialize = (value) => {
+  if (value === undefined) return "";
+  if (value === null || typeof value === "number" || typeof value === "boolean") {
+    return JSON.stringify(value);
+  }
+  if (typeof value === "string") {
+    return JSON.stringify(value);
+  }
+  if (value instanceof Date) {
+    return JSON.stringify(value.toISOString());
+  }
+  if (typeof FormData !== "undefined" && value instanceof FormData) {
+    const pairs = Array.from(value.entries()).map(([key, entryValue]) => [
+      key,
+      typeof entryValue === "string"
+        ? entryValue
+        : entryValue?.name || String(entryValue),
+    ]);
+    pairs.sort(([left], [right]) => String(left).localeCompare(String(right)));
+    return stableSerialize(pairs);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableSerialize(item)).join(",")}]`;
+  }
+  if (typeof value === "object") {
+    const keys = Object.keys(value).sort();
+    return `{${keys
+      .map((key) => `${JSON.stringify(key)}:${stableSerialize(value[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(String(value));
+};
+
+const getHotRequestPolicy = (method = "get", path = "/") =>
+  HOT_REQUEST_POLICIES.find(
+    (policy) => policy.methods.includes(method) && policy.match(path),
+  ) || null;
+
+const shouldServeHiddenCache = (policy, ageMs) =>
+  Boolean(policy?.hiddenCacheTtlMs) &&
+  typeof document !== "undefined" &&
+  document.hidden === true &&
+  ageMs <= policy.hiddenCacheTtlMs;
+
+const buildRequestIdentity = (config = {}, normalizedPath = "/") => {
+  const method = String(config.method || "get").toLowerCase();
+  const paramsPart = stableSerialize(config.params || {});
+  const dataPart =
+    method === "get" || method === "head"
+      ? ""
+      : stableSerialize(config.data || {});
+  return `${method}|${normalizedPath}|${paramsPart}|${dataPart}`;
+};
+
+const trimResponseCache = () => {
+  if (responseCacheState.size <= MAX_RESPONSE_CACHE_ENTRIES) return;
+
+  const entries = Array.from(responseCacheState.entries()).sort(
+    (left, right) => (left[1]?.timestamp || 0) - (right[1]?.timestamp || 0),
+  );
+
+  const overflowCount = Math.max(0, responseCacheState.size - MAX_RESPONSE_CACHE_ENTRIES);
+  for (let index = 0; index < overflowCount; index += 1) {
+    responseCacheState.delete(entries[index][0]);
+  }
+};
+
+const getCachedResponse = (cacheKey, policy) => {
+  if (!cacheKey || !policy) return null;
+
+  const entry = responseCacheState.get(cacheKey);
+  if (!entry) return null;
+
+  const ageMs = Date.now() - entry.timestamp;
+  if (ageMs <= (policy.cacheTtlMs || 0) || shouldServeHiddenCache(policy, ageMs)) {
+    return entry.response;
+  }
+
+  responseCacheState.delete(cacheKey);
+  return null;
+};
+
+const shouldInvalidateCachedPath = (mutatedPath = "/", cachedPath = "/") => {
+  if (!mutatedPath || !cachedPath) return false;
+
+  if (mutatedPath === cachedPath) return true;
+
+  if (mutatedPath.startsWith("/order")) {
+    return cachedPath === "/order" || cachedPath.startsWith("/order/");
+  }
+
+  if (mutatedPath.startsWith("/restaurant/orders")) {
+    return cachedPath === "/restaurant/orders";
+  }
+
+  if (mutatedPath.startsWith("/grocery/store/orders")) {
+    return cachedPath === "/grocery/store/orders";
+  }
+
+  if (mutatedPath.startsWith("/delivery/orders")) {
+    return cachedPath === "/delivery/orders" || cachedPath.startsWith("/delivery/orders/");
+  }
+
+  if (mutatedPath.startsWith("/restaurant/")) {
+    return cachedPath === mutatedPath || cachedPath === "/restaurant/orders";
+  }
+
+  if (mutatedPath.startsWith("/grocery/store/")) {
+    return cachedPath === mutatedPath || cachedPath === "/grocery/store/orders";
+  }
+
+  return false;
+};
+
+const invalidateResponseCache = (mutatedPath = "/") => {
+  for (const [cacheKey, entry] of responseCacheState.entries()) {
+    if (shouldInvalidateCachedPath(mutatedPath, entry?.path || "/")) {
+      responseCacheState.delete(cacheKey);
+    }
+  }
+};
+
 const canShowErrorToast = (key) => {
   if (!key) return true;
   const now = Date.now();
@@ -91,6 +299,63 @@ const apiClient = axios.create({
   },
   withCredentials: true, // Include cookies for refresh token
 });
+
+const baseApiClientRequest = apiClient.request.bind(apiClient);
+
+apiClient.request = function requestWithTrafficControl(configOrUrl, maybeConfig) {
+  const requestConfig =
+    typeof configOrUrl === "string"
+      ? { ...(maybeConfig || {}), url: configOrUrl }
+      : { ...(configOrUrl || {}) };
+
+  const method = String(requestConfig.method || "get").toLowerCase();
+  const normalizedPath = normalizeRequestPath(requestConfig.url, requestConfig.baseURL || apiClient.defaults.baseURL);
+  const requestPolicy = getHotRequestPolicy(method, normalizedPath);
+  const shouldDedupeInFlight = method === "get" || Boolean(requestPolicy?.dedupeInFlight);
+  const requestKey = buildRequestIdentity(requestConfig, normalizedPath);
+
+  const isMutationRequest = !["get", "head", "options"].includes(method);
+  const isReadLikeMutation =
+    (method === "post" && normalizedPath === "/order/calculate") ||
+    (method === "post" && normalizedPath === "/delivery/location");
+
+  if (isMutationRequest && !isReadLikeMutation) {
+    invalidateResponseCache(normalizedPath);
+  }
+
+  const cachedResponse = getCachedResponse(requestKey, requestPolicy);
+  if (cachedResponse) {
+    return Promise.resolve(cachedResponse);
+  }
+
+  if (shouldDedupeInFlight && inflightRequestState.has(requestKey)) {
+    return inflightRequestState.get(requestKey);
+  }
+
+  const requestPromise = baseApiClientRequest(requestConfig)
+    .then((response) => {
+      if (requestPolicy?.cacheTtlMs) {
+        responseCacheState.set(requestKey, {
+          path: normalizedPath,
+          response,
+          timestamp: Date.now(),
+        });
+        trimResponseCache();
+      }
+      return response;
+    })
+    .finally(() => {
+      if (shouldDedupeInFlight) {
+        inflightRequestState.delete(requestKey);
+      }
+    });
+
+  if (shouldDedupeInFlight) {
+    inflightRequestState.set(requestKey, requestPromise);
+  }
+
+  return requestPromise;
+};
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 60000;
 const MEDIA_UPLOAD_TIMEOUT_MS = 180000;

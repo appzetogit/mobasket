@@ -9,7 +9,8 @@ import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
 import AddToCartAnimation from "../../user/components/AddToCartAnimation";
 
-import imgStrawberry from "@/assets/grocery&kitchen/strawberry2.jpeg";
+const imgStrawberry =
+  "data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 600 600'%3E%3Crect width='600' height='600' fill='%23f3f4f6'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' dominant-baseline='middle' fill='%236b7280' font-family='Arial,sans-serif' font-size='32'%3EMoBasket%20Product%3C/text%3E%3C/svg%3E";
 
 const extractId = (value) => {
   if (!value) return "";

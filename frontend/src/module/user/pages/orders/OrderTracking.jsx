@@ -681,25 +681,41 @@ export default function OrderTracking() {
 
   // Poll for order updates (especially when delivery partner accepts)
   // Only poll if delivery partner is not yet assigned to avoid unnecessary updates
-  useEffect(() => {
-    if (!orderId || !order) return;
-    
-    // Skip polling if delivery partner is already assigned and accepted
-    const currentDeliveryStatus = order?.deliveryState?.status;
-    const currentPhase = order?.deliveryState?.currentPhase;
-    const hasDeliveryPartner = currentDeliveryStatus === 'accepted' || 
-                               currentPhase === 'en_route_to_pickup' ||
-                               currentPhase === 'at_pickup' ||
-                               currentPhase === 'en_route_to_delivery';
+  useEffect(() => {
+    if (!orderId || !order) return;
+    
+    // Skip polling if delivery partner is already assigned and accepted
+    const currentDeliveryStatus = order?.deliveryState?.status;
+    const currentPhase = order?.deliveryState?.currentPhase;
+    const normalizedOrderStatus = String(order?.status || "").toLowerCase();
+    const normalizedDeliveryStatus = String(currentDeliveryStatus || "").toLowerCase();
+    const normalizedPhase = String(currentPhase || "").toLowerCase();
+    const isTerminalOrderState =
+      normalizedOrderStatus === "cancelled" ||
+      normalizedOrderStatus === "delivered" ||
+      normalizedOrderStatus === "completed" ||
+      normalizedDeliveryStatus === "delivered" ||
+      normalizedPhase === "completed";
+
+    if (isTerminalOrderState) return;
+
+    const hasDeliveryPartner = currentDeliveryStatus === 'accepted' || 
+                               currentPhase === 'en_route_to_pickup' ||
+                               currentPhase === 'at_pickup' ||
+                               currentPhase === 'en_route_to_delivery';
     
     // If delivery partner is assigned, keep polling reasonably fast so status feels live.
     // If not assigned, poll every 5 seconds to detect assignment
-    const pollInterval = hasDeliveryPartner ? 8000 : 5000;
-    
-    const interval = setInterval(async () => {
-      try {
-        const response = await orderAPI.getOrderDetails(orderId);
-        if (response.data?.success && response.data.data?.order) {
+    const pollInterval = hasDeliveryPartner ? 8000 : 5000;
+    
+    const interval = setInterval(async () => {
+      if (typeof document !== "undefined" && document.hidden) {
+        return;
+      }
+
+      try {
+        const response = await orderAPI.getOrderDetails(orderId);
+        if (response.data?.success && response.data.data?.order) {
           const apiOrder = response.data.data.order;
           
           // Check if delivery state changed (e.g., status became 'accepted')

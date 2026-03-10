@@ -24,6 +24,19 @@ const getSafeImageUrl = (imageUrl) => {
 
 };
 
+const resolveThumbnailImage = (item) => {
+
+  return getSafeImageUrl(
+    item?.product?.imageUrl ||
+    item?.product?.image ||
+    item?.imageUrl ||
+    item?.image ||
+    (Array.isArray(item?.images) ? item.images[0] : '') ||
+    (Array.isArray(item?.product?.images) ? item.product.images[0] : ''),
+  );
+
+};
+
 
 
 
@@ -823,7 +836,7 @@ export default function AddToCartAnimation({
   const thumbnailItems = animationItems
     .slice(-3)
     .reverse()
-    .filter((item) => item?.product);
+    .filter(Boolean);
 
 
   const content = (
@@ -850,11 +863,11 @@ export default function AddToCartAnimation({
 
         >
 
-          {getSafeImageUrl(removedProduct.product?.imageUrl) ? (
+          {resolveThumbnailImage(removedProduct) ? (
 
             <img
 
-              src={getSafeImageUrl(removedProduct.product.imageUrl)}
+              src={resolveThumbnailImage(removedProduct)}
 
               alt={removedProduct.product?.name || 'Product'}
               className="w-full h-full object-cover rounded-full"
@@ -897,11 +910,11 @@ export default function AddToCartAnimation({
 
         >
 
-          {getSafeImageUrl(flyingProduct.product?.imageUrl) ? (
+          {resolveThumbnailImage(flyingProduct) ? (
 
             <img
 
-              src={getSafeImageUrl(flyingProduct.product.imageUrl)}
+              src={resolveThumbnailImage(flyingProduct)}
 
               alt={flyingProduct.product?.name || 'Product'}
               className="w-full h-full object-cover rounded-full"
@@ -991,7 +1004,7 @@ export default function AddToCartAnimation({
 
                   <motion.div
 
-                    key={item.product?.id || item.product?._id || `thumb-${idx}`}
+                    key={item.product?.id || item.product?._id || item.id || item._id || `thumb-${idx}`}
                     initial={{ scale: 0, opacity: 0 }}
 
                     animate={{ scale: 1, opacity: 1 }}
@@ -1012,11 +1025,11 @@ export default function AddToCartAnimation({
 
                   >
 
-                    {getSafeImageUrl(item.product?.imageUrl || item.imageUrl || item.image) ? (
+                    {resolveThumbnailImage(item) ? (
 
                       <img
 
-                        src={getSafeImageUrl(item.product?.imageUrl || item.imageUrl || item.image)}
+                        src={resolveThumbnailImage(item)}
 
                         alt={item.product?.name || 'Product'}
                         className="w-full h-full object-cover"
@@ -1027,7 +1040,7 @@ export default function AddToCartAnimation({
 
                       <div className="w-full h-full flex items-center justify-center bg-neutral-200 text-neutral-400 text-xs font-semibold">
 
-                        {item.product?.name?.charAt(0)?.toUpperCase() || '?'}
+                        {(item.product?.name || item.name)?.charAt(0)?.toUpperCase() || '?'}
                       </div>
 
                     )}
@@ -1141,4 +1154,3 @@ export default function AddToCartAnimation({
   return createPortal(content, document.body);
 
 }
-

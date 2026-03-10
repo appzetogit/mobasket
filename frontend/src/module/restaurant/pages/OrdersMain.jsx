@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { checkOnboardingStatus } from "../utils/onboardingUtils"
 import { checkGroceryStoreOnboardingStatus } from "@/module/grocery-store/utils/onboardingUtils"
@@ -115,7 +115,7 @@ function CompletedOrders({ onSelectOrder, orderAPI, searchQuery = "" }) {
 
     fetchOrders()
     intervalId = setInterval(() => {
-      if (isMounted) {
+      if (isMounted && !(typeof document !== "undefined" && document.hidden)) {
         fetchOrders()
       }
     }, 10000)
@@ -328,7 +328,7 @@ function CancelledOrders({ onSelectOrder, orderAPI, isGroceryStore = false, sear
 
     fetchOrders()
     intervalId = setInterval(() => {
-      if (isMounted) {
+      if (isMounted && !(typeof document !== "undefined" && document.hidden)) {
         fetchOrders()
       }
     }, 10000)
@@ -843,9 +843,11 @@ export default function OrdersMain() {
 
   // Check for confirmed orders that haven't been shown in popup yet (fallback if Socket.IO fails)
   useEffect(() => {
-    if (!canAccessLiveOrders) return undefined
+    if (!canAccessLiveOrders || isConnected) return undefined
 
     const checkConfirmedOrders = async () => {
+      if (typeof document !== "undefined" && document.hidden) return
+
       // Skip if popup is already showing or Socket.IO order exists
       if (showNewOrderPopupRef.current || newOrderRef.current) return
 
@@ -904,7 +906,7 @@ export default function OrdersMain() {
     checkConfirmedOrders()
 
     return () => clearInterval(interval)
-  }, [canAccessLiveOrders, orderAPI])
+  }, [canAccessLiveOrders, isConnected, orderAPI])
 
   // Play audio when popup opens
   useEffect(() => {
@@ -2648,7 +2650,7 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "" }
 
     // Refresh orders every 10 seconds
     intervalId = setInterval(() => {
-      if (isMounted) {
+      if (isMounted && !(typeof document !== "undefined" && document.hidden)) {
         fetchOrders()
       }
     }, 10000)
@@ -2910,7 +2912,7 @@ function ReadyOrders({ onSelectOrder, orderAPI, searchQuery = "" }) {
 
     // Refresh every 10 seconds (reduced frequency to avoid spam if backend is down)
     intervalId = setInterval(() => {
-      if (isMounted) {
+      if (isMounted && !(typeof document !== "undefined" && document.hidden)) {
         fetchOrders()
       }
     }, 10000)
@@ -3036,7 +3038,7 @@ const OutForDeliveryOrders = ({ onSelectOrder, orderAPI, searchQuery = "" }) => 
 
     // Refresh every 10 seconds
     intervalId = setInterval(() => {
-      if (isMounted) {
+      if (isMounted && !(typeof document !== "undefined" && document.hidden)) {
         fetchOrders()
       }
     }, 10000)
@@ -3168,7 +3170,7 @@ function ScheduledOrders({ onSelectOrder, orderAPI, searchQuery = "" }) {
 
     fetchOrders()
     intervalId = setInterval(() => {
-      if (isMounted) {
+      if (isMounted && !(typeof document !== "undefined" && document.hidden)) {
         fetchOrders()
       }
     }, 10000)

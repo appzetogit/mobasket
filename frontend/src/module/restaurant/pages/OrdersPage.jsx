@@ -176,6 +176,9 @@ export default function OrdersPage() {
 
     // Set up interval to refresh orders every 10 seconds (fallback if Socket.IO fails)
     const refreshInterval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden) {
+        return
+      }
       fetchOrders()
     }, 10000)
 
@@ -188,59 +191,6 @@ export default function OrdersPage() {
   useEffect(() => {
     if (newOrder) {
       console.log('🔄 New order notification received, refreshing orders list')
-      const fetchOrders = async () => {
-        try {
-          const response = await restaurantAPI.getOrders()
-          if (response.data?.success && response.data.data?.orders) {
-            const transformedOrders = response.data.data.orders.map(order => {
-              const createdAt = new Date(order.createdAt)
-              const now = new Date()
-              const diffMs = now - createdAt
-              const diffMins = Math.floor(diffMs / 60000)
-              const diffHours = Math.floor(diffMs / 3600000)
-              const diffDays = Math.floor(diffMs / 86400000)
-              
-              let timeAgo = ""
-              if (diffMins < 1) {
-                timeAgo = "Just now"
-              } else if (diffMins < 60) {
-                timeAgo = `${diffMins} min${diffMins > 1 ? 's' : ''} ago`
-              } else if (diffHours < 24) {
-                timeAgo = `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
-              } else if (diffDays < 7) {
-                timeAgo = `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
-              } else {
-                const weeks = Math.floor(diffDays / 7)
-                timeAgo = `${weeks} week${weeks > 1 ? 's' : ''} ago`
-              }
-              
-              return {
-                id: order.orderId || order._id,
-                mongoId: order._id,
-                items: order.items?.length || 0,
-                timeAgo: timeAgo,
-                deliveryType: order.deliveryFleet === 'standard' ? 'Home Delivery' : 'Express Delivery',
-                amount: order.pricing?.total || 0,
-                status: order.status || 'pending',
-                createdAt: order.createdAt,
-                customerName: order.userId?.name || 'Customer',
-                customerPhone: order.userId?.phone || '',
-                address: order.address
-              }
-            })
-            setOrders(transformedOrders)
-          }
-        } catch (err) {
-          console.error('Error refreshing orders:', err)
-        }
-      }
-      fetchOrders()
-    }
-  }, [newOrder])
-
-  // Refresh orders when new order notification is cleared
-  useEffect(() => {
-    if (!newOrder) {
       const fetchOrders = async () => {
         try {
           const response = await restaurantAPI.getOrders()
