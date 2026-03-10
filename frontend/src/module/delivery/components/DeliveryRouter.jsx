@@ -33,7 +33,7 @@ import ViewSupportTicket from "../pages/ViewSupportTicket"
 import ShowIdCard from "../pages/ShowIdCard"
 import ChangeLanguage from "../pages/ChangeLanguage"
 import SelectDropLocation from "../pages/SelectDropLocation"
-import ReferAndEarn from "../pages/ReferAndEarn"
+// import ReferAndEarn from "../pages/ReferAndEarn"
 import YourReferrals from "../pages/YourReferrals"
 import Earnings from "../pages/Earnings"
 import TripHistory from "../pages/TripHistory"
@@ -104,7 +104,7 @@ export default function DeliveryRouter() {
         }
         path="/select-drop-location"
       />
-      <Route
+      {/* <Route
         element={
           <ProtectedRoute>
             <DeliveryLayout>
@@ -113,7 +113,7 @@ export default function DeliveryRouter() {
           </ProtectedRoute>
         }
         path="/refer-and-earn"
-      />
+      /> */}
       <Route
         element={
           <ProtectedRoute>

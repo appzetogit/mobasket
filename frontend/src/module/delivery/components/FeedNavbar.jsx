@@ -440,25 +440,42 @@ export default function FeedNavbar({ className = "" }) {
         if (response?.data?.success && response?.data?.data?.profile) {
           const profile = response.data.data.profile;
           setProfileName(profile?.name || "");
-          // Use profileImage.url first, fallback to documents.photo
-          const imageUrl = profile.profileImage?.url || profile.documents?.photo;
-          if (imageUrl) {
-            setProfileImage(imageUrl);
-            setImageError(false);
-          } else {
-            setProfileImage(null);
-            setImageError(false);
+          // Show avatar only when a valid explicit profile image is available.
+          const imageUrl = typeof profile?.profileImage?.url === "string"
+            ? profile.profileImage.url.trim()
+            : "";
+          const documentPhotoUrl = typeof profile?.documents?.photo === "string"
+            ? profile.documents.photo.trim()
+            : "";
+          const hasValidProfileImage =
+            imageUrl !== "" &&
+            imageUrl.toLowerCase() !== "null" &&
+            imageUrl.toLowerCase() !== "undefined";
+          const isOnlyDocumentPhoto =
+            hasValidProfileImage &&
+            documentPhotoUrl !== "" &&
+            imageUrl === documentPhotoUrl;
+
+          if (hasValidProfileImage && !isOnlyDocumentPhoto) {
+            setProfileImage(imageUrl);
+            setImageError(false);
+          } else {
+            setProfileImage(null);
+            setImageError(false);
           }
         }
-      } catch (error) {
+      } catch (error) {
         // Skip logging network and timeout errors (handled by axios interceptor)
-        if (error.code !== 'ECONNABORTED' && 
-            error.code !== 'ERR_NETWORK' && 
-            error.message !== 'Network Error' &&
-            !error.message?.includes('timeout')) {
-          console.error("Error fetching profile image for navbar:", error);
-        }
-      }
+        if (error.code !== 'ECONNABORTED' && 
+            error.code !== 'ERR_NETWORK' && 
+            error.message !== 'Network Error' &&
+            !error.message?.includes('timeout')) {
+          console.error("Error fetching profile image for navbar:", error);
+        }
+        // Avoid showing stale avatar when profile fetch fails.
+        setProfileImage(null);
+        setImageError(false);
+      }
     };
 
     fetchProfileImage();

@@ -4525,7 +4525,7 @@ export default function DeliveryHome() {
   // Earnings Guarantee - Use active earning addon if available, otherwise show 0
 
 
-  // When no offer is active, show 0 of 0 and â‚¹0
+  // When no offer is active, show 0 of 0 and ₹0
 
 
   const earningsGuaranteeTarget = activeEarningAddon?.earningAmount || 0
@@ -14175,7 +14175,7 @@ export default function DeliveryHome() {
       if (isCashInHandLimitReached) {
 
 
-        toast.error(`Cash in hand limit reached (â‚¹${totalCashLimit.toFixed(2)}). Deposit cash in hand to continue receiving orders.`)
+        toast.error(`Cash in hand limit reached (\u20B9${totalCashLimit.toFixed(2)}). Deposit cash in hand to continue receiving orders.`)
 
 
         clearNewOrder()
@@ -14232,7 +14232,7 @@ export default function DeliveryHome() {
         toast.error(
 
 
-          `COD limit exceeded. Current cash in hand â‚¹${cashInHand.toFixed(2)}, incoming COD â‚¹${incomingCodAmount.toFixed(2)}, limit â‚¹${totalCashLimit.toFixed(2)}. Deposit cash to receive this order.`,
+          `COD limit exceeded. Current cash in hand \u20B9${cashInHand.toFixed(2)}, incoming COD \u20B9${incomingCodAmount.toFixed(2)}, limit \u20B9${totalCashLimit.toFixed(2)}. Deposit cash to receive this order.`,
 
 
         )
@@ -28945,7 +28945,7 @@ export default function DeliveryHome() {
                       <p className="text-xs text-gray-700 mt-1">
 
 
-                        Cash in hand has reached the delivery cash limit (â‚¹{totalCashLimit.toFixed(2)}). Deposit cash in hand to continue receiving orders.
+                        Cash in hand has reached the delivery cash limit ({"\u20B9"}{totalCashLimit.toFixed(2)}). Deposit cash in hand to continue receiving orders.
 
 
                       </p>
@@ -30025,7 +30025,7 @@ export default function DeliveryHome() {
                 <div className="relative z-10">
 
 
-                  <div className="text-white text-3xl font-bold mb-1">â‚¹6,000                 <span className="text-white/90 text-base font-medium mb-1">referral bonus</span>
+                  <div className="text-white text-3xl font-bold mb-1">{"\u20B9"}6,000                 <span className="text-white/90 text-base font-medium mb-1">referral bonus</span>
 
 
                   </div>
@@ -30067,7 +30067,7 @@ export default function DeliveryHome() {
                 <div className="flex items-center text-center justify-center gap-2 mb-2">
 
 
-                  <div className="text-4xl font-bold text-center">â‚¹100</div>
+                  <div className="text-4xl font-bold text-center">{"\u20B9"}100</div>
 
 
                   <Lock className="w-5 h-5 text-white" />
@@ -30076,7 +30076,7 @@ export default function DeliveryHome() {
                 </div>
 
 
-                <p className="text-white/90 text-center text-sm mb-4">Complete 1 order to unlock â‚¹100</p>
+                <p className="text-white/90 text-center text-sm mb-4">Complete 1 order to unlock {"\u20B9"}100</p>
 
 
                 <div className="flex items-center text-center justify-center gap-2 text-white/70 text-xs mb-4">
@@ -30214,7 +30214,7 @@ export default function DeliveryHome() {
                     <div className="bg-black text-white px-4 py-3 rounded-lg text-center min-w-[80px]">
 
 
-                      <div className="text-2xl font-bold">â‚¹{earningsGuaranteeTarget.toFixed(0)}</div>
+                      <div className="text-2xl font-bold">{"\u20B9"}{earningsGuaranteeTarget.toFixed(0)}</div>
 
 
                       <div className="text-xs text-white/80 mt-1">{hasActiveOffer ? `${earningsGuaranteeOrdersTarget} orders` : "This week"}</div>
@@ -30472,7 +30472,7 @@ export default function DeliveryHome() {
                         <div className="absolute inset-0 flex items-center justify-center">
 
 
-                          <span className="text-lg font-bold text-gray-900">â‚¹{earningsGuaranteeCurrentEarnings.toFixed(2)}</span>
+                          <span className="text-lg font-bold text-gray-900">{"\u20B9"}{earningsGuaranteeCurrentEarnings.toFixed(2)}</span>
 
 
                         </div>
@@ -31768,7 +31768,7 @@ export default function DeliveryHome() {
                     <p className="text-4xl font-bold text-gray-900 mb-2">
 
 
-                      â‚¹{(() => {
+                      {"\u20B9"}{(() => {
 
 
                         const earnings = newOrder?.estimatedEarnings || selectedRestaurant?.estimatedEarnings || 0;
@@ -31897,13 +31897,13 @@ export default function DeliveryHome() {
                             <p className="text-green-700 text-xs">
 
 
-                              Base: â‚¹{earnings.basePayout?.toFixed(0) || '0'}
+                              Base: {"\u20B9"}{earnings.basePayout?.toFixed(0) || '0'}
 
 
                               {earnings.distanceCommission > 0 && (
 
 
-                                <> + Distance ({earnings.distance?.toFixed(1)} km Ã— â‚¹{earnings.commissionPerKm?.toFixed(0)}/km) = â‚¹{earnings.distanceCommission?.toFixed(0)}</>
+                                <> + Distance ({earnings.distance?.toFixed(1)} km {"\u00D7"} {"\u20B9"}{earnings.commissionPerKm?.toFixed(0)}/km) = {"\u20B9"}{earnings.distanceCommission?.toFixed(0)}</>
 
 
                               )}
@@ -33740,7 +33740,7 @@ export default function DeliveryHome() {
               <p className="text-gray-600 text-sm mb-3 text-center">
 
 
-                {billImageUploaded ? 'âœ… Bill image uploaded' : 'Please capture bill image'}
+                {billImageUploaded ? 'Bill image uploaded' : 'Please capture bill image'}
 
 
               </p>
@@ -34577,7 +34577,7 @@ export default function DeliveryHome() {
             <h1 className="text-2xl font-bold text-gray-900 mb-2">
 
 
-              Great job! Delivery complete ðŸ‘
+              Great job! Delivery complete {"\uD83D\uDC4D"}
 
 
             </h1>
@@ -34628,7 +34628,13 @@ export default function DeliveryHome() {
                       : `${tripDistance.toFixed(0)} m`)
 
 
-                    : (selectedRestaurant?.tripDistance || 'Calculating...')}
+                    : (
+                      selectedRestaurant?.tripDistance ||
+                      selectedRestaurant?.dropDistance ||
+                      selectedRestaurant?.pickupDistance ||
+                      selectedRestaurant?.distance ||
+                      'Distance not available'
+                    )}
 
 
                 </span>
@@ -34667,7 +34673,11 @@ export default function DeliveryHome() {
                       : `${tripTime} secs`)
 
 
-                    : (selectedRestaurant?.tripTime || 'Calculating...')}
+                    : (
+                      selectedRestaurant?.tripTime ||
+                      selectedRestaurant?.timeAway ||
+                      'N/A'
+                    )}
 
 
                 </span>
@@ -34730,7 +34740,7 @@ export default function DeliveryHome() {
                   <span className={`text-lg font-bold ${isCod ? 'text-amber-700' : 'text-emerald-700'}`}>
 
 
-                    â‚¹{total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    {"\u20B9"}{total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
 
 
                   </span>
@@ -35024,13 +35034,13 @@ export default function DeliveryHome() {
                   {star <= customerRating ? (
 
 
-                    <span className="text-yellow-400">â˜…</span>
+                    <span className="text-yellow-400">{"\u2605"}</span>
 
 
                   ) : (
 
 
-                    <span className="text-gray-300">â˜…</span>
+                    <span className="text-gray-300">{"\u2605"}</span>
 
 
                   )}
@@ -35216,7 +35226,7 @@ export default function DeliveryHome() {
                       if (earnings > 0) {
 
 
-                        toast.success(`â‚¹${earnings.toFixed(2)} added to your wallet! ðŸ’°`)
+                        toast.success(`\u20B9${earnings.toFixed(2)} added to your wallet!`)
 
 
                       }
@@ -35381,7 +35391,7 @@ export default function DeliveryHome() {
               <p className="text-5xl font-bold text-gray-900">
 
 
-                â‚¹{(() => {
+                {"\u20B9"}{(() => {
 
 
                   if (orderEarnings > 0) {
@@ -35417,7 +35427,7 @@ export default function DeliveryHome() {
               </p>
 
 
-              <p className="text-green-600 text-sm mt-2">ðŸ’° Added to your wallet</p>
+              <p className="text-green-600 text-sm mt-2">Added to your wallet</p>
 
 
             </div>
@@ -35450,7 +35460,7 @@ export default function DeliveryHome() {
                     <span className="text-gray-600">Trip pay</span>
 
 
-                    <span className="text-gray-900 font-semibold">â‚¹{(() => {
+                    <span className="text-gray-900 font-semibold">{"\u20B9"}{(() => {
 
 
                       let earnings = 0;
@@ -35504,7 +35514,7 @@ export default function DeliveryHome() {
                     <span className="text-gray-600">Long distance return pay</span>
 
 
-                    <span className="text-gray-900 font-semibold">â‚¹5.00</span>
+                    <span className="text-gray-900 font-semibold">{"\u20B9"}5.00</span>
 
 
                   </div>
@@ -35519,7 +35529,7 @@ export default function DeliveryHome() {
                     <span className="text-lg font-bold text-gray-900">Total Earnings</span>
 
 
-                    <span className="text-lg font-bold text-gray-900">â‚¹{(() => {
+                    <span className="text-lg font-bold text-gray-900">{"\u20B9"}{(() => {
 
 
                       if (orderEarnings > 0) {
