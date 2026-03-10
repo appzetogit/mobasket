@@ -50,9 +50,23 @@ export default function BottomNavigation() {
         if (response?.data?.success && response?.data?.data?.profile) {
           const profile = response.data.data.profile
           setProfileName(profile?.name || "")
-          // Use profileImage.url first, fallback to documents.photo
-          const imageUrl = profile.profileImage?.url || profile.documents?.photo
-          if (imageUrl) {
+          // Show avatar only when a valid explicit profile image is available.
+          const imageUrl = typeof profile?.profileImage?.url === "string"
+            ? profile.profileImage.url.trim()
+            : ""
+          const documentPhotoUrl = typeof profile?.documents?.photo === "string"
+            ? profile.documents.photo.trim()
+            : ""
+          const hasValidProfileImage =
+            imageUrl !== "" &&
+            imageUrl.toLowerCase() !== "null" &&
+            imageUrl.toLowerCase() !== "undefined"
+          const isOnlyDocumentPhoto =
+            hasValidProfileImage &&
+            documentPhotoUrl !== "" &&
+            imageUrl === documentPhotoUrl
+
+          if (hasValidProfileImage && !isOnlyDocumentPhoto) {
             setProfileImage(imageUrl)
             setImageError(false)
           } else {
@@ -68,6 +82,9 @@ export default function BottomNavigation() {
             !error.message?.includes('timeout')) {
           console.error("Error fetching profile image for navigation:", error)
         }
+        // Avoid showing stale avatar when profile fetch fails.
+        setProfileImage(null)
+        setImageError(false)
       }
     }
 

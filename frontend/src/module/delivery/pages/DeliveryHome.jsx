@@ -34646,7 +34646,13 @@ export default function DeliveryHome() {
                       : `${tripDistance.toFixed(0)} m`)
 
 
-                    : (selectedRestaurant?.tripDistance || 'Calculating...')}
+                    : (
+                      selectedRestaurant?.tripDistance ||
+                      selectedRestaurant?.dropDistance ||
+                      selectedRestaurant?.pickupDistance ||
+                      selectedRestaurant?.distance ||
+                      'Distance not available'
+                    )}
 
 
                 </span>
@@ -34685,7 +34691,11 @@ export default function DeliveryHome() {
                       : `${tripTime} secs`)
 
 
-                    : (selectedRestaurant?.tripTime || 'Calculating...')}
+                    : (
+                      selectedRestaurant?.tripTime ||
+                      selectedRestaurant?.timeAway ||
+                      'N/A'
+                    )}
 
 
                 </span>

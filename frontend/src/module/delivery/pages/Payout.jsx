@@ -10,6 +10,15 @@ import {
 import { formatCurrency } from "../../restaurant/utils/currency"
 import { fetchWalletTransactions } from "../utils/deliveryWalletState"
 
+const normalizeTransactionType = (transaction = {}) =>
+  String(transaction?.type || "").trim().toLowerCase()
+
+// Keep payout screen compatible with legacy type values returned by older data.
+const isWithdrawalTransaction = (transaction = {}) => {
+  const type = normalizeTransactionType(transaction)
+  return type === "withdrawal" || type === "withdraw" || type.includes("withdraw")
+}
+
 export default function Payout() {
   const navigate = useNavigate()
   const [withdrawals, setWithdrawals] = useState([])
@@ -21,14 +30,12 @@ export default function Payout() {
       try {
         setLoading(true)
         
-        // Fetch only withdrawal transactions
-        const fetchedTransactions = await fetchWalletTransactions({
-          type: "withdrawal",
-          limit: 1000
-        })
+        // Fetch all and filter client-side so legacy/variant type values are also included.
+        const fetchedTransactions = await fetchWalletTransactions({ limit: 1000 })
+        const withdrawalTransactions = fetchedTransactions.filter(isWithdrawalTransaction)
         
         // Format transactions for display
-        const formattedTransactions = fetchedTransactions.map(t => ({
+        const formattedTransactions = withdrawalTransactions.map(t => ({
           id: t._id || t.id,
           amount: t.amount || 0,
           status: t.status || 'Pending',
