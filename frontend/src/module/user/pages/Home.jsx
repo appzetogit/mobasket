@@ -91,14 +91,76 @@ const placeholders = [
 
 const normalizeCityName = (value) => String(value || "").trim().toLowerCase();
 
+const CITY_PLACEHOLDERS = new Set([
+  "",
+  "current location",
+  "select location",
+  "unknown city",
+]);
+
+const isUsableCityValue = (value) => {
+  const normalized = normalizeCityName(value);
+  return normalized && !CITY_PLACEHOLDERS.has(normalized);
+};
+
+const extractCityFromAddressText = (value) => {
+  if (!value || typeof value !== "string") return "";
+  const parts = value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (!parts.length) return "";
+
+  const pincodeIndex = parts.findIndex((part) => /^\d{5,6}$/.test(part));
+  if (pincodeIndex >= 1) {
+    return parts[pincodeIndex - 1] || "";
+  }
+
+  if (parts.length >= 2) {
+    return parts[parts.length - 2] || "";
+  }
+
+  return parts[0] || "";
+};
+
+const getSavedUserCity = () => {
+  if (typeof window === "undefined") return "";
+  try {
+    const savedLocation = JSON.parse(localStorage.getItem("userLocation") || "null");
+    if (!savedLocation || typeof savedLocation !== "object") return "";
+
+    const directCity = savedLocation.city || savedLocation.location?.city || "";
+    if (isUsableCityValue(directCity)) return String(directCity).trim();
+
+    const fromAddress =
+      extractCityFromAddressText(savedLocation.formattedAddress) ||
+      extractCityFromAddressText(savedLocation.address);
+    return isUsableCityValue(fromAddress) ? String(fromAddress).trim() : "";
+  } catch {
+    return "";
+  }
+};
+
+const resolveUserCity = (locationLike) => {
+  const directCity = locationLike?.city || locationLike?.location?.city || "";
+  if (isUsableCityValue(directCity)) return String(directCity).trim();
+
+  const fromAddress =
+    extractCityFromAddressText(locationLike?.formattedAddress) ||
+    extractCityFromAddressText(locationLike?.address);
+  if (isUsableCityValue(fromAddress)) return String(fromAddress).trim();
+
+  return getSavedUserCity();
+};
+
 const matchesRestaurantCity = (restaurant, normalizedUserCity) => {
-  if (!normalizedUserCity) return true;
+  if (!normalizedUserCity) return false;
 
   const candidates = [
     restaurant?.location?.city,
     restaurant?.city,
     restaurant?.address?.city,
-    restaurant?.location?.area,
     restaurant?.location?.formattedAddress,
     restaurant?.location?.address,
     extractRestaurantCity(restaurant),
@@ -106,7 +168,7 @@ const matchesRestaurantCity = (restaurant, normalizedUserCity) => {
     .map((value) => normalizeCityName(value))
     .filter(Boolean);
 
-  if (candidates.length === 0) return true;
+  if (candidates.length === 0) return false;
 
   return candidates.some(
     (candidate) =>
@@ -910,7 +972,7 @@ export default function Home() {
   const { addFavorite, removeFavorite, isFavorite, getFavorites } =
     profileContext;
   const { addToCart, cart } = useCart();
-  const { location, loading, requestLocation } = useLocation();
+  const { location, loading } = useLocation();
   const {
     zoneId,
     zoneStatus,
@@ -930,6 +992,8 @@ export default function Home() {
 
   const cityName = location?.city || "Select";
   const stateName = location?.state || "Location";
+
+  // Keep home location stable by default. Location is refreshed only from explicit user action.
 
   // Mock points value - replace with actual points from context/store
   const userPoints = 99;
@@ -1070,11 +1134,18 @@ export default function Home() {
 
         // Home page is MoFood-only and should stay within the user's city.
         params.platform = "mofood";
-        const normalizedUserCity = normalizeCityName(
-          location?.city && location.city !== "Current Location" ? location.city : ""
-        );
+        const resolvedUserCity = resolveUserCity(location);
+        const normalizedUserCity = normalizeCityName(resolvedUserCity);
+
+        if (!normalizedUserCity) {
+          // City is mandatory for home listing scope; avoid showing cross-city restaurants.
+          setRestaurantsData([]);
+          setLoadingRestaurants(false);
+          return;
+        }
+
         if (normalizedUserCity) {
-          params.city = location.city;
+          params.city = resolvedUserCity;
         }
 
         // Strict zone filter: show only restaurants from the same detected zone when available.

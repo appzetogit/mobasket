@@ -35,10 +35,16 @@ export default function DesktopNavbar() {
     loadLogo();
   }, []);
 
-  // Show area if available, otherwise show city
+  const isGenericArea = (value) => {
+    const text = String(value || "").trim().toLowerCase();
+    if (!text) return true;
+    return ["home", "office", "work", "other"].includes(text) || text.includes("district");
+  };
+  // Show area if available and meaningful, otherwise show city
   // Priority: area > city > "Select"
   const areaName =
     userLocation?.area && userLocation?.area.trim()
+      && !isGenericArea(userLocation.area)
       ? userLocation.area.trim()
       : null;
   const cityName = userLocation?.city || null;

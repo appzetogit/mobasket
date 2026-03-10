@@ -70,8 +70,18 @@ export default function Navbar() {
     }
   }, [])
 
-  // Show area if available, otherwise show city
-  const areaName = location?.area && location?.area !== location?.city ? location.area : null
+  const isGenericArea = (value) => {
+    const text = String(value || "").trim().toLowerCase()
+    if (!text) return true
+    return ["home", "office", "work", "other"].includes(text) || text.includes("district")
+  }
+  // Show area if available and meaningful, otherwise show city
+  const areaName =
+    location?.area &&
+    location?.area !== location?.city &&
+    !isGenericArea(location?.area)
+      ? location.area
+      : null
   const cityName = areaName || location?.city || "Select"
   const stateName = location?.state || "Location"
 

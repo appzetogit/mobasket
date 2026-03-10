@@ -167,6 +167,22 @@ function getSavedAddressLocation() {
   }
 }
 
+function getUserLocationSource() {
+  try {
+    return String(localStorage.getItem("userLocationSource") || "").trim().toLowerCase()
+  } catch {
+    return ""
+  }
+}
+
+function setUserLocationSource(source) {
+  try {
+    localStorage.setItem("userLocationSource", String(source || "").trim().toLowerCase())
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
 export function useLocation() {
   const [location, setLocation] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -193,6 +209,7 @@ export function useLocation() {
       const savedAddressLocation = getSavedAddressLocation()
       if (!savedAddressLocation) return
 
+      setUserLocationSource("saved")
       localStorage.setItem("userLocation", JSON.stringify(savedAddressLocation))
       window.dispatchEvent(new CustomEvent("userLocationChanged", { detail: savedAddressLocation }))
       setLocation(savedAddressLocation)
@@ -1701,7 +1718,7 @@ export function useLocation() {
 
               const savedPreferredLocation = getSavedAddressLocation()
               const currentKnownLocation = location
-              if (isIncompleteAddressData(finalLoc)) {
+              if (!forceFresh && isIncompleteAddressData(finalLoc)) {
                 if (
                   savedPreferredLocation &&
                   !isIncompleteAddressData(savedPreferredLocation) &&
@@ -1937,6 +1954,11 @@ export function useLocation() {
     const startWatch = (options) => {
       watchIdRef.current = navigator.geolocation.watchPosition(
         async (pos) => {
+          if (getUserLocationSource() === "saved") {
+            // User explicitly selected a saved/default address.
+            // Keep header/location stable until user chooses current location manually.
+            return
+          }
           try {
             const { latitude, longitude, accuracy } = pos.coords
             
@@ -2266,6 +2288,7 @@ export function useLocation() {
   useEffect(() => {
     const savedAddressLocation = getSavedAddressLocation()
     if (savedAddressLocation) {
+      setUserLocationSource("saved")
       localStorage.setItem("userLocation", JSON.stringify(savedAddressLocation))
       window.dispatchEvent(new CustomEvent("userLocationChanged", { detail: savedAddressLocation }))
       setLocation(savedAddressLocation)
@@ -2448,31 +2471,59 @@ export function useLocation() {
     }
   }, [])
 
-  const requestLocation = async () => {
+  const requestLocation = async (forceFresh = true, updateDB = true, showLoadingIndicator = true) => {
     setLoading(true)
     setError(null)
     
     try {
-      // Clear cached location to force fresh fetch
-      localStorage.removeItem("userLocation")
+      if (forceFresh) {
+        setUserLocationSource("current")
+        // Clear cached location to force fresh GPS + reverse geocode
+        localStorage.removeItem("userLocation")
+      }
       
-      // Show loading, so pass showLoading = true
-      // forceFresh = true, updateDB = true, showLoading = true
-      // This ensures we get fresh GPS coordinates and reverse geocode with Google Maps
-      const location = await getLocation(true, true, true)
-      
-      // Verify we got complete address (POI, building, floor, area, city, state, pincode)
-      if (!location?.formattedAddress || 
-          location.formattedAddress === "Select location" ||
-          location.formattedAddress.match(/^-?\d+\.\d+,\s*-?\d+\.\d+$/) ||
-          location.formattedAddress.split(',').length < 4) {
-        // Location received but address is incomplete - silently handle
+      let nextLocation = await getLocation(updateDB, forceFresh, showLoadingIndicator)
+
+      // One-shot refinement to match the accurate "Detect Current Location" behavior
+      // used in map/address picker flows.
+      if (
+        nextLocation?.latitude &&
+        nextLocation?.longitude &&
+        isIncompleteAddressData(nextLocation)
+      ) {
+        try {
+          const refined = await reverseGeocodeWithOLAMaps(
+            Number(nextLocation.latitude),
+            Number(nextLocation.longitude)
+          )
+          const refinedLocation = {
+            ...nextLocation,
+            ...refined,
+            latitude: Number(nextLocation.latitude),
+            longitude: Number(nextLocation.longitude),
+            accuracy: nextLocation?.accuracy ?? null,
+            lastUpdated: Date.now(),
+          }
+
+          if (!isIncompleteAddressData(refinedLocation)) {
+            nextLocation = refinedLocation
+            localStorage.setItem("userLocation", JSON.stringify(refinedLocation))
+            window.dispatchEvent(new CustomEvent("userLocationChanged", { detail: refinedLocation }))
+            setLocation(refinedLocation)
+            setPermissionGranted(true)
+            if (updateDB) {
+              await updateLocationInDB(refinedLocation).catch(() => {})
+            }
+          }
+        } catch {
+          // keep original nextLocation if refinement fails
+        }
       }
       
       // Restart watching for live updates
       startWatchingLocation()
       
-      return location
+      return nextLocation
     } catch (err) {
       setError(err.message || "Failed to get location")
       // Still try to start watching in case it works

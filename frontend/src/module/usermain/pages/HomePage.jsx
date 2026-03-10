@@ -266,45 +266,49 @@ export default function HomePage() {
   }, [selectedAddress]);
 
   const effectiveLocation = useMemo(() => {
+    // Always prefer the user's chosen saved/default address to avoid mixed header lines.
     const sourceLocation =
-      (location && typeof location === "object" && (location.formattedAddress || location.address || location.area || location.city))
-        ? location
-        : (storedLocation && typeof storedLocation === "object" && (storedLocation.formattedAddress || storedLocation.address || storedLocation.area || storedLocation.city))
-          ? storedLocation
-          : selectedAddress;
+      (selectedAddress && typeof selectedAddress === "object" && (selectedAddress.formattedAddress || selectedAddress.address || selectedAddress.area || selectedAddress.city))
+        ? selectedAddress
+        : (location && typeof location === "object" && (location.formattedAddress || location.address || location.area || location.city))
+          ? location
+          : (storedLocation && typeof storedLocation === "object" && (storedLocation.formattedAddress || storedLocation.address || storedLocation.area || storedLocation.city))
+            ? storedLocation
+            : null;
 
     if (!sourceLocation) return null;
 
     const coords = extractAddressCoordinates(sourceLocation);
-    return {
-      ...(sourceLocation.location && typeof sourceLocation.location === "object"
+    const nestedLocation =
+      sourceLocation?.location && typeof sourceLocation.location === "object"
         ? sourceLocation.location
-        : {}),
+        : {};
+
+    return {
       ...sourceLocation,
       latitude:
         coords?.latitude ??
-        (Number.isFinite(Number(sourceLocation?.location?.latitude))
-          ? Number(sourceLocation?.location?.latitude)
+        (Number.isFinite(Number(nestedLocation?.latitude))
+          ? Number(nestedLocation?.latitude)
           : undefined),
       longitude:
         coords?.longitude ??
-        (Number.isFinite(Number(sourceLocation?.location?.longitude))
-          ? Number(sourceLocation?.location?.longitude)
+        (Number.isFinite(Number(nestedLocation?.longitude))
+          ? Number(nestedLocation?.longitude)
           : undefined),
       address:
         sourceLocation.address ||
-        sourceLocation.formattedAddress ||
         sourceLocation.street ||
+        sourceLocation.formattedAddress ||
         "",
       formattedAddress:
         sourceLocation.formattedAddress ||
-        sourceLocation.address ||
         "",
-      city: sourceLocation.city || sourceLocation.location?.city || "",
-      state: sourceLocation.state || sourceLocation.location?.state || "",
+      city: sourceLocation.city || nestedLocation?.city || "",
+      state: sourceLocation.state || nestedLocation?.state || "",
       area:
         sourceLocation.area ||
-        sourceLocation.location?.area ||
+        nestedLocation?.area ||
         sourceLocation.label ||
         "",
     };

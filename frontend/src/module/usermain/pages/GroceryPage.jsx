@@ -90,6 +90,16 @@ const formatSavedAddressForHeader = (address) => {
   return formattedAddress;
 };
 
+const parseStoredAddresses = () => {
+  if (typeof window === "undefined") return [];
+  try {
+    const parsed = JSON.parse(localStorage.getItem("userAddresses") || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
 const GroceryPage = () => {
   const FALLBACK_IMAGE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
   const navigate = useNavigate();
@@ -1620,18 +1630,30 @@ const GroceryPage = () => {
   }, [nearestStoreDistanceKm, selectedStoreDistanceKm, selectedStoreId]);
 
   const savedHeaderAddress = useMemo(() => {
+    const addressList = Array.isArray(addresses) && addresses.length > 0
+      ? addresses
+      : parseStoredAddresses();
+
+    if (!addressList.length) return "";
+
     const defaultAddress = getDefaultAddress?.();
     const defaultAddressId = String(defaultAddress?._id || defaultAddress?.id || "").trim();
 
-    if (defaultAddressId && Array.isArray(addresses)) {
-      const hydratedDefault = addresses.find(
+    if (defaultAddressId) {
+      const hydratedDefault = addressList.find(
         (address) => String(address?._id || address?.id || "").trim() === defaultAddressId,
       );
       const hydratedDisplay = formatSavedAddressForHeader(hydratedDefault);
       if (hydratedDisplay) return hydratedDisplay;
     }
 
-    return formatSavedAddressForHeader(defaultAddress);
+    const explicitDefault = addressList.find(
+      (address) => address?.isDefault === true || address?.default === true,
+    );
+    const explicitDefaultDisplay = formatSavedAddressForHeader(explicitDefault);
+    if (explicitDefaultDisplay) return explicitDefaultDisplay;
+
+    return formatSavedAddressForHeader(addressList[0]);
   }, [addresses, getDefaultAddress]);
 
   const topAddress = useMemo(() => {
@@ -1639,34 +1661,10 @@ const GroceryPage = () => {
       return savedHeaderAddress;
     }
 
-    const address = normalizeAddressText(userLocation?.address);
-    if (address && !isCoarseLocationText(address)) {
-      return address;
-    }
-
-    const fallbackParts = [
-      userLocation?.street,
-      userLocation?.area,
-      userLocation?.city,
-      userLocation?.state,
-      userLocation?.postalCode || userLocation?.zipCode,
-    ]
-      .map((part) => normalizeAddressText(part))
-      .filter(Boolean);
-
-    if (fallbackParts.length) {
-      return fallbackParts.join(", ");
-    }
-
-    const formattedAddress = normalizeAddressText(userLocation?.formattedAddress);
-    if (formattedAddress) {
-      return formattedAddress;
-    }
-
     return (
       "Select your location"
     );
-  }, [savedHeaderAddress, userLocation]);
+  }, [savedHeaderAddress]);
 
   const handleBestSellerClick = (item) => {
     if (item.itemType === "category" && item.itemId) {
