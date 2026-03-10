@@ -186,6 +186,34 @@ export default function HomePage() {
     } catch (err) {
       console.error("Failed to parse stored location:", err);
     }
+
+    const syncStoredLocation = (event) => {
+      try {
+        const nextLocation =
+          event?.detail && typeof event.detail === "object"
+            ? event.detail
+            : JSON.parse(localStorage.getItem("userLocation") || "null");
+        if (nextLocation && typeof nextLocation === "object") {
+          setStoredLocation(nextLocation);
+        }
+      } catch {
+        // Ignore malformed event payloads or storage parse errors.
+      }
+    };
+
+    const handleStorageLocationSync = (event) => {
+      if (event.key === "userLocation") {
+        syncStoredLocation();
+      }
+    };
+
+    window.addEventListener("userLocationChanged", syncStoredLocation);
+    window.addEventListener("storage", handleStorageLocationSync);
+
+    return () => {
+      window.removeEventListener("userLocationChanged", syncStoredLocation);
+      window.removeEventListener("storage", handleStorageLocationSync);
+    };
   }, []);
 
   useEffect(() => {
@@ -238,61 +266,68 @@ export default function HomePage() {
   }, [selectedAddress]);
 
   const effectiveLocation = useMemo(() => {
-    if (!selectedAddress) return null;
+    const sourceLocation =
+      (location && typeof location === "object" && (location.formattedAddress || location.address || location.area || location.city))
+        ? location
+        : (storedLocation && typeof storedLocation === "object" && (storedLocation.formattedAddress || storedLocation.address || storedLocation.area || storedLocation.city))
+          ? storedLocation
+          : selectedAddress;
 
-    const coords = extractAddressCoordinates(selectedAddress);
+    if (!sourceLocation) return null;
+
+    const coords = extractAddressCoordinates(sourceLocation);
     return {
-      ...(selectedAddress.location && typeof selectedAddress.location === "object"
-        ? selectedAddress.location
+      ...(sourceLocation.location && typeof sourceLocation.location === "object"
+        ? sourceLocation.location
         : {}),
-      ...selectedAddress,
+      ...sourceLocation,
       latitude:
         coords?.latitude ??
-        (Number.isFinite(Number(selectedAddress?.location?.latitude))
-          ? Number(selectedAddress?.location?.latitude)
+        (Number.isFinite(Number(sourceLocation?.location?.latitude))
+          ? Number(sourceLocation?.location?.latitude)
           : undefined),
       longitude:
         coords?.longitude ??
-        (Number.isFinite(Number(selectedAddress?.location?.longitude))
-          ? Number(selectedAddress?.location?.longitude)
+        (Number.isFinite(Number(sourceLocation?.location?.longitude))
+          ? Number(sourceLocation?.location?.longitude)
           : undefined),
       address:
-        selectedAddress.address ||
-        selectedAddress.formattedAddress ||
-        selectedAddress.street ||
+        sourceLocation.address ||
+        sourceLocation.formattedAddress ||
+        sourceLocation.street ||
         "",
       formattedAddress:
-        selectedAddress.formattedAddress ||
-        selectedAddress.address ||
+        sourceLocation.formattedAddress ||
+        sourceLocation.address ||
         "",
-      city: selectedAddress.city || selectedAddress.location?.city || "",
-      state: selectedAddress.state || selectedAddress.location?.state || "",
+      city: sourceLocation.city || sourceLocation.location?.city || "",
+      state: sourceLocation.state || sourceLocation.location?.state || "",
       area:
-        selectedAddress.area ||
-        selectedAddress.location?.area ||
-        selectedAddress.label ||
+        sourceLocation.area ||
+        sourceLocation.location?.area ||
+        sourceLocation.label ||
         "",
     };
-  }, [selectedAddress]);
+  }, [location, storedLocation, selectedAddress]);
 
   const { zoneId, isOutOfService } = useZone(effectiveLocation, "mofood");
 
   const savedAddressDisplay = useMemo(() => {
-    if (!selectedAddress) return null;
+    if (!effectiveLocation) return null;
 
     const formattedAddress = String(
-      selectedAddress?.formattedAddress ||
-      selectedAddress?.address ||
+      effectiveLocation?.formattedAddress ||
+      effectiveLocation?.address ||
       ""
     ).trim();
 
     const fullAddressParts = [
-      selectedAddress?.addressLine1,
-      selectedAddress?.street,
-      selectedAddress?.area || selectedAddress?.location?.area,
-      selectedAddress?.city || selectedAddress?.location?.city,
-      selectedAddress?.state || selectedAddress?.location?.state,
-      selectedAddress?.zipCode || selectedAddress?.pincode || selectedAddress?.postalCode,
+      effectiveLocation?.addressLine1,
+      effectiveLocation?.street,
+      effectiveLocation?.area || effectiveLocation?.location?.area,
+      effectiveLocation?.city || effectiveLocation?.location?.city,
+      effectiveLocation?.state || effectiveLocation?.location?.state,
+      effectiveLocation?.zipCode || effectiveLocation?.pincode || effectiveLocation?.postalCode,
     ]
       .map((part) => String(part || "").trim())
       .filter(Boolean);
@@ -307,7 +342,7 @@ export default function HomePage() {
     const sub = addressSegments.slice(2).join(", ");
 
     return { main, sub };
-  }, [selectedAddress]);
+  }, [effectiveLocation]);
 
   useEffect(() => {
     const resolveMatchingZones = async () => {

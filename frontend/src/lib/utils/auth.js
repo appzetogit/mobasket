@@ -157,6 +157,10 @@ export function clearModuleAuth(module) {
   localStorage.removeItem(`${module}_user`);
   // Also clear any sessionStorage data
   sessionStorage.removeItem(`${module}AuthData`);
+  // Legacy/session key variant for grocery-store module
+  if (module === "grocery-store") {
+    sessionStorage.removeItem("groceryStoreAuthData");
+  }
 }
 
 /**
@@ -372,7 +376,13 @@ export function clearStoreSignupSession() {
 
     const lKeys = Object.keys(localStorage);
     lKeys.forEach(key => {
-      if (key.includes('grocery-store_onboarding') || key === 'grocery-store_user' || key === 'grocery-store_authenticated') {
+      const normalized = String(key || "").toLowerCase();
+      const isStoreOnboardingKey =
+        normalized.includes("grocery-store_onboarding") ||
+        normalized.includes("grocery_store_onboarding") ||
+        normalized.includes("store_onboarding");
+
+      if (isStoreOnboardingKey || key === 'grocery-store_user' || key === 'grocery-store_authenticated') {
         localStorage.removeItem(key);
       }
     });

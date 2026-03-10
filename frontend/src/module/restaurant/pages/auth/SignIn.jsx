@@ -41,7 +41,7 @@ export default function RestaurantSignIn() {
       
       if (data.accessToken && data.restaurant) {
         // Replace old token with new one (handles cross-module login)
-        setAuthData("restaurant", data.accessToken, data.restaurant)
+        setAuthData("restaurant", data.accessToken, data.restaurant, data.refreshToken)
         
         // Dispatch custom event for same-tab updates
         window.dispatchEvent(new Event('restaurantAuthChanged'))

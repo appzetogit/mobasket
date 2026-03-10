@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useNavigate, useLocation } from "react-router-dom"
+import { clearRestaurantSignupSession, clearStoreSignupSession } from "@/lib/utils/auth"
 import { 
   User,
   Utensils,
@@ -181,18 +182,13 @@ export default function MenuOverlay({ showMenu, setShowMenu }) {
                         if (option.isLogout) {
                           // Handle logout
                           if (window.confirm("Are you sure you want to logout?")) {
-                            // Clear authentication state
+                            // Clear authentication/session state consistently (includes onboarding cache keys)
                             if (isGroceryStore) {
-                              localStorage.removeItem("grocery-store_authenticated")
-                              localStorage.removeItem("grocery-store_user")
-                              localStorage.removeItem("grocery-store_accessToken")
-                              localStorage.removeItem("grocery-store_refreshToken")
+                              clearStoreSignupSession()
                               window.dispatchEvent(new Event('groceryStoreAuthChanged'))
                               navigate("/store/login")
                             } else {
-                              localStorage.removeItem("restaurant_authenticated")
-                              localStorage.removeItem("restaurant_user")
-                              localStorage.removeItem("restaurant_accessToken")
+                              clearRestaurantSignupSession()
                               window.dispatchEvent(new Event('restaurantAuthChanged'))
                               navigate("/restaurant/login")
                             }

@@ -22,6 +22,7 @@ export default function RestaurantGoogleCallback() {
 
         // Get token and user from URL params (set by backend redirect)
         const token = searchParams.get("token")
+        const refreshToken = searchParams.get("refreshToken")
         const userParam = searchParams.get("user")
         const errorParam = searchParams.get("error")
 
@@ -58,7 +59,7 @@ export default function RestaurantGoogleCallback() {
         }
 
         // Store authentication data using utility function
-        setAuthData("restaurant", token, user)
+        setAuthData("restaurant", token, user, refreshToken || undefined)
 
         // Notify any listeners that auth state has changed
         window.dispatchEvent(new Event("restaurantAuthChanged"))
