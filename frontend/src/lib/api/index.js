@@ -471,9 +471,11 @@ export const restaurantAPI = {
 
   // Accept order
   acceptOrder: (id, preparationTime = null) => {
-    return apiClient.patch(API_ENDPOINTS.RESTAURANT.ORDER_ACCEPT.replace(':id', id), {
-      preparationTime
-    });
+    return apiClient.patch(
+      API_ENDPOINTS.RESTAURANT.ORDER_ACCEPT.replace(':id', id),
+      { preparationTime },
+      { timeout: 120000 }
+    );
   },
 
   // Reject order
@@ -814,9 +816,11 @@ export const groceryStoreAPI = {
   },
 
   acceptOrder: (id, preparationTime = null) => {
-    return apiClient.patch(API_ENDPOINTS.GROCERY_STORE.ORDER_ACCEPT.replace(':id', id), {
-      preparationTime
-    });
+    return apiClient.patch(
+      API_ENDPOINTS.GROCERY_STORE.ORDER_ACCEPT.replace(':id', id),
+      { preparationTime },
+      { timeout: 120000 }
+    );
   },
 
   rejectOrder: (id, reason = '') => {
@@ -1047,6 +1051,11 @@ export const deliveryAPI = {
       payload.currentLng = currentLocation.lng;
     }
     return apiClient.patch(API_ENDPOINTS.DELIVERY.ORDER_ACCEPT.replace(':orderId', orderId), payload);
+  },
+  rejectOrder: (orderId, reason = '') => {
+    return apiClient.patch(API_ENDPOINTS.DELIVERY.ORDER_REJECT.replace(':orderId', orderId), {
+      reason
+    });
   },
   confirmReachedPickup: (orderId, currentLocation = {}) => {
     const payload = {};

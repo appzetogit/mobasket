@@ -4,7 +4,7 @@ import { checkOnboardingStatus } from "../utils/onboardingUtils"
 import { checkGroceryStoreOnboardingStatus } from "@/module/grocery-store/utils/onboardingUtils"
 import { motion, AnimatePresence } from "framer-motion"
 import Lenis from "lenis"
-import { Printer, Volume2, VolumeX, ChevronDown, ChevronUp, Minus, Plus, X, AlertCircle, Loader2 } from "lucide-react"
+import { Printer, Volume2, VolumeX, ChevronDown, ChevronUp, ChevronRight, Minus, Plus, X, AlertCircle, Loader2 } from "lucide-react"
 import { toast } from "sonner"
 import BottomNavOrders from "../components/BottomNavOrders"
 import RestaurantNavbar from "../components/RestaurantNavbar"
@@ -16,6 +16,8 @@ import autoTable from "jspdf-autotable"
 
 const STORAGE_KEY = "restaurant_online_status"
 const ACTIVE_FILTER_STORAGE_KEY = "restaurant_orders_active_filter"
+const ACCEPT_SLIDE_HANDLE_WIDTH = 52
+const ACCEPT_SLIDE_TRIGGER_RATIO = 0.9
 
 const isCodLikePaymentMethod = (value) => {
   const method = String(value || "").toLowerCase().trim()
@@ -233,7 +235,7 @@ function CompletedOrders({ onSelectOrder, orderAPI, searchQuery = "" }) {
                       <div className="flex items-baseline gap-1">
                         <span className="text-[11px] text-gray-500">Amount</span>
                         <span className="text-xs font-medium text-black">
-                          Γé╣{order.amount.toFixed(2)}
+                          ₹{order.amount.toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -461,7 +463,7 @@ function CancelledOrders({ onSelectOrder, orderAPI, isGroceryStore = false, sear
                       <div className="flex items-baseline gap-1">
                         <span className="text-[11px] text-gray-500">Amount</span>
                         <span className="text-xs font-medium text-black">
-                          Γé╣{order.amount.toFixed(2)}
+                          ₹{order.amount.toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -568,12 +570,22 @@ export default function OrdersMain() {
   const [countdown, setCountdown] = useState(240) // 4 minutes in seconds
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(true)
   const [showRejectPopup, setShowRejectPopup] = useState(false)
+  const [showAcceptConfirmPopup, setShowAcceptConfirmPopup] = useState(false)
+  const [acceptSlideOffset, setAcceptSlideOffset] = useState(0)
+  const [isAcceptSliding, setIsAcceptSliding] = useState(false)
+  const [isAcceptProcessing, setIsAcceptProcessing] = useState(false)
   const [rejectReason, setRejectReason] = useState("")
   const [showCancelPopup, setShowCancelPopup] = useState(false)
   const [cancelReason, setCancelReason] = useState("")
   const [orderToCancel, setOrderToCancel] = useState(null)
   const audioRef = useRef(null)
   const shownOrdersRef = useRef(new Set()) // Track orders already shown in popup
+  const acceptSlideTrackRef = useRef(null)
+  const acceptSlideStartXRef = useRef(0)
+  const acceptSlideStartOffsetRef = useRef(0)
+  const acceptSlideOffsetRef = useRef(0)
+  const acceptSlideMovedRef = useRef(false)
+  const acceptSlidePointerIdRef = useRef(null)
   const [restaurantStatus, setRestaurantStatus] = useState({
     isActive: null,
     rejectionReason: null,
@@ -924,7 +936,25 @@ export default function OrdersMain() {
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
 
-  // Handle accept order
+  const handleAcceptClick = () => {
+    if (isGroceryStore) return
+    setShowAcceptConfirmPopup(true)
+  }
+
+  const getOrderIdCandidates = (order) => {
+    const candidates = [
+      order?.orderMongoId,
+      order?._id,
+      order?.orderId,
+      order?.id,
+    ]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+
+    return [...new Set(candidates)]
+  }
+
+  // Handle accept order (confirmed by user)
   const handleAcceptOrder = async () => {
     if (audioRef.current) {
       audioRef.current.pause()
@@ -935,31 +965,64 @@ export default function OrdersMain() {
     const orderToAccept = popupOrder || newOrder
 
     // Accept order via API if we have a real order
-    if (orderToAccept?.orderMongoId || orderToAccept?.orderId) {
-      try {
-        const orderId = orderToAccept.orderMongoId || orderToAccept.orderId
-        const response = await orderAPI.acceptOrder(orderId, prepTime)
-        console.log('Γ£à Order accepted:', orderId)
-        toast.success('Order accepted successfully')
-      } catch (error) {
-        console.error('Γ¥î Error accepting order:', error)
-        const errorMessage = error.response?.data?.message ||
+    const orderIdCandidates = getOrderIdCandidates(orderToAccept)
+    if (orderIdCandidates.length === 0) {
+      toast.error("Unable to accept: invalid order ID")
+      return false
+    }
+
+    try {
+      let acceptedOrderId = null
+      let lastError = null
+
+      for (const orderId of orderIdCandidates) {
+        try {
+          await orderAPI.acceptOrder(orderId, prepTime)
+          acceptedOrderId = orderId
+          break
+        } catch (attemptError) {
+          lastError = attemptError
+          const status = Number(attemptError?.response?.status || 0)
+          // Retry with next candidate only when order lookup failed
+          if (status !== 404) {
+            throw attemptError
+          }
+        }
+      }
+
+      if (!acceptedOrderId && lastError) {
+        throw lastError
+      }
+
+      console.log('Γ£à Order accepted:', acceptedOrderId || orderIdCandidates[0])
+      toast.success('Order accepted successfully')
+    } catch (error) {
+      const isTimeoutError =
+        error?.code === 'ECONNABORTED' ||
+        String(error?.message || '').toLowerCase().includes('timeout')
+
+      console.error('Γ¥î Error accepting order:', error)
+      const errorMessage = isTimeoutError
+        ? 'Accept request timed out. Backend may be slow. Please check the order list and retry once.'
+        : (
+          error.response?.data?.message ||
           error.message ||
           'Failed to accept order. Please try again.'
+        )
 
-        // Show specific error message
-        if (error.response?.status === 400) {
-          toast.error(errorMessage)
-        } else if (error.response?.status === 404) {
-          toast.error('Order not found. It may have been cancelled or already processed.')
-        } else {
-          toast.error(errorMessage)
-        }
-        return
+      // Show specific error message
+      if (error.response?.status === 400) {
+        toast.error(errorMessage)
+      } else if (error.response?.status === 404) {
+        toast.error('Order not found. It may have been cancelled or already processed.')
+      } else {
+        toast.error(errorMessage)
       }
+      return false
     }
 
     setShowNewOrderPopup(false)
+    setShowAcceptConfirmPopup(false)
     setPopupOrder(null)
     clearNewOrder()
     setCountdown(240)
@@ -967,7 +1030,100 @@ export default function OrdersMain() {
 
     // Note: PreparingOrders component will automatically refresh orders via its own useEffect
     // No need to manually refresh here as the component polls every 10 seconds
+    return true
   }
+
+  const handleAcceptCancel = () => {
+    setShowAcceptConfirmPopup(false)
+  }
+
+  const getAcceptSlideMaxOffset = () => {
+    const trackWidth = acceptSlideTrackRef.current?.clientWidth || 0
+    return Math.max(0, trackWidth - ACCEPT_SLIDE_HANDLE_WIDTH)
+  }
+
+  const resetAcceptSlider = () => {
+    setIsAcceptSliding(false)
+    acceptSlideMovedRef.current = false
+    acceptSlidePointerIdRef.current = null
+    acceptSlideOffsetRef.current = 0
+    setAcceptSlideOffset(0)
+  }
+
+  const handleAcceptSliderPointerDown = (event) => {
+    if (isAcceptProcessing) return
+    if (event.pointerType === "mouse" && event.button !== 0) return
+    const maxOffset = getAcceptSlideMaxOffset()
+    if (maxOffset <= 0) return
+
+    setIsAcceptSliding(true)
+    acceptSlideStartXRef.current = event.clientX
+    acceptSlideStartOffsetRef.current = acceptSlideOffsetRef.current
+    acceptSlideMovedRef.current = false
+    acceptSlidePointerIdRef.current = event.pointerId
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+  }
+
+  const handleAcceptSliderPointerMove = (event) => {
+    if (acceptSlidePointerIdRef.current !== event.pointerId) return
+    if (!isAcceptSliding || isAcceptProcessing) return
+    const maxOffset = getAcceptSlideMaxOffset()
+    const deltaX = event.clientX - acceptSlideStartXRef.current
+    if (Math.abs(deltaX) > 2) {
+      acceptSlideMovedRef.current = true
+    }
+    const nextOffset = Math.min(maxOffset, Math.max(0, acceptSlideStartOffsetRef.current + deltaX))
+    acceptSlideOffsetRef.current = nextOffset
+    setAcceptSlideOffset(nextOffset)
+  }
+
+  const handleAcceptSliderPointerEnd = async (event) => {
+    if (acceptSlidePointerIdRef.current !== event.pointerId) return
+    if (!isAcceptSliding) return
+    event.currentTarget.releasePointerCapture?.(event.pointerId)
+    setIsAcceptSliding(false)
+    acceptSlidePointerIdRef.current = null
+
+    const maxOffset = getAcceptSlideMaxOffset()
+    if (maxOffset <= 0) {
+      resetAcceptSlider()
+      return
+    }
+
+    if (!acceptSlideMovedRef.current) {
+      resetAcceptSlider()
+      return
+    }
+
+    const reachedEnd = acceptSlideOffsetRef.current >= maxOffset * ACCEPT_SLIDE_TRIGGER_RATIO
+    if (!reachedEnd) {
+      resetAcceptSlider()
+      return
+    }
+
+    acceptSlideOffsetRef.current = maxOffset
+    setAcceptSlideOffset(maxOffset)
+    setIsAcceptProcessing(true)
+    const accepted = await handleAcceptOrder()
+    setIsAcceptProcessing(false)
+
+    if (!accepted) {
+      resetAcceptSlider()
+    }
+  }
+
+  useEffect(() => {
+    if (!showNewOrderPopup) {
+      resetAcceptSlider()
+      setIsAcceptProcessing(false)
+      return
+    }
+
+    acceptSlideOffsetRef.current = 0
+    setAcceptSlideOffset(0)
+    setIsAcceptSliding(false)
+    setIsAcceptProcessing(false)
+  }, [showNewOrderPopup, popupOrder?.orderMongoId, popupOrder?.orderId, newOrder?.orderMongoId, newOrder?.orderId])
 
   // Handle reject order
   const handleRejectClick = () => {
@@ -981,11 +1137,31 @@ export default function OrdersMain() {
     const orderToReject = popupOrder || newOrder
 
     // Reject order via API if we have a real order
-    if (orderToReject?.orderMongoId || orderToReject?.orderId) {
+    const orderIdCandidates = getOrderIdCandidates(orderToReject)
+    if (orderIdCandidates.length > 0) {
       try {
-        const orderId = orderToReject.orderMongoId || orderToReject.orderId
-        await orderAPI.rejectOrder(orderId, rejectReason)
-        console.log('Γ£à Order rejected:', orderId)
+        let rejectedOrderId = null
+        let lastError = null
+
+        for (const orderId of orderIdCandidates) {
+          try {
+            await orderAPI.rejectOrder(orderId, rejectReason)
+            rejectedOrderId = orderId
+            break
+          } catch (attemptError) {
+            lastError = attemptError
+            const status = Number(attemptError?.response?.status || 0)
+            if (status !== 404) {
+              throw attemptError
+            }
+          }
+        }
+
+        if (!rejectedOrderId && lastError) {
+          throw lastError
+        }
+
+        console.log('Γ£à Order rejected:', rejectedOrderId || orderIdCandidates[0])
       } catch (error) {
         console.error('Γ¥î Error rejecting order:', error)
         alert('Failed to reject order. Please try again.')
@@ -1124,8 +1300,8 @@ export default function OrdersMain() {
         const tableData = orderToPrint.items.map(item => [
           item.name || 'Item',
           item.quantity || 1,
-          `Γé╣${(item.price || 0).toFixed(2)}`,
-          `Γé╣${((item.price || 0) * (item.quantity || 1)).toFixed(2)}`
+          `₹${(item.price || 0).toFixed(2)}`,
+          `₹${((item.price || 0) * (item.quantity || 1)).toFixed(2)}`
         ])
 
         autoTable(doc, {
@@ -1149,7 +1325,7 @@ export default function OrdersMain() {
       // Total
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(12)
-      doc.text(`Total: Γé╣${(orderToPrint.total || 0).toFixed(2)}`, 20, yPos)
+      doc.text(`Total: ₹${(orderToPrint.total || 0).toFixed(2)}`, 20, yPos)
 
       // Payment status
       yPos += 10
@@ -1679,7 +1855,7 @@ export default function OrdersMain() {
                                       {item.quantity} x {item.name}
                                     </p>
                                     <p className="text-xs text-gray-600 ml-2">
-                                      Γé╣{item.price * item.quantity}
+                                      ₹{item.price * item.quantity}
                                     </p>
                                   </div>
                                 </div>
@@ -1712,7 +1888,7 @@ export default function OrdersMain() {
                       <span className="text-sm font-semibold text-gray-900">Total bill</span>
                     </div>
                     <span className="text-base font-bold text-gray-900">
-                      Γé╣{(popupOrder || newOrder)?.total || 0}
+                      ₹{(popupOrder || newOrder)?.total || 0}
                     </span>
                   </div>
 
@@ -1756,22 +1932,59 @@ export default function OrdersMain() {
 
                   {/* Accept and Reject buttons */}
                   <div className="space-y-3">
-                    {/* Accept button with countdown */}
-                    <div className="relative">
-                      <button
-                        onClick={handleAcceptOrder}
-                        className="w-full bg-black text-white py-3.5 rounded-lg font-semibold text-sm hover:bg-gray-800 transition-colors relative overflow-hidden"
+                    {/* Accept control */}
+                    {isGroceryStore ? (
+                      <div
+                        ref={acceptSlideTrackRef}
+                        className="relative w-full h-14 rounded-xl overflow-hidden select-none bg-slate-900"
                       >
-                        {/* Loading background */}
                         <motion.div
-                          className="absolute inset-0 bg-blue-600"
+                          className="absolute inset-y-0 left-0 bg-emerald-600"
                           initial={{ width: "100%" }}
                           animate={{ width: `${(countdown / 240) * 100}%` }}
                           transition={{ duration: 1, ease: "linear" }}
                         />
-                        <span className="relative z-10">Accept ({formatTime(countdown)})</span>
-                      </button>
-                    </div>
+                        <div className="absolute inset-0 flex items-center justify-center px-16 pointer-events-none">
+                          <span className="text-sm font-semibold text-white tracking-wide">
+                            {isAcceptProcessing
+                              ? "Accepting order..."
+                              : `Slide to Accept (${formatTime(countdown)})`}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onPointerDown={handleAcceptSliderPointerDown}
+                          onPointerMove={handleAcceptSliderPointerMove}
+                          onPointerUp={handleAcceptSliderPointerEnd}
+                          onPointerCancel={resetAcceptSlider}
+                          disabled={isAcceptProcessing}
+                          className="absolute top-1 bottom-1 left-1 w-[52px] rounded-lg bg-white text-slate-900 shadow-md flex items-center justify-center disabled:opacity-70 touch-none"
+                          style={{
+                            transform: `translateX(${acceptSlideOffset}px)`,
+                            transition: isAcceptSliding ? "none" : "transform 0.2s ease",
+                          }}
+                          aria-label="Slide to accept order"
+                        >
+                          <ChevronRight className="w-5 h-5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <button
+                          onClick={handleAcceptClick}
+                          className="w-full bg-black text-white py-3.5 rounded-lg font-semibold text-sm hover:bg-gray-800 transition-colors relative overflow-hidden"
+                        >
+                          {/* Loading background */}
+                          <motion.div
+                            className="absolute inset-0 bg-blue-600"
+                            initial={{ width: "100%" }}
+                            animate={{ width: `${(countdown / 240) * 100}%` }}
+                            transition={{ duration: 1, ease: "linear" }}
+                          />
+                          <span className="relative z-10">Accept ({formatTime(countdown)})</span>
+                        </button>
+                      </div>
+                    )}
 
                     {/* Reject button */}
                     <button
@@ -1800,6 +2013,62 @@ export default function OrdersMain() {
       </AnimatePresence>
 
       {/* Reject Order Popup */}
+      <AnimatePresence>
+        {showAcceptConfirmPopup && (
+          <>
+            <motion.div
+              className="fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={handleAcceptCancel}
+            >
+              <motion.div
+                className="w-[95%] max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden"
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                transition={{ type: "spring", damping: 25, stiffness: 300 }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="px-4 py-4 border-b border-gray-200">
+                  <h3 className="text-lg font-bold text-gray-900">Confirm order acceptance</h3>
+                  <p className="text-sm text-gray-500 mt-1">
+                    This order will be accepted only after you confirm.
+                  </p>
+                </div>
+
+                <div className="px-4 py-4">
+                  <div className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2">
+                    <span className="font-semibold">Order:</span>{" "}
+                    {(popupOrder || newOrder)?.orderId || "N/A"}
+                  </div>
+                  <div className="text-sm text-gray-700 bg-gray-50 rounded-lg px-3 py-2 mt-2">
+                    <span className="font-semibold">Preparation time:</span> {prepTime} mins
+                  </div>
+                </div>
+
+                <div className="px-4 py-4 border-t border-gray-200 flex gap-3">
+                  <button
+                    onClick={handleAcceptCancel}
+                    className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-semibold text-sm hover:bg-gray-200 transition-colors"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={handleAcceptOrder}
+                    className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-semibold text-sm hover:bg-blue-700 transition-colors"
+                  >
+                    Confirm Accept
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          </>
+        )}
+
+      </AnimatePresence>
+
       <AnimatePresence>
         {showRejectPopup && (
           <>

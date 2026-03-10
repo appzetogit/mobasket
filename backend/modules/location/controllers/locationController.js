@@ -18,6 +18,77 @@ const NEARBY_LOCATIONS_CACHE_TTL_MS = 2 * 60 * 1000;
 const CACHE_COORD_PRECISION = 4; // ~11m precision
 const MAX_LOCATION_CACHE_ENTRIES = 2000;
 
+function normalizeAddressText(value) {
+  return String(value || '').trim().replace(/,\s*India$/i, '').trim();
+}
+
+function hasLikelyCompleteAddress({ formattedAddress = '', area = '', postalCode = '' } = {}) {
+  const normalized = normalizeAddressText(formattedAddress);
+  const parts = normalized.split(',').map((part) => part.trim()).filter(Boolean);
+  const hasPin = /\b\d{6}\b/.test(normalized) || Boolean(normalizeAddressText(postalCode));
+  const hasArea = Boolean(normalizeAddressText(area)) &&
+    !/district|division|zone/i.test(normalizeAddressText(area));
+  return normalized && parts.length >= 4 && (hasPin || hasArea);
+}
+
+function pickGoogleGeocodeResult(results = []) {
+  if (!Array.isArray(results) || results.length === 0) return null;
+  const ranked = [...results].sort((a, b) => {
+    const score = (entry) => {
+      const types = entry?.types || [];
+      let value = 0;
+      if (types.includes('street_address')) value += 6;
+      if (types.includes('premise')) value += 5;
+      if (types.includes('subpremise')) value += 4;
+      if (types.includes('route')) value += 3;
+      if (types.includes('plus_code')) value += 1;
+      return value;
+    };
+    return score(b) - score(a);
+  });
+  return ranked[0] || results[0] || null;
+}
+
+function toProcessedResultFromGoogle(result, latNum, lngNum) {
+  const components = Array.isArray(result?.address_components) ? result.address_components : [];
+  const byType = (types) => components.find((component) =>
+    (component?.types || []).some((type) => types.includes(type))
+  );
+
+  const streetNumber = byType(['street_number'])?.long_name || '';
+  const route = byType(['route'])?.long_name || '';
+  const premise = byType(['premise', 'subpremise'])?.long_name || '';
+  const neighborhood = byType(['sublocality_level_1', 'sublocality', 'neighborhood'])?.long_name || '';
+  const city = byType(['locality', 'administrative_area_level_2'])?.long_name || '';
+  const state = byType(['administrative_area_level_1'])?.long_name || '';
+  const country = byType(['country'])?.long_name || '';
+  const postalCode = byType(['postal_code'])?.long_name || '';
+
+  const street = [streetNumber, route].filter(Boolean).join(' ').trim() || route || premise || neighborhood || '';
+  const area = neighborhood || premise || route || '';
+  const formattedAddress = normalizeAddressText(result?.formatted_address || '');
+
+  return {
+    formatted_address: formattedAddress || `${latNum.toFixed(6)}, ${lngNum.toFixed(6)}`,
+    address_components: {
+      city,
+      state,
+      country,
+      area,
+      street,
+      streetNumber,
+      pincode: postalCode,
+      postalCode
+    },
+    geometry: result?.geometry || {
+      location: {
+        lat: latNum,
+        lng: lngNum
+      }
+    }
+  };
+}
+
 function buildLocationCacheKey(lat, lng, radius = null, query = '') {
   const round = (value) => Number.parseFloat(value).toFixed(CACHE_COORD_PRECISION);
   if (radius === null) {
@@ -415,6 +486,9 @@ export const reverseGeocode = async (req, res) => {
             let city = "";
             let state = "";
             let country = "";
+            let street = "";
+            let streetNumber = "";
+            let postalCode = "";
             let formattedAddress = firstResult.formatted_address || "";
             
             // Extract from address_components array
@@ -424,12 +498,22 @@ export const reverseGeocode = async (req, res) => {
                 area = comp.long_name || comp.short_name || "";
               } else if (types.includes('neighborhood') && !area) {
                 area = comp.long_name || comp.short_name || "";
+              } else if (types.includes('street_number')) {
+                streetNumber = comp.long_name || comp.short_name || "";
+              } else if (types.includes('route')) {
+                street = comp.long_name || comp.short_name || "";
+              } else if ((types.includes('premise') || types.includes('subpremise')) && !street) {
+                street = comp.long_name || comp.short_name || "";
               } else if (types.includes('locality')) {
+                city = comp.long_name || comp.short_name || "";
+              } else if (types.includes('administrative_area_level_2') && !city) {
                 city = comp.long_name || comp.short_name || "";
               } else if (types.includes('administrative_area_level_1')) {
                 state = comp.long_name || comp.short_name || "";
               } else if (types.includes('country')) {
                 country = comp.long_name || comp.short_name || "";
+              } else if (types.includes('postal_code')) {
+                postalCode = comp.long_name || comp.short_name || "";
               }
             });
             
@@ -506,6 +590,22 @@ export const reverseGeocode = async (req, res) => {
               }
             }
             
+            const normalizedStreet = [streetNumber, street].filter(Boolean).join(' ').trim() || street || "";
+            if (!street && formattedAddress) {
+              const parts = formattedAddress.split(',').map(p => p.trim()).filter(Boolean);
+              const firstPart = parts[0] || "";
+              const firstPartLower = firstPart.toLowerCase();
+              if (
+                firstPart &&
+                !firstPartLower.includes('district') &&
+                !firstPartLower.includes('city') &&
+                firstPartLower !== (city || "").toLowerCase() &&
+                firstPartLower !== (state || "").toLowerCase()
+              ) {
+                street = firstPart;
+              }
+            }
+
             // Transform to our expected format
             processedData = {
               results: [{
@@ -514,7 +614,11 @@ export const reverseGeocode = async (req, res) => {
                   city: city,
                   state: state,
                   country: country,
-                  area: area
+                  area: area,
+                  street: normalizedStreet || street || "",
+                  streetNumber: streetNumber || "",
+                  postalCode: postalCode || "",
+                  pincode: postalCode || ""
                 },
                 geometry: firstResult.geometry || {
                   location: {
@@ -534,6 +638,63 @@ export const reverseGeocode = async (req, res) => {
           }
         }
         
+        const firstProcessed = processedData?.results?.[0] || {};
+        const olaAddressComponents = firstProcessed?.address_components || {};
+        const olaFormattedAddress = firstProcessed?.formatted_address || firstProcessed?.formattedAddress || '';
+        const olaLooksComplete = hasLikelyCompleteAddress({
+          formattedAddress: olaFormattedAddress,
+          area: olaAddressComponents?.area,
+          postalCode: olaAddressComponents?.postalCode || olaAddressComponents?.pincode
+        });
+
+        if (!olaLooksComplete) {
+          try {
+            const { getGoogleMapsApiKey } = await import('../../../shared/utils/envService.js');
+            const googleApiKey = await getGoogleMapsApiKey();
+            if (googleApiKey) {
+              const googleResponse = await axios.get(
+                'https://maps.googleapis.com/maps/api/geocode/json',
+                {
+                  params: {
+                    latlng: `${latNum},${lngNum}`,
+                    key: googleApiKey,
+                    language: 'en'
+                  },
+                  timeout: 5000
+                }
+              );
+              const bestGoogleResult = pickGoogleGeocodeResult(googleResponse?.data?.results || []);
+              if (bestGoogleResult) {
+                const googleProcessed = toProcessedResultFromGoogle(bestGoogleResult, latNum, lngNum);
+                if (hasLikelyCompleteAddress({
+                  formattedAddress: googleProcessed?.formatted_address,
+                  area: googleProcessed?.address_components?.area,
+                  postalCode: googleProcessed?.address_components?.postalCode || googleProcessed?.address_components?.pincode
+                })) {
+                  logger.info('Using Google reverse geocode fallback for coarse OLA result', {
+                    lat: latNum,
+                    lng: lngNum,
+                    olaFormattedAddress,
+                    googleFormattedAddress: googleProcessed?.formatted_address
+                  });
+                  processedData = { results: [googleProcessed] };
+                  return res.json({
+                    success: true,
+                    data: processedData,
+                    source: 'google_geocode_fallback'
+                  });
+                }
+              }
+            }
+          } catch (googleFallbackError) {
+            logger.warn('Google reverse geocode fallback failed', {
+              error: googleFallbackError.message,
+              lat: latNum,
+              lng: lngNum
+            });
+          }
+        }
+
         return res.json({
           success: true,
           data: processedData,

@@ -3,6 +3,7 @@ import {
   getOrders, 
   getOrderDetails, 
   acceptOrder, 
+  rejectOrder,
   confirmReachedPickup, 
   confirmOrderId,
   confirmReachedDrop,
@@ -20,6 +21,7 @@ router.use(authenticate);
 router.get('/orders', getOrders);
 router.get('/orders/:orderId', getOrderDetails);
 router.patch('/orders/:orderId/accept', acceptOrder);
+router.patch('/orders/:orderId/reject', rejectOrder);
 router.patch('/orders/:orderId/reached-pickup', confirmReachedPickup);
 router.patch('/orders/:orderId/confirm-order-id', confirmOrderId);
 router.patch('/orders/:orderId/reached-drop', confirmReachedDrop);

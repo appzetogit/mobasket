@@ -820,8 +820,10 @@ export default function AddToCartAnimation({
 
   // Since items are added to the end of the array, we take the last 3
 
-  const thumbnailItems = animationItems.slice(-3).reverse();
-
+  const thumbnailItems = animationItems
+    .slice(-3)
+    .reverse()
+    .filter((item) => item?.product);
 
 
   const content = (
@@ -854,8 +856,7 @@ export default function AddToCartAnimation({
 
               src={getSafeImageUrl(removedProduct.product.imageUrl)}
 
-              alt={removedProduct.product?.name || "Product"}
-
+              alt={removedProduct.product?.name || 'Product'}
               className="w-full h-full object-cover rounded-full"
 
             />
@@ -902,8 +903,7 @@ export default function AddToCartAnimation({
 
               src={getSafeImageUrl(flyingProduct.product.imageUrl)}
 
-              alt={flyingProduct.product?.name || "Product"}
-
+              alt={flyingProduct.product?.name || 'Product'}
               className="w-full h-full object-cover rounded-full"
 
             />
@@ -912,8 +912,7 @@ export default function AddToCartAnimation({
 
             <div className="w-full h-full flex items-center justify-center bg-neutral-200 text-neutral-400 text-xs font-semibold rounded-full">
 
-              {flyingProduct.product?.name?.charAt(0).toUpperCase() || "?"}
-
+              {flyingProduct.product?.name?.charAt(0)?.toUpperCase() || '?'}
             </div>
 
           )}
@@ -992,8 +991,7 @@ export default function AddToCartAnimation({
 
                   <motion.div
 
-                    key={item.product?.id || item.id}
-
+                    key={item.product?.id || item.product?._id || `thumb-${idx}`}
                     initial={{ scale: 0, opacity: 0 }}
 
                     animate={{ scale: 1, opacity: 1 }}
@@ -1020,8 +1018,7 @@ export default function AddToCartAnimation({
 
                         src={getSafeImageUrl(item.product?.imageUrl || item.imageUrl || item.image)}
 
-                        alt={item.product?.name || item.name || "Product"}
-
+                        alt={item.product?.name || 'Product'}
                         className="w-full h-full object-cover"
 
                       />
@@ -1030,8 +1027,7 @@ export default function AddToCartAnimation({
 
                       <div className="w-full h-full flex items-center justify-center bg-neutral-200 text-neutral-400 text-xs font-semibold">
 
-                        {(item.product?.name || item.name)?.charAt(0).toUpperCase() || "?"}
-
+                        {item.product?.name?.charAt(0)?.toUpperCase() || '?'}
                       </div>
 
                     )}

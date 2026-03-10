@@ -17,7 +17,8 @@ export const getGroceryStoreOrders = asyncHandler(async (req, res) => {
     // Get store ID - normalize to string (Order.restaurantId is String type)
     const storeIdString = store._id?.toString() ||
       store.restaurantId?.toString() ||
-      store.id?.toString();
+      store.id?.toString() ||
+      store.slug?.toString();
 
     if (!storeIdString) {
       console.error('❌ No store ID found:', store);
@@ -26,7 +27,13 @@ export const getGroceryStoreOrders = asyncHandler(async (req, res) => {
 
     // Query orders by restaurantId (stored as String in Order model)
     // Try multiple restaurantId formats to handle different storage formats
-    const storeIdVariations = [storeIdString];
+    const storeIdVariations = Array.from(new Set([
+      store._id?.toString(),
+      store.restaurantId?.toString(),
+      store.id?.toString(),
+      store.slug?.toString(),
+      storeIdString
+    ].filter(Boolean)));
     
     // Also add ObjectId string format if valid (both directions)
     if (mongoose.Types.ObjectId.isValid(storeIdString)) {
@@ -48,7 +55,9 @@ export const getGroceryStoreOrders = asyncHandler(async (req, res) => {
     }
     
     // Also try direct match without ObjectId conversion
-    storeIdVariations.push(storeIdString);
+    if (!storeIdVariations.includes(storeIdString)) {
+      storeIdVariations.push(storeIdString);
+    }
 
     // Build query - search for orders with any matching restaurantId variation
     // Use $in for multiple variations and also try direct match as fallback
@@ -125,6 +134,7 @@ export const getGroceryStoreOrderById = asyncHandler(async (req, res) => {
       store._id?.toString(),
       store.restaurantId?.toString(),
       store.id?.toString(),
+      store.slug?.toString(),
     ].filter(Boolean)));
 
     let order = null;
@@ -164,9 +174,7 @@ export const getGroceryStoreOrderById = asyncHandler(async (req, res) => {
  * Adapts restaurant acceptOrder to work with req.store
  */
 export const acceptOrder = asyncHandler(async (req, res) => {
-  // Temporarily set req.restaurant to req.store for compatibility
   req.restaurant = req.store;
-  // Import and call the restaurant controller function
   const { acceptOrder: restaurantAcceptOrder } = await import('../../restaurant/controllers/restaurantOrderController.js');
   return restaurantAcceptOrder(req, res);
 });

@@ -12,6 +12,14 @@ import AuditLog from '../models/AuditLog.js';
 const normalizePlatform = (value) => (value === 'mogrocery' ? 'mogrocery' : 'mofood');
 
 const ORDER_MODIFICATION_WINDOW_MS = 2 * 60 * 1000;
+const RESTAURANT_ACCEPT_TIMEOUT_MS = 4 * 60 * 1000;
+const RESTAURANT_ACCEPT_TIMEOUT_REASON_REGEX = /order not accepted within time limit|did not respond in time/i;
+
+const isRestaurantAcceptTimeoutOrder = (order) => {
+  if (!order || order.status !== 'cancelled') return false;
+  const reason = String(order.cancellationReason || '');
+  return order.cancelledBy === 'restaurant' && RESTAURANT_ACCEPT_TIMEOUT_REASON_REGEX.test(reason);
+};
 
 /** Get 2-minute edit/cancel window for customer (MoFood and MoGrocery) */
 const getOrderModificationWindow = (order) => {
@@ -447,8 +455,11 @@ export const getOrders = asyncHandler(async (req, res) => {
       // Check if cancelled and determine who cancelled it
       let orderStatusDisplay;
       if (order.status === 'cancelled') {
+        const timedOutByRestaurant = isRestaurantAcceptTimeoutOrder(order);
         // Check cancelledBy field to determine who cancelled
-        if (order.cancelledBy === 'restaurant') {
+        if (timedOutByRestaurant) {
+          orderStatusDisplay = 'Not Accepted in Time';
+        } else if (order.cancelledBy === 'restaurant') {
           orderStatusDisplay = 'Cancelled by Restaurant';
         } else if (order.cancelledBy === 'user') {
           orderStatusDisplay = 'Cancelled by User';
@@ -531,6 +542,10 @@ export const getOrders = asyncHandler(async (req, res) => {
         order.restaurantPlatform ||
         'mofood'
       ).toLowerCase();
+      const timedOutByRestaurant = isRestaurantAcceptTimeoutOrder(order);
+      const acceptanceTimeoutAt = timedOutByRestaurant
+        ? new Date(new Date(order.createdAt).getTime() + RESTAURANT_ACCEPT_TIMEOUT_MS)
+        : null;
 
       return {
         sl: skip + index + 1,
@@ -572,7 +587,8 @@ export const getOrders = asyncHandler(async (req, res) => {
         orderStatus: orderStatusDisplay,
         status: order.status, // Backend status
         adminApprovalStatus: order.adminApproval?.status || null,
-        canAdminApprove: derivedRestaurantPlatform === 'mogrocery',
+        // MoGrocery now follows direct store acceptance flow (no admin pre-approval gate).
+        canAdminApprove: false,
         adminApprovalReason: order.adminApproval?.reason || null,
         adminReviewedAt: order.adminApproval?.reviewedAt || null,
         deliveryType: deliveryType,
@@ -586,6 +602,8 @@ export const getOrders = asyncHandler(async (req, res) => {
         cancellationReason: order.cancellationReason || null,
         cancelledAt: order.cancelledAt || null,
         cancelledBy: order.cancelledBy || null,
+        timedOutByRestaurant,
+        acceptanceTimeoutAt,
         tracking: order.tracking || {},
         deliveryState: order.deliveryState || {},
         billImageUrl: order.billImageUrl || null, // Bill image captured by delivery boy
@@ -725,8 +743,17 @@ export const getOrderById = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, 'Order not found');
     }
 
+    const timedOutByRestaurant = isRestaurantAcceptTimeoutOrder(order);
+    const acceptanceTimeoutAt = timedOutByRestaurant
+      ? new Date(new Date(order.createdAt).getTime() + RESTAURANT_ACCEPT_TIMEOUT_MS)
+      : null;
+
     return successResponse(res, 200, 'Order retrieved successfully', {
-      order
+      order: {
+        ...order,
+        timedOutByRestaurant,
+        acceptanceTimeoutAt
+      }
     });
   } catch (error) {
     console.error('Error fetching order:', error);

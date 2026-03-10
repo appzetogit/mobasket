@@ -34,6 +34,7 @@ const getStatusColor = (orderStatus, isGrocery = false) => {
       "Packing": "bg-orange-100 text-orange-700",
       "Out for Delivery": "bg-yellow-100 text-yellow-700",
       "Delivered": "bg-emerald-100 text-emerald-700",
+      "Not Accepted in Time": "bg-red-100 text-red-700",
       "Cancelled by Store": "bg-red-100 text-red-700",
       "Cancelled by User": "bg-orange-100 text-orange-700",
       "Payment Failed": "bg-red-100 text-red-700",
@@ -51,6 +52,7 @@ const getStatusColor = (orderStatus, isGrocery = false) => {
     "Accepted": "bg-green-100 text-green-700",
     "Processing": "bg-orange-100 text-orange-700",
     "Food On The Way": "bg-yellow-100 text-yellow-700",
+    "Not Accepted in Time": "bg-red-100 text-red-700",
     "Canceled": "bg-rose-100 text-rose-700",
     "Cancelled by Restaurant": "bg-red-100 text-red-700",
     "Cancelled by User": "bg-orange-100 text-orange-700",
@@ -197,6 +199,11 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order, isGrocery
                           order.cancelledBy === 'restaurant' ? (isGrocery ? 'Cancelled by Store - ' : 'Cancelled by Restaurant - ') :
                             'Cancellation '}Reason:
                       </span> {order.cancellationReason}
+                    </p>
+                  )}
+                  {order.timedOutByRestaurant && (
+                    <p className="text-xs text-red-700 mt-1 font-medium">
+                      {isGrocery ? "Store did not accept this order within 4 minutes." : "Restaurant did not accept this order within 4 minutes."}
                     </p>
                   )}
                   {order.cancelledAt && (

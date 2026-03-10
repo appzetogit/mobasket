@@ -452,8 +452,8 @@ export default function ExploreMore() {
       // Sign out from Firebase if restaurant logged in via Google
       try {
         const { signOut } = await import("firebase/auth")
-        const currentUser = firebaseAuth.currentUser
-        if (currentUser) {
+        const currentUser = firebaseAuth?.currentUser
+        if (currentUser && firebaseAuth) {
           await signOut(firebaseAuth)
         }
       } catch (firebaseError) {
@@ -516,8 +516,8 @@ export default function ExploreMore() {
       // Sign out from Firebase if restaurant logged in via Google
       try {
         const { signOut } = await import("firebase/auth")
-        const currentUser = firebaseAuth.currentUser
-        if (currentUser) {
+        const currentUser = firebaseAuth?.currentUser
+        if (currentUser && firebaseAuth) {
           await signOut(firebaseAuth)
         }
       } catch (firebaseError) {

@@ -1,6 +1,6 @@
 import { useEffect } from "react"
 import { motion } from "framer-motion"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import Lenis from "lenis"
 import { ArrowLeft } from "lucide-react"
 import BottomNavbar from "../components/BottomNavbar"
@@ -11,7 +11,15 @@ import { useCompanyName } from "@/lib/hooks/useCompanyName"
 export default function PrivacyPolicyPage() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
+  const location = useLocation()
   const [showMenu, setShowMenu] = useState(false)
+  const isStore = location.pathname.startsWith("/store")
+  const fallbackPath = isStore ? "/store/explore" : "/restaurant/explore"
+
+  const handleBack = () => {
+    // Keep store/restaurant users within their module even with odd browser history.
+    navigate(fallbackPath, { replace: true })
+  }
 
   // Lenis smooth scrolling
   useEffect(() => {
@@ -38,7 +46,7 @@ export default function PrivacyPolicyPage() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-50 flex items-center gap-3">
         <button 
-          onClick={() => navigate(-1)}
+          onClick={handleBack}
           className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
         >
           <ArrowLeft className="w-5 h-5 text-gray-600" />
