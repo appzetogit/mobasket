@@ -2515,27 +2515,36 @@ export const completeDelivery = asyncHandler(async (req, res) => {
       // Don't fail the delivery completion if bonus check fails
     }
 
-    // Legacy fallback: only run manual restaurant/admin commission updates if escrow distribution failed.
+    // Legacy fallback: only run manual store/restaurant/admin commission updates if escrow distribution failed.
     if (!escrowDistributed) {
-    // Calculate restaurant commission and update restaurant wallet
+    // Calculate restaurant/store commission and update wallet
     let restaurantWalletTransaction = null;
     let adminCommissionRecord = null;
     try {
-      // Get order total amount (subtotal, excluding delivery fee and tax for commission calculation)
-      const orderTotal = order.pricing?.subtotal || order.pricing?.total || 0;
+      // Align fallback with settlement flow:
+      // commission is calculated on food price = subtotal - discount.
+      const subtotal = Number(order.pricing?.subtotal || 0);
+      const discount = Number(order.pricing?.discount || 0);
+      const orderTotal = Math.max(0, subtotal - discount);
       
-      // Find restaurant by restaurantId (can be string or ObjectId)
+      // Find restaurant/store by restaurantId (can be string or ObjectId)
       let restaurant = null;
       if (mongoose.Types.ObjectId.isValid(order.restaurantId)) {
         restaurant = await Restaurant.findById(order.restaurantId);
+        if (!restaurant) {
+          restaurant = await GroceryStore.findById(order.restaurantId);
+        }
       } else {
         restaurant = await Restaurant.findOne({ restaurantId: order.restaurantId });
+        if (!restaurant) {
+          restaurant = await GroceryStore.findOne({ restaurantId: order.restaurantId });
+        }
       }
 
       if (!restaurant) {
-        console.warn(`⚠️ Restaurant not found for order ${orderIdForLog}, skipping commission calculation`);
+        console.warn(`⚠️ Restaurant/Store not found for order ${orderIdForLog}, skipping commission calculation`);
       } else {
-        // Calculate restaurant commission
+        // Calculate commission
         const commissionResult = await RestaurantCommission.calculateCommissionForOrder(
           restaurant._id,
           orderTotal
@@ -2713,6 +2722,8 @@ export const completeDelivery = asyncHandler(async (req, res) => {
     return errorResponse(res, 500, `Failed to complete delivery: ${error.message}`);
   }
 });
+
+
 
 
 

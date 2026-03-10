@@ -1552,11 +1552,20 @@ export const adminAPI = {
   getWithdrawalRequests: (params = {}) => {
     return apiClient.get(API_ENDPOINTS.ADMIN.WITHDRAWAL_REQUESTS, { params });
   },
+  getGroceryWithdrawalRequests: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.ADMIN.GROCERY_WITHDRAWAL_REQUESTS, { params });
+  },
   approveWithdrawalRequest: (id) => {
     return apiClient.post(API_ENDPOINTS.ADMIN.WITHDRAWAL_APPROVE.replace(':id', id));
   },
+  approveGroceryWithdrawalRequest: (id) => {
+    return apiClient.post(API_ENDPOINTS.ADMIN.GROCERY_WITHDRAWAL_APPROVE.replace(':id', id));
+  },
   rejectWithdrawalRequest: (id, rejectionReason = '') => {
     return apiClient.post(API_ENDPOINTS.ADMIN.WITHDRAWAL_REJECT.replace(':id', id), { rejectionReason });
+  },
+  rejectGroceryWithdrawalRequest: (id, rejectionReason = '') => {
+    return apiClient.post(API_ENDPOINTS.ADMIN.GROCERY_WITHDRAWAL_REJECT.replace(':id', id), { rejectionReason });
   },
 
   // Get customer wallet report

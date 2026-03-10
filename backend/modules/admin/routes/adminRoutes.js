@@ -622,5 +622,12 @@ router.get('/audit-logs/commission-changes', getCommissionChangeLogs);
 router.get('/withdrawal/requests', getAllWithdrawalRequests);
 router.post('/withdrawal/:id/approve', approveWithdrawalRequest);
 router.post('/withdrawal/:id/reject', rejectWithdrawalRequest);
+// Grocery withdrawal routes (separate admin route for store withdraws)
+router.get('/grocery-withdrawal/requests', (req, res, next) => {
+  req.query = { ...req.query, platform: 'mogrocery' };
+  return getAllWithdrawalRequests(req, res, next);
+});
+router.post('/grocery-withdrawal/:id/approve', approveWithdrawalRequest);
+router.post('/grocery-withdrawal/:id/reject', rejectWithdrawalRequest);
 
 export default router;

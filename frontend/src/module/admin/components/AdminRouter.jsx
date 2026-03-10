@@ -303,6 +303,10 @@ export default function AdminRouter() {
 
         {/* TRANSACTION MANAGEMENT */}
         <Route path="restaurant-withdraws" element={<RestaurantWithdraws />} />
+        <Route
+          path="grocery-store-withdraws"
+          element={<RestaurantWithdraws platformOverride="mogrocery" entityLabelOverride="Store" />}
+        />
         <Route path="withdraw-method" element={<WithdrawMethod />} />
 
         {/* EMPLOYEE MANAGEMENT */}

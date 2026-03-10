@@ -7,9 +7,10 @@ import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
 import { usePlatform } from "../../context/PlatformContext"
 
-export default function RestaurantWithdraws() {
+export default function RestaurantWithdraws({ platformOverride = null, entityLabelOverride = null }) {
   const { isMogrocery } = usePlatform()
-  const entityLabel = isMogrocery ? "Store" : "Restaurant"
+  const isGroceryView = platformOverride ? platformOverride === "mogrocery" : isMogrocery
+  const entityLabel = entityLabelOverride || (isGroceryView ? "Store" : "Restaurant")
   // default to 'All' instead of 'Pending' so initial view shows every request
   const [activeTab, setActiveTab] = useState("All")
   const [searchQuery, setSearchQuery] = useState("")
@@ -35,17 +36,20 @@ export default function RestaurantWithdraws() {
   // Fetch withdrawal requests
   useEffect(() => {
     fetchWithdrawals()
-  }, [activeTab, isMogrocery])
+  }, [activeTab, isGroceryView])
 
   const fetchWithdrawals = async () => {
     try {
       setLoading(true)
       const status = activeTab === "All" ? undefined : activeTab
-      const response = await adminAPI.getWithdrawalRequests({
+      const requestParams = {
         status,
         search: searchQuery || undefined,
-        platform: isMogrocery ? "mogrocery" : "mofood",
-      })
+        platform: isGroceryView ? "mogrocery" : "mofood",
+      }
+      const response = isGroceryView
+        ? await adminAPI.getGroceryWithdrawalRequests(requestParams)
+        : await adminAPI.getWithdrawalRequests(requestParams)
       if (response.data?.success) {
         setWithdraws(response.data.data?.requests || [])
       } else {
@@ -68,7 +72,7 @@ export default function RestaurantWithdraws() {
       }
     }, 500)
     return () => clearTimeout(timer)
-  }, [searchQuery, activeTab, isMogrocery])
+  }, [searchQuery, activeTab, isGroceryView])
 
   const filteredWithdraws = useMemo(() => {
     let result = [...withdraws]
@@ -110,7 +114,9 @@ export default function RestaurantWithdraws() {
     
     try {
       setProcessingAction(id)
-      const response = await adminAPI.approveWithdrawalRequest(id)
+      const response = isGroceryView
+        ? await adminAPI.approveGroceryWithdrawalRequest(id)
+        : await adminAPI.approveWithdrawalRequest(id)
       if (response.data?.success) {
         toast.success('Withdrawal request approved successfully')
         fetchWithdrawals()
@@ -133,7 +139,9 @@ export default function RestaurantWithdraws() {
     
     try {
       setProcessingAction(id)
-      const response = await adminAPI.rejectWithdrawalRequest(id, rejectionReason)
+      const response = isGroceryView
+        ? await adminAPI.rejectGroceryWithdrawalRequest(id, rejectionReason)
+        : await adminAPI.rejectWithdrawalRequest(id, rejectionReason)
       if (response.data?.success) {
         toast.success('Withdrawal request rejected successfully')
         setShowRejectModal(false)
