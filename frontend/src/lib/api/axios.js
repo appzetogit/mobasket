@@ -448,6 +448,41 @@ function getTokenMetaForModule(module = "user") {
   }
 }
 
+function clearModuleSession(module = "user") {
+  const { tokenKey, refreshTokenKey } = getTokenMetaForModule(module);
+  localStorage.removeItem(tokenKey);
+  localStorage.removeItem(refreshTokenKey);
+  localStorage.removeItem(`${module}_authenticated`);
+  localStorage.removeItem(`${module}_user`);
+  // Clear legacy token fallback too so interceptors don't keep attaching stale auth.
+  localStorage.removeItem("accessToken");
+}
+
+function isHardRefreshAuthFailure(refreshError) {
+  const refreshStatus = Number(refreshError?.response?.status || 0);
+  const refreshMessage = String(
+    refreshError?.response?.data?.message ||
+    refreshError?.response?.data?.error ||
+    refreshError?.message ||
+    "",
+  ).toLowerCase();
+
+  // Any 401 from refresh endpoint means session recovery failed and should force re-auth.
+  if (refreshStatus === 401) return true;
+  if (refreshStatus !== 401) return false;
+
+  return (
+    refreshMessage.includes("invalid refresh token") ||
+    refreshMessage.includes("refresh token is required") ||
+    refreshMessage.includes("refresh token not found") ||
+    refreshMessage.includes("invalid or expired refresh token") ||
+    refreshMessage.includes("jwt malformed") ||
+    refreshMessage.includes("jwt expired") ||
+    refreshMessage.includes("token is invalid") ||
+    refreshMessage.includes("unauthorized")
+  );
+}
+
 /**
  * Get the appropriate module token based on the current route
  * @returns {string|null} - Access token for the current module or null
@@ -801,154 +836,104 @@ apiClient.interceptors.response.use(
           });
         }
 
-        // Refresh failed: clear session and redirect to login only for modules that do full redirect.
-        // Store: do NOT clear or redirect (like delivery) so user stays on page and sees error.
         const currentPath = window.location.pathname;
-        const isOnboardingPage = currentPath.includes("/onboarding");
-        const isLandingPageManagement =
-          currentPath.includes("/hero-banner-management") ||
-          currentPath.includes("/landing-page");
-        const isDeliveryPath = currentPath.startsWith("/delivery");
-        const isStorePath = currentPath.startsWith("/store");
-        const isRestaurantAuthPath =
-          currentPath.startsWith("/restaurant/login") ||
-          currentPath.startsWith("/restaurant/signup") ||
-          currentPath.startsWith("/restaurant/otp") ||
-          currentPath.startsWith("/restaurant/forgot-password") ||
-          currentPath.startsWith("/restaurant/welcome") ||
-          currentPath.startsWith("/restaurant/auth/");
-        const isAdminAuthPath =
-          currentPath.startsWith("/admin/login") ||
-          currentPath.startsWith("/admin/forgot-password");
-        const isUserAuthPath =
-          currentPath.startsWith("/user/auth/") ||
-          currentPath.startsWith("/auth/sign-in") ||
-          currentPath.startsWith("/auth/otp") ||
-          currentPath.startsWith("/auth/callback");
+        const isHardAuthFailure = isHardRefreshAuthFailure(refreshError);
 
-        // Don't auto-logout for store, delivery, onboarding, or landing page - let component show error
-        if (!isOnboardingPage && !isLandingPageManagement && !isDeliveryPath && !isStorePath) {
-          if (currentPath.startsWith("/admin")) {
-            localStorage.removeItem("admin_accessToken");
-            localStorage.removeItem("admin_refreshToken");
-            localStorage.removeItem("admin_authenticated");
-            localStorage.removeItem("admin_user");
-            if (!isAdminAuthPath) {
-              window.location.href = "/admin/login";
-            }
-          } else if (
+        // Only force logout on clear invalid refresh-token failures.
+        if (isHardAuthFailure) {
+          const isStorePath = currentPath.startsWith("/store");
+          const isRestaurantPath =
             currentPath.startsWith("/restaurant") &&
-            !currentPath.startsWith("/restaurants")
-          ) {
-            // /restaurant/* is for restaurant module, /restaurants/* is for user module viewing restaurants
-            localStorage.removeItem("restaurant_accessToken");
-            localStorage.removeItem("restaurant_refreshToken");
-            localStorage.removeItem("restaurant_authenticated");
-            localStorage.removeItem("restaurant_user");
+            !currentPath.startsWith("/restaurants");
+          const isDeliveryPath = currentPath.startsWith("/delivery");
+          const isAdminPath = currentPath.startsWith("/admin");
+          const isUserPath = !isStorePath && !isRestaurantPath && !isDeliveryPath && !isAdminPath;
+
+          if (isStorePath) {
+            clearModuleSession("grocery-store");
+            if (!currentPath.startsWith("/store/login")) {
+              window.location.href = "/store/login";
+            }
+          } else if (isRestaurantPath) {
+            clearModuleSession("restaurant");
+            const isRestaurantAuthPath =
+              currentPath.startsWith("/restaurant/login") ||
+              currentPath.startsWith("/restaurant/signup") ||
+              currentPath.startsWith("/restaurant/otp") ||
+              currentPath.startsWith("/restaurant/forgot-password") ||
+              currentPath.startsWith("/restaurant/welcome") ||
+              currentPath.startsWith("/restaurant/auth/");
             if (!isRestaurantAuthPath) {
               window.location.href = "/restaurant/login";
             }
-          } else {
-            // User module includes /restaurants/* paths
-            localStorage.removeItem("user_accessToken");
-            localStorage.removeItem("user_refreshToken");
-            localStorage.removeItem("user_authenticated");
-            localStorage.removeItem("user");
+          } else if (isDeliveryPath) {
+            clearModuleSession("delivery");
+            if (!currentPath.startsWith("/delivery/sign-in")) {
+              window.location.href = "/delivery/sign-in";
+            }
+          } else if (isAdminPath) {
+            clearModuleSession("admin");
+            const isAdminAuthPath =
+              currentPath.startsWith("/admin/login") ||
+              currentPath.startsWith("/admin/forgot-password");
+            if (!isAdminAuthPath) {
+              window.location.href = "/admin/login";
+            }
+          } else if (isUserPath) {
+            clearModuleSession("user");
+            const isUserAuthPath =
+              currentPath.startsWith("/user/auth/") ||
+              currentPath.startsWith("/auth/sign-in") ||
+              currentPath.startsWith("/auth/otp") ||
+              currentPath.startsWith("/auth/callback");
             if (!isUserAuthPath) {
               window.location.href = "/user/auth/sign-in";
             }
           }
         }
 
-        // For delivery module, avoid force-logout loops from transient refresh failures.
-        // But if refresh token is explicitly invalid/missing, clear session immediately to stop 401 spam loops.
-        if (isDeliveryPath) {
-          const refreshStatus = refreshError?.response?.status;
-          const refreshMessage = String(
-            refreshError?.response?.data?.message ||
-            refreshError?.response?.data?.error ||
-            refreshError?.message ||
-            "",
-          ).toLowerCase();
-
-          const isHardAuthFailure =
-            refreshStatus === 401 &&
-            (
-              refreshMessage.includes("invalid refresh token") ||
-              refreshMessage.includes("refresh token not found") ||
-              refreshMessage.includes("jwt malformed") ||
-              refreshMessage.includes("jwt expired")
-            );
-
-          if (isHardAuthFailure) {
-            localStorage.removeItem("delivery_accessToken");
-            localStorage.removeItem("delivery_refreshToken");
-            localStorage.removeItem("delivery_authenticated");
-            localStorage.removeItem("delivery_user");
-            // Clear legacy token too so request interceptor doesn't keep attaching stale auth.
-            localStorage.removeItem("accessToken");
-
-            if (!window.location.pathname.startsWith("/delivery/sign-in")) {
-              window.location.href = "/delivery/sign-in";
-            }
-          }
-
-          return Promise.reject(refreshError);
-        }
-
-        // For grocery-store module, clear invalid sessions on hard auth failures
-        // so polling endpoints don't keep triggering repeated 401 loops.
-        if (isStorePath) {
-          const refreshStatus = refreshError?.response?.status;
-          const refreshMessage = String(
-            refreshError?.response?.data?.message ||
-            refreshError?.response?.data?.error ||
-            refreshError?.message ||
-            "",
-          ).toLowerCase();
-
-          const isHardAuthFailure =
-            refreshStatus === 401 &&
-            (
-              refreshMessage.includes("invalid refresh token") ||
-              refreshMessage.includes("refresh token is required") ||
-              refreshMessage.includes("refresh token not found") ||
-              refreshMessage.includes("jwt malformed") ||
-              refreshMessage.includes("jwt expired") ||
-              refreshMessage.includes("invalid or expired refresh token")
-            );
-
-          if (isHardAuthFailure) {
-            localStorage.removeItem("grocery-store_accessToken");
-            localStorage.removeItem("grocery-store_refreshToken");
-            localStorage.removeItem("grocery-store_authenticated");
-            localStorage.removeItem("grocery-store_user");
-            localStorage.removeItem("accessToken");
-
-            if (!window.location.pathname.startsWith("/store/login")) {
-              window.location.href = "/store/login";
-            }
-          }
-
-          return Promise.reject(refreshError);
-        }
-
-        // For onboarding page, reject the promise so component can handle it
         return Promise.reject(refreshError);
       }
     }
 
     // If refresh endpoint itself returns 401, avoid retry recursion and clear broken session.
     if (error.response?.status === 401 && isRefreshRequest) {
-      const requestModule = getModuleFromRequestUrl(originalRequest.url, getModuleFromPath(window.location.pathname));
+      const requestModule = getModuleFromRequestUrl(
+        originalRequest.url,
+        getModuleFromPath(window.location.pathname),
+      );
+
       if (requestModule === "grocery-store") {
-        localStorage.removeItem("grocery-store_accessToken");
-        localStorage.removeItem("grocery-store_refreshToken");
-        localStorage.removeItem("grocery-store_authenticated");
-        localStorage.removeItem("grocery-store_user");
-        localStorage.removeItem("accessToken");
+        clearModuleSession("grocery-store");
         if (!window.location.pathname.startsWith("/store/login")) {
           window.location.href = "/store/login";
+        }
+      } else if (requestModule === "restaurant") {
+        clearModuleSession("restaurant");
+        const isRestaurantAuthPath =
+          window.location.pathname.startsWith("/restaurant/login") ||
+          window.location.pathname.startsWith("/restaurant/signup") ||
+          window.location.pathname.startsWith("/restaurant/otp") ||
+          window.location.pathname.startsWith("/restaurant/forgot-password") ||
+          window.location.pathname.startsWith("/restaurant/welcome") ||
+          window.location.pathname.startsWith("/restaurant/auth/");
+        if (!isRestaurantAuthPath) {
+          window.location.href = "/restaurant/login";
+        }
+      } else if (requestModule === "delivery") {
+        clearModuleSession("delivery");
+        if (!window.location.pathname.startsWith("/delivery/sign-in")) {
+          window.location.href = "/delivery/sign-in";
+        }
+      } else if (requestModule === "admin") {
+        clearModuleSession("admin");
+        if (!window.location.pathname.startsWith("/admin/login")) {
+          window.location.href = "/admin/login";
+        }
+      } else {
+        clearModuleSession("user");
+        if (!window.location.pathname.startsWith("/user/auth/")) {
+          window.location.href = "/user/auth/sign-in";
         }
       }
       return Promise.reject(error);

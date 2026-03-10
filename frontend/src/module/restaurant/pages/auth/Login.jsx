@@ -260,13 +260,14 @@ export default function RestaurantLogin() {
 
       const accessToken = data.accessToken
       const restaurant = data.restaurant
+      const refreshToken = data.refreshToken
 
       if (!accessToken || !restaurant) {
         throw new Error("Invalid response from server")
       }
 
       // Store auth data for restaurant module using utility function
-      setAuthData("restaurant", accessToken, restaurant)
+      setAuthData("restaurant", accessToken, restaurant, refreshToken)
 
       // Notify any listeners that auth state has changed
       window.dispatchEvent(new Event("restaurantAuthChanged"))

@@ -11,6 +11,22 @@ export default function OrderTrackingCard() {
   const [activeOrder, setActiveOrder] = useState(null);
   const [timeRemaining, setTimeRemaining] = useState(null);
   const [apiOrders, setApiOrders] = useState([]);
+  const isTerminalOrder = (order) => {
+    const status = String(order?.status || '').toLowerCase();
+    const deliveryStateStatus = String(order?.deliveryState?.status || '').toLowerCase();
+    const deliveryPhase = String(order?.deliveryState?.currentPhase || '').toLowerCase();
+    const terminalStatuses = new Set(['delivered', 'cancelled', 'completed', 'canceled']);
+    const hasDeliveredTimestamp = Boolean(order?.deliveredAt || order?.deliveryState?.deliveredAt);
+    const trackingDelivered = Boolean(order?.tracking?.delivered?.status);
+
+    return (
+      terminalStatuses.has(status) ||
+      terminalStatuses.has(deliveryStateStatus) ||
+      deliveryPhase === 'completed' ||
+      hasDeliveredTimestamp ||
+      trackingDelivered
+    );
+  };
 
   // Fetch orders from API (optional - only if endpoint exists)
   // For now, we'll rely primarily on localStorage orders from OrdersContext
@@ -59,17 +75,8 @@ export default function OrderTrackingCard() {
     // Find active order - any order that is NOT delivered, cancelled, or completed
     const active = uniqueOrders.find(order => {
       const status = (order.status || order.deliveryState?.status || '').toLowerCase();
-      const isInactive = status === 'delivered' || 
-                        status === 'cancelled' || 
-                        status === 'completed' ||
-                        status === '';
-      
-      if (isInactive) {
-        return false;
-      }
-      
-      // If status exists and is not inactive, it's active
-      return true;
+      if (!status) return false;
+      return !isTerminalOrder(order);
     });
     if (active) {
       setActiveOrder(active);
@@ -107,8 +114,7 @@ export default function OrderTrackingCard() {
         return;
       }
 
-      const status = (currentActive.status || currentActive.deliveryState?.status || '').toLowerCase();
-      if (status === 'delivered' || status === 'cancelled' || status === 'completed') {
+      if (isTerminalOrder(currentActive)) {
         setActiveOrder(null);
         setTimeRemaining(null);
         return;
@@ -151,10 +157,11 @@ export default function OrderTrackingCard() {
   }
 
   // Check if order is delivered or time remaining is 0 - hide card
-  const orderStatus = (activeOrder.status || activeOrder.deliveryState?.status || 'preparing').toLowerCase();
-  if (orderStatus === 'delivered' || orderStatus === 'completed' || timeRemaining === 0) {
+  if (isTerminalOrder(activeOrder) || timeRemaining === 0) {
     return null;
   }
+
+  const orderStatus = (activeOrder.status || activeOrder.deliveryState?.status || 'preparing').toLowerCase();
 
   const restaurantName = activeOrder.restaurant || activeOrder.restaurantName || activeOrder.restaurantName || 'Restaurant';
   const restaurantPlatform = String(activeOrder?.restaurantId?.platform || activeOrder?.platform || '').toLowerCase();

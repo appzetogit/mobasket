@@ -291,6 +291,7 @@ export const API_ENDPOINTS = {
   ADMIN: {
     AUTH: {
       LOGIN: '/admin/auth/login',
+      REFRESH_TOKEN: '/admin/auth/refresh-token',
       LOGOUT: '/admin/auth/logout',
       ME: '/admin/auth/me',
     },

@@ -191,9 +191,10 @@ export default function RestaurantOTP() {
         const registerData = registerResponse?.data?.data || registerResponse?.data
         const registerAccessToken = registerData?.accessToken
         const registerRestaurant = registerData?.restaurant
+        const registerRefreshToken = registerData?.refreshToken
 
         if (registerAccessToken && registerRestaurant) {
-          setRestaurantAuthData("restaurant", registerAccessToken, registerRestaurant)
+          setRestaurantAuthData("restaurant", registerAccessToken, registerRestaurant, registerRefreshToken)
           window.dispatchEvent(new Event("restaurantAuthChanged"))
           sessionStorage.removeItem("restaurantAuthData")
           setTimeout(async () => {
@@ -205,10 +206,11 @@ export default function RestaurantOTP() {
 
       const accessToken = data?.accessToken
       const restaurant = data?.restaurant
+      const refreshToken = data?.refreshToken
 
       if (accessToken && restaurant) {
         // Store auth data using utility function to ensure proper module-specific token storage
-        setRestaurantAuthData("restaurant", accessToken, restaurant)
+        setRestaurantAuthData("restaurant", accessToken, restaurant, refreshToken)
 
         // Dispatch custom event for same-tab updates
         window.dispatchEvent(new Event("restaurantAuthChanged"))

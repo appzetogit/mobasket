@@ -58,23 +58,25 @@ export default function ProtectedRoute({ children, requiredRole, loginPath, modu
     if (user) {
       const normalizedStatus = String(user.status || '').trim().toLowerCase();
       const isApprovedAndActive = user.isActive === true;
+      const isOnboardingPage = location.pathname.startsWith(`/${modulePrefix}/onboarding`) ||
+        location.pathname.includes('/otp') ||
+        location.pathname.includes('/login');
+      const isPendingPage = location.pathname === `/${modulePrefix}/pending-approval`;
+      const isAuthPage = location.pathname.includes('/login') || location.pathname.includes('/otp');
 
       // Handle onboarding status
       if (!isApprovedAndActive && normalizedStatus === 'onboarding') {
-        const isOnboardingPage = location.pathname.startsWith(`/${modulePrefix}/onboarding`) ||
-          location.pathname.includes('/otp') ||
-          location.pathname.includes('/login');
-
-        if (!isOnboardingPage) {
+        // Allow both onboarding and pending pages to render so they can self-resolve
+        // using fresh backend state, instead of bouncing due to stale localStorage status.
+        if (!isOnboardingPage && !isPendingPage && !isAuthPage) {
           return <Navigate to={`/${modulePrefix}/onboarding`} replace />;
         }
       }
       // Handle pending status
       else if (!isApprovedAndActive && normalizedStatus === 'pending') {
-        const isPendingPage = location.pathname === `/${modulePrefix}/pending-approval`;
-        const isAuthPage = location.pathname.includes('/login') || location.pathname.includes('/otp');
-
-        if (!isPendingPage && !isAuthPage) {
+        // Allow onboarding route too to avoid ping-pong loops when local storage status
+        // is stale and backend returns onboarding for this account.
+        if (!isPendingPage && !isOnboardingPage && !isAuthPage) {
           return <Navigate to={`/${modulePrefix}/pending-approval`} replace />;
         }
       }

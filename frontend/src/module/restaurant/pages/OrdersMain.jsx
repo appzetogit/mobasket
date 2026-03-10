@@ -17,7 +17,8 @@ import autoTable from "jspdf-autotable"
 const STORAGE_KEY = "restaurant_online_status"
 const ACTIVE_FILTER_STORAGE_KEY = "restaurant_orders_active_filter"
 const ACCEPT_SLIDE_HANDLE_WIDTH = 52
-const ACCEPT_SLIDE_TRIGGER_RATIO = 0.9
+const ACCEPT_SLIDE_TRIGGER_RATIO = 0.5
+const ACCEPT_REQUEST_TIMEOUT_MS = 45000
 
 const isCodLikePaymentMethod = (value) => {
   const method = String(value || "").toLowerCase().trim()
@@ -958,6 +959,11 @@ export default function OrdersMain() {
 
   // Handle accept order (confirmed by user)
   const handleAcceptOrder = async () => {
+    if (countdown <= 0) {
+      toast.error("Acceptance window expired for this order")
+      return false
+    }
+
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current.currentTime = 0
@@ -977,14 +983,67 @@ export default function OrdersMain() {
       let acceptedOrderId = null
       let lastError = null
 
+      const acceptWithTimeout = async (orderId) => {
+        const timeoutPromise = new Promise((_, reject) => {
+          const timeoutError = new Error("Accept request timed out")
+          timeoutError.code = "ECONNABORTED"
+          setTimeout(() => reject(timeoutError), ACCEPT_REQUEST_TIMEOUT_MS)
+        })
+
+        return Promise.race([
+          orderAPI.acceptOrder(orderId, prepTime),
+          timeoutPromise,
+        ])
+      }
+
+      const isAcceptedOrderStatus = (status) => {
+        const normalized = String(status || "").toLowerCase().trim()
+        return normalized === "preparing" || normalized === "ready" || normalized === "out_for_delivery"
+      }
+
+      const verifyAcceptedAfterTimeout = async (ids = []) => {
+        if (typeof orderAPI?.getOrderById !== "function") return null
+
+        for (const id of ids) {
+          try {
+            const response = await orderAPI.getOrderById(id)
+            const order =
+              response?.data?.data?.order ||
+              response?.data?.order ||
+              response?.data?.data ||
+              null
+
+            if (order && isAcceptedOrderStatus(order.status)) {
+              return id
+            }
+          } catch {
+            // Ignore per-ID lookup failures; keep checking alternatives.
+          }
+        }
+
+        return null
+      }
+
       for (const orderId of orderIdCandidates) {
         try {
-          await orderAPI.acceptOrder(orderId, prepTime)
+          await acceptWithTimeout(orderId)
           acceptedOrderId = orderId
           break
         } catch (attemptError) {
           lastError = attemptError
           const status = Number(attemptError?.response?.status || 0)
+          const isTimeoutError =
+            attemptError?.code === "ECONNABORTED" ||
+            String(attemptError?.message || "").toLowerCase().includes("timeout")
+
+          if (isTimeoutError) {
+            const verifiedAcceptedId = await verifyAcceptedAfterTimeout(orderIdCandidates)
+            if (verifiedAcceptedId) {
+              acceptedOrderId = verifiedAcceptedId
+              break
+            }
+          }
+
           // Retry with next candidate only when order lookup failed
           if (status !== 404) {
             throw attemptError
@@ -994,6 +1053,11 @@ export default function OrdersMain() {
 
       if (!acceptedOrderId && lastError) {
         throw lastError
+      }
+
+      if (acceptedOrderId && typeof orderAPI?.resendDeliveryNotification === "function") {
+        // Best-effort nudge so the delivery assignment flow starts immediately.
+        orderAPI.resendDeliveryNotification(acceptedOrderId).catch(() => {})
       }
 
       console.log('Γ£à Order accepted:', acceptedOrderId || orderIdCandidates[0])
@@ -1054,6 +1118,7 @@ export default function OrdersMain() {
 
   const handleAcceptSliderPointerDown = (event) => {
     if (isAcceptProcessing) return
+    if (countdown <= 0) return
     if (event.pointerType === "mouse" && event.button !== 0) return
     const maxOffset = getAcceptSlideMaxOffset()
     if (maxOffset <= 0) return
@@ -1126,6 +1191,23 @@ export default function OrdersMain() {
     setIsAcceptSliding(false)
     setIsAcceptProcessing(false)
   }, [showNewOrderPopup, popupOrder?.orderMongoId, popupOrder?.orderId, newOrder?.orderMongoId, newOrder?.orderId])
+
+  useEffect(() => {
+    if (!showNewOrderPopup) return
+    if (countdown > 0) return
+
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+    }
+
+    resetAcceptSlider()
+    setIsAcceptProcessing(false)
+    setShowAcceptConfirmPopup(false)
+    setShowNewOrderPopup(false)
+    setPopupOrder(null)
+    clearNewOrder()
+  }, [countdown, showNewOrderPopup, clearNewOrder])
 
   // Handle reject order
   const handleRejectClick = () => {
@@ -1950,7 +2032,9 @@ export default function OrdersMain() {
                           <span className="text-sm font-semibold text-white tracking-wide">
                             {isAcceptProcessing
                               ? "Accepting order..."
-                              : `Slide to Accept (${formatTime(countdown)})`}
+                              : countdown <= 0
+                                ? "Accept window expired"
+                                : `Slide to Accept (${formatTime(countdown)})`}
                           </span>
                         </div>
                         <button
@@ -1959,7 +2043,7 @@ export default function OrdersMain() {
                           onPointerMove={handleAcceptSliderPointerMove}
                           onPointerUp={handleAcceptSliderPointerEnd}
                           onPointerCancel={resetAcceptSlider}
-                          disabled={isAcceptProcessing}
+                          disabled={isAcceptProcessing || countdown <= 0}
                           className="absolute top-1 bottom-1 left-1 w-[52px] rounded-lg bg-white text-slate-900 shadow-md flex items-center justify-center disabled:opacity-70 touch-none"
                           style={{
                             transform: `translateX(${acceptSlideOffset}px)`,

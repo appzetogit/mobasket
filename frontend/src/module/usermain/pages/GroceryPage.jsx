@@ -347,10 +347,27 @@ const GroceryPage = () => {
 
   const findActiveTrackableOrder = (orders = []) => {
     const activeStatuses = new Set(["pending", "confirmed", "preparing", "ready", "out_for_delivery", "scheduled"]);
+    const terminalStatuses = new Set(["delivered", "completed", "cancelled", "canceled"]);
+    const isTerminalOrder = (order) => {
+      const status = String(order?.status || "").toLowerCase();
+      const deliveryStateStatus = String(order?.deliveryState?.status || "").toLowerCase();
+      const deliveryPhase = String(order?.deliveryState?.currentPhase || "").toLowerCase();
+      const hasDeliveredTimestamp = Boolean(order?.deliveredAt || order?.deliveryState?.deliveredAt);
+      const trackingDelivered = Boolean(order?.tracking?.delivered?.status);
+
+      return (
+        terminalStatuses.has(status) ||
+        terminalStatuses.has(deliveryStateStatus) ||
+        deliveryPhase === "completed" ||
+        hasDeliveredTimestamp ||
+        trackingDelivered
+      );
+    };
 
     const candidates = orders
       .filter((order) => {
         const status = String(order?.status || "").toLowerCase();
+        if (isTerminalOrder(order)) return false;
         if (!activeStatuses.has(status)) return false;
 
         const orderKey = String(order?._id || order?.orderId || "").trim();
@@ -358,6 +375,7 @@ const GroceryPage = () => {
 
         const approvalStatus = String(order?.adminApproval?.status || "").toLowerCase();
         if (approvalStatus === "rejected") return false;
+        if (approvalStatus === "approved" && terminalStatuses.has(status)) return false;
 
         const hasItems = Array.isArray(order?.items) && order.items.length > 0;
         const hasAmount = Number(order?.totalAmount || order?.grandTotal || 0) > 0;
@@ -452,8 +470,23 @@ const GroceryPage = () => {
     [activeGroceryOrder]
   );
   const activeOrderTrackerKey = String(activeGroceryOrder?.orderId || activeGroceryOrder?._id || "").trim();
+  const activeOrderStatus = String(activeGroceryOrder?.status || "").toLowerCase();
+  const activeOrderDeliveryStateStatus = String(activeGroceryOrder?.deliveryState?.status || "").toLowerCase();
+  const activeOrderDeliveryPhase = String(activeGroceryOrder?.deliveryState?.currentPhase || "").toLowerCase();
+  const isTerminalActiveOrder =
+    ["delivered", "completed", "cancelled", "canceled"].includes(activeOrderStatus) ||
+    ["delivered", "completed", "cancelled", "canceled"].includes(activeOrderDeliveryStateStatus) ||
+    activeOrderDeliveryPhase === "completed" ||
+    Boolean(activeGroceryOrder?.deliveredAt || activeGroceryOrder?.deliveryState?.deliveredAt) ||
+    Boolean(activeGroceryOrder?.tracking?.delivered?.status);
   const isOrderTrackerVisible =
-    Boolean(activeOrderTrackerKey && activeGroceryOrder && activeOrderMeta && !isMoGroceryPlanOrder(activeGroceryOrder)) &&
+    Boolean(
+      activeOrderTrackerKey &&
+      activeGroceryOrder &&
+      activeOrderMeta &&
+      !isTerminalActiveOrder &&
+      !isMoGroceryPlanOrder(activeGroceryOrder)
+    ) &&
     dismissedOrderTrackerFor !== activeOrderTrackerKey;
 
   // Snow effect timer

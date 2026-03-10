@@ -194,6 +194,7 @@ export function useLocation() {
       if (!savedAddressLocation) return
 
       localStorage.setItem("userLocation", JSON.stringify(savedAddressLocation))
+      window.dispatchEvent(new CustomEvent("userLocationChanged", { detail: savedAddressLocation }))
       setLocation(savedAddressLocation)
       setPermissionGranted(true)
       setLoading(false)
@@ -201,9 +202,34 @@ export function useLocation() {
       stopWatchingLocation()
     }
 
+    const applyManualLocationSelection = (event) => {
+      try {
+        const detailLocation = event?.detail && typeof event.detail === "object" ? event.detail : null
+        const storedLocation = detailLocation || JSON.parse(localStorage.getItem("userLocation") || "null")
+        if (!storedLocation || typeof storedLocation !== "object") return
+
+        setLocation(storedLocation)
+        setPermissionGranted(true)
+        setLoading(false)
+        setError(null)
+        stopWatchingLocation()
+      } catch {
+        // Ignore malformed payloads or storage parsing issues.
+      }
+    }
+
+    const applyStorageLocationUpdate = (event) => {
+      if (event?.key && event.key !== "userLocation") return
+      applyManualLocationSelection()
+    }
+
     window.addEventListener("userAddressesChanged", applySavedAddressLocation)
+    window.addEventListener("userLocationChanged", applyManualLocationSelection)
+    window.addEventListener("storage", applyStorageLocationUpdate)
     return () => {
       window.removeEventListener("userAddressesChanged", applySavedAddressLocation)
+      window.removeEventListener("userLocationChanged", applyManualLocationSelection)
+      window.removeEventListener("storage", applyStorageLocationUpdate)
     }
   }, [])
 
@@ -1733,6 +1759,7 @@ export function useLocation() {
               }
               
             localStorage.setItem("userLocation", JSON.stringify(finalLoc))
+            window.dispatchEvent(new CustomEvent("userLocationChanged", { detail: finalLoc }))
             setLocation(finalLoc)
             setPermissionGranted(true)
             if (showLoading) setLoading(false)
@@ -1768,6 +1795,7 @@ export function useLocation() {
                   }
                   console.log("✅ Last resort geocoding succeeded:", lastResortLoc)
                   localStorage.setItem("userLocation", JSON.stringify(lastResortLoc))
+                  window.dispatchEvent(new CustomEvent("userLocationChanged", { detail: lastResortLoc }))
                   setLocation(lastResortLoc)
                   setPermissionGranted(true)
                   if (showLoading) setLoading(false)
@@ -2129,6 +2157,7 @@ export function useLocation() {
             if (coordsChanged) {
               prevLocationCoordsRef.current = { latitude: loc.latitude, longitude: loc.longitude }
               localStorage.setItem("userLocation", JSON.stringify(loc))
+              window.dispatchEvent(new CustomEvent("userLocationChanged", { detail: loc }))
               setLocation(loc)
               setPermissionGranted(true)
               setError(null)
@@ -2136,6 +2165,7 @@ export function useLocation() {
               // Coordinates haven't changed significantly, skip state update to prevent re-renders
               // Still update localStorage silently for persistence
               localStorage.setItem("userLocation", JSON.stringify(loc))
+              window.dispatchEvent(new CustomEvent("userLocationChanged", { detail: loc }))
             }
 
             // Debounce DB updates - timer + internal write guard both apply
@@ -2237,6 +2267,7 @@ export function useLocation() {
     const savedAddressLocation = getSavedAddressLocation()
     if (savedAddressLocation) {
       localStorage.setItem("userLocation", JSON.stringify(savedAddressLocation))
+      window.dispatchEvent(new CustomEvent("userLocationChanged", { detail: savedAddressLocation }))
       setLocation(savedAddressLocation)
       setPermissionGranted(true)
       setLoading(false)

@@ -1,8 +1,8 @@
 import { Navigate } from "react-router-dom"
+import { isModuleAuthenticated } from "@/lib/utils/auth"
 
 export default function ProtectedRoute({ children }) {
-  // Simple check - in real app, check authentication token
-  const isAuthenticated = localStorage.getItem("admin_authenticated") === "true"
+  const isAuthenticated = isModuleAuthenticated("admin")
 
   if (!isAuthenticated) {
     return <Navigate to="/admin/login" replace />

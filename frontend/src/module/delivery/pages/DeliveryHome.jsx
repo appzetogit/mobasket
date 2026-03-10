@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useRef, useMemo, useCallback } from "react"
+import { useEffect, useState, useRef, useMemo, useCallback } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 
 
@@ -2849,6 +2849,10 @@ export default function DeliveryHome() {
 
   const newOrderAcceptButtonIsSwiping = useRef(false)
   const newOrderAcceptButtonProgressRef = useRef(0)
+  const newOrderAcceptButtonMaxProgressRef = useRef(0)
+  const newOrderAcceptButtonPendingProgressRef = useRef(0)
+  const newOrderAcceptButtonRafRef = useRef(null)
+  const newOrderAcceptButtonRenderedProgressRef = useRef(0)
 
 
   const [newOrderAcceptButtonProgress, setNewOrderAcceptButtonProgress] = useState(0)
@@ -4526,7 +4530,7 @@ export default function DeliveryHome() {
   // Earnings Guarantee - Use active earning addon if available, otherwise show 0
 
 
-  // When no offer is active, show 0 of 0 and ₹0
+  // When no offer is active, show 0 of 0 and ?0
 
 
   const earningsGuaranteeTarget = activeEarningAddon?.earningAmount || 0
@@ -6104,7 +6108,7 @@ export default function DeliveryHome() {
 
 
 
-  // Get rider location - App open à¤¹à¥‹à¤¤à¥‡ à¤¹à¥€ location fetch à¤•à¤°à¥‡à¤‚
+  // Get rider location - App open होते ही location fetch करें
 
 
   useEffect(() => {
@@ -6149,7 +6153,7 @@ export default function DeliveryHome() {
     if (navigator.geolocation) {
 
 
-      // Get current position first - App open à¤¹à¥‹à¤¤à¥‡ à¤¹à¥€ location à¤²à¥‡à¤‚
+      // Get current position first - App open होते ही location लें
 
 
       console.log('[LOC] Fetching current location on app open...')
@@ -6344,7 +6348,7 @@ export default function DeliveryHome() {
           // Validate coordinates are reasonable for India (basic sanity check)
 
 
-          // India: Latitude 8.4Â° to 37.6Â°, Longitude 68.7Â° to 97.25Â°
+          // India: Latitude 8.4° to 37.6°, Longitude 68.7° to 97.25°
 
 
           const isInIndiaRange = latitude >= 8 && latitude <= 38 && longitude >= 68 && longitude <= 98
@@ -7921,9 +7925,37 @@ export default function DeliveryHome() {
 
   // Handle new order popup accept button swipe
 
+  const scheduleNewOrderAcceptProgress = (progress) => {
+    newOrderAcceptButtonPendingProgressRef.current = progress
+    if (newOrderAcceptButtonRafRef.current !== null) return
+
+    newOrderAcceptButtonRafRef.current = requestAnimationFrame(() => {
+      newOrderAcceptButtonRafRef.current = null
+      const nextProgress = newOrderAcceptButtonPendingProgressRef.current
+      if (Math.abs(nextProgress - newOrderAcceptButtonRenderedProgressRef.current) < 0.008) {
+        return
+      }
+      newOrderAcceptButtonRenderedProgressRef.current = nextProgress
+      setNewOrderAcceptButtonProgress(nextProgress)
+    })
+  }
+
+  const resetNewOrderAcceptProgress = () => {
+    if (newOrderAcceptButtonRafRef.current !== null) {
+      cancelAnimationFrame(newOrderAcceptButtonRafRef.current)
+      newOrderAcceptButtonRafRef.current = null
+    }
+    newOrderAcceptButtonPendingProgressRef.current = 0
+    newOrderAcceptButtonRenderedProgressRef.current = 0
+    newOrderAcceptButtonProgressRef.current = 0
+    newOrderAcceptButtonMaxProgressRef.current = 0
+    setNewOrderAcceptButtonProgress(0)
+  }
+
 
   const handleNewOrderAcceptTouchStart = (e) => {
 
+    e.stopPropagation()
 
     newOrderAcceptButtonSwipeStartX.current = e.touches[0].clientX
 
@@ -7932,7 +7964,7 @@ export default function DeliveryHome() {
 
 
     newOrderAcceptButtonIsSwiping.current = false
-    newOrderAcceptButtonProgressRef.current = 0
+    resetNewOrderAcceptProgress()
 
 
     setNewOrderIsAnimatingToComplete(false)
@@ -7942,6 +7974,7 @@ export default function DeliveryHome() {
 
   const handleNewOrderAcceptTouchMove = (e) => {
 
+    e.stopPropagation()
 
     const deltaX = e.touches[0].clientX - newOrderAcceptButtonSwipeStartX.current
 
@@ -7952,8 +7985,11 @@ export default function DeliveryHome() {
 
 
 
-    // Match Reached Pickup behavior: require a dominant right swipe.
-    if (Math.abs(deltaX) > DELIVERY_SWIPE_START_THRESHOLD_PX && Math.abs(deltaX) > Math.abs(deltaY) && deltaX > 0) {
+    // Smoother swipe detection: accept horizontal-first gestures even with slight vertical jitter.
+    if (
+      deltaX > DELIVERY_SWIPE_START_THRESHOLD_PX &&
+      (Math.abs(deltaX) > Math.abs(deltaY) * 0.45 || Math.abs(deltaY) < 24)
+    ) {
 
 
       newOrderAcceptButtonIsSwiping.current = true
@@ -7990,9 +8026,12 @@ export default function DeliveryHome() {
 
 
       newOrderAcceptButtonProgressRef.current = progress
+      newOrderAcceptButtonMaxProgressRef.current = Math.max(
+        newOrderAcceptButtonMaxProgressRef.current,
+        progress
+      )
 
-
-      setNewOrderAcceptButtonProgress(progress)
+      scheduleNewOrderAcceptProgress(progress)
 
 
     }
@@ -8006,12 +8045,12 @@ export default function DeliveryHome() {
 
   const handleNewOrderAcceptTouchEnd = (e) => {
 
+    e.stopPropagation()
 
     if (!newOrderAcceptButtonIsSwiping.current) {
 
 
-      setNewOrderAcceptButtonProgress(0)
-      newOrderAcceptButtonProgressRef.current = 0
+      resetNewOrderAcceptProgress()
 
 
       return
@@ -8039,12 +8078,14 @@ export default function DeliveryHome() {
 
 
     const threshold = maxSwipe * DELIVERY_SWIPE_CONFIRM_THRESHOLD
+    const finalProgress = Math.min(Math.max(deltaX / maxSwipe, 0), 1)
+    const acceptedProgress = Math.max(finalProgress, newOrderAcceptButtonMaxProgressRef.current)
 
 
 
 
 
-    if (deltaX > threshold) {
+    if (acceptedProgress >= DELIVERY_SWIPE_CONFIRM_THRESHOLD || deltaX > threshold) {
 
 
       // Stop audio immediately when user accepts
@@ -8062,6 +8103,7 @@ export default function DeliveryHome() {
       setNewOrderIsAnimatingToComplete(true)
 
 
+      newOrderAcceptButtonRenderedProgressRef.current = 1
       setNewOrderAcceptButtonProgress(1)
 
 
@@ -10255,8 +10297,7 @@ export default function DeliveryHome() {
       // Reset smoothly
 
 
-      setNewOrderAcceptButtonProgress(0)
-      newOrderAcceptButtonProgressRef.current = 0
+      resetNewOrderAcceptProgress()
 
 
     }
@@ -10272,9 +10313,17 @@ export default function DeliveryHome() {
 
 
     newOrderAcceptButtonIsSwiping.current = false
-    newOrderAcceptButtonProgressRef.current = 0
 
 
+  }
+
+  const handleNewOrderAcceptTouchCancel = (e) => {
+    e.stopPropagation()
+    newOrderAcceptButtonSwipeStartX.current = 0
+    newOrderAcceptButtonSwipeStartY.current = 0
+    newOrderAcceptButtonIsSwiping.current = false
+    setNewOrderIsAnimatingToComplete(false)
+    resetNewOrderAcceptProgress()
   }
 
 
@@ -14179,7 +14228,7 @@ export default function DeliveryHome() {
       if (isCashInHandLimitReached) {
 
 
-        toast.error(`Cash in hand limit reached (₹${totalCashLimit.toFixed(2)}). Deposit cash in hand to continue receiving orders.`)
+        toast.error(`Cash in hand limit reached (?${totalCashLimit.toFixed(2)}). Deposit cash in hand to continue receiving orders.`)
 
 
         clearNewOrder()
@@ -14236,7 +14285,7 @@ export default function DeliveryHome() {
         toast.error(
 
 
-          `COD limit exceeded. Current cash in hand ₹${cashInHand.toFixed(2)}, incoming COD ₹${incomingCodAmount.toFixed(2)}, limit ₹${totalCashLimit.toFixed(2)}. Deposit cash to receive this order.`,
+          `COD limit exceeded. Current cash in hand ?${cashInHand.toFixed(2)}, incoming COD ?${incomingCodAmount.toFixed(2)}, limit ?${totalCashLimit.toFixed(2)}. Deposit cash to receive this order.`,
 
 
         )
@@ -15593,7 +15642,7 @@ export default function DeliveryHome() {
         }
 
 
-        console.log(`✅ Found ${orders.length} assigned order(s)`)
+        console.log(`? Found ${orders.length} assigned order(s)`)
 
 
 
@@ -15674,7 +15723,7 @@ export default function DeliveryHome() {
         if (pendingOrders.length > 0) {
 
 
-          console.log(`📦 Found ${pendingOrders.length} new pending order(s) to show`)
+          console.log(`?? Found ${pendingOrders.length} new pending order(s) to show`)
 
 
 
@@ -15698,7 +15747,7 @@ export default function DeliveryHome() {
           if (isOrderAlreadyAccepted(orderId, firstOrder?.orderId, firstOrder?._id?.toString())) {
 
 
-            console.log('⚠️ Order already accepted, skipping:', orderId)
+            console.log('?? Order already accepted, skipping:', orderId)
 
 
             return
@@ -15722,7 +15771,7 @@ export default function DeliveryHome() {
 
 
 
-          console.log('📍 Restaurant address extracted from assigned order:', {
+          console.log('?? Restaurant address extracted from assigned order:', {
 
 
             address: normalizeAddressLabel(restaurantAddress, 'Restaurant address not available'),
@@ -15921,7 +15970,7 @@ export default function DeliveryHome() {
         } else {
 
 
-          console.log('ℹ️ No pending orders found')
+          console.log('?? No pending orders found')
 
 
         }
@@ -15930,7 +15979,7 @@ export default function DeliveryHome() {
       } else {
 
 
-        console.log('ℹ️ No orders in response or response format unexpected')
+        console.log('?? No orders in response or response format unexpected')
 
 
       }
@@ -15939,7 +15988,7 @@ export default function DeliveryHome() {
     } catch (error) {
 
 
-      console.error('❌ Error fetching assigned orders:', error)
+      console.error('? Error fetching assigned orders:', error)
 
 
       // Don't show error to user, just log it
@@ -17973,7 +18022,7 @@ export default function DeliveryHome() {
 
 
 
-      // Create or update bike marker IMMEDIATELY (blue dot à¤•à¥€ à¤œà¤—à¤¹ bike icon)
+      // Create or update bike marker IMMEDIATELY (blue dot की जगह bike icon)
 
 
       createOrUpdateBikeMarker(riderLocation[0], riderLocation[1], heading, true);
@@ -28949,7 +28998,7 @@ export default function DeliveryHome() {
                       <p className="text-xs text-gray-700 mt-1">
 
 
-                        Cash in hand has reached the delivery cash limit (₹{totalCashLimit.toFixed(2)}). Deposit cash in hand to continue receiving orders.
+                        Cash in hand has reached the delivery cash limit (?{totalCashLimit.toFixed(2)}). Deposit cash in hand to continue receiving orders.
 
 
                       </p>
@@ -29138,7 +29187,7 @@ export default function DeliveryHome() {
 
 
 
-                      // Update bike marker (only if online - blue dot à¤¨à¤¹à¥€à¤‚, bike icon)
+                      // Update bike marker (only if online - blue dot नहीं, bike icon)
 
 
                       if (window.deliveryMapInstance) {
@@ -30029,7 +30078,7 @@ export default function DeliveryHome() {
                 <div className="relative z-10">
 
 
-                  <div className="text-white text-3xl font-bold mb-1">₹6,000                 <span className="text-white/90 text-base font-medium mb-1">referral bonus</span>
+                  <div className="text-white text-3xl font-bold mb-1">?6,000                 <span className="text-white/90 text-base font-medium mb-1">referral bonus</span>
 
 
                   </div>
@@ -30071,7 +30120,7 @@ export default function DeliveryHome() {
                 <div className="flex items-center text-center justify-center gap-2 mb-2">
 
 
-                  <div className="text-4xl font-bold text-center">₹100</div>
+                  <div className="text-4xl font-bold text-center">?100</div>
 
 
                   <Lock className="w-5 h-5 text-white" />
@@ -30080,7 +30129,7 @@ export default function DeliveryHome() {
                 </div>
 
 
-                <p className="text-white/90 text-center text-sm mb-4">Complete 1 order to unlock ₹100</p>
+                <p className="text-white/90 text-center text-sm mb-4">Complete 1 order to unlock ?100</p>
 
 
                 <div className="flex items-center text-center justify-center gap-2 text-white/70 text-xs mb-4">
@@ -30218,7 +30267,7 @@ export default function DeliveryHome() {
                     <div className="bg-black text-white px-4 py-3 rounded-lg text-center min-w-[80px]">
 
 
-                      <div className="text-2xl font-bold">₹{earningsGuaranteeTarget.toFixed(0)}</div>
+                      <div className="text-2xl font-bold">?{earningsGuaranteeTarget.toFixed(0)}</div>
 
 
                       <div className="text-xs text-white/80 mt-1">{hasActiveOffer ? `${earningsGuaranteeOrdersTarget} orders` : "This week"}</div>
@@ -30484,7 +30533,7 @@ export default function DeliveryHome() {
                         <div className="absolute inset-0 flex items-center justify-center">
 
 
-                          <span className="text-lg font-bold text-gray-900">₹{earningsGuaranteeCurrentEarnings.toFixed(2)}</span>
+                          <span className="text-lg font-bold text-gray-900">?{earningsGuaranteeCurrentEarnings.toFixed(2)}</span>
 
 
                         </div>
@@ -31780,7 +31829,7 @@ export default function DeliveryHome() {
                     <p className="text-4xl font-bold text-gray-900 mb-2">
 
 
-                      ₹{(() => {
+                      ?{(() => {
 
 
                         const earnings = newOrder?.estimatedEarnings || selectedRestaurant?.estimatedEarnings || 0;
@@ -31909,13 +31958,13 @@ export default function DeliveryHome() {
                             <p className="text-green-700 text-xs">
 
 
-                              Base: ₹{earnings.basePayout?.toFixed(0) || '0'}
+                              Base: ?{earnings.basePayout?.toFixed(0) || '0'}
 
 
                               {earnings.distanceCommission > 0 && (
 
 
-                                <> + Distance ({earnings.distance?.toFixed(1)} km × ₹{earnings.commissionPerKm?.toFixed(0)}/km) = ₹{earnings.distanceCommission?.toFixed(0)}</>
+                                <> + Distance ({earnings.distance?.toFixed(1)} km � ?{earnings.commissionPerKm?.toFixed(0)}/km) = ?{earnings.distanceCommission?.toFixed(0)}</>
 
 
                               )}
@@ -31930,7 +31979,7 @@ export default function DeliveryHome() {
                               <p className="text-green-600 text-xs mt-1">
 
 
-                                Note: Distance {earnings.distance?.toFixed(1)} km ≤ {earnings.minDistance} km, per km commission not applicable
+                                Note: Distance {earnings.distance?.toFixed(1)} km = {earnings.minDistance} km, per km commission not applicable
 
 
                               </p>
@@ -32098,7 +32147,7 @@ export default function DeliveryHome() {
                       className="relative w-full bg-green-600 rounded-full overflow-hidden shadow-xl"
 
 
-                      style={{ touchAction: 'pan-x' }} // Prevent vertical scrolling, allow horizontal pan
+                      style={{ touchAction: 'none' }} // Capture touch fully for smooth swipe
 
 
                       onTouchStart={handleNewOrderAcceptTouchStart}
@@ -32108,6 +32157,8 @@ export default function DeliveryHome() {
 
 
                       onTouchEnd={handleNewOrderAcceptTouchEnd}
+
+                      onTouchCancel={handleNewOrderAcceptTouchCancel}
 
 
                       whileTap={{ scale: 0.98 }}
@@ -34707,7 +34758,7 @@ export default function DeliveryHome() {
                   <span className={`text-lg font-bold ${isCod ? 'text-amber-700' : 'text-emerald-700'}`}>
 
 
-                    ₹{total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    ?{total.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
 
 
                   </span>
@@ -34743,7 +34794,7 @@ export default function DeliveryHome() {
               className="relative w-full bg-green-600 rounded-full overflow-hidden shadow-xl"
 
 
-              style={{ touchAction: 'pan-x' }} // Prevent vertical scrolling, allow horizontal pan
+              style={{ touchAction: 'none' }} // Capture touch fully for smooth swipe
 
 
               onTouchStart={handleOrderDeliveredTouchStart}
@@ -35193,7 +35244,7 @@ export default function DeliveryHome() {
                       if (earnings > 0) {
 
 
-                        toast.success(`₹${earnings.toFixed(2)} added to your wallet! 💰`)
+                        toast.success(`?${earnings.toFixed(2)} added to your wallet! ??`)
 
 
                       }
@@ -35358,7 +35409,7 @@ export default function DeliveryHome() {
               <p className="text-5xl font-bold text-gray-900">
 
 
-                ₹{(() => {
+                ?{(() => {
 
 
                   if (orderEarnings > 0) {
@@ -35427,7 +35478,7 @@ export default function DeliveryHome() {
                     <span className="text-gray-600">Trip pay</span>
 
 
-                    <span className="text-gray-900 font-semibold">₹{(() => {
+                    <span className="text-gray-900 font-semibold">?{(() => {
 
 
                       let earnings = 0;
@@ -35481,7 +35532,7 @@ export default function DeliveryHome() {
                     <span className="text-gray-600">Long distance return pay</span>
 
 
-                    <span className="text-gray-900 font-semibold">₹5.00</span>
+                    <span className="text-gray-900 font-semibold">?5.00</span>
 
 
                   </div>
@@ -35496,7 +35547,7 @@ export default function DeliveryHome() {
                     <span className="text-lg font-bold text-gray-900">Total Earnings</span>
 
 
-                    <span className="text-lg font-bold text-gray-900">₹{(() => {
+                    <span className="text-lg font-bold text-gray-900">?{(() => {
 
 
                       if (orderEarnings > 0) {
@@ -35680,6 +35731,7 @@ export default function DeliveryHome() {
 
 
 }
+
 
 
 

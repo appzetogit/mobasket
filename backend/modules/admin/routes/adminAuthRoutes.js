@@ -2,7 +2,8 @@ import express from 'express';
 import {
   adminLogin,
   getCurrentAdmin,
-  adminLogout
+  adminLogout,
+  refreshAdminToken
 } from '../controllers/adminAuthController.js';
 import { authenticateAdmin } from '../middleware/adminAuth.js';
 import { validate } from '../../../shared/middleware/validate.js';
@@ -18,6 +19,7 @@ const loginSchema = Joi.object({
 
 // Public routes
 router.post('/login', validate(loginSchema), adminLogin);
+router.post('/refresh-token', refreshAdminToken);
 
 // Protected routes
 router.get('/me', authenticateAdmin, getCurrentAdmin);
