@@ -101,7 +101,7 @@ class OTPService {
       // Generate OTP
       // Use fixed OTP for default test number only.
       const isDefaultTestNumber = normalizedPhone === '+917610416911';
-      const otp = isDefaultTestNumber ? '110211' : generateOTP();
+      const otp = isDefaultTestNumber ? '123456' : generateOTP();
       const expiresAt = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
       // Build query for invalidating previous OTPs
@@ -127,7 +127,7 @@ class OTPService {
       const otpRecord = await Otp.create(otpData);
 
       // Send OTP via SMS or Email
-      // For default test number, skip external SMS and rely on static OTP 110211.
+      // For default test number, skip external SMS and rely on static OTP 123456.
       if (normalizedPhone && !isDefaultTestNumber) {
         await smsIndiaHubService.sendOTP(normalizedPhone, otp, purpose);
       } else if (email) {

@@ -94,8 +94,9 @@ export default function OutletTimings() {
   const isStore = location.pathname.startsWith("/store")
   const baseRoute = isStore ? "/store" : "/restaurant"
   const [expandedDay, setExpandedDay] = useState("Monday")
-  const isInternalUpdate = useRef(false)
   const saveTimeoutRef = useRef(null)
+  const hasMountedRef = useRef(false)
+  const hasLocalEditRef = useRef(false)
   const [days, setDays] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
@@ -141,17 +142,22 @@ export default function OutletTimings() {
     return getDefaultDays()
   })
 
-  // Save to localStorage and backend whenever days change via this page.
+  // Persist day changes locally for other pages and debounce backend sync.
   useEffect(() => {
-    if (isInternalUpdate.current) {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(days))
-        // Dispatch event to notify other components
-        window.dispatchEvent(new Event("outletTimingsUpdated"))
-      } catch (error) {
-        console.error("Error saving outlet timings:", error)
-      }
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(days))
+      // Dispatch event to notify other components
+      window.dispatchEvent(new Event("outletTimingsUpdated"))
+    } catch (error) {
+      console.error("Error saving outlet timings:", error)
+    }
 
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true
+      return undefined
+    }
+
+    if (hasLocalEditRef.current) {
       if (saveTimeoutRef.current) {
         clearTimeout(saveTimeoutRef.current)
       }
@@ -166,8 +172,6 @@ export default function OutletTimings() {
           toast.error("Failed to sync outlet timings. Please try again.")
         }
       }, 450)
-
-      isInternalUpdate.current = false
     }
 
     return () => {
@@ -186,6 +190,10 @@ export default function OutletTimings() {
           response?.data?.data?.outletTimings?.timings ||
           response?.data?.outletTimings?.timings ||
           []
+        // Avoid overwriting recent local edits with delayed API response.
+        if (hasLocalEditRef.current) {
+          return
+        }
         if (Array.isArray(apiTimings) && apiTimings.length > 0) {
           const mapped = mapApiTimingsToDays(apiTimings)
           setDays(mapped)
@@ -203,21 +211,19 @@ export default function OutletTimings() {
   // Listen for updates from other components
   useEffect(() => {
     const handleUpdate = () => {
-      if (!isInternalUpdate.current) {
-        try {
-          const saved = localStorage.getItem(STORAGE_KEY)
-          if (saved) {
-            const newDays = JSON.parse(saved)
-            setDays(prevDays => {
-              if (JSON.stringify(newDays) !== JSON.stringify(prevDays)) {
-                return newDays
-              }
-              return prevDays
-            })
-          }
-        } catch (error) {
-          console.error("Error loading updated outlet timings:", error)
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY)
+        if (saved) {
+          const newDays = JSON.parse(saved)
+          setDays(prevDays => {
+            if (JSON.stringify(newDays) !== JSON.stringify(prevDays)) {
+              return newDays
+            }
+            return prevDays
+          })
         }
+      } catch (error) {
+        console.error("Error loading updated outlet timings:", error)
       }
     }
 
@@ -250,7 +256,7 @@ export default function OutletTimings() {
   }
 
   const toggleDayOpen = (day) => {
-    isInternalUpdate.current = true
+    hasLocalEditRef.current = true
     setDays(prev => ({
       ...prev,
       [day]: {
@@ -266,7 +272,7 @@ export default function OutletTimings() {
       return
     }
     
-    isInternalUpdate.current = true
+    hasLocalEditRef.current = true
     const timeString = timeToString(newTime)
     
     // Validate time string format

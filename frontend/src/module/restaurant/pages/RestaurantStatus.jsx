@@ -16,6 +16,56 @@ import {
 } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 
+const OUTLET_TIMINGS_STORAGE_KEY = "restaurant_outlet_timings"
+const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+const normalizeHHMM = (value, fallback) => {
+  if (!value || typeof value !== "string") return fallback
+  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/)
+  if (!match) return fallback
+  const hours = Math.max(0, Math.min(23, Number(match[1])))
+  const minutes = Math.max(0, Math.min(59, Number(match[2])))
+  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return fallback
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`
+}
+
+const slotTo24Hour = (time, period) => {
+  if (!time || typeof time !== "string" || !time.includes(":")) return null
+  const [rawHour, rawMinute] = time.split(":").map(Number)
+  if (!Number.isFinite(rawHour) || !Number.isFinite(rawMinute)) return null
+  let hour = rawHour
+  const minute = Math.max(0, Math.min(59, rawMinute))
+  const p = String(period || "").toLowerCase()
+  if (p === "pm" && hour !== 12) hour += 12
+  if (p === "am" && hour === 12) hour = 0
+  hour = Math.max(0, Math.min(23, hour))
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`
+}
+
+const normalizeOutletTimings = (raw) => {
+  if (!raw) return null
+  const next = {}
+  const assignDay = (day, value) => {
+    if (!DAY_NAMES.includes(day) || !value || typeof value !== "object") return
+    const slot = Array.isArray(value?.slots) && value.slots.length > 0 ? value.slots[0] : null
+    const openingFromSlot = slot ? slotTo24Hour(slot.start, slot.startPeriod) : null
+    const closingFromSlot = slot ? slotTo24Hour(slot.end, slot.endPeriod) : null
+    next[day] = {
+      isOpen: value.isOpen !== false,
+      openingTime: normalizeHHMM(value.openingTime || openingFromSlot, "09:00"),
+      closingTime: normalizeHHMM(value.closingTime || closingFromSlot, "22:00"),
+    }
+  }
+
+  if (Array.isArray(raw)) {
+    raw.forEach((entry) => assignDay(entry?.day, entry))
+  } else if (typeof raw === "object") {
+    DAY_NAMES.forEach((day) => assignDay(day, raw[day]))
+  }
+
+  return Object.keys(next).length > 0 ? next : null
+}
+
 export default function RestaurantStatus() {
   const navigate = useNavigate()
   const routeLocation = useLocation()
@@ -71,19 +121,39 @@ export default function RestaurantStatus() {
     }
 
     fetchRestaurantData()
-  }, [isGroceryStore])
+  }, [isGroceryStore, entityLabel])
 
-  // Load outlet timings from localStorage
+  // Load outlet timings from localStorage + outlet timings API into one normalized map.
   useEffect(() => {
-    const loadOutletTimings = () => {
+    const loadOutletTimings = async () => {
       try {
-        const saved = localStorage.getItem("restaurant_outlet_timings")
+        const saved = localStorage.getItem(OUTLET_TIMINGS_STORAGE_KEY)
         if (saved) {
-          const data = JSON.parse(saved)
-          setOutletTimings(data)
+          const parsed = JSON.parse(saved)
+          const normalized = normalizeOutletTimings(parsed)
+          if (normalized) {
+            setOutletTimings(normalized)
+          }
         }
       } catch (error) {
         console.error("Error loading outlet timings:", error)
+      }
+
+      if (!isGroceryStore) {
+        try {
+          const response = await restaurantAPI.getOutletTimings()
+          const apiTimings =
+            response?.data?.data?.outletTimings?.timings ||
+            response?.data?.outletTimings?.timings ||
+            []
+          const normalizedApi = normalizeOutletTimings(apiTimings)
+          if (normalizedApi) {
+            setOutletTimings(normalizedApi)
+            localStorage.setItem(OUTLET_TIMINGS_STORAGE_KEY, JSON.stringify(normalizedApi))
+          }
+        } catch (apiError) {
+          console.error("Error loading outlet timings from API:", apiError)
+        }
       }
     }
 
@@ -91,11 +161,18 @@ export default function RestaurantStatus() {
 
     // Listen for outlet timings updates
     window.addEventListener("outletTimingsUpdated", loadOutletTimings)
+    const handleStorageChange = (event) => {
+      if (event.key === OUTLET_TIMINGS_STORAGE_KEY) {
+        loadOutletTimings()
+      }
+    }
+    window.addEventListener("storage", handleStorageChange)
     
     return () => {
       window.removeEventListener("outletTimingsUpdated", loadOutletTimings)
+      window.removeEventListener("storage", handleStorageChange)
     }
-  }, [])
+  }, [isGroceryStore, entityLabel])
 
   // Check if restaurant is currently open based on timings
   useEffect(() => {
@@ -109,24 +186,11 @@ export default function RestaurantStatus() {
       const currentMinute = now.getMinutes()
       const currentTimeInMinutes = currentHour * 60 + currentMinute
 
-      // First check outlet timings from localStorage (OutletTimings.jsx stores it there)
-      const STORAGE_KEY = "restaurant_outlet_timings"
-      let outletTimingsData = null
-      try {
-        const saved = localStorage.getItem(STORAGE_KEY)
-        if (saved) {
-          outletTimingsData = JSON.parse(saved)
-          setOutletTimings(outletTimingsData)
-        }
-      } catch (error) {
-        console.error("Error loading outlet timings:", error)
-      }
-
       // For restaurant, outlet timings are the only source of truth.
-      if (!isGroceryStore && outletTimingsData) {
-        const scheduledOpen = isOpenFromOutletTimingsMap(outletTimingsData, now)
+      if (!isGroceryStore && outletTimings) {
+        const scheduledOpen = isOpenFromOutletTimingsMap(outletTimings, now)
         if (typeof scheduledOpen === "boolean") {
-          const dayData = outletTimingsData[currentDayFull]
+          const dayData = outletTimings[currentDayFull]
           setIsDayClosed(Boolean(dayData && dayData.isOpen === false))
           setIsWithinTimings(scheduledOpen)
           return
@@ -135,6 +199,7 @@ export default function RestaurantStatus() {
 
       setIsDayClosed(false)
 
+      // Grocery store fallback path.
       // Check if current day is in openDays (from backend)
       const openDays = restaurantData.openDays || []
       const hasConfiguredOpenDays = Array.isArray(openDays) && openDays.length > 0
@@ -150,7 +215,7 @@ export default function RestaurantStatus() {
         return
       }
 
-      // Check if current time is within delivery timings
+      // Check if current time is within delivery timings (grocery fallback)
       const deliveryTimings = restaurantData.deliveryTimings
       if (!deliveryTimings || !deliveryTimings.openingTime || !deliveryTimings.closingTime) {
         setIsWithinTimings(true) // Default to open if no timings set
@@ -191,7 +256,7 @@ export default function RestaurantStatus() {
       clearInterval(interval)
       window.removeEventListener("outletTimingsUpdated", handleOutletTimingsUpdate)
     }
-  }, [restaurantData, currentDateTime, isGroceryStore])
+  }, [restaurantData, currentDateTime, isGroceryStore, outletTimings])
 
   // Note: Delivery status is now manually controlled by user via toggle
   // We don't automatically set it based on timings anymore
@@ -275,7 +340,7 @@ export default function RestaurantStatus() {
               detail: { isOnline: false } 
             }))
           }
-        } catch (localError) {
+        } catch {
           setDeliveryStatus(false)
           window.dispatchEvent(new CustomEvent(statusEventName, {
             detail: { isOnline: false } 
@@ -345,24 +410,12 @@ export default function RestaurantStatus() {
     return `${hours12}:${minutesStr} ${period}`
   }
 
-  // Format current date and time
-  const formatCurrentDateTime = () => {
-    const now = currentDateTime
-    const dateStr = now.toLocaleDateString('en-US', { day: 'numeric', month: 'short' })
-    const timeStr = now.toLocaleTimeString('en-US', { 
-      hour: 'numeric', 
-      minute: '2-digit',
-      hour12: true 
-    })
-    return `${dateStr}, ${timeStr}`
-  }
-
-  // Get delivery timings for current day (from outlet timings first, then backend)
+  // Get delivery timings for current day.
   const getCurrentDayTimings = () => {
     const now = new Date()
     const currentDayFull = now.toLocaleDateString('en-US', { weekday: 'long' }) // "Monday", "Tuesday", etc.
     
-    // First try to get from outlet timings (localStorage)
+    // Restaurant uses outlet timings as the single source of truth.
     if (outletTimings && outletTimings[currentDayFull]) {
       const dayData = outletTimings[currentDayFull]
       if (dayData.isOpen && dayData.openingTime && dayData.closingTime) {
@@ -372,8 +425,12 @@ export default function RestaurantStatus() {
         }
       }
     }
+
+    if (!isGroceryStore) {
+      return null
+    }
     
-    // Fallback to backend delivery timings
+    // Grocery fallback to backend delivery timings
     if (restaurantData?.deliveryTimings) {
       const openingTime = formatTime12Hour(restaurantData.deliveryTimings.openingTime)
       const closingTime = formatTime12Hour(restaurantData.deliveryTimings.closingTime)
