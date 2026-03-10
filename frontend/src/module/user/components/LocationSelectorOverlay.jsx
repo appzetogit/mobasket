@@ -2216,7 +2216,148 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     }
   }
 
-  const handleAddressFormSubmit = async (e) => {
+  const applySelectedAddressLocally = (address, options = {}) => {
+    const { navigateHome = true } = options
+    const coordinates = address?.location?.coordinates || []
+    const longitude = Number(address?.longitude ?? address?.lng ?? coordinates?.[0])
+    const latitude = Number(address?.latitude ?? address?.lat ?? coordinates?.[1])
+
+    const normalizedAdditionalDetails = normalizeAddressText(
+      address?.additionalDetails || address?.area || ""
+    )
+    const sanitizedArea = !isGenericLocalityText(
+      normalizedAdditionalDetails,
+      address?.city || "",
+      address?.state || ""
+    )
+      ? normalizedAdditionalDetails
+      : ""
+    const preferredAddressDetail = getPreferredAddressDetail({
+      street: address?.street || address?.addressLine1 || address?.address || "",
+      area: sanitizedArea,
+      city: address?.city || "",
+      state: address?.state || "",
+    })
+    const fullFormattedAddress = normalizeAddressText(
+      address?.formattedAddress ||
+      [
+        preferredAddressDetail,
+        address?.street,
+        address?.city,
+        address?.state,
+        address?.zipCode || address?.postalCode,
+      ]
+        .map((part) => normalizeAddressText(part))
+        .filter(Boolean)
+        .join(", ")
+    )
+    const hasCompleteSavedAddress = hasCompleteAddress({
+      formattedAddress: fullFormattedAddress,
+      street: address?.street || "",
+      area: sanitizedArea,
+      postalCode: address?.zipCode || address?.postalCode || "",
+    })
+    const primaryAddressLine =
+      preferredAddressDetail ||
+      String(address?.street || address?.addressLine1 || address?.address || "").trim() ||
+      String(address?.city || "").trim()
+    const locationData = {
+      city: address?.city || "",
+      state: address?.state || "",
+      address: primaryAddressLine,
+      area: sanitizedArea,
+      zipCode: address?.zipCode || address?.postalCode || "",
+      latitude: Number.isFinite(latitude) ? latitude : undefined,
+      longitude: Number.isFinite(longitude) ? longitude : undefined,
+      formattedAddress: hasCompleteSavedAddress ? fullFormattedAddress : "",
+      lastUpdated: Date.now(),
+    }
+
+    const selectedAddressId = String(address?.id || address?._id || "").trim()
+    const normalizedAddressRecord = {
+      ...address,
+      id: address?.id || address?._id || undefined,
+      _id: address?._id || address?.id || undefined,
+      latitude: Number.isFinite(latitude) ? latitude : address?.latitude,
+      longitude: Number.isFinite(longitude) ? longitude : address?.longitude,
+      location: {
+        ...(address?.location || {}),
+        coordinates:
+          Number.isFinite(longitude) && Number.isFinite(latitude)
+            ? [longitude, latitude]
+            : Array.isArray(address?.location?.coordinates)
+              ? address.location.coordinates
+              : undefined,
+      },
+      formattedAddress: fullFormattedAddress || address?.formattedAddress || "",
+      address: primaryAddressLine || address?.address || "",
+      area: sanitizedArea || address?.area || "",
+      isDefault: true,
+    }
+
+    try {
+      const existingAddresses = JSON.parse(localStorage.getItem("userAddresses") || "[]")
+      const nextAddresses = Array.isArray(existingAddresses) ? [...existingAddresses] : []
+      let matchedIndex = -1
+
+      if (selectedAddressId) {
+        matchedIndex = nextAddresses.findIndex((entry) => {
+          const entryId = String(entry?.id || entry?._id || "").trim()
+          return entryId && entryId === selectedAddressId
+        })
+      }
+      if (matchedIndex < 0) {
+        matchedIndex = nextAddresses.findIndex(
+          (entry) => String(entry?.label || "").trim().toLowerCase() === String(address?.label || "").trim().toLowerCase()
+        )
+      }
+
+      const withDefaults = nextAddresses.map((entry, idx) => ({
+        ...entry,
+        isDefault: idx === matchedIndex,
+      }))
+
+      if (matchedIndex >= 0) {
+        withDefaults[matchedIndex] = {
+          ...withDefaults[matchedIndex],
+          ...normalizedAddressRecord,
+          isDefault: true,
+        }
+      } else {
+        withDefaults.push(normalizedAddressRecord)
+      }
+
+      if (withDefaults.length > 0) {
+        withDefaults.forEach((entry, idx) => {
+          entry.isDefault = idx === (matchedIndex >= 0 ? matchedIndex : withDefaults.length - 1)
+        })
+        localStorage.setItem("userAddresses", JSON.stringify(withDefaults))
+      }
+      window.dispatchEvent(new Event("userAddressesChanged"))
+    } catch {
+      // Ignore malformed localStorage payload and continue with selected location.
+    }
+
+    if (selectedAddressId) {
+      try {
+        setDefaultAddress?.(selectedAddressId)
+      } catch {
+        // Ignore provider-level default update failure; localStorage already updated.
+      }
+    }
+
+    localStorage.setItem("userLocationSource", "saved")
+    localStorage.setItem("userLocation", JSON.stringify(locationData))
+    window.dispatchEvent(new CustomEvent("userLocationChanged", { detail: locationData }))
+
+    setCurrentAddress(fullFormattedAddress || primaryAddressLine || "")
+    onClose()
+    if (navigateHome) {
+      navigate("/home", { replace: true })
+    }
+  }
+
+  const handleAddressFormSubmit = async (e) => {
     e.preventDefault()
     
     // Validate required fields (zipCode is optional)
@@ -2272,17 +2413,42 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       // Check if an address with the same label already exists
       const existingAddressWithSameLabel = addresses.find(addr => addr.label === normalizedLabel)
       
-      if (existingAddressWithSameLabel) {
-        // Update existing address instead of creating a new one
-        console.log("🔄 Updating existing address with label:", normalizedLabel)
-        await updateAddress(existingAddressWithSameLabel.id, addressToSave)
-        toast.success(`Address updated for ${normalizedLabel}!`)
-      } else {
-        // Create new address
-        console.log("💾 Saving new address:", addressToSave)
-        await addAddress(addressToSave)
-        toast.success(`Address saved as ${normalizedLabel}!`)
-      }
+      let savedAddressRecord = null
+      if (existingAddressWithSameLabel) {
+        // Update existing address instead of creating a new one
+        console.log("🔄 Updating existing address with label:", normalizedLabel)
+        savedAddressRecord = await updateAddress(
+          existingAddressWithSameLabel.id || existingAddressWithSameLabel._id,
+          addressToSave
+        )
+        toast.success(`Address updated for ${normalizedLabel}!`)
+      } else {
+        // Create new address
+        console.log("💾 Saving new address:", addressToSave)
+        savedAddressRecord = await addAddress(addressToSave)
+        toast.success(`Address saved as ${normalizedLabel}!`)
+      }
+
+      const selectedAddressForState = {
+        ...(savedAddressRecord || existingAddressWithSameLabel || addressToSave),
+        id:
+          savedAddressRecord?.id ||
+          savedAddressRecord?._id ||
+          existingAddressWithSameLabel?.id ||
+          existingAddressWithSameLabel?._id,
+        label: normalizedLabel,
+        street: trimmedStreet,
+        city: trimmedCity,
+        state: trimmedState,
+        zipCode: (addressFormData.zipCode || "").trim(),
+        additionalDetails: (addressFormData.additionalDetails || "").trim(),
+        latitude: mapPosition[0],
+        longitude: mapPosition[1],
+        location: {
+          ...(savedAddressRecord?.location || existingAddressWithSameLabel?.location || {}),
+          coordinates: [mapPosition[1], mapPosition[0]],
+        },
+      }
       
       // Reset form
       setAddressFormData({
@@ -2294,12 +2460,12 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         label: "Home",
         phone: "",
       })
-      setShowAddressForm(false)
-      setLoadingAddress(false)
-      
-      // Close overlay without forcing navigation
-      onClose()
-    } catch (error) {
+      setShowAddressForm(false)
+      setLoadingAddress(false)
+
+      // Keep selected/saved address as source across the app.
+      applySelectedAddressLocally(selectedAddressForState, { navigateHome: true })
+    } catch (error) {
       console.error("❌ Error saving address:", error)
       console.error("❌ Error details:", {
         message: error.message,
@@ -2404,52 +2570,21 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         }
       }
 
-      // Update the location in localStorage with this address
-      const locationData = {
-        city: address.city,
-        state: address.state,
-        address: primaryAddressLine,
-        area: sanitizedArea,
-        zipCode: address.zipCode,
-        latitude,
+      applySelectedAddressLocally({
+        ...address,
+        latitude,
         longitude,
-        formattedAddress: hasCompleteSavedAddress ? fullFormattedAddress : ""
-      }
-      localStorage.setItem("userLocationSource", "saved")
-      localStorage.setItem("userLocation", JSON.stringify(locationData))
-      window.dispatchEvent(new CustomEvent("userLocationChanged", { detail: locationData }))
-      setCurrentAddress(sanitizedSavedDisplayAddress || primaryAddressLine)
-      
-      // Mark selected address as default so both MoFoods and MoGrocery use the same one.
-      const selectedAddressId = address?.id || address?._id || ""
-      if (selectedAddressId) {
-        try {
-          setDefaultAddress?.(selectedAddressId)
-        } catch {}
-        try {
-          const existingAddresses = JSON.parse(localStorage.getItem("userAddresses") || "[]")
-          if (Array.isArray(existingAddresses) && existingAddresses.length > 0) {
-            const nextAddresses = existingAddresses.map((entry) => {
-              const entryId = entry?.id || entry?._id || ""
-              const isSelected = String(entryId) === String(selectedAddressId)
-              return { ...entry, isDefault: isSelected }
-            })
-            localStorage.setItem("userAddresses", JSON.stringify(nextAddresses))
-            window.dispatchEvent(new Event("userAddressesChanged"))
-          }
-        } catch {}
-      }
+        area: sanitizedArea,
+        formattedAddress: hasCompleteSavedAddress ? fullFormattedAddress : "",
+      })
 
       toast.success("Location updated!", { id: "saved-address" })
-      onClose()
-      navigate("/home", { replace: true })
-    } catch (error) {
-      if (error?.response?.status === 429) {
-        console.log("ℹ️ Saved-address location update throttled; keeping local selection")
+    } catch (error) {
+      if (error?.response?.status === 429) {
+        console.log("ℹ️ Saved-address location update throttled; keeping local selection")
         toast.success("Location selected. Server will sync shortly.", { id: "saved-address" })
-        onClose()
-        navigate("/home", { replace: true })
-      } else {
+        applySelectedAddressLocally(address)
+      } else {
         console.error("Error selecting saved address:", error)
         toast.error("Failed to update location. Please try again.")
       }

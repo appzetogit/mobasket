@@ -1503,6 +1503,12 @@ export function useLocation() {
   /* ===================== DB FETCH ===================== */
   const fetchLocationFromDB = async () => {
     try {
+      const source = getUserLocationSource()
+      const strictSavedLocation = getSavedAddressLocation()
+      if (source === "saved" && strictSavedLocation) {
+        return strictSavedLocation
+      }
+
       // Check if user is authenticated before trying to fetch from DB
       const userToken = localStorage.getItem('user_accessToken') || localStorage.getItem('accessToken')
       if (!userToken || userToken === 'null' || userToken === 'undefined') {
@@ -1608,6 +1614,14 @@ export function useLocation() {
 
   /* ===================== MAIN LOCATION ===================== */
   const getLocation = async (updateDB = true, forceFresh = false, showLoading = false) => {
+    const source = getUserLocationSource()
+    const strictSavedLocation = getSavedAddressLocation()
+    if (!forceFresh && source === "saved" && strictSavedLocation) {
+      setLocation(strictSavedLocation)
+      if (showLoading) setLoading(false)
+      return strictSavedLocation
+    }
+
     // If not forcing fresh, try DB first (faster)
     let dbLocation = !forceFresh ? await fetchLocationFromDB() : null
     if (dbLocation && !forceFresh) {
@@ -1718,7 +1732,8 @@ export function useLocation() {
 
               const savedPreferredLocation = getSavedAddressLocation()
               const currentKnownLocation = location
-              if (!forceFresh && isIncompleteAddressData(finalLoc)) {
+              const source = getUserLocationSource()
+              if (!forceFresh && source !== "saved" && isIncompleteAddressData(finalLoc)) {
                 if (
                   savedPreferredLocation &&
                   !isIncompleteAddressData(savedPreferredLocation) &&
@@ -2097,7 +2112,8 @@ export function useLocation() {
 
             const currentLoc = location
             const savedPreferredLocation = getSavedAddressLocation()
-            if (isIncompleteAddressData(loc)) {
+            const source = getUserLocationSource()
+            if (source !== "saved" && isIncompleteAddressData(loc)) {
               if (
                 savedPreferredLocation &&
                 !isIncompleteAddressData(savedPreferredLocation) &&
