@@ -37,13 +37,11 @@ const countryCodes = [
   { code: "+31", country: "NL" },
   { code: "+46", country: "SE" },
 ]
-const DELIVERY_TEST_PHONE = "7610416911"
-const DELIVERY_TEST_COUNTRY_CODE = "+91"
 
 export default function DeliverySignIn() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
-  const [formData, setFormData] = useState({ phone: DELIVERY_TEST_PHONE, countryCode: DELIVERY_TEST_COUNTRY_CODE })
+  const [formData, setFormData] = useState({ phone: "", countryCode: "+91" })
   const [error, setError] = useState("")
   const [isSending, setIsSending] = useState(false)
   const [termsUrl, setTermsUrl] = useState("")
@@ -96,7 +94,7 @@ export default function DeliverySignIn() {
       return
     }
 
-    const fullPhone = `${DELIVERY_TEST_COUNTRY_CODE}${DELIVERY_TEST_PHONE}`
+    const fullPhone = `${formData.countryCode}${formData.phone}`
 
     try {
       setIsSending(true)
@@ -254,22 +252,16 @@ export default function DeliverySignIn() {
               <input
                 type="tel"
                 inputMode="numeric"
-                placeholder={DELIVERY_TEST_PHONE}
+                placeholder="Enter phone number"
                 value={formData.phone}
                 onChange={handlePhoneChange}
                 autoComplete="off"
                 autoFocus={false}
-                readOnly
                 className={`flex-1 h-12 px-4 text-gray-900 placeholder-gray-400 focus:outline-none text-base border rounded-lg min-w-0 ${
                   error ? "border-red-500" : "border-gray-300"
                 }`}
               />
             </div>
-
-            {/* Hint Text */}
-            <p className="text-sm text-gray-500">
-              Test login number: {DELIVERY_TEST_PHONE} | OTP: 123456
-            </p>
 
             {error && (
               <p className="text-sm text-red-500">
