@@ -18,6 +18,26 @@ const groceryPlanProductSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const groceryPlanZoneStoreRuleSchema = new mongoose.Schema(
+  {
+    zoneId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Zone',
+      required: true,
+    },
+    storeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'GroceryStore',
+      required: true,
+    },
+    subcategoryIds: {
+      type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'GrocerySubcategory' }],
+      default: [],
+    },
+  },
+  { _id: false }
+);
+
 const groceryPlanSchema = new mongoose.Schema(
   {
     key: {
@@ -113,6 +133,10 @@ const groceryPlanSchema = new mongoose.Schema(
     },
     zoneIds: {
       type: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Zone' }],
+      default: [],
+    },
+    zoneStoreRules: {
+      type: [groceryPlanZoneStoreRuleSchema],
       default: [],
     },
     order: {

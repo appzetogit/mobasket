@@ -918,6 +918,10 @@ export const createOrder = async (req, res) => {
             .filter(Boolean)
         )
       ).map((id) => new mongoose.Types.ObjectId(id));
+      const selectedStoreId =
+        mongoose.Types.ObjectId.isValid(planSubscription.selectedStoreId)
+          ? new mongoose.Types.ObjectId(planSubscription.selectedStoreId)
+          : null;
       return {
         planId: new mongoose.Types.ObjectId(rawPlanId),
         planName: (planSubscription.planName || '').toString().trim(),
@@ -925,7 +929,8 @@ export const createOrder = async (req, res) => {
         selectedOfferIds,
         selectedSubcategoryId,
         selectedSubcategoryIds,
-        selectedProductIds
+        selectedProductIds,
+        selectedStoreId
       };
     })();
     const isPlanSubscriptionOrder = Boolean(normalizedPlanSubscription?.planId);
@@ -942,12 +947,52 @@ export const createOrder = async (req, res) => {
       );
       const selectedProductIdStrings = (normalizedPlanSubscription.selectedProductIds || []).map((id) => id.toString());
 
-      const planDoc = await GroceryPlan.findById(planIdString).select('offerIds productCount isActive').lean();
+      const planDoc = await GroceryPlan.findById(planIdString).select('offerIds productCount isActive zoneStoreRules').lean();
       if (!planDoc || planDoc.isActive === false) {
         return res.status(400).json({
           success: false,
           message: 'Selected plan is not available'
         });
+      }
+      const selectedStoreIdString = normalizedPlanSubscription.selectedStoreId
+        ? normalizedPlanSubscription.selectedStoreId.toString()
+        : '';
+      const restaurantIdString = String(restaurantId || '').trim();
+      if (selectedStoreIdString && restaurantIdString && selectedStoreIdString !== restaurantIdString) {
+        return res.status(400).json({
+          success: false,
+          message: 'Plan store does not match selected store'
+        });
+      }
+
+      const zoneStoreRules = Array.isArray(planDoc.zoneStoreRules) ? planDoc.zoneStoreRules : [];
+      const hasZoneStoreRules = zoneStoreRules.length > 0;
+      let allowedSubcategoryIds = new Set();
+
+      if (hasZoneStoreRules) {
+        if (!selectedStoreIdString) {
+          return res.status(400).json({
+            success: false,
+            message: 'Please select a store for this plan'
+          });
+        }
+
+        const matchingRule = zoneStoreRules.find((rule) => {
+          const ruleStoreId = rule?.storeId ? String(rule.storeId) : '';
+          return ruleStoreId === selectedStoreIdString;
+        });
+        if (!matchingRule) {
+          return res.status(400).json({
+            success: false,
+            message: 'Selected store is not configured for this plan'
+          });
+        }
+
+        allowedSubcategoryIds = new Set(
+          (Array.isArray(matchingRule.subcategoryIds) ? matchingRule.subcategoryIds : [])
+            .map((id) => String(id))
+            .filter(Boolean)
+        );
       }
 
       const linkedPlanOfferIds = new Set(
@@ -966,18 +1011,19 @@ export const createOrder = async (req, res) => {
       const offerIdsForValidation = selectedOfferIdStrings.length > 0
         ? selectedOfferIdStrings
         : Array.from(linkedPlanOfferIds);
-      const offersForValidation = offerIdsForValidation.length > 0
-        ? await GroceryPlanOffer.find({ _id: { $in: offerIdsForValidation }, isActive: true })
-          .select('subcategoryIds')
-          .lean()
-        : [];
+      if (!hasZoneStoreRules) {
+        const offersForValidation = offerIdsForValidation.length > 0
+          ? await GroceryPlanOffer.find({ _id: { $in: offerIdsForValidation }, isActive: true })
+            .select('subcategoryIds')
+            .lean()
+          : [];
 
-      const allowedSubcategoryIds = new Set();
-      offersForValidation.forEach((offer) => {
-        (Array.isArray(offer?.subcategoryIds) ? offer.subcategoryIds : []).forEach((subcategoryId) => {
-          if (subcategoryId) allowedSubcategoryIds.add(subcategoryId.toString());
+        offersForValidation.forEach((offer) => {
+          (Array.isArray(offer?.subcategoryIds) ? offer.subcategoryIds : []).forEach((subcategoryId) => {
+            if (subcategoryId) allowedSubcategoryIds.add(subcategoryId.toString());
+          });
         });
-      });
+      }
 
       if (selectedSubcategoryIdStrings.some((subcategoryId) => !allowedSubcategoryIds.has(subcategoryId))) {
         return res.status(400).json({
@@ -993,7 +1039,20 @@ export const createOrder = async (req, res) => {
         });
       }
 
+      const expectedSubcategoryCount = allowedSubcategoryIds.size;
+      const shouldRequireEverySubcategory = expectedSubcategoryCount > 0;
       if (
+        shouldRequireEverySubcategory &&
+        (selectedSubcategoryIdStrings.length !== expectedSubcategoryCount || selectedProductIdStrings.length !== expectedSubcategoryCount)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message: 'Please select exactly one product for each configured subcategory'
+        });
+      }
+
+      if (
+        !shouldRequireEverySubcategory &&
         selectedSubcategoryIdStrings.length > 0 &&
         selectedProductIdStrings.length !== selectedSubcategoryIdStrings.length
       ) {
@@ -1015,10 +1074,15 @@ export const createOrder = async (req, res) => {
       }
 
       if (selectedProductIdStrings.length > 0 && selectedSubcategoryIdStrings.length > 0) {
-        const matchedProducts = await GroceryProduct.find({
+        const productQuery = {
           _id: { $in: selectedProductIdStrings },
           isActive: true
-        })
+        };
+        if (selectedStoreIdString) {
+          productQuery.storeId = selectedStoreIdString;
+        }
+
+        const matchedProducts = await GroceryProduct.find(productQuery)
           .select('_id subcategory subcategories')
           .lean();
 

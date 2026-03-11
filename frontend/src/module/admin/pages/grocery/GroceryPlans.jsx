@@ -20,6 +20,7 @@ const DEFAULT_PLAN_FORM = {
   popular: false,
   offerIds: [],
   zoneIds: [],
+  zoneStoreRules: [],
   benefitsText: "",
   vegProducts: [],
   nonVegProducts: [],
@@ -48,6 +49,14 @@ const normalizePlanProducts = (products) =>
   (Array.isArray(products) ? products : [])
     .map((item) => ({ name: String(item?.name || "").trim(), qty: String(item?.qty || "").trim() }))
     .filter((item) => item.name && item.qty)
+
+const getImageFromProduct = (product) => {
+  if (!product || typeof product !== "object") return ""
+  if (Array.isArray(product.images) && product.images.length > 0) return String(product.images[0] || "").trim()
+  if (typeof product.image === "string") return product.image.trim()
+  if (typeof product.thumbnail === "string") return product.thumbnail.trim()
+  return ""
+}
 
 const PLAN_COLOR_OPTIONS = [
   { label: "Emerald", value: "bg-emerald-500" },
@@ -169,6 +178,7 @@ export default function GroceryPlans() {
   const [categories, setCategories] = useState([])
   const [subcategories, setSubcategories] = useState([])
   const [zones, setZones] = useState([])
+  const [stores, setStores] = useState([])
 
   const [planForm, setPlanForm] = useState(DEFAULT_PLAN_FORM)
   const [offerForm, setOfferForm] = useState(DEFAULT_OFFER_FORM)
@@ -185,13 +195,14 @@ export default function GroceryPlans() {
   const loadBaseData = async () => {
     setLoading(true)
     try {
-      const [planRes, offerRes, prodRes, catRes, subRes, zoneRes] = await Promise.all([
+      const [planRes, offerRes, prodRes, catRes, subRes, zoneRes, storeRes] = await Promise.all([
         adminAPI.getGroceryPlans(),
         adminAPI.getGroceryPlanOffers(),
         adminAPI.getGroceryProducts(),
         adminAPI.getGroceryCategories(),
         adminAPI.getGrocerySubcategories(),
         adminAPI.getZones({ limit: 1000, platform: "mogrocery", isActive: true }),
+        adminAPI.getGroceryStores({ page: 1, limit: 1000, status: "active" }),
       ])
       setPlans(Array.isArray(planRes?.data?.data) ? planRes.data.data : [])
       setOffers(Array.isArray(offerRes?.data?.data) ? offerRes.data.data : [])
@@ -200,6 +211,8 @@ export default function GroceryPlans() {
       setSubcategories(Array.isArray(subRes?.data?.data) ? subRes.data.data : [])
       const zoneList = Array.isArray(zoneRes?.data?.data?.zones) ? zoneRes.data.data.zones : []
       setZones(zoneList)
+      const storeList = Array.isArray(storeRes?.data?.data?.stores) ? storeRes.data.data.stores : []
+      setStores(storeList)
     } catch (error) {
       toast.error(error?.response?.data?.message || "Failed to load plan data")
     } finally {
@@ -252,6 +265,15 @@ export default function GroceryPlans() {
       popular: Boolean(plan.popular),
       offerIds: toIds(plan.offerIds),
       zoneIds: toIds(plan.zoneIds),
+      zoneStoreRules: Array.isArray(plan.zoneStoreRules)
+        ? plan.zoneStoreRules
+            .map((rule) => ({
+              zoneId: typeof rule?.zoneId === "string" ? rule.zoneId : (rule?.zoneId?._id || ""),
+              storeId: typeof rule?.storeId === "string" ? rule.storeId : (rule?.storeId?._id || ""),
+              subcategoryIds: toIds(rule?.subcategoryIds),
+            }))
+            .filter((rule) => rule.zoneId && rule.storeId)
+        : [],
       benefitsText: Array.isArray(plan.benefits) ? plan.benefits.join("\n") : "",
       vegProducts: normalizePlanProducts(plan.vegProducts),
       nonVegProducts: normalizePlanProducts(plan.nonVegProducts),
@@ -272,7 +294,12 @@ export default function GroceryPlans() {
       toast.error("Selected product not found")
       return
     }
-    const toAdd = { name: selectedProduct.name.trim(), qty: picker.qty.trim() }
+    const toAdd = {
+      productId: selectedProduct._id,
+      name: selectedProduct.name.trim(),
+      qty: picker.qty.trim(),
+      image: getImageFromProduct(selectedProduct),
+    }
     if (type === "veg") {
       setPlanForm((prev) => ({ ...prev, vegProducts: [...prev.vegProducts, toAdd] }))
       setVegSelection({ productId: "", qty: "" })
@@ -342,6 +369,13 @@ export default function GroceryPlans() {
         isActive: Boolean(planForm.isActive),
         popular: Boolean(planForm.popular),
         zoneIds: toIds(planForm.zoneIds),
+        zoneStoreRules: (Array.isArray(planForm.zoneStoreRules) ? planForm.zoneStoreRules : [])
+          .map((rule) => ({
+            zoneId: String(rule?.zoneId || "").trim(),
+            storeId: String(rule?.storeId || "").trim(),
+            subcategoryIds: toIds(rule?.subcategoryIds),
+          }))
+          .filter((rule) => rule.zoneId && rule.storeId),
         benefits: parseBenefits(planForm.benefitsText || ""),
         vegProducts: normalizedVegProducts,
         nonVegProducts: normalizedNonVegProducts,
@@ -428,6 +462,95 @@ export default function GroceryPlans() {
       })),
     [zones]
   )
+  const storesByZoneId = useMemo(() => {
+    const map = new Map()
+    stores.forEach((store) => {
+      const zoneId = String(store?.zoneId?._id || store?.zoneId || "").trim()
+      if (!zoneId) return
+      if (!map.has(zoneId)) map.set(zoneId, [])
+      map.get(zoneId).push(store)
+    })
+    return map
+  }, [stores])
+  const subcategoriesByStoreId = useMemo(() => {
+    const map = new Map()
+    const ensureStoreMap = (storeId) => {
+      if (!map.has(storeId)) map.set(storeId, new Map())
+      return map.get(storeId)
+    }
+
+    products.forEach((product) => {
+      const storeId = String(product?.storeId?._id || product?.storeId || "").trim()
+      if (!storeId) return
+      const subMap = ensureStoreMap(storeId)
+      const linked = [
+        ...(Array.isArray(product?.subcategories) ? product.subcategories : []),
+        ...(product?.subcategory ? [product.subcategory] : []),
+      ]
+      linked.forEach((subcategory) => {
+        const subcategoryId = String(subcategory?._id || subcategory || "").trim()
+        if (!subcategoryId) return
+        if (!subMap.has(subcategoryId)) {
+          const fallback = subcategories.find((entry) => String(entry?._id || "") === subcategoryId)
+          subMap.set(subcategoryId, {
+            id: subcategoryId,
+            name: subcategory?.name || fallback?.name || "Subcategory",
+          })
+        }
+      })
+    })
+
+    return map
+  }, [products, subcategories])
+
+  const addZoneStoreRule = () => {
+    setPlanForm((prev) => ({
+      ...prev,
+      zoneStoreRules: [...(Array.isArray(prev.zoneStoreRules) ? prev.zoneStoreRules : []), { zoneId: "", storeId: "", subcategoryIds: [] }],
+    }))
+  }
+
+  const updateZoneStoreRule = (index, nextRule) => {
+    setPlanForm((prev) => {
+      const current = Array.isArray(prev.zoneStoreRules) ? prev.zoneStoreRules : []
+      const nextZoneIds = Array.isArray(prev.zoneIds) ? [...prev.zoneIds] : []
+      if (nextRule?.zoneId && !nextZoneIds.includes(nextRule.zoneId)) {
+        nextZoneIds.push(nextRule.zoneId)
+      }
+      return {
+        ...prev,
+        zoneIds: nextZoneIds,
+        zoneStoreRules: current.map((rule, idx) => (idx === index ? { ...rule, ...nextRule } : rule)),
+      }
+    })
+  }
+
+  const removeZoneStoreRule = (index) => {
+    setPlanForm((prev) => ({
+      ...prev,
+      zoneStoreRules: (Array.isArray(prev.zoneStoreRules) ? prev.zoneStoreRules : []).filter((_, idx) => idx !== index),
+    }))
+  }
+  const productsById = useMemo(() => {
+    const map = new Map()
+    products.forEach((item) => {
+      map.set(String(item._id), item)
+    })
+    return map
+  }, [products])
+  const getPlanItemImage = (item) => {
+    const direct = String(item?.image || "").trim()
+    if (direct) return direct
+    const byId = item?.productId ? productsById.get(String(item.productId)) : null
+    if (byId) return getImageFromProduct(byId)
+    if (item?.name) {
+      const byName = products.find((product) => String(product?.name || "").trim().toLowerCase() === String(item.name).trim().toLowerCase())
+      return getImageFromProduct(byName)
+    }
+    return ""
+  }
+  const selectedVegProduct = vegSelection.productId ? productsById.get(String(vegSelection.productId)) : null
+  const selectedNonVegProduct = nonVegSelection.productId ? productsById.get(String(nonVegSelection.productId)) : null
 
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
@@ -570,9 +693,12 @@ export default function GroceryPlans() {
 
       {showPlanModal && (
         <div className="fixed inset-0 z-[200] bg-black/50 overflow-y-auto p-4">
-          <form onSubmit={savePlan} className="bg-white w-full max-w-4xl rounded-xl p-4 sm:p-6 space-y-3 mx-auto my-4 sm:my-6 max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3rem)] overflow-y-auto">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold">{editingPlanId ? "Edit Plan" : "Create Plan"}</h2>
+          <form onSubmit={savePlan} className="bg-white w-full max-w-5xl rounded-2xl p-4 sm:p-6 space-y-4 mx-auto my-4 sm:my-6 max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3rem)] overflow-y-auto border border-slate-200 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-200">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900">{editingPlanId ? "Edit Plan" : "Create Plan"}</h2>
+                <p className="text-sm text-slate-500">Configure pricing, benefits and included products</p>
+              </div>
               <button
                 type="button"
                 onClick={() => setShowPlanModal(false)}
@@ -582,7 +708,7 @@ export default function GroceryPlans() {
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 border border-slate-200 rounded-xl p-4">
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-700">Plan Name</label>
                 <input className="w-full px-3 py-2 border rounded" placeholder="Enter plan name" required value={planForm.name} onChange={(e) => setPlanForm({ ...planForm, name: e.target.value })} />
@@ -641,11 +767,11 @@ export default function GroceryPlans() {
                 </select>
               </div>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 bg-white border border-slate-200 rounded-xl p-4">
               <label className="text-xs font-semibold text-slate-700">Description</label>
               <textarea className="w-full px-3 py-2 border rounded" placeholder="Enter plan description" value={planForm.description} onChange={(e) => setPlanForm({ ...planForm, description: e.target.value })} />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 bg-white border border-slate-200 rounded-xl p-4">
               <label className="text-xs font-semibold text-slate-700">Benefits</label>
             <textarea
               className="w-full px-3 py-2 border rounded min-h-[90px]"
@@ -654,7 +780,7 @@ export default function GroceryPlans() {
               onChange={(e) => setPlanForm({ ...planForm, benefitsText: e.target.value })}
             />
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 bg-slate-50 border border-slate-200 rounded-xl p-4">
               <label className="flex items-center gap-2 text-sm">
                 <input type="checkbox" checked={planForm.isActive} onChange={(e) => setPlanForm({ ...planForm, isActive: e.target.checked })} />
                 Active
@@ -664,7 +790,7 @@ export default function GroceryPlans() {
                 Mark as popular
               </label>
             </div>
-            <div>
+            <div className="bg-white border border-slate-200 rounded-xl p-3">
               <MultiSelectPicker
                 label="Applicable Zones"
                 options={zoneOptions}
@@ -673,7 +799,88 @@ export default function GroceryPlans() {
               />
               <p className="text-xs text-slate-500 mt-1">No zone selected means this plan is available in all grocery zones.</p>
             </div>
-            <div>
+            <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Zone to Store to Subcategories</p>
+                  <p className="text-xs text-slate-500">Pick a zone, then a store in that zone, then subcategories. Buyer must select one product per chosen subcategory.</p>
+                </div>
+                <button type="button" onClick={addZoneStoreRule} className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-xs hover:bg-indigo-700">
+                  Add Zone Rule
+                </button>
+              </div>
+              {(Array.isArray(planForm.zoneStoreRules) ? planForm.zoneStoreRules : []).length === 0 ? (
+                <p className="text-xs text-slate-500 border border-dashed rounded-lg p-3">No rules added yet.</p>
+              ) : (
+                <div className="space-y-3">
+                  {(Array.isArray(planForm.zoneStoreRules) ? planForm.zoneStoreRules : []).map((rule, idx) => {
+                    const zoneScopedOptions = planForm.zoneIds.length > 0
+                      ? zoneOptions.filter((zone) => planForm.zoneIds.includes(zone.id))
+                      : zoneOptions
+                    const storesInZone = storesByZoneId.get(String(rule.zoneId || "").trim()) || []
+                    const storeOptions = storesInZone.map((store) => ({
+                      id: String(store._id),
+                      name: store?.name || store?.ownerName || "Store",
+                    }))
+                    const storeSubcategories = rule.storeId
+                      ? Array.from((subcategoriesByStoreId.get(String(rule.storeId)) || new Map()).values())
+                      : []
+                    const subcategoryOptions = storeSubcategories.map((subcategory) => ({
+                      id: String(subcategory.id),
+                      name: subcategory.name || "Subcategory",
+                    }))
+
+                    return (
+                      <div key={`zone-store-rule-${idx}`} className="border rounded-xl p-3 bg-slate-50">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-slate-700">Zone</label>
+                            <select
+                              className="w-full px-3 py-2 border rounded"
+                              value={rule.zoneId || ""}
+                              onChange={(e) => updateZoneStoreRule(idx, { zoneId: e.target.value, storeId: "", subcategoryIds: [] })}
+                            >
+                              <option value="">Select zone</option>
+                              {zoneScopedOptions.map((zone) => (
+                                <option key={zone.id} value={zone.id}>{zone.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-xs font-semibold text-slate-700">Store</label>
+                            <select
+                              className="w-full px-3 py-2 border rounded"
+                              value={rule.storeId || ""}
+                              onChange={(e) => updateZoneStoreRule(idx, { storeId: e.target.value, subcategoryIds: [] })}
+                              disabled={!rule.zoneId}
+                            >
+                              <option value="">{rule.zoneId ? "Select store" : "Select zone first"}</option>
+                              {storeOptions.map((store) => (
+                                <option key={store.id} value={store.id}>{store.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+                        <div className="mt-3">
+                          <MultiSelectPicker
+                            label="Subcategories"
+                            options={subcategoryOptions}
+                            selectedIds={Array.isArray(rule.subcategoryIds) ? rule.subcategoryIds : []}
+                            onChange={(next) => updateZoneStoreRule(idx, { subcategoryIds: next })}
+                          />
+                        </div>
+                        <div className="mt-2 flex justify-end">
+                          <button type="button" onClick={() => removeZoneStoreRule(idx)} className="text-xs text-red-600 hover:underline">
+                            Remove Rule
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="bg-white border border-slate-200 rounded-xl p-3">
               <MultiSelectPicker
                 label="Link Offers"
                 options={offerOptions}
@@ -682,7 +889,7 @@ export default function GroceryPlans() {
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 bg-emerald-50/60 border border-emerald-100 rounded-xl p-4">
               <p className="text-sm font-semibold text-slate-800">Veg Products Included</p>
               <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_auto] gap-2">
                 <select className="px-3 py-2 border rounded" value={vegSelection.productId} onChange={(e) => setVegSelection((prev) => ({ ...prev, productId: e.target.value }))}>
@@ -694,10 +901,32 @@ export default function GroceryPlans() {
                 <input className="px-3 py-2 border rounded" placeholder="Qty (e.g. 5 kg - monthly)" value={vegSelection.qty} onChange={(e) => setVegSelection((prev) => ({ ...prev, qty: e.target.value }))} />
                 <button type="button" onClick={() => addPlanProduct("veg")} className="px-3 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700">Add</button>
               </div>
+              {selectedVegProduct && (
+                <div className="flex items-center gap-3 border border-emerald-200 bg-white rounded-lg px-3 py-2">
+                  <img
+                    src={getImageFromProduct(selectedVegProduct) || "/vite.svg"}
+                    alt={selectedVegProduct.name || "Product"}
+                    className="w-12 h-12 rounded-md object-cover border border-slate-200"
+                    loading="lazy"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">{selectedVegProduct.name}</p>
+                    <p className="text-xs text-slate-500">Selected product preview</p>
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
                 {planForm.vegProducts.map((item, idx) => (
-                  <div key={`${item.name}-${idx}`} className="flex items-center justify-between border rounded px-3 py-2">
-                    <p className="text-sm text-slate-700"><span className="font-semibold">{item.name}</span> - {item.qty}</p>
+                  <div key={`${item.name}-${idx}`} className="flex items-center justify-between border rounded px-3 py-2 bg-white">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={getPlanItemImage(item) || "/vite.svg"}
+                        alt={item.name || "Product"}
+                        className="w-10 h-10 rounded-md object-cover border border-slate-200"
+                        loading="lazy"
+                      />
+                      <p className="text-sm text-slate-700"><span className="font-semibold">{item.name}</span> - {item.qty}</p>
+                    </div>
                     <button type="button" className="text-red-600 hover:text-red-700" onClick={() => removePlanProduct("veg", idx)}>
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -707,7 +936,7 @@ export default function GroceryPlans() {
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-2 bg-rose-50/60 border border-rose-100 rounded-xl p-4">
               <p className="text-sm font-semibold text-slate-800">Non-veg Products Included</p>
               <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_auto] gap-2">
                 <select className="px-3 py-2 border rounded" value={nonVegSelection.productId} onChange={(e) => setNonVegSelection((prev) => ({ ...prev, productId: e.target.value }))}>
@@ -719,10 +948,32 @@ export default function GroceryPlans() {
                 <input className="px-3 py-2 border rounded" placeholder="Qty (e.g. 500 g - monthly)" value={nonVegSelection.qty} onChange={(e) => setNonVegSelection((prev) => ({ ...prev, qty: e.target.value }))} />
                 <button type="button" onClick={() => addPlanProduct("nonVeg")} className="px-3 py-2 rounded bg-rose-600 text-white hover:bg-rose-700">Add</button>
               </div>
+              {selectedNonVegProduct && (
+                <div className="flex items-center gap-3 border border-rose-200 bg-white rounded-lg px-3 py-2">
+                  <img
+                    src={getImageFromProduct(selectedNonVegProduct) || "/vite.svg"}
+                    alt={selectedNonVegProduct.name || "Product"}
+                    className="w-12 h-12 rounded-md object-cover border border-slate-200"
+                    loading="lazy"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">{selectedNonVegProduct.name}</p>
+                    <p className="text-xs text-slate-500">Selected product preview</p>
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
                 {planForm.nonVegProducts.map((item, idx) => (
-                  <div key={`${item.name}-${idx}`} className="flex items-center justify-between border rounded px-3 py-2">
-                    <p className="text-sm text-slate-700"><span className="font-semibold">{item.name}</span> - {item.qty}</p>
+                  <div key={`${item.name}-${idx}`} className="flex items-center justify-between border rounded px-3 py-2 bg-white">
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={getPlanItemImage(item) || "/vite.svg"}
+                        alt={item.name || "Product"}
+                        className="w-10 h-10 rounded-md object-cover border border-slate-200"
+                        loading="lazy"
+                      />
+                      <p className="text-sm text-slate-700"><span className="font-semibold">{item.name}</span> - {item.qty}</p>
+                    </div>
                     <button type="button" className="text-red-600 hover:text-red-700" onClick={() => removePlanProduct("nonVeg", idx)}>
                       <Trash2 className="w-4 h-4" />
                     </button>

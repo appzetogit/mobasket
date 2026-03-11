@@ -42,6 +42,7 @@ const PlansPage = () => {
   const [subcategoryProductBuckets, setSubcategoryProductBuckets] = useState([]);
   const [selectedProductBySubcategory, setSelectedProductBySubcategory] = useState({});
   const [expandedSubcategoryIds, setExpandedSubcategoryIds] = useState({});
+  const [selectedPlanStoreId, setSelectedPlanStoreId] = useState("");
   const [boughtPlans, setBoughtPlans] = useState([]);
   const [boughtPlansLoading, setBoughtPlansLoading] = useState(true);
   const [logoUrl, setLogoUrl] = useState(MOBASKETLogo);
@@ -101,6 +102,29 @@ const PlansPage = () => {
           products: Array.isArray(plan.products) ? plan.products : [],
           vegProducts: Array.isArray(plan.vegProducts) ? plan.vegProducts : [],
           nonVegProducts: Array.isArray(plan.nonVegProducts) ? plan.nonVegProducts : [],
+          zoneStoreRules: Array.isArray(plan.zoneStoreRules)
+            ? plan.zoneStoreRules
+                .map((rule) => {
+                  const zoneId = String(rule?.zoneId?._id || rule?.zoneId || "").trim();
+                  const storeId = String(rule?.storeId?._id || rule?.storeId || "").trim();
+                  const subcategoryIds = Array.isArray(rule?.subcategoryIds)
+                    ? rule.subcategoryIds
+                        .map((subcategory) => ({
+                          id: String(subcategory?._id || subcategory || "").trim(),
+                          name: subcategory?.name || "",
+                        }))
+                        .filter((subcategory) => Boolean(subcategory.id))
+                    : [];
+                  if (!zoneId || !storeId) return null;
+                  return {
+                    zoneId,
+                    storeId,
+                    storeName: rule?.storeId?.name || rule?.storeName || "Store",
+                    subcategoryIds,
+                  };
+                })
+                .filter(Boolean)
+            : [],
         }));
         setPlans(normalized);
       } catch (err) {
@@ -204,6 +228,7 @@ const PlansPage = () => {
     setSubcategoryProductBuckets([]);
     setSelectedProductBySubcategory({});
     setExpandedSubcategoryIds({});
+    setSelectedPlanStoreId("");
   };
 
   const selectedPlanOfferIdsKey = useMemo(() => {
@@ -263,7 +288,66 @@ const PlansPage = () => {
     fetchPlanOffers();
   }, [selectedPlan?.id, selectedPlanLinkedOffers, selectedPlanOfferIdsKey]);
 
+  const selectedPlanZoneStoreRules = useMemo(() => {
+    const rules = Array.isArray(selectedPlan?.zoneStoreRules) ? selectedPlan.zoneStoreRules : [];
+    if (!zoneId) return rules;
+    return rules.filter((rule) => String(rule.zoneId) === String(zoneId));
+  }, [selectedPlan?.zoneStoreRules, zoneId]);
+
+  const availablePlanStores = useMemo(() => {
+    const map = new Map();
+    selectedPlanZoneStoreRules.forEach((rule) => {
+      if (!rule?.storeId) return;
+      const key = String(rule.storeId);
+      if (!map.has(key)) {
+        map.set(key, {
+          id: key,
+          name: rule.storeName || "Store",
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [selectedPlanZoneStoreRules]);
+
+  useEffect(() => {
+    if (!selectedPlan) {
+      setSelectedPlanStoreId("");
+      return;
+    }
+    if (availablePlanStores.length === 1) {
+      setSelectedPlanStoreId(availablePlanStores[0].id);
+      return;
+    }
+    if (!availablePlanStores.some((store) => store.id === selectedPlanStoreId)) {
+      setSelectedPlanStoreId("");
+    }
+  }, [availablePlanStores, selectedPlan, selectedPlanStoreId]);
+
+  const configuredPlanSubcategories = useMemo(() => {
+    const subcategoryMap = new Map();
+    if (selectedPlanZoneStoreRules.length > 0 && !selectedPlanStoreId) {
+      return [];
+    }
+    const filteredRules = selectedPlanStoreId
+      ? selectedPlanZoneStoreRules.filter((rule) => String(rule.storeId) === String(selectedPlanStoreId))
+      : selectedPlanZoneStoreRules;
+    filteredRules.forEach((rule) => {
+      (Array.isArray(rule?.subcategoryIds) ? rule.subcategoryIds : []).forEach((subcategory) => {
+        const subcategoryId = String(subcategory?.id || subcategory?._id || subcategory || "");
+        if (!subcategoryId || subcategoryMap.has(subcategoryId)) return;
+        subcategoryMap.set(subcategoryId, {
+          id: subcategoryId,
+          name: subcategory?.name || "Subcategory",
+        });
+      });
+    });
+    return Array.from(subcategoryMap.values());
+  }, [selectedPlanStoreId, selectedPlanZoneStoreRules]);
+
   const planLinkedSubcategories = useMemo(() => {
+    if (configuredPlanSubcategories.length > 0) {
+      return configuredPlanSubcategories;
+    }
     const subcategoryMap = new Map();
     (Array.isArray(planOffers) ? planOffers : []).forEach((offer) => {
       const subcategories = Array.isArray(offer?.subcategoryIds) ? offer.subcategoryIds : [];
@@ -279,7 +363,7 @@ const PlansPage = () => {
       });
     });
     return Array.from(subcategoryMap.values());
-  }, [planOffers]);
+  }, [configuredPlanSubcategories, planOffers]);
 
   useEffect(() => {
     if (!selectedPlan?.id || planLinkedSubcategories.length === 0) {
@@ -310,6 +394,14 @@ const PlansPage = () => {
     });
   }, [selectedPlan?.id, planLinkedSubcategories, zoneId]);
 
+  useEffect(() => {
+    setSubcategoryProductBuckets((prev) =>
+      prev.map((bucket) => ({ ...bucket, products: null, loading: false, error: "" }))
+    );
+    setSelectedProductBySubcategory({});
+    setExpandedSubcategoryIds({});
+  }, [selectedPlanStoreId]);
+
   const loadProductsForSubcategory = async (subcategoryId) => {
     if (!subcategoryId) return;
     const subcategoryKey = String(subcategoryId);
@@ -328,6 +420,7 @@ const PlansPage = () => {
           subcategoryId: subcategoryKey,
           activeOnly: "true",
           limit: 100,
+          ...(selectedPlanStoreId ? { storeId: selectedPlanStoreId } : {}),
           ...(zoneId ? { zoneId } : {}),
         },
       });
@@ -544,7 +637,21 @@ const PlansPage = () => {
     }
     setIsSubscribing(true);
     try {
-      const { restaurantId, restaurantName } = await resolveGroceryRestaurant();
+      const hasConfiguredStoreRules = selectedPlanZoneStoreRules.length > 0;
+      if (hasConfiguredStoreRules && !selectedPlanStoreId) {
+        throw new Error("Please select a store for this plan.");
+      }
+      if (hasConfiguredStoreRules && planLinkedSubcategories.length > 0 && selectedManualProductIds.length !== planLinkedSubcategories.length) {
+        throw new Error("Please select exactly one product in each configured subcategory.");
+      }
+
+      const selectedStore = availablePlanStores.find((store) => String(store.id) === String(selectedPlanStoreId));
+      const { restaurantId, restaurantName } = hasConfiguredStoreRules
+        ? {
+            restaurantId: selectedStore?.id || selectedPlanStoreId,
+            restaurantName: selectedStore?.name || "MoGrocery",
+          }
+        : await resolveGroceryRestaurant();
 
       const items = [
         {
@@ -590,6 +697,7 @@ const PlansPage = () => {
             selectedSubcategoryIds.length > 0 ? selectedSubcategoryIds[0] : undefined,
           selectedSubcategoryIds,
           selectedProductIds: selectedManualProductIds,
+          selectedStoreId: hasConfiguredStoreRules ? selectedPlanStoreId : undefined,
         },
       };
 
@@ -677,6 +785,7 @@ const PlansPage = () => {
 
   const toggleSubcategoryExpanded = (subcategoryId) => {
     if (!subcategoryId) return;
+    if (selectedPlanZoneStoreRules.length > 0 && !selectedPlanStoreId) return;
     const subcategoryKey = String(subcategoryId);
     const isExpanded = Boolean(expandedSubcategoryIds[subcategoryKey]);
     const bucket = subcategoryProductBuckets.find((item) => item?.subcategory?.id === subcategoryKey);
@@ -1014,14 +1123,32 @@ const PlansPage = () => {
                     <LayoutGrid size={18} className="text-emerald-600" />
                     <h3 className="font-bold text-slate-900 text-lg">Build Your Plan Box</h3>
                   </div>
+                  {selectedPlanZoneStoreRules.length > 0 && (
+                    <div className="mb-4 p-3 rounded-xl border border-slate-200 bg-slate-50">
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">Store</label>
+                      <select
+                        className="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm"
+                        value={selectedPlanStoreId}
+                        onChange={(e) => setSelectedPlanStoreId(e.target.value)}
+                      >
+                        <option value="">Select store</option>
+                        {availablePlanStores.map((store) => (
+                          <option key={store.id} value={store.id}>{store.name}</option>
+                        ))}
+                      </select>
+                      <p className="text-[11px] text-slate-500 mt-1">Products will be loaded from this selected store only.</p>
+                    </div>
+                  )}
                   {planLinkedSubcategories.length === 0 ? (
                     <p className="text-sm text-slate-500">
-                      No subcategory-linked products configured in plan offers.
+                      {selectedPlanZoneStoreRules.length > 0
+                        ? "No configured subcategories found for selected store."
+                        : "No subcategory-linked products configured in plan offers."}
                     </p>
                   ) : (
                     <>
                       <p className="text-xs text-slate-500 mb-4">
-                        Optional: pick products by subcategory. You can skip and continue.
+                        Select one product from each subcategory.
                       </p>
                       <div className="space-y-4">
                         {subcategoryProductBuckets.map((bucket) => {
@@ -1114,7 +1241,11 @@ const PlansPage = () => {
                 <div className="mt-8 pt-4 border-t border-slate-100">
                   <button
                     onClick={handleSubscribePlan}
-                    disabled={isSubscribing}
+                    disabled={
+                      isSubscribing ||
+                      (selectedPlanZoneStoreRules.length > 0 && !selectedPlanStoreId) ||
+                      (planLinkedSubcategories.length > 0 && selectedManualProductIds.length !== planLinkedSubcategories.length)
+                    }
                     className="w-full bg-[#fec007] hover:bg-[#eeb100] disabled:opacity-60 disabled:cursor-not-allowed active:scale-[0.98] transition-all text-black font-black text-lg py-4 rounded-2xl shadow-lg shadow-yellow-200"
                   >
                     {isSubscribing ? "Opening Razorpay..." : `Subscribe for ${selectedPlan.priceDisplay}`}

@@ -306,6 +306,11 @@ const orderSchema = new mongoose.Schema({
         ref: 'GroceryProduct'
       }],
       default: []
+    },
+    selectedStoreId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'GroceryStore',
+      default: null
     }
   },
   sendCutlery: {

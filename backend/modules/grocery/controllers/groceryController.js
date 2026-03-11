@@ -145,6 +145,63 @@ const normalizePlanZoneIds = async (zoneIds) => {
   return zones.map((zone) => zone._id.toString());
 };
 
+const normalizePlanZoneStoreRules = async (rules) => {
+  if (!Array.isArray(rules)) return [];
+
+  const normalized = rules
+    .map((rule) => ({
+      zoneId: isValidObjectId(rule?.zoneId) ? String(rule.zoneId) : '',
+      storeId: isValidObjectId(rule?.storeId) ? String(rule.storeId) : '',
+      subcategoryIds: normalizeObjectIdArray(rule?.subcategoryIds || []),
+    }))
+    .filter((rule) => rule.zoneId && rule.storeId);
+
+  if (normalized.length === 0) return [];
+
+  const zoneIds = Array.from(new Set(normalized.map((rule) => rule.zoneId)));
+  const storeIds = Array.from(new Set(normalized.map((rule) => rule.storeId)));
+  const subcategoryIds = Array.from(
+    new Set(normalized.flatMap((rule) => rule.subcategoryIds))
+  );
+
+  const [zones, stores, subcategories] = await Promise.all([
+    Zone.find({ _id: { $in: zoneIds }, platform: 'mogrocery' }).select('_id').lean(),
+    GroceryStore.find({ _id: { $in: storeIds } }).select('_id zoneId').lean(),
+    subcategoryIds.length > 0
+      ? GrocerySubcategory.find({ _id: { $in: subcategoryIds } }).select('_id').lean()
+      : Promise.resolve([]),
+  ]);
+
+  const validZoneSet = new Set(zones.map((zone) => String(zone._id)));
+  const storeById = new Map(stores.map((store) => [String(store._id), store]));
+  const validSubcategorySet = new Set(subcategories.map((subcategory) => String(subcategory._id)));
+
+  const unique = new Set();
+  const filtered = [];
+  normalized.forEach((rule) => {
+    if (!validZoneSet.has(rule.zoneId)) return;
+    const store = storeById.get(rule.storeId);
+    if (!store) return;
+    if (store?.zoneId && String(store.zoneId) !== rule.zoneId) return;
+
+    const dedupedSubcategoryIds = Array.from(
+      new Set(rule.subcategoryIds.filter((subcategoryId) => validSubcategorySet.has(subcategoryId)))
+    );
+
+    const uniqueKey = `${rule.zoneId}:${rule.storeId}`;
+    if (unique.has(uniqueKey)) return;
+    unique.add(uniqueKey);
+
+    filtered.push({
+      zoneId: rule.zoneId,
+      storeId: rule.storeId,
+      subcategoryIds: dedupedSubcategoryIds,
+    });
+  });
+
+  return filtered;
+};
+
 const normalizePercentage = (value) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
@@ -933,6 +990,9 @@ export const getPlans = async (req, res) => {
     const plans = await GroceryPlan.find(filter)
       .populate('offerIds', 'name discountType discountValue freeDelivery isActive')
       .populate('zoneIds', 'name zoneName serviceLocation isActive platform')
+      .populate('zoneStoreRules.zoneId', 'name zoneName serviceLocation isActive platform')
+      .populate('zoneStoreRules.storeId', 'name ownerName zoneId isActive')
+      .populate('zoneStoreRules.subcategoryIds', 'name slug isActive')
       .sort({ order: 1, createdAt: -1 })
       .lean();
     return res.status(200).json({
@@ -959,6 +1019,9 @@ export const getPlanById = async (req, res) => {
     const plan = await GroceryPlan.findById(id)
       .populate('offerIds', 'name discountType discountValue freeDelivery isActive')
       .populate('zoneIds', 'name zoneName serviceLocation isActive platform')
+      .populate('zoneStoreRules.zoneId', 'name zoneName serviceLocation isActive platform')
+      .populate('zoneStoreRules.storeId', 'name ownerName zoneId isActive')
+      .populate('zoneStoreRules.subcategoryIds', 'name slug isActive')
       .lean();
     if (!plan) {
       return res.status(404).json({ success: false, message: 'Plan not found' });
@@ -992,6 +1055,7 @@ export const createPlan = async (req, res) => {
       nonVegProducts = [],
       offerIds = [],
       zoneIds = [],
+      zoneStoreRules = [],
       order = 0,
       isActive = true,
     } = req.body;
@@ -1015,7 +1079,13 @@ export const createPlan = async (req, res) => {
     const mergedProducts =
       normalizedProducts.length > 0 ? normalizedProducts : [...normalizedVegProducts, ...normalizedNonVegProducts];
     const normalizedOfferIds = normalizeObjectIdArray(offerIds);
-    const normalizedZoneIds = await normalizePlanZoneIds(zoneIds);
+    const normalizedZoneStoreRules = await normalizePlanZoneStoreRules(zoneStoreRules);
+    const normalizedZoneIds = Array.from(
+      new Set([
+        ...(await normalizePlanZoneIds(zoneIds)),
+        ...normalizedZoneStoreRules.map((rule) => String(rule.zoneId)),
+      ])
+    );
 
     const plan = await GroceryPlan.create({
       key: normalizedKey,
@@ -1037,6 +1107,7 @@ export const createPlan = async (req, res) => {
       nonVegProducts: normalizedNonVegProducts,
       offerIds: normalizedOfferIds,
       zoneIds: normalizedZoneIds,
+      zoneStoreRules: normalizedZoneStoreRules,
       order: Number(order) || 0,
       isActive: Boolean(isActive),
     });
@@ -1078,6 +1149,16 @@ export const updatePlan = async (req, res) => {
     if (update.nonVegProducts !== undefined) update.nonVegProducts = normalizePlanProducts(update.nonVegProducts);
     if (update.offerIds !== undefined) update.offerIds = normalizeObjectIdArray(update.offerIds);
     if (update.zoneIds !== undefined) update.zoneIds = await normalizePlanZoneIds(update.zoneIds);
+    if (update.zoneStoreRules !== undefined) {
+      update.zoneStoreRules = await normalizePlanZoneStoreRules(update.zoneStoreRules);
+      const mergedZoneIds = Array.from(
+        new Set([
+          ...(Array.isArray(update.zoneIds) ? update.zoneIds : normalizeObjectIdArray(existing.zoneIds)),
+          ...update.zoneStoreRules.map((rule) => String(rule.zoneId)),
+        ])
+      );
+      update.zoneIds = await normalizePlanZoneIds(mergedZoneIds);
+    }
 
     if (update.vegProducts !== undefined || update.nonVegProducts !== undefined) {
       const nextVegProducts = update.vegProducts ?? normalizePlanProducts(existing.vegProducts);
