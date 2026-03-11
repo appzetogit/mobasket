@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button"
 import { groceryStoreAPI } from "@/lib/api"
 import api from "@/lib/api"
 import { API_ENDPOINTS } from "@/lib/api/config"
-import { firebaseAuth, googleProvider } from "@/lib/firebase"
+import { firebaseAuth, googleProvider, ensureFirebaseAuthInitialized } from "@/lib/firebase"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 import { loadBusinessSettings } from "@/lib/utils/businessSettings"
 import PolicyModal from "@/components/legal/PolicyModal"
@@ -304,6 +304,11 @@ export default function GroceryStoreLogin() {
     setIsSending(true)
 
     try {
+      const authReady = ensureFirebaseAuthInitialized()
+      if (!authReady || !firebaseAuth || !googleProvider) {
+        throw new Error("Firebase Auth is not configured. Please verify Firebase settings in Admin > Env Setup.")
+      }
+
       const { signInWithPopup } = await import("firebase/auth")
       const result = await signInWithPopup(firebaseAuth, googleProvider)
       const user = result.user

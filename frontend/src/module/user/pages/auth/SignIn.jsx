@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select"
 import api, { authAPI } from "@/lib/api"
 import { API_ENDPOINTS } from "@/lib/api/config"
-import { firebaseAuth, googleProvider, ensureFirebaseInitialized } from "@/lib/firebase"
+import { firebaseAuth, googleProvider, ensureFirebaseAuthInitialized } from "@/lib/firebase"
 import { setAuthData } from "@/lib/utils/auth"
 import { loadBusinessSettings } from "@/lib/utils/businessSettings"
 import loginBanner from "@/assets/loginbanner.png"
@@ -79,8 +79,8 @@ export default function SignIn() {
   const redirectHandledRef = useRef(false)
 
   const getFirebaseAuthInstance = () => {
-    const isInitialized = ensureFirebaseInitialized()
-    if (!isInitialized || !firebaseAuth) {
+    const isInitialized = ensureFirebaseAuthInitialized()
+    if (!isInitialized || !firebaseAuth || !googleProvider) {
       return null
     }
     return firebaseAuth

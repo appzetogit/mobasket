@@ -51,7 +51,24 @@ function ensureFirebaseInitialized() {
     }
     firebaseApp = app;
 
-    // Initialize Auth - ensure it's connected to the app
+    if (!realtimeDb) {
+      realtimeDb = getDatabase(app);
+    }
+  } catch (error) {
+    console.error('Firebase initialization failed:', error);
+    return false;
+  }
+
+  return true;
+}
+
+export function ensureFirebaseAuthInitialized() {
+  const initialized = ensureFirebaseInitialized();
+  if (!initialized || !app) {
+    return false;
+  }
+
+  try {
     if (!firebaseAuth) {
       firebaseAuth = getAuth(app);
       if (!firebaseAuth) {
@@ -59,20 +76,13 @@ function ensureFirebaseInitialized() {
       }
     }
 
-    // Initialize Google Provider
     if (!googleProvider) {
       googleProvider = new GoogleAuthProvider();
-      // Add scopes if needed
       googleProvider.addScope('email');
       googleProvider.addScope('profile');
-      // Note: Don't set custom client_id - Firebase uses its own OAuth client
-    }
-
-    if (!realtimeDb) {
-      realtimeDb = getDatabase(app);
     }
   } catch (error) {
-    console.error('Firebase initialization failed:', error);
+    console.error('Firebase auth initialization failed:', error);
     return false;
   }
 
