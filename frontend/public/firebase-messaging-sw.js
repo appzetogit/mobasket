@@ -5,6 +5,8 @@ importScripts("https://www.gstatic.com/firebasejs/12.9.0/firebase-messaging-comp
 
 const REQUIRED_FIELDS = ["apiKey", "authDomain", "projectId", "appId", "messagingSenderId"];
 let messagingInstance = null;
+const PUSH_DEDUPE_WINDOW_MS = 10000;
+const seenPushes = new Map();
 
 const getApiBaseUrl = () => {
   try {
@@ -42,6 +44,37 @@ const getRuntimeConfigFromQuery = () => {
 const canInitialize = (config) =>
   REQUIRED_FIELDS.every((field) => typeof config[field] === "string" && config[field].trim());
 
+const getPushDedupId = (payload = {}) => {
+  const explicitId =
+    payload?.data?.pushId ||
+    payload?.messageId ||
+    payload?.data?.id ||
+    payload?.data?.notificationId ||
+    "";
+  if (explicitId) return String(explicitId);
+
+  const title = payload?.notification?.title || payload?.data?.title || "";
+  const body = payload?.notification?.body || payload?.data?.body || payload?.data?.message || "";
+  return `${title}::${body}`.trim();
+};
+
+const isDuplicatePush = (payload = {}) => {
+  const dedupeId = getPushDedupId(payload);
+  if (!dedupeId) return false;
+
+  const now = Date.now();
+  const previousTs = Number(seenPushes.get(dedupeId) || 0);
+  seenPushes.set(dedupeId, now);
+
+  for (const [id, ts] of seenPushes.entries()) {
+    if ((now - ts) > PUSH_DEDUPE_WINDOW_MS) {
+      seenPushes.delete(id);
+    }
+  }
+
+  return previousTs > 0 && (now - previousTs) < PUSH_DEDUPE_WINDOW_MS;
+};
+
 const ensureMessaging = () => {
   if (messagingInstance) return messagingInstance;
 
@@ -54,6 +87,16 @@ const ensureMessaging = () => {
 
   messagingInstance = firebase.messaging();
   messagingInstance.onBackgroundMessage((payload) => {
+    if (isDuplicatePush(payload)) {
+      return;
+    }
+
+    // When notification payload exists, browsers/FCM may already render it.
+    // Avoid manually showing another one from SW.
+    if (payload?.notification) {
+      return;
+    }
+
     const title = payload?.notification?.title || payload?.data?.title || "New Notification";
     const body = payload?.notification?.body || payload?.data?.body || payload?.data?.message || "";
     const icon = payload?.notification?.icon || "/vite.svg";

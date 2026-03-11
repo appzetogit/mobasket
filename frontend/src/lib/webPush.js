@@ -8,6 +8,8 @@ import {
 } from "@/lib/browserNotifications";
 
 const FCM_TOKEN_CACHE_KEY = "fcm_web_token";
+const PUSH_DEDUPE_WINDOW_MS = 10000;
+const PUSH_DEDUPE_STORAGE_PREFIX = "push_seen_";
 
 const moduleToUpdater = {
   user: authAPI.updateFcmToken,
@@ -54,6 +56,36 @@ const parseNotificationPayload = (payload = {}) => {
   return { title, body, link };
 };
 
+const getPushDedupId = (payload = {}) => {
+  const explicitId =
+    payload?.data?.pushId ||
+    payload?.messageId ||
+    payload?.data?.id ||
+    payload?.data?.notificationId ||
+    "";
+  if (explicitId) return String(explicitId);
+
+  const title = payload?.notification?.title || payload?.data?.title || "";
+  const body = payload?.notification?.body || payload?.data?.body || payload?.data?.message || "";
+  return `${title}::${body}`.trim();
+};
+
+const shouldSuppressDuplicatePush = (payload = {}) => {
+  try {
+    const dedupeId = getPushDedupId(payload);
+    if (!dedupeId) return false;
+
+    const now = Date.now();
+    const storageKey = `${PUSH_DEDUPE_STORAGE_PREFIX}${dedupeId}`;
+    const previousTs = Number(localStorage.getItem(storageKey) || 0);
+    localStorage.setItem(storageKey, String(now));
+
+    return previousTs > 0 && (now - previousTs) < PUSH_DEDUPE_WINDOW_MS;
+  } catch {
+    return false;
+  }
+};
+
 const getRuntimeFirebaseConfigForSw = () => {
   const runtimeEnv = (typeof window !== "undefined" && window.__PUBLIC_ENV) ? window.__PUBLIC_ENV : {};
   return {
@@ -69,6 +101,10 @@ const getRuntimeFirebaseConfigForSw = () => {
 };
 
 const showForegroundPushPopup = async (payload = {}) => {
+  if (shouldSuppressDuplicatePush(payload)) {
+    return;
+  }
+
   const { title, body, link } = parseNotificationPayload(payload);
   const tag = payload?.data?.pushId || payload?.messageId || "admin_push";
   const swRegistration = await navigator.serviceWorker.getRegistration();
