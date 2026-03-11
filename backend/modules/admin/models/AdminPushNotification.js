@@ -14,6 +14,11 @@ const adminPushNotificationSchema = new mongoose.Schema(
       trim: true,
       maxlength: 2000,
     },
+    image: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     zone: {
       type: String,
       default: 'All',

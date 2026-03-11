@@ -120,6 +120,7 @@ import DeliveryTermsAndConditions from "@/module/delivery/pages/TermsAndConditio
 import TermsPublic from "@/module/user/pages/legal/TermsPublic";
 import PrivacyPublic from "@/module/user/pages/legal/PrivacyPublic";
 import ContentPolicyPublic from "@/module/user/pages/legal/ContentPolicyPublic";
+import { setupWebPushForCurrentSession, teardownWebPushListener } from "@/lib/webPush";
 
 function UserPathRedirect() {
   const location = useLocation();
@@ -128,6 +129,8 @@ function UserPathRedirect() {
 }
 
 export default function App() {
+  const location = useLocation();
+
   useEffect(() => {
     if (typeof window === "undefined" || !("geolocation" in navigator)) return;
 
@@ -165,6 +168,45 @@ export default function App() {
 
     run();
   }, []);
+
+  useEffect(() => {
+    const runSetup = () => {
+      setupWebPushForCurrentSession(location.pathname).catch((error) => {
+        // Keep this visible in console so push setup issues are diagnosable.
+        // eslint-disable-next-line no-console
+        console.warn("Web push setup failed:", error?.message || error);
+      });
+    };
+
+    runSetup();
+
+    const tokenKeys = new Set([
+      "user_accessToken",
+      "user_refreshToken",
+      "accessToken",
+      "restaurant_accessToken",
+      "restaurant_refreshToken",
+      "grocery-store_accessToken",
+      "grocery-store_refreshToken",
+      "delivery_accessToken",
+      "delivery_refreshToken",
+    ]);
+
+    const onStorage = (event) => {
+      if (!event?.key || tokenKeys.has(event.key)) {
+        runSetup();
+      }
+    };
+
+    const intervalId = window.setInterval(runSetup, 15000);
+    window.addEventListener("storage", onStorage);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.removeEventListener("storage", onStorage);
+      teardownWebPushListener();
+    };
+  }, [location.pathname]);
 
   return (
     <>

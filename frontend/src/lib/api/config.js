@@ -108,6 +108,7 @@ export const API_ENDPOINTS = {
     REFRESH_TOKEN: '/auth/refresh-token',
     LOGOUT: '/auth/logout',
     ME: '/auth/me',
+    FCM_TOKEN: '/auth/fcm-token',
   },
   // User endpoints
   USER: {

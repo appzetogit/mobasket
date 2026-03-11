@@ -18,6 +18,8 @@ export default function PushNotification() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [loadingList, setLoadingList] = useState(true)
   const [zones, setZones] = useState([])
+  const [bannerImage, setBannerImage] = useState(null)
+  const [bannerPreviewUrl, setBannerPreviewUrl] = useState("")
 
   const filteredNotifications = useMemo(() => {
     if (!searchQuery.trim()) {
@@ -33,6 +35,28 @@ export default function PushNotification() {
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }))
+  }
+
+  const handleImageChange = (file) => {
+    if (!file) return
+
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"]
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Invalid image type. Allowed: JPEG, PNG, WEBP, GIF")
+      return
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Image size should be 2MB or less")
+      return
+    }
+
+    if (bannerPreviewUrl) {
+      URL.revokeObjectURL(bannerPreviewUrl)
+    }
+
+    setBannerImage(file)
+    setBannerPreviewUrl(URL.createObjectURL(file))
   }
 
   const loadPushNotifications = async () => {
@@ -93,6 +117,7 @@ export default function PushNotification() {
         zone: formData.zone,
         sendTo: formData.sendTo,
         platform,
+        image: bannerImage || undefined,
       })
 
       const created = response?.data?.data?.notification
@@ -102,17 +127,40 @@ export default function PushNotification() {
         setNotifications((prev) => [created, ...prev])
       }
 
-      toast.success(`Notification sent to ${recipientCount} ${formData.sendTo.toLowerCase()} recipient(s)`)
       if (pushDelivery) {
         if (!pushDelivery.initialized && pushDelivery.reason === "no_tokens") {
           toast.warning("No device tokens found. Popup notification cannot be shown until users log in and allow notifications.")
         } else if (!pushDelivery.initialized) {
           toast.error(`Push dispatch failed: ${pushDelivery.reason || "Firebase is not configured"}`)
         } else if (pushDelivery.failureCount > 0) {
-          toast.warning(`Push delivered: ${pushDelivery.successCount}, failed: ${pushDelivery.failureCount}`)
+          const failureByCode = pushDelivery.failureByCode || {}
+          const failureSamples = Array.isArray(pushDelivery.failureSamples) ? pushDelivery.failureSamples : []
+          const transportWarnings = Array.isArray(pushDelivery.transportWarnings) ? pushDelivery.transportWarnings : []
+          const engine = pushDelivery.engine ? `, engine: ${pushDelivery.engine}` : ""
+          const deliveredWeb = Number(pushDelivery.successWebCount || 0)
+          const deliveredMobile = Number(pushDelivery.successMobileCount || 0)
+          const topFailureCodes = Object.entries(failureByCode)
+            .sort((a, b) => (b[1] || 0) - (a[1] || 0))
+            .slice(0, 2)
+            .map(([code, count]) => `${code} (${count})`)
+            .join(", ")
+          const sampleMessage = failureSamples[0]?.message ? `, sample: ${failureSamples[0].message}` : ""
+          const transportMessage = transportWarnings[0]?.message ? `, transport: ${transportWarnings[0].message}` : ""
+          const cleanedText = pushDelivery.invalidTokenCount > 0
+            ? `, cleaned invalid tokens: ${pushDelivery.invalidTokenCount}`
+            : ""
+          const reasonText = topFailureCodes ? `, reasons: ${topFailureCodes}` : ""
+          toast.warning(`Sent to ${recipientCount} recipients. Push delivered: ${pushDelivery.successCount} (web: ${deliveredWeb}, mobile: ${deliveredMobile}), failed: ${pushDelivery.failureCount}${cleanedText}${reasonText}${sampleMessage}${transportMessage}${engine}`)
         } else if (pushDelivery.successCount > 0) {
-          toast.success(`Push popup delivered to ${pushDelivery.successCount} device(s)`)
+          const deliveredWeb = Number(pushDelivery.successWebCount || 0)
+          const deliveredMobile = Number(pushDelivery.successMobileCount || 0)
+          const engine = pushDelivery.engine ? `, engine: ${pushDelivery.engine}` : ""
+          toast.success(`Sent to ${recipientCount} recipients. Push delivered: ${pushDelivery.successCount} (web: ${deliveredWeb}, mobile: ${deliveredMobile})${engine}`)
+        } else {
+          toast.success(`Notification sent to ${recipientCount} ${formData.sendTo.toLowerCase()} recipient(s)`)
         }
+      } else {
+        toast.success(`Notification sent to ${recipientCount} ${formData.sendTo.toLowerCase()} recipient(s)`)
       }
       handleReset()
     } catch (error) {
@@ -124,13 +172,26 @@ export default function PushNotification() {
   }
 
   const handleReset = () => {
+    if (bannerPreviewUrl) {
+      URL.revokeObjectURL(bannerPreviewUrl)
+    }
     setFormData({
       title: "",
       zone: "All",
       sendTo: "Customer",
       description: "",
     })
+    setBannerImage(null)
+    setBannerPreviewUrl("")
   }
+
+  useEffect(() => {
+    return () => {
+      if (bannerPreviewUrl) {
+        URL.revokeObjectURL(bannerPreviewUrl)
+      }
+    }
+  }, [bannerPreviewUrl])
 
   const handleToggleStatus = (id) => {
     setNotifications(notifications.map(notification =>
@@ -206,11 +267,56 @@ export default function PushNotification() {
               <label className="block text-sm font-semibold text-slate-700 mb-3">
                 Notification banner
               </label>
-              <div className="border-2 border-dashed border-slate-300 rounded-lg p-12 text-center hover:border-blue-500 transition-colors cursor-pointer">
-                <Upload className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-                <p className="text-sm font-medium text-blue-600 mb-1">Upload Image</p>
-                <p className="text-xs text-slate-500">Image format - jpg png jpeg gif webp Image Size -maximum size 2 MB Image Ratio - 3:1</p>
-              </div>
+              <label
+                htmlFor="push-banner-image"
+                className="block border-2 border-dashed border-slate-300 rounded-lg p-12 text-center hover:border-blue-500 transition-colors cursor-pointer"
+              >
+                {bannerPreviewUrl ? (
+                  <div className="space-y-3">
+                    <img
+                      src={bannerPreviewUrl}
+                      alt="Notification banner preview"
+                      className="mx-auto h-28 w-full max-w-md rounded-lg object-cover border border-slate-200"
+                    />
+                    <p className="text-sm font-medium text-slate-700">{bannerImage?.name}</p>
+                    <p className="text-xs text-blue-600">Click to replace image</p>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="w-12 h-12 text-slate-400 mx-auto mb-3" />
+                    <p className="text-sm font-medium text-blue-600 mb-1">Upload Image</p>
+                    <p className="text-xs text-slate-500">Image format - jpg png jpeg gif webp Image Size -maximum size 2 MB Image Ratio - 3:1</p>
+                  </>
+                )}
+              </label>
+              <input
+                id="push-banner-image"
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null
+                  if (file) {
+                    handleImageChange(file)
+                  }
+                  e.target.value = ""
+                }}
+              />
+              {bannerImage && (
+                <button
+                  type="button"
+                  className="mt-2 text-xs text-red-600 hover:text-red-700"
+                  onClick={() => {
+                    if (bannerPreviewUrl) {
+                      URL.revokeObjectURL(bannerPreviewUrl)
+                    }
+                    setBannerImage(null)
+                    setBannerPreviewUrl("")
+                  }}
+                >
+                  Remove image
+                </button>
+              )}
             </div>
 
             {/* Description */}

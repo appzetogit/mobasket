@@ -291,7 +291,7 @@ router.use((req, res, next) => {
 // Dashboard
 router.get('/dashboard/stats', getDashboardStats);
 router.get('/push-notifications', getPushNotifications);
-router.post('/push-notifications', createPushNotification);
+router.post('/push-notifications', uploadMiddleware.single('image'), createPushNotification);
 
 // Delivery Partner global cash limit (applies to all delivery boys)
 router.get('/delivery-cash-limit', getDeliveryCashLimit);

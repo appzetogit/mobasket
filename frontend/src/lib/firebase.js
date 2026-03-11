@@ -2,20 +2,27 @@ import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getDatabase } from 'firebase/database';
 
-const runtimeEnv =
+const getRuntimeEnv = () =>
   (typeof window !== 'undefined' && window.__PUBLIC_ENV) ? window.__PUBLIC_ENV : {};
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || runtimeEnv.VITE_FIREBASE_API_KEY || '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || runtimeEnv.VITE_FIREBASE_AUTH_DOMAIN || '',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || runtimeEnv.VITE_FIREBASE_PROJECT_ID || '',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || runtimeEnv.VITE_FIREBASE_APP_ID || '',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || runtimeEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || runtimeEnv.VITE_FIREBASE_STORAGE_BUCKET || '',
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || runtimeEnv.VITE_FIREBASE_MEASUREMENT_ID || '',
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || runtimeEnv.VITE_FIREBASE_DATABASE_URL || ''
+const getFirebaseConfigFromRuntimeEnv = () => {
+  const runtimeEnv = getRuntimeEnv();
+  return {
+    apiKey: runtimeEnv.VITE_FIREBASE_API_KEY || '',
+    authDomain: runtimeEnv.VITE_FIREBASE_AUTH_DOMAIN || '',
+    projectId: runtimeEnv.VITE_FIREBASE_PROJECT_ID || '',
+    appId: runtimeEnv.VITE_FIREBASE_APP_ID || '',
+    messagingSenderId: runtimeEnv.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
+    storageBucket: runtimeEnv.VITE_FIREBASE_STORAGE_BUCKET || '',
+    measurementId: runtimeEnv.VITE_FIREBASE_MEASUREMENT_ID || '',
+    databaseURL: runtimeEnv.VITE_FIREBASE_DATABASE_URL || ''
+  };
 };
-const firebaseVapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY || runtimeEnv.VITE_FIREBASE_VAPID_KEY || '';
+
+export const getFirebaseVapidKey = () => {
+  const runtimeEnv = getRuntimeEnv();
+  return runtimeEnv.VITE_FIREBASE_VAPID_KEY || '';
+};
 
 const requiredFields = ['apiKey', 'authDomain', 'projectId', 'appId', 'messagingSenderId'];
 
@@ -24,9 +31,11 @@ let app;
 let firebaseAuth;
 let googleProvider;
 let realtimeDb;
+export let firebaseApp = null;
 
 // Function to ensure Firebase is initialized
 function ensureFirebaseInitialized() {
+  const firebaseConfig = getFirebaseConfigFromRuntimeEnv();
   const missingFields = requiredFields.filter(field => !firebaseConfig[field] || firebaseConfig[field] === 'undefined');
   if (missingFields.length > 0) {
     console.warn(`Firebase configuration missing fields: ${missingFields.join(', ')}. Configure them in Admin > Env Setup.`);
@@ -40,6 +49,7 @@ function ensureFirebaseInitialized() {
     } else {
       app = existingApps[0];
     }
+    firebaseApp = app;
 
     // Initialize Auth - ensure it's connected to the app
     if (!firebaseAuth) {
@@ -72,7 +82,6 @@ function ensureFirebaseInitialized() {
 // Initialize immediately when config is available
 ensureFirebaseInitialized();
 
-export const firebaseApp = app;
-export { firebaseAuth, googleProvider, realtimeDb, ensureFirebaseInitialized, firebaseVapidKey };
+export { firebaseAuth, googleProvider, realtimeDb, ensureFirebaseInitialized };
 
 

@@ -5,6 +5,7 @@ import { Toaster } from 'sonner'
 import './index.css'
 import { getGoogleMapsApiKey } from './lib/utils/googleMapsApiKey.js'
 import { loadBusinessSettings } from './lib/utils/businessSettings.js'
+import { API_BASE_URL } from './lib/api/config.js'
 
 // Load business settings on app start (favicon, title)
 // Silently handle errors - this is not critical for app functionality
@@ -250,7 +251,7 @@ if (!rootElement) {
 
 const bootstrap = async () => {
   try {
-    const response = await fetch('/api/env/public', { method: 'GET' })
+    const response = await fetch(`${API_BASE_URL}/env/public`, { method: 'GET' })
     if (response.ok) {
       const payload = await response.json()
       window.__PUBLIC_ENV = payload?.data || {}

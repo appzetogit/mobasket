@@ -126,6 +126,10 @@ export const authAPI = {
   getCurrentUser: () => {
     return apiClient.get(API_ENDPOINTS.AUTH.ME);
   },
+
+  updateFcmToken: (token, platform) => {
+    return apiClient.post(API_ENDPOINTS.AUTH.FCM_TOKEN, { token, platform });
+  },
 };
 
 // Export user API helper functions
@@ -1214,6 +1218,24 @@ export const adminAPI = {
     return apiClient.get(API_ENDPOINTS.ADMIN.PUSH_NOTIFICATIONS);
   },
   createPushNotification: (payload) => {
+    const image = payload?.image;
+    const hasImageFile =
+      image &&
+      typeof FormData !== 'undefined' &&
+      ((typeof File !== 'undefined' && image instanceof File) ||
+       (typeof Blob !== 'undefined' && image instanceof Blob));
+
+    if (hasImageFile) {
+      const formData = new FormData();
+      if (payload?.title != null) formData.append('title', String(payload.title));
+      if (payload?.description != null) formData.append('description', String(payload.description));
+      if (payload?.zone != null) formData.append('zone', String(payload.zone));
+      if (payload?.sendTo != null) formData.append('sendTo', String(payload.sendTo));
+      formData.append('platform', String(payload?.platform || getAdminPlatform()));
+      formData.append('image', image);
+      return apiClient.post(API_ENDPOINTS.ADMIN.PUSH_NOTIFICATIONS, formData);
+    }
+
     return apiClient.post(API_ENDPOINTS.ADMIN.PUSH_NOTIFICATIONS, {
       ...payload,
       platform: payload?.platform || getAdminPlatform(),
