@@ -25,6 +25,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { API_BASE_URL } from "@/lib/api/config";
 
 export default function HomePage() {
   const navigate = useNavigate();
@@ -789,14 +790,62 @@ export default function HomePage() {
   ];
 
   const normalizeCity = (value) => String(value || "").trim().toLowerCase();
+  const backendOrigin = useMemo(() => {
+    try {
+      return new URL(API_BASE_URL).origin;
+    } catch {
+      return "";
+    }
+  }, []);
 
-  const extractImageUrl = (value) => {
+  const extractImageUrl = (value, seen = new Set()) => {
     if (!value) return "";
-    if (typeof value === "string") return value;
+    if (typeof value === "string") return value.trim();
     if (typeof value === "object") {
-      return value.url || value.image || value.imageUrl || value.secure_url || "";
+      // Handle nested image objects safely.
+      const candidates = [
+        value.url,
+        value.image,
+        value.imageUrl,
+        value.secure_url,
+        value.src,
+        value.profileImageUrl,
+        value.profileImage,
+      ];
+      for (const candidate of candidates) {
+        if (!candidate) continue;
+        if (typeof candidate === "string") return candidate.trim();
+        if (typeof candidate === "object" && !seen.has(candidate)) {
+          seen.add(candidate);
+          const nested = extractImageUrl(candidate, seen);
+          if (nested) return nested;
+        }
+      }
     }
     return "";
+  };
+
+  const resolveRestaurantImageUrl = (value) => {
+    const raw = extractImageUrl(value);
+    if (!raw) return "";
+
+    const normalized = raw.replace(/\\/g, "/").trim();
+    if (!normalized) return "";
+    if (/^(https?:|data:|blob:)/i.test(normalized)) return normalized;
+
+    if (normalized.startsWith("//")) {
+      const protocol = typeof window !== "undefined" ? window.location.protocol : "https:";
+      return `${protocol}${normalized}`;
+    }
+
+    if (!backendOrigin) return normalized;
+
+    if (normalized.startsWith("/")) return `${backendOrigin}${normalized}`;
+    if (normalized.startsWith("uploads/") || normalized.startsWith("public/")) {
+      return `${backendOrigin}/${normalized}`;
+    }
+
+    return normalized;
   };
 
   useEffect(() => {
@@ -861,15 +910,18 @@ export default function HomePage() {
 
         const transformedRestaurants = cityFilteredRestaurants.map((restaurant) => {
           const coverImages = Array.isArray(restaurant?.coverImages)
-            ? restaurant.coverImages.map(extractImageUrl).filter(Boolean)
+            ? restaurant.coverImages.map(resolveRestaurantImageUrl).filter(Boolean)
             : [];
           const menuImages = Array.isArray(restaurant?.menuImages)
-            ? restaurant.menuImages.map(extractImageUrl).filter(Boolean)
+            ? restaurant.menuImages.map(resolveRestaurantImageUrl).filter(Boolean)
             : [];
           const foodImage =
             coverImages[0] ||
             menuImages[0] ||
-            extractImageUrl(restaurant?.profileImage) ||
+            resolveRestaurantImageUrl(restaurant?.profileImage) ||
+            resolveRestaurantImageUrl(restaurant?.image) ||
+            resolveRestaurantImageUrl(restaurant?.logo) ||
+            resolveRestaurantImageUrl(restaurant?.storeImage) ||
             "https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400&h=300&fit=crop";
 
           const cuisines = Array.isArray(restaurant?.cuisines)
@@ -1200,12 +1252,16 @@ export default function HomePage() {
               }}
             >
               {/* Food Image - Large */}
-              <div className="relative w-full h-40 rounded-t-xl overflow-hidden">
+              <div className="relative w-full h-40 sm:h-40 rounded-t-xl overflow-hidden bg-gray-100">
                 <img
                   src={restaurant.foodImage}
                   alt={restaurant.name}
                   className="w-full h-full object-cover"
+                  loading="lazy"
+                  decoding="async"
                   onError={(e) => {
+                    if (e.currentTarget.dataset.fallbackApplied === "1") return;
+                    e.currentTarget.dataset.fallbackApplied = "1";
                     e.target.src = `https://images.unsplash.com/photo-1512058564366-18510be2db19?w=400&h=300&fit=crop`;
                   }}
                 />
