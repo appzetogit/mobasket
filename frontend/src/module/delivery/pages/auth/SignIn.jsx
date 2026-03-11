@@ -37,11 +37,13 @@ const countryCodes = [
   { code: "+31", country: "NL" },
   { code: "+46", country: "SE" },
 ]
+const DELIVERY_TEST_PHONE = "7610416911"
+const DELIVERY_TEST_COUNTRY_CODE = "+91"
 
 export default function DeliverySignIn() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
-  const [formData, setFormData] = useState({ phone: "", countryCode: "+91" })
+  const [formData, setFormData] = useState({ phone: DELIVERY_TEST_PHONE, countryCode: DELIVERY_TEST_COUNTRY_CODE })
   const [error, setError] = useState("")
   const [isSending, setIsSending] = useState(false)
   const [termsUrl, setTermsUrl] = useState("")
@@ -94,7 +96,7 @@ export default function DeliverySignIn() {
       return
     }
 
-    const fullPhone = `${formData.countryCode} ${formData.phone}`.trim()
+    const fullPhone = `${DELIVERY_TEST_COUNTRY_CODE}${DELIVERY_TEST_PHONE}`
 
     try {
       setIsSending(true)
@@ -229,6 +231,7 @@ export default function DeliverySignIn() {
               <Select
                 value={formData.countryCode}
                 onValueChange={handleCountryCodeChange}
+                disabled
               >
                 <SelectTrigger className="w-[100px] !h-12 border-gray-300 rounded-lg flex items-center shrink-0" size="default">
                   <SelectValue>
@@ -251,11 +254,12 @@ export default function DeliverySignIn() {
               <input
                 type="tel"
                 inputMode="numeric"
-                placeholder="Enter mobile number"
+                placeholder={DELIVERY_TEST_PHONE}
                 value={formData.phone}
                 onChange={handlePhoneChange}
                 autoComplete="off"
                 autoFocus={false}
+                readOnly
                 className={`flex-1 h-12 px-4 text-gray-900 placeholder-gray-400 focus:outline-none text-base border rounded-lg min-w-0 ${
                   error ? "border-red-500" : "border-gray-300"
                 }`}
@@ -264,7 +268,7 @@ export default function DeliverySignIn() {
 
             {/* Hint Text */}
             <p className="text-sm text-gray-500">
-              Enter a valid 10 digit mobile number
+              Test login number: {DELIVERY_TEST_PHONE} | OTP: 123456
             </p>
 
             {error && (

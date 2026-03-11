@@ -190,11 +190,19 @@ export default function CategoryDirectoryPage() {
   }, [nearestStoreDistanceKm]);
 
   const topAddress = useMemo(() => {
-    const formattedAddress = (userLocation?.formattedAddress || "").trim();
-    if (formattedAddress) return formattedAddress;
+    const normalize = (value) => (typeof value === "string" ? value.trim() : "");
+    const isCoordinates = (value) => /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(normalize(value));
+    const isPlaceholder = (value) => {
+      const text = normalize(value).toLowerCase();
+      return !text || text === "select location" || text === "select your location" || text === "current location";
+    };
+    const isUsable = (value) => !isPlaceholder(value) && !isCoordinates(value);
 
-    const address = (userLocation?.address || "").trim();
-    if (address) return address;
+    const formattedAddress = normalize(userLocation?.formattedAddress);
+    if (isUsable(formattedAddress)) return formattedAddress;
+
+    const address = normalize(userLocation?.address);
+    if (isUsable(address)) return address;
 
     const fallbackParts = [
       userLocation?.street,
@@ -203,7 +211,7 @@ export default function CategoryDirectoryPage() {
       userLocation?.state,
       userLocation?.postalCode || userLocation?.zipCode,
     ]
-      .map((part) => (typeof part === "string" ? part.trim() : ""))
+      .map(normalize)
       .filter(Boolean);
 
     if (fallbackParts.length) return fallbackParts.join(", ");

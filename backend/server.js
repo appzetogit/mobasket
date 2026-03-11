@@ -19,7 +19,7 @@ import {
 dotenv.config();
 
 // Import configurations
-import { connectDB, requireDbConnection, isDbConnected } from './config/database.js';
+import { connectDB, waitForDBConnection, requireDbConnection, isDbConnected } from './config/database.js';
 import { connectRedis } from './config/redis.js';
 
 // Import middleware
@@ -1008,18 +1008,22 @@ io.on('connection', (socket) => {
   });
 });
 
-// Start server
+// Start server only after MongoDB is connected to avoid startup race
 const PORT = process.env.PORT || 5000;
 
-httpServer.listen(PORT, () => {
-  console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-  console.log(`Firebase Realtime status: ${isFirebaseRealtimeEnabled() ? 'enabled' : 'disabled'}`);
+const startServer = async () => {
+  await waitForDBConnection();
 
-  // Initialize scheduled tasks after DB connection is established
-  // Wait a bit for DB to connect, then start cron jobs
-  setTimeout(() => {
+  httpServer.listen(PORT, () => {
+    console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+    console.log(`Firebase Realtime status: ${isFirebaseRealtimeEnabled() ? 'enabled' : 'disabled'}`);
     initializeScheduledTasks();
-  }, 5000);
+  });
+};
+
+startServer().catch((error) => {
+  console.error('Failed to start server:', error?.message || error);
+  process.exit(1);
 });
 
 // Initialize scheduled tasks

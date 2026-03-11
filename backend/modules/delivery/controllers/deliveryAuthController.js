@@ -52,6 +52,21 @@ const getSafeOtpErrorMessage = (error) => {
   return rawMessage || "Failed to send OTP. Please try again.";
 };
 
+const DELIVERY_TEST_PHONE_DIGITS = '7610416911';
+const DELIVERY_TEST_PHONE_NORMALIZED = `+91${DELIVERY_TEST_PHONE_DIGITS}`;
+const DELIVERY_TEST_OTP = '123456';
+
+const normalizePhone = (phone) => {
+  if (!phone || typeof phone !== 'string') return '';
+  const digitsOnly = phone.replace(/\D/g, '');
+  if (!digitsOnly) return '';
+  if (digitsOnly.length === 10) return `+91${digitsOnly}`;
+  if (digitsOnly.length === 11 && digitsOnly.startsWith('0')) return `+91${digitsOnly.slice(1)}`;
+  if (digitsOnly.length > 10 && digitsOnly.startsWith('91')) return `+${digitsOnly}`;
+  if (phone.trim().startsWith('+')) return `+${digitsOnly}`;
+  return `+${digitsOnly}`;
+};
+
 /**
  * Send OTP for delivery boy phone number
  * POST /api/delivery/auth/send-otp
@@ -68,6 +83,15 @@ export const sendOTP = asyncHandler(async (req, res) => {
   const phoneRegex = /^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/;
   if (!phoneRegex.test(phone)) {
     return errorResponse(res, 400, 'Invalid phone number format');
+  }
+
+  const normalizedPhone = normalizePhone(phone);
+  if (normalizedPhone !== DELIVERY_TEST_PHONE_NORMALIZED) {
+    return errorResponse(
+      res,
+      400,
+      `Delivery login is restricted to test number ${DELIVERY_TEST_PHONE_DIGITS}`
+    );
   }
 
   try {
@@ -93,6 +117,18 @@ export const verifyOTP = asyncHandler(async (req, res) => {
   // Validate inputs
   if (!phone || !otp) {
     return errorResponse(res, 400, 'Phone number and OTP are required');
+  }
+
+  const normalizedPhone = normalizePhone(phone);
+  if (normalizedPhone !== DELIVERY_TEST_PHONE_NORMALIZED) {
+    return errorResponse(
+      res,
+      400,
+      `Delivery login is restricted to test number ${DELIVERY_TEST_PHONE_DIGITS}`
+    );
+  }
+  if (String(otp).trim() !== DELIVERY_TEST_OTP) {
+    return errorResponse(res, 400, 'Invalid OTP. Use 123456.');
   }
 
   // Normalize name - convert null/undefined to empty string for optional field
