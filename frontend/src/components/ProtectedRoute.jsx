@@ -36,9 +36,10 @@ export default function ProtectedRoute({ children, requiredRole, loginPath, modu
   if (isAuthenticated && moduleToCheck === 'delivery') {
     const rawUser = localStorage.getItem('delivery_user');
     const user = rawUser ? JSON.parse(rawUser) : null;
+    const needsSignup = localStorage.getItem('delivery_needsSignup') === 'true';
 
-    // If status is onboarding, and not already on a signup page, redirect to signup details
-    if (user && user.status === 'onboarding') {
+    // Redirect to signup only when OTP/login flow explicitly marked it as needed.
+    if (user && needsSignup) {
       const isSignupPage = location.pathname.startsWith('/delivery/signup/') ||
         location.pathname === '/delivery/otp' ||
         location.pathname === '/delivery/sign-in';

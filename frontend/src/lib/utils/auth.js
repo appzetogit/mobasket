@@ -155,6 +155,9 @@ export function clearModuleAuth(module) {
   localStorage.removeItem(`${module}_refreshToken`);
   localStorage.removeItem(`${module}_authenticated`);
   localStorage.removeItem(`${module}_user`);
+  if (module === "delivery") {
+    localStorage.removeItem("delivery_needsSignup");
+  }
   // Also clear any sessionStorage data
   sessionStorage.removeItem(`${module}AuthData`);
   // Legacy/session key variant for grocery-store module

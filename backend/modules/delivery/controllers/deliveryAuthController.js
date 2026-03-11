@@ -54,7 +54,7 @@ const getSafeOtpErrorMessage = (error) => {
 
 const DELIVERY_TEST_PHONE_DIGITS = '7610416911';
 const DELIVERY_TEST_PHONE_NORMALIZED = `+91${DELIVERY_TEST_PHONE_DIGITS}`;
-const DELIVERY_TEST_OTP = '123456';
+const DELIVERY_TEST_OTP = '110211';
 
 const normalizePhone = (phone) => {
   if (!phone || typeof phone !== 'string') return '';
@@ -65,6 +65,70 @@ const normalizePhone = (phone) => {
   if (digitsOnly.length > 10 && digitsOnly.startsWith('91')) return `+${digitsOnly}`;
   if (phone.trim().startsWith('+')) return `+${digitsOnly}`;
   return `+${digitsOnly}`;
+};
+
+const getPhoneVariants = (phone) => {
+  const normalized = normalizePhone(phone);
+  const digits = normalized.replace(/\D/g, '');
+  if (!digits) return [];
+
+  const lastTenDigits = digits.slice(-10);
+  const variants = new Set([
+    normalized,
+    normalized.replace('+91', '+91 '),
+    `+91${lastTenDigits}`,
+    `+91 ${lastTenDigits}`,
+    lastTenDigits,
+  ]);
+
+  return Array.from(variants).filter(Boolean);
+};
+
+const getDeliveryStatusPriority = (status = '') => {
+  const value = String(status || '').toLowerCase();
+  const priorities = {
+    active: 1,
+    approved: 2,
+    pending: 3,
+    blocked: 4,
+    suspended: 5,
+    onboarding: 6,
+  };
+  return priorities[value] || 99;
+};
+
+const findBestDeliveryByPhone = async (phone) => {
+  const variants = getPhoneVariants(phone);
+  if (variants.length === 0) return null;
+
+  const matches = await Delivery.find({
+    $or: [
+      { phone: { $in: variants } },
+      { mobile: { $in: variants } },
+    ],
+  }).sort({ updatedAt: -1 }).lean();
+
+  if (!matches || matches.length === 0) {
+    return null;
+  }
+
+  const sortedMatches = matches.sort((a, b) => {
+    const statusDiff = getDeliveryStatusPriority(a?.status) - getDeliveryStatusPriority(b?.status);
+    if (statusDiff !== 0) return statusDiff;
+    return new Date(b?.updatedAt || 0).getTime() - new Date(a?.updatedAt || 0).getTime();
+  });
+
+  if (sortedMatches.length > 1) {
+    logger.warn('Multiple delivery accounts found for normalized phone. Using highest-priority match.', {
+      inputPhone: phone,
+      variants,
+      matchCount: sortedMatches.length,
+      selectedDeliveryId: sortedMatches[0]?._id?.toString?.(),
+      selectedStatus: sortedMatches[0]?.status,
+    });
+  }
+
+  return Delivery.findById(sortedMatches[0]._id);
 };
 
 /**
@@ -86,12 +150,12 @@ export const sendOTP = asyncHandler(async (req, res) => {
   }
 
   const normalizedPhone = normalizePhone(phone);
-  if (normalizedPhone !== DELIVERY_TEST_PHONE_NORMALIZED) {
-    return errorResponse(
-      res,
-      400,
-      `Delivery login is restricted to test number ${DELIVERY_TEST_PHONE_DIGITS}`
-    );
+  const isDeliveryTestPhone = normalizedPhone === DELIVERY_TEST_PHONE_NORMALIZED;
+  if (isDeliveryTestPhone) {
+    return successResponse(res, 200, 'OTP generated successfully', {
+      expiresIn: 300,
+      identifierType: 'phone'
+    });
   }
 
   try {
@@ -120,16 +184,11 @@ export const verifyOTP = asyncHandler(async (req, res) => {
   }
 
   const normalizedPhone = normalizePhone(phone);
-  if (normalizedPhone !== DELIVERY_TEST_PHONE_NORMALIZED) {
-    return errorResponse(
-      res,
-      400,
-      `Delivery login is restricted to test number ${DELIVERY_TEST_PHONE_DIGITS}`
-    );
+  const isDeliveryTestPhone = normalizedPhone === DELIVERY_TEST_PHONE_NORMALIZED;
+  if (isDeliveryTestPhone && String(otp).trim() !== DELIVERY_TEST_OTP) {
+    return errorResponse(res, 400, `Invalid OTP. Use ${DELIVERY_TEST_OTP}.`);
   }
-  if (String(otp).trim() !== DELIVERY_TEST_OTP) {
-    return errorResponse(res, 400, 'Invalid OTP. Use 123456.');
-  }
+  const canonicalPhone = normalizedPhone || String(phone || '').trim();
 
   // Normalize name - convert null/undefined to empty string for optional field
   const normalizedName = name && typeof name === 'string' ? name.trim() : null;
@@ -141,7 +200,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     if (purpose === 'register') {
       // Registration flow
       // Check if delivery boy already exists
-      delivery = await Delivery.findOne({ phone });
+      delivery = await findBestDeliveryByPhone(canonicalPhone);
 
       if (delivery) {
         return errorResponse(res, 400, 'Delivery boy already exists with this phone number. Please login.');
@@ -152,12 +211,15 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         return errorResponse(res, 400, 'Name is required for registration');
       }
 
-      // Verify OTP before creating delivery boy
-      await otpService.verifyOTP(phone, otp, purpose, null);
+      // Verify OTP before creating delivery boy (skip external verification for configured test number)
+      if (!isDeliveryTestPhone) {
+        await otpService.verifyOTP(canonicalPhone, otp, purpose, null);
+      }
 
       const deliveryData = {
         name: normalizedName,
-        phone,
+        phone: canonicalPhone,
+        mobile: canonicalPhone,
         phoneVerified: true,
         signupMethod: 'phone',
         status: 'onboarding', // New delivery boys start as onboarding until documents are submitted
@@ -175,7 +237,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       } catch (createError) {
         // Handle duplicate key error
         if (createError.code === 11000) {
-          const existingDelivery = await Delivery.findOne({ phone });
+          const existingDelivery = await findBestDeliveryByPhone(canonicalPhone);
           if (existingDelivery) {
             return errorResponse(res, 400, 'Delivery boy already exists with this phone number. Please login.');
           }
@@ -193,17 +255,20 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
     } else {
       // Login (with optional auto-registration)
-      delivery = await Delivery.findOne({ phone });
+      delivery = await findBestDeliveryByPhone(canonicalPhone);
 
-      // Verify OTP first (before creating user)
-      await otpService.verifyOTP(phone, otp, purpose, null);
+      // Verify OTP first (before creating user). Skip for configured test number.
+      if (!isDeliveryTestPhone) {
+        await otpService.verifyOTP(canonicalPhone, otp, purpose, null);
+      }
 
       if (!delivery) {
         // New user - create minimal record for signup flow
         // Use provided name or placeholder
         const deliveryData = {
           name: normalizedName || 'Delivery Partner', // Placeholder if not provided
-          phone,
+          phone: canonicalPhone,
+          mobile: canonicalPhone,
           phoneVerified: true,
           signupMethod: 'phone',
           status: 'onboarding', // New delivery boys start as onboarding until documents are submitted
@@ -221,12 +286,12 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           });
         } catch (createError) {
           if (createError.code === 11000) {
-            delivery = await Delivery.findOne({ phone });
+            delivery = await findBestDeliveryByPhone(canonicalPhone);
             if (!delivery) {
               if (String(createError?.message || '').includes('mobile_1')) {
                 delivery = await Delivery.create({
                   ...deliveryData,
-                  mobile: phone
+                  mobile: canonicalPhone
                 });
               } else {
                 throw createError;
@@ -261,14 +326,18 @@ export const verifyOTP = asyncHandler(async (req, res) => {
         }
       }
 
-      // Check if signup needs to be completed (missing required fields)
-      const needsSignup = !delivery.location?.city ||
+      // Only force signup completion for true onboarding accounts.
+      // Existing approved/pending/active riders should not be pushed back to onboarding
+      // even if some legacy fields are empty.
+      const isOnboardingStatus = String(delivery.status || '').toLowerCase() === 'onboarding';
+      const missingSignupFields = !delivery.location?.city ||
         !delivery.vehicle?.number ||
         !delivery.documents?.pan?.number ||
         !delivery.documents?.aadhar?.number ||
         !delivery.documents?.aadhar?.document ||
         !delivery.documents?.pan?.document ||
         !delivery.documents?.drivingLicense?.document;
+      const needsSignup = isOnboardingStatus && missingSignupFields;
 
       if (needsSignup) {
         // Generate tokens for signup flow

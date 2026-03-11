@@ -215,6 +215,7 @@ export default function DeliveryOTP() {
         try {
           console.log("Storing auth data for signup flow:", { hasToken: !!accessToken, hasUser: !!user })
           storeAuthData("delivery", accessToken, user, refreshToken)
+          localStorage.setItem("delivery_needsSignup", "true")
           console.log("Auth data stored successfully for signup")
         } catch (storageError) {
           console.error("Failed to store authentication data:", storageError)
@@ -251,6 +252,7 @@ export default function DeliveryOTP() {
       try {
         console.log("Storing auth data for delivery:", { hasToken: !!accessToken, hasUser: !!user })
         storeAuthData("delivery", accessToken, user, refreshToken)
+        localStorage.removeItem("delivery_needsSignup")
         console.log("Auth data stored successfully")
       } catch (storageError) {
         console.error("Failed to store authentication data:", storageError)
@@ -275,17 +277,8 @@ export default function DeliveryOTP() {
         console.log("Verifying token storage:", { hasToken: !!storedToken, authenticated: storedAuth, retryCount })
 
         if (storedToken && storedAuth === "true") {
-          // Check user status for redirection
-          const rawUser = localStorage.getItem("delivery_user")
-          const user = rawUser ? JSON.parse(rawUser) : {}
-
-          if (user.status === "onboarding") {
-            console.log("Token verified, user is onboarding, navigating to /delivery/signup/details")
-            navigate("/delivery/signup/details", { replace: true })
-          } else {
-            console.log("Token verified, navigating to /delivery")
-            navigate("/delivery", { replace: true })
-          }
+          console.log("Token verified, navigating to /delivery")
+          navigate("/delivery", { replace: true })
         } else if (retryCount < maxRetries) {
           // Token not stored yet, retry after short delay
           retryCount++
@@ -355,6 +348,7 @@ export default function DeliveryOTP() {
       try {
         console.log("Storing auth data for delivery (with name):", { hasToken: !!accessToken, hasUser: !!user })
         storeAuthData("delivery", accessToken, user, refreshToken)
+        localStorage.removeItem("delivery_needsSignup")
         console.log("Auth data stored successfully")
       } catch (storageError) {
         console.error("Failed to store authentication data:", storageError)
