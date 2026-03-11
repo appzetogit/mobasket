@@ -90,6 +90,28 @@ const formatSavedAddressForHeader = (address) => {
   return formattedAddress;
 };
 
+const formatDynamicLocationForHeader = (locationLike) => {
+  if (!locationLike || typeof locationLike !== "object") return "";
+
+  const formatted = normalizeAddressText(
+    locationLike?.formattedAddress || locationLike?.address || ""
+  );
+  if (formatted && !isCoarseLocationText(formatted)) return formatted;
+
+  const fallbackParts = [
+    locationLike?.address,
+    locationLike?.street,
+    locationLike?.area || locationLike?.location?.area,
+    locationLike?.city || locationLike?.location?.city,
+    locationLike?.state || locationLike?.location?.state,
+    locationLike?.zipCode || locationLike?.postalCode || locationLike?.pincode,
+  ]
+    .map((part) => normalizeAddressText(part))
+    .filter(Boolean);
+
+  return fallbackParts.join(", ");
+};
+
 const parseStoredAddresses = () => {
   if (typeof window === "undefined") return [];
   try {
@@ -118,6 +140,23 @@ const GroceryPage = () => {
   const [activeCategoryId, setActiveCategoryId] = useState("all");
   const [activeSubcategoryId, setActiveSubcategoryId] = useState("all-subcategories");
   const [selectedStoreId, setSelectedStoreId] = useState("all-stores");
+  const [storedUserLocation, setStoredUserLocation] = useState(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const parsed = JSON.parse(localStorage.getItem("userLocation") || "null");
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
+  });
+  const [userLocationSource, setUserLocationSource] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return String(localStorage.getItem("userLocationSource") || "").trim().toLowerCase();
+    } catch {
+      return "";
+    }
+  });
 
   const [isScrolled, setIsScrolled] = useState(false);
   const [currentBanner, setCurrentBanner] = useState(0);
@@ -173,6 +212,42 @@ const GroceryPage = () => {
       html.style.cssText = previousHtmlCssText;
     };
   }, [isAnySheetOpen]);
+
+  useEffect(() => {
+    const syncLocationFromStorage = (event) => {
+      try {
+        const nextLocation =
+          event?.detail && typeof event.detail === "object"
+            ? event.detail
+            : JSON.parse(localStorage.getItem("userLocation") || "null");
+        setStoredUserLocation(nextLocation && typeof nextLocation === "object" ? nextLocation : null);
+      } catch {
+        setStoredUserLocation(null);
+      }
+
+      try {
+        setUserLocationSource(
+          String(localStorage.getItem("userLocationSource") || "").trim().toLowerCase()
+        );
+      } catch {
+        setUserLocationSource("");
+      }
+    };
+
+    const handleStorageSync = (event) => {
+      if (!event?.key || event.key === "userLocation" || event.key === "userLocationSource") {
+        syncLocationFromStorage();
+      }
+    };
+
+    window.addEventListener("userLocationChanged", syncLocationFromStorage);
+    window.addEventListener("storage", handleStorageSync);
+
+    return () => {
+      window.removeEventListener("userLocationChanged", syncLocationFromStorage);
+      window.removeEventListener("storage", handleStorageSync);
+    };
+  }, []);
 
   const getStoreCoordinates = (store) => {
     const geoCoordinates = store?.location?.coordinates;
@@ -1657,14 +1732,20 @@ const GroceryPage = () => {
   }, [addresses, getDefaultAddress]);
 
   const topAddress = useMemo(() => {
-    if (savedHeaderAddress) {
-      return savedHeaderAddress;
-    }
+    const liveLocationCandidate =
+      (storedUserLocation && typeof storedUserLocation === "object" ? storedUserLocation : null) ||
+      (userLocation && typeof userLocation === "object" ? userLocation : null);
+    const liveHeaderAddress = formatDynamicLocationForHeader(liveLocationCandidate);
+
+    if (userLocationSource === "current" && liveHeaderAddress) return liveHeaderAddress;
+    if (userLocationSource === "saved" && savedHeaderAddress) return savedHeaderAddress;
+    if (savedHeaderAddress) return savedHeaderAddress;
+    if (liveHeaderAddress) return liveHeaderAddress;
 
     return (
       "Select your location"
     );
-  }, [savedHeaderAddress]);
+  }, [savedHeaderAddress, storedUserLocation, userLocation, userLocationSource]);
 
   const handleBestSellerClick = (item) => {
     if (item.itemType === "category" && item.itemId) {

@@ -214,11 +214,15 @@ export default function PageNavbar({
         storedAddresses.find((addr) => addr?.isDefault === true || addr?.default === true) || storedAddresses[0] || null;
     }
 
-    // Always prefer saved/selected address for header display.
+    // Respect explicit user selection first (saved/current), then fall back.
+    const explicitlySelectedLocation =
+      (source === "saved" || source === "current") && storedLocation
+        ? storedLocation
+        : null;
     const preferredLocation =
-      defaultSavedAddress ||
-      (source === "saved" && storedLocation ? storedLocation : null) ||
+      explicitlySelectedLocation ||
       location ||
+      defaultSavedAddress ||
       storedLocation ||
       {};
     const mainLocation = extractMain(preferredLocation);
