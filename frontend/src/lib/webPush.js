@@ -131,8 +131,19 @@ const showForegroundPushPopup = async (payload = {}) => {
 };
 
 let foregroundUnsubscribe = null;
+let setupInFlightPromise = null;
+
+const isEmbeddedFlutterWebView = () => {
+  if (typeof window === "undefined") return false;
+  return Boolean(window.flutter_inappwebview);
+};
 
 export const setupWebPushForCurrentSession = async (pathname = "") => {
+  if (setupInFlightPromise) {
+    return setupInFlightPromise;
+  }
+
+  setupInFlightPromise = (async () => {
   if (typeof window === "undefined") return;
   if (!window.isSecureContext || !("serviceWorker" in navigator) || !("Notification" in window)) return;
 
@@ -156,6 +167,11 @@ export const setupWebPushForCurrentSession = async (pathname = "") => {
   }
 
   foregroundUnsubscribe = onMessage(messaging, (payload) => {
+    if (isEmbeddedFlutterWebView() && payload?.notification) {
+      // In Flutter WebView, native layer can already surface notification payloads.
+      // Skip browser popup to avoid double rendering.
+      return;
+    }
     showForegroundPushPopup(payload).catch(() => {});
   });
 
@@ -187,6 +203,12 @@ export const setupWebPushForCurrentSession = async (pathname = "") => {
 
   await updater(token, "web");
   localStorage.setItem(tokenCacheKey, token);
+  })()
+    .finally(() => {
+      setupInFlightPromise = null;
+    });
+
+  return setupInFlightPromise;
 };
 
 export const teardownWebPushListener = () => {

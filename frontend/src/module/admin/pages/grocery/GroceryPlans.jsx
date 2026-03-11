@@ -19,6 +19,7 @@ const DEFAULT_PLAN_FORM = {
   isActive: true,
   popular: false,
   offerIds: [],
+  zoneIds: [],
   benefitsText: "",
   vegProducts: [],
   nonVegProducts: [],
@@ -167,6 +168,7 @@ export default function GroceryPlans() {
   const [products, setProducts] = useState([])
   const [categories, setCategories] = useState([])
   const [subcategories, setSubcategories] = useState([])
+  const [zones, setZones] = useState([])
 
   const [planForm, setPlanForm] = useState(DEFAULT_PLAN_FORM)
   const [offerForm, setOfferForm] = useState(DEFAULT_OFFER_FORM)
@@ -183,18 +185,21 @@ export default function GroceryPlans() {
   const loadBaseData = async () => {
     setLoading(true)
     try {
-      const [planRes, offerRes, prodRes, catRes, subRes] = await Promise.all([
+      const [planRes, offerRes, prodRes, catRes, subRes, zoneRes] = await Promise.all([
         adminAPI.getGroceryPlans(),
         adminAPI.getGroceryPlanOffers(),
         adminAPI.getGroceryProducts(),
         adminAPI.getGroceryCategories(),
         adminAPI.getGrocerySubcategories(),
+        adminAPI.getZones({ limit: 1000, platform: "mogrocery", isActive: true }),
       ])
       setPlans(Array.isArray(planRes?.data?.data) ? planRes.data.data : [])
       setOffers(Array.isArray(offerRes?.data?.data) ? offerRes.data.data : [])
       setProducts(Array.isArray(prodRes?.data?.data) ? prodRes.data.data : [])
       setCategories(Array.isArray(catRes?.data?.data) ? catRes.data.data : [])
       setSubcategories(Array.isArray(subRes?.data?.data) ? subRes.data.data : [])
+      const zoneList = Array.isArray(zoneRes?.data?.data?.zones) ? zoneRes.data.data.zones : []
+      setZones(zoneList)
     } catch (error) {
       toast.error(error?.response?.data?.message || "Failed to load plan data")
     } finally {
@@ -246,6 +251,7 @@ export default function GroceryPlans() {
       isActive: plan.isActive !== false,
       popular: Boolean(plan.popular),
       offerIds: toIds(plan.offerIds),
+      zoneIds: toIds(plan.zoneIds),
       benefitsText: Array.isArray(plan.benefits) ? plan.benefits.join("\n") : "",
       vegProducts: normalizePlanProducts(plan.vegProducts),
       nonVegProducts: normalizePlanProducts(plan.nonVegProducts),
@@ -335,6 +341,7 @@ export default function GroceryPlans() {
         order: Number(planForm.order || 0),
         isActive: Boolean(planForm.isActive),
         popular: Boolean(planForm.popular),
+        zoneIds: toIds(planForm.zoneIds),
         benefits: parseBenefits(planForm.benefitsText || ""),
         vegProducts: normalizedVegProducts,
         nonVegProducts: normalizedNonVegProducts,
@@ -413,6 +420,14 @@ export default function GroceryPlans() {
   const productOptions = useMemo(() => products.map((item) => ({ id: item._id, name: item.name || "Untitled Product" })), [products])
   const categoryOptions = useMemo(() => categories.map((item) => ({ id: item._id, name: item.name || "Untitled Category" })), [categories])
   const subcategoryOptions = useMemo(() => subcategories.map((item) => ({ id: item._id, name: item.name || "Untitled Subcategory" })), [subcategories])
+  const zoneOptions = useMemo(
+    () =>
+      zones.map((zone) => ({
+        id: zone._id,
+        name: zone.name || zone.zoneName || zone.serviceLocation || "Unnamed Zone",
+      })),
+    [zones]
+  )
 
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
@@ -462,6 +477,7 @@ export default function GroceryPlans() {
                 <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Name</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Price</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Duration</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Zones</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-slate-700 uppercase">Offers</th>
                 <th className="px-4 py-3 text-right text-xs font-bold text-slate-700 uppercase">Actions</th>
               </tr>
@@ -472,6 +488,16 @@ export default function GroceryPlans() {
                   <td className="px-4 py-3">{plan.name}</td>
                   <td className="px-4 py-3">Rs {Number(plan.price || 0).toLocaleString("en-IN")}</td>
                   <td className="px-4 py-3">{plan.durationDays} days</td>
+                  <td className="px-4 py-3">
+                    {Array.isArray(plan.zoneIds) && plan.zoneIds.length > 0 ? (() => {
+                      const labels = plan.zoneIds
+                        .map((zone) => (typeof zone === "string" ? "" : (zone?.name || zone?.zoneName || zone?.serviceLocation || "")))
+                        .filter(Boolean)
+                      if (labels.length === 0) return `${plan.zoneIds.length} selected`
+                      const shown = labels.slice(0, 2).join(", ")
+                      return `${shown}${labels.length > 2 ? ` +${labels.length - 2}` : ""}`
+                    })() : "All zones"}
+                  </td>
                   <td className="px-4 py-3">{Array.isArray(plan.offerIds) ? plan.offerIds.length : 0}</td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2">
@@ -637,6 +663,15 @@ export default function GroceryPlans() {
                 <input type="checkbox" checked={planForm.popular} onChange={(e) => setPlanForm({ ...planForm, popular: e.target.checked })} />
                 Mark as popular
               </label>
+            </div>
+            <div>
+              <MultiSelectPicker
+                label="Applicable Zones"
+                options={zoneOptions}
+                selectedIds={planForm.zoneIds}
+                onChange={(next) => setPlanForm((prev) => ({ ...prev, zoneIds: next }))}
+              />
+              <p className="text-xs text-slate-500 mt-1">No zone selected means this plan is available in all grocery zones.</p>
             </div>
             <div>
               <MultiSelectPicker

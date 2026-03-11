@@ -131,6 +131,20 @@ const normalizeObjectIdArray = (values) => {
   return Array.from(unique);
 };
 
+const normalizePlanZoneIds = async (zoneIds) => {
+  const normalizedZoneIds = normalizeObjectIdArray(zoneIds);
+  if (normalizedZoneIds.length === 0) return [];
+
+  const zones = await Zone.find({
+    _id: { $in: normalizedZoneIds },
+    platform: 'mogrocery',
+  })
+    .select('_id')
+    .lean();
+
+  return zones.map((zone) => zone._id.toString());
+};
+
 const normalizePercentage = (value) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return 0;
@@ -901,14 +915,24 @@ export const deleteProduct = async (req, res) => {
 
 export const getPlans = async (req, res) => {
   try {
-    const { activeOnly = 'true' } = req.query;
+    const { activeOnly = 'true', zoneId } = req.query;
     const filter = {};
     if (activeOnly !== 'false') {
       filter.isActive = true;
     }
+    if (zoneId !== undefined && zoneId !== null && String(zoneId).trim() !== '') {
+      if (!isValidObjectId(zoneId)) {
+        return res.status(400).json({ success: false, message: 'Invalid zoneId' });
+      }
+      filter.$or = [
+        { zoneIds: new mongoose.Types.ObjectId(zoneId) },
+        { zoneIds: { $size: 0 } },
+      ];
+    }
 
     const plans = await GroceryPlan.find(filter)
       .populate('offerIds', 'name discountType discountValue freeDelivery isActive')
+      .populate('zoneIds', 'name zoneName serviceLocation isActive platform')
       .sort({ order: 1, createdAt: -1 })
       .lean();
     return res.status(200).json({
@@ -934,6 +958,7 @@ export const getPlanById = async (req, res) => {
 
     const plan = await GroceryPlan.findById(id)
       .populate('offerIds', 'name discountType discountValue freeDelivery isActive')
+      .populate('zoneIds', 'name zoneName serviceLocation isActive platform')
       .lean();
     if (!plan) {
       return res.status(404).json({ success: false, message: 'Plan not found' });
@@ -966,6 +991,7 @@ export const createPlan = async (req, res) => {
       vegProducts = [],
       nonVegProducts = [],
       offerIds = [],
+      zoneIds = [],
       order = 0,
       isActive = true,
     } = req.body;
@@ -989,6 +1015,7 @@ export const createPlan = async (req, res) => {
     const mergedProducts =
       normalizedProducts.length > 0 ? normalizedProducts : [...normalizedVegProducts, ...normalizedNonVegProducts];
     const normalizedOfferIds = normalizeObjectIdArray(offerIds);
+    const normalizedZoneIds = await normalizePlanZoneIds(zoneIds);
 
     const plan = await GroceryPlan.create({
       key: normalizedKey,
@@ -1009,6 +1036,7 @@ export const createPlan = async (req, res) => {
       vegProducts: normalizedVegProducts,
       nonVegProducts: normalizedNonVegProducts,
       offerIds: normalizedOfferIds,
+      zoneIds: normalizedZoneIds,
       order: Number(order) || 0,
       isActive: Boolean(isActive),
     });
@@ -1049,6 +1077,7 @@ export const updatePlan = async (req, res) => {
     if (update.vegProducts !== undefined) update.vegProducts = normalizePlanProducts(update.vegProducts);
     if (update.nonVegProducts !== undefined) update.nonVegProducts = normalizePlanProducts(update.nonVegProducts);
     if (update.offerIds !== undefined) update.offerIds = normalizeObjectIdArray(update.offerIds);
+    if (update.zoneIds !== undefined) update.zoneIds = await normalizePlanZoneIds(update.zoneIds);
 
     if (update.vegProducts !== undefined || update.nonVegProducts !== undefined) {
       const nextVegProducts = update.vegProducts ?? normalizePlanProducts(existing.vegProducts);

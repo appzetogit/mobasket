@@ -86,8 +86,16 @@ const ensureMessaging = () => {
   }
 
   messagingInstance = firebase.messaging();
-  messagingInstance.onBackgroundMessage((payload) => {
+  messagingInstance.onBackgroundMessage(async (payload) => {
     if (isDuplicatePush(payload)) {
+      return;
+    }
+
+    const windowClients = await clients.matchAll({ type: "window", includeUncontrolled: true });
+    const hasVisibleClient = windowClients.some(
+      (client) => client?.visibilityState === "visible" || client?.focused === true,
+    );
+    if (hasVisibleClient) {
       return;
     }
 
@@ -107,7 +115,7 @@ const ensureMessaging = () => {
       payload?.data?.url ||
       "/";
 
-    self.registration.showNotification(title, {
+    await self.registration.showNotification(title, {
       body,
       icon,
       data: { link, raw: payload?.data || {} },
