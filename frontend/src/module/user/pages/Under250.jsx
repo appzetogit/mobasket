@@ -21,7 +21,7 @@ import { restaurantAPI } from "@/lib/api"
 
 export default function Under250() {
   const { location } = useLocation()
-  const { zoneId, zoneStatus, isInService, isOutOfService } = useZone(location)
+  const { zoneId, loading: zoneLoading, isOutOfService } = useZone(location)
   const navigate = useNavigate()
   const { addToCart, updateQuantity, removeFromCart, getCartItem, cart } = useCart()
   const [activeCategory, setActiveCategory] = useState(null)
@@ -222,19 +222,12 @@ export default function Under250() {
     const fetchRestaurantsUnder250 = async () => {
       try {
         setLoadingRestaurants(true)
-        // Backend already returns all restaurants for this page.
-        // Retry without zoneId if cached zone is stale/invalid.
-        let response
-        try {
-          response = await restaurantAPI.getRestaurantsUnder250(zoneId)
-        } catch (err) {
-          const status = err?.response?.status
-          if (status === 400 && zoneId) {
-            response = await restaurantAPI.getRestaurantsUnder250()
-          } else {
-            throw err
-          }
+        if (!zoneId) {
+          setUnder250Restaurants([])
+          return
         }
+
+        const response = await restaurantAPI.getRestaurantsUnder250(zoneId)
 
         const restaurants = response?.data?.data?.restaurants
         setUnder250Restaurants(Array.isArray(restaurants) ? restaurants : [])
@@ -246,8 +239,15 @@ export default function Under250() {
       }
     }
 
+    if (zoneLoading) return
+    if (isOutOfService) {
+      setUnder250Restaurants([])
+      setLoadingRestaurants(false)
+      return
+    }
+
     fetchRestaurantsUnder250()
-  }, [zoneId, isOutOfService])
+  }, [zoneId, zoneLoading, isOutOfService])
 
   // Fetch categories from admin API
   useEffect(() => {
