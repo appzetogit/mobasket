@@ -1,11 +1,10 @@
 import { Link } from "react-router-dom";
 import { X, ChevronRight } from "lucide-react";
 import { useCart } from "../context/CartContext";
-import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useEffect } from "react";
 
 export default function StickyCartCard() {
-  const { cart, getCartCount, isGroceryCart } = useCart();
+  const { cart, getCartCount, activePlatform } = useCart();
   const [isVisible, setIsVisible] = useState(true);
   const [bottomPosition, setBottomPosition] = useState("bottom-[70px]"); // Fixed above bottom navigation
   const cartCount = getCartCount();
@@ -47,56 +46,14 @@ export default function StickyCartCard() {
   // Create restaurant slug from restaurant name
   const restaurantSlug = restaurantName.toLowerCase().replace(/\s+/g, "-");
 
-  // Calculate total price
-  const totalPrice = cart.reduce(
-    (sum, item) => sum + item.price * item.quantity * 83,
-    0,
-  );
-
-  // Animation variants for the popout effect
-  const cardVariants = {
-    initial: {
-      opacity: 1,
-      scale: 1,
-      y: 0,
-      rotate: 0,
-    },
-    animate: {
-      opacity: 1,
-      scale: 1,
-      y: 0,
-      rotate: 0,
-      transition: {
-        type: "spring",
-        stiffness: 300,
-        damping: 25,
-        mass: 0.8,
-      },
-    },
-    exit: {
-      opacity: 0,
-      scale: 0.8,
-      y: 100,
-      rotate: -5,
-      transition: {
-        duration: 0.4,
-        ease: [0.4, 0, 0.2, 1],
-      },
-    },
-  };
-
-  // Don't render if cart is empty or it's a grocery cart
-  if (cartCount === 0 || isGroceryCart()) return null;
+  // Don't render if cart is empty or active cart is grocery
+  if (cartCount === 0 || activePlatform === "mogrocery") return null;
 
   return (
-    <AnimatePresence>
-      {isVisible && (
-        <motion.div
+    <>
+      {isVisible ? (
+        <div
           className={`fixed ${bottomPosition} md:bottom-6 left-0 right-0 md:left-auto md:right-6 z-50 px-4 md:px-0 pb-4 md:pb-0 pointer-events-none`}
-          initial="initial"
-          animate="animate"
-          exit="exit"
-          variants={cardVariants}
         >
           <div className="max-w-7xl md:max-w-none mx-auto md:mx-0 pointer-events-auto">
             <div className="bg-white dark:bg-[#0a0a0a] dark:text-white rounded-3xl shadow-2xl border border-gray-200 dark:border-gray-800 overflow-hidden md:max-w-md md:w-[400px]">
@@ -140,20 +97,17 @@ export default function StickyCartCard() {
                 </Link>
 
                 {/* Close Button */}
-                <motion.button
+                <button
                   onClick={() => setIsVisible(false)}
                   className="flex-shrink-0 w-8 h-8 md:w-9 md:h-9 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
-                  whileHover={{ scale: 1.1, rotate: 90 }}
-                  whileTap={{ scale: 0.9 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 17 }}
                 >
                   <X className="h-4 w-4 md:h-5 md:w-5 text-gray-500 dark:text-gray-400" />
-                </motion.button>
+                </button>
               </div>
             </div>
           </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+        </div>
+      ) : null}
+    </>
   );
 }
