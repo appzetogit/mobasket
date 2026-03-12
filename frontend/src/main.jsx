@@ -201,7 +201,12 @@ console.log = (...args) => {
     logStr.includes('💰 Total Bonus Amount:') ||
     logStr.includes('🔄 Fetching active earning addons...') ||
     // --- Profile image logs ---
-    logStr.includes('Profile image data:')
+    logStr.includes('Profile image data:') ||
+    // --- Map / Live location update logs ---
+    logStr.includes('Map is ready, requesting user location...') ||
+    logStr.includes('🔵 Creating/updating blue dot:') ||
+    logStr.includes('✅✅✅ Blue dot and accuracy circle created successfully:') ||
+    logStr.includes('📍 Live location update:')
   ) {
     return
   }
