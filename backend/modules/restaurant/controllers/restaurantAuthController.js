@@ -119,6 +119,7 @@ const rejectIfGroceryPlatformRequest = (req, res) => {
 export const sendOTP = asyncHandler(async (req, res) => {
   if (rejectIfGroceryPlatformRequest(req, res)) return;
   const { phone, email, purpose = 'login' } = req.body;
+  const normalizedPhone = phone ? normalizePhoneNumber(phone) : null;
 
   // Validate that either phone or email is provided
   if (!phone && !email) {
@@ -129,6 +130,9 @@ export const sendOTP = asyncHandler(async (req, res) => {
   if (phone) {
     const phoneRegex = /^[+]?[(]?[0-9]{1,4}[)]?[-\s.]?[(]?[0-9]{1,4}[)]?[-\s.]?[0-9]{1,9}$/;
     if (!phoneRegex.test(phone)) {
+      return errorResponse(res, 400, 'Invalid phone number format');
+    }
+    if (!normalizedPhone) {
       return errorResponse(res, 400, 'Invalid phone number format');
     }
   }
@@ -142,7 +146,7 @@ export const sendOTP = asyncHandler(async (req, res) => {
   }
 
   try {
-    const result = await otpService.generateAndSendOTP(phone || null, purpose, email || null);
+    const result = await otpService.generateAndSendOTP(normalizedPhone || null, purpose, email || null);
     return successResponse(res, 200, result.message, {
       expiresIn: result.expiresIn,
       identifierType: result.identifierType
@@ -182,10 +186,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       // Registration flow
       // Check if restaurant already exists with normalized phone
       // For phone, search in both formats (with and without country code) to handle old data
-      const findQuery = normalizedPhone
-        ? buildPhoneQuery(normalizedPhone)
-        : { email: email?.toLowerCase().trim() };
-      restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(findQuery));
+      if (normalizedPhone) {
+        restaurant = await findRestaurantByNormalizedPhone(normalizedPhone);
+      } else {
+        restaurant = await Restaurant.findOne(
+          withRestaurantPlatformFilter({ email: email?.toLowerCase().trim() })
+        );
+      }
 
       if (restaurant) {
         return errorResponse(res, 400, `Restaurant already exists with this ${identifierType}. Please login.`);
@@ -197,7 +204,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
 
       // Verify OTP (phone or email) before creating restaurant
-      await otpService.verifyOTP(phone || null, otp, purpose, email || null);
+      await otpService.verifyOTP(normalizedPhone || null, otp, purpose, email || null);
 
       const restaurantData = {
         name,
@@ -267,8 +274,8 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               error: createError.message,
               keyPattern: createError.keyPattern
             });
-            // Try to find existing restaurant by phone
-            restaurant = await Restaurant.findOne(withRestaurantPlatformFilter({ phone }));
+            // Try to find existing restaurant by phone (search in both formats)
+            restaurant = await findRestaurantByNormalizedPhone(normalizedPhone);
             if (restaurant) {
               return errorResponse(res, 400, `Restaurant already exists with this phone number. Please login.`);
             }
@@ -303,8 +310,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               // Check if it's still a duplicate key error
               if (retryError.code === 11000) {
                 // Try to find restaurant again (search in both formats)
-                const phoneQuery = buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone };
-                restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(phoneQuery));
+                restaurant = await findRestaurantByNormalizedPhone(normalizedPhone);
                 if (restaurant) {
                   return errorResponse(res, 400, `Restaurant already exists with this phone number. Please login.`);
                 }
@@ -313,8 +319,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             }
           } else if (createError.keyPattern && createError.keyPattern.phone) {
             // Phone duplicate key error - search in both formats
-            const phoneQuery = buildPhoneQuery(normalizedPhone) || { phone: normalizedPhone };
-            restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(phoneQuery));
+            restaurant = await findRestaurantByNormalizedPhone(normalizedPhone);
             if (restaurant) {
               return errorResponse(res, 400, `Restaurant already exists with this phone number. Please login.`);
             }
@@ -342,10 +347,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               });
             } catch (retryError) {
               // If still fails, check if restaurant exists
-              const findQuery = normalizedPhone
-                ? { phone: normalizedPhone }
-                : { email: email?.toLowerCase().trim() };
-              restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(findQuery));
+              if (normalizedPhone) {
+                restaurant = await findRestaurantByNormalizedPhone(normalizedPhone);
+              } else {
+                restaurant = await Restaurant.findOne(
+                  withRestaurantPlatformFilter({ email: email?.toLowerCase().trim() })
+                );
+              }
               if (!restaurant) {
                 throw retryError;
               }
@@ -353,10 +361,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
             }
           } else {
             // Other duplicate key errors (email, phone)
-            const findQuery = normalizedPhone
-              ? { phone: normalizedPhone }
-              : { email: email?.toLowerCase().trim() };
-            restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(findQuery));
+            if (normalizedPhone) {
+              restaurant = await findRestaurantByNormalizedPhone(normalizedPhone);
+            } else {
+              restaurant = await Restaurant.findOne(
+                withRestaurantPlatformFilter({ email: email?.toLowerCase().trim() })
+              );
+            }
             if (!restaurant) {
               throw createError;
             }
@@ -369,10 +380,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
     } else {
       // Login (with optional auto-registration)
       // For phone, search across all phone-bearing fields and common formats.
-      const findQuery = normalizedPhone
-        ? buildPhoneQuery(normalizedPhone)
-        : { email: email?.toLowerCase().trim() };
-      restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(findQuery));
+      if (normalizedPhone) {
+        restaurant = await findRestaurantByNormalizedPhone(normalizedPhone);
+      } else {
+        restaurant = await Restaurant.findOne(
+          withRestaurantPlatformFilter({ email: email?.toLowerCase().trim() })
+        );
+      }
 
       if (!restaurant && !name) {
         // Tell the client that we need restaurant name to proceed with auto-registration
@@ -389,7 +403,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           return errorResponse(res, 404, 'No restaurant account found with this email.');
         }
         // Verify OTP for password reset
-        await otpService.verifyOTP(phone || null, otp, purpose, email || null);
+        await otpService.verifyOTP(normalizedPhone || null, otp, purpose, email || null);
         return successResponse(res, 200, 'OTP verified. You can now reset your password.', {
           verified: true,
           email: restaurant.email
@@ -397,7 +411,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       }
 
       // Verify OTP first
-      await otpService.verifyOTP(phone || null, otp, purpose, email || null);
+      await otpService.verifyOTP(normalizedPhone || null, otp, purpose, email || null);
 
       if (!restaurant) {
         // Auto-register new restaurant after OTP verification
@@ -465,8 +479,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
                 keyPattern: createError.keyPattern
               });
               // Try to find existing restaurant by phone (search in both formats)
-              const phoneQuery = buildPhoneQuery(normalizedPhone) || { phone };
-              restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(phoneQuery));
+              restaurant = await findRestaurantByNormalizedPhone(normalizedPhone);
               if (restaurant) {
                 logger.info(`Restaurant found after email null duplicate key error: ${restaurant._id}`);
                 // Continue with login flow
@@ -502,8 +515,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
                   // Check if it's still a duplicate key error
                   if (retryError.code === 11000) {
                     // Try to find restaurant again (search in both formats)
-                    const phoneQuery = buildPhoneQuery(normalizedPhone) || { phone };
-                    restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(phoneQuery));
+                    restaurant = await findRestaurantByNormalizedPhone(normalizedPhone);
                     if (restaurant) {
                       logger.info(`Restaurant found after retry error: ${restaurant._id}`);
                       // Continue with login flow
@@ -517,7 +529,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               }
             } else if (createError.keyPattern && createError.keyPattern.phone) {
               // Phone duplicate key error
-              restaurant = await Restaurant.findOne(withRestaurantPlatformFilter({ phone }));
+              restaurant = await findRestaurantByNormalizedPhone(normalizedPhone);
               if (restaurant) {
                 logger.info(`Restaurant found after phone duplicate key error: ${restaurant._id}`);
                 // Continue with login flow
@@ -547,10 +559,11 @@ export const verifyOTP = asyncHandler(async (req, res) => {
                 });
               } catch (retryError) {
                 // If still fails, check if restaurant exists
-                const findQuery = phone
-                  ? { phone }
-                  : { email };
-                restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(findQuery));
+                if (normalizedPhone) {
+                  restaurant = await findRestaurantByNormalizedPhone(normalizedPhone);
+                } else {
+                  restaurant = await Restaurant.findOne(withRestaurantPlatformFilter({ email }));
+                }
                 if (!restaurant) {
                   throw retryError;
                 }
@@ -558,10 +571,11 @@ export const verifyOTP = asyncHandler(async (req, res) => {
               }
             } else {
               // Other duplicate key errors (email, phone)
-              const findQuery = phone
-                ? { phone }
-                : { email };
-              restaurant = await Restaurant.findOne(withRestaurantPlatformFilter(findQuery));
+              if (normalizedPhone) {
+                restaurant = await findRestaurantByNormalizedPhone(normalizedPhone);
+              } else {
+                restaurant = await Restaurant.findOne(withRestaurantPlatformFilter({ email }));
+              }
               if (!restaurant) {
                 throw createError;
               }
@@ -654,12 +668,18 @@ export const register = asyncHandler(async (req, res) => {
   }
 
   // Check if restaurant already exists
-  const existingRestaurant = await Restaurant.findOne(withRestaurantPlatformFilter({
-    $or: [
-      { email: email.toLowerCase().trim() },
-      ...(normalizedPhone ? [{ phone: normalizedPhone }] : [])
-    ]
-  }));
+  const existingQueryOr = [{ email: email.toLowerCase().trim() }];
+  if (normalizedPhone) {
+    const phoneQuery = buildPhoneQuery(normalizedPhone);
+    if (phoneQuery?.$or?.length) {
+      existingQueryOr.push(...phoneQuery.$or);
+    } else {
+      existingQueryOr.push({ phone: normalizedPhone });
+    }
+  }
+  const existingRestaurant = await Restaurant.findOne(
+    withRestaurantPlatformFilter({ $or: existingQueryOr })
+  );
 
   if (existingRestaurant) {
     if (existingRestaurant.email === email.toLowerCase().trim()) {
@@ -924,6 +944,38 @@ const normalizeRestaurantOnboardingState = (restaurant) => {
   }
 
   return onboarding;
+};
+
+/**
+ * Find restaurant by phone deterministically across legacy formats.
+ * Prioritizes exact normalized phone on the primary `phone` field to avoid ambiguity.
+ */
+const findRestaurantByNormalizedPhone = async (normalizedPhone) => {
+  const phoneQuery = buildPhoneQuery(normalizedPhone);
+  if (!phoneQuery) return null;
+
+  const matches = await Restaurant.find(withRestaurantPlatformFilter(phoneQuery));
+  if (!matches || matches.length === 0) return null;
+
+  const scoreMatch = (restaurant) => {
+    let score = 0;
+    const phone = String(restaurant?.phone || '').trim();
+    const ownerPhone = String(restaurant?.ownerPhone || '').trim();
+    const primaryContactNumber = String(restaurant?.primaryContactNumber || '').trim();
+
+    if (phone && normalizePhoneNumber(phone) === normalizedPhone) score += 100;
+    if (phone === normalizedPhone) score += 120;
+    if (ownerPhone && normalizePhoneNumber(ownerPhone) === normalizedPhone) score += 60;
+    if (primaryContactNumber && normalizePhoneNumber(primaryContactNumber) === normalizedPhone) score += 40;
+    if (restaurant?.phoneVerified) score += 10;
+    if (restaurant?.status === 'active' || restaurant?.status === 'approved') score += 10;
+    if (restaurant?.isActive) score += 5;
+
+    return score;
+  };
+
+  matches.sort((a, b) => scoreMatch(b) - scoreMatch(a));
+  return matches[0];
 };
 
 /**
