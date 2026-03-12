@@ -5,10 +5,12 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function StickyCartCard() {
-  const { cart, getCartCount, isGroceryCart } = useCart();
+  const { cart, getCartCount, isGroceryItem } = useCart();
   const [isVisible, setIsVisible] = useState(true);
   const [bottomPosition, setBottomPosition] = useState("bottom-[70px]"); // Fixed above bottom navigation
   const cartCount = getCartCount();
+  const hasGroceryItems =
+    typeof isGroceryItem === "function" && cart.some((item) => isGroceryItem(item));
 
   // Set fixed position above bottom navigation (no scroll-based movement)
   useEffect(() => {
@@ -86,7 +88,7 @@ export default function StickyCartCard() {
   };
 
   // Don't render if cart is empty or it's a grocery cart
-  if (cartCount === 0 || isGroceryCart()) return null;
+  if (cartCount === 0 || hasGroceryItems) return null;
 
   return (
     <AnimatePresence>

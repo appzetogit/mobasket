@@ -1196,13 +1196,15 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       .limit(100); // Limit to first 100 restaurants for performance
 
     restaurants = restaurants.filter((restaurant) => {
-      const lat = Number(restaurant?.location?.latitude ?? restaurant?.location?.coordinates?.[1]);
-      const lng = Number(restaurant?.location?.longitude ?? restaurant?.location?.coordinates?.[0]);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+      const restaurantZoneIds = getNormalizedEntityZoneIds(restaurant, activeZones);
+      if (restaurantZoneIds.length === 0) return false;
+      if (userZoneIdNormalized && !restaurantZoneIds.includes(userZoneIdNormalized)) return false;
 
-      const restaurantZoneId = getRestaurantZoneId(lat, lng, activeZones);
-      if (!restaurantZoneId) return false;
-      if (userZoneIdNormalized && restaurantZoneId !== userZoneIdNormalized) return false;
+      restaurant.zoneIds = restaurantZoneIds;
+      restaurant.zoneId = userZoneIdNormalized && restaurantZoneIds.includes(userZoneIdNormalized)
+        ? userZoneIdNormalized
+        : restaurantZoneIds[0];
+
       return true;
     });
 

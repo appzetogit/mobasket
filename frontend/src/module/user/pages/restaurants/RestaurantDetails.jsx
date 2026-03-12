@@ -111,6 +111,15 @@ const normalizeSlugLike = (value = "") =>
 
 const toCompactSlug = (value = "") => normalizeSlugLike(value).replace(/-/g, "");
 
+const shouldPreferRestaurantApi = (value = "") => {
+  const normalizedValue = String(value || "").trim().toLowerCase();
+  return (
+    /^restaurant-[a-z0-9-]+$/.test(normalizedValue) ||
+    /^rest-[a-z0-9-]+$/.test(normalizedValue) ||
+    /^[a-f0-9]{24}$/.test(normalizedValue)
+  );
+};
+
 const levenshteinDistance = (a = "", b = "") => {
   const left = String(a);
   const right = String(b);
@@ -405,14 +414,8 @@ export default function RestaurantDetails() {
 
       });
 
-    } catch (error) {
-
-      if (error?.response?.status !== 404) {
-
-        console.warn("Menu refresh failed:", error?.message || error);
-
-      }
-
+    } catch {
+      // Ignore background refresh failures.
     }
 
   }, [restaurant?.id, restaurant?.restaurantId, restaurant?._id]);
@@ -579,17 +582,12 @@ export default function RestaurantDetails() {
                   }
                   : prev,
               );
-            } catch (ordersError) {
-              console.warn(
-                "Could not build personalized recommendations:",
-                ordersError?.message || ordersError,
-              );
+            } catch {
             }
           }, 0);
         }
       } catch (menuError) {
         if (menuError.response && menuError.response.status === 404) {
-          console.log("⚠️ Menu not found for this restaurant (might be a dining-only listing).");
         } else {
           console.error("❌ Error fetching menu:", menuError);
         }
@@ -820,11 +818,35 @@ export default function RestaurantDetails() {
 
         let apiRestaurant = null;
 
+        if (shouldPreferRestaurantApi(slug)) {
+
+          try {
+
+            response = await restaurantAPI.getRestaurantById(slug);
+
+            if (response.data && response.data.success && response.data.data) {
+
+              apiRestaurant = response.data.data;
+
+            }
+
+          } catch (directLookupError) {
+
+            if (directLookupError.response?.status !== 404) {
+
+              throw directLookupError;
+
+            }
+
+          }
+
+        }
+
 
 
         // Try dining API first
 
-        try {
+        if (!apiRestaurant) try {
 
           response = await diningAPI.getRestaurantBySlug(slug);
 
@@ -840,11 +862,6 @@ export default function RestaurantDetails() {
 
           if (diningError.response?.status === 404) {
 
-            console.log(
-
-              "⚠️ Restaurant not found in dining API, trying restaurant API...",
-
-            );
 
             try {
 
@@ -868,13 +885,6 @@ export default function RestaurantDetails() {
 
                   apiRestaurant = response.data.data;
 
-                  console.log(
-
-                    "✅ Found restaurant in restaurant API by slug/ID:",
-
-                    apiRestaurant,
-
-                  );
 
                 }
 
@@ -882,11 +892,6 @@ export default function RestaurantDetails() {
 
                 // If direct lookup fails, try searching by name (requires zoneId)
 
-                console.log(
-
-                  "⚠️ Direct lookup failed, trying search by name...",
-
-                );
 
 
 
@@ -894,11 +899,6 @@ export default function RestaurantDetails() {
 
                 if (!zoneId) {
 
-                  console.warn(
-
-                    "⚠️ User zone not available, cannot search restaurants. Restaurant may not be found.",
-
-                  );
 
                   // Don't throw error - let it fall through to show "Restaurant not found" message
 
@@ -968,13 +968,6 @@ export default function RestaurantDetails() {
 
                       apiRestaurant = fullResponse.data.data;
 
-                      console.log(
-
-                        "✅ Found restaurant in restaurant API by name search:",
-
-                        apiRestaurant,
-
-                      );
 
                     }
 
@@ -1016,21 +1009,10 @@ export default function RestaurantDetails() {
 
         if (apiRestaurant) {
 
-          console.log("📋 Restaurant data keys:", Object.keys(apiRestaurant));
 
-          console.log("📋 Restaurant name field:", apiRestaurant?.name);
 
-          console.log(
 
-            "📋 Restaurant restaurantId:",
 
-            apiRestaurant?.restaurantId,
-
-          );
-
-          console.log("📋 Restaurant _id:", apiRestaurant?._id);
-
-          console.log("📋 Restaurant.restaurant:", apiRestaurant?.restaurant);
 
 
 
@@ -1292,13 +1274,6 @@ export default function RestaurantDetails() {
 
             actualRestaurant?.location || apiRestaurant?.location;
 
-          console.log(
-
-            "📍 formattedAddress field:",
-
-            locationObj?.formattedAddress,
-
-          );
 
           const formattedAddress = formatRestaurantAddress(locationObj);
 
@@ -1360,15 +1335,6 @@ export default function RestaurantDetails() {
 
 
 
-          console.log("📍 Restaurant coordinates:", {
-
-            restaurantLat,
-
-            restaurantLng,
-
-            locationObj,
-
-          });
 
 
 
@@ -1432,41 +1398,9 @@ export default function RestaurantDetails() {
 
             }
 
-            console.log(
-
-              "✅ Calculated distance from user to restaurant:",
-
-              calculatedDistance,
-
-              "km:",
-
-              distanceInKm,
-
-            );
 
           } else {
 
-            console.warn(
-
-              "⚠️ Cannot calculate distance - missing coordinates:",
-
-              {
-
-                hasUserLocation: !!(userLat && userLng),
-
-                hasRestaurantLocation: !!(restaurantLat && restaurantLng),
-
-                userLat,
-
-                userLng,
-
-                restaurantLat,
-
-                restaurantLng,
-
-              },
-
-            );
 
           }
 
@@ -1764,13 +1698,6 @@ export default function RestaurantDetails() {
 
 
 
-          console.log(
-
-            "✅ Restaurant ID for menu fetch:",
-
-            transformedRestaurant.id,
-
-          );
 
 
 
@@ -1800,11 +1727,6 @@ export default function RestaurantDetails() {
 
           if (!restaurantIdForMenu) {
 
-            console.warn(
-
-              "⚠️ No restaurant ID available, searching for restaurant by name...",
-
-            );
 
             try {
 
@@ -1812,11 +1734,6 @@ export default function RestaurantDetails() {
 
               if (!zoneId) {
 
-                console.warn(
-
-                  "⚠️ User zone not available, cannot search restaurants. Menu may not load.",
-
-                );
 
                 // Continue without menu - restaurant details are still available
 
@@ -1868,13 +1785,6 @@ export default function RestaurantDetails() {
 
                   matchingRestaurant.id;
 
-                console.log(
-
-                  "✅ Found matching restaurant by name, ID:",
-
-                  restaurantIdForMenu,
-
-                );
 
 
 
@@ -1908,13 +1818,6 @@ export default function RestaurantDetails() {
 
             try {
 
-              console.log(
-
-                "📋 Fetching menu for restaurant ID:",
-
-                restaurantIdForMenu,
-
-              );
 
               const menuResponse =
 
@@ -2148,7 +2051,6 @@ export default function RestaurantDetails() {
 
                 } catch (ordersError) {
 
-                  console.warn("Could not build personalized recommendations:", ordersError?.message || ordersError);
 
                 }
 
@@ -2156,27 +2058,6 @@ export default function RestaurantDetails() {
 
                 // Debug log to check preparationTime in menu sections
 
-                console.log(
-
-                  "Menu sections with preparationTime:",
-
-                  menuSections.map((section) => ({
-
-                    sectionName: section.name,
-
-                    items:
-
-                      section.items?.map((item) => ({
-
-                        name: item.name,
-
-                        preparationTime: item.preparationTime,
-
-                      })) || [],
-
-                  })),
-
-                );
 
 
 
@@ -2224,13 +2105,6 @@ export default function RestaurantDetails() {
 
 
 
-                console.log(
-
-                  "Fetched menu sections with recommended items:",
-
-                  finalMenuSections,
-
-                );
 
               }
 
@@ -2238,11 +2112,6 @@ export default function RestaurantDetails() {
 
               if (menuError.response && menuError.response.status === 404) {
 
-                console.log(
-
-                  "⚠️ Menu not found for this restaurant (might be a dining-only listing).",
-
-                );
 
               } else {
 
@@ -2256,13 +2125,6 @@ export default function RestaurantDetails() {
 
             try {
 
-              console.log(
-
-                "📋 Fetching inventory for restaurant ID:",
-
-                restaurantIdForMenu,
-
-              );
 
               const inventoryResponse =
 
@@ -2354,13 +2216,6 @@ export default function RestaurantDetails() {
 
                 }));
 
-                console.log(
-
-                  "✅ Fetched and normalized inventory categories:",
-
-                  normalizedInventory,
-
-                );
 
               }
 
@@ -2374,11 +2229,6 @@ export default function RestaurantDetails() {
 
               ) {
 
-                console.log(
-
-                  "⚠️ Inventory not found for this restaurant (might be a dining-only listing).",
-
-                );
 
               } else {
 
@@ -2448,7 +2298,6 @@ export default function RestaurantDetails() {
 
           // 404 error - restaurant doesn't exist in database
 
-          console.log(`Restaurant "${slug}" not found in database`);
 
           setRestaurantError("Restaurant not found");
 
@@ -2493,11 +2342,6 @@ export default function RestaurantDetails() {
 
     if (loadingZone) {
 
-      console.log(
-
-        "⏳ Waiting for zone detection before fetching restaurant...",
-
-      );
 
       return;
 
@@ -2783,17 +2627,6 @@ export default function RestaurantDetails() {
 
       if (calculatedDistance !== prevDistanceRef.current) {
 
-        console.log(
-
-          "🔄 Recalculated distance from user to restaurant:",
-
-          calculatedDistance,
-
-          "km:",
-
-          distanceInKm,
-
-        );
 
         prevDistanceRef.current = calculatedDistance;
 
@@ -3057,19 +2890,6 @@ export default function RestaurantDetails() {
 
     // Log for debugging
 
-    console.log("🛒 Adding item to cart:", {
-
-      itemName: item.name,
-
-      restaurantName: restaurant.name,
-
-      restaurantId: validRestaurantId,
-
-      restaurant_id: restaurant._id,
-
-      restaurant_restaurantId: restaurant.restaurantId,
-
-    });
 
 
 
@@ -5201,17 +5021,6 @@ export default function RestaurantDetails() {
 
                           if (item.preparationTime) {
 
-                            console.log(
-
-                              `[FRONTEND] Item "${item.name}" preparationTime:`,
-
-                              item.preparationTime,
-
-                              "Type:",
-
-                              typeof item.preparationTime,
-
-                            );
 
                           }
 
@@ -5869,13 +5678,6 @@ export default function RestaurantDetails() {
 
                                           if (item.preparationTime) {
 
-                                            console.log(
-
-                                              `[FRONTEND] Subsection item "${item.name}" preparationTime:`,
-
-                                              item.preparationTime,
-
-                                            );
 
                                           }
 

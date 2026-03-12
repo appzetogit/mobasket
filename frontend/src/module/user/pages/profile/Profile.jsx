@@ -199,31 +199,6 @@ export default function Profile() {
       (completedRequiredFields / totalRequiredFields) * 100,
     );
 
-    // Always log for debugging (remove in production if needed)
-    console.log("?? Profile completion check:", {
-      requiredFields,
-      completedRequiredFields,
-      totalRequiredFields,
-      percentage,
-      fieldStatus: {
-        name: hasName ? "?" : "?",
-        contact: hasContact ? "?" : "?",
-        profileImage: hasImage ? "?" : "?",
-        dateOfBirth: hasDateOfBirth ? "?" : "?",
-        gender: hasGender ? "?" : "?",
-      },
-      rawData: {
-        name: userProfile.name || "missing",
-        phone: userProfile.phone || "missing",
-        email: userProfile.email || "missing",
-        profileImage: userProfile.profileImage ? "exists" : "missing",
-        dateOfBirth: userProfile.dateOfBirth
-          ? String(userProfile.dateOfBirth)
-          : "missing",
-        gender: userProfile.gender || "missing",
-      },
-    });
-
     return percentage;
   };
 
@@ -358,12 +333,17 @@ export default function Profile() {
         const apiKey = await getGoogleMapsApiKey();
         if (!apiKey || !isMounted) return;
 
-        const loader = new Loader({
-          apiKey,
-          version: "weekly",
-          libraries: ["places"],
-        });
-        const google = await loader.load();
+        const hasLoadedGooglePlaces =
+          typeof window !== "undefined" &&
+          window.google?.maps?.places;
+
+        const google = hasLoadedGooglePlaces
+          ? window.google
+          : await new Loader({
+            apiKey,
+            version: "weekly",
+            libraries: ["places"],
+          }).load();
         if (!isMounted) return;
 
         autocompleteServiceRef.current = new google.maps.places.AutocompleteService();

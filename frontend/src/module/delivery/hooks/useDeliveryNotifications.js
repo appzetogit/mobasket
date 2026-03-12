@@ -612,13 +612,13 @@ export const useDeliveryNotifications = (options = {}) => {
   }, [deliveryPartnerId, enabled, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, triggerOrderBuzz]);
 
   // Helper functions
-  const clearNewOrder = () => {
+  const clearNewOrder = useCallback(() => {
     setNewOrder(null);
-  };
+  }, []);
 
-  const clearOrderReady = () => {
+  const clearOrderReady = useCallback(() => {
     setOrderReady(null);
-  };
+  }, []);
 
   return {
     newOrder,

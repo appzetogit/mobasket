@@ -8,6 +8,57 @@ import { ref as rtdbRef, onValue } from 'firebase/database';
 import { realtimeDb } from '@/lib/firebase';
 import './DeliveryTrackingMap.css';
 
+const trackingSocketPool = new Map();
+
+function getTrackingSocket(orderId, backendUrl) {
+  const poolKey = `${backendUrl}::${orderId}`;
+  let entry = trackingSocketPool.get(poolKey);
+
+  if (!entry) {
+    entry = {
+      socket: io(backendUrl, {
+        transports: ['websocket', 'polling'],
+        reconnection: true,
+        reconnectionDelay: 500,
+        reconnectionAttempts: 5,
+        timeout: 5000
+      }),
+      refCount: 0,
+      cleanupTimer: null
+    };
+    trackingSocketPool.set(poolKey, entry);
+  }
+
+  if (entry.cleanupTimer) {
+    clearTimeout(entry.cleanupTimer);
+    entry.cleanupTimer = null;
+  }
+
+  entry.refCount += 1;
+  return { poolKey, entry };
+}
+
+function releaseTrackingSocket(poolKey) {
+  const entry = trackingSocketPool.get(poolKey);
+  if (!entry) return;
+
+  entry.refCount = Math.max(0, entry.refCount - 1);
+  if (entry.refCount > 0 || entry.cleanupTimer) return;
+
+  entry.cleanupTimer = setTimeout(() => {
+    const latestEntry = trackingSocketPool.get(poolKey);
+    if (!latestEntry || latestEntry.refCount > 0) return;
+
+    if (latestEntry.socket?._locationRequestInterval) {
+      clearInterval(latestEntry.socket._locationRequestInterval);
+      latestEntry.socket._locationRequestInterval = null;
+    }
+
+    latestEntry.socket?.disconnect();
+    trackingSocketPool.delete(poolKey);
+  }, 250);
+}
+
 // Helper function to calculate Haversine distance
 function calculateHaversineDistance(lat1, lng1, lat2, lng2) {
   const R = 6371000; // Earth radius in meters
@@ -534,7 +585,6 @@ const DeliveryTrackingMap = ({
 
       if (!bikeMarkerRef.current) {
         // Create bike marker with the same icon as delivery boy's map
-        console.log('🚴 Map instance:', !!mapInstance.current);
         
         // Create bike icon configuration
         let bikeIcon = {
@@ -592,18 +642,6 @@ const DeliveryTrackingMap = ({
           const markerVisible = bikeMarkerRef.current.getVisible();
           const markerPosition = bikeMarkerRef.current.getPosition();
           
-          console.log('✅✅✅ Bike marker created and visible at:', { 
-            lat, 
-            lng, 
-            heading,
-            marker: bikeMarkerRef.current,
-            isVisible: markerVisible,
-            position: markerPosition ? { lat: markerPosition.lat(), lng: markerPosition.lng() } : null,
-            map: markerMap,
-            iconUrl: bikeLogo,
-            mapBounds: markerMap ? markerMap.getBounds() : null,
-            hasRouteAnimation: !!animationControllerRef.current
-          });
           
           if (!markerMap) {
             console.error('❌ Bike marker created but not on map! Re-adding...');
@@ -619,12 +657,6 @@ const DeliveryTrackingMap = ({
             if (bikeMarkerRef.current) {
               const finalMap = bikeMarkerRef.current.getMap();
               const finalVisible = bikeMarkerRef.current.getVisible();
-              console.log('🔍 Bike marker verification after 500ms:', {
-                exists: !!bikeMarkerRef.current,
-                onMap: !!finalMap,
-                visible: finalVisible,
-                position: bikeMarkerRef.current.getPosition()
-              });
             }
           }, 500);
         } catch (markerError) {
@@ -646,7 +678,6 @@ const DeliveryTrackingMap = ({
               visible: true,
               zIndex: window.google.maps.Marker.MAX_ZINDEX + 3
             });
-            console.log('✅ Created fallback marker (orange circle)');
           } catch (fallbackError) {
             console.error('❌ Even fallback marker failed:', fallbackError);
           }
@@ -724,12 +755,6 @@ const DeliveryTrackingMap = ({
             
             // Use route-based animation controller if available
             if (animationControllerRef.current) {
-              console.log('🛵 Route-based animation (Rapido/Zomato style):', { 
-                progress, 
-                segmentIndex: nearest.segmentIndex,
-                onRoute: true,
-                snappedToRoad: true
-              });
               animationControllerRef.current.updatePosition(progress, heading || 0);
               animationControllerRef.current.lastProgress = progress;
             } else {
@@ -824,22 +849,20 @@ const DeliveryTrackingMap = ({
       )
     );
 
-    socketRef.current = io(backendUrl, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionDelay: 500,
-      reconnectionAttempts: 5,
-      timeout: 5000
-    });
+    const { poolKey, entry } = getTrackingSocket(orderId, backendUrl);
+    socketRef.current = entry.socket;
 
-    socketRef.current.on('connect', () => {
-      console.log('Socket connected for order:', orderId);
+    const handleConnect = () => {
       orderAliases.forEach((alias) => {
         socketRef.current.emit('join-order-tracking', alias);
         socketRef.current.emit('request-current-location', alias);
       });
 
       // Fallback sync: aggressively request current location so user map stays in sync with rider app.
+      if (socketRef.current._locationRequestInterval) {
+        clearInterval(socketRef.current._locationRequestInterval);
+      }
+
       const locationRequestInterval = setInterval(() => {
         const now = Date.now();
         const isLiveUpdateStale = (now - (lastLiveLocationUpdateAtRef.current || 0)) > SOCKET_LOCATION_STALE_THRESHOLD_MS;
@@ -851,7 +874,9 @@ const DeliveryTrackingMap = ({
       }, SOCKET_LOCATION_REFRESH_INTERVAL_MS);
 
       socketRef.current._locationRequestInterval = locationRequestInterval;
-    });
+    };
+
+    socketRef.current.on('connect', handleConnect);
 
     socketRef.current.on('disconnect', () => {
     });
@@ -930,9 +955,7 @@ const DeliveryTrackingMap = ({
     });
 
     // Listen for order status updates (e.g., "Delivery partner on the way")
-    socketRef.current.on('order_status_update', (data) => {
-      console.log('Received order status update:', data);
-
+    const handleOrderStatusUpdate = (data) => {
       const incomingOrderId = data?.orderId ? String(data.orderId).trim() : '';
       if (incomingOrderId && !orderAliases.includes(incomingOrderId)) {
         return;
@@ -948,20 +971,23 @@ const DeliveryTrackingMap = ({
           }
         }));
       }
-    });
+    };
+
+    socketRef.current.on('order_status_update', handleOrderStatusUpdate);
+
+    if (socketRef.current.connected) {
+      handleConnect();
+    }
 
     return () => {
       if (socketRef.current) {
-        // Clear location request interval if it exists
-        if (socketRef.current._locationRequestInterval) {
-          clearInterval(socketRef.current._locationRequestInterval);
-        }
         orderAliases.forEach((alias) => {
           socketRef.current.off(`location-receive-${alias}`, handleLocationUpdate);
           socketRef.current.off(`current-location-${alias}`, handleCurrentLocation);
         });
-        socketRef.current.off('order_status_update');
-        socketRef.current.disconnect();
+        socketRef.current.off('connect', handleConnect);
+        socketRef.current.off('order_status_update', handleOrderStatusUpdate);
+        releaseTrackingSocket(poolKey);
       }
     };
   }, [orderId, order?.orderId, order?._id, order?.id, backendUrl, moveBikeSmoothly, hasDeliveryPartner, parseSocketLocation]);
@@ -1413,17 +1439,9 @@ const DeliveryTrackingMap = ({
                                     deliveryStateStatus === 'accepted' ||
                                     (deliveryStateStatus && deliveryStateStatus !== 'pending');
           
-          console.log('🚴 Map tiles loaded - Checking for delivery partner:', {
-            currentPhase,
-            deliveryStateStatus,
-            hasDeliveryPartnerOnLoad,
-            hasBikeMarker: !!bikeMarkerRef.current
-          });
-          
           // DO NOT create bike at restaurant on map load
           // Wait for real location from socket - bike will be created when real location is received
           if (hasDeliveryPartnerOnLoad && !bikeMarkerRef.current) {
-            console.log('🚴 Map loaded - Delivery partner detected, waiting for REAL location from socket...');
             // Request current location immediately
             if (socketRef.current && socketRef.current.connected && hasDeliveryPartner) {
               socketRef.current.emit('request-current-location', orderId);
@@ -1484,7 +1502,6 @@ const DeliveryTrackingMap = ({
     
     // If delivery partner is assigned but bike marker doesn't exist, create it
     if (hasDeliveryPartnerByPhase && !bikeMarkerRef.current && mapInstance.current) {
-      console.log('🚴 Delivery partner detected by phase, creating bike marker:', currentPhase);
       // DO NOT show bike at restaurant - wait for real location from socket
       // Bike will be created when real location is received via socket
       if (socketRef.current && socketRef.current.connected && hasDeliveryPartner) {
@@ -1532,23 +1549,8 @@ const DeliveryTrackingMap = ({
     if (route.start && route.end) {
       lastRouteUpdateRef.current = now;
       drawRoute(route.start, route.end);
-      console.log('🔄 Route updated:', {
-        phase: order?.deliveryState?.currentPhase,
-        status: order?.deliveryState?.status,
-        from: route.start,
-        to: route.end,
-        hasBikeMarker: !!bikeMarkerRef.current
-      });
-      
       // Force show bike if delivery partner is assigned but bike marker doesn't exist
       if (hasDeliveryPartnerByPhase && !bikeMarkerRef.current && mapInstance.current) {
-        console.log('🚴🚴🚴 FORCING bike marker creation after route update!', {
-          phase: currentPhase,
-          routeStart: route.start,
-          routeEnd: route.end,
-          restaurantCoords
-        });
-        
         // ONLY use real delivery boy location - NEVER use restaurant
         // Priority 1: Use delivery boy's REAL location from socket/state
         if (deliveryBoyLat && deliveryBoyLng) {
@@ -1598,34 +1600,7 @@ const DeliveryTrackingMap = ({
     const deliveryStateStatus = order?.deliveryState?.status;
     const shouldShowBike = hasDeliveryPartner || (Number.isFinite(Number(deliveryBoyLat)) && Number.isFinite(Number(deliveryBoyLng)));
     
-    console.log('🚴🚴🚴 BIKE VISIBILITY CHECK:', {
-      shouldShowBike,
-      hasDeliveryPartner,
-      deliveryStateStatus,
-      currentPhase,
-      hasBikeMarker: !!bikeMarkerRef.current
-    });
-    
-    console.log('🔍 Checking delivery partner assignment:', {
-      hasDeliveryPartner,
-      shouldShowBike,
-      currentPhase,
-      deliveryStateStatus,
-      deliveryPartnerId: order?.deliveryPartnerId,
-      deliveryPartner: order?.deliveryPartner,
-      assignmentInfo: order?.assignmentInfo,
-      deliveryState: order?.deliveryState,
-      hasBikeMarker: !!bikeMarkerRef.current,
-      deliveryBoyLocation: { lat: deliveryBoyLat, lng: deliveryBoyLng, heading: deliveryBoyHeading },
-      restaurantCoords: { lat: restaurantLat, lng: restaurantLng },
-      mapInstance: !!mapInstance.current,
-      isMapLoaded
-    });
-    
     if (shouldShowBike && !bikeMarkerRef.current) {
-      console.log('🚴🚴🚴 CREATING BIKE MARKER - Delivery partner accepted!');
-      console.log('🚴 Full order state:', JSON.stringify(order?.deliveryState, null, 2));
-      
       // Priority 1: ALWAYS use delivery boy's REAL location if available (from socket)
       if (deliveryBoyLat && deliveryBoyLng) {
         moveBikeSmoothly(deliveryBoyLat, deliveryBoyLng, deliveryBoyHeading || 0);
@@ -1652,21 +1627,9 @@ const DeliveryTrackingMap = ({
       setTimeout(() => {
         if (bikeMarkerRef.current) {
           const marker = bikeMarkerRef.current;
-          const markerPosition = marker.getPosition();
           const markerVisible = marker.getVisible();
           const markerMap = marker.getMap();
-          
-          console.log('✅✅✅ BIKE MARKER VERIFICATION:', {
-            exists: true,
-            visible: markerVisible,
-            onMap: !!markerMap,
-            position: markerPosition ? { 
-              lat: markerPosition.lat(), 
-              lng: markerPosition.lng() 
-            } : null,
-            iconUrl: bikeLogo
-          });
-          
+
           // Force visibility if needed
           if (!markerVisible) {
             marker.setVisible(true);
@@ -1679,7 +1642,6 @@ const DeliveryTrackingMap = ({
           // Real location will come via socket and bike will be created in moveBikeSmoothly
           if (socketRef.current && socketRef.current.connected && hasDeliveryPartner) {
             socketRef.current.emit('request-current-location', orderId);
-            console.log('📡 Requested current location from socket for bike marker');
           }
         }
       }, 500);
@@ -1691,7 +1653,6 @@ const DeliveryTrackingMap = ({
     } else {
       // Remove bike marker if delivery partner is not assigned
       if (bikeMarkerRef.current) {
-        console.log('🗑️ Removing bike marker - no delivery partner');
         bikeMarkerRef.current.setMap(null);
         bikeMarkerRef.current = null;
       }
