@@ -127,6 +127,16 @@ export default function Under250() {
     return 999
   }
 
+  const isRestaurantAvailable = useCallback((restaurant) => {
+    if (!restaurant || typeof restaurant !== "object") return false
+
+    const isActive = restaurant.isActive !== false
+    const isOnline = restaurant.isOnline !== false
+    const isAcceptingOrders = restaurant.isAcceptingOrders !== false
+
+    return isActive && isOnline && isAcceptingOrders
+  }, [])
+
   // Sort and filter restaurants based on selected sort and filters
   const sortedAndFilteredRestaurants = useMemo(() => {
     let filtered = [...under250Restaurants]
@@ -215,7 +225,7 @@ export default function Under250() {
     }
 
     return filtered
-  }, [under250Restaurants, selectedSort, under30MinsFilter, activeCategory, categories, priceRange])
+  }, [under250Restaurants, selectedSort, under30MinsFilter, activeCategory, categories, priceRange, isRestaurantAvailable])
 
   // Fetch restaurants with dishes under ₹250 from backend
   useEffect(() => {
@@ -247,7 +257,7 @@ export default function Under250() {
     }
 
     fetchRestaurantsUnder250()
-  }, [zoneId, zoneLoading, isOutOfService])
+  }, [zoneId, zoneLoading, isOutOfService, isRestaurantAvailable])
 
   // Fetch categories from admin API
   useEffect(() => {
@@ -609,8 +619,9 @@ export default function Under250() {
         ) : (
           sortedAndFilteredRestaurants.map((restaurant) => {
             const restaurantSlug = restaurant.slug || restaurant.name.toLowerCase().replace(/\s+/g, "-")
+            const isRestaurantOffline = !isRestaurantAvailable(restaurant)
             return (
-              <section key={restaurant.id} className="pt-4 sm:pt-6 md:pt-8 lg:pt-10">
+              <section key={restaurant.id} className={`pt-4 sm:pt-6 md:pt-8 lg:pt-10 ${isRestaurantOffline ? "grayscale opacity-60" : ""}`}>
                 {/* Restaurant Header */}
                 <div className="flex items-start justify-between mb-3 md:mb-4 lg:mb-6">
                   <div className="flex-1">
@@ -620,6 +631,11 @@ export default function Under250() {
                     <div className="flex items-center gap-2 text-sm md:text-base lg:text-lg text-gray-500 dark:text-gray-400">
                       <Clock className="h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6" strokeWidth={1.5} />
                       <span className="font-medium">{restaurant.deliveryTime}</span>
+                      {isRestaurantOffline && (
+                        <span className="ml-2 inline-flex items-center rounded-full bg-red-100 text-red-700 px-2 py-0.5 text-xs font-semibold">
+                          Offline
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex flex-col items-end">
@@ -652,20 +668,24 @@ export default function Under250() {
                         return (
                           <motion.div
                             key={item.id}
-                            className="flex-shrink-0 w-[200px] sm:w-[220px] md:w-full bg-white dark:bg-[#1a1a1a] rounded-lg md:rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden cursor-pointer"
-                            onClick={() => handleItemClick(item, restaurant)}
+                            className={`flex-shrink-0 w-[200px] sm:w-[220px] md:w-full bg-white dark:bg-[#1a1a1a] rounded-lg md:rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden ${isRestaurantOffline ? "cursor-not-allowed" : "cursor-pointer"}`}
+                            onClick={() => {
+                              if (!isRestaurantOffline) {
+                                handleItemClick(item, restaurant)
+                              }
+                            }}
                             initial={{ opacity: 0, y: 20 }}
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true, margin: "-50px" }}
                             transition={{ duration: 0.4, delay: itemIndex * 0.05 }}
-                            whileHover={{ y: -8, scale: 1.02 }}
+                            whileHover={isRestaurantOffline ? undefined : { y: -8, scale: 1.02 }}
                             style={{ boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)" }}
                           >
                             {/* Item Image */}
                             <div className="relative w-full h-32 sm:h-36 md:h-40 lg:h-48 xl:h-52 overflow-hidden">
                               <motion.div
                                 className="absolute inset-0"
-                                whileHover={{ scale: 1.1 }}
+                                whileHover={isRestaurantOffline ? undefined : { scale: 1.1 }}
                                 transition={{ duration: 0.5, ease: "easeOut" }}
                               >
                                 <OptimizedImage
@@ -723,28 +743,32 @@ export default function Under250() {
                                     <Button
                                       variant={"outline"}
                                       size="sm"
-                                      className="bg-green-600/10 text-green-500 border-green-500 hover:bg-green-700 hover:text-white h-7 md:h-8 lg:h-9 px-3 md:px-4 lg:px-5 text-xs md:text-sm lg:text-base"
+                                      disabled={isRestaurantOffline}
+                                      className={`h-7 md:h-8 lg:h-9 px-3 md:px-4 lg:px-5 text-xs md:text-sm lg:text-base ${isRestaurantOffline
+                                        ? "bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-300 dark:border-gray-700 cursor-not-allowed opacity-50"
+                                        : "bg-green-600/10 text-green-500 border-green-500 hover:bg-green-700 hover:text-white"
+                                        }`}
                                     >
-                                      View cart
+                                      {isRestaurantOffline ? "Offline" : "View cart"}
                                     </Button>
                                   </Link>
                                 ) : (
                                   <Button
                                     variant={"outline"}
                                     size="sm"
-                                    disabled={shouldShowGrayscale}
-                                    className={`h-7 md:h-8 lg:h-9 px-3 md:px-4 lg:px-5 text-xs md:text-sm lg:text-base ${shouldShowGrayscale
+                                    disabled={shouldShowGrayscale || isRestaurantOffline}
+                                    className={`h-7 md:h-8 lg:h-9 px-3 md:px-4 lg:px-5 text-xs md:text-sm lg:text-base ${(shouldShowGrayscale || isRestaurantOffline)
                                       ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-300 dark:border-gray-700 cursor-not-allowed opacity-50'
                                       : 'bg-green-600/10 text-green-500 border-green-500 hover:bg-green-700 hover:text-white'
                                       }`}
                                     onClick={(e) => {
                                       e.stopPropagation()
-                                      if (!shouldShowGrayscale) {
+                                      if (!shouldShowGrayscale && !isRestaurantOffline) {
                                         handleItemClick(item, restaurant)
                                       }
                                     }}
                                   >
-                                    Add
+                                    {isRestaurantOffline ? "Offline" : "Add"}
                                   </Button>
                                 )}
                               </div>
@@ -755,14 +779,26 @@ export default function Under250() {
                     </div>
 
                     {/* View Full Menu Button */}
-                    <Link className="flex justify-center mt-2 md:mt-3 lg:mt-4" to={`/user/restaurants/${restaurantSlug}?under250=true`}>
-                      <Button
-                        variant="outline"
-                        className="w-min align-center text-center rounded-lg md:rounded-xl mx-auto bg-gray-50 dark:bg-[#1a1a1a] hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-white text-gray-700 border-gray-200 dark:border-gray-800 h-9 md:h-10 lg:h-11 px-4 md:px-6 lg:px-8 text-sm md:text-base lg:text-lg"
-                      >
-                        View full menu <ArrowRight className="h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6 ml-2 text-gray-700 dark:text-gray-300" />
-                      </Button>
-                    </Link>
+                    {isRestaurantOffline ? (
+                      <div className="flex justify-center mt-2 md:mt-3 lg:mt-4">
+                        <Button
+                          variant="outline"
+                          disabled
+                          className="w-min align-center text-center rounded-lg md:rounded-xl mx-auto bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-300 dark:border-gray-700 h-9 md:h-10 lg:h-11 px-4 md:px-6 lg:px-8 text-sm md:text-base lg:text-lg cursor-not-allowed"
+                        >
+                          Offline
+                        </Button>
+                      </div>
+                    ) : (
+                      <Link className="flex justify-center mt-2 md:mt-3 lg:mt-4" to={`/user/restaurants/${restaurantSlug}?under250=true`}>
+                        <Button
+                          variant="outline"
+                          className="w-min align-center text-center rounded-lg md:rounded-xl mx-auto bg-gray-50 dark:bg-[#1a1a1a] hover:bg-gray-100 dark:hover:bg-gray-800 dark:text-white text-gray-700 border-gray-200 dark:border-gray-800 h-9 md:h-10 lg:h-11 px-4 md:px-6 lg:px-8 text-sm md:text-base lg:text-lg"
+                        >
+                          View full menu <ArrowRight className="h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6 ml-2 text-gray-700 dark:text-gray-300" />
+                        </Button>
+                      </Link>
+                    )}
                   </div>
                 )}
               </section>

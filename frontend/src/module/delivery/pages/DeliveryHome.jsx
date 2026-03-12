@@ -5461,96 +5461,47 @@ export default function DeliveryHome() {
 
 
   // Countdown timer for new order popup
-
-
+  // Keep one stable interval while popup is open; avoid resetting interval on every tick.
   useEffect(() => {
-
-
-    if (showNewOrderPopup && countdownSeconds > 0) {
-
-
-      countdownTimerRef.current = setInterval(() => {
-
-
-        setCountdownSeconds((prev) => {
-
-
-          if (prev <= 1) {
-
-
-            // Stop audio when countdown reaches 0
-
-
-            stopNewOrderAlertSound("countdown ended")
-
-
-            // Auto-close when countdown reaches 0
-
-
-            setShowNewOrderPopup(false)
-
-
-            return 0
-
-
-          }
-
-
-          return prev - 1
-
-
-        })
-
-
-      }, 1000)
-
-
-    } else {
-
-
+    if (!showNewOrderPopup) {
       if (countdownTimerRef.current) {
-
-
         clearInterval(countdownTimerRef.current)
-
-
         countdownTimerRef.current = null
-
-
       }
-
-
+      return () => {}
     }
 
+    if (countdownTimerRef.current) {
+      clearInterval(countdownTimerRef.current)
+      countdownTimerRef.current = null
+    }
 
-
-
+    countdownTimerRef.current = setInterval(() => {
+      setCountdownSeconds((prev) => {
+        if (prev <= 1) {
+          if (countdownTimerRef.current) {
+            clearInterval(countdownTimerRef.current)
+            countdownTimerRef.current = null
+          }
+          // Stop audio when countdown reaches 0
+          stopNewOrderAlertSound("countdown ended")
+          // Auto-close when countdown reaches 0
+          setShowNewOrderPopup(false)
+          return 0
+        }
+        return prev - 1
+      })
+    }, 1000)
 
     return () => {
-
-
       // Only clear the timer, don't stop audio here
-
-
       // Audio will be stopped by the popup close useEffect
-
-
       if (countdownTimerRef.current) {
-
-
         clearInterval(countdownTimerRef.current)
-
-
         countdownTimerRef.current = null
-
-
       }
-
-
     }
-
-
-  }, [showNewOrderPopup, countdownSeconds, stopNewOrderAlertSound])
+  }, [showNewOrderPopup, stopNewOrderAlertSound])
 
 
 
