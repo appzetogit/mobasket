@@ -26,21 +26,19 @@ const getModuleFromPathname = (pathname = "") => {
   return "user";
 };
 
+const hasUsableToken = (value) => {
+  const token = String(value || "").trim();
+  return Boolean(token && token !== "null" && token !== "undefined");
+};
+
 const hasAuthTokenForModule = (moduleName) => {
   if (typeof window === "undefined") return false;
 
   if (moduleName === "user") {
-    return Boolean(
-      localStorage.getItem("user_accessToken") ||
-      localStorage.getItem("user_refreshToken") ||
-      localStorage.getItem("accessToken"),
-    );
+    return hasUsableToken(localStorage.getItem("user_accessToken")) || hasUsableToken(localStorage.getItem("accessToken"));
   }
 
-  return Boolean(
-    localStorage.getItem(`${moduleName}_accessToken`) ||
-    localStorage.getItem(`${moduleName}_refreshToken`),
-  );
+  return hasUsableToken(localStorage.getItem(`${moduleName}_accessToken`));
 };
 
 const parseNotificationPayload = (payload = {}) => {
@@ -201,7 +199,15 @@ export const setupWebPushForCurrentSession = async (pathname = "") => {
   const cachedToken = localStorage.getItem(tokenCacheKey);
   if (cachedToken === token) return;
 
-  await updater(token, "web");
+  try {
+    await updater(token, "web");
+  } catch (error) {
+    const status = Number(error?.response?.status || 0);
+    if (status === 401 || status === 403) {
+      return;
+    }
+    throw error;
+  }
   localStorage.setItem(tokenCacheKey, token);
   })()
     .finally(() => {

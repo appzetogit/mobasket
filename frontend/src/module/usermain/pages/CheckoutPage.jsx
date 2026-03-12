@@ -15,6 +15,8 @@ import {
   Minus,
   Sparkles,
   Wallet,
+  User,
+  Phone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AddressLocationPicker from "@/components/AddressLocationPicker";
@@ -23,7 +25,7 @@ import { useCart } from "../../user/context/CartContext";
 import { useProfile } from "../../user/context/ProfileContext";
 import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
-import api, { adminAPI, orderAPI, restaurantAPI, userAPI } from "@/lib/api";
+import api, { adminAPI, orderAPI, restaurantAPI, userAPI, zoneAPI } from "@/lib/api";
 import { initRazorpayPayment } from "@/lib/utils/razorpay";
 import { Loader } from "@googlemaps/js-api-loader";
 import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey";
@@ -70,6 +72,20 @@ export default function CheckoutPage() {
     reason: "",
   });
   const [selectedAddress, setSelectedAddress] = useState(null);
+  const [orderingForSomeoneElse, setOrderingForSomeoneElse] = useState(false);
+  const [showRecipientMap, setShowRecipientMap] = useState(false);
+  const [recipientDetails, setRecipientDetails] = useState({
+    name: "",
+    phone: "",
+    street: "",
+    additionalDetails: "",
+    city: "",
+    state: "",
+    zipCode: "",
+    latitude: "",
+    longitude: "",
+    formattedAddress: "",
+  });
   const [showAddAddressForm, setShowAddAddressForm] = useState(false);
   const [isSavingAddress, setIsSavingAddress] = useState(false);
   const [walletBalance, setWalletBalance] = useState(0);
@@ -741,15 +757,22 @@ export default function CheckoutPage() {
       tax,
       total,
       deliveryAddress:
-        selectedAddress?.formattedAddress ||
-        formatAddressLine(selectedAddress) ||
-        "Select delivery address",
+        orderingForSomeoneElse
+          ? recipientDetails?.formattedAddress ||
+            formatAddressLine(recipientDetails) ||
+            "Add recipient address"
+          : selectedAddress?.formattedAddress ||
+            formatAddressLine(selectedAddress) ||
+            "Select delivery address",
       estimatedTime: "30-40 min",
     };
-  }, [calculatedPricing, feeSettings, foodItems, selectedAddress]);
+  }, [calculatedPricing, feeSettings, foodItems, selectedAddress, orderingForSomeoneElse, recipientDetails]);
 
   const hasSufficientWalletBalance = walletBalance >= orderSummary.total;
   const visibleCoupons = showAllCoupons ? availableCoupons : availableCoupons.slice(0, 4);
+  const hasRecipientCoordinates =
+    Number.isFinite(Number(recipientDetails?.latitude)) &&
+    Number.isFinite(Number(recipientDetails?.longitude));
 
   const buildOrderItems = () =>
     foodItems.map((item) => ({
@@ -985,13 +1008,13 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!Array.isArray(addresses) || addresses.length === 0) {
+    if (!orderingForSomeoneElse && (!Array.isArray(addresses) || addresses.length === 0)) {
       toast.error("Please add a saved address before ordering.");
       setShowAddAddressForm(true);
       return;
     }
 
-    if (!selectedAddress) {
+    if (!orderingForSomeoneElse && !selectedAddress) {
       toast.error("Please add/select a delivery address first.");
       return;
     }
@@ -1042,20 +1065,63 @@ export default function CheckoutPage() {
         throw new Error("Cart item data is invalid. Please refresh and try again.");
       }
 
-      // Geocode address if it's missing coordinates (do this early for pricing calculation)
+      // Resolve delivery address (self or someone else) and geocode/validate coordinates
       const apiKey = await getGoogleMapsApiKey();
       let addressForOrder = selectedAddress;
-      
-      const hasValidCoordinates = 
-        (selectedAddress?.location?.coordinates && 
-         Number.isFinite(selectedAddress.location.coordinates[1]) && 
-         Number.isFinite(selectedAddress.location.coordinates[0]) &&
-         !(selectedAddress.location.coordinates[0] === 0 && selectedAddress.location.coordinates[1] === 0)) ||
-        (Number.isFinite(selectedAddress?.latitude) && Number.isFinite(selectedAddress?.longitude) &&
-         !(selectedAddress.latitude === 0 && selectedAddress.longitude === 0));
-      
+
+      if (orderingForSomeoneElse) {
+        const recipientName = String(recipientDetails?.name || "").trim();
+        const recipientPhone = String(recipientDetails?.phone || "").trim();
+        const phoneDigits = recipientPhone.replace(/\D/g, "");
+        const street = String(recipientDetails?.street || "").trim();
+        const city = String(recipientDetails?.city || "").trim();
+        const state = String(recipientDetails?.state || "").trim();
+        const zipCode = String(recipientDetails?.zipCode || "").trim();
+        const lat = Number(recipientDetails?.latitude);
+        const lng = Number(recipientDetails?.longitude);
+
+        if (!recipientName || !recipientPhone || !street || !city || !state || !zipCode) {
+          throw new Error("Please fill recipient name, phone and complete delivery address.");
+        }
+        if (phoneDigits.length < 10) {
+          throw new Error("Please enter a valid recipient phone number.");
+        }
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+          throw new Error("Please set recipient location pin before placing order.");
+        }
+
+        const zoneCheckResponse = await zoneAPI.detectAllZones(lat, lng, "mofood");
+        const zoneCheck = zoneCheckResponse?.data?.data;
+        if (!zoneCheckResponse?.data?.success || zoneCheck?.status !== "IN_SERVICE") {
+          throw new Error("Recipient address is outside active delivery zones.");
+        }
+
+        addressForOrder = {
+          label: "Recipient",
+          street,
+          additionalDetails: String(recipientDetails?.additionalDetails || "").trim(),
+          city,
+          state,
+          zipCode,
+          formattedAddress:
+            String(recipientDetails?.formattedAddress || "").trim() ||
+            [street, city, state, zipCode].filter(Boolean).join(", "),
+          latitude: lat,
+          longitude: lng,
+        };
+      }
+
+      const hasValidCoordinates =
+        (addressForOrder?.location?.coordinates &&
+          Number.isFinite(addressForOrder.location.coordinates[1]) &&
+          Number.isFinite(addressForOrder.location.coordinates[0]) &&
+          !(addressForOrder.location.coordinates[0] === 0 && addressForOrder.location.coordinates[1] === 0)) ||
+        (Number.isFinite(addressForOrder?.latitude) &&
+          Number.isFinite(addressForOrder?.longitude) &&
+          !(addressForOrder.latitude === 0 && addressForOrder.longitude === 0));
+
       if (!hasValidCoordinates) {
-        const geocodedAddress = await ensureAddressCoordinates(selectedAddress, apiKey);
+        const geocodedAddress = await ensureAddressCoordinates(addressForOrder, apiKey);
         if (geocodedAddress?.latitude && geocodedAddress?.longitude) {
           addressForOrder = geocodedAddress;
         }
@@ -1110,11 +1176,15 @@ export default function CheckoutPage() {
         restaurantName,
         pricing: calculatedPricing,
         deliveryFleet: "standard",
-        note: "[MoFood] Order from user checkout",
+        note: orderingForSomeoneElse
+          ? `[MoFood] Order for recipient: ${String(recipientDetails?.name || "").trim()} (${String(
+              recipientDetails?.phone || "",
+            ).trim()})`
+          : "[MoFood] Order from user checkout",
         sendCutlery: false,
         paymentMethod: backendPaymentMethod,
         couponCode: appliedCouponCode || undefined,
-        zoneId: zoneId || undefined,
+        zoneId: orderingForSomeoneElse ? undefined : zoneId || undefined,
         deliveryOption: deliveryType === "scheduled" ? "scheduled" : "now",
         scheduledFor:
           deliveryType === "scheduled" ? buildScheduledFor()?.toISOString() : undefined,
@@ -1270,49 +1340,184 @@ export default function CheckoutPage() {
           </div>
         )}
 
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-orange-100">
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-yellow-100">
           <div className="flex items-start gap-3">
-            <div className="bg-[#ff8100] rounded-xl p-2">
+            <div className="bg-yellow-500 rounded-xl p-2">
               <MapPin className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1">
               <h3 className="text-sm font-bold text-gray-900 mb-1">Delivery Address</h3>
               <p className="text-xs text-gray-600">{orderSummary.deliveryAddress}</p>
-              <div className="mt-3 space-y-2">
-                {Array.isArray(addresses) && addresses.length > 0 ? (
-                  addresses.map((address) => {
-                    const addressId = address.id || address._id;
-                    const selectedId = selectedAddress?.id || selectedAddress?._id;
-                    const isSelected = selectedId && addressId && String(selectedId) === String(addressId);
-                    return (
-                      <button
-                        key={String(addressId)}
-                        type="button"
-                        onClick={() => setSelectedAddress(address)}
-                        className={`w-full text-left rounded-xl border px-3 py-2 transition-colors ${isSelected
-                            ? "border-[#ff8100] bg-orange-50"
-                            : "border-gray-200 bg-white"
-                          }`}
-                      >
-                        <p className="text-xs font-semibold text-gray-900">
-                          {address.label || "Address"} {address.isDefault ? "(Default)" : ""}
-                        </p>
-                        <p className="text-xs text-gray-600">{formatAddressLine(address)}</p>
-                      </button>
-                    );
-                  })
-                ) : null}
-
+              <div className="mt-3 grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowAddAddressForm((prev) => !prev)}
-                  className="text-xs font-semibold text-[#ff8100]"
+                  onClick={() => setOrderingForSomeoneElse(false)}
+                  className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                    !orderingForSomeoneElse
+                      ? "border-yellow-500 bg-yellow-50 text-yellow-700"
+                      : "border-gray-200 bg-white text-gray-700"
+                  }`}
                 >
-                  {showAddAddressForm ? "Close Add Address" : "+ Add New Address"}
+                  For Me
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setOrderingForSomeoneElse(true)}
+                  className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
+                    orderingForSomeoneElse
+                      ? "border-yellow-500 bg-yellow-50 text-yellow-700"
+                      : "border-gray-200 bg-white text-gray-700"
+                  }`}
+                >
+                  Order For Someone Else
+                </button>
+              </div>
+              <div className="mt-3 space-y-2">
+                {orderingForSomeoneElse ? (
+                  <div className="rounded-xl border border-yellow-200 p-2.5 space-y-2 bg-yellow-50/60">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="relative">
+                        <User className="absolute left-2 top-2 h-3.5 w-3.5 text-gray-400" />
+                        <input
+                          type="text"
+                          value={recipientDetails.name}
+                          onChange={(e) =>
+                            setRecipientDetails((prev) => ({ ...prev, name: e.target.value }))
+                          }
+                          placeholder="Recipient name"
+                          className="h-8 w-full rounded-lg border border-gray-200 bg-white pl-7 pr-2 text-xs"
+                        />
+                      </div>
+                      <div className="relative">
+                        <Phone className="absolute left-2 top-2 h-3.5 w-3.5 text-gray-400" />
+                        <input
+                          type="text"
+                          value={recipientDetails.phone}
+                          onChange={(e) =>
+                            setRecipientDetails((prev) => ({ ...prev, phone: e.target.value }))
+                          }
+                          placeholder="Recipient phone"
+                          className="h-8 w-full rounded-lg border border-gray-200 bg-white pl-7 pr-2 text-xs"
+                        />
+                      </div>
+                    </div>
+                    <input
+                      type="text"
+                      value={recipientDetails.street}
+                      onChange={(e) =>
+                        setRecipientDetails((prev) => ({ ...prev, street: e.target.value }))
+                      }
+                      placeholder="Full address (House/Flat, Street)"
+                      className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs"
+                    />
+                    <input
+                      type="text"
+                      value={recipientDetails.additionalDetails}
+                      onChange={(e) =>
+                        setRecipientDetails((prev) => ({ ...prev, additionalDetails: e.target.value }))
+                      }
+                      placeholder="Landmark / Delivery note"
+                      className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        value={recipientDetails.city}
+                        onChange={(e) =>
+                          setRecipientDetails((prev) => ({ ...prev, city: e.target.value }))
+                        }
+                        placeholder="City"
+                        className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs"
+                      />
+                      <input
+                        type="text"
+                        value={recipientDetails.state}
+                        onChange={(e) =>
+                          setRecipientDetails((prev) => ({ ...prev, state: e.target.value }))
+                        }
+                        placeholder="State"
+                        className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs"
+                      />
+                    </div>
+                    <input
+                      type="text"
+                      value={recipientDetails.zipCode}
+                      onChange={(e) =>
+                        setRecipientDetails((prev) => ({ ...prev, zipCode: e.target.value }))
+                      }
+                      placeholder="Pincode"
+                      className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs"
+                    />
+                    <div className="rounded-lg border border-yellow-200 bg-white p-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] font-medium text-gray-700">
+                          {hasRecipientCoordinates ? "Pin set for recipient address" : "Recipient pin not set"}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setShowRecipientMap((prev) => !prev)}
+                          className="text-[11px] font-semibold text-yellow-700 hover:text-yellow-800"
+                        >
+                          {showRecipientMap ? "Hide Map" : hasRecipientCoordinates ? "Update Pin" : "Set Pin"}
+                        </button>
+                      </div>
+                      <p className="mt-1 text-[11px] text-gray-500">
+                        Address must be inside an active delivery zone.
+                      </p>
+                      {hasRecipientCoordinates ? (
+                        <p className="mt-1 text-[11px] text-yellow-700">
+                          {Number(recipientDetails.latitude).toFixed(5)}, {Number(recipientDetails.longitude).toFixed(5)}
+                        </p>
+                      ) : null}
+                    </div>
 
-                {showAddAddressForm ? (
-                  <div className="rounded-xl border border-gray-200 p-3 space-y-2 bg-gray-50">
+                    {showRecipientMap ? (
+                      <AddressLocationPicker
+                        value={recipientDetails}
+                        onChange={setRecipientDetails}
+                        title="Recipient exact delivery pin"
+                        description="Set exact pin. Address must be inside any active delivery zone."
+                      />
+                    ) : null}
+                  </div>
+                ) : (
+                  <>
+                    {Array.isArray(addresses) && addresses.length > 0 ? (
+                      addresses.map((address) => {
+                        const addressId = address.id || address._id;
+                        const selectedId = selectedAddress?.id || selectedAddress?._id;
+                        const isSelected =
+                          selectedId && addressId && String(selectedId) === String(addressId);
+                        return (
+                          <button
+                            key={String(addressId)}
+                            type="button"
+                            onClick={() => setSelectedAddress(address)}
+                            className={`w-full text-left rounded-xl border px-3 py-2 transition-colors ${
+                              isSelected
+                                ? "border-yellow-500 bg-yellow-50"
+                                : "border-gray-200 bg-white hover:border-yellow-300"
+                            }`}
+                          >
+                            <p className="text-xs font-semibold text-gray-900">
+                              {address.label || "Address"} {address.isDefault ? "(Default)" : ""}
+                            </p>
+                            <p className="text-xs text-gray-600">{formatAddressLine(address)}</p>
+                          </button>
+                        );
+                      })
+                    ) : null}
+
+                    <button
+                      type="button"
+                      onClick={() => setShowAddAddressForm((prev) => !prev)}
+                      className="text-xs font-semibold text-yellow-700"
+                    >
+                      {showAddAddressForm ? "Close Add Address" : "+ Add New Address"}
+                    </button>
+
+                    {showAddAddressForm ? (
+                      <div className="rounded-xl border border-gray-200 p-3 space-y-2 bg-gray-50">
                     <div className="grid grid-cols-3 gap-2">
                       {["Home", "Office", "Other"].map((label) => (
                         <button
@@ -1320,7 +1525,7 @@ export default function CheckoutPage() {
                           type="button"
                           onClick={() => setNewAddress((prev) => ({ ...prev, label }))}
                           className={`h-8 rounded-lg text-xs font-semibold border ${newAddress.label === label
-                              ? "border-[#ff8100] bg-orange-100 text-[#ff8100]"
+                              ? "border-yellow-500 bg-yellow-100 text-yellow-700"
                               : "border-gray-200 bg-white text-gray-700"
                             }`}
                         >
@@ -1357,7 +1562,7 @@ export default function CheckoutPage() {
                                 type="button"
                                 onMouseDown={(e) => e.preventDefault()}
                                 onClick={() => handleAddressSuggestionSelect(suggestion)}
-                                className="block w-full border-b border-gray-100 px-3 py-2 text-left text-xs text-gray-700 hover:bg-orange-50 last:border-b-0"
+                                className="block w-full border-b border-gray-100 px-3 py-2 text-left text-xs text-gray-700 hover:bg-yellow-50 last:border-b-0"
                               >
                                 {suggestion.description}
                               </button>
@@ -1425,14 +1630,16 @@ export default function CheckoutPage() {
 
                     <Button
                       type="button"
-                      className="w-full h-8 text-xs bg-[#ff8100] hover:bg-[#e67300] text-white"
+                      className="w-full h-8 text-xs bg-yellow-500 hover:bg-yellow-600 text-white"
                       onClick={handleSaveNewAddress}
                       disabled={isSavingAddress}
                     >
                       {isSavingAddress ? "Saving..." : "Save Address"}
                     </Button>
-                  </div>
-                ) : null}
+                      </div>
+                    ) : null}
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -1440,19 +1647,28 @@ export default function CheckoutPage() {
       </div>
 
       <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-orange-100">
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-yellow-100">
           <h3 className="text-sm font-bold text-gray-900 mb-3">Order Items</h3>
           <div className="space-y-3">
             {orderSummary.items.map((item) => (
               <div
                 key={item.id}
-                className="flex items-center justify-between pb-3 border-b border-gray-100 last:border-0 last:pb-0"
+                className="flex items-center justify-between gap-3 pb-3 border-b border-gray-100 last:border-0 last:pb-0"
               >
-                <div className="flex-1">
+                <img
+                  src={item.image || item.imageUrl || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=160&h=160&fit=crop"}
+                  alt={item.name}
+                  className="w-14 h-14 rounded-xl object-cover border border-yellow-100"
+                  onError={(event) => {
+                    event.currentTarget.src =
+                      "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=160&h=160&fit=crop";
+                  }}
+                />
+                <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900">{item.name}</p>
                   <p className="text-xs text-gray-500">Quantity: {item.quantity}</p>
                 </div>
-                <p className="text-sm font-bold text-gray-900">
+                <p className="text-sm font-bold text-gray-900 whitespace-nowrap">
                   ₹{(Number(item.price || 0) * Number(item.quantity || 0)).toFixed(2)}
                 </p>
               </div>
@@ -1462,7 +1678,7 @@ export default function CheckoutPage() {
       </div>
 
       <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-orange-100">
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-yellow-100">
           <h3 className="text-sm font-bold text-gray-900 mb-3">Apply Coupon</h3>
           <div className="flex items-center gap-2">
             <input
@@ -1485,7 +1701,7 @@ export default function CheckoutPage() {
                 type="button"
                 onClick={() => handleApplyCoupon()}
                 disabled={couponApplying}
-                className="h-10 bg-[#ff8100] hover:bg-[#e67300] text-white px-4"
+                className="h-10 bg-yellow-500 hover:bg-yellow-600 text-white px-4"
               >
                 {couponApplying ? "Applying..." : "Apply"}
               </Button>
@@ -1512,7 +1728,7 @@ export default function CheckoutPage() {
                       key={coupon.code}
                       type="button"
                       onClick={() => handleApplyCoupon(coupon.code)}
-                      className="px-3 py-1.5 rounded-full border border-orange-200 bg-orange-50 text-xs font-semibold text-orange-700 hover:bg-orange-100"
+                      className="px-3 py-1.5 rounded-full border border-yellow-300 bg-yellow-50 text-xs font-semibold text-yellow-700 hover:bg-yellow-100"
                     >
                       {coupon.code}
                       {coupon.discountPercentage > 0 ? ` (${coupon.discountPercentage}% OFF)` : ""}
@@ -1523,7 +1739,7 @@ export default function CheckoutPage() {
                   <button
                     type="button"
                     onClick={() => setShowAllCoupons((prev) => !prev)}
-                    className="mt-2 text-xs font-semibold text-[#ff8100] hover:text-[#e67300]"
+                    className="mt-2 text-xs font-semibold text-yellow-700 hover:text-yellow-800"
                   >
                     {showAllCoupons
                       ? "Show less"
@@ -1645,7 +1861,7 @@ export default function CheckoutPage() {
       )}
 
       <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-orange-100">
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-yellow-100">
           <h3 className="text-sm font-bold text-gray-900 mb-3">Order Summary</h3>
           <div className="space-y-2">
             <div className="flex items-center justify-between text-sm">
@@ -1679,7 +1895,7 @@ export default function CheckoutPage() {
             <div className="border-t border-gray-200 pt-2 mt-2">
               <div className="flex items-center justify-between">
                 <span className="text-base font-bold text-gray-900">Total</span>
-                <span className="text-xl font-bold text-[#ff8100]">{formatCurrency(orderSummary.total)}</span>
+                <span className="text-xl font-bold text-yellow-600">{formatCurrency(orderSummary.total)}</span>
               </div>
             </div>
           </div>
@@ -1687,9 +1903,9 @@ export default function CheckoutPage() {
       </div>
 
       <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-orange-100">
+        <div className="bg-white rounded-2xl p-4 shadow-sm border border-yellow-100">
           <div className="flex items-center gap-3">
-            <div className="bg-[#ff8100] rounded-xl p-2">
+            <div className="bg-yellow-500 rounded-xl p-2">
               <Clock className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -1702,21 +1918,21 @@ export default function CheckoutPage() {
 
       {!isOrderEditMode && (
         <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
-          <div className="bg-white rounded-2xl p-4 shadow-sm border border-orange-100">
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-yellow-100">
             <h3 className="text-sm font-bold text-gray-900 mb-3">Payment Method</h3>
             <div className="space-y-2">
               <button
                 onClick={() => setPaymentMethod("card")}
                 className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${paymentMethod === "card"
-                    ? "border-[#ff8100] bg-[#ff8100]/10"
+                    ? "border-yellow-500 bg-yellow-100"
                     : "border-gray-200 bg-white"
                   }`}
               >
                 <CreditCard
-                  className={`w-5 h-5 ${paymentMethod === "card" ? "text-[#ff8100]" : "text-gray-400"}`}
+                  className={`w-5 h-5 ${paymentMethod === "card" ? "text-yellow-600" : "text-gray-400"}`}
                 />
                 <span
-                  className={`text-sm font-medium ${paymentMethod === "card" ? "text-[#ff8100]" : "text-gray-700"}`}
+                  className={`text-sm font-medium ${paymentMethod === "card" ? "text-yellow-700" : "text-gray-700"}`}
                 >
                   Credit/Debit Card
                 </span>
@@ -1724,17 +1940,17 @@ export default function CheckoutPage() {
               <button
                 onClick={() => setPaymentMethod("wallet")}
                 className={`w-full flex items-center justify-between gap-3 p-3 rounded-lg border-2 transition-colors ${paymentMethod === "wallet"
-                    ? "border-[#ff8100] bg-[#ff8100]/10"
+                    ? "border-yellow-500 bg-yellow-100"
                     : "border-gray-200 bg-white"
                   }`}
               >
                 <div className="flex items-center gap-3">
                   <Wallet
-                    className={`w-5 h-5 ${paymentMethod === "wallet" ? "text-[#ff8100]" : "text-gray-400"}`}
+                    className={`w-5 h-5 ${paymentMethod === "wallet" ? "text-yellow-600" : "text-gray-400"}`}
                   />
                   <div className="text-left">
                     <span
-                      className={`block text-sm font-medium ${paymentMethod === "wallet" ? "text-[#ff8100]" : "text-gray-700"}`}
+                      className={`block text-sm font-medium ${paymentMethod === "wallet" ? "text-yellow-700" : "text-gray-700"}`}
                     >
                       MoBasket Wallet
                     </span>
@@ -1752,15 +1968,15 @@ export default function CheckoutPage() {
               <button
                 onClick={() => setPaymentMethod("upi")}
                 className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${paymentMethod === "upi"
-                    ? "border-[#ff8100] bg-[#ff8100]/10"
+                    ? "border-yellow-500 bg-yellow-100"
                     : "border-gray-200 bg-white"
                   }`}
               >
                 <Smartphone
-                  className={`w-5 h-5 ${paymentMethod === "upi" ? "text-[#ff8100]" : "text-gray-400"}`}
+                  className={`w-5 h-5 ${paymentMethod === "upi" ? "text-yellow-600" : "text-gray-400"}`}
                 />
                 <span
-                  className={`text-sm font-medium ${paymentMethod === "upi" ? "text-[#ff8100]" : "text-gray-700"}`}
+                  className={`text-sm font-medium ${paymentMethod === "upi" ? "text-yellow-700" : "text-gray-700"}`}
                 >
                   UPI (Razorpay)
                 </span>
@@ -1768,15 +1984,15 @@ export default function CheckoutPage() {
               <button
                 onClick={() => setPaymentMethod("cash")}
                 className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${paymentMethod === "cash"
-                    ? "border-[#ff8100] bg-[#ff8100]/10"
+                    ? "border-yellow-500 bg-yellow-100"
                     : "border-gray-200 bg-white"
                   }`}
               >
                 <ShoppingBag
-                  className={`w-5 h-5 ${paymentMethod === "cash" ? "text-[#ff8100]" : "text-gray-400"}`}
+                  className={`w-5 h-5 ${paymentMethod === "cash" ? "text-yellow-600" : "text-gray-400"}`}
                 />
                 <span
-                  className={`text-sm font-medium ${paymentMethod === "cash" ? "text-[#ff8100]" : "text-gray-700"}`}
+                  className={`text-sm font-medium ${paymentMethod === "cash" ? "text-yellow-700" : "text-gray-700"}`}
                 >
                   Cash on Delivery
                 </span>
@@ -1788,7 +2004,7 @@ export default function CheckoutPage() {
 
       <div className="max-w-[1100px] mx-auto w-full px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] md:pb-6">
         <Button
-          className="w-full bg-[#ff8100] hover:bg-[#e67300] text-white font-bold py-4 rounded-2xl text-base shadow-lg shadow-orange-200/70"
+          className="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-4 rounded-2xl text-base shadow-lg shadow-yellow-200/80"
           onClick={handleProceedToPayment}
           disabled={
             isPlacingOrder ||

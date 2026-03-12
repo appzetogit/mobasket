@@ -1199,12 +1199,6 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       const restaurantZoneIds = getNormalizedEntityZoneIds(restaurant, activeZones);
       if (restaurantZoneIds.length === 0) return false;
       if (userZoneIdNormalized && !restaurantZoneIds.includes(userZoneIdNormalized)) return false;
-
-      restaurant.zoneIds = restaurantZoneIds;
-      restaurant.zoneId = userZoneIdNormalized && restaurantZoneIds.includes(userZoneIdNormalized)
-        ? userZoneIdNormalized
-        : restaurantZoneIds[0];
-
       return true;
     });
 

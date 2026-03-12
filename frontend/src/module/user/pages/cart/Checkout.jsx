@@ -1,8 +1,9 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
-import { CheckCircle, MapPin, CreditCard, ArrowLeft } from "lucide-react"
+import { CheckCircle, MapPin, CreditCard, ArrowLeft, User, Phone } from "lucide-react"
 import { Link } from "react-router-dom"
+import { toast } from "sonner"
 import AnimatedPage from "../../components/AnimatedPage"
 import ScrollReveal from "../../components/ScrollReveal"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
@@ -10,35 +11,158 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import AddressLocationPicker from "@/components/AddressLocationPicker"
+import { zoneAPI } from "@/lib/api"
 import { useCart } from "../../context/CartContext"
 import { useProfile } from "../../context/ProfileContext"
 import { useOrders } from "../../context/OrdersContext"
+
+const getEntityId = (entity) => entity?.id || entity?._id || ""
+
+const formatAddress = (address = {}) =>
+  [
+    address?.street,
+    address?.additionalDetails,
+    address?.city && address?.state
+      ? `${address.city}, ${address.state}${address.zipCode ? ` ${address.zipCode}` : ""}`
+      : [address?.city, address?.state, address?.zipCode].filter(Boolean).join(" "),
+  ]
+    .filter(Boolean)
+    .join(", ")
 
 export default function Checkout() {
   const navigate = useNavigate()
   const { cart, clearCart } = useCart()
   const { getDefaultAddress, getDefaultPaymentMethod, addresses, paymentMethods } = useProfile()
   const { createOrder } = useOrders()
-  const [selectedAddress, setSelectedAddress] = useState(getDefaultAddress()?.id || "")
-  const [selectedPayment, setSelectedPayment] = useState(getDefaultPaymentMethod()?.id || "")
+  const [selectedAddress, setSelectedAddress] = useState(getEntityId(getDefaultAddress()))
+  const [selectedPayment, setSelectedPayment] = useState(getEntityId(getDefaultPaymentMethod()))
+  const [orderingForSomeoneElse, setOrderingForSomeoneElse] = useState(false)
+  const [someoneElseAddress, setSomeoneElseAddress] = useState({
+    recipientName: "",
+    recipientPhone: "",
+    street: "",
+    additionalDetails: "",
+    city: "",
+    state: "",
+    zipCode: "",
+    formattedAddress: "",
+    latitude: "",
+    longitude: "",
+  })
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
 
-  const defaultAddress = addresses.find(addr => addr.id === selectedAddress) || getDefaultAddress()
-  const defaultPayment = paymentMethods.find(pm => pm.id === selectedPayment) || getDefaultPaymentMethod()
+  const defaultAddress =
+    addresses.find((addr) => getEntityId(addr) === selectedAddress) || getDefaultAddress()
+  const defaultPayment =
+    paymentMethods.find((pm) => getEntityId(pm) === selectedPayment) || getDefaultPaymentMethod()
 
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity * 83, 0)
   const deliveryFee = 2.99 * 83
   const tax = subtotal * 0.08
   const total = subtotal + deliveryFee + tax
 
+  const canPlaceOrder = useMemo(() => {
+    if (isPlacingOrder) return false
+    if (!selectedPayment) return false
+    if (!orderingForSomeoneElse) return Boolean(selectedAddress)
+
+    const requiredGuestFields = [
+      someoneElseAddress.recipientName,
+      someoneElseAddress.recipientPhone,
+      someoneElseAddress.street,
+      someoneElseAddress.city,
+      someoneElseAddress.state,
+      someoneElseAddress.zipCode,
+      someoneElseAddress.latitude,
+      someoneElseAddress.longitude,
+    ]
+
+    return requiredGuestFields.every((field) => String(field || "").trim().length > 0)
+  }, [isPlacingOrder, selectedPayment, selectedAddress, orderingForSomeoneElse, someoneElseAddress])
+
   const handlePlaceOrder = async () => {
-    if (!selectedAddress || !selectedPayment) {
-      alert("Please select a delivery address and payment method")
+    if (!selectedPayment) {
+      toast.error("Please select a payment method")
       return
     }
 
     if (cart.length === 0) {
-      alert("Your cart is empty")
+      toast.error("Your cart is empty")
+      return
+    }
+
+    let deliveryAddress = defaultAddress
+    let recipientMeta = null
+
+    if (orderingForSomeoneElse) {
+      const requiredGuestFields = [
+        { key: "recipientName", label: "Recipient name" },
+        { key: "recipientPhone", label: "Recipient phone" },
+        { key: "street", label: "Street address" },
+        { key: "city", label: "City" },
+        { key: "state", label: "State" },
+        { key: "zipCode", label: "Zip code" },
+        { key: "latitude", label: "Latitude" },
+        { key: "longitude", label: "Longitude" },
+      ]
+
+      for (const field of requiredGuestFields) {
+        if (!String(someoneElseAddress[field.key] || "").trim()) {
+          toast.error(`${field.label} is required`)
+          return
+        }
+      }
+
+      const lat = Number(someoneElseAddress.latitude)
+      const lng = Number(someoneElseAddress.longitude)
+      if (!Number.isFinite(lat) || !Number.isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        toast.error("Please enter valid latitude and longitude")
+        return
+      }
+
+      const phoneDigits = String(someoneElseAddress.recipientPhone || "").replace(/\D/g, "")
+      if (phoneDigits.length < 10) {
+        toast.error("Please enter a valid recipient phone number")
+        return
+      }
+
+      try {
+        const zoneResponse = await zoneAPI.detectAllZones(lat, lng, "mofood")
+        const zoneData = zoneResponse?.data?.data
+
+        if (!zoneResponse?.data?.success || zoneData?.status !== "IN_SERVICE") {
+          toast.error("Entered address is outside all active delivery zones")
+          return
+        }
+
+        deliveryAddress = {
+          label: "Guest Delivery",
+          street: String(someoneElseAddress.street || "").trim(),
+          additionalDetails: String(someoneElseAddress.additionalDetails || "").trim(),
+          city: String(someoneElseAddress.city || "").trim(),
+          state: String(someoneElseAddress.state || "").trim(),
+          zipCode: String(someoneElseAddress.zipCode || "").trim(),
+          formattedAddress:
+            String(someoneElseAddress.formattedAddress || "").trim() ||
+            formatAddress(someoneElseAddress),
+          latitude: lat,
+          longitude: lng,
+          zoneIds: Array.isArray(zoneData?.zoneIds) ? zoneData.zoneIds : [],
+        }
+
+        recipientMeta = {
+          forSomeoneElse: true,
+          recipientName: String(someoneElseAddress.recipientName || "").trim(),
+          recipientPhone: String(someoneElseAddress.recipientPhone || "").trim(),
+        }
+      } catch (error) {
+        console.error("Zone validation failed:", error)
+        toast.error(error?.response?.data?.message || "Failed to validate delivery zone")
+        return
+      }
+    } else if (!selectedAddress || !deliveryAddress) {
+      toast.error("Please select a delivery address")
       return
     }
 
@@ -54,12 +178,13 @@ export default function Checkout() {
           quantity: item.quantity,
           image: item.image
         })),
-        address: defaultAddress,
+        address: deliveryAddress,
         paymentMethod: defaultPayment,
         subtotal,
         deliveryFee,
         tax,
         total,
+        recipient: recipientMeta,
         restaurant: cart[0]?.restaurant || cart[0]?.name || "Multiple Restaurants"
       })
 
@@ -108,7 +233,174 @@ export default function Checkout() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
           {/* Left Column - Order Details */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Delivery Address */}
+            <ScrollReveal delay={0.05}>
+              <Card className="border-yellow-200 bg-gradient-to-r from-yellow-50 to-orange-50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                    <User className="h-5 w-5 text-orange-600" />
+                    Who Is This Order For?
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+                      !orderingForSomeoneElse
+                        ? "border-orange-500 bg-white shadow-sm"
+                        : "border-yellow-200 bg-white/70 hover:border-orange-300"
+                    }`}
+                    onClick={() => setOrderingForSomeoneElse(false)}
+                  >
+                    <p className="font-semibold text-sm md:text-base">Myself</p>
+                    <p className="text-xs md:text-sm text-muted-foreground">Use my saved delivery address</p>
+                  </button>
+                  <button
+                    type="button"
+                    className={`rounded-xl border px-4 py-3 text-left transition-colors ${
+                      orderingForSomeoneElse
+                        ? "border-orange-500 bg-white shadow-sm"
+                        : "border-yellow-200 bg-white/70 hover:border-orange-300"
+                    }`}
+                    onClick={() => setOrderingForSomeoneElse(true)}
+                  >
+                    <p className="font-semibold text-sm md:text-base">Someone else</p>
+                    <p className="text-xs md:text-sm text-muted-foreground">Enter recipient and full delivery address</p>
+                  </button>
+                </CardContent>
+              </Card>
+            </ScrollReveal>
+
+            {orderingForSomeoneElse ? (
+              <ScrollReveal delay={0.1}>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <MapPin className="h-5 w-5 text-yellow-600" />
+                      Recipient Delivery Details
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="recipientName">Recipient Name</Label>
+                        <Input
+                          id="recipientName"
+                          placeholder="Full name"
+                          value={someoneElseAddress.recipientName}
+                          onChange={(e) =>
+                            setSomeoneElseAddress((prev) => ({ ...prev, recipientName: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="recipientPhone" className="flex items-center gap-2">
+                          <Phone className="h-4 w-4" />
+                          Recipient Phone
+                        </Label>
+                        <Input
+                          id="recipientPhone"
+                          placeholder="e.g. 9876543210"
+                          value={someoneElseAddress.recipientPhone}
+                          onChange={(e) =>
+                            setSomeoneElseAddress((prev) => ({ ...prev, recipientPhone: e.target.value }))
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="guestStreet">Full Street Address</Label>
+                      <Input
+                        id="guestStreet"
+                        placeholder="House/Flat, Street, Landmark"
+                        value={someoneElseAddress.street}
+                        onChange={(e) =>
+                          setSomeoneElseAddress((prev) => ({ ...prev, street: e.target.value }))
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="guestAdditional">Additional Details</Label>
+                      <Input
+                        id="guestAdditional"
+                        placeholder="Apartment, floor, delivery note"
+                        value={someoneElseAddress.additionalDetails}
+                        onChange={(e) =>
+                          setSomeoneElseAddress((prev) => ({ ...prev, additionalDetails: e.target.value }))
+                        }
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="guestCity">City</Label>
+                        <Input
+                          id="guestCity"
+                          placeholder="City"
+                          value={someoneElseAddress.city}
+                          onChange={(e) =>
+                            setSomeoneElseAddress((prev) => ({ ...prev, city: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="guestState">State</Label>
+                        <Input
+                          id="guestState"
+                          placeholder="State"
+                          value={someoneElseAddress.state}
+                          onChange={(e) =>
+                            setSomeoneElseAddress((prev) => ({ ...prev, state: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="guestZip">Zip Code</Label>
+                        <Input
+                          id="guestZip"
+                          placeholder="Postal code"
+                          value={someoneElseAddress.zipCode}
+                          onChange={(e) =>
+                            setSomeoneElseAddress((prev) => ({ ...prev, zipCode: e.target.value }))
+                          }
+                        />
+                      </div>
+                    </div>
+
+                    <AddressLocationPicker
+                      value={someoneElseAddress}
+                      onChange={setSomeoneElseAddress}
+                      title="Recipient Delivery Pin"
+                      description="Set the exact pin for this address. We validate this pin against active delivery zones."
+                    />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="guestLat">Latitude</Label>
+                        <Input
+                          id="guestLat"
+                          value={someoneElseAddress.latitude}
+                          onChange={(e) =>
+                            setSomeoneElseAddress((prev) => ({ ...prev, latitude: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="guestLng">Longitude</Label>
+                        <Input
+                          id="guestLng"
+                          value={someoneElseAddress.longitude}
+                          onChange={(e) =>
+                            setSomeoneElseAddress((prev) => ({ ...prev, longitude: e.target.value }))
+                          }
+                        />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </ScrollReveal>
+            ) : (
             <ScrollReveal delay={0.1}>
               <Card>
                 <CardHeader>
@@ -121,21 +413,18 @@ export default function Checkout() {
                   {addresses.length > 0 ? (
                     <div className="space-y-3">
                       {addresses.map((address) => {
-                        const isSelected = selectedAddress === address.id
-                        const addressString = [
-                          address.street,
-                          address.additionalDetails,
-                          `${address.city}, ${address.state} ${address.zipCode}`
-                        ].filter(Boolean).join(", ")
+                        const addressId = getEntityId(address)
+                        const isSelected = selectedAddress === addressId
+                        const addressString = formatAddress(address)
 
                         return (
                           <div
-                            key={address.id}
+                            key={addressId}
                             className={`border-2 rounded-lg p-4 cursor-pointer transition-colors ${isSelected
                                 ? "border-yellow-500 bg-yellow-50"
                                 : "border-gray-200 hover:border-yellow-300"
                               }`}
-                            onClick={() => setSelectedAddress(address.id)}
+                            onClick={() => setSelectedAddress(addressId)}
                           >
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
@@ -163,6 +452,7 @@ export default function Checkout() {
                 </CardContent>
               </Card>
             </ScrollReveal>
+            )}
 
             {/* Payment Method */}
             <ScrollReveal delay={0.2}>
@@ -177,17 +467,18 @@ export default function Checkout() {
                   {paymentMethods.length > 0 ? (
                     <div className="space-y-3">
                       {paymentMethods.map((payment) => {
-                        const isSelected = selectedPayment === payment.id
+                        const paymentId = getEntityId(payment)
+                        const isSelected = selectedPayment === paymentId
                         const cardNumber = `**** **** **** ${payment.cardNumber}`
 
                         return (
                           <div
-                            key={payment.id}
+                            key={paymentId}
                             className={`border-2 rounded-lg p-4 cursor-pointer transition-colors ${isSelected
                                 ? "border-yellow-500 bg-yellow-50"
                                 : "border-gray-200 hover:border-yellow-300"
                               }`}
-                            onClick={() => setSelectedPayment(payment.id)}
+                            onClick={() => setSelectedPayment(paymentId)}
                           >
                             <div className="flex items-start justify-between">
                               <div className="flex-1">
@@ -281,7 +572,7 @@ export default function Checkout() {
                   <Button
                     className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-600 hover:to-orange-600 text-white mt-4 md:mt-6 h-11 md:h-12 text-sm md:text-base"
                     onClick={handlePlaceOrder}
-                    disabled={isPlacingOrder || !selectedAddress || !selectedPayment}
+                    disabled={!canPlaceOrder}
                   >
                     {isPlacingOrder ? "Placing Order..." : "Place Order"}
                   </Button>
