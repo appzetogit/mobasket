@@ -122,7 +122,7 @@ const OptimizedImage = ({
 
   // Preload critical images
   useEffect(() => {
-    if (priority && src && !src.startsWith('data:')) {
+    if (priority && src && !src.startsWith('data:') && !supportsOptimization(src)) {
       const link = document.createElement('link')
       link.rel = 'preload'
       link.as = 'image'

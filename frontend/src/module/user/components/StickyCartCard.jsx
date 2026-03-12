@@ -8,6 +8,8 @@ export default function StickyCartCard() {
   const [isVisible, setIsVisible] = useState(true);
   const [bottomPosition, setBottomPosition] = useState("bottom-[70px]"); // Fixed above bottom navigation
   const cartCount = getCartCount();
+  const hasGroceryItems =
+    typeof isGroceryItem === "function" && cart.some((item) => isGroceryItem(item));
 
   // Set fixed position above bottom navigation (no scroll-based movement)
   useEffect(() => {

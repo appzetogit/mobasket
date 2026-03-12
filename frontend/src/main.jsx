@@ -78,6 +78,159 @@ if (savedTheme === 'dark') {
   document.documentElement.classList.remove('dark')
 }
 
+const originalLog = console.log
+console.log = (...args) => {
+  const logStr = args.join(' ')
+
+  if (
+    logStr.includes('Starting wallet fetch') ||
+    logStr.includes('Fetching active earning addons from:') ||
+    logStr.includes('[LOC] Restored recent cached location:') ||
+    logStr.includes('[LOC] Fetching current location on app open...') ||
+    logStr.includes('[LOC] Starting live location tracking (offline/online)') ||
+    logStr.includes('[SYNC] Online status effect triggered:') ||
+    logStr.includes('[LOOKUP] Reached Pickup popup useEffect triggered:') ||
+    logStr.includes('[NEXT] Skipping fetch - popup not shown') ||
+    logStr.includes('Attempting to connect to Delivery Socket.IO:') ||
+    logStr.includes('API_BASE_URL:') ||
+    logStr.includes('Delivery Partner ID:') ||
+    logStr.includes('Environment:') ||
+    logStr.includes('[LOC] Google Maps API check:') ||
+    logStr.includes('Fetching assigned orders from API...') ||
+    logStr.includes('Accepting first location (will be used for admin map):') ||
+    logStr.includes('[LOC] Map recentered to GPS location') ||
+    logStr.includes('[LOC] Current location obtained on app open (filtered):') ||
+    logStr.includes('[LOC] Creating bike marker with smoothed location:') ||
+    logStr.includes('[LOC] Live location updated (smoothed):') ||
+    logStr.includes('[UPLOAD] Sending smoothed location to backend:') ||
+    logStr.includes('Bike marker created with first location') ||
+    logStr.includes('[OK] Bike marker created:') ||
+    logStr.includes('[LOC] Updating bike marker position:') ||
+    logStr.includes('Active earning addons response:') ||
+    logStr.includes('Active offers found:') ||
+    logStr.includes('Selected active offer:') ||
+    logStr.includes('Full API Response:') ||
+    logStr.includes('Response Status:') ||
+    logStr.includes('Response Data:') ||
+    logStr.includes('Response Data Type:') ||
+    logStr.includes('Found wallet in:') ||
+    logStr.includes('Wallet Data from API:') ||
+    logStr.includes('Total Balance:') ||
+    logStr.includes('Cash In Hand:') ||
+    logStr.includes('Total Earned:') ||
+    logStr.includes('Transactions Count:') ||
+    logStr.includes('Transactions:') ||
+    logStr.includes('Transformed Wallet Data:') ||
+    logStr.includes('Found 0 assigned order(s)') ||
+    logStr.includes('No pending orders found') ||
+    logStr.includes('[OK] Smoothed location sent to backend successfully:') ||
+    logStr.includes('[ORDER] New order received from Socket.IO:') ||
+    logStr.includes('[MONEY] Earnings from notification:') ||
+    logStr.includes('[MONEY] Display earnings calculation:') ||
+    logStr.includes('[LOC] Rider location available, initializing map...') ||
+    logStr.includes('[LOC] Initializing map with rider location:') ||
+    logStr.includes('[OK] Map initialized with rider location') ||
+    logStr.includes('[NewOrder] [AUDIO] Attempting to play audio...') ||
+    logStr.includes('[AUDIO] Audio playback skipped - user has not interacted with page yet') ||
+    logStr.includes('[NewOrder] [WARN] playAlertSound returned null') ||
+    logStr.includes('[NewOrder] Audio stopped') ||
+    // --- Order accept / reached-pickup flow ---
+    logStr.includes('[LOOKUP] Order ID lookup:') ||
+    logStr.includes('[LOOKUP] Order ID lookup for reached pickup:') ||
+    logStr.includes('[LOOKUP] Order structure for address extraction:') ||
+    logStr.includes('[ORDER] Accepting order:') ||
+    logStr.includes('[ORDER] Confirming reached pickup for order:') ||
+    logStr.includes('[ORDER] API endpoint:') ||
+    logStr.includes('[ORDER] Reached pickup API response:') ||
+    logStr.includes('[LOC] Current LIVE location:') ||
+    logStr.includes('[LOC] Route data:') ||
+    logStr.includes('[LOC] Route details:') ||
+    logStr.includes('[DETAILS] Order details:') ||
+    logStr.includes('[DETAILS] Full order data from backend:') ||
+    logStr.includes('[NEXT] Skipping fetch - address already exists') ||
+    logStr.includes('[API] API Response:') ||
+    logStr.includes('[OK] Order accepted successfully') ||
+    logStr.includes('[OK] Fetched restaurant data:') ||
+    logStr.includes('[OK] Fetched restaurant.location.formattedAddress:') ||
+    logStr.includes('[OK] Using restaurantName from order:') ||
+    logStr.includes('[OK] Added order to accepted list:') ||
+    logStr.includes('[OK] Order is in pickup phase, showing Reached Pickup popup immediately') ||
+    logStr.includes('[OK] Reached pickup confirmed and status saved in database') ||
+    logStr.includes('[OK] Showing Order ID confirmation popup') ||
+    logStr.includes('[STORE] Restaurant name from backend:') ||
+    logStr.includes('[STORE] Final extracted restaurant name:') ||
+    logStr.includes('[STORE] Updated restaurant info from backend:') ||
+    logStr.includes('[SYNC] Fetching restaurant address by ID:') ||
+    logStr.includes('[MAP] Calculating route with Google Maps Directions API') ||
+    logStr.includes('[MAP] Calculating route to customer using Directions API') ||
+    logStr.includes('[MONEY] Earnings from backend:') ||
+    logStr.includes('[Reached Drop] Order not in delivery phase:') ||
+    // --- Bill upload / order-confirm / delivery completion flow ---
+    logStr.includes('[CAM] Flutter handler not available') ||
+    logStr.includes('[CAM] Uploading bill image to Cloudinary') ||
+    logStr.includes('[OK] Bill image uploaded to Cloudinary') ||
+    logStr.includes('[ORDER] Confirming order ID:') ||
+    logStr.includes('[OK] Order ID confirmed, response:') ||
+    logStr.includes('[LOC] From (Delivery Boy Live Location):') ||
+    logStr.includes('[LOC] To (Customer):') ||
+    logStr.includes('[OK] Route to customer calculated with Directions API') ||
+    logStr.includes('[STATS] Total trip calculated:') ||
+    logStr.includes('[OK] Live tracking polyline initialized for customer delivery route') ||
+    logStr.includes('[OK] Showing Reached Drop popup instantly') ||
+    logStr.includes('[LOC] Distance to customer:') ||
+    logStr.includes('[OK] Reached Drop popup state set to true') ||
+    logStr.includes('[OK] Showing Order Delivered popup instantly') ||
+    logStr.includes('[LOOKUP] Order ID lookup for reached drop:') ||
+    logStr.includes('[ORDER] Confirming reached drop for order:') ||
+    logStr.includes('[OK] Reached drop confirmed') ||
+    logStr.includes('[REVIEW] Submitting review and completing delivery:') ||
+    logStr.includes('[OK] Delivery completed and earnings added to wallet:') ||
+    logStr.includes('[OK] Wallet transaction:') ||
+    // --- Wallet / balance calculation logs ---
+    logStr.includes('calculateDeliveryBalances called with state:') ||
+    logStr.includes('📊 Balance values:') ||
+    logStr.includes('📊 Calculated balances:') ||
+    logStr.includes('💰 Wallet State:') ||
+    logStr.includes('💰 Calculated Balances:') ||
+    logStr.includes('💰 Pocket Balance (same as Total Balance):') ||
+    logStr.includes('💰 Total Balance (includes bonus):') ||
+    logStr.includes('💰 FINAL Pocket Balance Display:') ||
+    logStr.includes('💰 Wallet data fetched:') ||
+    logStr.includes('💰 Total Balance from API:') ||
+    logStr.includes('💰 Pocket Balance from API:') ||
+    logStr.includes('💰 Total Bonus Amount:') ||
+    logStr.includes('🔄 Fetching active earning addons...') ||
+    // --- Profile image logs ---
+    logStr.includes('Profile image data:')
+  ) {
+    return
+  }
+
+  originalLog.apply(console, args)
+}
+
+const originalWarn = console.warn
+console.warn = (...args) => {
+  const warningStr = args.join(' ')
+
+  if (
+    warningStr.includes('Google Maps already loaded outside @googlemaps/js-api-loader') ||
+    warningStr.includes('google.maps.places.AutocompleteService is not available to new customers') ||
+    warningStr.includes('google.maps.places.PlacesService is not available to new customers') ||
+    warningStr.includes('google.maps.Marker is deprecated') ||
+    warningStr.includes('google.maps.DirectionsService is deprecated') ||
+    warningStr.includes('google.maps.DirectionsRenderer is deprecated') ||
+    warningStr.includes('Warning: Missing `Description` or `aria-describedby={undefined}` for {DialogContent}.') ||
+    warningStr.includes('[WARN] Bike marker not on correct map, re-adding...') ||
+    // --- Order accept flow warnings ---
+    warningStr.includes('[WARN] Restaurant address not found in order')
+  ) {
+    return
+  }
+
+  originalWarn.apply(console, args)
+}
+
 // Suppress browser extension errors
 const originalError = console.error
 console.error = (...args) => {

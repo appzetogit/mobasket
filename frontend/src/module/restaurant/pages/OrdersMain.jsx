@@ -1083,7 +1083,6 @@ export default function OrdersMain() {
         orderAPI.resendDeliveryNotification(acceptedOrderId).catch(() => {})
       }
 
-      console.log('Γ£à Order accepted:', acceptedOrderId || orderIdCandidates[0])
       toast.success('Order accepted successfully')
     } catch (error) {
       const isTimeoutError =

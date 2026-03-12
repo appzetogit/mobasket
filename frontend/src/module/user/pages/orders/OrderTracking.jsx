@@ -22,7 +22,8 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
-  DialogContent,
+  DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
@@ -2082,7 +2083,10 @@ export default function OrderTracking() {
           <DialogHeader>
             <DialogTitle className="text-xl font-bold text-gray-900">
               Cancel Order
-            </DialogTitle>
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Provide a reason before confirming order cancellation.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-5 py-6 px-2">
             <div className="space-y-2 w-full">
