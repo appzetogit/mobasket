@@ -1224,7 +1224,7 @@ export default function Profile() {
                         <SettingsIcon className="h-5 w-5 text-gray-700 dark:text-gray-300" />
                       </motion.div>
                       <span className="text-base font-medium text-gray-900 dark:text-white">
-                        Settings
+                        Notification Settings
                       </span>
                     </div>
                     <motion.div
