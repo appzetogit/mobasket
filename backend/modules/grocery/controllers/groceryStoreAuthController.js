@@ -600,6 +600,32 @@ export const updateStoreProfile = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Update grocery store delivery status (isAcceptingOrders)
+ * PUT /api/grocery/store/delivery-status
+ */
+export const updateStoreDeliveryStatus = asyncHandler(async (req, res) => {
+  const store = req.store;
+  const { isAcceptingOrders } = req.body || {};
+
+  if (typeof isAcceptingOrders !== 'boolean') {
+    return errorResponse(res, 400, 'isAcceptingOrders must be a boolean value');
+  }
+
+  store.isAcceptingOrders = isAcceptingOrders;
+  await store.save();
+
+  const storeResponse = store.toObject();
+  delete storeResponse.password;
+
+  return successResponse(res, 200, 'Delivery status updated successfully', {
+    store: {
+      id: storeResponse._id,
+      isAcceptingOrders: Boolean(storeResponse.isAcceptingOrders),
+    },
+  });
+});
+
+/**
  * Update FCM token for grocery store app notifications
  * POST /api/grocery/store/auth/fcm-token
  */

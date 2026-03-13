@@ -1,5 +1,6 @@
 import OutletTimings from '../models/OutletTimings.js';
 import Restaurant from '../models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 import { parseTimeToMinutes, isOpenFromOutletTimings } from '../utils/outletTimingStatus.js';
@@ -40,7 +41,10 @@ const syncRestaurantTimingFields = async (restaurantId, timings) => {
     };
   }
 
-  await Restaurant.findByIdAndUpdate(restaurantId, { $set: updateData });
+  const updatedRestaurant = await Restaurant.findByIdAndUpdate(restaurantId, { $set: updateData });
+  if (!updatedRestaurant) {
+    await GroceryStore.findByIdAndUpdate(restaurantId, { $set: updateData });
+  }
 };
 
 /**

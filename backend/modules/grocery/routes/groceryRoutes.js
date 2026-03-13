@@ -32,6 +32,7 @@ import {
   sendOTP as sendGroceryStoreOTP,
   verifyOTP as verifyGroceryStoreOTP,
   updateStoreProfile,
+  updateStoreDeliveryStatus,
 } from '../controllers/groceryStoreAuthController.js';
 import groceryStoreAuthRoutes from './groceryStoreAuthRoutes.js';
 import groceryStoreOrderRoutes from './groceryStoreOrderRoutes.js';
@@ -57,6 +58,13 @@ import {
   updateAddon as updateStoreAddon,
   deleteAddon as deleteStoreAddon,
 } from '../../restaurant/controllers/menuController.js';
+import {
+  getOutletTimings,
+  upsertOutletTimings,
+  updateDayTiming,
+  toggleOutletTimingsStatus,
+  deleteOutletTimings,
+} from '../../restaurant/controllers/outletTimingsController.js';
 
 const router = express.Router();
 const attachStoreAsRestaurant = (req, _res, next) => {
@@ -130,6 +138,7 @@ router.put('/store/onboarding', authenticate, updateOnboarding);
 
 // Grocery Store Profile Routes (authenticated)
 router.put('/store/profile', authenticate, updateStoreProfile);
+router.put('/store/delivery-status', authenticate, updateStoreDeliveryStatus);
 router.get('/store/owner/me', authenticate, async (req, res) => {
   const store = req.store;
   const storeResponse = store.toObject();
@@ -139,6 +148,13 @@ router.get('/store/owner/me', authenticate, async (req, res) => {
     data: { store: storeResponse }
   });
 });
+
+// Grocery Store Outlet Timings (authenticated)
+router.get('/store/outlet-timings', authenticate, attachStoreAsRestaurant, getOutletTimings);
+router.put('/store/outlet-timings', authenticate, attachStoreAsRestaurant, upsertOutletTimings);
+router.patch('/store/outlet-timings/day/:day', authenticate, attachStoreAsRestaurant, updateDayTiming);
+router.patch('/store/outlet-timings/status', authenticate, attachStoreAsRestaurant, toggleOutletTimingsStatus);
+router.delete('/store/outlet-timings', authenticate, attachStoreAsRestaurant, deleteOutletTimings);
 
 // Grocery Store Notifications (authenticated)
 router.get('/store/notifications', authenticate, getStoreNotifications);

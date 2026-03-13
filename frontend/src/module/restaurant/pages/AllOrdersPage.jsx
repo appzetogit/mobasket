@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react"
 import { DateRangeCalendar } from "@/components/ui/date-range-calendar"
-import { restaurantAPI } from "@/lib/api"
+import { groceryStoreAPI, restaurantAPI } from "@/lib/api"
 
 // Mock order data matching the image (fallback)
 const mockOrders = [
@@ -233,6 +233,7 @@ export default function AllOrdersPage() {
   const location = useLocation()
   const isStore = location.pathname.startsWith("/store")
   const baseRoute = isStore ? "/store" : "/restaurant"
+  const ordersAPI = isStore ? groceryStoreAPI : restaurantAPI
   const [searchQuery, setSearchQuery] = useState("")
   const [showCalendar, setShowCalendar] = useState(false)
   const [showDateRangePopup, setShowDateRangePopup] = useState(false)
@@ -267,8 +268,12 @@ export default function AllOrdersPage() {
   useEffect(() => {
     const fetchRestaurantData = async () => {
       try {
-        const response = await restaurantAPI.getCurrentRestaurant()
-        const data = response?.data?.data?.restaurant || response?.data?.restaurant
+        const response = isStore
+          ? await groceryStoreAPI.getCurrentStore()
+          : await restaurantAPI.getCurrentRestaurant()
+        const data = isStore
+          ? (response?.data?.data?.store || response?.data?.store || response?.data?.data?.restaurant || response?.data?.restaurant)
+          : (response?.data?.data?.restaurant || response?.data?.restaurant)
         if (data) {
           setRestaurantData(data)
         }
@@ -280,7 +285,7 @@ export default function AllOrdersPage() {
       }
     }
     fetchRestaurantData()
-  }, [])
+  }, [isStore])
 
   // Transform API order to component format
   const transformOrder = useCallback((order) => {
@@ -295,7 +300,7 @@ export default function AllOrdersPage() {
                     'Address not available'
     
     // Get restaurant name
-    const restaurantName = restaurantData?.name || order.restaurantId?.name || 'Restaurant'
+    const restaurantName = restaurantData?.name || order.restaurantId?.name || (isStore ? 'Store' : 'Restaurant')
     
     // Get customer name
     const customerName = order.userId?.name || order.customerName || 'Customer'
@@ -327,11 +332,11 @@ export default function AllOrdersPage() {
           : 'restaurant'
 
     if (status === 'REJECTED' && order.rejectionReason) {
-      reason = `Rejected by Restaurant: ${order.rejectionReason}`
+      reason = `Rejected by ${isStore ? 'Store' : 'Restaurant'}: ${order.rejectionReason}`
     } else if (status === 'CANCELLED' && order.cancellationReason) {
       reason = `Cancelled by ${cancelledByLabel}: ${order.cancellationReason}`
     } else if (status === 'REJECTED') {
-      reason = 'Rejected by Restaurant'
+      reason = `Rejected by ${isStore ? 'Store' : 'Restaurant'}`
     } else if (status === 'CANCELLED') {
       reason = `Cancelled by ${cancelledByLabel}`
     }
@@ -360,7 +365,7 @@ export default function AllOrdersPage() {
       createdAt: order.createdAt,
       mongoId: order._id?.toString()
     }
-  }, [restaurantData])
+  }, [isStore, restaurantData])
 
   // Fetch orders from backend
   useEffect(() => {
@@ -376,7 +381,7 @@ export default function AllOrdersPage() {
         }
         
         // Fetch all orders (we'll filter by date range on frontend)
-        const response = await restaurantAPI.getOrders(params)
+        const response = await ordersAPI.getOrders(params)
         
         if (response.data?.success && response.data.data?.orders) {
           // Transform orders
@@ -412,7 +417,7 @@ export default function AllOrdersPage() {
     if (!restaurantData) return // Don't fetch if restaurant data is not loaded yet
     
     fetchOrders()
-  }, [startDate, endDate, restaurantData, transformOrder])
+  }, [endDate, ordersAPI, restaurantData, startDate, transformOrder])
 
   // Close calendar when clicking outside
   useEffect(() => {
