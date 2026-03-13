@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { Search, Menu, ChevronRight, MapPin, X, Bell } from "lucide-react"
 import { restaurantAPI, groceryStoreAPI } from "@/lib/api"
@@ -10,12 +10,16 @@ export default function RestaurantNavbar({
   showSearch = true,
   showOfflineOnlineTag = true,
   showNotifications = true,
+  onSearchChange,
 }) {
   const navigate = useNavigate()
   const routeLocation = useLocation()
   const isGroceryStore = routeLocation.pathname.startsWith('/store')
+  const isOrdersHome = routeLocation.pathname === (isGroceryStore ? "/store" : "/restaurant")
   const [isSearchActive, setIsSearchActive] = useState(false)
   const [searchValue, setSearchValue] = useState("")
+  const skipSearchHistoryRef = useRef(false)
+  const searchHistoryKey = isGroceryStore ? "storeOrdersSearchOpen" : "restaurantOrdersSearchOpen"
   const [status, setStatus] = useState("Offline")
   const [restaurantData, setRestaurantData] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -252,11 +256,62 @@ export default function RestaurantNavbar({
   const handleSearchClose = () => {
     setIsSearchActive(false)
     setSearchValue("")
+    if (typeof onSearchChange === "function") {
+      onSearchChange("")
+    }
   }
 
   const handleSearchChange = (e) => {
-    setSearchValue(e.target.value)
+    const nextValue = e.target.value
+    setSearchValue(nextValue)
+    if (typeof onSearchChange === "function") {
+      onSearchChange(nextValue)
+    }
   }
+
+  useEffect(() => {
+    if (!showSearch || !isOrdersHome) return
+    if (!isSearchActive) return
+    if (skipSearchHistoryRef.current) {
+      skipSearchHistoryRef.current = false
+      return
+    }
+
+    const currentUrl = window.location.pathname + window.location.search
+    const currentState = window.history.state || {}
+    if (currentState?.[searchHistoryKey]) return
+
+    window.history.pushState(
+      { ...currentState, [searchHistoryKey]: true },
+      "",
+      currentUrl
+    )
+  }, [isSearchActive, isOrdersHome, searchHistoryKey, showSearch])
+
+  useEffect(() => {
+    if (!showSearch || !isOrdersHome) return
+
+    const handlePopState = (event) => {
+      if (!window.location.pathname.startsWith(isGroceryStore ? "/store" : "/restaurant")) return
+      const shouldOpen = Boolean(event.state?.[searchHistoryKey])
+      if (shouldOpen === isSearchActive) return
+      skipSearchHistoryRef.current = true
+      if (shouldOpen) {
+        setIsSearchActive(true)
+      } else {
+        setIsSearchActive(false)
+        setSearchValue("")
+        if (typeof onSearchChange === "function") {
+          onSearchChange("")
+        }
+      }
+    }
+
+    window.addEventListener("popstate", handlePopState)
+    return () => {
+      window.removeEventListener("popstate", handlePopState)
+    }
+  }, [isGroceryStore, isOrdersHome, isSearchActive, onSearchChange, searchHistoryKey, showSearch])
 
   const handleMenuClick = () => {
     navigate(isGroceryStore ? "/store/explore" : "/restaurant/explore")

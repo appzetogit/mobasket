@@ -558,6 +558,8 @@ export default function OrdersMain() {
   const [isSheetOpen, setIsSheetOpen] = useState(false)
   const contentRef = useRef(null)
   const filterBarRef = useRef(null)
+  const skipFilterHistoryRef = useRef(false)
+  const filterHistoryKey = isGroceryStore ? "storeOrdersFilter" : "restaurantOrdersFilter"
   const touchStartX = useRef(0)
   const touchEndX = useRef(0)
   const touchStartY = useRef(0)
@@ -651,6 +653,68 @@ export default function OrdersMain() {
       // Ignore storage errors and continue using in-memory state.
     }
   }, [activeFilter])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const currentUrl = window.location.pathname + window.location.search
+    const currentState = window.history.state || {}
+    if (currentState?.[filterHistoryKey] === undefined) {
+      window.history.replaceState(
+        { ...currentState, [filterHistoryKey]: "preparing" },
+        "",
+        currentUrl
+      )
+    }
+  }, [filterHistoryKey])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    if (skipFilterHistoryRef.current) {
+      skipFilterHistoryRef.current = false
+      return
+    }
+
+    const currentUrl = window.location.pathname + window.location.search
+    const currentState = window.history.state || {}
+    const currentValue = currentState?.[filterHistoryKey]
+
+    if (activeFilter === "preparing") {
+      if (currentValue !== "preparing") {
+        window.history.replaceState(
+          { ...currentState, [filterHistoryKey]: "preparing" },
+          "",
+          currentUrl
+        )
+      }
+      return
+    }
+
+    if (currentValue === activeFilter) return
+
+    window.history.pushState(
+      { ...currentState, [filterHistoryKey]: activeFilter },
+      "",
+      currentUrl
+    )
+  }, [activeFilter, filterHistoryKey])
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const basePath = isGroceryStore ? "/store" : "/restaurant"
+
+    const handlePopState = (event) => {
+      if (!window.location.pathname.startsWith(basePath)) return
+      const nextFilter = event.state?.[filterHistoryKey] || "preparing"
+      if (nextFilter === activeFilter) return
+      skipFilterHistoryRef.current = true
+      setActiveFilter(nextFilter)
+    }
+
+    window.addEventListener("popstate", handlePopState)
+    return () => {
+      window.removeEventListener("popstate", handlePopState)
+    }
+  }, [activeFilter, filterHistoryKey, isGroceryStore])
 
   // Restaurant notifications hook for real-time orders
   const { newOrder, clearNewOrder, isConnected } = useRestaurantNotifications({
