@@ -279,8 +279,17 @@ export const approveWithdrawalRequest = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, `Withdrawal request is already ${withdrawalRequest.status}`);
     }
 
-    // Get restaurant wallet
-    const wallet = await RestaurantWallet.findOrCreateByRestaurantId(withdrawalRequest.restaurantId._id);
+    const entityId =
+      withdrawalRequest?.restaurantId?._id ||
+      withdrawalRequest?.restaurantId;
+
+    if (!entityId) {
+      logger.error(`Withdrawal request ${id} is missing restaurant/store reference`);
+      return errorResponse(res, 400, 'Invalid withdrawal request: missing entity reference');
+    }
+
+    // Shared wallet model is used for both restaurant and grocery store entities.
+    const wallet = await RestaurantWallet.findOrCreateByRestaurantId(entityId);
 
     // Update withdrawal request
     withdrawalRequest.status = 'Approved';

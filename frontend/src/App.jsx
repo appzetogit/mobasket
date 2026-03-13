@@ -336,6 +336,17 @@ export default function App() {
           }
         />
         <Route
+          path="/store/details"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <OutletInfo />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/store/product/:id"
           element={
             <ProtectedRoute
