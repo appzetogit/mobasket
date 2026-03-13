@@ -17,6 +17,8 @@ import {
   LayoutGrid,
   Printer,
   Monitor,
+  Minus,
+  Plus,
   X,
   Snowflake,
   Store,
@@ -55,6 +57,28 @@ const isCoarseLocationText = (value) => {
   if (hasDistrict && !hasPinCode) return true;
 
   return false;
+};
+
+const normalizeVariantKey = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
+
+const getGroceryCartItemId = (product) => {
+  const productId = String(product?._id || product?.id || "").trim();
+  if (!productId) return "";
+
+  const variantLabel = String(
+    product?.unit ||
+    product?.weight ||
+    product?.variantName ||
+    product?.selectedVariant?.name ||
+    "",
+  ).trim();
+  const variantKey = normalizeVariantKey(variantLabel);
+  return variantKey ? `${productId}::${variantKey}` : productId;
 };
 
 const formatSavedAddressForHeader = (address) => {
@@ -126,7 +150,7 @@ const GroceryPage = () => {
   const FALLBACK_IMAGE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
   const navigate = useNavigate();
   const routerLocation = useRouterLocation();
-  const { getGroceryCartCount, addToCart, isInCart } = useCart();
+  const { getGroceryCartCount, addToCart, getCartItem, isInCart, updateQuantity } = useCart();
   const { addresses, getDefaultAddress } = useProfile();
   const { location: userLocation, loading: locationLoading } = useUserLocation();
   const { openLocationSelector } = useLocationSelector();
@@ -2517,7 +2541,10 @@ const GroceryPage = () => {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
                   {visibleLayoutProducts.map((product) => {
                     const productId = product?._id || product?.id;
-                    const alreadyInCart = isInCart(productId);
+                    const cartItemId = getGroceryCartItemId(product);
+                    const cartItem = cartItemId ? getCartItem(cartItemId) : null;
+                    const currentQty = Number(cartItem?.quantity || 0);
+                    const alreadyInCart = currentQty > 0 || (cartItemId ? isInCart(cartItemId) : false);
 
                     return (
                       <div
@@ -2560,19 +2587,69 @@ const GroceryPage = () => {
                               <p className="text-[10px] text-slate-400 dark:text-slate-500 line-through">Rs {Number(product?.mrp || 0)}</p>
                             )}
                           </div>
-                          <button
-                            type="button"
-                            className={`h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg text-[10px] sm:text-xs font-[900] border ${alreadyInCart
-                              ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-400/40"
-                              : "bg-white dark:bg-[#0f1b2c] text-slate-900 dark:text-slate-100 border-[#facd01] dark:border-cyan-400/70"
-                              }`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleAddProductToCart(product, event);
-                            }}
-                          >
-                            {alreadyInCart ? "ADDED" : "ADD"}
-                          </button>
+                          {alreadyInCart ? (
+                            <div
+                              className="flex items-center gap-1 rounded-full border border-emerald-300 bg-white px-1 py-0.5 shadow-sm"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                              }}
+                            >
+                              <button
+                                type="button"
+                                className="w-5 h-5 flex items-center justify-center text-emerald-700"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  updateQuantity(
+                                    cartItemId,
+                                    currentQty - 1,
+                                    null,
+                                    {
+                                      id: cartItemId,
+                                      name: product?.name || "Product",
+                                      imageUrl: getProductImage(product),
+                                      stockQuantity: product?.stockQuantity,
+                                    },
+                                  );
+                                }}
+                              >
+                                <Minus size={12} />
+                              </button>
+                              <span className="text-[11px] font-bold text-emerald-700 min-w-[14px] text-center">
+                                {currentQty}
+                              </span>
+                              <button
+                                type="button"
+                                className="w-5 h-5 flex items-center justify-center text-emerald-700"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  updateQuantity(
+                                    cartItemId,
+                                    currentQty + 1,
+                                    null,
+                                    {
+                                      id: cartItemId,
+                                      name: product?.name || "Product",
+                                      imageUrl: getProductImage(product),
+                                      stockQuantity: product?.stockQuantity,
+                                    },
+                                  );
+                                }}
+                              >
+                                <Plus size={12} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="h-7 sm:h-8 px-2.5 sm:px-3 rounded-lg text-[10px] sm:text-xs font-[900] border bg-white dark:bg-[#0f1b2c] text-slate-900 dark:text-slate-100 border-[#facd01] dark:border-cyan-400/70"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleAddProductToCart(product, event);
+                              }}
+                            >
+                              ADD
+                            </button>
+                          )}
                         </div>
                       </div>
                     );
@@ -2764,7 +2841,10 @@ const GroceryPage = () => {
               <div className="flex gap-3 overflow-x-auto no-scrollbar pb-1">
                 {section.products.map((product) => {
                   const productId = String(product?._id || product?.id || "");
-                  const alreadyInCart = productId ? isInCart(productId) : false;
+                  const cartItemId = getGroceryCartItemId(product);
+                  const cartItem = cartItemId ? getCartItem(cartItemId) : null;
+                  const currentQty = Number(cartItem?.quantity || 0);
+                  const alreadyInCart = currentQty > 0 || (cartItemId ? isInCart(cartItemId) : false);
                   return (
                     <div
                       key={`best-section-product-${section.id}-${productId}`}
@@ -2788,19 +2868,67 @@ const GroceryPage = () => {
                           <p className="text-sm font-bold text-slate-900 dark:text-slate-100">Rs {Number(product?.sellingPrice || 0)}</p>
                           <p className="text-xs text-slate-400 dark:text-slate-500 line-through">Rs {Number(product?.mrp || 0)}</p>
                         </div>
-                        <button
-                          type="button"
-                          className={`h-8 px-3 rounded-lg text-xs font-[900] border ${alreadyInCart
-                            ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-400/40"
-                            : "bg-white dark:bg-[#0f1b2c] text-[#2f8d2f] dark:text-emerald-300 border-[#79b879] dark:border-emerald-400/70"
-                            }`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            if (!alreadyInCart) handleAddProductToCart(product, event);
-                          }}
-                        >
-                          {alreadyInCart ? "ADDED" : "ADD"}
-                        </button>
+                        {alreadyInCart ? (
+                          <div
+                            className="flex items-center gap-1 rounded-full border border-emerald-300 bg-white px-1 py-0.5 shadow-sm"
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            <button
+                              type="button"
+                              className="w-5 h-5 flex items-center justify-center text-emerald-700"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                updateQuantity(
+                                  cartItemId,
+                                  currentQty - 1,
+                                  null,
+                                  {
+                                    id: cartItemId,
+                                    name: product?.name || "Product",
+                                    imageUrl: getProductImage(product),
+                                    stockQuantity: product?.stockQuantity,
+                                  },
+                                );
+                              }}
+                            >
+                              <Minus size={12} />
+                            </button>
+                            <span className="text-[11px] font-bold text-emerald-700 min-w-[14px] text-center">
+                              {currentQty}
+                            </span>
+                            <button
+                              type="button"
+                              className="w-5 h-5 flex items-center justify-center text-emerald-700"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                updateQuantity(
+                                  cartItemId,
+                                  currentQty + 1,
+                                  null,
+                                  {
+                                    id: cartItemId,
+                                    name: product?.name || "Product",
+                                    imageUrl: getProductImage(product),
+                                    stockQuantity: product?.stockQuantity,
+                                  },
+                                );
+                              }}
+                            >
+                              <Plus size={12} />
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            className="h-8 px-3 rounded-lg text-xs font-[900] border bg-white dark:bg-[#0f1b2c] text-[#2f8d2f] dark:text-emerald-300 border-[#79b879] dark:border-emerald-400/70"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              handleAddProductToCart(product, event);
+                            }}
+                          >
+                            ADD
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
@@ -3030,7 +3158,10 @@ const GroceryPage = () => {
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 md:max-w-6xl md:mx-auto pb-4">
                       {collectionVisibleProducts.map((product) => {
                         const productId = product?._id || product?.id;
-                        const alreadyInCart = isInCart(productId);
+                        const cartItemId = getGroceryCartItemId(product);
+                        const cartItem = cartItemId ? getCartItem(cartItemId) : null;
+                        const currentQty = Number(cartItem?.quantity || 0);
+                        const alreadyInCart = currentQty > 0 || (cartItemId ? isInCart(cartItemId) : false);
                         const sellingPrice = Number(product?.sellingPrice || 0);
                         const mrp = Number(product?.mrp || 0);
                         const discountPercent = mrp > sellingPrice && mrp > 0
@@ -3079,16 +3210,64 @@ const GroceryPage = () => {
                                   <p className="text-[11px] text-slate-400 dark:text-slate-500 line-through">Rs {mrp}</p>
                                 )}
                               </div>
-                              <button
-                                type="button"
-                                className={`h-7 px-3 rounded-md text-[11px] font-black border ${alreadyInCart
-                                  ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-400/40"
-                                  : "bg-white dark:bg-[#0f1b2c] text-slate-900 dark:text-slate-100 border-[#facd01] dark:border-cyan-400/70"
-                                  }`}
-                                onClick={(event) => handleAddProductToCart(product, event)}
-                              >
-                                {alreadyInCart ? "ADDED" : "ADD"}
-                              </button>
+                              {alreadyInCart ? (
+                                <div
+                                  className="flex items-center gap-1 rounded-full border border-emerald-300 bg-white px-1 py-0.5 shadow-sm"
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  <button
+                                    type="button"
+                                    className="w-5 h-5 flex items-center justify-center text-emerald-700"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      updateQuantity(
+                                        cartItemId,
+                                        currentQty - 1,
+                                        null,
+                                        {
+                                          id: cartItemId,
+                                          name: product?.name || "Product",
+                                          imageUrl: getProductImage(product),
+                                          stockQuantity: product?.stockQuantity,
+                                        },
+                                      );
+                                    }}
+                                  >
+                                    <Minus size={12} />
+                                  </button>
+                                  <span className="text-[11px] font-bold text-emerald-700 min-w-[14px] text-center">
+                                    {currentQty}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="w-5 h-5 flex items-center justify-center text-emerald-700"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      updateQuantity(
+                                        cartItemId,
+                                        currentQty + 1,
+                                        null,
+                                        {
+                                          id: cartItemId,
+                                          name: product?.name || "Product",
+                                          imageUrl: getProductImage(product),
+                                          stockQuantity: product?.stockQuantity,
+                                        },
+                                      );
+                                    }}
+                                  >
+                                    <Plus size={12} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="h-7 px-3 rounded-md text-[11px] font-black border bg-white dark:bg-[#0f1b2c] text-slate-900 dark:text-slate-100 border-[#facd01] dark:border-cyan-400/70"
+                                  onClick={(event) => handleAddProductToCart(product, event)}
+                                >
+                                  ADD
+                                </button>
+                              )}
                             </div>
                           </div>
                         );
@@ -3163,7 +3342,10 @@ const GroceryPage = () => {
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-3 md:gap-4 md:max-w-6xl md:mx-auto pb-4">
                       {groceryWishlistedProducts.map((product) => {
                         const productId = product?._id || product?.id;
-                        const alreadyInCart = isInCart(productId);
+                        const cartItemId = getGroceryCartItemId(product);
+                        const cartItem = cartItemId ? getCartItem(cartItemId) : null;
+                        const currentQty = Number(cartItem?.quantity || 0);
+                        const alreadyInCart = currentQty > 0 || (cartItemId ? isInCart(cartItemId) : false);
                         const sellingPrice = Number(product?.sellingPrice || product?.price || 0);
                         const mrp = Number(product?.mrp || 0);
 
@@ -3197,16 +3379,64 @@ const GroceryPage = () => {
                                   <p className="text-[11px] text-slate-400 dark:text-slate-500 line-through">Rs {mrp}</p>
                                 )}
                               </div>
-                              <button
-                                type="button"
-                                className={`h-7 px-3 rounded-md text-[11px] font-black border ${alreadyInCart
-                                  ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-400/40"
-                                  : "bg-white dark:bg-[#0f1b2c] text-slate-900 dark:text-slate-100 border-[#facd01] dark:border-cyan-400/70"
-                                  }`}
-                                onClick={(event) => handleAddProductToCart(product, event)}
-                              >
-                                {alreadyInCart ? "ADDED" : "ADD"}
-                              </button>
+                              {alreadyInCart ? (
+                                <div
+                                  className="flex items-center gap-1 rounded-full border border-emerald-300 bg-white px-1 py-0.5 shadow-sm"
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  <button
+                                    type="button"
+                                    className="w-5 h-5 flex items-center justify-center text-emerald-700"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      updateQuantity(
+                                        cartItemId,
+                                        currentQty - 1,
+                                        null,
+                                        {
+                                          id: cartItemId,
+                                          name: product?.name || "Product",
+                                          imageUrl: getProductImage(product),
+                                          stockQuantity: product?.stockQuantity,
+                                        },
+                                      );
+                                    }}
+                                  >
+                                    <Minus size={12} />
+                                  </button>
+                                  <span className="text-[11px] font-bold text-emerald-700 min-w-[14px] text-center">
+                                    {currentQty}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="w-5 h-5 flex items-center justify-center text-emerald-700"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      updateQuantity(
+                                        cartItemId,
+                                        currentQty + 1,
+                                        null,
+                                        {
+                                          id: cartItemId,
+                                          name: product?.name || "Product",
+                                          imageUrl: getProductImage(product),
+                                          stockQuantity: product?.stockQuantity,
+                                        },
+                                      );
+                                    }}
+                                  >
+                                    <Plus size={12} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  className="h-7 px-3 rounded-md text-[11px] font-black border bg-white dark:bg-[#0f1b2c] text-slate-900 dark:text-slate-100 border-[#facd01] dark:border-cyan-400/70"
+                                  onClick={(event) => handleAddProductToCart(product, event)}
+                                >
+                                  ADD
+                                </button>
+                              )}
                             </div>
                           </div>
                         );

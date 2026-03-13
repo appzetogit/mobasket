@@ -199,10 +199,80 @@ export default function OrdersPage() {
       ) : (
         <div className="px-4 py-3 md:py-4 space-y-2.5 md:space-y-4">
           {orders.map((order) => {
-            // Check if payment failed
-            const paymentFailed =
-              order.payment?.status === "failed" ||
-              order.payment?.status === "pending";
+            const normalizedPaymentMethod = String(
+              order.payment?.method || order.paymentMethod || ""
+            )
+              .trim()
+              .toLowerCase();
+            const rawPaymentStatus =
+              order.payment?.status ||
+              order.paymentStatus ||
+              order.payment_status ||
+              order.payment?.paymentStatus ||
+              order.payment?.payment_status ||
+              "";
+            const normalizedPaymentStatus = String(rawPaymentStatus)
+              .trim()
+              .toLowerCase();
+
+            const isCodPayment =
+              normalizedPaymentMethod === "cash" ||
+              normalizedPaymentMethod === "cod" ||
+              normalizedPaymentMethod === "cash_on_delivery" ||
+              normalizedPaymentMethod === "cash on delivery" ||
+              normalizedPaymentMethod.includes("cash") ||
+              normalizedPaymentMethod.includes("cod");
+
+            const paidStatuses = new Set([
+              "paid",
+              "completed",
+              "success",
+              "succeeded",
+              "captured",
+              "settled",
+              "charged",
+            ]);
+            const pendingStatuses = new Set([
+              "pending",
+              "processing",
+              "created",
+              "authorized",
+              "authorised",
+              "queued",
+              "awaiting",
+              "in_progress",
+              "in-progress",
+            ]);
+            const failedStatuses = new Set([
+              "failed",
+              "failure",
+              "payment_failed",
+              "declined",
+              "rejected",
+              "cancelled",
+              "canceled",
+              "expired",
+            ]);
+
+            const isDelivered = order.status === "Delivered";
+
+            const paymentStatusKey = isCodPayment
+              ? paidStatuses.has(normalizedPaymentStatus) || isDelivered
+                ? "paid"
+                : "pending"
+              : failedStatuses.has(normalizedPaymentStatus)
+                ? "failed"
+                : paidStatuses.has(normalizedPaymentStatus)
+                  ? "paid"
+                  : pendingStatuses.has(normalizedPaymentStatus) ||
+                      normalizedPaymentStatus === ""
+                    ? "pending"
+                    : "pending";
+
+            const paymentStatusLabel =
+              paymentStatusKey.charAt(0).toUpperCase() +
+              paymentStatusKey.slice(1);
+            const paymentFailed = paymentStatusKey === "failed";
 
             return (
               <div
@@ -233,14 +303,36 @@ export default function OrdersPage() {
                     >
                       {order.status}
                     </div>
-                    {paymentFailed && (
-                      <div className="flex items-center gap-1 px-1.5 py-0.5 bg-red-50 rounded-full">
-                        <AlertCircle className="w-2.5 h-2.5 text-red-600" />
-                        <span className="text-[9px] text-red-600 font-semibold">
-                          Payment Failed
-                        </span>
-                      </div>
-                    )}
+                    <div
+                      className={`flex items-center gap-1 px-1.5 py-0.5 rounded-full ${
+                        paymentStatusKey === "paid"
+                          ? "bg-green-50"
+                          : paymentStatusKey === "failed"
+                            ? "bg-red-50"
+                            : "bg-yellow-50"
+                      }`}
+                    >
+                      <AlertCircle
+                        className={`w-2.5 h-2.5 ${
+                          paymentStatusKey === "paid"
+                            ? "text-green-600"
+                            : paymentStatusKey === "failed"
+                              ? "text-red-600"
+                              : "text-yellow-600"
+                        }`}
+                      />
+                      <span
+                        className={`text-[9px] font-semibold ${
+                          paymentStatusKey === "paid"
+                            ? "text-green-600"
+                            : paymentStatusKey === "failed"
+                              ? "text-red-600"
+                              : "text-yellow-600"
+                        }`}
+                      >
+                        Payment {paymentStatusLabel}
+                      </span>
+                    </div>
                   </div>
                 </div>
 

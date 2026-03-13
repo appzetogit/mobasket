@@ -16,7 +16,7 @@ export default function Settings() {
               <ArrowLeft className="h-5 w-5 text-black dark:text-white" />
             </Button>
           </Link>
-          <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-black dark:text-white">Notification Settings</h1>
+          <h1 className="text-lg sm:text-xl md:text-2xl font-bold text-black dark:text-white">Settings</h1>
         </div>
         <Card className="bg-white dark:bg-[#1a1a1a] border-0 dark:border-gray-800">
           <CardHeader>

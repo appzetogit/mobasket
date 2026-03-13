@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, ShoppingCart } from "lucide-react";
+import { ArrowLeft, Minus, Plus, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import { useCart } from "../../user/context/CartContext";
@@ -64,7 +64,7 @@ export default function GroceryBestSellerProductsPage() {
     );
   }
 
-  const { addToCart, isInCart } = useCart();
+  const { addToCart, getCartItem, isInCart, updateQuantity } = useCart();
   const { location, loading: locationLoading } = useUserLocation();
   const { zoneId, refreshZone, loading: zoneLoading } = useZone(location, "mogrocery");
   const [loading, setLoading] = useState(true);
@@ -235,7 +235,7 @@ export default function GroceryBestSellerProductsPage() {
       }
 
       const sourcePosition = getSourcePosition(event, product?._id || product?.id);
-      addToCart({
+      const didAdd = addToCart({
         id: cartItemId,
         cartItemId,
         productId: product?._id || product?.id,
@@ -277,7 +277,9 @@ export default function GroceryBestSellerProductsPage() {
         platform: "mogrocery",
         stockQuantity: product?.stockQuantity,
       }, sourcePosition);
-      toast.success("Added to cart");
+      if (didAdd) {
+        toast.success("Added to cart");
+      }
     } catch (err) {
       toast.error(err?.message || "Failed to add to cart");
     }
@@ -356,7 +358,9 @@ export default function GroceryBestSellerProductsPage() {
         <div className="grid grid-cols-2 gap-3 px-4 py-4 md:grid-cols-3">
           {products.map((product) => {
             const { price, mrp, weight, cartItemId } = getCardProductData(product);
-            const alreadyInCart = cartItemId ? isInCart(cartItemId) : false;
+            const cartItem = cartItemId ? getCartItem(cartItemId) : null;
+            const currentQty = Number(cartItem?.quantity || 0);
+            const alreadyInCart = currentQty > 0 || (cartItemId ? isInCart(cartItemId) : false);
 
             return (
               <div
@@ -384,17 +388,69 @@ export default function GroceryBestSellerProductsPage() {
                         <p className="text-[10px] font-semibold text-emerald-700 mt-1">Added to cart</p>
                       )}
                     </div>
-                    <button
-                      type="button"
-                      onClick={(event) => handleAddToCart(product, event)}
-                      className={`h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1 ${alreadyInCart
-                          ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                          : "bg-emerald-600 text-white"
-                        }`}
-                    >
-                      <ShoppingCart size={14} />
-                      {alreadyInCart ? "Added" : "Add"}
-                    </button>
+                    {alreadyInCart ? (
+                      <div
+                        className="flex items-center gap-1 rounded-full border border-emerald-300 bg-white px-1 py-0.5 shadow-sm"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <button
+                          type="button"
+                          className="w-5 h-5 flex items-center justify-center text-emerald-700"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateQuantity(
+                              cartItemId,
+                              currentQty - 1,
+                              null,
+                              {
+                                id: cartItemId,
+                                name: product?.name || "Product",
+                                imageUrl:
+                                  (Array.isArray(product?.images) && product.images[0]) ||
+                                  "https://via.placeholder.com/200",
+                                stockQuantity: product?.stockQuantity,
+                              },
+                            );
+                          }}
+                        >
+                          <Minus size={12} />
+                        </button>
+                        <span className="text-[11px] font-bold text-emerald-700 min-w-[14px] text-center">
+                          {currentQty}
+                        </span>
+                        <button
+                          type="button"
+                          className="w-5 h-5 flex items-center justify-center text-emerald-700"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            updateQuantity(
+                              cartItemId,
+                              currentQty + 1,
+                              null,
+                              {
+                                id: cartItemId,
+                                name: product?.name || "Product",
+                                imageUrl:
+                                  (Array.isArray(product?.images) && product.images[0]) ||
+                                  "https://via.placeholder.com/200",
+                                stockQuantity: product?.stockQuantity,
+                              },
+                            );
+                          }}
+                        >
+                          <Plus size={12} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={(event) => handleAddToCart(product, event)}
+                        className="h-8 px-3 rounded-lg text-xs font-semibold flex items-center gap-1 bg-emerald-600 text-white"
+                      >
+                        <ShoppingCart size={14} />
+                        Add
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

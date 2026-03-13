@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Search, Share2, Clock, ChevronDown, CheckCircle, X, Minus, Plus } from "lucide-react";
+import { ArrowLeft, Share2, ChevronDown, CheckCircle, X, Minus, Plus } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 import WishlistButton from "@/components/WishlistButton";
@@ -261,8 +261,6 @@ export default function FoodDetailPage() {
     return null;
   };
 
-  const handleSearchClick = () => navigate("/grocery");
-
   const handleShareClick = async () => {
     const url = window.location.href;
     const payload = {
@@ -377,13 +375,6 @@ export default function FoodDetailPage() {
     <div className="flex items-center gap-2">
       <WishlistButton item={wishlistItem} type="food" className="w-10 h-10 bg-white/70 backdrop-blur-md border border-white/60" />
       <button
-        onClick={handleSearchClick}
-        className="w-10 h-10 rounded-full bg-white/70 backdrop-blur-md border border-white/60 flex items-center justify-center"
-        aria-label="Search"
-      >
-        <Search className="w-5 h-5 text-slate-900" />
-      </button>
-      <button
         onClick={handleShareClick}
         className="w-10 h-10 rounded-full bg-white/70 backdrop-blur-md border border-white/60 flex items-center justify-center"
         aria-label="Share"
@@ -485,10 +476,6 @@ export default function FoodDetailPage() {
               Home / {product.restaurant || "MoGrocery"} / {product.name}
             </p>
 
-            <div className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded-full text-[10px] md:text-xs font-bold mb-2 md:mb-4 w-max">
-              <Clock size={12} />
-              {product.time}
-            </div>
 
             <h1 className="text-[20px] md:text-3xl font-[900] text-slate-900 leading-snug">{product.name}</h1>
 
@@ -741,21 +728,6 @@ export default function FoodDetailPage() {
         )}
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-3 md:hidden">
-        <button
-          onClick={(e) => {
-            if (isAddedToCart) {
-              navigate("/grocery/cart");
-              return;
-            }
-            handleAddToCart(null, e);
-          }}
-          className={`w-full h-12 rounded-xl text-white font-bold text-base shadow-md ${isAddedToCart ? "bg-emerald-700 hover:bg-emerald-700" : "bg-[#16a34a] hover:bg-[#15803d]"
-            }`}
-        >
-          {isAddedToCart ? "Added to cart" : "Add to cart"}
-        </button>
-      </div>
 
       <style>{`
         .no-scrollbar::-webkit-scrollbar { display: none; }

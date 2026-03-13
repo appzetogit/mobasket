@@ -155,20 +155,20 @@ function extractReverseGeocodedAddress(response, latitude, longitude) {
 
   const fromArray = Array.isArray(components)
     ? {
-        city:
-          components.find((c) => c.types?.includes("locality"))?.long_name ||
-          components.find((c) => c.types?.includes("administrative_area_level_2"))?.long_name ||
-          "",
-        state:
-          components.find((c) => c.types?.includes("administrative_area_level_1"))?.long_name ||
-          "",
-        zipCode: components.find((c) => c.types?.includes("postal_code"))?.long_name || "",
-      }
+      city:
+        components.find((c) => c.types?.includes("locality"))?.long_name ||
+        components.find((c) => c.types?.includes("administrative_area_level_2"))?.long_name ||
+        "",
+      state:
+        components.find((c) => c.types?.includes("administrative_area_level_1"))?.long_name ||
+        "",
+      zipCode: components.find((c) => c.types?.includes("postal_code"))?.long_name || "",
+    }
     : {
-        city: components.city || "",
-        state: components.state || "",
-        zipCode: components.zipCode || components.postal_code || "",
-      };
+      city: components.city || "",
+      state: components.state || "",
+      zipCode: components.zipCode || components.postal_code || "",
+    };
 
   const formattedAddress = String(firstResult?.formatted_address || "");
   const pincodeFromText =

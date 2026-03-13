@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle, ShoppingCart, X } from "lucide-react";
+import { ArrowLeft, CheckCircle, Minus, Plus, ShoppingCart, X } from "lucide-react";
 import { toast } from "sonner";
 import { useCart } from "../../user/context/CartContext";
 import WishlistButton from "@/components/WishlistButton";
@@ -118,7 +118,7 @@ export function CategoryFoodsContent({
   initialStoreId = "all-stores",
 }) {
   const navigate = useNavigate();
-  const { addToCart, isInCart } = useCart();
+  const { addToCart, getCartItem, isInCart, updateQuantity } = useCart();
   const { location: userLocation, loading: locationLoading } = useUserLocation();
   const { zoneId, loading: zoneLoading } = useZone(userLocation, "mogrocery");
   const cachedZoneId =
@@ -318,7 +318,7 @@ export function CategoryFoodsContent({
 
     const { defaultVariant, price, mrp, weight, cartItemId } = getCardProductData(product);
 
-    addToCart({
+    const didAdd = addToCart({
       id: cartItemId,
       cartItemId,
       productId: product?._id || product?.id,
@@ -350,6 +350,8 @@ export function CategoryFoodsContent({
       platform: "mogrocery",
       stockQuantity: product?.stockQuantity,
     });
+
+    if (!didAdd) return;
 
     toast.custom(
       (t) => (
@@ -455,7 +457,9 @@ export function CategoryFoodsContent({
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {products.map((item) => {
                   const { productId, price, mrp, weight, cartItemId } = getCardProductData(item);
-                  const alreadyInCart = cartItemId ? isInCart(cartItemId) : false;
+                  const cartItem = cartItemId ? getCartItem(cartItemId) : null;
+                  const currentQty = Number(cartItem?.quantity || 0);
+                  const alreadyInCart = currentQty > 0 || (cartItemId ? isInCart(cartItemId) : false);
                   const discountPercent =
                     mrp > price && mrp > 0
                       ? Math.max(1, Math.round(((mrp - price) / mrp) * 100))
@@ -484,15 +488,67 @@ export function CategoryFoodsContent({
                           className="w-full h-full object-contain drop-shadow-[0_8px_6px_rgba(0,0,0,0.15)]"
                         />
 
-                        <button
-                          className={`absolute bottom-1 right-2 border text-[10px] font-black px-4 py-1 rounded shadow-sm transition-colors z-20 ${alreadyInCart
-                            ? "bg-emerald-100 border-emerald-300 text-emerald-800"
-                            : "bg-white border-[#facd01] text-gray-900 hover:bg-[#facd01]"
-                            }`}
-                          onClick={(e) => handleAddToCart(item, e)}
-                        >
-                          {alreadyInCart ? "ADDED" : "ADD"}
-                        </button>
+                        {alreadyInCart ? (
+                          <div className="absolute bottom-1 right-2 z-20">
+                            <div
+                              className="flex items-center gap-1 rounded-full border border-emerald-300 bg-white px-1 py-0.5 shadow-sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                              }}
+                            >
+                              <button
+                                type="button"
+                                className="w-5 h-5 flex items-center justify-center text-emerald-700"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateQuantity(
+                                    cartItemId,
+                                    currentQty - 1,
+                                    null,
+                                    {
+                                      id: cartItemId,
+                                      name: item?.name || "Product",
+                                      imageUrl: extractImage(item),
+                                      stockQuantity: item?.stockQuantity,
+                                    },
+                                  );
+                                }}
+                              >
+                                <Minus size={12} />
+                              </button>
+                              <span className="text-[11px] font-bold text-emerald-700 min-w-[14px] text-center">
+                                {currentQty}
+                              </span>
+                              <button
+                                type="button"
+                                className="w-5 h-5 flex items-center justify-center text-emerald-700"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  updateQuantity(
+                                    cartItemId,
+                                    currentQty + 1,
+                                    null,
+                                    {
+                                      id: cartItemId,
+                                      name: item?.name || "Product",
+                                      imageUrl: extractImage(item),
+                                      stockQuantity: item?.stockQuantity,
+                                    },
+                                  );
+                                }}
+                              >
+                                <Plus size={12} />
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            className="absolute bottom-1 right-2 border text-[10px] font-black px-4 py-1 rounded shadow-sm transition-colors z-20 bg-white border-[#facd01] text-gray-900 hover:bg-[#facd01]"
+                            onClick={(e) => handleAddToCart(item, e)}
+                          >
+                            ADD
+                          </button>
+                        )}
                       </div>
 
                       <div className="px-2 pb-2 flex-1 flex flex-col justify-between">

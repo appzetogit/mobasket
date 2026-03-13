@@ -7,10 +7,6 @@ import {
   Smartphone,
   Clock,
   ShoppingBag,
-  Home,
-  Heart,
-  Menu,
-  ChefHat,
   Plus,
   Minus,
   Sparkles,
@@ -759,11 +755,11 @@ export default function CheckoutPage() {
       deliveryAddress:
         orderingForSomeoneElse
           ? recipientDetails?.formattedAddress ||
-            formatAddressLine(recipientDetails) ||
-            "Add recipient address"
+          formatAddressLine(recipientDetails) ||
+          "Add recipient address"
           : selectedAddress?.formattedAddress ||
-            formatAddressLine(selectedAddress) ||
-            "Select delivery address",
+          formatAddressLine(selectedAddress) ||
+          "Select delivery address",
       estimatedTime: "30-40 min",
     };
   }, [calculatedPricing, feeSettings, foodItems, selectedAddress, orderingForSomeoneElse, recipientDetails]);
@@ -807,18 +803,18 @@ export default function CheckoutPage() {
 
     const addressPart = address
       ? [
-          address.formattedAddress || "",
-          address.street || "",
-          address.city || "",
-          address.state || "",
-          address.zipCode || "",
-          Array.isArray(address.location?.coordinates)
-            ? String(address.location.coordinates[0] || "")
-            : "",
-          Array.isArray(address.location?.coordinates)
-            ? String(address.location.coordinates[1] || "")
-            : "",
-        ].join("|")
+        address.formattedAddress || "",
+        address.street || "",
+        address.city || "",
+        address.state || "",
+        address.zipCode || "",
+        Array.isArray(address.location?.coordinates)
+          ? String(address.location.coordinates[0] || "")
+          : "",
+        Array.isArray(address.location?.coordinates)
+          ? String(address.location.coordinates[1] || "")
+          : "",
+      ].join("|")
       : "no-address";
 
     return [
@@ -1178,8 +1174,8 @@ export default function CheckoutPage() {
         deliveryFleet: "standard",
         note: orderingForSomeoneElse
           ? `[MoFood] Order for recipient: ${String(recipientDetails?.name || "").trim()} (${String(
-              recipientDetails?.phone || "",
-            ).trim()})`
+            recipientDetails?.phone || "",
+          ).trim()})`
           : "[MoFood] Order from user checkout",
         sendCutlery: false,
         paymentMethod: backendPaymentMethod,
@@ -1352,22 +1348,20 @@ export default function CheckoutPage() {
                 <button
                   type="button"
                   onClick={() => setOrderingForSomeoneElse(false)}
-                  className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
-                    !orderingForSomeoneElse
+                  className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${!orderingForSomeoneElse
                       ? "border-yellow-500 bg-yellow-50 text-yellow-700"
                       : "border-gray-200 bg-white text-gray-700"
-                  }`}
+                    }`}
                 >
                   For Me
                 </button>
                 <button
                   type="button"
                   onClick={() => setOrderingForSomeoneElse(true)}
-                  className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${
-                    orderingForSomeoneElse
+                  className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${orderingForSomeoneElse
                       ? "border-yellow-500 bg-yellow-50 text-yellow-700"
                       : "border-gray-200 bg-white text-gray-700"
-                  }`}
+                    }`}
                 >
                   Order For Someone Else
                 </button>
@@ -1493,11 +1487,10 @@ export default function CheckoutPage() {
                             key={String(addressId)}
                             type="button"
                             onClick={() => setSelectedAddress(address)}
-                            className={`w-full text-left rounded-xl border px-3 py-2 transition-colors ${
-                              isSelected
+                            className={`w-full text-left rounded-xl border px-3 py-2 transition-colors ${isSelected
                                 ? "border-yellow-500 bg-yellow-50"
                                 : "border-gray-200 bg-white hover:border-yellow-300"
-                            }`}
+                              }`}
                           >
                             <p className="text-xs font-semibold text-gray-900">
                               {address.label || "Address"} {address.isDefault ? "(Default)" : ""}
@@ -1518,124 +1511,124 @@ export default function CheckoutPage() {
 
                     {showAddAddressForm ? (
                       <div className="rounded-xl border border-gray-200 p-3 space-y-2 bg-gray-50">
-                    <div className="grid grid-cols-3 gap-2">
-                      {["Home", "Office", "Other"].map((label) => (
-                        <button
-                          key={label}
-                          type="button"
-                          onClick={() => setNewAddress((prev) => ({ ...prev, label }))}
-                          className={`h-8 rounded-lg text-xs font-semibold border ${newAddress.label === label
-                              ? "border-yellow-500 bg-yellow-100 text-yellow-700"
-                              : "border-gray-200 bg-white text-gray-700"
-                            }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          {["Home", "Office", "Other"].map((label) => (
+                            <button
+                              key={label}
+                              type="button"
+                              onClick={() => setNewAddress((prev) => ({ ...prev, label }))}
+                              className={`h-8 rounded-lg text-xs font-semibold border ${newAddress.label === label
+                                ? "border-yellow-500 bg-yellow-100 text-yellow-700"
+                                : "border-gray-200 bg-white text-gray-700"
+                                }`}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
 
-                    <div className="relative">
-                      <input
-                        type="text"
-                        value={newAddress.street}
-                        onChange={(e) => handleStreetInputChange(e.target.value)}
-                        onFocus={() => {
-                          if (newAddress.street.trim().length >= 3) {
-                            setShowAddressSuggestions(true);
-                            fetchAddressSuggestions(newAddress.street);
-                          }
-                        }}
-                        onBlur={() => {
-                          setTimeout(() => setShowAddressSuggestions(false), 150);
-                        }}
-                        placeholder="Street / House No."
-                        className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs"
-                      />
-                      {showAddressSuggestions && (
-                        <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
-                          {loadingAddressSuggestions ? (
-                            <p className="px-3 py-2 text-xs text-gray-500">Loading suggestions...</p>
-                          ) : addressSuggestions.length > 0 ? (
-                            addressSuggestions.map((suggestion) => (
-                              <button
-                                key={suggestion.place_id}
-                                type="button"
-                                onMouseDown={(e) => e.preventDefault()}
-                                onClick={() => handleAddressSuggestionSelect(suggestion)}
-                                className="block w-full border-b border-gray-100 px-3 py-2 text-left text-xs text-gray-700 hover:bg-yellow-50 last:border-b-0"
-                              >
-                                {suggestion.description}
-                              </button>
-                            ))
-                          ) : (
-                            <p className="px-3 py-2 text-xs text-gray-500">
-                              {googlePlacesReady
-                                ? "No address suggestions found."
-                                : "Preparing suggestions..."}
-                            </p>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={newAddress.street}
+                            onChange={(e) => handleStreetInputChange(e.target.value)}
+                            onFocus={() => {
+                              if (newAddress.street.trim().length >= 3) {
+                                setShowAddressSuggestions(true);
+                                fetchAddressSuggestions(newAddress.street);
+                              }
+                            }}
+                            onBlur={() => {
+                              setTimeout(() => setShowAddressSuggestions(false), 150);
+                            }}
+                            placeholder="Street / House No."
+                            className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs"
+                          />
+                          {showAddressSuggestions && (
+                            <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg">
+                              {loadingAddressSuggestions ? (
+                                <p className="px-3 py-2 text-xs text-gray-500">Loading suggestions...</p>
+                              ) : addressSuggestions.length > 0 ? (
+                                addressSuggestions.map((suggestion) => (
+                                  <button
+                                    key={suggestion.place_id}
+                                    type="button"
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => handleAddressSuggestionSelect(suggestion)}
+                                    className="block w-full border-b border-gray-100 px-3 py-2 text-left text-xs text-gray-700 hover:bg-yellow-50 last:border-b-0"
+                                  >
+                                    {suggestion.description}
+                                  </button>
+                                ))
+                              ) : (
+                                <p className="px-3 py-2 text-xs text-gray-500">
+                                  {googlePlacesReady
+                                    ? "No address suggestions found."
+                                    : "Preparing suggestions..."}
+                                </p>
+                              )}
+                            </div>
                           )}
                         </div>
-                      )}
-                    </div>
-                    <input
-                      type="text"
-                      value={newAddress.additionalDetails}
-                      onChange={(e) =>
-                        setNewAddress((prev) => ({ ...prev, additionalDetails: e.target.value }))
-                      }
-                      placeholder="Area / Landmark"
-                      className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        value={newAddress.city}
-                        onChange={(e) => setNewAddress((prev) => ({ ...prev, city: e.target.value }))}
-                        placeholder="City"
-                        className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs"
-                      />
-                      <input
-                        type="text"
-                        value={newAddress.state}
-                        onChange={(e) => setNewAddress((prev) => ({ ...prev, state: e.target.value }))}
-                        placeholder="State"
-                        className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs"
-                      />
-                    </div>
-                    <input
-                      type="text"
-                      value={newAddress.zipCode}
-                      onChange={(e) => setNewAddress((prev) => ({ ...prev, zipCode: e.target.value }))}
-                      placeholder="Pincode"
-                      className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs"
-                    />
+                        <input
+                          type="text"
+                          value={newAddress.additionalDetails}
+                          onChange={(e) =>
+                            setNewAddress((prev) => ({ ...prev, additionalDetails: e.target.value }))
+                          }
+                          placeholder="Area / Landmark"
+                          className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs"
+                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            value={newAddress.city}
+                            onChange={(e) => setNewAddress((prev) => ({ ...prev, city: e.target.value }))}
+                            placeholder="City"
+                            className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs"
+                          />
+                          <input
+                            type="text"
+                            value={newAddress.state}
+                            onChange={(e) => setNewAddress((prev) => ({ ...prev, state: e.target.value }))}
+                            placeholder="State"
+                            className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs"
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          value={newAddress.zipCode}
+                          onChange={(e) => setNewAddress((prev) => ({ ...prev, zipCode: e.target.value }))}
+                          placeholder="Pincode"
+                          className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs"
+                        />
 
-                    <AddressLocationPicker
-                      value={newAddress}
-                      onChange={setNewAddress}
-                      title="Exact delivery location"
-                      description="For family or out-of-station orders, drag the pin to the exact drop point before saving."
-                    />
+                        <AddressLocationPicker
+                          value={newAddress}
+                          onChange={setNewAddress}
+                          title="Exact delivery location"
+                          description="For family or out-of-station orders, drag the pin to the exact drop point before saving."
+                        />
 
-                    <label className="flex items-center gap-2 text-xs text-gray-600">
-                      <input
-                        type="checkbox"
-                        checked={newAddress.isDefault}
-                        onChange={(e) =>
-                          setNewAddress((prev) => ({ ...prev, isDefault: e.target.checked }))
-                        }
-                      />
-                      Set as default
-                    </label>
+                        <label className="flex items-center gap-2 text-xs text-gray-600">
+                          <input
+                            type="checkbox"
+                            checked={newAddress.isDefault}
+                            onChange={(e) =>
+                              setNewAddress((prev) => ({ ...prev, isDefault: e.target.checked }))
+                            }
+                          />
+                          Set as default
+                        </label>
 
-                    <Button
-                      type="button"
-                      className="w-full h-8 text-xs bg-yellow-500 hover:bg-yellow-600 text-white"
-                      onClick={handleSaveNewAddress}
-                      disabled={isSavingAddress}
-                    >
-                      {isSavingAddress ? "Saving..." : "Save Address"}
-                    </Button>
+                        <Button
+                          type="button"
+                          className="w-full h-8 text-xs bg-yellow-500 hover:bg-yellow-600 text-white"
+                          onClick={handleSaveNewAddress}
+                          disabled={isSavingAddress}
+                        >
+                          {isSavingAddress ? "Saving..." : "Save Address"}
+                        </Button>
                       </div>
                     ) : null}
                   </>
@@ -1924,8 +1917,8 @@ export default function CheckoutPage() {
               <button
                 onClick={() => setPaymentMethod("card")}
                 className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${paymentMethod === "card"
-                    ? "border-yellow-500 bg-yellow-100"
-                    : "border-gray-200 bg-white"
+                  ? "border-yellow-500 bg-yellow-100"
+                  : "border-gray-200 bg-white"
                   }`}
               >
                 <CreditCard
@@ -1940,8 +1933,8 @@ export default function CheckoutPage() {
               <button
                 onClick={() => setPaymentMethod("wallet")}
                 className={`w-full flex items-center justify-between gap-3 p-3 rounded-lg border-2 transition-colors ${paymentMethod === "wallet"
-                    ? "border-yellow-500 bg-yellow-100"
-                    : "border-gray-200 bg-white"
+                  ? "border-yellow-500 bg-yellow-100"
+                  : "border-gray-200 bg-white"
                   }`}
               >
                 <div className="flex items-center gap-3">
@@ -1968,8 +1961,8 @@ export default function CheckoutPage() {
               <button
                 onClick={() => setPaymentMethod("upi")}
                 className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${paymentMethod === "upi"
-                    ? "border-yellow-500 bg-yellow-100"
-                    : "border-gray-200 bg-white"
+                  ? "border-yellow-500 bg-yellow-100"
+                  : "border-gray-200 bg-white"
                   }`}
               >
                 <Smartphone
@@ -1984,8 +1977,8 @@ export default function CheckoutPage() {
               <button
                 onClick={() => setPaymentMethod("cash")}
                 className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${paymentMethod === "cash"
-                    ? "border-yellow-500 bg-yellow-100"
-                    : "border-gray-200 bg-white"
+                  ? "border-yellow-500 bg-yellow-100"
+                  : "border-gray-200 bg-white"
                   }`}
               >
                 <ShoppingBag
@@ -2026,37 +2019,6 @@ export default function CheckoutPage() {
         </Button>
       </div>
 
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
-        <div className="flex items-center justify-around py-2 px-4">
-          <button
-            onClick={() => navigate("/grocery")}
-            className="flex flex-col items-center gap-1 p-2 text-gray-600 hover:text-[#ff8100] transition-colors"
-          >
-            <Home className="w-6 h-6" />
-            <span className="text-xs text-gray-600 font-medium">Home</span>
-          </button>
-          <button
-            onClick={() => navigate("/wishlist")}
-            className="flex flex-col items-center gap-1 p-2 text-gray-600 hover:text-[#ff8100] transition-colors"
-          >
-            <Heart className="w-6 h-6" />
-            <span className="text-xs text-gray-600 font-medium">Wishlist</span>
-          </button>
-          <button className="flex flex-col items-center gap-1 p-2 -mt-8">
-            <div className="bg-white rounded-full p-3 shadow-lg border-2 border-gray-200">
-              <ChefHat className="w-6 h-6 text-gray-600" />
-            </div>
-          </button>
-          <button className="flex flex-col items-center gap-1 p-2 text-gray-600">
-            <ShoppingBag className="w-6 h-6" />
-            <span className="text-xs text-gray-600 font-medium">Orders</span>
-          </button>
-          <button className="flex flex-col items-center gap-1 p-2 text-gray-600">
-            <Menu className="w-6 h-6" />
-            <span className="text-xs text-gray-600 font-medium">Menu</span>
-          </button>
-        </div>
-      </div>
     </div>
   );
 }
