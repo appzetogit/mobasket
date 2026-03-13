@@ -158,7 +158,10 @@ export default function GroceryCheckoutPage() {
   const groceryItemsKey = useMemo(
     () =>
       groceryItems
-        .map((item) => `${item?.id || item?._id || ""}:${item?.quantity || 0}:${item?.restaurantId || ""}`)
+        .map(
+          (item) =>
+            `${item?.id || item?._id || ""}:${item?.quantity || 0}:${item?.restaurantId || ""}:${item?.storeId || ""}`,
+        )
         .join("|"),
     [groceryItems],
   );
@@ -583,7 +586,15 @@ export default function GroceryCheckoutPage() {
     0,
   );
   const totalSavings = itemsTotal - subtotal;
-  const cartRestaurantId = groceryItems[0]?.restaurantId;
+  const cartRestaurantId = String(
+    groceryItems[0]?.restaurantId?._id ||
+      groceryItems[0]?.restaurantId?.id ||
+      groceryItems[0]?.restaurantId ||
+      groceryItems[0]?.storeId?._id ||
+      groceryItems[0]?.storeId?.id ||
+      groceryItems[0]?.storeId ||
+      "",
+  ).trim();
   const cartRestaurantName = groceryItems[0]?.restaurant || groceryItems[0]?.storeName || "MoGrocery";
   const cartRestaurantAddress =
     groceryItems[0]?.restaurantAddress ||
@@ -848,9 +859,10 @@ export default function GroceryCheckoutPage() {
               .filter(Boolean),
           ),
         );
+        const couponLookupItemIds = Array.from(new Set([...uniqueItemIds, "__ALL_ITEMS__"]));
 
         const responses = await Promise.all(
-          uniqueItemIds.map((itemId) =>
+          couponLookupItemIds.map((itemId) =>
             restaurantAPI
               .getCouponsByItemIdPublic(String(resolvedRestaurant.restaurantId), itemId)
               .catch(() => null),
@@ -861,6 +873,7 @@ export default function GroceryCheckoutPage() {
         responses.forEach((response) => {
           const coupons = response?.data?.data?.coupons || [];
           coupons.forEach((coupon) => {
+            if (coupon?.showAtCheckout === false) return;
             const customerGroup = String(coupon?.customerGroup || "all").toLowerCase();
             const isEligibleCustomerGroup =
               customerGroup === "all" || (customerGroup === "shared" && hasSharedApp);
@@ -1595,79 +1608,98 @@ export default function GroceryCheckoutPage() {
 
       {/* Coupons */}
       <div className="px-4 mb-4">
-        <div className="bg-white dark:bg-[#1a1a1a] rounded-xl p-4 shadow-sm border border-yellow-50 dark:border-gray-800">
-          <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-3 border-b border-gray-50 dark:border-gray-800 pb-2">
-            Apply Coupon
-          </h3>
-
-          <div className="flex items-center gap-2">
-            <input
-              type="text"
-              value={couponCodeInput}
-              onChange={(event) => setCouponCodeInput(String(event.target.value || "").toUpperCase())}
-              placeholder="Enter coupon code"
-              className="h-10 flex-1 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-900"
-            />
-            {appliedCouponCode ? (
-              <button
-                type="button"
-                onClick={handleRemoveCoupon}
-                className="h-10 px-4 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-900 text-sm font-bold"
-              >
-                Remove
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => handleApplyCoupon()}
-                disabled={couponApplying}
-                className="h-10 px-4 rounded-lg bg-[#facd01] hover:bg-[#e6bc01] text-gray-900 text-sm font-bold disabled:opacity-60"
-              >
-                {couponApplying ? "Applying..." : "Apply"}
-              </button>
-            )}
+        <div className="overflow-hidden rounded-2xl border border-rose-100 bg-white shadow-sm">
+          <div className="relative bg-gradient-to-r from-rose-50 via-orange-50 to-amber-50 px-4 py-3 border-b border-rose-100">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.18em] font-black text-rose-500">Savings Corner</p>
+                <h3 className="text-sm font-black text-slate-900">Coupons & Offers</h3>
+              </div>
+              <div className="h-9 w-9 rounded-full bg-white/80 border border-rose-100 flex items-center justify-center shadow-sm">
+                <Sparkles className="w-4 h-4 text-rose-500" />
+              </div>
+            </div>
           </div>
 
-          {appliedCouponCode ? (
-            <p className="mt-2 text-xs font-medium text-green-600">
-              Applied: {appliedCouponCode}
-            </p>
-          ) : null}
+          <div className="p-4">
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={couponCodeInput}
+                onChange={(event) => setCouponCodeInput(String(event.target.value || "").toUpperCase())}
+                placeholder="Enter coupon code"
+                className="h-11 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-200"
+              />
+              {appliedCouponCode ? (
+                <button
+                  type="button"
+                  onClick={handleRemoveCoupon}
+                  className="h-11 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 text-sm font-bold"
+                >
+                  Remove
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleApplyCoupon()}
+                  disabled={couponApplying}
+                  className="h-11 px-4 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-sm font-black disabled:opacity-60"
+                >
+                  {couponApplying ? "Applying..." : "Apply"}
+                </button>
+              )}
+            </div>
 
-          <div className="mt-3">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-              Available coupons
-            </p>
-            {loadingCoupons ? (
-              <p className="text-xs text-gray-500">Loading coupons...</p>
-            ) : visibleCoupons.length > 0 ? (
-              <>
-                <div className="flex flex-wrap gap-2">
+            {appliedCouponCode ? (
+              <div className="mt-3 flex items-center justify-between rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2">
+                <p className="text-xs font-bold text-emerald-700">Applied: {appliedCouponCode}</p>
+                <span className="text-[11px] font-semibold text-emerald-700">You are saving more</span>
+              </div>
+            ) : null}
+
+            <div className="mt-3">
+              {loadingCoupons ? (
+                <p className="text-xs text-slate-500">Loading coupons...</p>
+              ) : visibleCoupons.length > 0 ? (
+                <div className="space-y-2">
                   {visibleCoupons.map((coupon) => (
                     <button
                       key={coupon.code}
                       type="button"
                       onClick={() => handleApplyCoupon(coupon.code)}
-                      className="px-3 py-1.5 rounded-full border border-yellow-200 bg-yellow-50 text-xs font-semibold text-yellow-800 hover:bg-yellow-100"
+                      className="w-full text-left rounded-xl border border-slate-200 bg-white px-3 py-2.5 hover:border-rose-200 hover:bg-rose-50/40 transition-colors"
                     >
-                      {coupon.code}
-                      {coupon.discountPercentage > 0 ? ` (${coupon.discountPercentage}% OFF)` : ""}
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-sm font-black tracking-wide text-slate-900">{coupon.code}</p>
+                          <p className="text-xs text-slate-500">
+                            {coupon.discountPercentage > 0
+                              ? `${coupon.discountPercentage}% OFF on this store`
+                              : "Offer available on this store"}
+                          </p>
+                        </div>
+                        <span className="inline-flex items-center gap-1 text-xs font-bold text-rose-600">
+                          Apply
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </span>
+                      </div>
                     </button>
                   ))}
                 </div>
-                {availableCoupons.length > 4 ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowAllCoupons((prev) => !prev)}
-                    className="mt-2 text-xs font-semibold text-yellow-700 hover:text-yellow-800"
-                  >
-                    {showAllCoupons ? "Show less" : `Show all (${availableCoupons.length})`}
-                  </button>
-                ) : null}
-              </>
-            ) : (
-              <p className="text-xs text-gray-500">No coupons available for current cart items.</p>
-            )}
+              ) : (
+                <p className="text-xs text-slate-500">No coupons available for current cart items.</p>
+              )}
+            </div>
+
+            {availableCoupons.length > 4 ? (
+              <button
+                type="button"
+                onClick={() => setShowAllCoupons((prev) => !prev)}
+                className="mt-3 text-xs font-black text-rose-600 hover:text-rose-700"
+              >
+                {showAllCoupons ? "Show less coupons" : `View all coupons (${availableCoupons.length})`}
+              </button>
+            ) : null}
           </div>
         </div>
       </div>

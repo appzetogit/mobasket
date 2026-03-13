@@ -1,4 +1,5 @@
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import Offer from '../../restaurant/models/Offer.js';
 import FeeSettings from '../../admin/models/FeeSettings.js';
 import Zone from '../../admin/models/Zone.js';
@@ -57,6 +58,42 @@ const getLayerChargeForZone = (zone, lat, lng) => {
   }
 
   return null;
+};
+
+const resolveOfferRestaurantContext = async (restaurantIdentifier) => {
+  const normalizedIdentifier = String(restaurantIdentifier || '').trim();
+  if (!normalizedIdentifier) return { restaurant: null, offerRestaurantObjectId: null };
+
+  const identityConditions = [
+    { restaurantId: normalizedIdentifier },
+    { slug: normalizedIdentifier }
+  ];
+  if (mongoose.Types.ObjectId.isValid(normalizedIdentifier) && normalizedIdentifier.length === 24) {
+    identityConditions.push({ _id: new mongoose.Types.ObjectId(normalizedIdentifier) });
+  }
+
+  const restaurant = await Restaurant.findOne({ $or: identityConditions }).lean();
+  if (restaurant?._id) {
+    return { restaurant, offerRestaurantObjectId: restaurant._id };
+  }
+
+  const groceryStore = await GroceryStore.findOne({ $or: identityConditions })
+    .select('_id restaurantId slug platform isActive')
+    .lean();
+  if (!groceryStore) {
+    return { restaurant: null, offerRestaurantObjectId: null };
+  }
+
+  const mirrorConditions = [{ _id: groceryStore._id }];
+  if (groceryStore.restaurantId) mirrorConditions.push({ restaurantId: groceryStore.restaurantId });
+  if (groceryStore.slug) mirrorConditions.push({ slug: groceryStore.slug });
+
+  const mirroredRestaurant = await Restaurant.findOne({ $or: mirrorConditions }).lean();
+  if (mirroredRestaurant?._id) {
+    return { restaurant: mirroredRestaurant, offerRestaurantObjectId: mirroredRestaurant._id };
+  }
+
+  return { restaurant: groceryStore, offerRestaurantObjectId: groceryStore._id };
 };
 
 /**
@@ -614,45 +651,36 @@ export const calculateOrderPricing = async ({
     
     // Get restaurant details
     let restaurant = null;
+    let offerRestaurantObjectId = null;
     if (restaurantId) {
-      if (mongoose.Types.ObjectId.isValid(restaurantId) && restaurantId.length === 24) {
-        restaurant = await Restaurant.findById(restaurantId).lean();
-      }
-      if (!restaurant) {
-        restaurant = await Restaurant.findOne({
-          $or: [
-            { restaurantId: restaurantId },
-            { slug: restaurantId }
-          ]
-        }).lean();
-      }
+      const resolvedContext = await resolveOfferRestaurantContext(restaurantId);
+      restaurant = resolvedContext.restaurant;
+      offerRestaurantObjectId = resolvedContext.offerRestaurantObjectId;
     }
     
     // Calculate coupon discount
     let discount = 0;
     let appliedCoupon = null;
     
-    if (couponCode && restaurant) {
+    if (couponCode && restaurant && offerRestaurantObjectId) {
       try {
-        // Get restaurant ObjectId
-        let restaurantObjectId = restaurant._id;
-        if (!restaurantObjectId && mongoose.Types.ObjectId.isValid(restaurantId) && restaurantId.length === 24) {
-          restaurantObjectId = new mongoose.Types.ObjectId(restaurantId);
-        }
-
-        if (restaurantObjectId) {
+        if (offerRestaurantObjectId) {
           const now = new Date();
           
           // Find active offer with this coupon code for this restaurant
           const offer = await Offer.findOne({
-            restaurant: restaurantObjectId,
+            restaurant: offerRestaurantObjectId,
             status: 'active',
-            $or: [{ showAtCheckout: true }, { showAtCheckout: { $exists: false } }],
             'items.couponCode': couponCode,
             startDate: { $lte: now },
-            $or: [
-              { endDate: { $gte: now } },
-              { endDate: null }
+            $and: [
+              { $or: [{ showAtCheckout: true }, { showAtCheckout: { $exists: false } }] },
+              {
+                $or: [
+                  { endDate: { $gte: now } },
+                  { endDate: null }
+                ]
+              }
             ]
           }).lean();
 
