@@ -238,16 +238,17 @@ export default function RestaurantOnboarding() {
   const getVerificationRedirectPath = (restaurant) => {
     const normalizedStatus = String(restaurant?.status || "").trim().toLowerCase()
     const completedSteps = Number(restaurant?.onboarding?.completedSteps || 0)
+    const isApprovalPendingStatus = normalizedStatus === "pending" || normalizedStatus === "rejected" || normalizedStatus === "declined"
 
     if (restaurant?.isActive === true) {
       return "/restaurant"
     }
 
-    if (normalizedStatus && normalizedStatus !== "onboarding") {
-      return "/restaurant"
+    if (completedSteps >= 4 || isApprovalPendingStatus) {
+      return "/restaurant/pending-approval"
     }
 
-    if (completedSteps >= 4) {
+    if (normalizedStatus && normalizedStatus !== "onboarding") {
       return "/restaurant"
     }
 
@@ -293,22 +294,45 @@ export default function RestaurantOnboarding() {
     const normalizedLng = Number(Number(lng).toFixed(6))
     const resolvedAddress = String(address || "").trim() || `${normalizedLat}, ${normalizedLng}`
 
-    setLocationSearch(resolvedAddress)
-    updateStep1Location((prevLocation) => ({
-      ...prevLocation,
-      addressLine1: parsedAddress.addressLine1 || prevLocation.addressLine1 || "",
-      addressLine2: parsedAddress.addressLine2 || prevLocation.addressLine2 || "",
-      area: parsedAddress.area || prevLocation.area || "",
-      city: parsedAddress.city || prevLocation.city || "",
-      state: parsedAddress.state || prevLocation.state || "",
-      landmark: parsedAddress.landmark || prevLocation.landmark || "",
-      zipCode: parsedAddress.zipCode || prevLocation.zipCode || "",
-      formattedAddress: resolvedAddress,
-      address: resolvedAddress,
-      latitude: normalizedLat,
-      longitude: normalizedLng,
-      coordinates: [normalizedLng, normalizedLat],
-    }))
+    setLocationSearch((prev) => (prev === resolvedAddress ? prev : resolvedAddress))
+    updateStep1Location((prevLocation) => {
+      const nextLocation = {
+        ...prevLocation,
+        addressLine1: parsedAddress.addressLine1 || prevLocation.addressLine1 || "",
+        addressLine2: parsedAddress.addressLine2 || prevLocation.addressLine2 || "",
+        area: parsedAddress.area || prevLocation.area || "",
+        city: parsedAddress.city || prevLocation.city || "",
+        state: parsedAddress.state || prevLocation.state || "",
+        landmark: parsedAddress.landmark || prevLocation.landmark || "",
+        zipCode: parsedAddress.zipCode || prevLocation.zipCode || "",
+        formattedAddress: resolvedAddress,
+        address: resolvedAddress,
+        latitude: normalizedLat,
+        longitude: normalizedLng,
+        coordinates: [normalizedLng, normalizedLat],
+      }
+
+      const prevLat = Number(prevLocation?.latitude)
+      const prevLng = Number(prevLocation?.longitude)
+      const hasSameCoords =
+        Number.isFinite(prevLat) &&
+        Number.isFinite(prevLng) &&
+        prevLat === normalizedLat &&
+        prevLng === normalizedLng
+      const hasSameAddress =
+        String(prevLocation?.formattedAddress || "") === resolvedAddress &&
+        String(prevLocation?.address || "") === resolvedAddress
+      const hasSameLines =
+        String(prevLocation?.addressLine1 || "") === String(nextLocation.addressLine1 || "") &&
+        String(prevLocation?.addressLine2 || "") === String(nextLocation.addressLine2 || "") &&
+        String(prevLocation?.area || "") === String(nextLocation.area || "") &&
+        String(prevLocation?.city || "") === String(nextLocation.city || "") &&
+        String(prevLocation?.state || "") === String(nextLocation.state || "") &&
+        String(prevLocation?.landmark || "") === String(nextLocation.landmark || "") &&
+        String(prevLocation?.zipCode || "") === String(nextLocation.zipCode || "")
+
+      return hasSameCoords && hasSameAddress && hasSameLines ? prevLocation : nextLocation
+    })
 
     if (mapInstanceRef.current) {
       mapInstanceRef.current.panTo({ lat: normalizedLat, lng: normalizedLng })
@@ -561,7 +585,7 @@ export default function RestaurantOnboarding() {
     if (isFreshStepOne) {
       return
     }
-  }, [isFreshStepOne, requestedStepParam, searchParams])
+  }, [isFreshStepOne, requestedStepParam])
 
   useEffect(() => {
     const fetchData = async () => {
@@ -1259,13 +1283,13 @@ export default function RestaurantOnboarding() {
         toast.success("Onboarding submitted. Verification is pending.")
 
         // Show success message briefly, then navigate
-        console.log('Onboarding completed successfully, redirecting to restaurant home...')
+        console.log('Onboarding completed successfully, redirecting to pending verification...')
 
         // Wait a moment to ensure data is saved, then navigate
         setTimeout(() => {
-          // Navigate to restaurant home page after onboarding completion
-          console.log('Navigating to restaurant home page...')
-          navigate("/restaurant", { replace: true })
+          // Navigate to pending approval page after onboarding completion
+          console.log('Navigating to restaurant pending approval page...')
+          navigate("/restaurant/pending-approval", { replace: true })
         }, 800)
       }
     } catch (err) {
