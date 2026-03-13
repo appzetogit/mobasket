@@ -1,8 +1,45 @@
 import Offer from '../models/Offer.js';
 import Restaurant from '../models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import mongoose from 'mongoose';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
+
+const resolveOfferRestaurantObjectId = async (restaurantIdentifier) => {
+  const normalizedIdentifier = String(restaurantIdentifier || '').trim();
+  if (!normalizedIdentifier) return null;
+
+  const restaurantConditions = [
+    { restaurantId: normalizedIdentifier },
+    { slug: normalizedIdentifier },
+  ];
+
+  if (mongoose.Types.ObjectId.isValid(normalizedIdentifier) && normalizedIdentifier.length === 24) {
+    restaurantConditions.push({ _id: new mongoose.Types.ObjectId(normalizedIdentifier) });
+  }
+
+  const restaurant = await Restaurant.findOne({ $or: restaurantConditions }).select('_id').lean();
+  if (restaurant?._id) return restaurant._id;
+
+  const groceryStore = await GroceryStore.findOne({ $or: restaurantConditions })
+    .select('_id restaurantId slug')
+    .lean();
+  if (!groceryStore) return null;
+
+  const mirrorRestaurantConditions = [
+    { _id: groceryStore._id },
+  ];
+
+  if (groceryStore.restaurantId) {
+    mirrorRestaurantConditions.push({ restaurantId: groceryStore.restaurantId });
+  }
+  if (groceryStore.slug) {
+    mirrorRestaurantConditions.push({ slug: groceryStore.slug });
+  }
+
+  const mirroredRestaurant = await Restaurant.findOne({ $or: mirrorRestaurantConditions }).select('_id').lean();
+  return mirroredRestaurant?._id || groceryStore._id || null;
+};
 
 // Create/Activate offer
 export const createOffer = asyncHandler(async (req, res) => {
@@ -248,6 +285,7 @@ export const getCouponsByItemId = asyncHandler(async (req, res) => {
           discountPercentage: item.discountPercentage,
           originalPrice: item.originalPrice,
           discountedPrice: item.discountedPrice,
+          showAtCheckout: offer.showAtCheckout !== false,
           customerGroup: offer.customerGroup || 'all',
           minOrderValue: offer.minOrderValue || 0,
           discountType: offer.discountType,
@@ -282,39 +320,21 @@ export const getCouponsByItemIdPublic = asyncHandler(async (req, res) => {
   const now = new Date();
   console.log(`[COUPONS-PUBLIC] Current date: ${now.toISOString()}`);
 
-  // Find restaurant by ID, slug, or restaurantId to get the actual MongoDB _id
+  // Resolve to the Restaurant _id used by Offer.restaurant.
   let restaurantObjectId = null;
-
-  // Try to find restaurant first
   try {
-    const restaurantQuery = {};
-
-    // Check if restaurantId is a valid MongoDB ObjectId
-    if (mongoose.Types.ObjectId.isValid(restaurantId) && restaurantId.length === 24) {
-      restaurantQuery._id = new mongoose.Types.ObjectId(restaurantId);
-    } else {
-      // Try restaurantId field or slug
-      restaurantQuery.$or = [
-        { restaurantId: restaurantId },
-        { slug: restaurantId },
-      ];
-    }
-
-    const restaurant = await Restaurant.findOne(restaurantQuery).select('_id').lean();
-
-    if (restaurant) {
-      restaurantObjectId = restaurant._id;
-      console.log(`[COUPONS-PUBLIC] Found restaurant with _id: ${restaurantObjectId}`);
-    } else {
+    restaurantObjectId = await resolveOfferRestaurantObjectId(restaurantId);
+    if (!restaurantObjectId) {
       console.log(`[COUPONS-PUBLIC] Restaurant not found for ID: ${restaurantId}`);
       return successResponse(res, 200, 'No coupons found', {
         coupons: [],
         total: 0,
       });
     }
+    console.log(`[COUPONS-PUBLIC] Resolved offer restaurant _id: ${restaurantObjectId}`);
   } catch (error) {
-    console.error(`[COUPONS-PUBLIC] Error finding restaurant:`, error);
-    return errorResponse(res, 500, `Error finding restaurant: ${error.message}`);
+    console.error(`[COUPONS-PUBLIC] Error resolving restaurant:`, error);
+    return errorResponse(res, 500, `Error resolving restaurant: ${error.message}`);
   }
 
   // Find all active offers that include this item for this restaurant
@@ -362,6 +382,7 @@ export const getCouponsByItemIdPublic = asyncHandler(async (req, res) => {
           discountPercentage: item.discountPercentage,
           originalPrice: item.originalPrice,
           discountedPrice: item.discountedPrice,
+          showAtCheckout: offer.showAtCheckout !== false,
           customerGroup: offer.customerGroup || 'all',
           minOrderValue: offer.minOrderValue || 0,
           discountType: offer.discountType,

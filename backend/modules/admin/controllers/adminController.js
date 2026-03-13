@@ -2421,12 +2421,22 @@ export const getAllOffers = asyncHandler(async (req, res) => {
       platform
     } = req.query;
     const requestedPlatform = platform === 'mogrocery' ? 'mogrocery' : 'mofood';
-    const platformRestaurantQuery =
-      requestedPlatform === 'mogrocery'
-        ? { platform: 'mogrocery' }
-        : { $or: [{ platform: 'mofood' }, { platform: { $exists: false } }] };
-    const eligibleRestaurants = await Restaurant.find(platformRestaurantQuery).select('_id').lean();
-    const eligibleRestaurantIds = eligibleRestaurants.map((restaurant) => restaurant._id);
+    let eligibleRestaurantIds = [];
+    if (requestedPlatform === 'mogrocery') {
+      const [restaurantEntities, groceryStores] = await Promise.all([
+        Restaurant.find({ platform: 'mogrocery' }).select('_id').lean(),
+        GroceryStore.find({ isActive: true }).select('_id').lean(),
+      ]);
+      const mergedIds = [...restaurantEntities, ...groceryStores].map((entity) => String(entity?._id || ''));
+      eligibleRestaurantIds = Array.from(new Set(mergedIds))
+        .filter((id) => mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
+    } else {
+      const restaurantEntities = await Restaurant.find({
+        $or: [{ platform: 'mofood' }, { platform: { $exists: false } }]
+      }).select('_id').lean();
+      eligibleRestaurantIds = restaurantEntities.map((restaurant) => restaurant._id);
+    }
 
     // Build query
     const query = {
@@ -2454,6 +2464,44 @@ export const getAllOffers = asyncHandler(async (req, res) => {
       .limit(parseInt(limit))
       .lean();
 
+    const unresolvedStoreIds = requestedPlatform === 'mogrocery'
+      ? Array.from(
+          new Set(
+            offers
+              .map((offer) => {
+                if (offer?.restaurant && typeof offer.restaurant === 'object') {
+                  return String(offer.restaurant?._id || '');
+                }
+                return String(offer?.restaurant || '');
+              })
+              .filter(Boolean)
+              .filter((id) => !offers.some((offer) => String(offer?.restaurant?._id || '') === id && offer?.restaurant?.name))
+          )
+        )
+      : [];
+
+    let groceryStoreNameMap = new Map();
+    if (unresolvedStoreIds.length > 0) {
+      const stores = await GroceryStore.find({
+        _id: {
+          $in: unresolvedStoreIds
+            .filter((id) => mongoose.Types.ObjectId.isValid(id))
+            .map((id) => new mongoose.Types.ObjectId(id))
+        }
+      })
+        .select('_id name restaurantId')
+        .lean();
+      groceryStoreNameMap = new Map(
+        stores.map((store) => [
+          String(store._id),
+          {
+            name: store.name || 'Unknown Store',
+            restaurantId: store.restaurantId || String(store._id),
+          }
+        ])
+      );
+    }
+
     // Get total count
     const total = await Offer.countDocuments(query);
 
@@ -2478,8 +2526,15 @@ export const getAllOffers = asyncHandler(async (req, res) => {
           offerItems.push({
             sl: skip + offerItems.length + 1,
             offerId: offer._id.toString(),
-            restaurantName: offer.restaurant?.name || 'Unknown Restaurant',
-            restaurantId: offer.restaurant?.restaurantId || offer.restaurant?._id?.toString() || 'N/A',
+            restaurantName:
+              offer.restaurant?.name ||
+              groceryStoreNameMap.get(String(offer?.restaurant?._id || offer?.restaurant || ''))?.name ||
+              'Unknown Store',
+            restaurantId:
+              offer.restaurant?.restaurantId ||
+              groceryStoreNameMap.get(String(offer?.restaurant?._id || offer?.restaurant || ''))?.restaurantId ||
+              offer.restaurant?._id?.toString() ||
+              String(offer?.restaurant || 'N/A'),
             dishName: item.itemName || 'Unknown Dish',
             dishId: item.itemId || 'N/A',
             couponCode: item.couponCode || 'N/A',
@@ -2587,36 +2642,74 @@ export const createOffer = asyncHandler(async (req, res) => {
       String(platform) === 'mofood' &&
       String(restaurantScope) === 'all';
 
-    const platformRestaurantQuery =
-      shouldCreateForBothPlatforms
-        ? {}
-        : String(platform) === 'mogrocery'
-        ? { platform: 'mogrocery' }
-        : { $or: [{ platform: 'mofood' }, { platform: { $exists: false } }] };
+    const validIds = (Array.isArray(restaurantIds) ? restaurantIds : [])
+      .filter((id) => mongoose.Types.ObjectId.isValid(String(id)))
+      .map((id) => new mongoose.Types.ObjectId(String(id)));
+
+    if (restaurantScope !== 'all' && validIds.length === 0) {
+      return errorResponse(res, 400, 'At least one valid restaurant is required for selected scope');
+    }
 
     let targetRestaurants = [];
-    if (restaurantScope === 'all') {
-      targetRestaurants = await Restaurant.find({
-        isActive: true,
-        ...platformRestaurantQuery
-      })
+    if (shouldCreateForBothPlatforms) {
+      const [foodRestaurants, groceryStores] = await Promise.all([
+        Restaurant.find({
+          isActive: true,
+          $or: [{ platform: 'mofood' }, { platform: { $exists: false } }]
+        })
+          .select('_id name restaurantId slug')
+          .lean(),
+        GroceryStore.find({ isActive: true })
+          .select('_id name restaurantId slug')
+          .lean(),
+      ]);
+
+      targetRestaurants = [
+        ...foodRestaurants.map((restaurant) => ({
+          offerRestaurantId: restaurant._id,
+          restaurantName: restaurant.name || 'Unknown Restaurant',
+          sourceRestaurantId: restaurant.restaurantId || String(restaurant._id),
+        })),
+        ...groceryStores.map((store) => ({
+          offerRestaurantId: store._id,
+          restaurantName: store.name || 'Unknown Store',
+          sourceRestaurantId: store.restaurantId || String(store._id),
+        })),
+      ];
+    } else if (String(platform) === 'mogrocery') {
+      const groceryQuery = restaurantScope === 'all'
+        ? { isActive: true }
+        : { _id: { $in: validIds } };
+
+      const groceryStores = await GroceryStore.find(groceryQuery)
         .select('_id name restaurantId')
         .lean();
+
+      targetRestaurants = groceryStores.map((store) => ({
+        offerRestaurantId: store._id,
+        restaurantName: store.name || 'Unknown Store',
+        sourceRestaurantId: store.restaurantId || String(store._id),
+      }));
     } else {
-      const validIds = (Array.isArray(restaurantIds) ? restaurantIds : [])
-        .filter((id) => mongoose.Types.ObjectId.isValid(String(id)))
-        .map((id) => new mongoose.Types.ObjectId(String(id)));
+      const foodQuery = restaurantScope === 'all'
+        ? {
+            isActive: true,
+            $or: [{ platform: 'mofood' }, { platform: { $exists: false } }]
+          }
+        : {
+            _id: { $in: validIds },
+            $or: [{ platform: 'mofood' }, { platform: { $exists: false } }]
+          };
 
-      if (validIds.length === 0) {
-        return errorResponse(res, 400, 'At least one valid restaurant is required for selected scope');
-      }
-
-      targetRestaurants = await Restaurant.find({
-        _id: { $in: validIds },
-        ...platformRestaurantQuery
-      })
+      const foodRestaurants = await Restaurant.find(foodQuery)
         .select('_id name restaurantId')
         .lean();
+
+      targetRestaurants = foodRestaurants.map((restaurant) => ({
+        offerRestaurantId: restaurant._id,
+        restaurantName: restaurant.name || 'Unknown Restaurant',
+        sourceRestaurantId: restaurant.restaurantId || String(restaurant._id),
+      }));
     }
 
     if (targetRestaurants.length === 0) {
@@ -2628,7 +2721,7 @@ export const createOffer = asyncHandler(async (req, res) => {
 
     for (const restaurant of targetRestaurants) {
       const existingCoupon = await Offer.findOne({
-        restaurant: restaurant._id,
+        restaurant: restaurant.offerRestaurantId,
         status: { $in: ['active', 'paused', 'draft', 'expired'] },
         'items.couponCode': normalizedCode
       })
@@ -2637,15 +2730,15 @@ export const createOffer = asyncHandler(async (req, res) => {
 
       if (existingCoupon) {
         skipped.push({
-          restaurantId: restaurant._id.toString(),
-          restaurantName: restaurant.name || 'Unknown Restaurant',
+          restaurantId: String(restaurant.sourceRestaurantId || restaurant.offerRestaurantId),
+          restaurantName: restaurant.restaurantName || 'Unknown Restaurant',
           reason: 'Coupon code already exists for this restaurant'
         });
         continue;
       }
 
       const offer = await Offer.create({
-        restaurant: restaurant._id,
+        restaurant: restaurant.offerRestaurantId,
         goalId: 'increase-value',
         discountType: 'percentage',
         items: [
@@ -2672,8 +2765,8 @@ export const createOffer = asyncHandler(async (req, res) => {
 
       created.push({
         offerId: offer._id.toString(),
-        restaurantId: restaurant._id.toString(),
-        restaurantName: restaurant.name || 'Unknown Restaurant',
+        restaurantId: String(restaurant.sourceRestaurantId || restaurant.offerRestaurantId),
+        restaurantName: restaurant.restaurantName || 'Unknown Restaurant',
         couponCode: normalizedCode
       });
     }
@@ -2722,7 +2815,13 @@ export const updateOffer = asyncHandler(async (req, res) => {
       }
 
       const linkedRestaurant = await Restaurant.findById(offer.restaurant).select('platform').lean();
-      const offerPlatform = linkedRestaurant?.platform === 'mogrocery' ? 'mogrocery' : 'mofood';
+      const linkedGroceryStore = linkedRestaurant
+        ? null
+        : await GroceryStore.findById(offer.restaurant).select('_id').lean();
+      const offerPlatform =
+        linkedRestaurant?.platform === 'mogrocery' || linkedGroceryStore
+          ? 'mogrocery'
+          : 'mofood';
       if (offerPlatform !== String(platform)) {
         return errorResponse(res, 404, 'Offer not found for requested platform');
       }

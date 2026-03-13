@@ -58,6 +58,7 @@ export default function ProtectedRoute({ children, requiredRole, loginPath, modu
 
     if (user) {
       const normalizedStatus = String(user.status || '').trim().toLowerCase();
+      const completedOnboardingSteps = Number(user?.onboarding?.completedSteps || 0);
       const isApprovedAndActive = user.isActive === true;
       const isOnboardingPage = location.pathname.startsWith(`/${modulePrefix}/onboarding`) ||
         location.pathname.includes('/otp') ||
@@ -67,9 +68,14 @@ export default function ProtectedRoute({ children, requiredRole, loginPath, modu
 
       // Handle onboarding status
       if (!isApprovedAndActive && normalizedStatus === 'onboarding') {
+        if (completedOnboardingSteps >= 4) {
+          if (!isPendingPage && !isAuthPage) {
+            return <Navigate to={`/${modulePrefix}/pending-approval`} replace />;
+          }
+        }
         // Allow both onboarding and pending pages to render so they can self-resolve
         // using fresh backend state, instead of bouncing due to stale localStorage status.
-        if (!isOnboardingPage && !isPendingPage && !isAuthPage) {
+        else if (!isOnboardingPage && !isPendingPage && !isAuthPage) {
           return <Navigate to={`/${modulePrefix}/onboarding`} replace />;
         }
       }
