@@ -338,7 +338,7 @@ export default function PocketPage() {
 
   // Earnings Guarantee - Use active earning addon if available, otherwise show 0
   // When no offer is active, show 0 of 0 and ₹0
-  const earningsGuaranteeTarget = activeEarningAddon?.earningAmount || 0
+  const earningsGuaranteeTarget = activeEarningAddon?.earningAmount || weeklyEarnings || 0
   const earningsGuaranteeOrdersTarget = activeEarningAddon?.requiredOrders || 0
   // Fallback to live weekly values when no active offer exists (avoid looking static).
   const earningsGuaranteeCurrentOrders = activeEarningAddon
@@ -451,29 +451,11 @@ export default function PocketPage() {
     })
     .reduce((sum, t) => sum + getTransactionAmount(t), 0) || 0
 
-  // Payout data - calculate from completed withdrawals in previous week
-  const calculatePayoutAmount = () => {
-    const now = new Date()
-    const lastWeekStart = new Date(now)
-    lastWeekStart.setDate(now.getDate() - now.getDay() - 7) // Previous week start
-    lastWeekStart.setHours(0, 0, 0, 0)
-    const lastWeekEnd = new Date(lastWeekStart)
-    lastWeekEnd.setDate(lastWeekStart.getDate() + 6)
-    lastWeekEnd.setHours(23, 59, 59, 999)
-
-    return walletState.transactions
-      ?.filter(t => {
-        const transactionType = normalizeTransactionType(t)
-        const transactionStatus = normalizeTransactionStatus(t)
-        if (transactionType !== 'withdrawal' || !isCompletedLikeStatus(transactionStatus)) return false
-        const transactionDate = getTransactionDate(t, { preferProcessedAt: true })
-        if (!transactionDate) return false
-        return transactionDate >= lastWeekStart && transactionDate <= lastWeekEnd
-      })
-      .reduce((sum, t) => sum + getTransactionAmount(t), 0) || 0
-  }
-
-  const payoutAmount = calculatePayoutAmount()
+  // Payout data - show total withdrawal amount (approved + pending)
+  const payoutAmount = Math.max(
+    0,
+    (Number(balances?.totalWithdrawn) || 0) + (Number(balances?.pendingWithdrawals) || 0)
+  )
 
   // Payout period - previous week
   const getPayoutPeriod = () => {
