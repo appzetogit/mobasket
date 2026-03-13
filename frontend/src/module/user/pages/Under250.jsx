@@ -10,6 +10,8 @@ import { useLocationSelector } from "../components/UserLayout"
 import { useLocation } from "../hooks/useLocation"
 import { useZone } from "../hooks/useZone"
 import { useCart } from "../context/CartContext"
+import { useProfile } from "../context/ProfileContext"
+import { getCompanyNameAsync } from "@/lib/utils/businessSettings"
 import PageNavbar from "../components/PageNavbar"
 import { foodImages } from "@/constants/images"
 import MoBasketLogo from "@/assets/mobasketlogo.png"
@@ -34,7 +36,11 @@ export default function Under250() {
   const [showItemDetail, setShowItemDetail] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
   const [quantities, setQuantities] = useState({})
-  const [bookmarkedItems, setBookmarkedItems] = useState(new Set())
+  const { 
+    addDishFavorite, 
+    removeDishFavorite, 
+    isDishFavorite
+  } = useProfile()
   const [viewCartButtonBottom, setViewCartButtonBottom] = useState("bottom-20")
   const lastScrollY = useRef(0)
   const [categories, setCategories] = useState([])
@@ -445,16 +451,70 @@ export default function Under250() {
     setShowItemDetail(true)
   }
 
-  const handleBookmarkClick = (itemId) => {
-    setBookmarkedItems((prev) => {
-      const newSet = new Set(prev)
-      if (newSet.has(itemId)) {
-        newSet.delete(itemId)
-      } else {
-        newSet.add(itemId)
+  const handleBookmarkClick = (item) => {
+    if (!item) return;
+
+    const dishId = item.id || item._id;
+    const restaurantId = item.restaurantId || item.restaurant_id || item.restaurant?.id || "unknown";
+    const restaurantName = item.restaurantName || item.restaurant?.name || "Restaurant";
+    const restaurantSlug = item.restaurantSlug || item.restaurant?.slug || "";
+
+    if (isDishFavorite(dishId, restaurantId)) {
+      removeDishFavorite(dishId, restaurantId);
+      toast.success("Removed from favorites");
+    } else {
+      const dishData = {
+        id: dishId,
+        name: item.name,
+        description: item.description,
+        price: item.price,
+        originalPrice: item.originalPrice || item.price,
+        image: item.image,
+        restaurantId: restaurantId,
+        restaurantName: restaurantName,
+        restaurantSlug: restaurantSlug,
+        foodType: item.isVeg ? "Veg" : "Non-Veg",
+      };
+      addDishFavorite(dishData);
+      toast.success("Added to favorites");
+    }
+  }
+
+  const handleShareClick = async (item) => {
+    if (!item) return;
+    
+    const companyName = await getCompanyNameAsync();
+    const dishId = item.id || item._id;
+    const restaurantSlug = item.restaurantSlug || item.restaurant?.slug || "";
+    
+    const shareUrl = `${window.location.origin}/user/restaurants/${restaurantSlug}?dish=${dishId}`;
+    const shareText = `Check out ${item.name} on ${companyName}! ${shareUrl}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: item.name,
+          text: shareText,
+          url: shareUrl,
+        });
+        toast.success("Shared successfully");
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          await copyToClipboard(shareUrl);
+        }
       }
-      return newSet
-    })
+    } else {
+      await copyToClipboard(shareUrl);
+    }
+  }
+
+  const copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Link copied to clipboard!");
+    } catch (error) {
+      toast.error("Failed to copy link");
+    }
   }
 
   // Check if should show grayscale (only when user is out of service)
@@ -944,19 +1004,25 @@ export default function Under250() {
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      handleBookmarkClick(selectedItem.id)
+                      handleBookmarkClick(selectedItem)
                     }}
-                    className={`h-10 w-10 rounded-full border flex items-center justify-center transition-all duration-300 ${bookmarkedItems.has(selectedItem.id)
+                    className={`h-10 w-10 rounded-full border flex items-center justify-center transition-all duration-300 ${isDishFavorite(selectedItem.id, selectedItem.restaurantId || selectedItem.restaurant?.id || "unknown")
                       ? "border-red-500 bg-red-50 text-red-500"
                       : "border-white bg-white/90 text-gray-600 hover:bg-white"
                       }`}
                   >
                     <Bookmark
-                      className={`h-5 w-5 transition-all duration-300 ${bookmarkedItems.has(selectedItem.id) ? "fill-red-500" : ""
+                      className={`h-5 w-5 transition-all duration-300 ${isDishFavorite(selectedItem.id, selectedItem.restaurantId || selectedItem.restaurant?.id || "unknown") ? "fill-red-500" : ""
                         }`}
                     />
                   </button>
-                  <button className="h-10 w-10 rounded-full border border-white bg-white/90 text-gray-600 hover:bg-white flex items-center justify-center transition-colors">
+                  <button 
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleShareClick(selectedItem)
+                    }}
+                    className="h-10 w-10 rounded-full border border-white bg-white/90 text-gray-600 hover:bg-white flex items-center justify-center transition-colors"
+                  >
                     <Share2 className="h-5 w-5" />
                   </button>
                 </div>
@@ -981,19 +1047,25 @@ export default function Under250() {
                     <button
                       onClick={(e) => {
                         e.stopPropagation()
-                        handleBookmarkClick(selectedItem.id)
+                        handleBookmarkClick(selectedItem)
                       }}
-                      className={`h-8 w-8 lg:h-10 lg:w-10 rounded-full border flex items-center justify-center transition-all duration-300 ${bookmarkedItems.has(selectedItem.id)
+                      className={`h-8 w-8 lg:h-10 lg:w-10 rounded-full border flex items-center justify-center transition-all duration-300 ${isDishFavorite(selectedItem.id, selectedItem.restaurantId || selectedItem.restaurant?.id || "unknown")
                         ? "border-red-500 bg-red-50 dark:bg-red-900/20 text-red-500 dark:text-red-400"
                         : "border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
                         }`}
                     >
                       <Bookmark
-                        className={`h-4 w-4 lg:h-5 lg:w-5 transition-all duration-300 ${bookmarkedItems.has(selectedItem.id) ? "fill-red-500 dark:fill-red-400" : ""
+                        className={`h-4 w-4 lg:h-5 lg:w-5 transition-all duration-300 ${isDishFavorite(selectedItem.id, selectedItem.restaurantId || selectedItem.restaurant?.id || "unknown") ? "fill-red-500 dark:fill-red-400" : ""
                           }`}
                       />
                     </button>
-                    <button className="h-8 w-8 lg:h-10 lg:w-10 rounded-full border border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 flex items-center justify-center transition-colors">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleShareClick(selectedItem)
+                      }}
+                      className="h-8 w-8 lg:h-10 lg:w-10 rounded-full border border-gray-300 dark:border-gray-600 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 flex items-center justify-center transition-colors"
+                    >
                       <Share2 className="h-4 w-4 lg:h-5 lg:w-5" />
                     </button>
                   </div>

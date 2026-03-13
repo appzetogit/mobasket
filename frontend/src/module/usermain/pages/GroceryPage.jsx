@@ -2102,10 +2102,10 @@ const GroceryPage = () => {
                 className="flex-1 bg-transparent text-slate-800 dark:text-slate-100 text-[15px] font-semibold outline-none placeholder:text-slate-400/90 dark:placeholder:text-slate-500 h-full"
               />
               <div className="w-[1px] h-6 bg-slate-200 dark:bg-slate-700 mx-3"></div>
-              <Mic
+{/* <Mic
                 onClick={startListening}
                 className={`w-5 h-5 stroke-[2.5] transition-colors cursor-pointer ${isListening ? "text-[#EF4F5F] animate-pulse" : "text-slate-400"}`}
-              />
+              /> */}
             </div>
           </div>
 

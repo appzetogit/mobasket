@@ -1988,7 +1988,7 @@ export default function Home() {
                     )}
                   </div>
                 </div>
-                <button
+{/* <button
                   type="button"
                   onClick={startListening}
                   className={`flex-shrink-0 mr-2 sm:mr-3 lg:mr-4 p-1 lg:p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors ${isListening ? "bg-[#EF4F5F]/10" : ""}`}
@@ -1997,7 +1997,7 @@ export default function Home() {
                     className={`h-4 w-4 sm:h-4 sm:w-4 lg:h-5 lg:w-5 ${isListening ? "text-[#EF4F5F] animate-pulse" : "text-[#EF4F5F]"}`}
                     strokeWidth={2.5}
                   />
-                </button>
+                </button> */}
               </div>
             </div>
           </motion.div>
@@ -3597,18 +3597,6 @@ export default function Home() {
                 Apply
               </button>
 
-              {/* More settings link */}
-              <button
-                onClick={() => {
-                  setShowVegModePopup(false);
-                  // Revert veg mode to OFF if popup is closed without applying
-                  setVegModeContext(false);
-                  setPrevVegMode(false);
-                }}
-                className="w-full text-green-600 dark:text-green-400 font-medium text-xs hover:text-green-700 dark:hover:text-green-500 transition-colors"
-              >
-                More settings
-              </button>
             </motion.div>
           </>
         )}

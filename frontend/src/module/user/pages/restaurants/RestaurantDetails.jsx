@@ -4367,55 +4367,6 @@ export default function RestaurantDetails() {
 
           <div className="flex items-center gap-2">
 
-            {!showSearch ? (
-
-              <Button
-
-                variant="ghost"
-
-                size="icon"
-
-                className="rounded-full h-10 w-10 bg-white/90 backdrop-blur-md shadow-md hover:bg-white text-gray-900"
-
-                onClick={() => setShowSearch(true)}
-
-              >
-
-                <Search className="h-5 w-5" />
-
-              </Button>
-
-            ) : (
-
-              <div className="flex items-center gap-2 bg-white rounded-full px-3 py-1 shadow-lg">
-
-                <Search className="h-4 w-4 text-gray-400" />
-
-                <input
-
-                  type="text"
-
-                  placeholder="Search dishes..."
-
-                  value={searchQuery}
-
-                  onChange={(e) => setSearchQuery(e.target.value)}
-
-                  className="bg-transparent border-none outline-none text-sm w-32 sm:w-48"
-
-                  autoFocus
-
-                />
-
-                <button onClick={() => setShowSearch(false)}>
-
-                  <X className="h-4 w-4 text-gray-400" />
-
-                </button>
-
-              </div>
-
-            )}
 
             <Button
 
@@ -4454,8 +4405,6 @@ export default function RestaurantDetails() {
               <h1 className="text-2xl font-[900] text-gray-900 dark:text-white flex items-center gap-2 leading-tight">
 
                 {restaurant?.name}
-
-                <Info className="h-4 w-4 text-gray-400 cursor-pointer" />
 
               </h1>
 
@@ -7693,11 +7642,23 @@ export default function RestaurantDetails() {
 
                       <div className="flex items-center gap-2 flex-1">
 
-                        <div className="h-5 w-5 rounded border-2 border-amber-700 dark:border-amber-600 bg-amber-50 dark:bg-amber-900/30 flex items-center justify-center flex-shrink-0">
+                        {getItemDietType(selectedItem) === "veg" ? (
 
-                          <div className="h-2.5 w-2.5 rounded-full bg-amber-700 dark:bg-amber-600" />
+                          <div className="w-5 h-5 border-2 border-green-600 flex items-center justify-center rounded-sm flex-shrink-0">
 
-                        </div>
+                            <div className="w-2.5 h-2.5 bg-green-600 rounded-full"></div>
+
+                          </div>
+
+                        ) : (
+
+                          <div className="w-5 h-5 border-2 border-orange-600 flex items-center justify-center rounded-sm flex-shrink-0">
+
+                            <div className="w-2.5 h-2.5 bg-orange-600 rounded-full"></div>
+
+                          </div>
+
+                        )}
 
                         <h2 className="text-xl font-bold text-gray-900 dark:text-white">
 

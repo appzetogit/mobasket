@@ -259,7 +259,7 @@ export default function CategoryDirectoryPage() {
             onChange={(e) => setSearchQuery(e.target.value)}
           />
           <div className="w-[1px] h-5 bg-slate-200 mx-2 z-10 pointer-events-none"></div>
-          <Mic className="text-slate-400 w-5 h-5 stroke-[2.5] z-10 pointer-events-none" />
+{/* <Mic className="text-slate-400 w-5 h-5 stroke-[2.5] z-10 pointer-events-none" /> */}
         </div>
       </div>
 

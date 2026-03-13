@@ -16,13 +16,18 @@ import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
 
 export default function Restaurants() {
   const { addFavorite, removeFavorite, isFavorite } = useProfile();
-  const { location } = useLocation();
-  const { zoneId } = useZone(location, "mofood");
+  const { location, loading: locationLoading } = useLocation();
+  const { zoneId, zoneStatus } = useZone(location, "mofood");
   const [restaurants, setRestaurants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    // Wait for location and zone detection to complete before fetching
+    if (locationLoading || zoneStatus === "loading") {
+      return;
+    }
+
     const fetchRestaurants = async () => {
       try {
         setLoading(true);
@@ -122,7 +127,7 @@ export default function Restaurants() {
     };
 
     fetchRestaurants();
-  }, [location?.city, zoneId]);
+  }, [location?.city, zoneId, locationLoading, zoneStatus]);
 
   return (
     <AnimatedPage className="min-h-screen bg-gradient-to-b from-yellow-50/30 dark:from-[#0a0a0a] via-white dark:via-[#0a0a0a] to-orange-50/20 dark:to-[#0a0a0a]">

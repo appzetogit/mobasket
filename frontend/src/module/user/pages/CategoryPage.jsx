@@ -852,9 +852,9 @@ export default function CategoryPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 pr-10 h-11 md:h-12 rounded-lg border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-[#1a1a1a] focus:bg-white dark:focus:bg-[#2a2a2a] focus:border-gray-500 dark:focus:border-gray-600 text-sm md:text-base dark:text-white placeholder:text-gray-600 dark:placeholder:text-gray-400"
               />
-              <button className="absolute right-3 top-1/2 -translate-y-1/2">
+{/* <button className="absolute right-3 top-1/2 -translate-y-1/2">
                 <Mic className="h-4 w-4 text-gray-500" />
-              </button>
+              </button> */}
             </div>
           </div>
 
