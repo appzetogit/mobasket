@@ -1,7 +1,13 @@
 /* global importScripts, firebase */
 
-importScripts("https://www.gstatic.com/firebasejs/12.9.0/firebase-app-compat.js");
-importScripts("https://www.gstatic.com/firebasejs/12.9.0/firebase-messaging-compat.js");
+let firebaseLoadFailed = false;
+try {
+  importScripts("https://www.gstatic.com/firebasejs/12.9.0/firebase-app-compat.js");
+  importScripts("https://www.gstatic.com/firebasejs/12.9.0/firebase-messaging-compat.js");
+} catch {
+  // Avoid breaking SW registration if CDN is blocked/unavailable.
+  firebaseLoadFailed = true;
+}
 
 const REQUIRED_FIELDS = ["apiKey", "authDomain", "projectId", "appId", "messagingSenderId"];
 let messagingInstance = null;
@@ -77,51 +83,58 @@ const isDuplicatePush = (payload = {}) => {
 
 const ensureMessaging = () => {
   if (messagingInstance) return messagingInstance;
+  if (firebaseLoadFailed) return null;
+  if (typeof firebase === "undefined") return null;
 
   const firebaseConfig = getRuntimeConfigFromQuery();
   if (!canInitialize(firebaseConfig)) return null;
 
-  if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
-  }
-
-  messagingInstance = firebase.messaging();
-  messagingInstance.onBackgroundMessage(async (payload) => {
-    if (isDuplicatePush(payload)) {
-      return;
+  try {
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
     }
 
-    const windowClients = await clients.matchAll({ type: "window", includeUncontrolled: true });
-    const hasVisibleClient = windowClients.some(
-      (client) => client?.visibilityState === "visible" || client?.focused === true,
-    );
-    if (hasVisibleClient) {
-      return;
-    }
+    messagingInstance = firebase.messaging();
+    messagingInstance.onBackgroundMessage(async (payload) => {
+      if (isDuplicatePush(payload)) {
+        return;
+      }
 
-    // When notification payload exists, browsers/FCM may already render it.
-    // Avoid manually showing another one from SW.
-    if (payload?.notification) {
-      return;
-    }
+      const windowClients = await clients.matchAll({ type: "window", includeUncontrolled: true });
+      const hasVisibleClient = windowClients.some(
+        (client) => client?.visibilityState === "visible" || client?.focused === true,
+      );
+      if (hasVisibleClient) {
+        return;
+      }
 
-    const title = payload?.notification?.title || payload?.data?.title || "New Notification";
-    const body = payload?.notification?.body || payload?.data?.body || payload?.data?.message || "";
-    const icon = payload?.notification?.icon || "/vite.svg";
-    const link =
-      payload?.fcmOptions?.link ||
-      payload?.data?.link ||
-      payload?.data?.click_action ||
-      payload?.data?.url ||
-      "/";
+      // When notification payload exists, browsers/FCM may already render it.
+      // Avoid manually showing another one from SW.
+      if (payload?.notification) {
+        return;
+      }
 
-    await self.registration.showNotification(title, {
-      body,
-      icon,
-      data: { link, raw: payload?.data || {} },
-      requireInteraction: true,
+      const title = payload?.notification?.title || payload?.data?.title || "New Notification";
+      const body = payload?.notification?.body || payload?.data?.body || payload?.data?.message || "";
+      const icon = payload?.notification?.icon || "/vite.svg";
+      const link =
+        payload?.fcmOptions?.link ||
+        payload?.data?.link ||
+        payload?.data?.click_action ||
+        payload?.data?.url ||
+        "/";
+
+      await self.registration.showNotification(title, {
+        body,
+        icon,
+        data: { link, raw: payload?.data || {} },
+        requireInteraction: true,
+      });
     });
-  });
+  } catch {
+    messagingInstance = null;
+    return null;
+  }
 
   return messagingInstance;
 };
