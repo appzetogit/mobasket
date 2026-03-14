@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom"
+import { Routes, Route, Navigate } from "react-router-dom"
 import DeliveryLayout from "./DeliveryLayout"
 import ProtectedRoute from "./ProtectedRoute"
 
@@ -86,6 +86,7 @@ export default function DeliveryRouter() {
         }
         path="/requests"
       />
+      <Route path="/pocket" element={<Navigate to="/delivery/requests" replace />} />
       <Route
         element={
           <ProtectedRoute>
@@ -154,6 +155,7 @@ export default function DeliveryRouter() {
         }
         path="/profile"
       />
+      <Route path="/my-profile" element={<Navigate to="/delivery/profile" replace />} />
       <Route
         element={
           <ProtectedRoute>
@@ -204,6 +206,7 @@ export default function DeliveryRouter() {
         }
         path="/trip-history"
       />
+      <Route path="/trips" element={<Navigate to="/delivery/trip-history" replace />} />
       <Route
         element={
           <ProtectedRoute>
@@ -394,6 +397,7 @@ export default function DeliveryRouter() {
         }
         path="/help/create-ticket"
       />
+      <Route path="/help/create-new-ticket" element={<Navigate to="/delivery/help/create-ticket" replace />} />
       <Route
         element={
           <ProtectedRoute>

@@ -199,7 +199,7 @@ export default function AddMoneyModal({ open, onOpenChange, onSuccess }) {
                 value={amount}
                 onChange={handleAmountChange}
                 placeholder="Enter amount"
-                className="pl-10 h-12 text-lg"
+                className="pl-10 h-12 text-lg bg-white text-gray-900 placeholder:text-gray-500 dark:bg-[#111] dark:text-white dark:placeholder:text-gray-400 border-gray-300 dark:border-gray-700"
                 disabled={loading || processing}
               />
             </div>
@@ -218,8 +218,12 @@ export default function AddMoneyModal({ open, onOpenChange, onSuccess }) {
                 <Button
                   key={quickAmount}
                   type="button"
-                  variant={amount === quickAmount.toString() ? "default" : "outline"}
-                  className="h-10"
+                  variant="outline"
+                  className={`h-10 font-semibold ${
+                    amount === quickAmount.toString()
+                      ? "border-[#EF4F5F] bg-[#EF4F5F]/10 text-[#EF4F5F] hover:bg-[#EF4F5F]/15 dark:bg-[#EF4F5F]/20 dark:text-[#ff9eaa] dark:border-[#EF4F5F]"
+                      : "bg-white text-gray-800 hover:bg-gray-50 border-gray-200 dark:bg-[#111] dark:text-gray-200 dark:border-gray-700 dark:hover:bg-[#1a1a1a]"
+                  }`}
                   onClick={() => handleAmountSelect(quickAmount)}
                   disabled={loading || processing}
                 >

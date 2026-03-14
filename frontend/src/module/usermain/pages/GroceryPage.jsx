@@ -159,6 +159,12 @@ const GroceryPage = () => {
     typeof window !== "undefined" ? localStorage.getItem("userZoneId:mogrocery") : "";
   const effectiveZoneId = String(zoneId || cachedZoneId || "").trim();
   const isGroceryCategoriesRoute = routerLocation.pathname === "/grocery/categories";
+  const hasUserSession = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    return Boolean(
+      localStorage.getItem("user_accessToken") || localStorage.getItem("user_refreshToken"),
+    );
+  }, []);
   const itemCount = getGroceryCartCount();
   const [activeTab, setActiveTab] = useState("All");
   const [activeCategoryId, setActiveCategoryId] = useState("all");
@@ -303,6 +309,32 @@ const GroceryPage = () => {
       storeLike?.storeId ||
       ""
     ).trim();
+
+  const getStoreIdCandidates = (storeLike) => {
+    const rawCandidates = [
+      storeLike?._id,
+      storeLike?.id,
+      storeLike?.restaurantId,
+      storeLike?.storeId?._id,
+      storeLike?.storeId?.id,
+      storeLike?.storeId,
+      storeLike?.storeId?.restaurantId,
+      storeLike?.restaurant?._id,
+      storeLike?.restaurant?.id,
+      storeLike?.restaurant?.restaurantId,
+      storeLike?.restaurantId?._id,
+      storeLike?.restaurantId?.id,
+      storeLike?.restaurantId?.restaurantId,
+    ];
+
+    return Array.from(
+      new Set(
+        rawCandidates
+          .map((value) => String(value || "").trim())
+          .filter(Boolean)
+      )
+    );
+  };
 
   const resolveStoreObjectFromProduct = (product) => {
     const populatedStore =
@@ -668,7 +700,11 @@ const GroceryPage = () => {
       selectedStoreId && selectedStoreId !== "all-stores"
         ? { storeId: String(selectedStoreId) }
         : {};
-    navigate("/grocery/categories", {
+    const storeSearch =
+      selectedStoreId && selectedStoreId !== "all-stores"
+        ? `?storeId=${encodeURIComponent(String(selectedStoreId))}`
+        : "";
+    navigate(`/grocery/categories${storeSearch}`, {
       state: {
         categoryId: normalizedCategoryId,
         ...selectedStoreState,
@@ -799,8 +835,7 @@ const GroceryPage = () => {
 
     const allowedStoreIds = new Set(
       groceryStores
-        .map((store) => String(store?._id || store?.id || store?.restaurantId || "").trim())
-        .filter(Boolean),
+        .flatMap((store) => getStoreIdCandidates(store)),
     );
 
     if (allowedStoreIds.size === 0) {
@@ -827,8 +862,10 @@ const GroceryPage = () => {
         product?.restaurantId ||
         "",
       ).trim();
+      const productStoreCandidates = getStoreIdCandidates(product);
       if (effectiveZoneId && productZoneId && productZoneId !== String(effectiveZoneId)) return false;
-      return productStoreId && allowedStoreIds.has(productStoreId);
+      if (productStoreId && allowedStoreIds.has(productStoreId)) return true;
+      return productStoreCandidates.some((candidateId) => allowedStoreIds.has(candidateId));
     });
 
     setAllProducts(zoneScopedProducts);
@@ -917,9 +954,14 @@ const GroceryPage = () => {
   }, [effectiveZoneId, locationLoading, refreshZone, zoneLoading]);
 
   useEffect(() => {
+    if (!hasUserSession) return undefined;
+
     let timer = null;
+    const POLL_INTERVAL_MS = 20000;
 
     const fetchAndNotifyOrderUpdates = async () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+
       try {
         const response = await userAPI.getOrders({ page: 1, limit: 30 });
         const orders = Array.isArray(response?.data?.data?.orders)
@@ -957,15 +999,23 @@ const GroceryPage = () => {
     };
 
     fetchAndNotifyOrderUpdates();
-    timer = setInterval(fetchAndNotifyOrderUpdates, 12000);
+    timer = setInterval(fetchAndNotifyOrderUpdates, POLL_INTERVAL_MS);
+
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && !document.hidden) {
+        fetchAndNotifyOrderUpdates();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       if (timer) clearInterval(timer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       hasSeededOrderSnapshotRef.current = false;
       orderSnapshotRef.current = new Map();
       setActiveGroceryOrder(null);
     };
-  }, [zoneId]);
+  }, [hasUserSession, zoneId]);
 
   useEffect(() => {
     const loadWishlist = () => {
@@ -1109,7 +1159,11 @@ const GroceryPage = () => {
       return true;
     }
 
-    navigate("/grocery/categories", {
+    const storeSearch =
+      selectedStoreId && selectedStoreId !== "all-stores"
+        ? `?storeId=${encodeURIComponent(String(selectedStoreId))}`
+        : "";
+    navigate(`/grocery/categories${storeSearch}`, {
       state: {
         categoryId: "all",
         ...(selectedStoreId && selectedStoreId !== "all-stores"
@@ -1122,10 +1176,19 @@ const GroceryPage = () => {
 
   const storeFilteredProducts = useMemo(() => {
     if (selectedStoreId === "all-stores") return allProducts;
-    return allProducts.filter(
-      (product) => getNormalizedStoreId(product) === String(selectedStoreId)
+    const selectedStore = groceryStores.find(
+      (store) => getNormalizedStoreId(store) === String(selectedStoreId)
     );
-  }, [allProducts, selectedStoreId]);
+    const selectedCandidateIds = new Set(
+      selectedStore
+        ? getStoreIdCandidates(selectedStore)
+        : [String(selectedStoreId)]
+    );
+
+    return allProducts.filter(
+      (product) => getStoreIdCandidates(product).some((candidateId) => selectedCandidateIds.has(candidateId))
+    );
+  }, [allProducts, groceryStores, selectedStoreId]);
 
   const visibleLayoutProducts = useMemo(() => {
     return storeFilteredProducts.filter((product) => {
@@ -1596,26 +1659,40 @@ const GroceryPage = () => {
   }, [bestSellerItems, bestSellerSections, storeFilteredProducts]);
 
   const storeFilterOptions = useMemo(() => {
-    const counts = new Map();
-    allProducts.forEach((product) => {
-      const productStoreId = getNormalizedStoreId(product);
-      if (!productStoreId) return;
-      counts.set(productStoreId, (counts.get(productStoreId) || 0) + 1);
-    });
-
-    return groceryStores
+    const normalizedStores = groceryStores
       .map((store) => {
-        const storeId = getNormalizedStoreId(store);
-        if (!storeId) return null;
+        const primaryId = getNormalizedStoreId(store);
+        if (!primaryId) return null;
         return {
-          id: storeId,
+          id: primaryId,
+          candidateIds: getStoreIdCandidates(store),
           name: String(store?.name || "Store").trim() || "Store",
-          count: counts.get(storeId) || 0,
+          count: 0,
           image: store?.profileImage?.url || store?.logo || FALLBACK_IMAGE,
           address: store?.location?.area || store?.location?.city || "",
         };
       })
-      .filter(Boolean)
+      .filter(Boolean);
+
+    const counts = new Map(normalizedStores.map((store) => [store.id, 0]));
+    allProducts.forEach((product) => {
+      const productIds = new Set(getStoreIdCandidates(product));
+      if (productIds.size === 0) return;
+      const matchedStore = normalizedStores.find((store) =>
+        store.candidateIds.some((candidateId) => productIds.has(candidateId))
+      );
+      if (!matchedStore) return;
+      counts.set(matchedStore.id, (counts.get(matchedStore.id) || 0) + 1);
+    });
+
+    return normalizedStores
+      .map((store) => ({
+        id: store.id,
+        name: store.name,
+        count: counts.get(store.id) || 0,
+        image: store.image,
+        address: store.address,
+      }))
       .sort((a, b) => {
         if (b.count !== a.count) return b.count - a.count;
         return a.name.localeCompare(b.name);
@@ -1943,7 +2020,11 @@ const GroceryPage = () => {
       }
       return;
     }
-    navigate("/grocery/categories", {
+    const storeSearch =
+      selectedStoreId && selectedStoreId !== "all-stores"
+        ? `?storeId=${encodeURIComponent(String(selectedStoreId))}`
+        : "";
+    navigate(`/grocery/categories${storeSearch}`, {
       state: {
         categoryId: "all",
         ...(selectedStoreId && selectedStoreId !== "all-stores"

@@ -5,96 +5,65 @@ import AuthRedirect from "@/components/AuthRedirect";
 import { isModuleAuthenticated } from "@/lib/utils/auth";
 import UserLayout from "./UserLayout";
 
-// Home & Discovery
-import Home from "../pages/Home";
-import Coffee from "../pages/Coffee";
-import Under250 from "../pages/Under250";
-import CategoryPage from "../pages/CategoryPage";
-import Restaurants from "../pages/restaurants/Restaurants";
-import SearchResults from "../pages/SearchResults";
-import ProductDetail from "../pages/ProductDetail";
-
-// Cart
-import CartPage from "@/module/usermain/pages/CartPage";
-import CheckoutPage from "@/module/usermain/pages/CheckoutPage";
-import PaymentPage from "@/module/usermain/pages/PaymentPage";
-
-// Orders
-import OrdersPage from "@/module/usermain/pages/OrdersPage";
-import OrderTracking from "../pages/orders/OrderTracking";
-import OrderInvoice from "../pages/orders/OrderInvoice";
-import UserOrderDetails from "../pages/orders/UserOrderDetails";
-
-// Offers
-import Offers from "../pages/Offers";
-
-// Gourmet
-import Gourmet from "../pages/Gourmet";
-
-// Top 10
-import Top10 from "../pages/Top10";
-
-// Collections
-import Collections from "../pages/Collections";
-import CollectionDetail from "../pages/CollectionDetail";
-
-// Gift Cards
-import GiftCards from "../pages/GiftCards";
-import GiftCardCheckout from "../pages/GiftCardCheckout";
-
-// Profile
-import Profile from "../pages/profile/Profile";
-import EditProfile from "../pages/profile/EditProfile";
-import Payments from "../pages/profile/Payments";
-import AddPayment from "../pages/profile/AddPayment";
-import EditPayment from "../pages/profile/EditPayment";
-import Favorites from "../pages/profile/Favorites";
-import Settings from "../pages/profile/Settings";
-import Coupons from "../pages/profile/Coupons";
-import RedeemGoldCoupon from "../pages/profile/RedeemGoldCoupon";
-import About from "../pages/profile/About";
-import Terms from "../pages/profile/Terms";
-import Privacy from "../pages/profile/Privacy";
-import Refund from "../pages/profile/Refund";
-import Shipping from "../pages/profile/Shipping";
-import Cancellation from "../pages/profile/Cancellation";
-import SendFeedback from "../pages/profile/SendFeedback";
-import ReportSafetyEmergency from "../pages/profile/ReportSafetyEmergency";
-import Accessibility from "../pages/profile/Accessibility";
-import Logout from "../pages/profile/Logout";
-
-// Auth
 import SignIn from "../pages/auth/SignIn";
-import OTP from "../pages/auth/OTP";
-import AuthCallback from "../pages/auth/AuthCallback";
-
-// Help
-import Help from "../pages/help/Help";
-import OrderHelp from "../pages/help/OrderHelp";
-
-// Notifications
-import Notifications from "../pages/Notifications";
-
-// Wallet
-import Wallet from "../pages/Wallet";
-
-// Complaints
-import SubmitComplaint from "../pages/complaints/SubmitComplaint";
-
-// Grocery (MoBasket)
-import GroceryPage from "@/module/usermain/pages/GroceryPage";
-import GroceryProfile from "@/module/usermain/pages/GroceryProfile";
-import GroceryCartPage from "@/module/usermain/pages/GroceryCartPage";
-import GroceryCheckoutPage from "@/module/usermain/pages/GroceryCheckoutPage";
-import GrocerySubcategoryProductsPage from "@/module/usermain/pages/GrocerySubcategoryProductsPage";
-import GroceryBestSellerProductsPage from "@/module/usermain/pages/GroceryBestSellerProductsPage";
-import PlansPage from "@/module/usermain/pages/PlansPage";
-import CategoryDirectoryPage from "@/module/usermain/pages/CategoryDirectoryPage";
-import CategoryFoodsPage from "@/module/usermain/pages/CategoryFoodsPage";
-import WishlistPage from "@/module/usermain/pages/WishlistPage";
-import FoodDetailPage from "@/module/usermain/pages/FoodDetailPage";
-import WelcomeSelectionPage from "@/module/user/pages/WelcomeSelectionPage";
-
+const Home = lazy(() => import("../pages/Home"));
+const Under250 = lazy(() => import("../pages/Under250"));
+const CategoryPage = lazy(() => import("../pages/CategoryPage"));
+const Restaurants = lazy(() => import("../pages/restaurants/Restaurants"));
+const SearchResults = lazy(() => import("../pages/SearchResults"));
+const ProductDetail = lazy(() => import("../pages/ProductDetail"));
+const CartPage = lazy(() => import("@/module/usermain/pages/CartPage"));
+const CheckoutPage = lazy(() => import("@/module/usermain/pages/CheckoutPage"));
+const PaymentPage = lazy(() => import("@/module/usermain/pages/PaymentPage"));
+const OrdersPage = lazy(() => import("@/module/usermain/pages/OrdersPage"));
+const OrderTracking = lazy(() => import("../pages/orders/OrderTracking"));
+const OrderInvoice = lazy(() => import("../pages/orders/OrderInvoice"));
+const UserOrderDetails = lazy(() => import("../pages/orders/UserOrderDetails"));
+const Offers = lazy(() => import("../pages/Offers"));
+const Gourmet = lazy(() => import("../pages/Gourmet"));
+const Top10 = lazy(() => import("../pages/Top10"));
+const Collections = lazy(() => import("../pages/Collections"));
+const CollectionDetail = lazy(() => import("../pages/CollectionDetail"));
+const GiftCards = lazy(() => import("../pages/GiftCards"));
+const GiftCardCheckout = lazy(() => import("../pages/GiftCardCheckout"));
+const Profile = lazy(() => import("../pages/profile/Profile"));
+const EditProfile = lazy(() => import("../pages/profile/EditProfile"));
+const Payments = lazy(() => import("../pages/profile/Payments"));
+const AddPayment = lazy(() => import("../pages/profile/AddPayment"));
+const EditPayment = lazy(() => import("../pages/profile/EditPayment"));
+const Favorites = lazy(() => import("../pages/profile/Favorites"));
+const Settings = lazy(() => import("../pages/profile/Settings"));
+const Coupons = lazy(() => import("../pages/profile/Coupons"));
+const RedeemGoldCoupon = lazy(() => import("../pages/profile/RedeemGoldCoupon"));
+const About = lazy(() => import("../pages/profile/About"));
+const Terms = lazy(() => import("../pages/profile/Terms"));
+const Privacy = lazy(() => import("../pages/profile/Privacy"));
+const Refund = lazy(() => import("../pages/profile/Refund"));
+const Shipping = lazy(() => import("../pages/profile/Shipping"));
+const Cancellation = lazy(() => import("../pages/profile/Cancellation"));
+const SendFeedback = lazy(() => import("../pages/profile/SendFeedback"));
+const ReportSafetyEmergency = lazy(() => import("../pages/profile/ReportSafetyEmergency"));
+const Accessibility = lazy(() => import("../pages/profile/Accessibility"));
+const Logout = lazy(() => import("../pages/profile/Logout"));
+const OTP = lazy(() => import("../pages/auth/OTP"));
+const AuthCallback = lazy(() => import("../pages/auth/AuthCallback"));
+const Help = lazy(() => import("../pages/help/Help"));
+const OrderHelp = lazy(() => import("../pages/help/OrderHelp"));
+const Notifications = lazy(() => import("../pages/Notifications"));
+const Wallet = lazy(() => import("../pages/Wallet"));
+const SubmitComplaint = lazy(() => import("../pages/complaints/SubmitComplaint"));
+const GroceryPage = lazy(() => import("@/module/usermain/pages/GroceryPage"));
+const GroceryProfile = lazy(() => import("@/module/usermain/pages/GroceryProfile"));
+const GroceryCartPage = lazy(() => import("@/module/usermain/pages/GroceryCartPage"));
+const GroceryCheckoutPage = lazy(() => import("@/module/usermain/pages/GroceryCheckoutPage"));
+const GrocerySubcategoryProductsPage = lazy(() => import("@/module/usermain/pages/GrocerySubcategoryProductsPage"));
+const GroceryBestSellerProductsPage = lazy(() => import("@/module/usermain/pages/GroceryBestSellerProductsPage"));
+const PlansPage = lazy(() => import("@/module/usermain/pages/PlansPage"));
+const CategoryDirectoryPage = lazy(() => import("@/module/usermain/pages/CategoryDirectoryPage"));
+const CategoryFoodsPage = lazy(() => import("@/module/usermain/pages/CategoryFoodsPage"));
+const WishlistPage = lazy(() => import("@/module/usermain/pages/WishlistPage"));
+const FoodDetailPage = lazy(() => import("@/module/usermain/pages/FoodDetailPage"));
+const WelcomeSelectionPage = lazy(() => import("@/module/user/pages/WelcomeSelectionPage"));
 const RestaurantDetails = lazy(() => import("../pages/restaurants/RestaurantDetails"));
 
 function RouteLoader({ label = "Loading..." }) {
@@ -110,8 +79,9 @@ function RouteLoader({ label = "Loading..." }) {
 
 export default function UserRouter() {
   return (
-    <Routes>
-      <Route element={<UserLayout />}>
+    <Suspense fallback={<RouteLoader />}>
+      <Routes>
+        <Route element={<UserLayout />}>
         <Route path="/sign-in" element={<SignIn />} />
         <Route path="/" element={<RootLanding />} />
         <Route
@@ -522,8 +492,9 @@ export default function UserRouter() {
         <Route path="/grocery/subcategory/:subcategoryId" element={<GrocerySubcategoryProductsPage />} />
         <Route path="/grocery/best-seller/:itemType/:itemId" element={<GroceryBestSellerProductsPage />} />
         <Route path="/food/:id" element={<FoodDetailPage />} />
-      </Route>
-    </Routes>
+        </Route>
+      </Routes>
+    </Suspense>
   );
 }
 

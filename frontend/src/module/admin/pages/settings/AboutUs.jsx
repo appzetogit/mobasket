@@ -200,7 +200,7 @@ export default function AboutUs() {
                 onChange={(e) => setAboutData(prev => ({ ...prev, description: e.target.value }))}
                 placeholder="Your trusted food delivery partner..."
                 rows={4}
-                className="mt-1"
+                className="mt-1 p-3"
               />
             </div>
             <div>
@@ -289,6 +289,7 @@ export default function AboutUs() {
                             onChange={(e) => updateFeature(index, 'description', e.target.value)}
                             placeholder="Feature description"
                             rows={2}
+                            className="p-3"
                           />
                         </div>
                       </div>

@@ -137,7 +137,7 @@ export default function SignIn() {
     }
   }
 
-  // Handle Firebase redirect result on component mount and URL changes
+  // Handle Firebase redirect result on component mount.
   useEffect(() => {
     // Prevent multiple calls
     if (redirectHandledRef.current) {
@@ -146,12 +146,6 @@ export default function SignIn() {
 
     const handleRedirectResult = async () => {
       try {
-        // Check if we're coming back from a redirect (URL might have hash or params)
-        const currentUrl = window.location.href
-        const hasHash = window.location.hash.length > 0
-        const hasQueryParams = window.location.search.length > 0
-
-
         const { getRedirectResult } = await import("firebase/auth")
 
         const auth = getFirebaseAuthInstance()
@@ -242,56 +236,6 @@ export default function SignIn() {
       }
     }
 
-    // Helper function to process signed-in user
-    const processSignedInUser = async (user, source = "unknown") => {
-      if (redirectHandledRef.current) {
-        return
-      }
-
-      redirectHandledRef.current = true
-      setIsLoading(true)
-      setApiError("")
-
-      try {
-        const idToken = await user.getIdToken()
-
-        const response = await authAPI.firebaseGoogleLogin(idToken, "user")
-        const data = response?.data?.data || {}
-
-        const accessToken = data.accessToken
-        const appUser = data.user
-
-        if (accessToken && appUser) {
-          setAuthData("user", accessToken, appUser)
-          window.dispatchEvent(new Event("userAuthChanged"))
-
-          // Clear any URL hash or params
-          const hasHash = window.location.hash.length > 0
-          const hasQueryParams = window.location.search.length > 0
-          if (hasHash || hasQueryParams) {
-            window.history.replaceState({}, document.title, window.location.pathname)
-          }
-
-          navigate("/welcome", { replace: true })
-        } else {
-          redirectHandledRef.current = false
-          setIsLoading(false)
-          setApiError("Invalid response from server. Please try again.")
-        }
-      } catch (error) {
-        redirectHandledRef.current = false
-        setIsLoading(false)
-
-        let errorMessage = "Failed to complete sign-in. Please try again."
-        if (error?.response?.data?.message) {
-          errorMessage = error.response.data.message
-        } else if (error?.message) {
-          errorMessage = error.message
-        }
-        setApiError(errorMessage)
-      }
-    }
-
     // Set up auth state listener FIRST (before getRedirectResult)
     // This ensures we catch auth state changes immediately
     let unsubscribe = null
@@ -350,7 +294,7 @@ export default function SignIn() {
         unsubscribe()
       }
     }
-  }, [navigate, searchParams])
+  }, [navigate])
 
   useEffect(() => {
     const loadPolicyLinks = async () => {
@@ -554,6 +498,7 @@ export default function SignIn() {
       const { signInWithPopup, signInWithRedirect } = await import("firebase/auth")
 
       try {
+        googleProvider.setCustomParameters({ prompt: "select_account" })
         const popupResult = await signInWithPopup(auth, googleProvider)
         if (popupResult?.user) {
           await processSignedInUser(popupResult.user, "google-popup")
@@ -563,9 +508,14 @@ export default function SignIn() {
         const popupCode = popupError?.code || ""
         const shouldFallbackToRedirect =
           popupCode === "auth/popup-blocked" ||
-          popupCode === "auth/popup-closed-by-user" ||
           popupCode === "auth/cancelled-popup-request" ||
           popupCode === "auth/operation-not-supported-in-this-environment"
+
+        if (popupCode === "auth/popup-closed-by-user") {
+          setIsLoading(false)
+          setApiError("Sign-in was cancelled. Please try again.")
+          return
+        }
 
         if (!shouldFallbackToRedirect) {
           throw popupError

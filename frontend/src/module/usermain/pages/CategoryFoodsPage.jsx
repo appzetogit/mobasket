@@ -37,6 +37,40 @@ const extractStoreId = (product) =>
       "",
   ).trim();
 
+const getStoreIdCandidates = (storeLike) => {
+  const rawCandidates = [
+    storeLike?._id,
+    storeLike?.id,
+    storeLike?.restaurantId,
+    storeLike?.storeId?._id,
+    storeLike?.storeId?.id,
+    storeLike?.storeId,
+    storeLike?.storeId?.restaurantId,
+    storeLike?.restaurant?._id,
+    storeLike?.restaurant?.id,
+    storeLike?.restaurant?.restaurantId,
+    storeLike?.restaurantId?._id,
+    storeLike?.restaurantId?.id,
+    storeLike?.restaurantId?.restaurantId,
+  ];
+
+  return Array.from(
+    new Set(
+      rawCandidates
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  );
+};
+
+const doesProductMatchStore = (product, selectedStoreId) => {
+  const normalizedSelectedStoreId = String(selectedStoreId || "").trim();
+  if (!normalizedSelectedStoreId || normalizedSelectedStoreId === "all-stores") return true;
+  const selectedIds = new Set([normalizedSelectedStoreId]);
+  const productStoreIds = getStoreIdCandidates(product);
+  return productStoreIds.some((id) => selectedIds.has(id));
+};
+
 const normalizeVariantKey = (value) =>
   String(value || "")
     .trim()
@@ -242,7 +276,7 @@ export function CategoryFoodsContent({
             const storeMatch =
               !selectedStoreId ||
               selectedStoreId === "all-stores" ||
-              extractStoreId(product) === String(selectedStoreId);
+              doesProductMatchStore(product, selectedStoreId);
 
             return categoryMatch && subcategoryMatch && storeMatch;
           });
@@ -250,7 +284,7 @@ export function CategoryFoodsContent({
 
         if (selectedStoreId && selectedStoreId !== "all-stores") {
           zoneSafeData = zoneSafeData.filter(
-            (product) => extractStoreId(product) === String(selectedStoreId),
+            (product) => doesProductMatchStore(product, selectedStoreId),
           );
         }
 
@@ -608,8 +642,9 @@ const CategoryFoodsPage = () => {
   const isCategoriesRootPage = location?.pathname === "/grocery/categories";
   const stateCategoryId = String(location?.state?.categoryId || "").trim();
   const stateStoreId = String(location?.state?.storeId || "").trim();
+  const queryStoreId = String(new URLSearchParams(location?.search || "").get("storeId") || "").trim();
   const initialCategory = isCategoriesRootPage ? "all" : (id || stateCategoryId || "all");
-  const initialStoreId = stateStoreId || "all-stores";
+  const initialStoreId = stateStoreId || queryStoreId || "all-stores";
 
   return (
     <CategoryFoodsContent
