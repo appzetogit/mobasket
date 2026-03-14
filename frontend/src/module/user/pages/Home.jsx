@@ -1919,10 +1919,9 @@ export default function Home() {
       </div>
 
       {/* 1. Navbar Section (Sticky Top, White Background) */}
-      <div className="sticky top-0 z-50 bg-white shadow-sm md:hidden">
+      <div className="sticky top-0 z-50 bg-white dark:bg-[#0a0a0a] shadow-sm dark:shadow-none border-b border-gray-100 dark:border-gray-800 md:hidden">
         <PageNavbar
-          textColor="black"
-          locationIconColor="black"
+          textColor="auto"
           zIndex={50}
         />
       </div>
@@ -1936,7 +1935,7 @@ export default function Home() {
             whileHover={{ scale: 1.02 }}
             transition={{ type: "spring", stiffness: 300, damping: 20 }}
           >
-            <div className="relative bg-white dark:bg-[#1a1a1a] rounded-xl lg:rounded-2xl shadow-sm border border-gray-200 dark:border-gray-800 p-1 sm:p-1.5 lg:p-2 transition-all duration-300 hover:shadow-md">
+            <div className="relative bg-white dark:bg-[#1a1a1a] dark:border-gray-700 rounded-xl lg:rounded-2xl shadow-sm border border-gray-200 p-1 sm:p-1.5 lg:p-2 transition-all duration-300 hover:shadow-md">
               <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
                 <Search
                   className="h-4 w-4 sm:h-4 sm:w-4 lg:h-5 lg:w-5 text-[#EF4F5F] flex-shrink-0 ml-2 sm:ml-3 lg:ml-4"

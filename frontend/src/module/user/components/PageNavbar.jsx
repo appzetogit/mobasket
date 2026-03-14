@@ -244,11 +244,52 @@ export default function PageNavbar({
     openLocationSelector();
   };
 
-  const textColorClass = textColor === "white" ? "text-white" : "text-black";
-  const iconFill =
-    locationIconColor || (textColor === "white" ? "white" : "black");
-  const ringColor =
-    textColor === "white" ? "ring-white/30" : "ring-gray-800/30";
+  const isAutoText = textColor === "auto" || textColor === "adaptive";
+
+
+  const textColorClass = isAutoText
+    ? "text-gray-900 dark:text-white"
+    : textColor === "white"
+      ? "text-white"
+      : "text-black";
+
+
+  const subTextColorClass = isAutoText
+    ? "text-gray-700 dark:text-white/90"
+    : textColor === "white"
+      ? "text-white/90"
+      : "text-black";
+
+
+  const iconFill =
+
+
+    locationIconColor || (isAutoText ? "currentColor" : textColor === "white" ? "white" : "black");
+
+
+  const ringColor = isAutoText
+    ? "ring-gray-800/30 dark:ring-white/30"
+    : textColor === "white"
+      ? "ring-white/30"
+      : "ring-gray-800/30";
+
+
+  const dropShadowClass = isAutoText ? "dark:drop-shadow-lg" : textColor === "white" ? "drop-shadow-lg" : "";
+
+
+  const subDropShadowClass = isAutoText ? "dark:drop-shadow-md" : textColor === "white" ? "drop-shadow-md" : "";
+
+
+  const actionIconClass = isAutoText
+    ? "text-gray-800 dark:text-white"
+    : textColor === "white"
+      ? "text-white"
+      : "text-gray-800";
+  const badgeRingColor = isAutoText
+    ? "ring-gray-800/30 dark:ring-white/50"
+    : textColor === "white"
+      ? "ring-white/50"
+      : "ring-gray-800/30";
 
   const zIndexClass = zIndex === 50 ? "z-50" : "z-20";
   const profileImageUrl =
@@ -280,7 +321,7 @@ export default function PageNavbar({
           >
             {loading ? (
               <span
-                className={`text-sm font-bold ${textColorClass} ${textColor === "white" ? "drop-shadow-lg" : ""}`}
+                className={`text-sm font-bold ${textColorClass} ${dropShadowClass}`}
               >
                 Loading...
               </span>
@@ -288,24 +329,24 @@ export default function PageNavbar({
               <div className="flex flex-col items-start min-w-0">
                 <div className="flex items-start gap-1.5 w-full min-w-0">
                   <FaLocationDot
-                    className={`h-6 w-6 sm:h-7 sm:w-7 ${textColorClass} flex-shrink-0 ${textColor === "white" ? "drop-shadow-lg" : ""}`}
+                    className={`h-6 w-6 sm:h-7 sm:w-7 ${textColorClass} flex-shrink-0 ${dropShadowClass}`}
                     fill={iconFill}
                     strokeWidth={2}
                   />
                   <span
-                    className={`text-md sm:text-lg font-bold ${textColorClass} whitespace-normal break-words leading-tight text-left ${textColor === "white" ? "drop-shadow-lg" : ""}`}
+                    className={`text-md sm:text-lg font-bold ${textColorClass} whitespace-normal break-words leading-tight text-left ${dropShadowClass}`}
                   >
                     {mainLocationName}
                   </span>
                   <ChevronDown
-                    className={`h-4 w-4 sm:h-5 sm:w-5 mt-0.5 ${textColorClass} flex-shrink-0 ${textColor === "white" ? "drop-shadow-lg" : ""}`}
+                    className={`h-4 w-4 sm:h-5 sm:w-5 mt-0.5 ${textColorClass} flex-shrink-0 ${dropShadowClass}`}
                     strokeWidth={2.5}
                   />
                 </div>
                 {/* Show sub location (city, state) in second line */}
                 {subLocationName && (
                   <span
-                    className={`text-xs font-bold ${textColorClass}${textColor === "white" ? "/90" : ""} whitespace-normal break-words mt-0.5 text-left ${textColor === "white" ? "drop-shadow-md" : ""}`}
+                    className={`text-xs font-bold ${subTextColorClass} whitespace-normal break-words mt-0.5 text-left ${subDropShadowClass}`}
                   >
                     {subLocationName}
                   </span>
@@ -344,7 +385,7 @@ export default function PageNavbar({
                 className={`h-full w-full rounded-full bg-white/20 flex items-center justify-center ring-2 ${ringColor}`}
               >
                 <Wallet
-                  className="h-4 w-4 sm:h-5 sm:w-5 text-gray-800"
+                  className={`h-4 w-4 sm:h-5 sm:w-5 ${actionIconClass}`}
                   strokeWidth={2}
                 />
               </div>
@@ -363,13 +404,13 @@ export default function PageNavbar({
                 className={`h-full w-full rounded-full bg-white/20 flex items-center justify-center ring-2 ${ringColor}`}
               >
                 <ShoppingCart
-                  className="h-4 w-4 sm:h-5 sm:w-5 text-gray-800"
+                  className={`h-4 w-4 sm:h-5 sm:w-5 ${actionIconClass}`}
                   strokeWidth={2}
                 />
               </div>
               {cartCount > 0 && (
                 <span
-                  className={`absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#EF4F5F] rounded-full flex items-center justify-center ring-2 ${textColor === "white" ? "ring-white/50" : "ring-gray-800/30"}`}
+                  className={`absolute -top-0.5 -right-0.5 w-4 h-4 bg-[#EF4F5F] rounded-full flex items-center justify-center ring-2 ${badgeRingColor}`}
                 >
                   <span className="text-[9px] font-bold text-white">
                     {cartCount > 99 ? "99+" : cartCount}
@@ -414,5 +455,6 @@ export default function PageNavbar({
 
 
 
+
 
 

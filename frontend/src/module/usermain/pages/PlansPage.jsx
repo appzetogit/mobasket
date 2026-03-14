@@ -823,11 +823,11 @@ const PlansPage = () => {
   }, [plans, activeBoughtPlan]);
 
   return (
-    <div className="bg-gray-50 min-h-screen font-sans w-full relative pb-20 overflow-x-hidden">
-      <div className="bg-[#FACC15] pb-10 rounded-b-[2.5rem] shadow-sm">
+    <div className="bg-gray-50 dark:bg-[#0a0a0a] dark:text-slate-100 min-h-screen font-sans w-full relative pb-20 overflow-x-hidden">
+      <div className="bg-[#FACC15] dark:bg-[#0f172a] pb-10 rounded-b-[2.5rem] shadow-sm">
         <div className="p-4 pt-6 flex justify-between items-start md:max-w-7xl md:mx-auto">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-white/80 border border-yellow-200 shadow-sm flex items-center justify-center overflow-hidden">
+            <div className="w-12 h-12 rounded-xl bg-white/80 dark:bg-white/10 border border-yellow-200 dark:border-slate-700 shadow-sm flex items-center justify-center overflow-hidden">
               <img
                 src={logoUrl}
                 alt="Company logo"
@@ -841,10 +841,10 @@ const PlansPage = () => {
               />
             </div>
             <div>
-              <h1 className="text-xl font-black text-slate-900 leading-none tracking-tight">
+              <h1 className="text-xl font-black text-slate-900 dark:text-slate-100 leading-none tracking-tight">
                 MoGold
               </h1>
-              <p className="text-xs font-bold text-slate-800 mt-0.5 opacity-80">
+              <p className="text-xs font-bold text-slate-800 dark:text-slate-300 mt-0.5 opacity-80">
                 Membership plans
               </p>
             </div>
@@ -855,38 +855,38 @@ const PlansPage = () => {
       <div className="px-4 mt-8 md:max-w-7xl md:mx-auto">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xl font-black text-slate-900">Bought Plans</h2>
+            <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">Bought Plans</h2>
             {boughtPlans.length > 0 && (
-              <span className="text-xs font-semibold text-slate-500">
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                 {boughtPlans.length} plan{boughtPlans.length === 1 ? "" : "s"}
               </span>
             )}
           </div>
           {boughtPlansLoading ? (
-            <p className="text-sm text-slate-500">Loading bought plans...</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400">Loading bought plans...</p>
           ) : boughtPlans.length === 0 ? (
-            <div className="bg-white border border-slate-200 rounded-2xl p-4">
-              <p className="text-sm text-slate-500">You have not bought any plan yet.</p>
+            <div className="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl p-4">
+              <p className="text-sm text-slate-500 dark:text-slate-400">You have not bought any plan yet.</p>
             </div>
           ) : (
             <div className="grid gap-3 md:grid-cols-2">
               {boughtPlans.map((plan) => (
-                <div key={plan.id} className="bg-white border border-slate-200 rounded-2xl p-4">
+                <div key={plan.id} className="bg-white dark:bg-[#0f172a] border border-slate-200 dark:border-slate-800 rounded-2xl p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-base font-bold text-slate-900">{plan.planName}</p>
-                      <p className="text-xs text-slate-500 mt-1">Order #{plan.orderId}</p>
+                      <p className="text-base font-bold text-slate-900 dark:text-slate-100">{plan.planName}</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Order #{plan.orderId}</p>
                     </div>
                     <span
                       className={`text-[11px] font-bold px-2 py-1 rounded-full ${plan.isActive
-                        ? "bg-green-100 text-green-700 border border-green-200"
-                        : "bg-slate-100 text-slate-600 border border-slate-200"
+                        ? "bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-700/60"
+                        : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700"
                         }`}
                     >
                       {plan.isActive ? "Active" : "Expired"}
                     </span>
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
+                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600 dark:text-slate-300">
                     <p>Bought: {formatDate(plan.purchasedAt)}</p>
                     <p>Valid till: {formatDate(plan.expiresAt)}</p>
                     <p>Duration: {plan.durationDays || 0} days</p>
@@ -894,7 +894,7 @@ const PlansPage = () => {
                   </div>
                   <button
                     type="button"
-                    className="mt-3 text-xs font-semibold text-emerald-700 hover:underline"
+                    className="mt-3 text-xs font-semibold text-emerald-700 dark:text-emerald-300 hover:underline"
                     onClick={() => navigate(`/orders/${plan.orderId}`)}
                   >
                     View purchase details
@@ -907,21 +907,21 @@ const PlansPage = () => {
 
         <div className="flex justify-between items-center mb-5">
           <div className="flex items-center gap-3">
-            <h2 className="text-xl font-black text-slate-900">
+            <h2 className="text-xl font-black text-slate-900 dark:text-slate-100">
               {activeBoughtPlan ? "Current Plan" : "Monthly Plans"}
             </h2>
             {!activeBoughtPlan ? (
-              <span className="bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 border border-yellow-200">
+              <span className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 border border-yellow-200 dark:border-yellow-700/60">
                 <Zap size={10} className="fill-yellow-800" /> SAVE 40%
               </span>
             ) : null}
           </div>
         </div>
 
-        {loading && <p className="text-sm text-slate-500">Loading plans...</p>}
+        {loading && <p className="text-sm text-slate-500 dark:text-slate-400">Loading plans...</p>}
         {!loading && error && <p className="text-sm text-red-500">{error}</p>}
         {!loading && !error && displayPlans.length === 0 && (
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             {activeBoughtPlan ? "Your active plan details are not available right now." : "No plans available right now."}
           </p>
         )}
@@ -930,7 +930,7 @@ const PlansPage = () => {
           {displayPlans.map((plan) => (
             <div
               key={plan.id}
-              className={`bg-white rounded-2xl p-4 shadow-sm border cursor-pointer active:scale-95 transition-transform duration-200 ${plan.popular ? "border-yellow-400 ring-1 ring-yellow-400 relative" : "border-gray-100"} hover:shadow-md h-full flex flex-col justify-between`}
+              className={`bg-white dark:bg-[#0f172a] rounded-2xl p-4 shadow-sm border cursor-pointer active:scale-95 transition-transform duration-200 ${plan.popular ? "border-yellow-400 ring-1 ring-yellow-400 relative" : "border-gray-100 dark:border-slate-800"} hover:shadow-md h-full flex flex-col justify-between`}
               onClick={() => openPlan(plan)}
             >
               {plan.popular && (
@@ -946,22 +946,22 @@ const PlansPage = () => {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="font-bold text-slate-900 text-lg">{plan.name}</h3>
-                      <span className="bg-gray-100 text-gray-500 text-[10px] font-bold px-1.5 py-0.5 rounded text-nowrap">
+                      <h3 className="font-bold text-slate-900 dark:text-slate-100 text-lg">{plan.name}</h3>
+                      <span className="bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-300 text-[10px] font-bold px-1.5 py-0.5 rounded text-nowrap">
                         {plan.items}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-400 font-medium">
+                    <p className="text-xs text-gray-400 dark:text-slate-400 font-medium">
                       {plan.benefits?.[0] || plan.description || "Plan benefits available"}
                     </p>
                   </div>
                 </div>
                 <div className="text-right flex items-center gap-2">
                   <div>
-                    <p className="font-black text-xl text-slate-900">{plan.priceDisplay}</p>
-                    <p className="text-[10px] text-gray-400 font-medium text-right">{plan.duration}</p>
+                    <p className="font-black text-xl text-slate-900 dark:text-slate-100">{plan.priceDisplay}</p>
+                    <p className="text-[10px] text-gray-400 dark:text-slate-400 font-medium text-right">{plan.duration}</p>
                   </div>
-                  <ChevronRight size={18} className="text-gray-300" />
+                  <ChevronRight size={18} className="text-gray-300 dark:text-slate-600" />
                 </div>
               </div>
             </div>
@@ -969,20 +969,20 @@ const PlansPage = () => {
         </div>
       </div>
 
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 z-50 w-full pb-4">
+      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-[#0a0a0a] border-t border-slate-100 dark:border-slate-800 z-50 w-full pb-4">
         <div className="md:max-w-7xl md:mx-auto w-full flex justify-between items-end py-2 px-6">
-          <div className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 hover:text-slate-600" onClick={() => navigate("/grocery")}>
+          <div className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" onClick={() => navigate("/grocery")}>
             <Home size={24} />
             <span className="text-[10px] font-medium">Home</span>
           </div>
 
           <div className="flex flex-col items-center gap-1 cursor-pointer">
-            <ShoppingBag size={24} className="text-slate-900 fill-current" />
-            <span className="text-[10px] font-bold text-slate-900">Plan</span>
-            <div className="w-8 h-1 bg-slate-900 rounded-full mt-0.5"></div>
+            <ShoppingBag size={24} className="text-slate-900 dark:text-slate-100 fill-current" />
+            <span className="text-[10px] font-bold text-slate-900 dark:text-slate-100">Plan</span>
+            <div className="w-8 h-1 bg-slate-900 dark:bg-slate-100 rounded-full mt-0.5"></div>
           </div>
 
-          <div className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 hover:text-slate-600" onClick={() => navigate("/categories")}>
+          <div className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" onClick={() => navigate("/categories")}>
             <LayoutGrid size={24} />
             <span className="text-[10px] font-medium">Categories</span>
           </div>
