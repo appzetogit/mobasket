@@ -1918,16 +1918,17 @@ export default function Home() {
         `}</style>
       </div>
 
-      {/* 1. Navbar Section (Sticky Top, White Background) */}
-      <div className="sticky top-0 z-50 bg-white dark:bg-[#0a0a0a] shadow-sm dark:shadow-none border-b border-gray-100 dark:border-gray-800 md:hidden">
-        <PageNavbar
-          textColor="auto"
-          zIndex={50}
-        />
-      </div>
+      <div className="sticky top-0 z-50 bg-white dark:bg-[#0a0a0a] md:static md:z-auto">
+        {/* 1. Navbar Section (Sticky Top, White Background) */}
+        <div className="bg-white dark:bg-[#0a0a0a] shadow-sm dark:shadow-none md:hidden">
+          <PageNavbar
+            textColor="auto"
+            zIndex={50}
+          />
+        </div>
 
-      {/* 2. Search Bar Section (White Background) */}
-      <div className="bg-white py-2 pb-4 px-3 sm:px-6 md:pt-20">
+        {/* 2. Search Bar Section (White Background) */}
+        <div className="bg-white dark:bg-[#0a0a0a] py-2 pb-4 px-3 sm:px-6 md:pt-20 border-b border-gray-100 dark:border-gray-800">
         <div className="w-full lg:max-w-[1100px] mx-auto lg:px-8 xl:px-0 flex items-center gap-3 sm:gap-4 lg:gap-6">
           {/* Enhanced Search Bar */}
           <motion.div
@@ -2022,6 +2023,7 @@ export default function Home() {
               className="data-[state=checked]:bg-green-600 data-[state=unchecked]:bg-gray-300 w-9 h-4 sm:w-10 sm:h-5 lg:w-12 lg:h-6 shadow-sm border border-gray-200"
             />
           </motion.div>
+        </div>
         </div>
       </div>
 

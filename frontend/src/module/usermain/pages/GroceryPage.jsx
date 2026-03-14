@@ -1814,7 +1814,7 @@ const GroceryPage = () => {
       return;
     }
 
-    navigate("/categories");
+    navigate("/grocery/categories");
   };
 
   const buildProductDetailState = (product) => {
@@ -2029,12 +2029,12 @@ const GroceryPage = () => {
           >
             <div className="px-4 pt-6 flex justify-between items-start mb-0 md:max-w-6xl md:mx-auto w-full">
               <div className="flex flex-col">
-                <h1 className="text-[10px] uppercase font-black tracking-[0.15em] text-[#3e3212] dark:text-[#fff5cc] leading-none mb-0.5">
+                <h1 className="text-[10px] uppercase font-black tracking-[0.15em] text-[#3e3212] dark:text-black leading-none mb-0.5">
                   MoBasket in
                 </h1>
                 <div className="flex items-baseline gap-2 leading-none">
                   <span
-                    className="text-[1.5rem] font-[900] text-[#1a1a1a] dark:text-[#fff9e8] tracking-tight -ml-0.5"
+                    className="text-[1.5rem] font-[900] text-[#1a1a1a] dark:text-black tracking-tight -ml-0.5"
                     style={{
                       fontFamily: "system-ui, -apple-system, sans-serif",
                     }}
@@ -2043,25 +2043,25 @@ const GroceryPage = () => {
                   </span>
                 </div>
                 <div onClick={openLocationSelector} className="flex items-center gap-1 -mt-0.5 cursor-pointer">
-                  <span className="text-[#1a1a1a] dark:text-[#fff4d1] text-[0.8rem] font-bold tracking-tight leading-tight line-clamp-2">
+                  <span className="text-[#1a1a1a] dark:text-black text-[0.8rem] font-bold tracking-tight leading-tight line-clamp-2">
                     {topAddress}
                   </span>
                   <ChevronDown
                     size={14}
-                    className="text-[#1a1a1a] dark:text-[#fff4d1] stroke-[3]"
+                    className="text-[#1a1a1a] dark:text-black stroke-[3]"
                   />
                 </div>
               </div>
 
               {/* Desktop Search Bar */}
-              <div className="hidden md:flex flex-1 max-w-lg mx-8 items-center bg-white dark:bg-[#101825] rounded-xl px-4 py-2.5 shadow-sm border border-transparent dark:border-white/10 focus-within:border-black/10 dark:focus-within:border-cyan-400/50 transition-colors">
+              <div className="hidden md:flex flex-1 max-w-lg mx-8 items-center bg-white dark:bg-[#1f2937] rounded-xl px-4 py-2.5 shadow-sm border border-transparent dark:border-white/10 focus-within:border-black/10 dark:focus-within:border-cyan-400/50 transition-colors">
                 <Search className="h-4 w-4 text-slate-500 dark:text-slate-300 stroke-[2.5] mr-3" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder='Search "chocolate"'
-                  className="flex-1 bg-transparent outline-none text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-400/90 text-sm font-medium"
+                  className="flex-1 bg-white dark:bg-[#1f2937] outline-none text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-400/90 text-sm font-medium"
                 />
               </div>
 
@@ -2116,14 +2116,14 @@ const GroceryPage = () => {
 
           {/* Search Bar (Mobile) - OUTSIDE YELLOW BOX */}
           <div className="px-4 mt-3 mb-2 relative z-30 md:hidden">
-            <div className="bg-gray-100 dark:bg-[#111b2a] rounded-2xl h-12 flex items-center px-4 border border-transparent dark:border-white/10 focus-within:border-black/5 dark:focus-within:border-cyan-400/45 transition-all w-full shadow-sm dark:shadow-black/25">
+            <div className="bg-gray-100 dark:bg-[#1f2937] rounded-2xl h-12 flex items-center px-4 border border-transparent dark:border-white/10 focus-within:border-black/5 dark:focus-within:border-cyan-400/45 transition-all w-full shadow-sm dark:shadow-black/25">
               <Search className="text-slate-400 dark:text-slate-300 w-5 h-5 stroke-[2.5] mr-3" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder='Search "pet food"'
-                className="flex-1 bg-transparent text-slate-800 dark:text-slate-100 text-[15px] font-semibold outline-none placeholder:text-slate-400/90 dark:placeholder:text-slate-500 h-full"
+                className="flex-1 bg-white dark:bg-[#1f2937] text-slate-800 dark:text-slate-100 text-[15px] font-semibold outline-none placeholder:text-slate-400/90 dark:placeholder:text-slate-500 h-full"
               />
               <div className="w-[1px] h-6 bg-slate-200 dark:bg-slate-700 mx-3"></div>
 {/* <Mic

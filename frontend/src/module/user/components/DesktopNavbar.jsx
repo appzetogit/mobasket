@@ -40,6 +40,16 @@ export default function DesktopNavbar() {
     if (!text) return true;
     return ["home", "office", "work", "other"].includes(text) || text.includes("district");
   };
+  const compactLocationLabel = (value) => {
+    const raw = String(value || "").replace(/,\s*india\s*$/i, "").trim();
+    if (!raw) return "";
+    const parts = raw.split(",").map((part) => part.trim()).filter(Boolean);
+    if (!parts.length) return raw;
+    if (/[A-Z0-9]{4,}\+[A-Z0-9]{2,}/i.test(parts[0])) parts.shift();
+    if (!parts.length) return raw;
+    const compact = parts.slice(0, 2).join(", ");
+    return compact || parts[0] || raw;
+  };
   // Show area if available and meaningful, otherwise show city
   // Priority: area > city > "Select"
   const areaName =
@@ -50,7 +60,7 @@ export default function DesktopNavbar() {
   const cityName = userLocation?.city || null;
   const stateName = userLocation?.state || null;
   // Main location name: Show area if available, otherwise show city, otherwise "Select"
-  const mainLocationName = areaName || cityName || "Select";
+  const mainLocationName = areaName ? compactLocationLabel(areaName) : cityName || "Select";
   // Secondary location: Show only city when area is available (as per design image)
   const secondaryLocation = areaName
     ? cityName || "" // Show only city when area is available
@@ -144,14 +154,14 @@ export default function DesktopNavbar() {
                     Loading...
                   </span>
                 ) : (
-                  <div className="flex flex-col items-start min-w-0">
-                    <div className="flex items-center gap-1.5 lg:gap-2">
+                  <div className="flex flex-col items-start min-w-0 max-w-[260px] lg:max-w-[340px]">
+                    <div className="flex items-center gap-1.5 lg:gap-2 min-w-0">
                       <FaLocationDot
                         className="h-5 w-5 lg:h-6 lg:w-6 text-black flex-shrink-0"
                         fill="black"
                         strokeWidth={2}
                       />
-                      <span className="text-sm lg:text-base font-bold text-black whitespace-nowrap">
+                      <span className="text-sm lg:text-base font-bold text-black truncate">
                         {mainLocationName}
                       </span>
                       <ChevronDown
@@ -160,7 +170,7 @@ export default function DesktopNavbar() {
                       />
                     </div>
                     {secondaryLocation && (
-                      <span className="text-xs lg:text-sm font-bold text-black mt-0.5 whitespace-nowrap">
+                      <span className="text-xs lg:text-sm font-bold text-black mt-0.5 truncate">
                         {secondaryLocation}
                       </span>
                     )}

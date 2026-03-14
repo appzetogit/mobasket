@@ -525,7 +525,7 @@ export default function Under250() {
     <div className={`relative min-h-screen bg-white dark:bg-[#0a0a0a] ${shouldShowGrayscale ? 'grayscale opacity-75' : ''}`}>
       {/* Navbar - Mobile Only */}
       <div className="relative z-20 pt-2 sm:pt-3 lg:pt-4 md:hidden">
-        <PageNavbar textColor="black" zIndex={20} showProfile={true} />
+        <PageNavbar textColor="white" zIndex={20} showProfile={true} />
       </div>
 
       {/* Content Section */}

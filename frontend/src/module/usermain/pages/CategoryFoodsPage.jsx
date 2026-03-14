@@ -379,17 +379,17 @@ export function CategoryFoodsContent({
   };
 
   return (
-    <div className={`bg-[#f4f6fb] flex flex-col min-h-0 font-sans ${isModal ? "h-full w-full" : "min-h-screen h-full w-full"}`}>
-      <div className={`flex flex-col h-full min-h-0 ${!isModal ? "md:max-w-7xl md:mx-auto w-full bg-white md:shadow-xl md:my-4 md:rounded-2xl md:overflow-hidden" : ""}`}>
-        <div className="bg-white sticky top-0 z-50 px-4 py-3 flex items-center gap-3 border-b border-gray-100 shadow-sm relative">
-          <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center hover:bg-slate-200 transition-colors">
-            <ArrowLeft size={20} className="text-slate-800" />
+    <div className={`bg-[#f4f6fb] dark:bg-[#0b0f17] dark:text-slate-100 flex flex-col min-h-0 font-sans ${isModal ? "h-full w-full" : "min-h-screen h-full w-full"}`}>
+      <div className={`flex flex-col h-full min-h-0 ${!isModal ? "md:max-w-7xl md:mx-auto w-full bg-white dark:bg-[#0f172a] md:shadow-xl dark:md:shadow-black/40 md:my-4 md:rounded-2xl md:overflow-hidden" : ""}`}>
+        <div className="bg-white dark:bg-[#0f172a] sticky top-0 z-50 px-4 py-3 flex items-center gap-3 border-b border-gray-100 dark:border-slate-800 shadow-sm dark:shadow-black/40 relative">
+          <button onClick={onClose} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800/80 flex items-center justify-center hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors">
+            <ArrowLeft size={20} className="text-slate-800 dark:text-slate-100" />
           </button>
           <div className="flex flex-col">
-            <h1 className="text-sm font-black text-slate-800 tracking-wide line-clamp-1">
+            <h1 className="text-sm font-black text-slate-800 dark:text-slate-100 tracking-wide line-clamp-1">
               {sidebarCategories.find((c) => c.id === selectedCategory)?.name || "All Products"}
             </h1>
-            <span className="text-[10px] text-slate-500 font-bold">{products.length} items</span>
+            <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">{products.length} items</span>
           </div>
 
           {isModal && (
@@ -403,7 +403,7 @@ export function CategoryFoodsContent({
         </div>
 
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <div className="w-full bg-white overflow-x-auto no-scrollbar z-10 flex items-center px-2 shadow-sm border-b border-gray-50 flex-shrink-0">
+          <div className="w-full bg-white dark:bg-[#0f172a] overflow-x-auto no-scrollbar z-10 flex items-center px-2 shadow-sm border-b border-gray-50 dark:border-slate-800 flex-shrink-0">
             {sidebarCategories.map((cat) => (
               <div
                 key={cat.id}
@@ -411,12 +411,12 @@ export function CategoryFoodsContent({
                   setSelectedCategory(cat.id);
                   setSelectedSubcategoryId("");
                 }}
-                className={`relative flex flex-col items-center justify-center gap-1.5 py-3 px-1 cursor-pointer transition-all min-w-[76px] flex-shrink-0 ${selectedCategory === cat.id ? "bg-transparent" : "bg-white"}`}
+                className={`relative flex flex-col items-center justify-center gap-1.5 py-3 px-1 cursor-pointer transition-all min-w-[76px] flex-shrink-0 ${selectedCategory === cat.id ? "bg-transparent" : "bg-white dark:bg-[#0f172a]"}`}
               >
                 <div
                   className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${selectedCategory === cat.id
-                    ? "bg-[#fef3c7] scale-105 border-2 border-[#facd01]"
-                    : "bg-slate-50 border border-transparent"
+                    ? "bg-[#fef3c7] scale-105 border-2 border-[#facd01] dark:bg-[#152338]"
+                    : "bg-slate-50 border border-transparent dark:bg-[#111827] dark:border-slate-700"
                     } p-1.5`}
                 >
                   <img
@@ -430,7 +430,7 @@ export function CategoryFoodsContent({
                 </div>
 
                 <span
-                  className={`text-[10px] text-center leading-tight px-0.5 font-bold line-clamp-2 max-w-[70px] ${selectedCategory === cat.id ? "text-slate-900" : "text-slate-500"}`}
+                  className={`text-[10px] text-center leading-tight px-0.5 font-bold line-clamp-2 max-w-[70px] ${selectedCategory === cat.id ? "text-slate-900 dark:text-slate-100" : "text-slate-500 dark:text-slate-400"}`}
                 >
                   {cat.name}
                 </span>
@@ -442,13 +442,13 @@ export function CategoryFoodsContent({
             ))}
           </div>
 
-          <div data-sheet-scrollable="true" className="flex-1 min-h-0 bg-white h-full overflow-y-auto pb-24 px-3 pt-4 touch-auto [-webkit-overflow-scrolling:touch]">
+          <div data-sheet-scrollable="true" className="flex-1 min-h-0 bg-white dark:bg-[#0b1220] h-full overflow-y-auto pb-24 px-3 pt-4 touch-auto [-webkit-overflow-scrolling:touch]">
             {isProductsLoading && (
-              <div className="text-sm text-slate-500 px-1 py-2">Loading products...</div>
+              <div className="text-sm text-slate-500 dark:text-slate-400 px-1 py-2">Loading products...</div>
             )}
 
             {!isProductsLoading && products.length === 0 && (
-              <div className="text-sm text-slate-500 px-1 py-2">
+              <div className="text-sm text-slate-500 dark:text-slate-400 px-1 py-2">
                 {isCategoriesLoading ? "Loading categories..." : "No products available."}
               </div>
             )}
@@ -468,10 +468,10 @@ export function CategoryFoodsContent({
                   return (
                     <div
                       key={productId || item?.name}
-                      className="flex flex-col bg-white rounded-xl overflow-hidden shadow-sm border border-slate-100 cursor-pointer hover:shadow-md transition-shadow h-full"
+                      className="flex flex-col bg-white dark:bg-[#0f172a] rounded-xl overflow-hidden shadow-sm dark:shadow-black/30 border border-slate-100 dark:border-slate-800 cursor-pointer hover:shadow-md transition-shadow h-full"
                       onClick={() => handleProductCardClick(item)}
                     >
-                      <div className="relative w-full h-40 md:h-48 p-2 bg-white">
+                      <div className="relative w-full h-40 md:h-48 p-2 bg-white dark:bg-[#0b1220]">
                         {discountPercent > 0 && (
                           <div className="absolute top-2 left-0 bg-[#f8e71d] text-[9px] font-black px-1.5 py-0.5 rounded-r text-slate-900 z-10 shadow-sm">
                             {discountPercent}% OFF
@@ -491,14 +491,14 @@ export function CategoryFoodsContent({
                         {alreadyInCart ? (
                           <div className="absolute bottom-1 right-2 z-20">
                             <div
-                              className="flex items-center gap-1 rounded-full border border-emerald-300 bg-white px-1 py-0.5 shadow-sm"
+                              className="flex items-center gap-1 rounded-full border border-emerald-300 dark:border-emerald-500/60 bg-white dark:bg-[#0b1220] px-1 py-0.5 shadow-sm"
                               onClick={(e) => {
                                 e.stopPropagation();
                               }}
                             >
                               <button
                                 type="button"
-                                className="w-5 h-5 flex items-center justify-center text-emerald-700"
+                                className="w-5 h-5 flex items-center justify-center text-emerald-700 dark:text-emerald-300"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   updateQuantity(
@@ -516,12 +516,12 @@ export function CategoryFoodsContent({
                               >
                                 <Minus size={12} />
                               </button>
-                              <span className="text-[11px] font-bold text-emerald-700 min-w-[14px] text-center">
+                              <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 min-w-[14px] text-center">
                                 {currentQty}
                               </span>
                               <button
                                 type="button"
-                                className="w-5 h-5 flex items-center justify-center text-emerald-700"
+                                className="w-5 h-5 flex items-center justify-center text-emerald-700 dark:text-emerald-300"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   updateQuantity(
@@ -543,7 +543,7 @@ export function CategoryFoodsContent({
                           </div>
                         ) : (
                           <button
-                            className="absolute bottom-1 right-2 border text-[10px] font-black px-4 py-1 rounded shadow-sm transition-colors z-20 bg-white border-[#facd01] text-gray-900 hover:bg-[#facd01]"
+                            className="absolute bottom-1 right-2 border text-[10px] font-black px-4 py-1 rounded shadow-sm transition-colors z-20 bg-white dark:bg-[#0b1220] border-[#facd01] text-gray-900 dark:text-slate-100 hover:bg-[#facd01]"
                             onClick={(e) => handleAddToCart(item, e)}
                           >
                             ADD
@@ -553,20 +553,20 @@ export function CategoryFoodsContent({
 
                       <div className="px-2 pb-2 flex-1 flex flex-col justify-between">
                         <div>
-                          <h3 className="text-[12px] font-bold text-slate-900 leading-tight line-clamp-2 mb-1 min-h-[2.4em]">
+                          <h3 className="text-[12px] font-bold text-slate-900 dark:text-slate-100 leading-tight line-clamp-2 mb-1 min-h-[2.4em]">
                             {item?.name || "Product"}
                           </h3>
 
-                          <p className="text-[10px] font-medium text-slate-400 mb-2">
+                          <p className="text-[10px] font-medium text-slate-400 dark:text-slate-400 mb-2">
                             {weight || "Unit"}
                           </p>
 
                           <div className="flex items-center gap-2">
-                            <span className="text-[12px] font-black text-slate-900">
+                            <span className="text-[12px] font-black text-slate-900 dark:text-slate-100">
                               Rs {price}
                             </span>
                             {mrp > price && (
-                              <span className="text-[10px] text-slate-400 line-through decoration-slate-400">
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500 line-through decoration-slate-400">
                                 Rs {mrp}
                               </span>
                             )}

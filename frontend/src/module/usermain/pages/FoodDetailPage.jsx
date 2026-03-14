@@ -468,8 +468,8 @@ export default function FoodDetailPage() {
         </div>
 
         {/* Right Side: Details Layout */}
-        <div className="relative -mt-10 z-10 md:w-[55%] md:mt-0 md:z-auto">
-          <div className="bg-white dark:bg-[#0f172a] rounded-t-[26px] shadow-[0_-6px_26px_rgba(15,23,42,0.08)] px-5 pt-5 pb-4 border-t border-slate-100 dark:border-slate-800 md:rounded-none md:shadow-none md:border-none md:p-0 md:bg-transparent md:flex md:flex-col md:justify-center">
+        <div className="relative -mt-10 z-10 md:w-[55%] md:mt-0 md:z-auto md:pl-8 md:dark:h-[500px]">
+          <div className="bg-white dark:bg-[#0f172a] rounded-t-[26px] shadow-[0_-6px_26px_rgba(15,23,42,0.08)] px-5 pt-5 pb-4 border-t border-slate-100 dark:border-slate-800 md:rounded-3xl md:shadow-[0_20px_60px_rgba(2,6,23,0.25)] md:border md:border-slate-100 md:dark:border-slate-800 md:p-8 md:bg-white md:dark:bg-[#0f172a] md:flex md:flex-col md:justify-center md:gap-4 md:dark:h-full">
 
             {/* Breadcrumb style text on desktop */}
             <p className="hidden md:block text-xs font-semibold text-slate-400 dark:text-slate-500 mb-3">
@@ -529,7 +529,7 @@ export default function FoodDetailPage() {
               </div>
             )}
 
-            <div className="flex items-center gap-2 mt-2.5 md:mt-6">
+            <div className="flex items-center gap-2 mt-2.5 md:mt-8">
               <span className="text-xl md:text-3xl font-[900] text-slate-900 dark:text-slate-100">Rs {displayedPrice}</span>
               {displayedMrp > displayedPrice && (
                 <span className="text-[11px] md:text-sm font-bold text-slate-400 dark:text-slate-500 line-through">MRP Rs {displayedMrp}</span>
@@ -542,7 +542,7 @@ export default function FoodDetailPage() {
             </div>
 
             {/* DESKTOP ADD BUTTON */}
-            <div className="hidden md:flex mt-8 mb-4">
+            <div className="hidden md:flex mt-10 mb-4">
               {isAddedToCart ? (
                 <div className="h-12 w-40 rounded-xl bg-emerald-600 text-white flex items-center justify-between px-3 shadow-md hover:shadow-lg transition-transform">
                   <button
@@ -592,7 +592,7 @@ export default function FoodDetailPage() {
       </div>
 
       <div className="px-5 pt-6 pb-8 md:max-w-6xl md:mx-auto md:px-8 md:pt-12">
-        <h2 className="text-lg md:text-xl font-[900] text-slate-900 dark:text-slate-100 mb-4 md:mb-6">Similar products</h2>
+        <h2 className="text-lg md:text-2xl font-[900] text-slate-900 dark:text-slate-100 mb-4 md:mb-6">Similar products</h2>
         {similarProducts.length === 0 ? (
           <div className="text-sm text-slate-500 dark:text-slate-400">No similar products found in this category.</div>
         ) : (
@@ -617,7 +617,7 @@ export default function FoodDetailPage() {
               return (
                 <div
                   key={item.id}
-                  className="flex flex-col h-full bg-white dark:bg-[#0f172a] relative cursor-pointer group"
+                  className="flex flex-col h-full bg-white dark:bg-[#0f172a] relative cursor-pointer group md:rounded-3xl md:border md:border-slate-100 md:dark:border-slate-800 md:p-3 md:shadow-[0_12px_30px_rgba(0,0,0,0.12)] md:hover:-translate-y-1 md:hover:shadow-[0_18px_36px_rgba(0,0,0,0.2)] md:transition-all"
                   onClick={() => {
                     navigate(`/food/${item.id}`, { state: { item } });
                     window.scrollTo(0, 0);
