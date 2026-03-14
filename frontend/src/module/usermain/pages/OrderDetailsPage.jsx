@@ -41,9 +41,9 @@ export default function OrderDetailsPage() {
 
   if (!order) {
     return (
-      <div className="min-h-screen bg-[#f6e9dc] flex items-center justify-center">
+      <div className="min-h-screen bg-[#f6e9dc] flex items-center justify-center dark:bg-[#0b0b0b] dark:text-gray-100">
         <div className="text-center">
-          <p className="text-gray-600">Order not found</p>
+          <p className="text-gray-600 dark:text-gray-400">Order not found</p>
           <Button
             onClick={() => navigate("/orders")}
             className="mt-4 bg-[#ff8100] hover:bg-[#e67300] text-white"
@@ -59,17 +59,17 @@ export default function OrderDetailsPage() {
   const items = orderDetails.items || [];
 
   return (
-    <div className="min-h-screen bg-[#f6e9dc] pb-20 md:pb-24">
+    <div className="min-h-screen bg-[#f6e9dc] pb-20 md:pb-24 dark:bg-[#0b0b0b] dark:text-gray-100">
       {/* Header */}
-      <div className="bg-white sticky top-0 z-50 rounded-b-3xl">
+      <div className="bg-white sticky top-0 z-50 rounded-b-3xl dark:bg-[#111827] dark:border-b dark:border-white/10">
         <div className="px-4 py-2.5 md:py-3 flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
-            className="p-1.5 md:p-2 hover:bg-gray-100 rounded-full transition-colors"
+            className="p-1.5 md:p-2 hover:bg-gray-100 rounded-full transition-colors dark:hover:bg-white/10"
           >
-            <ArrowLeft className="w-4 h-4 md:w-5 md:h-5 text-gray-800" />
+            <ArrowLeft className="w-4 h-4 md:w-5 md:h-5 text-gray-800 dark:text-gray-100" />
           </button>
-          <h1 className="text-base md:text-lg font-bold text-gray-900">
+          <h1 className="text-base md:text-lg font-bold text-gray-900 dark:text-gray-100">
             Order Details
           </h1>
         </div>
@@ -77,13 +77,13 @@ export default function OrderDetailsPage() {
 
       {/* Order Status Card */}
       <div className="px-4 py-3 md:py-4">
-        <div className="bg-white rounded-xl p-4 md:p-5 shadow-sm">
+        <div className="bg-white rounded-xl p-4 md:p-5 shadow-sm dark:bg-[#151a23] dark:border dark:border-white/10">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h3 className="text-sm md:text-base font-bold text-gray-900 mb-1">
+              <h3 className="text-sm md:text-base font-bold text-gray-900 mb-1 dark:text-gray-100">
                 Order #{order.id}
               </h3>
-              <p className="text-xs md:text-sm text-gray-600">
+              <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400">
                 {order.restaurant}
               </p>
             </div>
@@ -100,7 +100,7 @@ export default function OrderDetailsPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 text-xs md:text-sm text-gray-600">
+          <div className="flex items-center gap-2 text-xs md:text-sm text-gray-600 dark:text-gray-400">
             <Clock className="w-3.5 h-3.5 md:w-4 md:h-4" />
             <span>
               {new Date(order.date).toLocaleDateString("en-US", {
@@ -116,11 +116,11 @@ export default function OrderDetailsPage() {
 
       {/* Map View Toggle */}
       <div className="px-4 mb-3 md:mb-4">
-        <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm">
+        <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm dark:bg-[#151a23] dark:border dark:border-white/10">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Map className="w-4 h-4 md:w-5 md:h-5 text-[#ff8100]" />
-              <span className="text-sm md:text-base font-semibold text-gray-900">
+              <span className="text-sm md:text-base font-semibold text-gray-900 dark:text-gray-100">
                 Track Order
               </span>
             </div>
@@ -138,16 +138,16 @@ export default function OrderDetailsPage() {
       {/* Map View */}
       {showMap && (
         <div className="px-4 mb-3 md:mb-4">
-          <div className="bg-white rounded-xl overflow-hidden shadow-sm">
-            <div className="relative w-full h-64 md:h-80 bg-gray-200">
+          <div className="bg-white rounded-xl overflow-hidden shadow-sm dark:bg-[#151a23] dark:border dark:border-white/10">
+            <div className="relative w-full h-64 md:h-80 bg-gray-200 dark:bg-[#0f172a]">
               {/* Map placeholder - In real app, integrate Google Maps or Mapbox */}
-              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-100 to-blue-200">
+              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-blue-100 to-blue-200 dark:from-blue-900/20 dark:to-blue-800/10">
                 <div className="text-center">
                   <MapPin className="w-12 h-12 md:w-16 md:h-16 text-[#ff8100] mx-auto mb-2" />
-                  <p className="text-sm md:text-base font-semibold text-gray-700">
+                  <p className="text-sm md:text-base font-semibold text-gray-700 dark:text-gray-200">
                     Live Tracking
                   </p>
-                  <p className="text-xs md:text-sm text-gray-600 mt-1">
+                  <p className="text-xs md:text-sm text-gray-600 mt-1 dark:text-gray-400">
                     Order is on the way
                   </p>
                 </div>
@@ -160,7 +160,7 @@ export default function OrderDetailsPage() {
               /> */}
             </div>
             <div className="p-3 md:p-4">
-              <div className="flex items-center gap-2 text-xs md:text-sm text-gray-600">
+              <div className="flex items-center gap-2 text-xs md:text-sm text-gray-600 dark:text-gray-400">
                 <MapPin className="w-3.5 h-3.5 md:w-4 md:h-4 text-[#ff8100]" />
                 <span>
                   {orderDetails.deliveryAddress ||
@@ -174,8 +174,8 @@ export default function OrderDetailsPage() {
 
       {/* Order Items */}
       <div className="px-4 mb-3 md:mb-4">
-        <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm">
-          <h3 className="text-sm md:text-base font-bold text-gray-900 mb-3">
+        <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm dark:bg-[#151a23] dark:border dark:border-white/10">
+          <h3 className="text-sm md:text-base font-bold text-gray-900 mb-3 dark:text-gray-100">
             Order Items
           </h3>
           <div className="space-y-2 md:space-y-3">
@@ -183,23 +183,23 @@ export default function OrderDetailsPage() {
               items.map((item, index) => (
                 <div
                   key={index}
-                  className="flex items-center justify-between pb-2 md:pb-3 border-b border-gray-100 last:border-0 last:pb-0"
+                  className="flex items-center justify-between pb-2 md:pb-3 border-b border-gray-100 last:border-0 last:pb-0 dark:border-white/10"
                 >
                   <div className="flex-1">
-                    <p className="text-xs md:text-sm font-medium text-gray-900">
+                    <p className="text-xs md:text-sm font-medium text-gray-900 dark:text-gray-100">
                       {item.name}
                     </p>
-                    <p className="text-[10px] md:text-xs text-gray-500">
+                    <p className="text-[10px] md:text-xs text-gray-500 dark:text-gray-400">
                       Quantity: {item.quantity}
                     </p>
                   </div>
-                  <p className="text-xs md:text-sm font-bold text-gray-900">
+                  <p className="text-xs md:text-sm font-bold text-gray-900 dark:text-gray-100">
                     ${(item.price * item.quantity).toFixed(2)}
                   </p>
                 </div>
               ))
             ) : (
-              <p className="text-xs md:text-sm text-gray-600">No items found</p>
+              <p className="text-xs md:text-sm text-gray-600 dark:text-gray-400">No items found</p>
             )}
           </div>
         </div>
@@ -207,34 +207,34 @@ export default function OrderDetailsPage() {
 
       {/* Order Summary */}
       <div className="px-4 mb-3 md:mb-4">
-        <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm">
-          <h3 className="text-sm md:text-base font-bold text-gray-900 mb-3">
+        <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm dark:bg-[#151a23] dark:border dark:border-white/10">
+          <h3 className="text-sm md:text-base font-bold text-gray-900 mb-3 dark:text-gray-100">
             Order Summary
           </h3>
           <div className="space-y-2">
             <div className="flex items-center justify-between text-xs md:text-sm">
-              <span className="text-gray-600">Subtotal</span>
-              <span className="text-gray-900 font-medium">
+              <span className="text-gray-600 dark:text-gray-400">Subtotal</span>
+              <span className="text-gray-900 font-medium dark:text-gray-100">
                 ${(orderDetails.subtotal || 0).toFixed(2)}
               </span>
             </div>
             <div className="flex items-center justify-between text-xs md:text-sm">
-              <span className="text-gray-600">Delivery Fee</span>
-              <span className="text-gray-900 font-medium">
+              <span className="text-gray-600 dark:text-gray-400">Delivery Fee</span>
+              <span className="text-gray-900 font-medium dark:text-gray-100">
                 ${(orderDetails.deliveryFee || 0).toFixed(2)}
               </span>
             </div>
             {orderDetails.discount > 0 && (
               <div className="flex items-center justify-between text-xs md:text-sm">
-                <span className="text-gray-600">Discount</span>
+                <span className="text-gray-600 dark:text-gray-400">Discount</span>
                 <span className="text-[#ff8100] font-medium">
                   -${orderDetails.discount.toFixed(2)}
                 </span>
               </div>
             )}
-            <div className="border-t border-gray-200 pt-2 mt-2">
+            <div className="border-t border-gray-200 pt-2 mt-2 dark:border-white/10">
               <div className="flex items-center justify-between">
-                <span className="text-sm md:text-base font-bold text-gray-900">
+                <span className="text-sm md:text-base font-bold text-gray-900 dark:text-gray-100">
                   Total
                 </span>
                 <span className="text-lg md:text-xl font-bold text-[#ff8100]">
@@ -248,8 +248,8 @@ export default function OrderDetailsPage() {
 
       {/* Delivery Information */}
       <div className="px-4 mb-3 md:mb-4">
-        <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm">
-          <h3 className="text-sm md:text-base font-bold text-gray-900 mb-3">
+        <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm dark:bg-[#151a23] dark:border dark:border-white/10">
+          <h3 className="text-sm md:text-base font-bold text-gray-900 mb-3 dark:text-gray-100">
             Delivery Information
           </h3>
           <div className="space-y-2 md:space-y-3">
@@ -258,10 +258,10 @@ export default function OrderDetailsPage() {
                 <MapPin className="w-4 h-4 md:w-5 md:h-5 text-white" />
               </div>
               <div className="flex-1">
-                <p className="text-xs md:text-sm font-semibold text-gray-900 mb-1">
+                <p className="text-xs md:text-sm font-semibold text-gray-900 mb-1 dark:text-gray-100">
                   Delivery Address
                 </p>
-                <p className="text-[10px] md:text-xs text-gray-600">
+                <p className="text-[10px] md:text-xs text-gray-600 dark:text-gray-400">
                   {orderDetails.deliveryAddress ||
                     "202, Princess Centre, 2nd Floor, 6/3, 452001, New Delhi"}
                 </p>
@@ -272,10 +272,10 @@ export default function OrderDetailsPage() {
                 <Clock className="w-4 h-4 md:w-5 md:h-5 text-white" />
               </div>
               <div className="flex-1">
-                <p className="text-xs md:text-sm font-semibold text-gray-900 mb-1">
+                <p className="text-xs md:text-sm font-semibold text-gray-900 mb-1 dark:text-gray-100">
                   Estimated Delivery
                 </p>
-                <p className="text-[10px] md:text-xs text-gray-600">
+                <p className="text-[10px] md:text-xs text-gray-600 dark:text-gray-400">
                   {orderDetails.estimatedTime || "30-40 min"}
                 </p>
               </div>
@@ -285,10 +285,10 @@ export default function OrderDetailsPage() {
                 <Package className="w-4 h-4 md:w-5 md:h-5 text-white" />
               </div>
               <div className="flex-1">
-                <p className="text-xs md:text-sm font-semibold text-gray-900 mb-1">
+                <p className="text-xs md:text-sm font-semibold text-gray-900 mb-1 dark:text-gray-100">
                   Payment Method
                 </p>
-                <p className="text-[10px] md:text-xs text-gray-600 capitalize">
+                <p className="text-[10px] md:text-xs text-gray-600 capitalize dark:text-gray-400">
                   {order.paymentMethod === "cash"
                     ? "Cash on Delivery"
                     : "Card Payment"}
@@ -301,16 +301,16 @@ export default function OrderDetailsPage() {
 
       {/* Contact Support */}
       <div className="px-4 mb-4">
-        <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm">
+        <div className="bg-white rounded-xl p-3 md:p-4 shadow-sm dark:bg-[#151a23] dark:border dark:border-white/10">
           <div className="flex items-center gap-3">
             <div className="bg-[#ff8100] rounded-lg p-2">
               <Phone className="w-4 h-4 md:w-5 md:h-5 text-white" />
             </div>
             <div className="flex-1">
-              <p className="text-xs md:text-sm font-semibold text-gray-900">
+              <p className="text-xs md:text-sm font-semibold text-gray-900 dark:text-gray-100">
                 Need Help?
               </p>
-              <p className="text-[10px] md:text-xs text-gray-600">
+              <p className="text-[10px] md:text-xs text-gray-600 dark:text-gray-400">
                 Contact our support team
               </p>
             </div>
@@ -328,25 +328,25 @@ export default function OrderDetailsPage() {
       </div>
 
       {/* Bottom Navigation Bar - Mobile Only */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50 dark:bg-[#111827] dark:border-white/10">
         <div className="flex items-center justify-around py-2 px-4">
           <button
             onClick={() => navigate("/grocery")}
-            className="flex flex-col items-center gap-1 p-2 text-gray-600 hover:text-[#ff8100] transition-colors"
+            className="flex flex-col items-center gap-1 p-2 text-gray-600 hover:text-[#ff8100] transition-colors dark:text-gray-400"
           >
             <Home className="w-6 h-6" />
-            <span className="text-xs text-gray-600 font-medium">Home</span>
+            <span className="text-xs text-gray-600 font-medium dark:text-gray-400">Home</span>
           </button>
           <button
             onClick={() => navigate("/wishlist")}
-            className="flex flex-col items-center gap-1 p-2 text-gray-600 hover:text-[#ff8100] transition-colors"
+            className="flex flex-col items-center gap-1 p-2 text-gray-600 hover:text-[#ff8100] transition-colors dark:text-gray-400"
           >
             <Heart className="w-6 h-6" />
-            <span className="text-xs text-gray-600 font-medium">Wishlist</span>
+            <span className="text-xs text-gray-600 font-medium dark:text-gray-400">Wishlist</span>
           </button>
           <button className="flex flex-col items-center gap-1 p-2 -mt-8">
-            <div className="bg-white rounded-full p-3 shadow-lg border-2 border-gray-200">
-              <ChefHat className="w-6 h-6 text-gray-600" />
+            <div className="bg-white rounded-full p-3 shadow-lg border-2 border-gray-200 dark:bg-[#0f172a] dark:border-white/10">
+              <ChefHat className="w-6 h-6 text-gray-600 dark:text-gray-300" />
             </div>
           </button>
           <button
@@ -356,9 +356,9 @@ export default function OrderDetailsPage() {
             <ShoppingBag className="w-6 h-6" />
             <span className="text-xs text-[#ff8100] font-medium">Orders</span>
           </button>
-          <button className="flex flex-col items-center gap-1 p-2 text-gray-600">
+          <button className="flex flex-col items-center gap-1 p-2 text-gray-600 dark:text-gray-400">
             <Menu className="w-6 h-6" />
-            <span className="text-xs text-gray-600 font-medium">Menu</span>
+            <span className="text-xs text-gray-600 font-medium dark:text-gray-400">Menu</span>
           </button>
         </div>
       </div>

@@ -2360,7 +2360,7 @@ const GroceryPage = () => {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder='Search "pet food"'
-                className="flex-1 bg-white dark:bg-[#1f2937] text-slate-800 dark:text-slate-100 text-[15px] font-semibold outline-none placeholder:text-slate-400/90 dark:placeholder:text-slate-500 h-full"
+                className="flex-1 bg-transparent text-slate-800 dark:text-slate-100 text-[15px] font-semibold outline-none placeholder:text-slate-400/90 dark:placeholder:text-slate-500 h-full"
               />
               <div className="w-[1px] h-6 bg-slate-200 dark:bg-slate-700 mx-3"></div>
 {/* <Mic

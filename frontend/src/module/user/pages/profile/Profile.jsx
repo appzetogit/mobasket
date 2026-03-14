@@ -1400,12 +1400,12 @@ export default function Profile() {
 
       {/* Veg Mode Popup */}
       <Dialog open={vegModeOpen} onOpenChange={setVegModeOpen}>
-        <DialogContent className="max-w-sm md:max-w-md lg:max-w-lg w-[calc(100%-2rem)] rounded-2xl p-0 overflow-hidden">
+        <DialogContent className="max-w-sm md:max-w-md lg:max-w-lg w-[calc(100%-2rem)] rounded-2xl p-0 overflow-hidden bg-white dark:bg-[#151a23] border-gray-200 dark:border-white/10">
           <DialogHeader className="p-5 pb-3">
-            <DialogTitle className="text-lg font-bold text-gray-900">
+            <DialogTitle className="text-lg font-bold text-gray-900 dark:text-gray-100">
               Veg Mode
             </DialogTitle>
-            <DialogDescription className="text-sm text-gray-500">
+            <DialogDescription className="text-sm text-gray-500 dark:text-gray-400">
               Filter restaurants and dishes based on your dietary preferences
             </DialogDescription>
           </DialogHeader>
@@ -1417,29 +1417,29 @@ export default function Profile() {
               }}
               className={`w-full p-3 rounded-xl border-2 transition-all flex items-center justify-between ${vegMode
                 ? "border-[#EF4F5F] bg-[#EF4F5F]/10"
-                : "border-gray-200 bg-white hover:border-gray-300"
+                : "border-gray-200 bg-white hover:border-gray-300 dark:border-white/10 dark:bg-[#0f172a] dark:hover:border-white/20"
                 }`}
             >
               <div className="flex items-center gap-3">
                 <div
                   className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${vegMode
                     ? "border-[#EF4F5F] bg-[#EF4F5F]"
-                    : "border-gray-300"
+                    : "border-gray-300 dark:border-white/20"
                     }`}
                 >
                   {vegMode && <Check className="h-3 w-3 text-white" />}
                 </div>
                 <div className="text-left">
-                  <p className="font-medium text-gray-900 text-sm">
+                  <p className="font-medium text-gray-900 text-sm dark:text-gray-100">
                     Veg Mode ON
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     Show only vegetarian options
                   </p>
                 </div>
               </div>
               <Leaf
-                className={`h-5 w-5 ${vegMode ? "text-[#EF4F5F]" : "text-gray-400"}`}
+                className={`h-5 w-5 ${vegMode ? "text-[#EF4F5F]" : "text-gray-400 dark:text-gray-500"}`}
               />
             </button>
             <button
@@ -1449,21 +1449,21 @@ export default function Profile() {
               }}
               className={`w-full p-3 rounded-xl border-2 transition-all flex items-center justify-between ${!vegMode
                 ? "border-[#EF4F5F] bg-[#EF4F5F]/10"
-                : "border-gray-200 bg-white hover:border-gray-300"
+                : "border-gray-200 bg-white hover:border-gray-300 dark:border-white/10 dark:bg-[#0f172a] dark:hover:border-white/20"
                 }`}
             >
               <div className="flex items-center gap-3">
                 <div
-                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${!vegMode ? "border-[#EF4F5F] bg-[#EF4F5F]" : "border-gray-300"
+                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${!vegMode ? "border-[#EF4F5F] bg-[#EF4F5F]" : "border-gray-300 dark:border-white/20"
                     }`}
                 >
                   {!vegMode && <Check className="h-3 w-3 text-white" />}
                 </div>
                 <div className="text-left">
-                  <p className="font-medium text-gray-900 text-sm">
+                  <p className="font-medium text-gray-900 text-sm dark:text-gray-100">
                     Veg Mode OFF
                   </p>
-                  <p className="text-xs text-gray-500">Show all options</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">Show all options</p>
                 </div>
               </div>
             </button>

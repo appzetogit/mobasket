@@ -216,8 +216,8 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
   }, [deliveryType, selectedDate, normalizedSelectedTimeSlot, onScheduleChange]);
 
   return (
-    <div className="bg-white rounded-xl p-4 shadow-sm border border-orange-50 mb-4">
-      <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
+    <div className="bg-white rounded-xl p-4 shadow-sm border border-orange-50 mb-4 dark:bg-[#151a23] dark:border-white/10">
+      <h3 className="text-base font-bold text-gray-900 mb-4 flex items-center gap-2 dark:text-gray-100">
         <Truck className="w-5 h-5 text-[#ff8100]" />
         Delivery Options
       </h3>
@@ -227,13 +227,13 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
         <div
           onClick={() => setDeliveryType("now")}
           className={`flex-1 p-4 rounded-xl border relative cursor-pointer transition-all flex items-center justify-between ${deliveryType === "now"
-            ? "border-[#ff8100] bg-white shadow-sm ring-1 ring-[#ff8100]"
-            : "border-gray-200 bg-white text-gray-400 opacity-60 hover:opacity-100"
+            ? "border-[#ff8100] bg-white shadow-sm ring-1 ring-[#ff8100] dark:bg-[#0f172a]"
+            : "border-gray-200 bg-white text-gray-400 opacity-60 hover:opacity-100 dark:bg-[#0f172a] dark:text-gray-500 dark:border-white/10"
             }`}
         >
           <div>
             <span
-              className={`block text-sm font-bold ${deliveryType === "now" ? "text-gray-900" : "text-gray-500"
+              className={`block text-sm font-bold ${deliveryType === "now" ? "text-gray-900 dark:text-gray-100" : "text-gray-500 dark:text-gray-400"
                 }`}
             >
               Deliver Now
@@ -243,7 +243,7 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
             </span>
           </div>
           <div
-            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${deliveryType === "now" ? "border-[#ff8100]" : "border-gray-300"
+            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${deliveryType === "now" ? "border-[#ff8100]" : "border-gray-300 dark:border-white/30"
               }`}
           >
             {deliveryType === "now" && <div className="w-2.5 h-2.5 bg-[#ff8100] rounded-full" />}
@@ -253,13 +253,13 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
         <div
           onClick={() => setDeliveryType("scheduled")}
           className={`flex-1 p-4 rounded-xl border relative cursor-pointer transition-all flex items-center justify-between ${deliveryType === "scheduled"
-            ? "border-[#ff8100] bg-orange-50/10 shadow-sm ring-1 ring-[#ff8100]"
-            : "border-gray-200 bg-white text-gray-400 opacity-60 hover:opacity-100"
+            ? "border-[#ff8100] bg-orange-50/10 shadow-sm ring-1 ring-[#ff8100] dark:bg-orange-500/10"
+            : "border-gray-200 bg-white text-gray-400 opacity-60 hover:opacity-100 dark:bg-[#0f172a] dark:text-gray-500 dark:border-white/10"
             }`}
         >
           <div>
             <span
-              className={`block text-sm font-bold ${deliveryType === "scheduled" ? "text-gray-900" : "text-gray-500"
+              className={`block text-sm font-bold ${deliveryType === "scheduled" ? "text-gray-900 dark:text-gray-100" : "text-gray-500 dark:text-gray-400"
                 }`}
             >
               Schedule
@@ -269,7 +269,7 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
             </span>
           </div>
           <div
-            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${deliveryType === "scheduled" ? "border-[#ff8100]" : "border-gray-300"
+            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${deliveryType === "scheduled" ? "border-[#ff8100]" : "border-gray-300 dark:border-white/30"
               }`}
           >
             {deliveryType === "scheduled" && <div className="w-2.5 h-2.5 bg-[#ff8100] rounded-full" />}
@@ -282,7 +282,7 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
         <div className="animate-in fade-in slide-in-from-top-2 duration-300">
           {/* Date */}
           <div className="mb-4">
-            <p className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1">
+            <p className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1 dark:text-gray-400">
               <Calendar className="w-3.5 h-3.5" /> Select Date
             </p>
             <div className="flex gap-2 overflow-x-auto pb-2 mb-3">
@@ -295,11 +295,11 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
                     onClick={() => setSelectedDate(dateOption)}
                     className={`shrink-0 rounded-xl border px-3 py-2 text-left transition-colors ${
                       active
-                        ? "border-[#ff8100] bg-orange-50 text-orange-900"
-                        : "border-gray-200 bg-white text-gray-700 hover:border-orange-300"
+                        ? "border-[#ff8100] bg-orange-50 text-orange-900 dark:bg-orange-500/10 dark:text-orange-100"
+                        : "border-gray-200 bg-white text-gray-700 hover:border-orange-300 dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-300 dark:hover:border-orange-400/60"
                     }`}
                   >
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
                       {format(dateOption, "EEE")}
                     </p>
                     <p className="text-sm font-bold">{format(dateOption, "d MMM")}</p>
@@ -310,7 +310,7 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
             <div className="relative">
               <button
                 type="button"
-                className="w-full flex items-center justify-between bg-orange-50/50 border border-orange-200 text-orange-900 rounded-xl px-4 py-3 shadow-sm hover:border-[#ff8100] transition-colors"
+                className="w-full flex items-center justify-between bg-orange-50/50 border border-orange-200 text-orange-900 rounded-xl px-4 py-3 shadow-sm hover:border-[#ff8100] transition-colors dark:bg-orange-500/10 dark:border-orange-400/40 dark:text-orange-100"
                 onClick={() => {
                   const input = dateInputRef.current;
                   if (!input) return;
@@ -331,7 +331,7 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
                   </div>
                   <div className="flex flex-col items-start">
                     <span className="text-[10px] font-bold text-orange-600 uppercase tracking-wider">Date</span>
-                    <span className="text-sm font-bold text-gray-900">
+                    <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
                       {format(selectedDate, "EEE, MMM d")}
                     </span>
                   </div>
@@ -371,11 +371,11 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
 
           {/* Time Slot */}
           <div>
-            <p className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1">
+            <p className="text-xs font-medium text-gray-500 mb-2 flex items-center gap-1 dark:text-gray-400">
               <Clock className="w-3.5 h-3.5" /> Select Time Slot
             </p>
             {availableTimeSlots.length === 0 ? (
-              <div className="w-full bg-gray-50 border border-gray-200 text-gray-600 text-sm rounded-xl p-3">
+              <div className="w-full bg-gray-50 border border-gray-200 text-gray-600 text-sm rounded-xl p-3 dark:bg-white/5 dark:border-white/10 dark:text-gray-300">
                 No slots available for this date
               </div>
             ) : (
@@ -389,8 +389,8 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
                       onClick={() => setSelectedTimeSlot(slot.value)}
                       className={`w-full text-left rounded-xl px-3 py-2.5 border text-sm font-medium transition-colors ${
                         isSelected
-                          ? "border-[#ff8100] bg-orange-50 text-orange-900"
-                          : "border-gray-200 bg-white text-gray-800 hover:border-orange-300"
+                          ? "border-[#ff8100] bg-orange-50 text-orange-900 dark:bg-orange-500/10 dark:text-orange-100"
+                          : "border-gray-200 bg-white text-gray-800 hover:border-orange-300 dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-200 dark:hover:border-orange-400/60"
                       }`}
                     >
                       {slot.label}
@@ -400,7 +400,7 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
               </div>
             )}
             {selectedSlotLabel && (
-              <p className="mt-2 text-xs font-medium text-gray-600 break-words">
+              <p className="mt-2 text-xs font-medium text-gray-600 break-words dark:text-gray-400">
                 Selected: {selectedSlotLabel}
               </p>
             )}

@@ -186,46 +186,46 @@ export default function CartPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f6e9dc] md:pt-20">
+    <div className="min-h-screen bg-[#f6e9dc] text-gray-900 md:pt-20 dark:bg-[#0b0b0b] dark:text-gray-100">
       {/* Header */}
-      <div className="bg-white sticky top-0 z-50 rounded-b-3xl md:hidden">
+      <div className="bg-white sticky top-0 z-50 rounded-b-3xl md:hidden dark:bg-[#111827] dark:border-b dark:border-white/10">
         <div className="px-4 py-3 flex items-center gap-3">
           <button
             onClick={() => navigate(-1)}
-            className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+            className="p-2 hover:bg-gray-100 rounded-full transition-colors dark:hover:bg-white/10"
           >
-            <X className="w-5 h-5 text-gray-800" />
+            <X className="w-5 h-5 text-gray-800 dark:text-gray-100" />
           </button>
-          <h1 className="text-lg font-bold text-gray-900">Cart</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">Cart</h1>
         </div>
       </div>
 
       {/* Desktop Header/Headline */}
       <div className="hidden md:block max-w-[1100px] mx-auto w-full px-4 mt-4 mb-4">
-        <div className="bg-white shadow-sm rounded-2xl py-4 px-4 flex items-center gap-4">
+        <div className="bg-white shadow-sm rounded-2xl py-4 px-4 flex items-center gap-4 dark:bg-[#111827] dark:border dark:border-white/10">
           <button
             onClick={() => navigate(-1)}
-            className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+            className="p-1 hover:bg-gray-100 rounded-full transition-colors dark:hover:bg-white/10"
           >
-            <X className="w-6 h-6 text-gray-800" />
+            <X className="w-6 h-6 text-gray-800 dark:text-gray-100" />
           </button>
-          <h1 className="text-xl font-bold text-gray-900 font-Inter">Cart</h1>
+          <h1 className="text-xl font-bold text-gray-900 font-Inter dark:text-gray-100">Cart</h1>
         </div>
       </div>
 
       {/* Empty Cart State */}
       {isEditSessionActive && (
         <div className="px-4 pt-4">
-          <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 flex items-center justify-between gap-2">
+          <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3 flex items-center justify-between gap-2 dark:bg-orange-500/10 dark:border-orange-400/30">
             <div>
-              <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide">
+              <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide dark:text-orange-300">
                 Editing order #{orderEditSession?.orderRouteId}
               </p>
-              <p className="text-sm font-semibold text-orange-900">
+              <p className="text-sm font-semibold text-orange-900 dark:text-orange-100">
                 Complete changes before timer ends
               </p>
             </div>
-            <p className="text-lg font-extrabold text-orange-900 tabular-nums">
+            <p className="text-lg font-extrabold text-orange-900 tabular-nums dark:text-orange-100">
               {String(Math.floor(editSecondsLeft / 60)).padStart(2, "0")}:
               {String(editSecondsLeft % 60).padStart(2, "0")}
             </p>
@@ -234,11 +234,11 @@ export default function CartPage() {
       )}
       {cartItems.length === 0 ? (
         <div className="max-w-[1100px] mx-auto w-full flex flex-col items-center justify-center py-20 px-4">
-          <ShoppingBag className="w-16 h-16 text-gray-300 mb-4" />
-          <h2 className="text-lg font-bold text-gray-700 mb-1">
+          <ShoppingBag className="w-16 h-16 text-gray-300 mb-4 dark:text-white/30" />
+          <h2 className="text-lg font-bold text-gray-700 mb-1 dark:text-gray-100">
             Your cart is empty
           </h2>
-          <p className="text-sm text-gray-500 mb-6">
+          <p className="text-sm text-gray-500 mb-6 dark:text-gray-400">
             Add items from a restaurant to get started
           </p>
           <Button
@@ -255,7 +255,7 @@ export default function CartPage() {
             {cartItems.map((item) => (
               <div
                 key={item.id}
-                className="bg-white rounded-xl overflow-hidden shadow-sm"
+                className="bg-white rounded-xl overflow-hidden shadow-sm dark:bg-[#151a23] dark:border dark:border-white/10"
               >
                 <div className="flex gap-3 p-3">
                   {/* Food Image */}
@@ -269,14 +269,14 @@ export default function CartPage() {
 
                   {/* Food Details */}
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-bold text-gray-900 mb-2">
+                    <h3 className="text-sm font-bold text-gray-900 mb-2 dark:text-gray-100">
                       {item.name}
                     </h3>
 
                     {/* Restaurant Name */}
                     {item.restaurant && (
                       <div className="mb-2">
-                        <span className="text-xs text-gray-500">
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
                           {item.restaurant}
                         </span>
                       </div>
@@ -284,7 +284,7 @@ export default function CartPage() {
 
                     {/* Price and Quantity */}
                     <div className="flex items-center justify-between">
-                      <span className="text-base font-bold text-gray-900">
+                      <span className="text-base font-bold text-gray-900 dark:text-gray-100">
                         ₹{(item.price || 0).toFixed(2)}
                       </span>
 
@@ -292,11 +292,11 @@ export default function CartPage() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => handleQuantityChange(item.id, -1)}
-                          className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-100 transition-colors"
+                          className="w-8 h-8 rounded-full border border-gray-300 flex items-center justify-center hover:bg-gray-100 transition-colors dark:border-white/10 dark:hover:bg-white/10"
                         >
-                          <Minus className="w-4 h-4 text-gray-600" />
+                          <Minus className="w-4 h-4 text-gray-600 dark:text-gray-300" />
                         </button>
-                        <span className="text-sm font-semibold text-gray-900 min-w-[30px] text-center">
+                        <span className="text-sm font-semibold text-gray-900 min-w-[30px] text-center dark:text-gray-100">
                           {Number(item.quantity || 0)}
                         </span>
                         <button
@@ -316,12 +316,12 @@ export default function CartPage() {
           {/* Complete your meal with add-ons */}
           {addons.length > 0 && (
             <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
-              <div className="bg-white rounded-xl p-4 shadow-sm">
+              <div className="bg-white rounded-xl p-4 shadow-sm dark:bg-[#151a23] dark:border dark:border-white/10">
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center">
-                    <Sparkles className="w-4 h-4 text-orange-600" />
+                  <div className="w-7 h-7 rounded-full bg-orange-100 flex items-center justify-center dark:bg-orange-500/20">
+                    <Sparkles className="w-4 h-4 text-orange-600 dark:text-orange-300" />
                   </div>
-                  <h3 className="text-sm font-bold text-gray-900">Complete your meal</h3>
+                  <h3 className="text-sm font-bold text-gray-900 dark:text-gray-100">Complete your meal</h3>
                 </div>
 
                 {loadingAddons ? (
@@ -329,11 +329,11 @@ export default function CartPage() {
                     {[1, 2, 3].map((placeholder) => (
                       <div
                         key={placeholder}
-                        className="min-w-[170px] rounded-xl border border-gray-200 p-3 animate-pulse"
+                        className="min-w-[170px] rounded-xl border border-gray-200 p-3 animate-pulse dark:border-white/10"
                       >
-                        <div className="h-20 bg-gray-200 rounded-lg mb-2" />
-                        <div className="h-3 bg-gray-200 rounded w-2/3 mb-2" />
-                        <div className="h-3 bg-gray-200 rounded w-1/3" />
+                        <div className="h-20 bg-gray-200 rounded-lg mb-2 dark:bg-white/10" />
+                        <div className="h-3 bg-gray-200 rounded w-2/3 mb-2 dark:bg-white/10" />
+                        <div className="h-3 bg-gray-200 rounded w-1/3 dark:bg-white/10" />
                       </div>
                     ))}
                   </div>
@@ -351,7 +351,7 @@ export default function CartPage() {
                       return (
                         <div
                           key={addonId}
-                          className="min-w-[185px] rounded-xl border border-orange-100 bg-orange-50/40 p-2"
+                          className="min-w-[185px] rounded-xl border border-orange-100 bg-orange-50/40 p-2 dark:border-orange-500/30 dark:bg-orange-500/10"
                         >
                           <img
                             src={addonImage}
@@ -363,26 +363,26 @@ export default function CartPage() {
                             }}
                           />
                           <div className="p-1.5">
-                            <p className="text-sm font-semibold text-gray-900 line-clamp-1">{addon.name}</p>
-                            <p className="text-xs text-gray-500 line-clamp-1">
+                            <p className="text-sm font-semibold text-gray-900 line-clamp-1 dark:text-gray-100">{addon.name}</p>
+                            <p className="text-xs text-gray-500 line-clamp-1 dark:text-gray-400">
                               {addon.description || "Popular add-on"}
                             </p>
                             <div className="mt-2 flex items-center justify-between">
-                              <span className="text-sm font-bold text-gray-900">
+                              <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
                                 ₹{Number(addon.price || 0).toFixed(0)}
                               </span>
                               {qty > 0 ? (
-                                <div className="flex items-center gap-1 rounded-full border border-orange-300 bg-white px-1 py-0.5">
+                                <div className="flex items-center gap-1 rounded-full border border-orange-300 bg-white px-1 py-0.5 dark:border-orange-400/40 dark:bg-[#0f172a]">
                                   <button
                                     onClick={() => updateQuantity(addonId, qty - 1)}
-                                    className="w-6 h-6 rounded-full flex items-center justify-center text-orange-600 hover:bg-orange-50"
+                                    className="w-6 h-6 rounded-full flex items-center justify-center text-orange-600 hover:bg-orange-50 dark:text-orange-300 dark:hover:bg-orange-500/10"
                                   >
                                     <Minus className="w-3.5 h-3.5" />
                                   </button>
-                                  <span className="text-xs font-semibold w-5 text-center">{qty}</span>
+                                  <span className="text-xs font-semibold w-5 text-center dark:text-gray-100">{qty}</span>
                                   <button
                                     onClick={() => updateQuantity(addonId, qty + 1)}
-                                    className="w-6 h-6 rounded-full flex items-center justify-center text-orange-600 hover:bg-orange-50"
+                                    className="w-6 h-6 rounded-full flex items-center justify-center text-orange-600 hover:bg-orange-50 dark:text-orange-300 dark:hover:bg-orange-500/10"
                                   >
                                     <Plus className="w-3.5 h-3.5" />
                                   </button>
@@ -401,7 +401,7 @@ export default function CartPage() {
                                       restaurantId,
                                     })
                                   }
-                                  className="h-8 px-3 rounded-full bg-white border border-[#ff8100] text-[#ff8100] text-xs font-bold hover:bg-orange-50"
+                                  className="h-8 px-3 rounded-full bg-white border border-[#ff8100] text-[#ff8100] text-xs font-bold hover:bg-orange-50 dark:bg-transparent dark:border-orange-400/60 dark:text-orange-300 dark:hover:bg-orange-500/10"
                                 >
                                   ADD
                                 </button>
@@ -426,26 +426,26 @@ export default function CartPage() {
             />
           </div>
 
-          {/* Total Section */}
-          <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
-            <div className="bg-white rounded-xl p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-gray-900">Total</span>
-                <span className="text-xl font-bold text-[#ff8100]">
-                  ₹{cartTotal.toFixed(2)}
-                </span>
-              </div>
-            </div>
+      {/* Total Section */}
+      <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
+        <div className="bg-white rounded-xl p-4 dark:bg-[#151a23] dark:border dark:border-white/10">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Total</span>
+            <span className="text-xl font-bold text-[#ff8100]">
+              ₹{cartTotal.toFixed(2)}
+            </span>
           </div>
+        </div>
+      </div>
 
-          {!restaurantAvailability.isAvailable && (
-            <div className="px-4 mb-4">
-              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
-                <p className="text-sm font-semibold text-red-700">
-                  {restaurantAvailability.reason || "Restaurant is offline. You cannot order right now."}
-                </p>
-              </div>
-            </div>
+      {!restaurantAvailability.isAvailable && (
+        <div className="px-4 mb-4">
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-500/40 dark:bg-red-500/10">
+            <p className="text-sm font-semibold text-red-700 dark:text-red-300">
+              {restaurantAvailability.reason || "Restaurant is offline. You cannot order right now."}
+            </p>
+          </div>
+        </div>
           )}
 
           {/* Checkout Button */}

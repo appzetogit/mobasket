@@ -379,8 +379,8 @@ export default function MyOrders() {
                       <div>
                         <div className="flex items-center gap-1">
                           <span className="text-sm text-gray-800">You rated</span>
-                          <div className="flex bg-yellow-400 text-white px-1 rounded text-[10px] items-center gap-0.5 h-4">
-                            {rating}<Star className="w-2 h-2 fill-current" />
+                          <div className="flex bg-yellow-400 text-white px-1 rounded text-[10px] items-center gap-0.5 h-4 leading-none">
+                            {rating}<Star className="w-3 h-3 fill-current stroke-current shrink-0" />
                     </div>
                   </div>
                         <button className="text-xs text-red-500 font-medium mt-0.5 flex items-center hover:text-red-600">

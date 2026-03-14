@@ -1399,7 +1399,7 @@ export default function Cart() {
                               }}
                             />
                             <div className="absolute top-1 md:top-2 left-1 md:left-2">
-                              <div className="w-3.5 h-3.5 md:w-4 md:h-4 bg-white border border-green-600 flex items-center justify-center rounded">
+                              <div className="w-3.5 h-3.5 md:w-4 md:h-4 bg-white dark:bg-[#0f172a] border border-green-600 dark:border-green-500 flex items-center justify-center rounded">
                                 <div className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-green-600" />
                               </div>
                             </div>
@@ -1432,7 +1432,7 @@ export default function Cart() {
                                   restaurantId: cartRestaurantId
                                 });
                               }}
-                              className="absolute bottom-1 md:bottom-2 right-1 md:right-2 w-6 h-6 md:w-7 md:h-7 bg-white border border-red-600 rounded flex items-center justify-center shadow-sm hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                              className="absolute bottom-1 md:bottom-2 right-1 md:right-2 w-6 h-6 md:w-7 md:h-7 bg-white dark:bg-[#0f172a] border border-red-600 dark:border-red-500 rounded flex items-center justify-center shadow-sm hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                             >
                               <Plus className="h-3.5 w-3.5 md:h-4 md:w-4 text-red-600" />
                             </button>
@@ -1809,7 +1809,7 @@ export default function Cart() {
 
           {/* Modal Sheet */}
           <div
-            className="absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl overflow-hidden"
+            className="absolute bottom-0 left-0 right-0 bg-white dark:bg-[#111827] rounded-t-3xl shadow-2xl overflow-hidden dark:border dark:border-gray-800"
             style={{ animation: 'slideUpModal 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}
           >
             <div className="px-6 py-8">
@@ -1818,9 +1818,9 @@ export default function Cart() {
 
               {/* Payment Info */}
               <div className="flex items-center gap-4 mb-5">
-                <div className="w-14 h-14 rounded-xl border border-gray-200 flex items-center justify-center bg-white shadow-sm">
-                  <CreditCard className="w-6 h-6 text-gray-600" />
-                </div>
+                <div className="w-14 h-14 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center justify-center bg-white dark:bg-[#0f172a] shadow-sm">
+                  <CreditCard className="w-6 h-6 text-gray-600 dark:text-gray-300" />
+                </div>
                 <div>
                   <p className="text-lg font-semibold text-gray-900">
                     {selectedPaymentMethod === "razorpay"
@@ -1834,8 +1834,8 @@ export default function Cart() {
 
               {/* Delivery Address */}
               <div className="flex items-center gap-4 mb-8">
-                <div className="w-14 h-14 rounded-xl border border-gray-200 flex items-center justify-center bg-gray-50">
-                  <svg className="w-7 h-7 text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <div className="w-14 h-14 rounded-xl border border-gray-200 dark:border-gray-700 flex items-center justify-center bg-gray-50 dark:bg-[#0f172a]">
+                  <svg className="w-7 h-7 text-gray-600 dark:text-gray-300" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                     <path d="M9 22V12h6v10" />
                   </svg>
@@ -1893,7 +1893,7 @@ export default function Cart() {
       {/* Order Success Celebration Page */}
       {showOrderSuccess && (
         <div
-          className="fixed inset-0 z-[70] bg-white flex flex-col items-center justify-center h-screen w-screen overflow-hidden"
+          className="fixed inset-0 z-[70] bg-white dark:bg-[#0a0a0a] flex flex-col items-center justify-center h-screen w-screen overflow-hidden"
           style={{ animation: 'fadeIn 0.3s ease-out' }}
         >
           {/* Confetti Background */}
