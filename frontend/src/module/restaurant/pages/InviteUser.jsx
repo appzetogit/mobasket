@@ -74,9 +74,17 @@ export default function InviteUser() {
   const [addMethod, setAddMethod] = useState("phone") // "phone" or "email"
   const [photo, setPhoto] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
+<<<<<<< HEAD
   const [submitting, setSubmitting] = useState(false)
   const photoInputRef = useRef(null)
   const photoCameraInputRef = useRef(null)
+=======
+  const [isCameraLoading, setIsCameraLoading] = useState(false)
+  const fileInputRef = useRef(null)
+  const cameraInputRef = useRef(null)
+  const [existingStaff, setExistingStaff] = useState([])
+  const [loadingExistingStaff, setLoadingExistingStaff] = useState(false)
+>>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
 
   // Lenis smooth scrolling
   useEffect(() => {
@@ -97,6 +105,32 @@ export default function InviteUser() {
       lenis.destroy()
     }
   }, [])
+
+  // Fetch existing staff to prevent duplicates
+  useEffect(() => {
+    const fetchExistingStaff = async () => {
+      try {
+        setLoadingExistingStaff(true)
+        const response = await restaurantAPI.getStaff()
+        const staffData = response?.data?.data?.staff || response?.data?.staff || []
+        setExistingStaff(staffData)
+      } catch (error) {
+        console.error("Error fetching existing staff:", error)
+        setExistingStaff([])
+      } finally {
+        setLoadingExistingStaff(false)
+      }
+    }
+
+    fetchExistingStaff()
+  }, [])
+
+  const normalizeName = (value) => value.trim().toLowerCase()
+  const normalizePhone = (value) => value.replace(/\D/g, "")
+  const comparablePhone = (value) => {
+    const digits = normalizePhone(value || "")
+    return digits.length > 10 ? digits.slice(-10) : digits
+  }
 
   // Phone number validation
   const validatePhone = (phone) => {
@@ -190,9 +224,54 @@ export default function InviteUser() {
     }
   }
 
+  const buildFileFromBase64 = (base64, fileName, mimeType) => {
+    if (!base64) {
+      throw new Error("Invalid image data")
+    }
+    const cleanedBase64 = base64.includes("base64,") ? base64.split("base64,")[1] : base64
+    const binaryString = window.atob(cleanedBase64)
+    const bytes = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i += 1) {
+      bytes[i] = binaryString.charCodeAt(i)
+    }
+    return new File([bytes], fileName, { type: mimeType })
+  }
+
+  const handleCameraCapture = async () => {
+    if (isCameraLoading) return
+    setIsCameraLoading(true)
+    try {
+      if (window?.flutter_inappwebview?.callHandler) {
+        const result = await window.flutter_inappwebview.callHandler("openCamera")
+        if (result?.success && result?.base64) {
+          const fileName = result?.fileName || `staff-${Date.now()}.jpg`
+          const mimeType = result?.mimeType || "image/jpeg"
+          const cleanedBase64 = result.base64.includes("base64,")
+            ? result.base64.split("base64,")[1]
+            : result.base64
+          const file = buildFileFromBase64(result.base64, fileName, mimeType)
+          setPhoto(file)
+          setPhotoPreview(`data:${mimeType};base64,${cleanedBase64}`)
+        } else if (result?.success === false) {
+          // User cancelled or failed; no action needed
+        } else {
+          alert("Failed to capture image")
+        }
+      } else {
+        cameraInputRef.current?.click()
+      }
+    } catch (error) {
+      console.error("Camera capture error:", error)
+      alert("Failed to capture image")
+    } finally {
+      setIsCameraLoading(false)
+    }
+  }
+
   const handleRemovePhoto = () => {
     setPhoto(null)
     setPhotoPreview(null)
+<<<<<<< HEAD
     if (photoInputRef.current) photoInputRef.current.value = ""
     if (photoCameraInputRef.current) photoCameraInputRef.current.value = ""
   }
@@ -225,6 +304,14 @@ export default function InviteUser() {
     } catch (error) {
       console.error("Camera capture failed:", error)
       alert("Failed to capture image. Please try again.")
+=======
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ""
+    }
+    if (cameraInputRef.current) {
+      cameraInputRef.current.value = ""
+>>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
     }
   }
 
@@ -242,6 +329,28 @@ export default function InviteUser() {
     }
 
     if (!isValid) return
+
+    const normalizedName = normalizeName(name)
+    if (!loadingExistingStaff && normalizedName) {
+      const hasDuplicateName = existingStaff.some((staff) =>
+        normalizeName(staff?.name || "") === normalizedName
+      )
+      if (hasDuplicateName) {
+        setNameError("A user with this name already exists")
+        return
+      }
+    }
+
+    if (addMethod === "phone" && !loadingExistingStaff) {
+      const newPhone = comparablePhone(phoneNumber)
+      const hasDuplicatePhone = existingStaff.some((staff) =>
+        comparablePhone(staff?.phone || "") === newPhone
+      )
+      if (hasDuplicatePhone) {
+        setPhoneError("This phone number is already added")
+        return
+      }
+    }
 
     try {
       setSubmitting(true)
@@ -453,8 +562,8 @@ export default function InviteUser() {
                 <ImageIcon className="w-8 h-8 text-gray-400" />
               )}
             </div>
-            <div className="flex-1">
-              {photo ? (
+            <div className="flex-1 space-y-2">
+              {photo && (
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-600">{photo.name}</span>
                   <button
@@ -465,6 +574,7 @@ export default function InviteUser() {
                     <X className="w-4 h-4" />
                   </button>
                 </div>
+<<<<<<< HEAD
               ) : (
                 <div className="flex flex-wrap items-center gap-2">
                   <label
@@ -486,6 +596,30 @@ export default function InviteUser() {
               )}
               <input
                 ref={photoInputRef}
+=======
+              )}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCameraCapture}
+                  disabled={isCameraLoading}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-black text-white text-sm font-medium hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ImageIcon className="w-4 h-4" />
+                  <span>{isCameraLoading ? "Opening..." : "Camera"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-300 text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>Gallery</span>
+                </button>
+              </div>
+              <input
+                ref={fileInputRef}
+>>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
                 id="photoInput"
                 type="file"
                 accept="image/*"
@@ -493,7 +627,11 @@ export default function InviteUser() {
                 onChange={handlePhotoChange}
               />
               <input
+<<<<<<< HEAD
                 ref={photoCameraInputRef}
+=======
+                ref={cameraInputRef}
+>>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
                 id="photoCameraInput"
                 type="file"
                 accept="image/*"

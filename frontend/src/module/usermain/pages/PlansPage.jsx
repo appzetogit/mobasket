@@ -824,7 +824,7 @@ const PlansPage = () => {
 
   return (
     <div className="bg-gray-50 dark:bg-[#0a0a0a] dark:text-slate-100 min-h-screen font-sans w-full relative pb-20 overflow-x-hidden">
-      <div className="bg-[#FACC15] dark:bg-[#0f172a] pb-10 rounded-b-[2.5rem] shadow-sm">
+      <div className="bg-[#FACC15] dark:bg-[#FACC15] pb-10 rounded-b-[2.5rem] shadow-sm">
         <div className="p-4 pt-6 flex justify-between items-start md:max-w-7xl md:mx-auto">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-xl bg-white/80 dark:bg-white/10 border border-yellow-200 dark:border-slate-700 shadow-sm flex items-center justify-center overflow-hidden">
@@ -982,7 +982,7 @@ const PlansPage = () => {
             <div className="w-8 h-1 bg-slate-900 dark:bg-slate-100 rounded-full mt-0.5"></div>
           </div>
 
-          <div className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" onClick={() => navigate("/categories")}>
+          <div className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" onClick={() => navigate("/grocery/categories")}>
             <LayoutGrid size={24} />
             <span className="text-[10px] font-medium">Categories</span>
           </div>

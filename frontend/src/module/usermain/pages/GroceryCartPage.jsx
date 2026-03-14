@@ -731,7 +731,7 @@ const GroceryCartPage = () => {
           </div>
         )}
         <div
-          className={`rounded-xl flex items-center justify-between px-4 py-3 shadow-lg transition-all overflow-hidden border ${shouldDisableOrderNow
+          className={`rounded-xl flex items-center justify-between px-4 py-3 shadow-lg transition-all overflow-hidden border md:dark:relative ${shouldDisableOrderNow
               ? "bg-gray-200 border-gray-300 cursor-not-allowed"
               : "bg-[#facd01] border-yellow-400 active:scale-[0.98] cursor-pointer group"
             }`}

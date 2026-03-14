@@ -174,20 +174,20 @@ export default function AddMoneyModal({ open, onOpenChange, onSuccess }) {
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="w-[calc(100%-24px)] sm:w-full sm:max-w-sm md:max-w-md max-h-[85vh] overflow-y-auto bg-white dark:bg-[#0f1115] border border-gray-200 dark:border-gray-800 shadow-xl rounded-2xl p-4 sm:p-5 md:p-6">
         <DialogHeader>
-          <DialogTitle className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">
+          <DialogTitle className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900 dark:text-white">
             Add Money to Wallet
           </DialogTitle>
-          <DialogDescription className="text-sm md:text-base text-gray-600 dark:text-gray-400">
+          <DialogDescription className="text-xs sm:text-sm md:text-base text-gray-600 dark:text-gray-400">
             Enter the amount you want to add to your wallet
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
+        <div className="space-y-5 sm:space-y-6 py-3 sm:py-4">
           {/* Amount Input */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">
               Enter Amount
             </label>
             <div className="relative">
@@ -199,27 +199,27 @@ export default function AddMoneyModal({ open, onOpenChange, onSuccess }) {
                 value={amount}
                 onChange={handleAmountChange}
                 placeholder="Enter amount"
-                className="pl-10 h-12 text-lg bg-white text-gray-900 placeholder:text-gray-500 dark:bg-[#111] dark:text-white dark:placeholder:text-gray-400 border-gray-300 dark:border-gray-700"
+                className="pl-10 h-11 sm:h-12 text-base sm:text-lg bg-white text-gray-900 placeholder:text-gray-500 dark:bg-[#111] dark:text-white dark:placeholder:text-gray-400 border-gray-300 dark:border-gray-700"
                 disabled={loading || processing}
               />
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-[11px] sm:text-xs text-gray-500 dark:text-gray-400">
               Minimum: ₹1 | Maximum: ₹50,000
             </p>
           </div>
 
           {/* Quick Amount Buttons */}
           <div className="space-y-2">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">
               Quick Select
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-2 sm:gap-2.5">
               {quickAmounts.map((quickAmount) => (
                 <Button
                   key={quickAmount}
                   type="button"
                   variant="outline"
-                  className={`h-10 font-semibold ${
+                  className={`h-9 sm:h-10 text-xs sm:text-sm font-semibold ${
                     amount === quickAmount.toString()
                       ? "border-[#EF4F5F] bg-[#EF4F5F]/10 text-[#EF4F5F] hover:bg-[#EF4F5F]/15 dark:bg-[#EF4F5F]/20 dark:text-[#ff9eaa] dark:border-[#EF4F5F]"
                       : "bg-white text-gray-800 hover:bg-gray-50 border-gray-200 dark:bg-[#111] dark:text-gray-200 dark:border-gray-700 dark:hover:bg-[#1a1a1a]"
@@ -237,7 +237,7 @@ export default function AddMoneyModal({ open, onOpenChange, onSuccess }) {
           <Button
             onClick={handleAddMoney}
             disabled={!amount || loading || processing || parseFloat(amount) < 1}
-            className="w-full h-12 bg-green-600 hover:bg-green-700 text-white font-semibold text-base"
+            className="w-full h-11 sm:h-12 bg-green-600 hover:bg-green-700 text-white font-semibold text-sm sm:text-base"
           >
             {loading || processing ? (
               <>

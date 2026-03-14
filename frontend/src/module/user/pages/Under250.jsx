@@ -525,7 +525,7 @@ export default function Under250() {
     <div className={`relative min-h-screen bg-white dark:bg-[#0a0a0a] ${shouldShowGrayscale ? 'grayscale opacity-75' : ''}`}>
       {/* Navbar - Mobile Only */}
       <div className="relative z-20 pt-2 sm:pt-3 lg:pt-4 md:hidden">
-        <PageNavbar textColor="black" zIndex={20} showProfile={true} />
+        <PageNavbar textColor="auto" zIndex={20} showProfile={true} />
       </div>
 
       {/* Content Section */}
@@ -600,17 +600,6 @@ export default function Under250() {
 
         <section className="py-2 sm:py-3 md:py-4">
           <div className="flex flex-wrap items-center gap-2 md:gap-3">
-            <Button
-              variant="outline"
-              onClick={() => setShowSortPopup(true)}
-              className="h-8 sm:h-9 md:h-10 px-3 sm:px-4 md:px-5 rounded-md flex items-center gap-2 whitespace-nowrap flex-shrink-0 font-medium transition-all bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-300 text-sm md:text-base"
-            >
-              <ArrowDownUp className="h-4 w-4 md:h-5 md:w-5 rotate-90" />
-              <span className="text-sm md:text-base font-medium">
-                {selectedSort ? sortOptions.find(opt => opt.id === selectedSort)?.label : 'Sort'}
-              </span>
-              <ChevronDown className="h-3 w-3 md:h-4 md:w-4" />
-            </Button>
             <Button
               variant="outline"
               onClick={() => setUnder30MinsFilter(!under30MinsFilter)}

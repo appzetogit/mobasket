@@ -49,6 +49,8 @@ export default function EditOwner() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [profileImageFile, setProfileImageFile] = useState(null)
+  const [isCameraLoading, setIsCameraLoading] = useState(false)
+  const [restaurantName, setRestaurantName] = useState("restaurant")
   const fileInputRef = useRef(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
@@ -81,6 +83,10 @@ export default function EditOwner() {
         const response = await restaurantAPI.getCurrentRestaurant()
         const data = response?.data?.data?.restaurant || response?.data?.restaurant
         if (data) {
+          const resolvedName = (data.name || data.restaurantName || "").trim()
+          if (resolvedName) {
+            setRestaurantName(resolvedName)
+          }
           const ownerDataFromBackend = {
             name: data.ownerName || data.name || "",
             phone: data.ownerPhone || data.primaryContactNumber || data.phone || "",
@@ -102,6 +108,9 @@ export default function EditOwner() {
             const parsed = JSON.parse(saved)
             setOwnerData(parsed)
             setFormData(parsed)
+            if (parsed?.restaurantName) {
+              setRestaurantName(String(parsed.restaurantName).trim() || "restaurant")
+            }
           }
         } catch (e) {
           console.error("Error loading owner data from localStorage:", e)
@@ -144,6 +153,50 @@ export default function EditOwner() {
         }))
       }
       reader.readAsDataURL(file)
+    }
+  }
+
+  const buildFileFromBase64 = (base64, fileName, mimeType) => {
+    if (!base64) {
+      throw new Error("Invalid image data")
+    }
+    const cleanedBase64 = base64.includes("base64,") ? base64.split("base64,")[1] : base64
+    const binaryString = window.atob(cleanedBase64)
+    const bytes = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i += 1) {
+      bytes[i] = binaryString.charCodeAt(i)
+    }
+    return new File([bytes], fileName, { type: mimeType })
+  }
+
+  const handleCameraCapture = async () => {
+    if (isCameraLoading) return
+    setIsCameraLoading(true)
+    try {
+      if (window?.flutter_inappwebview?.callHandler) {
+        const result = await window.flutter_inappwebview.callHandler("openCamera")
+        if (result?.success && result?.base64) {
+          const fileName = result?.fileName || `owner-${Date.now()}.jpg`
+          const mimeType = result?.mimeType || "image/jpeg"
+          const file = buildFileFromBase64(result.base64, fileName, mimeType)
+          setProfileImageFile(file)
+          setFormData(prev => ({
+            ...prev,
+            photo: `data:${mimeType};base64,${result.base64.includes("base64,") ? result.base64.split("base64,")[1] : result.base64}`
+          }))
+        } else if (result?.success === false) {
+          // User cancelled or failed; no action needed
+        } else {
+          alert("Failed to capture image")
+        }
+      } else {
+        fileInputRef.current?.click()
+      }
+    } catch (error) {
+      console.error("Camera capture error:", error)
+      alert("Failed to capture image")
+    } finally {
+      setIsCameraLoading(false)
     }
   }
 
@@ -298,13 +351,22 @@ export default function EditOwner() {
               )}
             </div>
           </div>
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={loading || saving}
-            className="text-blue-600 text-sm font-normal hover:text-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Edit photo
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleCameraCapture}
+              disabled={loading || saving || isCameraLoading}
+              className="px-4 py-2 rounded-lg bg-black text-white text-sm font-medium hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isCameraLoading ? "Opening..." : "Camera"}
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={loading || saving}
+              className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Gallery
+            </button>
+          </div>
           <input
             ref={fileInputRef}
             type="file"
@@ -373,7 +435,11 @@ export default function EditOwner() {
             className="flex items-center gap-2 text-red-600 hover:text-red-700 transition-colors"
           >
             <Trash2 className="w-5 h-5" />
+<<<<<<< HEAD
             <span className="text-sm font-normal">Delete your {appName} account</span>
+=======
+            <span className="text-sm font-normal">Delete your {restaurantName || "restaurant"} account</span>
+>>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
           </button>
         </div>
       </div>
@@ -386,7 +452,11 @@ export default function EditOwner() {
               <span className="text-2xl leading-none text-red-600">!</span>
             </div>
             <DialogTitle className="text-base font-semibold text-gray-900 text-center">
+<<<<<<< HEAD
               You are about to delete your {appName} account
+=======
+              You are about to delete your {restaurantName || "restaurant"} account
+>>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
             </DialogTitle>
             <DialogDescription className="mt-2 text-sm text-gray-600">
               All information associated with your account will be deleted, and you will lose access to your {isStore ? "store" : "restaurant"} permanently.

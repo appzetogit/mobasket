@@ -58,6 +58,7 @@ export default function ItemDetailsPage() {
   const [images, setImages] = useState([])
   const [imageFiles, setImageFiles] = useState(new Map()) // Track File objects by preview URL
   const [uploadingImages, setUploadingImages] = useState(false)
+  const [isCameraLoading, setIsCameraLoading] = useState(false)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const [touchStart, setTouchStart] = useState(null)
   const [touchEnd, setTouchEnd] = useState(null)
@@ -311,12 +312,13 @@ export default function ItemDetailsPage() {
     }
   ]
 
-  const handleImageAdd = (e) => {
-    const files = Array.from(e.target.files)
+  const appendImageFiles = (files = []) => {
+    const fileList = Array.from(files || [])
+    if (fileList.length === 0) return
 
     // Validate file types
     const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/webp"]
-    const validFiles = files.filter(file => {
+    const validFiles = fileList.filter(file => {
       if (!allowedTypes.includes(file.type)) {
         toast.error(`${file.name}: Invalid file type. Please upload PNG, JPG, JPEG, or WEBP.`)
         return false
@@ -334,20 +336,75 @@ export default function ItemDetailsPage() {
 
     // Create preview URLs for display and map them to File objects
     const newImagePreviews = []
-    const newImageFilesMap = new Map(imageFiles)
+    const previewEntries = []
 
     validFiles.forEach(file => {
       const previewUrl = URL.createObjectURL(file)
       newImagePreviews.push(previewUrl)
-      newImageFilesMap.set(previewUrl, file)
+      previewEntries.push([previewUrl, file])
     })
 
-    setImages([...images, ...newImagePreviews])
-    setImageFiles(newImageFilesMap)
+    setImages(prev => [...prev, ...newImagePreviews])
+    setImageFiles(prev => {
+      const newMap = new Map(prev)
+      previewEntries.forEach(([previewUrl, file]) => {
+        newMap.set(previewUrl, file)
+      })
+      return newMap
+    })
 
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
+    if (cameraInputRef.current) {
+      cameraInputRef.current.value = ""
+    }
+  }
+
+  const buildFileFromBase64 = (base64, fileName, mimeType) => {
+    if (!base64) {
+      throw new Error("Invalid image data")
+    }
+    const cleanedBase64 = base64.includes("base64,") ? base64.split("base64,")[1] : base64
+    const binaryString = window.atob(cleanedBase64)
+    const bytes = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i += 1) {
+      bytes[i] = binaryString.charCodeAt(i)
+    }
+    return new File([bytes], fileName, { type: mimeType })
+  }
+
+  const handleCameraCapture = async () => {
+    if (isCameraLoading) return
+    setIsCameraLoading(true)
+    try {
+      if (window?.flutter_inappwebview?.callHandler) {
+        const result = await window.flutter_inappwebview.callHandler("openCamera")
+        if (result?.success && result?.base64) {
+          const fileName = result?.fileName || `camera-${Date.now()}.jpg`
+          const mimeType = result?.mimeType || "image/jpeg"
+          const file = buildFileFromBase64(result.base64, fileName, mimeType)
+          appendImageFiles([file])
+        } else if (result?.success === false) {
+          // User cancelled or failed; no action needed
+        } else {
+          toast.error("Failed to capture image")
+        }
+      } else if (cameraInputRef.current) {
+        cameraInputRef.current.click()
+      } else if (fileInputRef.current) {
+        fileInputRef.current.click()
+      }
+    } catch (error) {
+      console.error("Camera capture error:", error)
+      toast.error("Failed to capture image")
+    } finally {
+      setIsCameraLoading(false)
+    }
+  }
+
+  const handleImageAdd = (e) => {
+    appendImageFiles(Array.from(e.target.files || []))
   }
 
   const handleImageDelete = (index) => {
@@ -468,6 +525,10 @@ export default function ItemDetailsPage() {
   }
 
   const handleSave = async () => {
+    if (!images || images.length === 0) {
+      toast.error("Please add at least one image")
+      return
+    }
     if (!itemName.trim()) {
       toast.error("Please enter an item name")
       return
@@ -476,6 +537,7 @@ export default function ItemDetailsPage() {
       toast.error("Please select a category")
       return
     }
+<<<<<<< HEAD
     const parsedBasePrice = parseFloat(basePrice)
     if (!basePrice || Number.isNaN(parsedBasePrice) || parsedBasePrice <= 0) {
       toast.error("Please enter a valid base price greater than 0")
@@ -483,14 +545,27 @@ export default function ItemDetailsPage() {
     }
     if (!preparationTime.trim()) {
       toast.error("Please select preparation time")
+=======
+    if (!categories.some((cat) => cat?.name === category)) {
+      toast.error("Please select a valid category")
+>>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
       return
     }
     if (itemDescription.trim().length < minDescriptionLength) {
       toast.error(`Item description must be at least ${minDescriptionLength} characters`)
       return
     }
+<<<<<<< HEAD
     if (!Array.isArray(images) || images.length === 0) {
       toast.error("Please add at least one image")
+=======
+    if (!basePrice || Number.parseFloat(basePrice) <= 0) {
+      toast.error("Please enter a valid base price")
+      return
+    }
+    if (!String(preparationTime || "").trim()) {
+      toast.error("Please select preparation time")
+>>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
       return
     }
 
@@ -996,6 +1071,7 @@ export default function ItemDetailsPage() {
               ref={fileInputRef}
               type="file"
               accept="image/*"
+<<<<<<< HEAD
               multiple
               onChange={handleImageAdd}
               className="hidden"
@@ -1006,10 +1082,13 @@ export default function ItemDetailsPage() {
               type="file"
               accept="image/*"
               capture="environment"
+=======
+>>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
               onChange={handleImageAdd}
               className="hidden"
               id="image-upload-camera"
             />
+<<<<<<< HEAD
             <div className="grid grid-cols-2 gap-3">
               <label
                 htmlFor="image-upload-gallery"
@@ -1028,6 +1107,37 @@ export default function ItemDetailsPage() {
                   <Camera className="w-4 h-4" />
                 </div>
                 <span>Use Camera</span>
+=======
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleImageAdd}
+              className="hidden"
+              id="image-capture"
+            />
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleCameraCapture}
+                disabled={isCameraLoading}
+                className="flex-1 flex items-center justify-center gap-2.5 px-4 py-3.5 bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-xl text-sm font-semibold cursor-pointer hover:from-gray-800 hover:to-gray-700 transition-all shadow-md hover:shadow-lg active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
+              >
+                <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
+                  <Camera className="w-4 h-4" />
+                </div>
+                <span>{isCameraLoading ? "Opening..." : "Camera"}</span>
+              </button>
+              <label
+                htmlFor="image-upload"
+                className="flex-1 flex items-center justify-center gap-2.5 px-4 py-3.5 bg-white text-gray-900 rounded-xl text-sm font-semibold cursor-pointer border border-gray-300 hover:bg-gray-50 transition-all shadow-sm active:scale-95"
+              >
+                <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <span>Gallery</span>
+>>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
               </label>
             </div>
           </div>
