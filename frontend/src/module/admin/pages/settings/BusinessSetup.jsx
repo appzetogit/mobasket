@@ -75,6 +75,11 @@ export default function BusinessSetup() {
     }));
   };
 
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const PHONE_REGEX = /^\d{7,15}$/;
+  const STATE_REGEX = /^[A-Za-z\s.-]{2,50}$/;
+  const PINCODE_REGEX = /^\d{4,10}$/;
+
   const handleSave = async () => {
     try {
       // Validate required fields
@@ -86,8 +91,24 @@ export default function BusinessSetup() {
         toast.error("Email is required");
         return;
       }
+      if (!EMAIL_REGEX.test(formData.email.trim())) {
+        toast.error("Enter a valid email address");
+        return;
+      }
       if (!formData.phoneNumber.trim()) {
         toast.error("Phone number is required");
+        return;
+      }
+      if (!PHONE_REGEX.test(formData.phoneNumber.trim())) {
+        toast.error("Phone number must be 7 to 15 digits");
+        return;
+      }
+      if (formData.state.trim() && !STATE_REGEX.test(formData.state.trim())) {
+        toast.error("State should contain only letters");
+        return;
+      }
+      if (formData.pincode.trim() && !PINCODE_REGEX.test(formData.pincode.trim())) {
+        toast.error("Pincode must be 4 to 10 digits");
         return;
       }
 
@@ -455,7 +476,7 @@ export default function BusinessSetup() {
                     type="text"
                     placeholder="Enter Your Phone Number"
                     value={formData.phoneNumber}
-                    onChange={(e) => handleInputChange("phoneNumber", e.target.value)}
+                    onChange={(e) => handleInputChange("phoneNumber", e.target.value.replace(/\D/g, "").slice(0, 15))}
                     className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -482,7 +503,7 @@ export default function BusinessSetup() {
                   type="text"
                   placeholder="Enter Your State"
                   value={formData.state}
-                  onChange={(e) => handleInputChange("state", e.target.value)}
+                  onChange={(e) => handleInputChange("state", e.target.value.replace(/[^A-Za-z\s.-]/g, ""))}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
@@ -495,7 +516,7 @@ export default function BusinessSetup() {
                   type="text"
                   placeholder="Enter Your Pincode"
                   value={formData.pincode}
-                  onChange={(e) => handleInputChange("pincode", e.target.value)}
+                  onChange={(e) => handleInputChange("pincode", e.target.value.replace(/\D/g, "").slice(0, 10))}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>

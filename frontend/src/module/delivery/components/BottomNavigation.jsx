@@ -132,7 +132,7 @@ export default function BottomNavigation() {
           className="flex flex-col items-center gap-1 p-2"
         >
           {TabIcon(isActive("/delivery/trip-history"), ClockOutline, ClockSolid)}
-          {TabLabel(isActive("/delivery/trip-history "), "Trip History")}
+          {TabLabel(isActive("/delivery/trip-history"), "Trip History")}
         </button>
 
         {/* Profile */}

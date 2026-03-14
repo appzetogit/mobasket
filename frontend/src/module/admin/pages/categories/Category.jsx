@@ -834,6 +834,24 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
         resolvedImageValue = uploadResponse?.data?.data?.url || ""
       }
 
+      const normalizedName = String(formData.name || "").trim()
+      if (!normalizedName) {
+        toast.error(`${activeEntitySingularLabel} name is required`)
+        return
+      }
+
+      const hasCategoryImage =
+        Boolean(selectedImageFile) ||
+        (Boolean(resolvedImageValue) && resolvedImageValue !== DEFAULT_CATEGORY_IMAGE)
+
+      const shouldRequireImage =
+        !editingCategory && (!isGroceryScope || activeGroceryEntity !== "products")
+
+      if (shouldRequireImage && !hasCategoryImage) {
+        toast.error(`${activeEntitySingularLabel} image is required`)
+        return
+      }
+
       if (!isGroceryScope) {
         const resolvedType = isCustomTypeMode
           ? String(customTypeValue || "").trim()
@@ -845,7 +863,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
         }
 
         const formDataToSend = new FormData()
-        formDataToSend.append('name', formData.name)
+        formDataToSend.append('name', normalizedName)
         formDataToSend.append('type', resolvedType)
         formDataToSend.append('status', formData.status.toString())
         if (selectedImageFile) {
@@ -868,7 +886,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
       } else if (activeGroceryEntity === "subcategories") {
         const payload = {
           category: formData.parentCategory,
-          name: formData.name,
+          name: normalizedName,
           isActive: formData.status,
           image: resolvedImageValue && resolvedImageValue !== DEFAULT_CATEGORY_IMAGE ? resolvedImageValue : "",
         }
@@ -963,7 +981,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
         const payload = {
           category: resolvedCategoryId,
           subcategories: uniqueResolvedSubcategoryIds,
-          name: formData.name,
+          name: normalizedName,
           description: (formData.description || "").trim(),
           mrp: Number(formData.mrp || 0),
           sellingPrice: Number(formData.sellingPrice || 0),
@@ -993,10 +1011,9 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
         await fetchGroceryTypeOptions()
         await fetchGrocerySubcategoryOptions()
       } else {
-        const normalizedCategoryName = (formData.name || "").trim()
         const payload = {
-          name: normalizedCategoryName,
-          section: normalizedCategoryName,
+          name: normalizedName,
+          section: normalizedName,
           isActive: Boolean(formData.status),
           image: resolvedImageValue && resolvedImageValue !== DEFAULT_CATEGORY_IMAGE ? resolvedImageValue : "",
         }

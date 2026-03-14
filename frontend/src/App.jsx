@@ -170,16 +170,6 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const runSetup = () => {
-      setupWebPushForCurrentSession(location.pathname).catch((error) => {
-        // Keep this visible in console so push setup issues are diagnosable.
-        // eslint-disable-next-line no-console
-        console.warn("Web push setup failed:", error?.message || error);
-      });
-    };
-
-    runSetup();
-
     const tokenKeys = new Set([
       "user_accessToken",
       "user_refreshToken",
@@ -192,18 +182,44 @@ export default function App() {
       "delivery_refreshToken",
     ]);
 
+    const hasAnySessionToken = () => {
+      for (const key of tokenKeys) {
+        if (localStorage.getItem(key)) return true;
+      }
+      return false;
+    };
+
+    const runSetup = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      if (!hasAnySessionToken()) return;
+
+      setupWebPushForCurrentSession(location.pathname).catch((error) => {
+        // Keep this visible in console so push setup issues are diagnosable.
+        // eslint-disable-next-line no-console
+        console.warn("Web push setup failed:", error?.message || error);
+      });
+    };
+
+    runSetup();
+
     const onStorage = (event) => {
       if (!event?.key || tokenKeys.has(event.key)) {
         runSetup();
       }
     };
 
-    const intervalId = window.setInterval(runSetup, 15000);
+    const onVisibilityChange = () => {
+      if (!document.hidden) runSetup();
+    };
+
+    const intervalId = window.setInterval(runSetup, 60000);
     window.addEventListener("storage", onStorage);
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       window.clearInterval(intervalId);
       window.removeEventListener("storage", onStorage);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
       teardownWebPushListener();
     };
   }, [location.pathname]);
@@ -588,6 +604,8 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route path="/store/online-offline" element={<Navigate to="/store/status" replace />} />
+        <Route path="/store/payments" element={<Navigate to="/store/wallet" replace />} />
         <Route
           path="/store/conversation/:conversationId"
           element={

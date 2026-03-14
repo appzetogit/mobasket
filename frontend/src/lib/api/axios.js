@@ -659,7 +659,8 @@ function isHardRefreshAuthFailure(refreshError) {
 
   // Any 401 from refresh endpoint means session recovery failed and should force re-auth.
   if (refreshStatus === 401) return true;
-  if (refreshStatus !== 401) return false;
+  // Backend can also return 400/403 for malformed or missing refresh token.
+  if (![400, 401, 403].includes(refreshStatus)) return false;
 
   return (
     refreshMessage.includes("invalid refresh token") ||
@@ -669,7 +670,8 @@ function isHardRefreshAuthFailure(refreshError) {
     refreshMessage.includes("jwt malformed") ||
     refreshMessage.includes("jwt expired") ||
     refreshMessage.includes("token is invalid") ||
-    refreshMessage.includes("unauthorized")
+    refreshMessage.includes("unauthorized") ||
+    refreshMessage.includes("missing refresh token")
   );
 }
 

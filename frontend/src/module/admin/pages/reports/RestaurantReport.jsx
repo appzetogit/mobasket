@@ -117,7 +117,7 @@ export default function RestaurantReport({ platformOverride = "mofood", entityLa
   }
 
   const handleFilterApply = () => {
-    // Filters are already applied via useMemo
+    toast.success("Filters applied")
   }
 
   const activeFiltersCount = (filters.zone !== "All Zones" ? 1 : 0) + (filters.all !== "All" ? 1 : 0) + (filters.type !== "All types" ? 1 : 0) + (filters.time !== "All Time" ? 1 : 0)
@@ -277,6 +277,11 @@ export default function RestaurantReport({ platformOverride = "mofood", entityLa
                   placeholder="Ex: search restaurant nam"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                    }
+                  }}
                   className="pl-4 pr-10 py-2.5 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -466,10 +471,13 @@ export default function RestaurantReport({ platformOverride = "mofood", entityLa
               Report Settings
             </DialogTitle>
           </DialogHeader>
-          <div className="px-6 pb-6">
-            <p className="text-sm text-slate-700">
-              Restaurant report settings and preferences will be available here.
-            </p>
+          <div className="px-6 pb-6 space-y-2 text-sm text-slate-700">
+            <p>Current search: <span className="font-semibold">{searchQuery || "None"}</span></p>
+            <p>Zone: <span className="font-semibold">{filters.zone}</span></p>
+            <p>All: <span className="font-semibold">{filters.all}</span></p>
+            <p>Type: <span className="font-semibold">{filters.type}</span></p>
+            <p>Time: <span className="font-semibold">{filters.time}</span></p>
+            <p>Total records: <span className="font-semibold">{filteredRestaurants.length}</span></p>
           </div>
           <div className="px-6 pb-6 flex items-center justify-end">
             <button

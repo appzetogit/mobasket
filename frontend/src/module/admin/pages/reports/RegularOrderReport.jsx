@@ -195,7 +195,8 @@ export default function RegularOrderReport() {
   }
 
   const handleFilterApply = () => {
-    // Filters are already applied via useMemo
+    setCurrentPage(1)
+    toast.success("Filters applied")
   }
 
   const handleResetFilters = () => {
@@ -430,6 +431,11 @@ export default function RegularOrderReport() {
                     setSearchQuery(e.target.value)
                     setCurrentPage(1)
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                    }
+                  }}
                   className="pl-7 pr-2 py-1.5 w-full text-[11px] rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <img src={searchIcon} alt="Search" className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3" />
@@ -538,7 +544,9 @@ export default function RegularOrderReport() {
                         </span>
                       </td>
                       <td className="px-1.5 py-1">
-                        <span className="text-[10px] text-blue-600 hover:underline cursor-pointer">{order.orderId}</span>
+                        <span className="text-[10px] text-blue-600 hover:underline cursor-pointer truncate block max-w-full">
+                          {order.orderId}
+                        </span>
                       </td>
                       <td className="px-1.5 py-1">
                         <span className="text-[10px] text-slate-700 truncate block">{order.restaurant}</span>
@@ -635,10 +643,13 @@ export default function RegularOrderReport() {
               Report Settings
             </DialogTitle>
           </DialogHeader>
-          <div className="px-6 pb-6">
-            <p className="text-sm text-slate-700">
-              Regular order report settings and preferences will be available here.
-            </p>
+          <div className="px-6 pb-6 space-y-2 text-sm text-slate-700">
+            <p>Current search: <span className="font-semibold">{searchQuery || "None"}</span></p>
+            <p>Zone: <span className="font-semibold">{filters.zone}</span></p>
+            <p>Restaurant: <span className="font-semibold">{filters.restaurant}</span></p>
+            <p>Customer: <span className="font-semibold">{filters.customer}</span></p>
+            <p>Time: <span className="font-semibold">{filters.time}</span></p>
+            <p>Total records: <span className="font-semibold">{filteredOrders.length}</span></p>
           </div>
           <div className="px-6 pb-6 flex items-center justify-end">
             <button

@@ -276,10 +276,10 @@ export default function PocketPage() {
     // Fetch immediately on mount
     fetchActiveEarningAddons()
 
-    // Refresh every 5 seconds to get latest offers
+    // Keep this modest to avoid UI thrash on low-end devices.
     const refreshInterval = setInterval(() => {
       fetchActiveEarningAddons()
-    }, 3000) // Refresh every 3 seconds - FAST REFRESH
+    }, 30000)
 
     // Refresh when page becomes visible
     const handleVisibilityChange = () => {

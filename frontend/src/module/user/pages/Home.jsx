@@ -1927,6 +1927,8 @@ export default function Home() {
           />
         </div>
 
+      {/* 2. Search Bar Section (Pinned on mobile scroll) */}
+      <div className="sticky top-[56px] z-40 bg-white py-2 pb-4 px-3 sm:px-6 md:static md:top-auto md:z-auto md:pt-20">
         {/* 2. Search Bar Section (White Background) */}
         <div className="bg-white dark:bg-[#0a0a0a] py-2 pb-4 px-3 sm:px-6 md:pt-20 border-b border-gray-100 dark:border-gray-800">
         <div className="w-full lg:max-w-[1100px] mx-auto lg:px-8 xl:px-0 flex items-center gap-3 sm:gap-4 lg:gap-6">

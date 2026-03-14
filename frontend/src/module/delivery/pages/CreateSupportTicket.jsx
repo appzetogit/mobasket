@@ -53,18 +53,10 @@ export default function CreateSupportTicket() {
     try {
       setCreating(true)
       
-      // Prepare request data
+      // Keep payload minimal to stay compatible with strict backend validators.
       const requestData = {
         subject: formData.subject.trim(),
         description: formData.description.trim()
-      }
-      
-      // Only include category and priority if they have valid values
-      if (formData.category && formData.category !== '') {
-        requestData.category = formData.category
-      }
-      if (formData.priority && formData.priority !== '') {
-        requestData.priority = formData.priority
       }
       
       console.log('Sending ticket creation request:', requestData)

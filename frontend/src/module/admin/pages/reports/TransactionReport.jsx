@@ -1,7 +1,8 @@
 import { useState, useMemo, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { BarChart3, ChevronDown, Info, FileText, FileSpreadsheet, Code, Loader2 } from "lucide-react"
+import { BarChart3, ChevronDown, Info, FileText, FileSpreadsheet, Code, Loader2, Settings } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { exportTransactionReportToCSV, exportTransactionReportToExcel, exportTransactionReportToPDF, exportTransactionReportToJSON } from "../../components/reports/reportsExportUtils"
 import { adminAPI } from "@/lib/api"
 import { usePlatform } from "../../context/PlatformContext"
@@ -46,6 +47,7 @@ export default function TransactionReport() {
   })
   const [zones, setZones] = useState([])
   const [restaurants, setRestaurants] = useState([])
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const isGroceryPlatform = platform === "mogrocery"
   const outletLabel = isGroceryPlatform ? "stores" : "restaurants"
 
@@ -182,7 +184,8 @@ export default function TransactionReport() {
   }
 
   const handleFilterApply = () => {
-    // Filters are already applied via useMemo
+    setCurrentPage(1)
+    toast.success("Filters applied")
   }
 
   const handleResetFilters = () => {
@@ -463,6 +466,11 @@ export default function TransactionReport() {
                     setSearchQuery(e.target.value)
                     setCurrentPage(1)
                   }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                    }
+                  }}
                   className="pl-7 pr-2 py-1.5 w-full text-[11px] rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <img src={searchIcon} alt="Search" className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3" />
@@ -497,6 +505,14 @@ export default function TransactionReport() {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+              <button
+                type="button"
+                onClick={() => setIsSettingsOpen(true)}
+                className="p-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-all"
+                title="Report settings"
+              >
+                <Settings className="w-3 h-3" />
+              </button>
             </div>
           </div>
 
@@ -638,6 +654,24 @@ export default function TransactionReport() {
           </div>
         </div>
       </div>
+
+      <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+        <DialogContent className="max-w-md bg-white">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings className="w-5 h-5" />
+              Order Transactions Settings
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-slate-700">
+            <p>Current search: <span className="font-semibold">{searchQuery || "None"}</span></p>
+            <p>Zone: <span className="font-semibold">{filters.zone}</span></p>
+            <p>{isGroceryPlatform ? "Store" : "Restaurant"}: <span className="font-semibold">{filters.restaurant}</span></p>
+            <p>Time: <span className="font-semibold">{filters.time}</span></p>
+            <p>Total records: <span className="font-semibold">{pagination.total || 0}</span></p>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </div>
   )
