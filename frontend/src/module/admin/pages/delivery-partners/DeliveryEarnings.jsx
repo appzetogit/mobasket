@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Search, Download, ChevronDown, DollarSign, Calendar, Filter, Loader2, FileText, FileSpreadsheet, Code } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -138,7 +138,7 @@ export default function DeliveryEarnings() {
     }))
 
     switch (format) {
-      case "csv":
+      case "csv": {
         const csvContent = [
           headers.map(h => h.label).join(","),
           ...data.map(row => headers.map(h => `"${row[h.key] || ''}"`).join(","))
@@ -150,13 +150,16 @@ export default function DeliveryEarnings() {
         csvLink.click()
         toast.success("CSV exported successfully")
         break
-      case "excel":
+      }
+      case "excel": {
         toast.info("Excel export coming soon")
         break
-      case "pdf":
+      }
+      case "pdf": {
         toast.info("PDF export coming soon")
         break
-      case "json":
+      }
+      case "json": {
         const jsonContent = JSON.stringify(data, null, 2)
         const jsonBlob = new Blob([jsonContent], { type: "application/json" })
         const jsonLink = document.createElement("a")
@@ -165,8 +168,10 @@ export default function DeliveryEarnings() {
         jsonLink.click()
         toast.success("JSON exported successfully")
         break
-      default:
+      }
+      default: {
         toast.error("Invalid export format")
+      }
     }
   }
 
@@ -293,7 +298,7 @@ export default function DeliveryEarnings() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search by name, phone, order ID..."
+                placeholder='Search by name,id'
                 value={searchQuery}
                 onChange={(e) => {
                   setSearchQuery(e.target.value)
@@ -310,7 +315,7 @@ export default function DeliveryEarnings() {
                   <ChevronDown className="w-4 h-4" />
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              <DropdownMenuContent align="end" className="w-56 bg-white border border-slate-200 rounded-lg shadow-lg z-50">
                 <DropdownMenuLabel>Export Format</DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => handleExport("csv")}>

@@ -200,7 +200,7 @@ const GroceryProfile = () => {
                 </div>
               </div>
               <div className="w-16 h-16 flex items-center justify-center bg-white/50 dark:bg-white/10 rounded-xl overflow-hidden">
-                <span className="text-4xl animate-bounce">🎂</span>
+                <span className="text-2xl font-black text-yellow-600 animate-bounce">BD</span>
               </div>
             </motion.div>
           )}
@@ -271,7 +271,7 @@ const GroceryProfile = () => {
           <MenuItem
             icon={MapPin}
             title="Address book"
-            onClick={() => navigate("/profile")}
+            onClick={() => navigate("/profile/addresses")}
           />
           <MenuItem
             icon={Heart}
@@ -281,7 +281,7 @@ const GroceryProfile = () => {
           <MenuItem
             icon={FileText}
             title="GST details"
-            onClick={() => navigate("/profile/edit")}
+            onClick={() => toast.info("GST details will be available here soon.")}
           />
           <MenuItem
             icon={Gift}
@@ -296,7 +296,7 @@ const GroceryProfile = () => {
           <MenuItem
             icon={Wallet}
             title="MoBasket Money"
-            subtitle={`Balance: ₹${walletBalance}`}
+            subtitle={`Balance: Rs ${walletBalance}`}
             onClick={() => navigate("/wallet")}
           />
           <MenuItem

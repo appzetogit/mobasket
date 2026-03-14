@@ -119,11 +119,11 @@ export default function BottomNavigation() {
 
         {/* Pocket */}
         <button
-          onClick={() => navigate("/delivery/requests")}
+          onClick={() => navigate("/delivery/pocket")}
           className="flex flex-col items-center gap-1 p-2"
         >
-          {TabIcon(isActive("/delivery/requests"), WalletOutline, WalletSolid)}
-          {TabLabel(isActive("/delivery/requests"), "Pocket")}
+          {TabIcon(isActive("/delivery/requests") || isActive("/delivery/pocket"), WalletOutline, WalletSolid)}
+          {TabLabel(isActive("/delivery/requests") || isActive("/delivery/pocket"), "Pocket")}
         </button>
 
         {/* Trip History */}

@@ -36,6 +36,7 @@ export default function DeliveryLayout({
   // Pages where bottom navigation should be shown
   const showBottomNav = [
     '/delivery',
+    '/delivery/pocket',
     '/delivery/requests',
     '/delivery/trip-history',
     '/delivery/profile'

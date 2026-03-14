@@ -1,6 +1,6 @@
 import { X } from "lucide-react"
 
-export default function DispatchFilterPanel({ isOpen, onClose, filters, setFilters, onApply, onReset }) {
+export default function DispatchFilterPanel({ isOpen, onClose, filters, setFilters, onApply, onReset, zones = [] }) {
   if (!isOpen) return null
 
   return (
@@ -29,7 +29,10 @@ export default function DispatchFilterPanel({ isOpen, onClose, filters, setFilte
               onChange={(e) => setFilters(prev => ({ ...prev, zone: e.target.value }))}
               className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
-              <option value="">Select zone</option>
+              <option value="">All zones</option>
+              {zones.map((zone) => (
+                <option key={zone} value={zone}>{zone}</option>
+              ))}
             </select>
           </div>
 

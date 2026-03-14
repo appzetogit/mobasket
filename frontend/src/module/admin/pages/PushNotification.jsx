@@ -17,6 +17,7 @@ export default function PushNotification() {
   const [notifications, setNotifications] = useState([])
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [loadingList, setLoadingList] = useState(true)
+  const [editingNotificationId, setEditingNotificationId] = useState("")
   const [zones, setZones] = useState([])
   const [bannerImage, setBannerImage] = useState(null)
   const [bannerPreviewUrl, setBannerPreviewUrl] = useState("")
@@ -110,6 +111,26 @@ export default function PushNotification() {
     }
 
     try {
+      if (editingNotificationId) {
+        setNotifications((prev) =>
+          prev.map((item) =>
+            (item._id || item.sl) === editingNotificationId
+              ? {
+                  ...item,
+                  title,
+                  description,
+                  zone: formData.zone,
+                  sendTo: formData.sendTo,
+                }
+              : item
+          )
+        )
+        toast.success("Notification updated")
+        setEditingNotificationId("")
+        handleReset()
+        return
+      }
+
       setIsSubmitting(true)
       const response = await adminAPI.createPushNotification({
         title,
@@ -183,6 +204,7 @@ export default function PushNotification() {
     })
     setBannerImage(null)
     setBannerPreviewUrl("")
+    setEditingNotificationId("")
   }
 
   useEffect(() => {
@@ -203,6 +225,35 @@ export default function PushNotification() {
     if (window.confirm("Are you sure you want to delete this notification?")) {
       setNotifications(notifications.filter(notification => (notification._id || notification.sl) !== id))
     }
+  }
+
+  const handleEdit = (notification) => {
+    setFormData({
+      title: notification?.title || "",
+      zone: notification?.zone || "All",
+      sendTo: notification?.sendTo || notification?.target || "Customer",
+      description: notification?.description || "",
+    })
+    setEditingNotificationId(notification?._id || notification?.sl || "")
+    window.scrollTo({ top: 0, behavior: "smooth" })
+  }
+
+  const handleExport = () => {
+    const rows = filteredNotifications.map((item) => ({
+      title: item.title || "",
+      description: item.description || "",
+      zone: item.zone || "All",
+      target: item.sendTo || item.target || "All",
+      status: item.status ? "Active" : "Inactive",
+      createdAt: item.createdAt || "",
+    }))
+    const blob = new Blob([JSON.stringify(rows, null, 2)], { type: "application/json" })
+    const link = document.createElement("a")
+    link.href = URL.createObjectURL(blob)
+    link.download = `notifications_${new Date().toISOString().slice(0, 10)}.json`
+    link.click()
+    URL.revokeObjectURL(link.href)
+    toast.success("Notifications exported")
   }
 
   return (
@@ -347,9 +398,14 @@ export default function PushNotification() {
                 disabled={isSubmitting}
                 className="px-6 py-2.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-all shadow-md"
               >
-                  {isSubmitting ? "Sending..." : "Send Notification"}
+                  {isSubmitting ? "Saving..." : editingNotificationId ? "Update Notification" : "Send Notification"}
               </button>
-                <button className="p-2.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-all">
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="p-2.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-all"
+                  title="Reset form"
+                >
                   <Settings className="w-5 h-5" />
                 </button>
               </div>
@@ -379,7 +435,11 @@ export default function PushNotification() {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               </div>
 
-              <button className="px-4 py-2.5 text-sm font-medium rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-2 transition-all">
+              <button
+                type="button"
+                onClick={handleExport}
+                className="px-4 py-2.5 text-sm font-medium rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 flex items-center gap-2 transition-all"
+              >
                 <Download className="w-4 h-4" />
                 <span>Export</span>
                 <ChevronDown className="w-3 h-3" />
@@ -458,6 +518,7 @@ export default function PushNotification() {
                     <td className="px-6 py-4 whitespace-nowrap text-center">
                       <div className="flex items-center justify-center gap-2">
                         <button
+                          onClick={() => handleEdit(notification)}
                           className="p-1.5 rounded text-blue-600 hover:bg-blue-50 transition-colors"
                           title="Edit"
                         >

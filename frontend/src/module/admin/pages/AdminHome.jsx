@@ -37,33 +37,31 @@ export default function AdminHome() {
   const [selectedPeriod, setSelectedPeriod] = useState("overall")
   const [isLoading, setIsLoading] = useState(true)
   const [dashboardData, setDashboardData] = useState(null)
-  const [cityOptions, setCityOptions] = useState([])
+  const [zoneOptions, setZoneOptions] = useState([])
 
   useEffect(() => {
-    const fetchCityOptions = async () => {
+    const fetchZoneOptions = async () => {
       try {
-        const response = isGrocery
-          ? await adminAPI.getGroceryStores({ limit: 1000, activeOnly: "true" })
-          : await adminAPI.getRestaurants({ limit: 1000, status: "active" })
-        const list = isGrocery
-          ? response?.data?.data?.stores || response?.data?.stores || []
-          : response?.data?.data?.restaurants || []
-        const nextCities = Array.from(
-          new Set(
-            (Array.isArray(list) ? list : [])
-              .map((item) => String(item?.location?.city || "").trim())
-              .filter(Boolean)
-          )
-        ).sort((a, b) => a.localeCompare(b))
-        setCityOptions(nextCities)
+        const response = await adminAPI.getZones({ limit: 1000, platform })
+        const list = response?.data?.data?.zones || response?.data?.zones || []
+        const mapped = (Array.isArray(list) ? list : [])
+          .map((zone) => ({
+            id: String(zone?._id || zone?.id || ""),
+            name: String(zone?.name || zone?.zoneName || "").trim(),
+            city: String(zone?.city || zone?.location?.city || "").trim(),
+          }))
+          .filter((zone) => zone.id && zone.name)
+        setZoneOptions(mapped)
       } catch (error) {
-        console.error("Error fetching dashboard city options:", error)
-        setCityOptions([])
+        console.error("Error fetching dashboard zone options:", error)
+        setZoneOptions([])
       }
     }
 
-    fetchCityOptions()
-  }, [isGrocery, platform])
+    fetchZoneOptions()
+  }, [platform, isGrocery])
+
+  const selectedZoneOption = zoneOptions.find((zone) => zone.id === selectedZone)
 
   // Fetch dashboard stats for active platform + filters
   useEffect(() => {
@@ -72,7 +70,9 @@ export default function AdminHome() {
         setIsLoading(true)
         const response = await adminAPI.getDashboardStats({
           platform,
-          city: selectedZone !== "all" ? selectedZone : undefined,
+          zoneId: selectedZoneOption?.id || undefined,
+          zone: selectedZoneOption?.name || undefined,
+          city: selectedZoneOption?.city || undefined,
           period: selectedPeriod,
         })
         if (response.data?.success && response.data?.data) {
@@ -89,7 +89,7 @@ export default function AdminHome() {
     }
 
     fetchDashboardStats()
-  }, [platform, selectedZone, selectedPeriod])
+  }, [platform, selectedZone, selectedPeriod, selectedZoneOption])
 
   // Get order stats from real data
   const getOrderStats = () => {
@@ -283,12 +283,12 @@ export default function AdminHome() {
           <div className="flex flex-wrap gap-3">
             <Select value={selectedZone} onValueChange={setSelectedZone}>
               <SelectTrigger className="min-w-[160px] border-neutral-300 bg-white text-neutral-900">
-                <SelectValue placeholder="All cities" />
+                <SelectValue placeholder="All zones" />
               </SelectTrigger>
               <SelectContent className="border-neutral-200 bg-white text-neutral-900">
-                <SelectItem value="all">All cities</SelectItem>
-                {cityOptions.map((city) => (
-                  <SelectItem key={city} value={city}>{city}</SelectItem>
+                <SelectItem value="all">All zones</SelectItem>
+                {zoneOptions.map((zone) => (
+                  <SelectItem key={zone.id} value={zone.id}>{zone.name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

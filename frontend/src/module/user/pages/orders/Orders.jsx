@@ -11,6 +11,7 @@ export default function Orders() {
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [ratingModal, setRatingModal] = useState({ open: false, order: null })
+  const [ratingTarget, setRatingTarget] = useState("delivery")
   const [activeMenuOrderId, setActiveMenuOrderId] = useState(null)
   const [selectedRating, setSelectedRating] = useState(null)
   const [feedbackText, setFeedbackText] = useState("")
@@ -272,6 +273,7 @@ export default function Orders() {
               preparationTime: Number(order.preparationTime || 0),
               deliveredAt: order.deliveredAt || null,
               deliveryPartnerName: order.deliveryPartnerId?.name || order.deliveryPartnerName || null,
+              deliveryPartnerId: order.deliveryPartnerId?._id || order.deliveryPartnerId || null,
               deliveryPartnerPhone: order.deliveryPartnerId?.phone || order.deliveryPartnerPhone || null,
               note: order.note || null
             }
@@ -403,14 +405,16 @@ Order again from this restaurant in the ${companyName} app.`
   }
 
   // Open rating modal for an order
-  const handleOpenRating = (order) => {
+  const handleOpenRating = (order, target = "delivery") => {
     setRatingModal({ open: true, order })
+    setRatingTarget(target)
     setSelectedRating(order.rating || null)
     setFeedbackText("")
   }
 
   const handleCloseRating = () => {
     setRatingModal({ open: false, order: null })
+    setRatingTarget("delivery")
     setSelectedRating(null)
     setFeedbackText("")
   }
@@ -429,13 +433,17 @@ Order again from this restaurant in the ${companyName} app.`
 
       await api.post(API_ENDPOINTS.ADMIN.FEEDBACK_EXPERIENCE_CREATE, {
         rating: selectedRating,
-        module: "user",
+        module: ratingTarget === "delivery" ? "delivery" : "user",
         restaurantId: order.restaurantId || null,
         metadata: {
           orderId: order.id,
           orderMongoId: order.mongoId,
           orderTotal: order.total,
           restaurantName: order.restaurant,
+          ratingTarget,
+          deliveryPartnerId: order.deliveryPartnerId || null,
+          deliveryPartnerName: order.deliveryPartnerName || null,
+          deliveryPartnerPhone: order.deliveryPartnerPhone || null,
           comment: feedbackText || undefined,
         },
       })
@@ -552,7 +560,6 @@ Order again from this restaurant in the ${companyName} app.`
                 normalizedPaymentMethod.includes('cash') ||
                 normalizedPaymentMethod.includes('cod')
               const isWalletPayment = normalizedPaymentMethod === 'wallet'
-              const isCodOrWallet = isCodPayment || isWalletPayment
               const isOnlinePayment =
                 normalizedPaymentMethod === 'razorpay' ||
                 normalizedPaymentMethod === 'online' ||
@@ -572,10 +579,15 @@ Order again from this restaurant in the ${companyName} app.`
                   normalizedPaymentStatus === 'payment_failed'
                 )
               const paymentStatusForDisplay = isCodPayment
-                ? (order.status === 'delivered' ? 'completed' : 'pending')
+                ? (
+                  ['delivered', 'completed'].includes(String(order.status || '').toLowerCase()) ||
+                  ['paid', 'completed', 'success', 'succeeded', 'captured', 'settled'].includes(normalizedPaymentStatus)
+                    ? 'completed'
+                    : 'pending'
+                )
                 : normalizedPaymentStatus
 
-              const isDelivered = order.status === 'delivered'
+              const isDelivered = ['delivered', 'completed'].includes(String(order.status || '').toLowerCase())
               const isRestaurantCancelled = order.isRestaurantCancelled || order.status === 'restaurant_cancelled'
               const isUserCancelled = order.isUserCancelled || (isCancelled && order.cancelledBy === 'user')
               // Prefer food image from first item; fallback to restaurant image, then generic food photo
@@ -841,10 +853,10 @@ Order again from this restaurant in the ${companyName} app.`
                         <p className="text-xs text-gray-500">Order delivered</p>
                         <button
                           type="button"
-                          onClick={() => handleOpenRating(order)}
+                          onClick={() => handleOpenRating(order, "delivery")}
                           className="text-xs text-red-500 font-medium mt-0.5 flex items-center"
                         >
-                          Rate order <span className="ml-0.5">▸</span>
+                          Rate delivery experience <span className="ml-0.5">▸</span>
                         </button>
                       </div>
                     ) : (
@@ -891,7 +903,7 @@ Order again from this restaurant in the ${companyName} app.`
                 <div className="flex items-center justify-between mb-2">
                   <h2 className="text-xl font-bold text-white flex items-center gap-2">
                     <Star className="w-5 h-5 fill-white" />
-                    Rate Your Order
+                    {ratingTarget === "delivery" ? "Rate Delivery Partner" : "Rate Your Order"}
                   </h2>
                   <button
                     type="button"
@@ -904,13 +916,20 @@ Order again from this restaurant in the ${companyName} app.`
                 <p className="text-sm text-white/90">
                   {ratingModal.order.restaurant} • Order #{ratingModal.order.id}
                 </p>
+                {ratingTarget === "delivery" && ratingModal.order.deliveryPartnerName && (
+                  <p className="text-xs text-white/85 mt-1">
+                    Partner: {ratingModal.order.deliveryPartnerName}
+                  </p>
+                )}
               </div>
 
               <div className="px-6 py-6">
                 {/* Star rating (1–5) */}
                 <div className="mb-6">
                   <p className="text-sm font-semibold text-gray-900 mb-4 text-center">
-                    How was your overall experience?
+                    {ratingTarget === "delivery"
+                      ? "How was your delivery experience?"
+                      : "How was your overall experience?"}
                   </p>
                   <div className="flex items-center justify-center gap-2 mb-3">
                     {Array.from({ length: 5 }, (_, i) => i + 1).map((num) => {

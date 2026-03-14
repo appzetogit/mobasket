@@ -24,7 +24,7 @@ const normalizeVariantsForForm = (variants = []) => {
 
   const normalized = variants
     .map((variant, index) => ({
-      name: parseInt(variant?.name || ""),
+      name: String(variant?.name || "").trim(),
       mrp: variant?.mrp ?? "",
       sellingPrice: variant?.sellingPrice ?? "",
       stockQuantity: variant?.stockQuantity ?? 0,
@@ -78,6 +78,13 @@ export default function GroceryStoreProductDetailsPage() {
   // New category/subcategory names – submitted together with product (one request for approval)
   const [requestedNewCategoryName, setRequestedNewCategoryName] = useState("")
   const [requestedNewSubcategoryNamesText, setRequestedNewSubcategoryNamesText] = useState("")
+
+  useEffect(() => {
+    const parsedStock = Number(stockQuantity)
+    if (Number.isFinite(parsedStock) && parsedStock <= 0 && inStock) {
+      setInStock(false)
+    }
+  }, [inStock, stockQuantity])
 
   // Fetch categories and subcategories (public endpoints – no admin auth)
   const fetchCategoriesAndSubcategories = async () => {
@@ -324,6 +331,14 @@ export default function GroceryStoreProductDetailsPage() {
     }
     if (!sellingPrice || parseFloat(sellingPrice) <= 0) {
       toast.error('Selling price is required and must be greater than 0')
+      return
+    }
+    if (!unit.trim()) {
+      toast.error('Unit is required')
+      return
+    }
+    if (stockQuantity === "" || Number.isNaN(Number(stockQuantity))) {
+      toast.error('Stock quantity is required')
       return
     }
 
@@ -692,7 +707,7 @@ export default function GroceryStoreProductDetailsPage() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Unit
+                Unit *
               </label>
               <input
                 type="text"
@@ -704,7 +719,7 @@ export default function GroceryStoreProductDetailsPage() {
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Stock Quantity
+                Stock Quantity *
               </label>
               <input
                 type="number"

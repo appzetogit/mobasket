@@ -206,9 +206,12 @@ export const calculateDeliveryBalances = (state) => {
       const normalized = String(status || '').trim().toLowerCase()
       return normalized === 'completed' || normalized === 'approved' || normalized === 'processed'
     }
-    const isPaymentType = (type) => String(type || '').trim().toLowerCase() === 'payment'
+    const isEarningType = (type) => {
+      const normalized = String(type || '').trim().toLowerCase()
+      return normalized === 'payment' || normalized === 'earning_addon' || normalized === 'bonus'
+    }
     const earningsFromTransactions = state.transactions
-      .filter(t => isPaymentType(t.type) && isCompletedLikeStatus(t.status)) // Exclude bonus from earnings
+      .filter(t => isEarningType(t.type) && isCompletedLikeStatus(t.status))
       .reduce((sum, t) => sum + (Number(t.amount) || 0), 0)
     if (earningsFromTransactions > 0) {
       totalEarningsFromTransactions = earningsFromTransactions
@@ -245,7 +248,7 @@ export const calculatePeriodEarnings = (state, period) => {
 
   const isEarningType = (type) => {
     const normalized = String(type || '').trim().toLowerCase()
-    return normalized === 'payment' || normalized === 'earning_addon'
+    return normalized === 'payment' || normalized === 'earning_addon' || normalized === 'bonus'
   }
 
   const getTransactionDate = (transaction) => {

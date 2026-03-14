@@ -323,9 +323,8 @@ export function CategoryFoodsContent({
       try {
         const params = {
           page: 1,
-          limit: 200,
+          limit: 2000,
           ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
-          ...(selectedSubcategoryId ? { subcategoryId: selectedSubcategoryId } : {}),
           ...(selectedStoreId && selectedStoreId !== "all-stores"
             ? { storeId: selectedStoreId }
             : {}),
@@ -356,22 +355,12 @@ export function CategoryFoodsContent({
           });
           const fallbackData = Array.isArray(fallbackResponse?.data?.data) ? fallbackResponse.data.data : [];
           zoneSafeData = fallbackData.filter((product) => {
-            const productSubcategoryIds = [
-              ...(Array.isArray(product?.subcategories) ? product.subcategories : []),
-              product?.subcategory,
-            ]
-              .map((subcategory) => extractId(subcategory))
-              .filter(Boolean);
-
-            const subcategoryMatch =
-              !selectedSubcategoryId ||
-              productSubcategoryIds.includes(String(selectedSubcategoryId));
             const storeMatch =
               !selectedStoreId ||
               selectedStoreId === "all-stores" ||
               doesProductMatchStore(product, selectedStoreId);
 
-            return subcategoryMatch && storeMatch;
+            return storeMatch;
           });
         }
 
@@ -398,7 +387,6 @@ export function CategoryFoodsContent({
     effectiveZoneId,
     locationLoading,
     selectedStoreId,
-    selectedSubcategoryId,
     zoneLoading,
   ]);
 

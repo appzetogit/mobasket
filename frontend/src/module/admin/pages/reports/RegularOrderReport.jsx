@@ -40,12 +40,19 @@ export default function RegularOrderReport() {
   const [restaurants, setRestaurants] = useState([])
   const [customers, setCustomers] = useState([])
   
+  const [draftFilters, setDraftFilters] = useState({
+    zone: "All Zones",
+    restaurant: "All restaurants",
+    customer: "All customers",
+    time: "All Time",
+  })
   const [filters, setFilters] = useState({
     zone: "All Zones",
     restaurant: "All restaurants",
     customer: "All customers",
     time: "All Time",
   })
+  const [searchInput, setSearchInput] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
 
@@ -92,11 +99,13 @@ export default function RegularOrderReport() {
         toDate = new Date(now.setHours(23, 59, 59, 999))
         break
       case "This Week":
-        const weekStart = new Date(now)
-        weekStart.setDate(now.getDate() - now.getDay())
-        weekStart.setHours(0, 0, 0, 0)
-        fromDate = weekStart
-        toDate = new Date(now.setHours(23, 59, 59, 999))
+        {
+          const weekStart = new Date(now)
+          weekStart.setDate(now.getDate() - now.getDay())
+          weekStart.setHours(0, 0, 0, 0)
+          fromDate = weekStart
+          toDate = new Date(now.setHours(23, 59, 59, 999))
+        }
         break
       case "This Month":
         fromDate = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -195,20 +204,26 @@ export default function RegularOrderReport() {
   }
 
   const handleFilterApply = () => {
+    setFilters({ ...draftFilters })
     setCurrentPage(1)
     toast.success("Filters applied")
   }
 
   const handleResetFilters = () => {
-    setFilters({
+    const resetFilters = {
       zone: "All Zones",
       restaurant: "All restaurants",
       customer: "All customers",
       time: "All Time",
-    })
+    }
+    setDraftFilters(resetFilters)
+    setFilters(resetFilters)
+    setSearchInput("")
+    setSearchQuery("")
+    setCurrentPage(1)
   }
 
-  const activeFiltersCount = (filters.zone !== "All Zones" ? 1 : 0) + (filters.restaurant !== "All restaurants" ? 1 : 0) + (filters.customer !== "All customers" ? 1 : 0) + (filters.time !== "All Time" ? 1 : 0)
+  const activeFiltersCount = (draftFilters.zone !== "All Zones" ? 1 : 0) + (draftFilters.restaurant !== "All restaurants" ? 1 : 0) + (draftFilters.customer !== "All customers" ? 1 : 0) + (draftFilters.time !== "All Time" ? 1 : 0)
 
   const totalPages = Math.max(1, Math.ceil(filteredOrders.length / PAGE_SIZE))
 
@@ -246,8 +261,7 @@ export default function RegularOrderReport() {
     `$ ${Number(amount || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   const handleFilterChange = (key, value) => {
-    setFilters((prev) => ({ ...prev, [key]: value }))
-    setCurrentPage(1)
+    setDraftFilters((prev) => ({ ...prev, [key]: value }))
   }
 
   const handlePageChange = (newPage) => {
@@ -319,7 +333,7 @@ export default function RegularOrderReport() {
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <div className="relative flex-1 min-w-0">
               <select
-                value={filters.zone}
+                value={draftFilters.zone}
                 onChange={(e) => handleFilterChange("zone", e.target.value)}
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
@@ -335,7 +349,7 @@ export default function RegularOrderReport() {
 
             <div className="relative flex-1 min-w-0">
               <select
-                value={filters.restaurant}
+                value={draftFilters.restaurant}
                 onChange={(e) => handleFilterChange("restaurant", e.target.value)}
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
@@ -351,7 +365,7 @@ export default function RegularOrderReport() {
 
             <div className="relative flex-1 min-w-0">
               <select
-                value={filters.customer}
+                value={draftFilters.customer}
                 onChange={(e) => handleFilterChange("customer", e.target.value)}
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
@@ -367,7 +381,7 @@ export default function RegularOrderReport() {
 
             <div className="relative flex-1 min-w-0">
               <select
-                value={filters.time}
+                value={draftFilters.time}
                 onChange={(e) => handleFilterChange("time", e.target.value)}
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
@@ -426,14 +440,15 @@ export default function RegularOrderReport() {
                 <input
                   type="text"
                   placeholder="Search by Order ID"
-                  value={searchQuery}
+                  value={searchInput}
                   onChange={(e) => {
-                    setSearchQuery(e.target.value)
-                    setCurrentPage(1)
+                    setSearchInput(e.target.value)
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault()
+                      setSearchQuery(searchInput.trim())
+                      setCurrentPage(1)
                     }
                   }}
                   className="pl-7 pr-2 py-1.5 w-full text-[11px] rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -481,7 +496,7 @@ export default function RegularOrderReport() {
 
           {/* Table */}
           <div className="overflow-x-auto scrollbar-hide">
-            <table className="w-full" style={{ tableLayout: "fixed", width: "100%" }}>
+            <table className="w-full min-w-[1120px]" style={{ tableLayout: "auto" }}>
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: "3%" }}>

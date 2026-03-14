@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react"
+import { useNavigate } from "react-router-dom"
 import { Search, Wallet, Eye, CheckCircle, XCircle, Loader2, Package } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
@@ -17,6 +18,7 @@ const TABS = [
 ]
 
 export default function DeliveryWithdrawal() {
+  const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState("Pending")
   const [searchQuery, setSearchQuery] = useState("")
   const [requests, setRequests] = useState([])
@@ -26,6 +28,11 @@ export default function DeliveryWithdrawal() {
   const [processingAction, setProcessingAction] = useState(null)
   const [rejectionReason, setRejectionReason] = useState("")
   const [showRejectModal, setShowRejectModal] = useState(false)
+
+  const openDeliveryProfile = (deliveryIdentifier) => {
+    if (!deliveryIdentifier) return
+    navigate(`/admin/delivery-partners?viewId=${encodeURIComponent(String(deliveryIdentifier))}`)
+  }
 
   useEffect(() => {
     fetchRequests()
@@ -69,7 +76,6 @@ export default function DeliveryWithdrawal() {
       (r) =>
         r.deliveryName?.toLowerCase().includes(q) ||
         r.deliveryIdString?.toLowerCase().includes(q) ||
-        r.deliveryPhone?.toLowerCase().includes(q) ||
         r.amount?.toString().includes(q)
     )
   }, [requests, searchQuery])
@@ -190,7 +196,7 @@ export default function DeliveryWithdrawal() {
             <div className="relative flex-1 sm:flex-initial min-w-[200px] max-w-xs">
               <input
                 type="text"
-                placeholder="Search by delivery name, ID, phone"
+                placeholder='Search by name,id'
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 pr-4 py-2.5 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
@@ -237,7 +243,18 @@ export default function DeliveryWithdrawal() {
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">{index + 1}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">{formatCurrency(req.amount)}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">{req.deliveryName || "N/A"}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">{req.deliveryIdString || "N/A"}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">
+                          {req.deliveryIdString || req.deliveryPartnerId || req.deliveryId ? (
+                            <button
+                              type="button"
+                              onClick={() => openDeliveryProfile(req.deliveryPartnerId || req.deliveryId || req.deliveryIdString)}
+                              className="text-blue-600 hover:text-blue-700 underline"
+                              title="Open delivery partner profile"
+                            >
+                              {req.deliveryIdString || req.deliveryId || String(req.deliveryPartnerId)}
+                            </button>
+                          ) : "N/A"}
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">{formatDate(req.requestedAt || req.createdAt)}</td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusBadge(req.status)}`}>

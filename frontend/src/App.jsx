@@ -648,8 +648,28 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="/store/online-offline" element={<Navigate to="/store/status" replace />} />
-        <Route path="/store/payments" element={<Navigate to="/store/wallet" replace />} />
+        <Route
+          path="/store/online-offline"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <RestaurantStatus />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/store/payments"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <WalletPage />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/store/conversation/:conversationId"
           element={

@@ -362,7 +362,7 @@ export default function ContactMessages() {
                             <Settings className="w-4 h-4" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        <DropdownMenuContent align="end" className="w-44 bg-white border border-slate-200 rounded-lg shadow-lg z-50">
                           <DropdownMenuItem onClick={() => handleViewFeedback(feedback)}>
                             <Eye className="w-4 h-4 mr-2" />
                             View Details
@@ -407,7 +407,7 @@ export default function ContactMessages() {
 
       {/* View Feedback Dialog */}
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto p-0">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto p-0 bg-white">
           <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-200 dark:border-slate-700">
             <DialogTitle className="text-2xl font-bold text-slate-900 dark:text-white">Feedback Details</DialogTitle>
             <DialogDescription className="text-sm text-slate-600 dark:text-slate-400 mt-1">

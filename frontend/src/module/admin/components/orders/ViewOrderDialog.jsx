@@ -383,14 +383,6 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order, isGrocery
                     <Eye className="w-4 h-4" />
                     View Full Size
                   </a>
-                  <a
-                    href={order.billImageUrl || order.billImage || order.deliveryState?.billImageUrl}
-                    download
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-                  >
-                    <Package className="w-4 h-4" />
-                    Download
-                  </a>
                 </div>
               </div>
             </div>

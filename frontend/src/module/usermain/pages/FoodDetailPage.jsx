@@ -275,11 +275,14 @@ export default function FoodDetailPage() {
         return;
       }
 
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(url);
-        toast.success("Product link copied");
-        return;
-      }
+      const shareText = `${payload.text} ${url}`.trim();
+      window.open(
+        `https://wa.me/?text=${encodeURIComponent(shareText)}`,
+        "_blank",
+        "noopener,noreferrer",
+      );
+      toast.success("Opening share options...");
+      return;
     } catch (error) {
       console.error("Share failed:", error);
     }

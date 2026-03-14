@@ -48,10 +48,7 @@ export default function DeliveryEmergencyHelp() {
       if (!value) return;
       const trimmed = value.trim();
       const digits = trimmed.replace(/\D/g, "");
-
-      // Only enforce 10 digits for full phone number fields
-      const isPhoneNumberField = id === "accidentHelpline" || id === "insurance";
-      if (isPhoneNumberField && digits.length !== 10) {
+      if (digits.length !== 10) {
         errors[id] = "Phone number must be exactly 10 digits";
       }
     }
@@ -66,16 +63,7 @@ export default function DeliveryEmergencyHelp() {
   }
 
   const handleInputChange = (field, value) => {
-    // Only enforce strict 10-digit numeric filtering for full phone number fields
-    const isPhoneNumberField = field === "accidentHelpline" || field === "insurance";
-    let filteredValue;
-
-    if (isPhoneNumberField) {
-      filteredValue = value.replace(/\D/g, "").slice(0, 10);
-    } else {
-      // For short codes (like 100, 108), allow basic phone formatting without strict 10-digit limit
-      filteredValue = value.replace(/[^\d\s\-\+\(\)]/g, "");
-    }
+    const filteredValue = value.replace(/\D/g, "").slice(0, 10)
 
     setFormData(prev => ({
       ...prev,
@@ -129,28 +117,28 @@ export default function DeliveryEmergencyHelp() {
       label: "Medical Emergency",
       placeholder: "Enter medical emergency phone number",
       icon: "🚑",
-      description: "Phone number for medical emergencies (e.g., 108, +91-XXX-XXX-XXXX)"
+      description: "10-digit phone number for medical emergencies"
     },
     {
       id: "accidentHelpline",
       label: "Accident Helpline",
       placeholder: "Enter accident helpline phone number",
       icon: "⚠️",
-      description: "Phone number for accident helpline"
+      description: "10-digit phone number for accident helpline"
     },
     {
       id: "contactPolice",
       label: "Contact Police",
       placeholder: "Enter police emergency phone number",
       icon: "🚔",
-      description: "Phone number for police emergency (e.g., 100)"
+      description: "10-digit phone number for police emergency"
     },
     {
       id: "insurance",
       label: "Insurance",
       placeholder: "Enter insurance helpline phone number",
       icon: "🛡️",
-      description: "Phone number for insurance claims and policy help"
+      description: "10-digit phone number for insurance claims and policy help"
     }
   ]
 
@@ -209,7 +197,7 @@ export default function DeliveryEmergencyHelp() {
                 <div className="relative">
                   <input
                     type="tel"
-                    maxLength={field.id === "accidentHelpline" || field.id === "insurance" ? 10 : undefined}
+                    maxLength={10}
                     value={formData[field.id]}
                     onChange={(e) => handleInputChange(field.id, e.target.value)}
                     placeholder={field.placeholder}

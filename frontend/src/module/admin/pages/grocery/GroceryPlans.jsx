@@ -49,6 +49,15 @@ const normalizePlanProducts = (products) =>
   (Array.isArray(products) ? products : [])
     .map((item) => ({ name: String(item?.name || "").trim(), qty: String(item?.qty || "").trim() }))
     .filter((item) => item.name && item.qty)
+const normalizeEntityId = (value) =>
+  String(
+    value?._id ||
+    value?.id ||
+    value?.storeId ||
+    value?.restaurantId ||
+    value ||
+    ""
+  ).trim()
 
 const getImageFromProduct = (product) => {
   if (!product || typeof product !== "object") return ""
@@ -268,8 +277,8 @@ export default function GroceryPlans() {
       zoneStoreRules: Array.isArray(plan.zoneStoreRules)
         ? plan.zoneStoreRules
             .map((rule) => ({
-              zoneId: typeof rule?.zoneId === "string" ? rule.zoneId : (rule?.zoneId?._id || ""),
-              storeId: typeof rule?.storeId === "string" ? rule.storeId : (rule?.storeId?._id || ""),
+              zoneId: normalizeEntityId(rule?.zoneId),
+              storeId: normalizeEntityId(rule?.storeId),
               subcategoryIds: toIds(rule?.subcategoryIds),
             }))
             .filter((rule) => rule.zoneId && rule.storeId)
@@ -457,7 +466,7 @@ export default function GroceryPlans() {
   const zoneOptions = useMemo(
     () =>
       zones.map((zone) => ({
-        id: zone._id,
+        id: normalizeEntityId(zone),
         name: zone.name || zone.zoneName || zone.serviceLocation || "Unnamed Zone",
       })),
     [zones]
@@ -465,7 +474,7 @@ export default function GroceryPlans() {
   const storesByZoneId = useMemo(() => {
     const map = new Map()
     stores.forEach((store) => {
-      const zoneId = String(store?.zoneId?._id || store?.zoneId || "").trim()
+      const zoneId = normalizeEntityId(store?.zoneId)
       if (!zoneId) return
       if (!map.has(zoneId)) map.set(zoneId, [])
       map.get(zoneId).push(store)
@@ -819,7 +828,7 @@ export default function GroceryPlans() {
                       : zoneOptions
                     const storesInZone = storesByZoneId.get(String(rule.zoneId || "").trim()) || []
                     const storeOptions = storesInZone.map((store) => ({
-                      id: String(store._id),
+                      id: normalizeEntityId(store),
                       name: store?.name || store?.ownerName || "Store",
                     }))
                     const storeSubcategories = rule.storeId

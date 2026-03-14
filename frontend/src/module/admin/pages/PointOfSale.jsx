@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+﻿import { useState, useEffect } from 'react'
 import { Search, TrendingUp, TrendingDown, DollarSign, ShoppingCart, XCircle, Star, Calendar, BarChart3, Users, Award, Package } from 'lucide-react'
 import { adminAPI } from '@/lib/api'
 import { usePlatform } from '../context/PlatformContext'
@@ -14,7 +14,6 @@ export default function PointOfSale() {
   const [selectedRestaurant, setSelectedRestaurant] = useState('')
   const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(false)
-  const [restaurantData, setRestaurantData] = useState(null)
   const [showSearchResults, setShowSearchResults] = useState(false)
 
   // Dummy data structure - replace with actual API calls
@@ -48,7 +47,6 @@ export default function PointOfSale() {
     setSelectedRestaurant('')
     setSearchQuery('')
     setShowSearchResults(false)
-    setRestaurantData(null)
     fetchRestaurants()
   }, [platform])
 
@@ -57,7 +55,6 @@ export default function PointOfSale() {
     if (selectedRestaurant) {
       fetchRestaurantAnalytics(selectedRestaurant)
     } else {
-      setRestaurantData(null)
       setAnalyticsData({
         totalOrders: 0,
         cancelledOrders: 0,
@@ -151,14 +148,11 @@ export default function PointOfSale() {
       console.log('Analytics response:', analyticsResponse)
       
       if (analyticsResponse?.data?.success && analyticsResponse.data.data) {
-        const { restaurant, analytics } = analyticsResponse.data.data
+        const { analytics } = analyticsResponse.data.data
         
         console.log('Analytics data received:', analytics)
         console.log('Commission percentage from API:', analytics.commissionPercentage)
         console.log('Commission percentage type:', typeof analytics.commissionPercentage)
-        
-        // Set restaurant data
-        setRestaurantData(restaurant)
         
         // Parse commission percentage - handle both number and string
         const commissionPercentage = analytics.commissionPercentage !== undefined && analytics.commissionPercentage !== null
@@ -186,7 +180,7 @@ export default function PointOfSale() {
           averageMonthlyProfit: analytics.averageMonthlyProfit || 0,
           averageYearlyProfit: analytics.averageYearlyProfit || 0,
           status: analytics.status || 'inactive',
-          joinDate: analytics.joinDate || restaurant.createdAt || new Date(),
+          joinDate: analytics.joinDate || new Date(),
           totalCustomers: analytics.totalCustomers || 0,
           repeatCustomers: analytics.repeatCustomers || 0,
           cancellationRate: analytics.cancellationRate || 0,
@@ -301,6 +295,13 @@ export default function PointOfSale() {
     }
   }
 
+  const handleSearchKeyDown = (e) => {
+    if (e.key !== "Enter") return
+    e.preventDefault()
+    if (!searchQuery.trim() || filteredRestaurants.length === 0) return
+    handleRestaurantSelect(filteredRestaurants[0]._id)
+  }
+
   const formatCurrency = (amount) => {
     return `₹ ${amount?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}`
   }
@@ -337,6 +338,7 @@ export default function PointOfSale() {
                       type="text"
                       value={searchQuery}
                   onChange={handleSearchChange}
+                  onKeyDown={handleSearchKeyDown}
                   onFocus={() => {
                     if (searchQuery.trim()) {
                       setShowSearchResults(true)
@@ -387,35 +389,6 @@ export default function PointOfSale() {
               )}
         </div>
 
-            {/* Alternative: Dropdown Selector */}
-            <div>
-                    <label className="block text-sm font-medium text-[#334257] mb-2">
-                Or Select from Dropdown
-                    </label>
-                    <div className="relative">
-                      <select 
-                  value={selectedRestaurant}
-                  onChange={(e) => {
-                    setSelectedRestaurant(e.target.value)
-                    const selected = restaurants.find(r => r._id === e.target.value)
-                    if (selected) {
-                      setSearchQuery(`${selected.name} (${getEntityId(selected)})`)
-                    }
-                  }}
-                        className="w-full h-11 rounded-md border border-[#e3e6ef] bg-white px-3 pr-10 text-sm text-[#4a5671] focus:outline-none focus:ring-1 focus:ring-[#006fbd]"
-                      >
-                  <option value="">{`Select ${entityLabel}`}</option>
-                  {restaurants.map(restaurant => (
-                    <option key={restaurant._id} value={restaurant._id}>
-                      {restaurant.name} ({getEntityId(restaurant)})
-                          </option>
-                        ))}
-                      </select>
-                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-gray-400 text-xs">
-                        ▼
-                      </span>
-                    </div>
-                  </div>
                   </div>
                 </div>
 

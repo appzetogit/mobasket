@@ -30,9 +30,36 @@ export function useGenericTableManagement(data, title, searchFields = []) {
     Object.entries(filters).forEach(([key, value]) => {
       if (value && value !== "") {
         result = result.filter(item => {
-          const itemValue = item[key]
+          // Date range handling
+          if (key === "fromDate" || key === "toDate") {
+            const itemDateRaw = item.createdAt || item.orderDate || item.date || item.originalOrder?.createdAt
+            if (!itemDateRaw) return false
+            const itemDate = new Date(itemDateRaw)
+            if (Number.isNaN(itemDate.getTime())) return false
+            if (key === "fromDate") {
+              const fromDate = new Date(value)
+              fromDate.setHours(0, 0, 0, 0)
+              return itemDate >= fromDate
+            }
+            const toDate = new Date(value)
+            toDate.setHours(23, 59, 59, 999)
+            return itemDate <= toDate
+          }
+
+          // Support common alias fields across different tables
+          const itemValue = item[key] ?? (
+            key === "restaurant" ? (item.restaurantName ?? item.restaurant) :
+            key === "zone" ? (item.zoneName ?? item.zone) :
+            undefined
+          )
+
+          // Partial matching for free-text filters
+          if (typeof value === 'string' && (key === "restaurant" || key === "zone")) {
+            return String(itemValue || "").toLowerCase().includes(value.toLowerCase())
+          }
+
           if (typeof value === 'string') {
-            return itemValue === value || itemValue?.toString().toLowerCase() === value.toLowerCase()
+            return itemValue === value || String(itemValue || "").toLowerCase() === value.toLowerCase()
           }
           return itemValue === value
         })

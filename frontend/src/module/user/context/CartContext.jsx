@@ -89,6 +89,15 @@ const isValidGroceryCartItem = (item) => {
 const isGroceryItem = (item) => {
   return detectItemPlatform(item) === "mogrocery";
 };
+
+const isOutOfStockItem = (item) => {
+  if (!item || typeof item !== "object") return false;
+  if (item.inStock === false) return true;
+  if (item.isActive === false) return true;
+  const numericStock = Number(item.stockQuantity);
+  if (Number.isFinite(numericStock) && numericStock <= 0) return true;
+  return false;
+};
 const parseStoredCart = (raw) => {
   try {
     const parsed = raw ? JSON.parse(raw) : [];
@@ -230,6 +239,11 @@ export function CartProvider({ children }) {
       return false;
     }
 
+    if (itemPlatform === "mogrocery" && isOutOfStockItem(item)) {
+      toast.error("This item is currently out of stock.");
+      return false;
+    }
+
     if (!item?.restaurantId && !item?.restaurant) {
       console.error("Cannot add item: missing restaurant information", item);
       toast.error("Item is missing restaurant information. Please refresh.");
@@ -269,10 +283,17 @@ export function CartProvider({ children }) {
     setTargetCart((prev) => {
       const existing = prev.find((i) => String(i.id) === normalizedItemId);
       if (existing) {
+        if (itemPlatform === "mogrocery" && (existing.inStock === false || existing.isActive === false)) {
+          toast.error("This item is currently out of stock.");
+          return prev;
+        }
+
         // Stock Validation
-        const stockAvailable = (item.stockQuantity !== undefined && item.stockQuantity !== null)
-          ? Number(item.stockQuantity)
-          : ((existing.stockQuantity !== undefined && existing.stockQuantity !== null) ? Number(existing.stockQuantity) : Infinity);
+        const preferredStock = Number(item.stockQuantity);
+        const existingStock = Number(existing.stockQuantity);
+        const stockAvailable = Number.isFinite(preferredStock)
+          ? preferredStock
+          : (Number.isFinite(existingStock) ? existingStock : Infinity);
 
         if (existing.quantity + 1 > stockAvailable) {
           toast.error(`Only ${stockAvailable} units available in stock`);
@@ -304,12 +325,11 @@ export function CartProvider({ children }) {
       }
 
       // Stock Validation for first item
-      const stockAvailable = (item.stockQuantity !== undefined && item.stockQuantity !== null)
-        ? Number(item.stockQuantity)
-        : Infinity;
+      const stockAvailable = Number(item.stockQuantity);
+      const resolvedStock = Number.isFinite(stockAvailable) ? stockAvailable : Infinity;
 
-      if (1 > stockAvailable) {
-        toast.error(`Only ${stockAvailable} units available in stock`);
+      if (1 > resolvedStock) {
+        toast.error(`Only ${resolvedStock} units available in stock`);
         return prev;
       }
 
@@ -429,10 +449,17 @@ export function CartProvider({ children }) {
       const existingItem = prev.find((i) => i.id === itemId);
 
       if (existingItem) {
+        if (activePlatform === "mogrocery" && (existingItem.inStock === false || existingItem.isActive === false)) {
+          toast.error("This item is currently out of stock.");
+          return prev;
+        }
+
         // Stock Validation
-        const stockAvailable = (productInfo?.stockQuantity !== undefined && productInfo?.stockQuantity !== null)
-          ? Number(productInfo.stockQuantity)
-          : ((existingItem.stockQuantity !== undefined && existingItem.stockQuantity !== null) ? Number(existingItem.stockQuantity) : Infinity);
+        const preferredStock = Number(productInfo?.stockQuantity);
+        const existingStock = Number(existingItem.stockQuantity);
+        const stockAvailable = Number.isFinite(preferredStock)
+          ? preferredStock
+          : (Number.isFinite(existingStock) ? existingStock : Infinity);
 
         if (quantity > stockAvailable) {
           toast.error(`Only ${stockAvailable} units available in stock`);
@@ -486,10 +513,14 @@ export function CartProvider({ children }) {
     setTargetCart((prev) => {
       const existingItem = prev.find((i) => i.id === itemId);
       if (existingItem) {
+        if (platform === "mogrocery" && (existingItem.inStock === false || existingItem.isActive === false)) {
+          toast.error("This item is currently out of stock.");
+          return prev;
+        }
+
         // Stock Validation
-        const stockAvailable = (existingItem.stockQuantity !== undefined && existingItem.stockQuantity !== null)
-          ? Number(existingItem.stockQuantity)
-          : Infinity;
+        const parsedStock = Number(existingItem.stockQuantity);
+        const stockAvailable = Number.isFinite(parsedStock) ? parsedStock : Infinity;
 
         if (quantity > stockAvailable) {
           toast.error(`Only ${stockAvailable} units available in stock`);

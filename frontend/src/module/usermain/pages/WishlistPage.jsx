@@ -6,8 +6,6 @@ import { Button } from "@/components/ui/button";
 
 export default function WishlistPage() {
   const navigate = useNavigate();
-  const [wishlist, setWishlist] = useState([]);
-
   // Load wishlist from localStorage
   const loadWishlist = () => {
     const saved = localStorage.getItem("wishlist");
@@ -33,18 +31,29 @@ export default function WishlistPage() {
         );
 
         setWishlist(unique);
-      } catch (error) {
+      } catch {
         setWishlist([]);
       }
     } else {
       setWishlist([]);
     }
   };
+  const [wishlist, setWishlist] = useState(() => {
+    const saved = localStorage.getItem("wishlist");
+    if (!saved) return [];
+    try {
+      const parsed = JSON.parse(saved);
+      if (!Array.isArray(parsed)) return [];
+      const validItems = parsed.filter((item) => item && typeof item === "object" && item.id);
+      return validItems.filter(
+        (item, index, self) => index === self.findIndex((t) => t.id === item.id),
+      );
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
-    // Load wishlist on mount
-    loadWishlist();
-
     // Listen for storage changes (when wishlist is updated from other tabs/pages)
     const handleStorageChange = (e) => {
       if (e.key === "wishlist") {
@@ -71,12 +80,14 @@ export default function WishlistPage() {
     const updated = wishlist.filter((item) => item.id !== itemId);
     setWishlist(updated);
     localStorage.setItem("wishlist", JSON.stringify(updated));
+    window.dispatchEvent(new Event("wishlistUpdated"));
   };
 
   // Clear all wishlist
   const clearWishlist = () => {
     setWishlist([]);
     localStorage.setItem("wishlist", JSON.stringify([]));
+    window.dispatchEvent(new Event("wishlistUpdated"));
   };
 
   const containerVariants = {
@@ -165,8 +176,8 @@ export default function WishlistPage() {
                 whileHover={{ y: -5 }}
                 className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow"
               >
-                {item.type === "restaurant" ? (
-                  // Restaurant Item Card
+                {item.type === "food" ? (
+                  // Product Item Card
                   <div
                     className="flex gap-4 p-4 cursor-pointer"
                     onClick={() =>

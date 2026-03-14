@@ -39,6 +39,7 @@ export function useOrdersManagement(orders, statusKey, title) {
   // Apply search and filters
   const filteredOrders = useMemo(() => {
     let result = [...orders]
+    const normalize = (value) => String(value || "").toLowerCase().replace(/[\s_-]+/g, " ").trim()
 
     // Apply search query
     if (searchQuery.trim()) {
@@ -123,28 +124,34 @@ export function useOrdersManagement(orders, statusKey, title) {
     if (filters.paymentStatus && filters.paymentStatus.trim() !== '') {
       result = result.filter(order => {
         // Check multiple possible payment status fields
-        const orderPaymentStatus = (
+        const orderPaymentStatus = normalize(
           order.paymentStatus || 
           order.payment?.status || 
           order.paymentStatus || 
           ''
-        ).toString().trim()
-        const filterPaymentStatus = filters.paymentStatus.toString().trim()
-        return orderPaymentStatus.toLowerCase() === filterPaymentStatus.toLowerCase()
+        )
+        const filterPaymentStatus = normalize(filters.paymentStatus)
+        if (filterPaymentStatus === "all") return true
+        if (filterPaymentStatus === "unpaid") return orderPaymentStatus.includes("unpaid") || orderPaymentStatus.includes("not paid")
+        if (filterPaymentStatus === "paid") return orderPaymentStatus.includes("paid") || orderPaymentStatus.includes("success") || orderPaymentStatus.includes("collected")
+        return orderPaymentStatus === filterPaymentStatus || orderPaymentStatus.includes(filterPaymentStatus)
       })
     }
 
     if (filters.deliveryType && filters.deliveryType.trim() !== '') {
       result = result.filter(order => {
         // Check multiple possible delivery type fields
-        const orderDeliveryType = (
+        const orderDeliveryType = normalize(
           order.deliveryType || 
           order.delivery?.type || 
           order.orderType ||
           ''
-        ).toString().trim()
-        const filterDeliveryType = filters.deliveryType.toString().trim()
-        return orderDeliveryType.toLowerCase() === filterDeliveryType.toLowerCase()
+        )
+        const filterDeliveryType = normalize(filters.deliveryType)
+        if (filterDeliveryType === "all") return true
+        if (filterDeliveryType === "home delivery") return orderDeliveryType.includes("delivery")
+        if (filterDeliveryType === "take away") return orderDeliveryType.includes("take away") || orderDeliveryType.includes("takeaway") || orderDeliveryType.includes("pickup")
+        return orderDeliveryType === filterDeliveryType || orderDeliveryType.includes(filterDeliveryType)
       })
     }
 
@@ -185,14 +192,14 @@ export function useOrdersManagement(orders, statusKey, title) {
     if (filters.restaurant && filters.restaurant.trim() !== '') {
       result = result.filter(order => {
         // Check multiple possible restaurant fields
-        const orderRestaurant = (
+        const orderRestaurant = normalize(
           order.restaurant || 
           order.restaurantName || 
           order.restaurant?.name ||
           ''
-        ).toString().trim()
-        const filterRestaurant = filters.restaurant.toString().trim()
-        return orderRestaurant.toLowerCase() === filterRestaurant.toLowerCase()
+        )
+        const filterRestaurant = normalize(filters.restaurant)
+        return orderRestaurant.includes(filterRestaurant)
       })
     }
 

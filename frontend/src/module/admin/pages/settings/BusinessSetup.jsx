@@ -77,7 +77,7 @@ export default function BusinessSetup() {
 
   const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const PHONE_REGEX = /^\d{7,15}$/;
-  const STATE_REGEX = /^[A-Za-z\s.-]{2,50}$/;
+  const STATE_REGEX = /^[A-Za-z\s]{2,50}$/;
   const PINCODE_REGEX = /^\d{4,10}$/;
 
   const handleSave = async () => {
@@ -249,7 +249,7 @@ export default function BusinessSetup() {
                   type="email"
                   placeholder="Enter Your Email"
                   value={formData.email}
-                  onChange={(e) => handleInputChange("email", e.target.value)}
+                  onChange={(e) => handleInputChange("email", e.target.value.replace(/\s+/g, "").toLowerCase())}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
@@ -503,7 +503,7 @@ export default function BusinessSetup() {
                   type="text"
                   placeholder="Enter Your State"
                   value={formData.state}
-                  onChange={(e) => handleInputChange("state", e.target.value.replace(/[^A-Za-z\s.-]/g, ""))}
+                  onChange={(e) => handleInputChange("state", e.target.value.replace(/[^A-Za-z\s]/g, ""))}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>

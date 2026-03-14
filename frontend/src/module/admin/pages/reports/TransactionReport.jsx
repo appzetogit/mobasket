@@ -23,6 +23,7 @@ export default function TransactionReport() {
   const PAGE_SIZE = 25
   const navigate = useNavigate()
   const { platform } = usePlatform()
+  const [searchInput, setSearchInput] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [transactions, setTransactions] = useState([])
   const [currentPage, setCurrentPage] = useState(1)
@@ -40,6 +41,11 @@ export default function TransactionReport() {
     restaurantEarning: 0,
     deliverymanEarning: 0
   })
+  const [draftFilters, setDraftFilters] = useState({
+    zone: "All Zones",
+    restaurant: `All ${platform === "mogrocery" ? "stores" : "restaurants"}`,
+    time: "All Time",
+  })
   const [filters, setFilters] = useState({
     zone: "All Zones",
     restaurant: `All ${platform === "mogrocery" ? "stores" : "restaurants"}`,
@@ -52,10 +58,18 @@ export default function TransactionReport() {
   const outletLabel = isGroceryPlatform ? "stores" : "restaurants"
 
   useEffect(() => {
+    const defaultRestaurant = `All ${outletLabel}`
+    setDraftFilters({
+      zone: "All Zones",
+      restaurant: defaultRestaurant,
+      time: "All Time",
+    })
     setFilters((prev) => ({
       ...prev,
-      restaurant: `All ${outletLabel}`
+      restaurant: defaultRestaurant
     }))
+    setSearchInput("")
+    setSearchQuery("")
     setCurrentPage(1)
   }, [outletLabel])
 
@@ -184,16 +198,21 @@ export default function TransactionReport() {
   }
 
   const handleFilterApply = () => {
+    setFilters({ ...draftFilters })
     setCurrentPage(1)
     toast.success("Filters applied")
   }
 
   const handleResetFilters = () => {
-    setFilters({
+    const resetFilters = {
       zone: "All Zones",
       restaurant: `All ${outletLabel}`,
       time: "All Time",
-    })
+    }
+    setDraftFilters(resetFilters)
+    setFilters(resetFilters)
+    setSearchInput("")
+    setSearchQuery("")
     setCurrentPage(1)
   }
   const handlePageChange = (newPage) => {
@@ -201,7 +220,7 @@ export default function TransactionReport() {
     setCurrentPage(newPage)
   }
 
-  const activeFiltersCount = (filters.zone !== "All Zones" ? 1 : 0) + (filters.restaurant !== `All ${outletLabel}` ? 1 : 0) + (filters.time !== "All Time" ? 1 : 0)
+  const activeFiltersCount = (draftFilters.zone !== "All Zones" ? 1 : 0) + (draftFilters.restaurant !== `All ${outletLabel}` ? 1 : 0) + (draftFilters.time !== "All Time" ? 1 : 0)
 
   const formatCurrency = (amount = 0) => {
     if (amount >= 1000) {
@@ -258,10 +277,9 @@ export default function TransactionReport() {
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <div className="relative flex-1 min-w-0">
               <select
-                value={filters.zone}
+                value={draftFilters.zone}
                 onChange={(e) => {
-                  setFilters(prev => ({ ...prev, zone: e.target.value }))
-                  setCurrentPage(1)
+                  setDraftFilters(prev => ({ ...prev, zone: e.target.value }))
                 }}
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
@@ -275,10 +293,9 @@ export default function TransactionReport() {
 
             <div className="relative flex-1 min-w-0">
               <select
-                value={filters.restaurant}
+                value={draftFilters.restaurant}
                 onChange={(e) => {
-                  setFilters(prev => ({ ...prev, restaurant: e.target.value }))
-                  setCurrentPage(1)
+                  setDraftFilters(prev => ({ ...prev, restaurant: e.target.value }))
                 }}
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
@@ -294,10 +311,9 @@ export default function TransactionReport() {
 
             <div className="relative flex-1 min-w-0">
               <select
-                value={filters.time}
+                value={draftFilters.time}
                 onChange={(e) => {
-                  setFilters(prev => ({ ...prev, time: e.target.value }))
-                  setCurrentPage(1)
+                  setDraftFilters(prev => ({ ...prev, time: e.target.value }))
                 }}
                 className="w-full px-2.5 py-1.5 pr-5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs appearance-none cursor-pointer"
               >
@@ -461,14 +477,15 @@ export default function TransactionReport() {
                 <input
                   type="text"
                   placeholder="Search by Order ID"
-                  value={searchQuery}
+                  value={searchInput}
                   onChange={(e) => {
-                    setSearchQuery(e.target.value)
-                    setCurrentPage(1)
+                    setSearchInput(e.target.value)
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault()
+                      setSearchQuery(searchInput.trim())
+                      setCurrentPage(1)
                     }
                   }}
                   className="pl-7 pr-2 py-1.5 w-full text-[11px] rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -518,12 +535,12 @@ export default function TransactionReport() {
 
           {/* Table */}
           <div className="overflow-x-auto scrollbar-hide">
-            <table className="w-full" style={{ tableLayout: 'fixed', width: '100%' }}>
+            <table className="w-full min-w-[980px]" style={{ tableLayout: "auto" }}>
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: '3%' }}>SI</th>
-                  <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: '7%' }}>Order Id</th>
-                  <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: '10%' }}>Restaurant</th>
+                  <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: "10%" }}>Order Id</th>
+                  <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: "12%" }}>Restaurant</th>
                   <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: '10%' }}>Customer Name</th>
                   <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: '9%' }}>Total Item Amount</th>
                   <th className="px-1.5 py-1 text-left text-[8px] font-bold text-slate-700 uppercase tracking-wider" style={{ width: '8%' }}>Item Discount</th>
@@ -558,7 +575,7 @@ export default function TransactionReport() {
                         <button
                           type="button"
                           onClick={() => handleOrderIdClick(transaction.orderId)}
-                          className="text-[10px] text-blue-600 hover:underline cursor-pointer"
+                          className="text-[10px] text-blue-600 hover:underline cursor-pointer truncate block"
                         >
                           {transaction.orderId}
                         </button>

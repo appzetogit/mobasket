@@ -61,6 +61,35 @@ const createInitialForm = () => ({
   },
 })
 
+const sanitizeInputByField = (field, value) => {
+  const raw = String(value ?? "")
+  switch (field) {
+    case "storeName":
+      return raw.replace(/[^a-zA-Z0-9 &-]/g, "").slice(0, 100)
+    case "ownerName":
+      return raw.replace(/[^a-zA-Z\s]/g, "").slice(0, 60)
+    case "ownerEmail":
+      return raw.replace(/\s+/g, "").replace(/[^a-zA-Z0-9@._+-]/g, "").slice(0, 120)
+    case "ownerPhone":
+    case "primaryContactNumber":
+      return raw.replace(/\D/g, "").slice(0, 10)
+    case "addressLine1":
+      return raw.replace(/[^a-zA-Z0-9\s,./#-]/g, "").slice(0, 150)
+    case "addressLine2":
+      return raw.replace(/[^a-zA-Z0-9\s,./#-]/g, "").slice(0, 150)
+    case "area":
+    case "city":
+    case "state":
+      return raw.replace(/[^a-zA-Z\s]/g, "").slice(0, 80)
+    case "zipCode":
+      return raw.replace(/\D/g, "").slice(0, 6)
+    case "landmark":
+      return raw.replace(/[^a-zA-Z0-9\s,./#-]/g, "").slice(0, 120)
+    default:
+      return raw
+  }
+}
+
 export default function GroceryStoreOnboarding() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
@@ -564,7 +593,8 @@ export default function GroceryStoreOnboarding() {
   }
 
   const uploadCapturedImage = async (base64Data, filename, mimeType, folder) => {
-    const byteCharacters = atob(base64Data)
+    const cleanBase64 = String(base64Data || "").replace(/^data:[^;]+;base64,/, "")
+    const byteCharacters = atob(cleanBase64)
     const byteNumbers = new Array(byteCharacters.length)
     for (let i = 0; i < byteCharacters.length; i += 1) {
       byteNumbers[i] = byteCharacters.charCodeAt(i)
@@ -598,6 +628,86 @@ export default function GroceryStoreOnboarding() {
       toast.success("Store image uploaded successfully")
     } catch (err) {
       toast.error(err?.message || "Failed to capture store image")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleStoreImageGalleryPick = async () => {
+    if (!window.flutter_inappwebview?.callHandler) {
+      storeImageGalleryInputRef.current?.click()
+      return
+    }
+
+    try {
+      setSaving(true)
+      const result = await window.flutter_inappwebview.callHandler("openGallery")
+      if (!result?.success || !result?.base64) {
+        storeImageGalleryInputRef.current?.click()
+        return
+      }
+
+      const uploaded = await uploadCapturedImage(
+        result.base64,
+        result.fileName || `store_gallery_${Date.now()}.jpg`,
+        result.mimeType || "image/jpeg",
+        "mobasket/grocery-store/store"
+      )
+      setImages((prev) => ({ ...prev, storeImage: uploaded }))
+      toast.success("Store image uploaded successfully")
+    } catch {
+      storeImageGalleryInputRef.current?.click()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const normalizeGalleryResults = (result) => {
+    if (!result) return []
+    if (Array.isArray(result?.files)) return result.files
+    if (Array.isArray(result)) return result
+    if (result?.base64) return [result]
+    return []
+  }
+
+  const handleAdditionalImagesGalleryPick = async () => {
+    if (!window.flutter_inappwebview?.callHandler) {
+      additionalImagesGalleryInputRef.current?.click()
+      return
+    }
+
+    try {
+      setSaving(true)
+      const result = await window.flutter_inappwebview.callHandler("openGallery")
+      const files = normalizeGalleryResults(result)
+      if (!files.length) {
+        additionalImagesGalleryInputRef.current?.click()
+        return
+      }
+
+      const uploads = []
+      for (const fileData of files) {
+        if (!fileData?.base64) continue
+        const uploaded = await uploadCapturedImage(
+          fileData.base64,
+          fileData.fileName || `additional_gallery_${Date.now()}.jpg`,
+          fileData.mimeType || "image/jpeg",
+          "mobasket/grocery-store/additional"
+        )
+        uploads.push(uploaded)
+      }
+
+      if (uploads.length) {
+        setImages((prev) => ({
+          ...prev,
+          additionalImages: [...prev.additionalImages, ...uploads],
+        }))
+        toast.success(`${uploads.length} image(s) uploaded successfully`)
+      } else {
+        additionalImagesGalleryInputRef.current?.click()
+      }
+    } catch {
+      additionalImagesGalleryInputRef.current?.click()
     } finally {
       setSaving(false)
     }
@@ -652,12 +762,13 @@ export default function GroceryStoreOnboarding() {
         else if (val.length > 60) error = "Maximum 60 characters allowed";
         else if (!/^[a-zA-Z\s]+$/.test(val)) error = "Only alphabets and spaces allowed";
         break;
-      case "ownerEmail":
+      case "ownerEmail": {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!val) error = "Owner email is required";
         else if (/\s/.test(val)) error = "No spaces allowed in email";
         else if (!emailRegex.test(val)) error = "Please enter a valid email";
         break;
+      }
       case "ownerPhone":
       case "primaryContactNumber":
         if (!val) error = "Phone number is required";
@@ -693,20 +804,14 @@ export default function GroceryStoreOnboarding() {
   };
 
   const handleFieldChange = (field, value) => {
-    let nextValue = value
-    if (field === "ownerPhone" || field === "primaryContactNumber") {
-      nextValue = String(value || "").replace(/\D/g, "").slice(0, 10)
-    }
+    const nextValue = sanitizeInputByField(field, value)
 
     setForm((prev) => ({ ...prev, [field]: nextValue }))
     validateFieldRealTime(field, nextValue);
   }
 
   const handleLocationChange = (field, value) => {
-    let nextValue = value
-    if (field === "zipCode") {
-      nextValue = String(value || "").replace(/\D/g, "").slice(0, 6)
-    }
+    const nextValue = sanitizeInputByField(field, value)
 
     setForm((prev) => ({
       ...prev,
@@ -1097,7 +1202,7 @@ export default function GroceryStoreOnboarding() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => storeImageGalleryInputRef.current?.click()}
+                      onClick={handleStoreImageGalleryPick}
                       disabled={saving}
                       className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium disabled:opacity-60"
                     >
@@ -1149,7 +1254,7 @@ export default function GroceryStoreOnboarding() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => additionalImagesGalleryInputRef.current?.click()}
+                    onClick={handleAdditionalImagesGalleryPick}
                     disabled={saving}
                     className="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 disabled:opacity-60"
                   >
@@ -1171,6 +1276,7 @@ export default function GroceryStoreOnboarding() {
                     id="additionalImagesGalleryInput"
                     type="file"
                     accept="image/*"
+                    multiple
                     className="hidden"
                     onChange={handleAdditionalImageChange}
                     disabled={saving}

@@ -86,7 +86,16 @@ export default function DeliveryRouter() {
         }
         path="/requests"
       />
-      <Route path="/pocket" element={<Navigate to="/delivery/requests" replace />} />
+      <Route
+        element={
+          <ProtectedRoute>
+            <DeliveryLayout showGig={true} showPocket={true}>
+              <PocketPage />
+            </DeliveryLayout>
+          </ProtectedRoute>
+        }
+        path="/pocket"
+      />
       <Route
         element={
           <ProtectedRoute>

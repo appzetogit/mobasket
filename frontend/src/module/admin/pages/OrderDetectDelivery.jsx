@@ -6,6 +6,7 @@ import OrdersTopbar from "../components/orders/OrdersTopbar"
 import OrderDetectDeliveryTable from "../components/orders/OrderDetectDeliveryTable"
 import ViewOrderDetectDeliveryDialog from "../components/orders/ViewOrderDetectDeliveryDialog"
 import SettingsDialog from "../components/orders/SettingsDialog"
+import DispatchFilterPanel from "../components/orders/DispatchFilterPanel"
 import { useGenericTableManagement } from "../components/orders/useGenericTableManagement"
 import { usePlatform } from "../context/PlatformContext"
 
@@ -203,6 +204,8 @@ const transformOrder = (order, index) => {
     userName: order.customerName || order.userId?.name || 'Unknown',
     userNumber: order.customerPhone || order.userId?.phone || 'N/A',
     restaurantName: order.restaurant || order.restaurantName || 'Unknown Restaurant',
+    restaurant: order.restaurant || order.restaurantName || 'Unknown Restaurant',
+    zone: order.zoneName || order.zone || order.originalZoneName || "",
     deliveryBoyName: order.deliveryPartnerName || order.deliveryPartnerId?.name || null,
     deliveryBoyNumber: order.deliveryPartnerPhone || order.deliveryPartnerId?.phone || null,
     status: displayStatus,
@@ -310,6 +313,16 @@ export default function OrderDetectDelivery({ platformOverride }) {
     
     return { total, ordered, restaurantAccepted, rejected, deliveryBoyAssigned, reachedPickup, orderIdAccepted, reachedDrop, delivered }
   }, [filteredData, orders.length])
+
+  const zoneOptions = useMemo(() => {
+    return Array.from(
+      new Set(
+        orders
+          .map((order) => String(order.zone || "").trim())
+          .filter(Boolean)
+      )
+    )
+  }, [orders])
 
   const resetColumns = () => {
     setVisibleColumns({
@@ -487,6 +500,15 @@ export default function OrderDetectDelivery({ platformOverride }) {
           status: "Status",
           actions: "Actions",
         }}
+      />
+      <DispatchFilterPanel
+        isOpen={isFilterOpen}
+        onClose={() => setIsFilterOpen(false)}
+        filters={filters}
+        setFilters={setFilters}
+        onApply={handleApplyFilters}
+        onReset={handleResetFilters}
+        zones={zoneOptions}
       />
       <ViewOrderDetectDeliveryDialog
         isOpen={isViewOrderOpen}

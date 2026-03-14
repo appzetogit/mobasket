@@ -2625,7 +2625,7 @@ function OrderCard({
             e.stopPropagation();
             onCancel({ orderId, mongoId, customerName });
           }}
-          className="absolute top-2 right-2 p-1.5 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors z-10"
+          className="absolute top-2.5 right-2.5 p-1.5 rounded-full bg-red-100 text-red-600 hover:bg-red-200 transition-colors z-10"
           title="Cancel Order"
         >
           <X className="w-4 h-4" />
@@ -2646,7 +2646,7 @@ function OrderCard({
             deliveryPartnerId,
           })
         }
-        className="w-full text-left flex gap-3 items-stretch cursor-pointer"
+        className={`w-full text-left flex gap-3 items-stretch cursor-pointer ${normalizedStatus === "preparing" ? "pr-8" : ""}`}
       >
         {/* Photo */}
         <div className="h-20 w-20 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center flex-shrink-0 my-auto">
@@ -2789,9 +2789,25 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "", 
           // Filter orders with 'preparing' status only
           // 'confirmed' orders should only appear in popup notification, not in preparing list
           // After accepting, order status changes to 'preparing' and then appears here
-          const preparingOrders = response.data.data.orders.filter(
-            order => order.status === 'preparing'
-          )
+          const preparingOrders = response.data.data.orders.filter((order) => {
+            const status = String(order?.status || "").toLowerCase()
+            const deliveryStatus = String(order?.deliveryState?.status || "").toLowerCase()
+            const deliveryPhase = String(order?.deliveryState?.currentPhase || "").toLowerCase()
+            const movedAhead =
+              status === "ready" ||
+              status === "out_for_delivery" ||
+              status === "delivered" ||
+              status === "completed" ||
+              deliveryStatus === "order_confirmed" ||
+              deliveryStatus === "reached_pickup" ||
+              deliveryStatus === "delivered" ||
+              deliveryPhase === "at_pickup" ||
+              deliveryPhase === "en_route_to_delivery" ||
+              deliveryPhase === "at_delivery" ||
+              deliveryPhase === "completed"
+
+            return status === "preparing" && !movedAhead
+          })
 
           const transformedOrders = preparingOrders.map(order => {
             const initialETA = order.estimatedDeliveryTime || 30 // in minutes

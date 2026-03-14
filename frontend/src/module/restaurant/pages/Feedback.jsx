@@ -14,7 +14,7 @@ const tabs = [
 ]
 
 // Dummy review data
-const dummyReviews = [
+const _dummyReviews = [
   {
     id: 1,
     orderNumber: "0",
@@ -84,7 +84,7 @@ const dummyReviews = [
 ]
 
 export default function Feedback() {
-  const [searchParams, setSearchParams] = useSearchParams()
+  const [searchParams] = useSearchParams()
   const location = useLocation()
   const isGroceryStore = location.pathname.startsWith('/store')
   const baseRoute = isGroceryStore ? '/store' : '/restaurant'
@@ -145,7 +145,7 @@ export default function Feedback() {
   const [restaurantData, setRestaurantData] = useState(null)
   const [isLoadingRestaurant, setIsLoadingRestaurant] = useState(true)
   const [isLoadingReviews, setIsLoadingReviews] = useState(true)
-  const [ratingSummary, setRatingSummary] = useState({
+  const [, setRatingSummary] = useState({
     averageRating: 0,
     totalRatings: 0,
     totalReviews: 0
@@ -325,16 +325,40 @@ export default function Feedback() {
               (restaurantData?.name) ||
               (isGroceryStore ? 'Store' : 'Restaurant')
 
-            // Get rating if available (from order.review or order.rating)
-            const rating = order.review?.rating ||
-              order.rating ||
-              order.feedback?.rating ||
-              null
-            const reviewText = order.review?.comment ||
-              order.review?.text ||
-              order.feedback?.comment ||
-              order.feedback?.text ||
-              (rating ? `${rating}★ rating` : 'No review text')
+            const reviewData = order?.review && typeof order.review === "object" ? order.review : {}
+            const feedbackData = order?.feedback && typeof order.feedback === "object" ? order.feedback : {}
+            const reviewSource = String(
+              reviewData?.source ||
+              feedbackData?.source ||
+              reviewData?.type ||
+              feedbackData?.type ||
+              ""
+            ).toLowerCase()
+            const isDeliverySideFeedback =
+              reviewSource.includes("delivery") ||
+              reviewSource.includes("driver") ||
+              reviewSource.includes("rider") ||
+              Number.isFinite(Number(order?.deliveryRating)) ||
+              Number.isFinite(Number(order?.deliveryReview?.rating)) ||
+              Number.isFinite(Number(order?.deliveryFeedback?.rating))
+
+            const parsedRating = Number(
+              reviewData?.rating ??
+              feedbackData?.rating ??
+              order?.rating
+            )
+            const rating = Number.isFinite(parsedRating) && parsedRating > 0 ? parsedRating : null
+            const reviewText = String(
+              reviewData?.comment ||
+              reviewData?.text ||
+              feedbackData?.comment ||
+              feedbackData?.text ||
+              ""
+            ).trim()
+
+            if (isDeliverySideFeedback || (!rating && !reviewText)) {
+              return null
+            }
 
             // Count user's orders with this restaurant
             const userOrdersCount = allOrders.filter(o =>
@@ -348,17 +372,14 @@ export default function Feedback() {
               userName: userName,
               userImage: userImage,
               ordersCount: userOrdersCount,
-              rating: rating || 5, // Default to 5 if no rating
+              rating: rating,
               date: formattedDate,
-              reviewText: reviewText,
+              reviewText: reviewText || "Customer shared a review",
               reply: order.review?.reply || order.feedback?.reply || null,
               orderData: order // Keep original order data
             }
           })
-          .filter(review => {
-            // Include reviews that have a rating or have review text (not the default "No review text")
-            return review.rating !== null || (review.reviewText && review.reviewText !== 'No review text')
-          })
+          .filter(Boolean)
 
         // Calculate rating summary
         const ratings = transformedReviews.map(r => r.rating).filter(r => r !== null)
@@ -395,7 +416,7 @@ export default function Feedback() {
     if (!isLoadingRestaurant) {
       fetchReviews()
     }
-  }, [isLoadingRestaurant, restaurantData])
+  }, [isGroceryStore, isLoadingRestaurant, restaurantData])
 
   // Persist reviews to localStorage whenever they change (removed - now done in fetchReviews)
 

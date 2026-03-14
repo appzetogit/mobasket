@@ -81,6 +81,14 @@ const getGroceryCartItemId = (product) => {
   return variantKey ? `${productId}::${variantKey}` : productId;
 };
 
+const isProductOutOfStock = (product) => {
+  if (!product || typeof product !== "object") return false;
+  if (product.inStock === false) return true;
+  if (product.isActive === false) return true;
+  const parsedStock = Number(product.stockQuantity);
+  return Number.isFinite(parsedStock) && parsedStock <= 0;
+};
+
 const formatSavedAddressForHeader = (address) => {
   if (!address || typeof address !== "object") return "";
 
@@ -2115,6 +2123,10 @@ const GroceryPage = () => {
       toast.error("Store is offline or closed. You cannot order right now.");
       return;
     }
+    if (isProductOutOfStock(product)) {
+      toast.error("This item is out of stock.");
+      return;
+    }
 
     const sourcePosition = getSourcePosition(event, product?._id || product?.id);
     const store = resolveStoreObjectFromProduct(product);
@@ -2150,6 +2162,8 @@ const GroceryPage = () => {
       restaurantLocation: product?.storeLocation || product?.storeId?.location || null,
       platform: "mogrocery",
       stockQuantity: product?.stockQuantity,
+      inStock: product?.inStock,
+      isActive: product?.isActive,
     }, sourcePosition);
   };
 
@@ -2831,6 +2845,8 @@ const GroceryPage = () => {
                                       name: product?.name || "Product",
                                       imageUrl: getProductImage(product),
                                       stockQuantity: product?.stockQuantity,
+                                      inStock: product?.inStock,
+                                      isActive: product?.isActive,
                                     },
                                   );
                                 }}
@@ -2854,6 +2870,8 @@ const GroceryPage = () => {
                                       name: product?.name || "Product",
                                       imageUrl: getProductImage(product),
                                       stockQuantity: product?.stockQuantity,
+                                      inStock: product?.inStock,
+                                      isActive: product?.isActive,
                                     },
                                   );
                                 }}
@@ -3110,6 +3128,8 @@ const GroceryPage = () => {
                                     name: product?.name || "Product",
                                     imageUrl: getProductImage(product),
                                     stockQuantity: product?.stockQuantity,
+                                      inStock: product?.inStock,
+                                      isActive: product?.isActive,
                                   },
                                 );
                               }}
@@ -3133,6 +3153,8 @@ const GroceryPage = () => {
                                     name: product?.name || "Product",
                                     imageUrl: getProductImage(product),
                                     stockQuantity: product?.stockQuantity,
+                                      inStock: product?.inStock,
+                                      isActive: product?.isActive,
                                   },
                                 );
                               }}
@@ -3452,6 +3474,8 @@ const GroceryPage = () => {
                                           name: product?.name || "Product",
                                           imageUrl: getProductImage(product),
                                           stockQuantity: product?.stockQuantity,
+                                      inStock: product?.inStock,
+                                      isActive: product?.isActive,
                                         },
                                       );
                                     }}
@@ -3475,6 +3499,8 @@ const GroceryPage = () => {
                                           name: product?.name || "Product",
                                           imageUrl: getProductImage(product),
                                           stockQuantity: product?.stockQuantity,
+                                      inStock: product?.inStock,
+                                      isActive: product?.isActive,
                                         },
                                       );
                                     }}
@@ -3621,6 +3647,8 @@ const GroceryPage = () => {
                                           name: product?.name || "Product",
                                           imageUrl: getProductImage(product),
                                           stockQuantity: product?.stockQuantity,
+                                      inStock: product?.inStock,
+                                      isActive: product?.isActive,
                                         },
                                       );
                                     }}
@@ -3644,6 +3672,8 @@ const GroceryPage = () => {
                                           name: product?.name || "Product",
                                           imageUrl: getProductImage(product),
                                           stockQuantity: product?.stockQuantity,
+                                      inStock: product?.inStock,
+                                      isActive: product?.isActive,
                                         },
                                       );
                                     }}
@@ -3764,5 +3794,4 @@ const GroceryPage = () => {
 };
 
 export default GroceryPage;
-
 

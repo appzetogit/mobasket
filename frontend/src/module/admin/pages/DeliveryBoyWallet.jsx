@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { Search, PiggyBank, Loader2, Package } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
@@ -9,6 +10,7 @@ const formatCurrency = (amount) => {
 }
 
 export default function DeliveryBoyWallet() {
+  const navigate = useNavigate()
   const [wallets, setWallets] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -16,6 +18,11 @@ export default function DeliveryBoyWallet() {
   const [total, setTotal] = useState(0)
   const [pages, setPages] = useState(1)
   const limit = 20
+
+  const openDeliveryProfile = (deliveryIdentifier) => {
+    if (!deliveryIdentifier) return
+    navigate(`/admin/delivery-partners?viewId=${encodeURIComponent(String(deliveryIdentifier))}`)
+  }
 
   const fetchWallets = async (overrides = {}) => {
     const p = overrides.page ?? page
@@ -80,7 +87,7 @@ export default function DeliveryBoyWallet() {
             <div className="relative flex-1 sm:flex-initial min-w-[200px] max-w-xs">
               <input
                 type="text"
-                placeholder="Search by name, ID, phone"
+                placeholder='Search by name,id'
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 pr-4 py-2.5 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
@@ -127,7 +134,18 @@ export default function DeliveryBoyWallet() {
                       <tr key={w.walletId || w.deliveryId} className="hover:bg-slate-50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">{(page - 1) * limit + i + 1}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">{w.name || "—"}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">{w.deliveryIdString || "—"}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">
+                          {w.deliveryIdString || w.deliveryPartnerId || w.deliveryId ? (
+                            <button
+                              type="button"
+                              onClick={() => openDeliveryProfile(w.deliveryPartnerId || w.deliveryId || w.deliveryIdString)}
+                              className="text-blue-600 hover:text-blue-700 underline"
+                              title="Open delivery partner profile"
+                            >
+                              {w.deliveryIdString || w.deliveryId || String(w.deliveryPartnerId)}
+                            </button>
+                          ) : "—"}
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">{formatCurrency(w.remainingCashLimit)}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">{formatCurrency(w.pocketBalance)}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">{formatCurrency(w.cashCollected)}</td>

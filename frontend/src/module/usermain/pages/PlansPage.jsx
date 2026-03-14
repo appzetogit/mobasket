@@ -222,8 +222,10 @@ const PlansPage = () => {
   };
 
   const openPlan = (plan) => {
+    const hasVegProducts = Array.isArray(plan?.vegProducts) && plan.vegProducts.length > 0;
+    const defaultMealType = hasVegProducts ? "veg" : "nonVeg";
     setSelectedPlan(plan);
-    setSelectedMealType("veg");
+    setSelectedMealType(defaultMealType);
     setSelectedOfferIds([]);
     setSubcategoryProductBuckets([]);
     setSelectedProductBySubcategory({});
@@ -483,6 +485,12 @@ const PlansPage = () => {
     const nonVegProducts = Array.isArray(selectedPlan.nonVegProducts) ? selectedPlan.nonVegProducts : [];
     return vegProducts.length > 0 || nonVegProducts.length > 0;
   }, [selectedPlan]);
+  const selectedPlanHasBothMealTypes = useMemo(() => {
+    if (!selectedPlan) return false;
+    const vegProducts = Array.isArray(selectedPlan.vegProducts) ? selectedPlan.vegProducts : [];
+    const nonVegProducts = Array.isArray(selectedPlan.nonVegProducts) ? selectedPlan.nonVegProducts : [];
+    return vegProducts.length > 0 && nonVegProducts.length > 0;
+  }, [selectedPlan]);
 
   const selectedPlanProducts = useMemo(() => {
     if (!selectedPlan) return [];
@@ -570,7 +578,7 @@ const PlansPage = () => {
     const groceryStores = restaurants.filter((r) => r?.platform === "mogrocery" && r?.isActive);
 
     if (!groceryStores.length) {
-      throw new Error("No active grocery store found.");
+      throw new Error("No active grocery store found in your zone.");
     }
 
     const prioritizedStores = [
@@ -603,7 +611,12 @@ const PlansPage = () => {
     }
 
     if (!groceryLikeStore) {
-      throw new Error("All stores are currently offline. Please try again later.");
+      // Fallback to first active store so plan purchase does not fail on strict availability checks.
+      groceryLikeStore = prioritizedStores[0] || groceryStores[0] || null;
+    }
+
+    if (!groceryLikeStore) {
+      throw new Error("Unable to resolve a grocery store right now. Please try again.");
     }
 
     const restaurantId = groceryLikeStore?._id || groceryLikeStore?.restaurantId;
@@ -1064,24 +1077,26 @@ const PlansPage = () => {
                     <ShoppingBag size={18} className="text-yellow-500" />
                     <h3 className="font-bold text-slate-900 text-lg">Products Included</h3>
                   </div>
-                  <div className="mb-4 inline-flex rounded-xl border border-slate-200 p-1 bg-slate-50">
-                    <button
-                      type="button"
-                      className={`px-4 py-1.5 text-sm font-semibold rounded-lg transition ${selectedMealType === "veg" ? "bg-green-600 text-white" : "text-slate-600"
-                        }`}
-                      onClick={() => setSelectedMealType("veg")}
-                    >
-                      Veg
-                    </button>
-                    <button
-                      type="button"
-                      className={`px-4 py-1.5 text-sm font-semibold rounded-lg transition ${selectedMealType === "nonVeg" ? "bg-rose-600 text-white" : "text-slate-600"
-                        }`}
-                      onClick={() => setSelectedMealType("nonVeg")}
-                    >
-                      Non-veg
-                    </button>
-                  </div>
+                  {selectedPlanHasTypedProducts && selectedPlanHasBothMealTypes && (
+                    <div className="mb-4 inline-flex rounded-xl border border-slate-200 p-1 bg-slate-50">
+                      <button
+                        type="button"
+                        className={`px-4 py-1.5 text-sm font-semibold rounded-lg transition ${selectedMealType === "veg" ? "bg-green-600 text-white" : "text-slate-600"
+                          }`}
+                        onClick={() => setSelectedMealType("veg")}
+                      >
+                        Veg
+                      </button>
+                      <button
+                        type="button"
+                        className={`px-4 py-1.5 text-sm font-semibold rounded-lg transition ${selectedMealType === "nonVeg" ? "bg-rose-600 text-white" : "text-slate-600"
+                          }`}
+                        onClick={() => setSelectedMealType("nonVeg")}
+                      >
+                        Non-veg
+                      </button>
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-3">
                     {displayedProducts.length > 0 ? (
                       displayedProducts.map((prod, idx) => (

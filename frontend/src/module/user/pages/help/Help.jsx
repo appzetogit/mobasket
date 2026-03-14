@@ -48,7 +48,7 @@ const helpCategories = [
       },
       {
         question: "What is the minimum order amount?",
-        answer: "The minimum order amount varies by restaurant, typically ranging from $10 to $15. This information is displayed on each restaurant's page."
+        answer: "The minimum order amount varies by restaurant, typically ranging from Rs 100 to Rs 300. This information is displayed on each restaurant's page."
       }
     ]
   },
@@ -92,7 +92,7 @@ const helpCategories = [
       },
       {
         question: "How much is the delivery fee?",
-        answer: "Delivery fees vary by restaurant and distance, typically ranging from $2.99 to $5.99. The exact fee is shown before you place your order."
+        answer: "Delivery fees vary by restaurant and distance, typically ranging from Rs 20 to Rs 80. The exact fee is shown before you place your order."
       },
       {
         question: "Can I schedule a delivery for later?",
@@ -239,7 +239,7 @@ export default function Help() {
         {/* Quick Actions */}
         <ScrollReveal delay={0.2}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5 lg:gap-6">
-            <Link to="/user/orders">
+            <Link to="/orders">
                 <CardContent className="p-4 md:p-5 lg:p-6">
                   <div className="flex items-center gap-3 md:gap-4">
                     <div className="p-2 md:p-3 bg-yellow-100 rounded-lg">
@@ -252,7 +252,7 @@ export default function Help() {
                   </div>
                 </CardContent>
             </Link>
-            <Link to="/user/profile">
+            <Link to="/profile">
                 <CardContent className="p-4 md:p-5 lg:p-6">
                   <div className="flex items-center gap-3 md:gap-4">
                     <div className="p-2 md:p-3 bg-blue-100 rounded-lg">
@@ -265,6 +265,7 @@ export default function Help() {
                   </div>
                 </CardContent>
             </Link>
+            <a href="#contact-support" className="block">
               <CardContent className="p-4 md:p-5 lg:p-6">
                 <div className="flex items-center gap-3 md:gap-4">
                   <div className="p-2 md:p-3 bg-green-100 rounded-lg">
@@ -276,6 +277,7 @@ export default function Help() {
                   </div>
                 </div>
               </CardContent>
+            </a>
           </div>
         </ScrollReveal>
 
@@ -300,7 +302,7 @@ export default function Help() {
                 </CardContent>
               </Card>
             ) : (
-              filteredCategories.map((category, categoryIndex) => {
+              filteredCategories.map((category) => {
                 const Icon = category.icon
                 const isExpanded = expandedCategory === category.id
 
@@ -340,6 +342,7 @@ export default function Help() {
                             >
                               <button
                                 onClick={() => toggleQuestion(questionIndex)}
+                                className="w-full text-left flex items-center justify-between gap-3 px-4 py-3 md:px-5 md:py-3.5 bg-white dark:bg-[#0f172a] dark:text-slate-100"
                               >
                                 <span className="font-semibold pr-4">{topic.question}</span>
                                 {isQuestionExpanded ? (
@@ -349,7 +352,7 @@ export default function Help() {
                                 )}
                               </button>
                               {isQuestionExpanded && (
-                                <div className="p-4 text-muted-foreground border-t bg-muted/30">
+                                <div className="p-4 md:p-5 text-muted-foreground border-t bg-muted/30 dark:bg-slate-900/40">
                                   <p>{topic.answer}</p>
                                 </div>
                               )}
@@ -367,7 +370,7 @@ export default function Help() {
 
         {/* Contact Support Section */}
         <ScrollReveal delay={0.4}>
-          <Card className="bg-gradient-to-br from-yellow-50 to-orange-50 border-yellow-200 shadow-lg">
+          <Card id="contact-support" className="bg-gradient-to-br from-yellow-50 to-orange-50 border-yellow-200 shadow-lg">
             <CardHeader className="p-4 md:p-5 lg:p-6">
               <CardTitle className="text-xl md:text-2xl lg:text-3xl flex items-center gap-2">
                 <MessageCircle className="h-5 w-5 md:h-6 md:w-6 text-primary-orange" />
@@ -379,7 +382,7 @@ export default function Help() {
             </CardHeader>
             <CardContent className="space-y-4 md:space-y-5 lg:space-y-6 p-4 md:p-5 lg:p-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-5 lg:gap-6">
-                <div className="flex items-start gap-3 p-4 bg-white rounded-lg">
+                <div className="flex items-start gap-3 p-4 bg-white dark:bg-[#0f172a] rounded-lg">
                   <div className="p-2 bg-blue-100 rounded-lg">
                     <Phone className="h-5 w-5 text-blue-600" />
                   </div>
@@ -389,14 +392,14 @@ export default function Help() {
                       Call us anytime
                     </p>
                     <a
-                      href="tel:+1-800-123-4567"
+                      href="tel:+91-7223077890"
                       className="text-sm text-primary hover:underline font-medium"
                     >
-                      +1 (800) 123-4567
+                      +91 72230 77890
                     </a>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-4 bg-white rounded-lg">
+                <div className="flex items-start gap-3 p-4 bg-white dark:bg-[#0f172a] rounded-lg">
                   <div className="p-2 bg-green-100 rounded-lg">
                     <Mail className="h-5 w-5 text-green-600" />
                   </div>
@@ -413,7 +416,7 @@ export default function Help() {
                     </a>
                   </div>
                 </div>
-                <div className="flex items-start gap-3 p-4 bg-white rounded-lg">
+                <div className="flex items-start gap-3 p-4 bg-white dark:bg-[#0f172a] rounded-lg">
                   <div className="p-2 bg-purple-100 rounded-lg">
                     <MessageCircle className="h-5 w-5 text-purple-600" />
                   </div>
@@ -426,7 +429,7 @@ export default function Help() {
                       variant="outline"
                       size="sm"
                       className="mt-1"
-                      onClick={() => alert("Live chat would open here")}
+                      onClick={() => window.open("https://wa.me/917223077890", "_blank", "noopener,noreferrer")}
                     >
                       Start Chat
                     </Button>

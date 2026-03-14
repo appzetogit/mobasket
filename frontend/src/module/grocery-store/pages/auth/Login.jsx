@@ -16,6 +16,7 @@ import { API_ENDPOINTS } from "@/lib/api/config"
 import { firebaseAuth, googleProvider, ensureFirebaseAuthInitialized } from "@/lib/firebase"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 import { loadBusinessSettings } from "@/lib/utils/businessSettings"
+import { isModuleAuthenticated } from "@/lib/utils/auth"
 import PolicyModal from "@/components/legal/PolicyModal"
 import { redirectGroceryStoreAfterAuth } from "../../utils/onboardingUtils"
 
@@ -77,9 +78,7 @@ export default function GroceryStoreLogin() {
   })
 
   useEffect(() => {
-    const hasAccessToken = localStorage.getItem("grocery-store_accessToken")
-    const hasRefreshToken = localStorage.getItem("grocery-store_refreshToken")
-    if (hasAccessToken || hasRefreshToken) {
+    if (isModuleAuthenticated("grocery-store")) {
       const from = location.state?.from?.pathname || location.state?.from || null
       redirectGroceryStoreAfterAuth(navigate, { replace: true, redirectTo: from })
     }

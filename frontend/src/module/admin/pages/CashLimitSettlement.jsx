@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react"
+import { useNavigate } from "react-router-dom"
 import { Search, Receipt, Loader2, Package } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
@@ -25,6 +26,7 @@ const formatDate = (d) => {
 }
 
 export default function CashLimitSettlement() {
+  const navigate = useNavigate()
   const [transactions, setTransactions] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -32,6 +34,11 @@ export default function CashLimitSettlement() {
   const [total, setTotal] = useState(0)
   const [pages, setPages] = useState(1)
   const limit = 20
+
+  const openDeliveryProfile = (deliveryIdentifier) => {
+    if (!deliveryIdentifier) return
+    navigate(`/admin/delivery-partners?viewId=${encodeURIComponent(String(deliveryIdentifier))}`)
+  }
 
   const fetchData = async (overrides = {}) => {
     const p = overrides.page ?? page
@@ -96,7 +103,7 @@ export default function CashLimitSettlement() {
             <div className="relative flex-1 sm:flex-initial min-w-[200px] max-w-xs">
               <input
                 type="text"
-                placeholder="Search by name, ID, phone"
+                placeholder='Search by name,id'
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 pr-4 py-2.5 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
@@ -148,7 +155,16 @@ export default function CashLimitSettlement() {
                           {tx.deliveryName || "—"}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-700">
-                          {tx.deliveryIdString || "—"}
+                          {tx.deliveryIdString || tx.deliveryId || tx.deliveryPartnerId ? (
+                            <button
+                              type="button"
+                              onClick={() => openDeliveryProfile(tx.deliveryPartnerId || tx.deliveryId || tx.deliveryIdString)}
+                              className="text-blue-600 hover:text-blue-700 underline font-medium"
+                              title="Open delivery partner profile"
+                            >
+                              {tx.deliveryIdString || tx.deliveryId || String(tx.deliveryPartnerId)}
+                            </button>
+                          ) : "—"}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-700">
                           {formatCurrency(tx.amount)}

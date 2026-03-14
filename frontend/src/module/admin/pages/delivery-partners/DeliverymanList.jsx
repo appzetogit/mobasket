@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef } from "react"
+import { useSearchParams } from "react-router-dom"
 import { Search, Download, ChevronDown, Eye, Trash2, User, Star, ArrowUpDown, Settings, FileText, FileSpreadsheet, Loader2, Check, Columns, ExternalLink, Calendar, MapPin, CreditCard, Mail, Phone, Bike, FileCheck } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -6,6 +7,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { exportDeliverymenToExcel, exportDeliverymenToPDF } from "../../components/deliveryman/deliverymanExportUtils"
 
 export default function DeliverymanList() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const handledViewIdRef = useRef("")
   const [searchQuery, setSearchQuery] = useState("")
   const [deliverymen, setDeliverymen] = useState([])
   const [loading, setLoading] = useState(true)
@@ -89,6 +92,39 @@ export default function DeliverymanList() {
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery])
+
+  useEffect(() => {
+    const viewId = searchParams.get("viewId")
+    if (!viewId || handledViewIdRef.current === viewId || loading) return
+
+    const openFromQuery = async () => {
+      try {
+        handledViewIdRef.current = viewId
+        const match = deliverymen.find((dm) =>
+          String(dm?._id || "") === viewId ||
+          String(dm?.deliveryId || "") === viewId ||
+          String(dm?.deliveryIdString || "") === viewId
+        )
+        if (match?._id) {
+          await handleView(match)
+        } else {
+          const response = await adminAPI.getDeliveryPartnerById(viewId)
+          const detail = response?.data?.data?.delivery
+          if (detail) {
+            setViewDetails(detail)
+            setIsViewOpen(true)
+          }
+        }
+      } catch (error) {
+        console.error("Error opening delivery profile from query:", error)
+      } finally {
+        const next = new URLSearchParams(searchParams)
+        next.delete("viewId")
+        setSearchParams(next, { replace: true })
+      }
+    }
+    openFromQuery()
+  }, [searchParams, setSearchParams, deliverymen, loading])
 
   const filteredDeliverymen = useMemo(() => {
     // Backend already handles search, but we can do client-side filtering if needed
@@ -198,7 +234,7 @@ export default function DeliverymanList() {
               <div className="relative flex-1 sm:flex-initial min-w-[250px]">
                 <input
                   type="text"
-                  placeholder="Search by name or restaur..."
+                  placeholder='Search by name,id'
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 pr-4 py-2.5 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"

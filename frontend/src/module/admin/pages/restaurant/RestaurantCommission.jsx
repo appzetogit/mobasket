@@ -10,7 +10,8 @@ import { API_BASE_URL } from "@/lib/api/config"
 import { toast } from "sonner"
 
 export default function RestaurantCommission({ platformOverride = "mofood", entityLabel = "Restaurant" }) {
-  const [searchQuery, setSearchQuery] = useState("")
+  const [commissionSearchQuery, setCommissionSearchQuery] = useState("")
+  const [restaurantSearchQuery, setRestaurantSearchQuery] = useState("")
   const [commissions, setCommissions] = useState([])
   const [approvedRestaurants, setApprovedRestaurants] = useState([])
   const [loading, setLoading] = useState(true)
@@ -30,7 +31,7 @@ export default function RestaurantCommission({ platformOverride = "mofood", enti
     notes: ""
   })
   const [formErrors, setFormErrors] = useState({})
-  const [visibleColumns, setVisibleColumns] = useState({
+  const [visibleColumns] = useState({
     si: true,
     restaurant: true,
     restaurantId: true,
@@ -40,30 +41,30 @@ export default function RestaurantCommission({ platformOverride = "mofood", enti
   })
 
   const filteredCommissions = useMemo(() => {
-    if (!searchQuery.trim()) {
+    if (!commissionSearchQuery.trim()) {
       return commissions
     }
     
-    const query = searchQuery.toLowerCase().trim()
+    const query = commissionSearchQuery.toLowerCase().trim()
     return commissions.filter(commission =>
       commission.restaurantName?.toLowerCase().includes(query) ||
       commission.restaurantId?.toLowerCase().includes(query) ||
       commission.restaurant?.name?.toLowerCase().includes(query)
     )
-  }, [commissions, searchQuery])
+  }, [commissions, commissionSearchQuery])
 
   const filteredRestaurants = useMemo(() => {
-    if (!searchQuery.trim()) {
+    if (!restaurantSearchQuery.trim()) {
       return approvedRestaurants
     }
     
-    const query = searchQuery.toLowerCase().trim()
+    const query = restaurantSearchQuery.toLowerCase().trim()
     return approvedRestaurants.filter(restaurant =>
       restaurant.name?.toLowerCase().includes(query) ||
       restaurant.restaurantId?.toLowerCase().includes(query) ||
       restaurant.ownerName?.toLowerCase().includes(query)
     )
-  }, [approvedRestaurants, searchQuery])
+  }, [approvedRestaurants, restaurantSearchQuery])
 
   // Fetch data on component mount
   useEffect(() => {
@@ -165,6 +166,7 @@ export default function RestaurantCommission({ platformOverride = "mofood", enti
       notes: ""
     })
     setFormErrors({})
+    setRestaurantSearchQuery("")
     setIsRestaurantSelectOpen(true)
   }
 
@@ -312,15 +314,6 @@ export default function RestaurantCommission({ platformOverride = "mofood", enti
     }
   }
 
-  const columnsConfig = {
-    si: "Serial Number",
-    restaurant: `${entityLabel} Name`,
-    restaurantId: `${entityLabel} ID`,
-    defaultCommission: "Default Commission",
-    status: "Status",
-    actions: "Actions",
-  }
-
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
@@ -349,8 +342,8 @@ export default function RestaurantCommission({ platformOverride = "mofood", enti
               <input
                 type="text"
                 placeholder={`Ex: Search by ${entityLabel.toLowerCase()} name or ID`}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={commissionSearchQuery}
+                onChange={(e) => setCommissionSearchQuery(e.target.value)}
                 className="pl-10 pr-4 py-2.5 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
               />
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -494,8 +487,8 @@ export default function RestaurantCommission({ platformOverride = "mofood", enti
               <input
                 type="text"
                 placeholder={`Search ${entityLabel.toLowerCase()}s...`}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                value={restaurantSearchQuery}
+                onChange={(e) => setRestaurantSearchQuery(e.target.value)}
                 className="pl-10 pr-4 py-2 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -618,12 +611,12 @@ export default function RestaurantCommission({ platformOverride = "mofood", enti
 
       {/* Delete Confirmation Dialog */}
       <Dialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
-        <DialogContent className="max-w-md bg-white">
+        <DialogContent className="max-w-md bg-white p-6">
           <DialogHeader>
             <DialogTitle>Delete {entityLabel} Commission</DialogTitle>
           </DialogHeader>
           <div className="py-4">
-            <p className="text-sm text-slate-700">
+            <p className="rounded-md bg-slate-50 p-3 text-sm text-slate-700">
               Are you sure you want to delete commission for "{selectedCommission?.restaurantName || selectedCommission?.restaurant?.name}"? This action cannot be undone.
             </p>
           </div>

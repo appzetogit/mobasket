@@ -261,6 +261,14 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     })
   }
 
+  const clearAllFilters = () => {
+    setSearchQuery("")
+    setActiveFilters(new Set())
+    setSortBy(null)
+    setSelectedCuisine(null)
+    setCurrentPage(1)
+  }
+
   // Fetch categories from API
   useEffect(() => {
     fetchCategories()
@@ -1127,6 +1135,14 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
               <Download className="w-4 h-4" />
               <span>Export</span>
               <ChevronDown className="w-3 h-3" />
+            </button>
+
+            <button
+              type="button"
+              onClick={clearAllFilters}
+              className="px-4 py-2.5 text-sm font-medium rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-all"
+            >
+              Remove All Filters
             </button>
 
             <button 

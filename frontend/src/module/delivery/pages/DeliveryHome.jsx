@@ -84,6 +84,7 @@ import {
 
 
   AlertCircle,
+  Star,
 
 
 } from "lucide-react"
@@ -15911,6 +15912,9 @@ export default function DeliveryHome() {
 
 
         const pendingOrders = orders.filter(order => {
+          if (zoneCheckReady && isOutOfZone) {
+            return false
+          }
 
 
           const orderStatus = order.status
@@ -35356,19 +35360,9 @@ export default function DeliveryHome() {
                 >
 
 
-                  {star <= customerRating ? (
-
-
-                    <span className="text-yellow-400">*</span>
-
-
-                  ) : (
-
-
-                    <span className="text-gray-300">*</span>
-
-
-                  )}
+                  <Star
+                    className={`w-9 h-9 ${star <= customerRating ? "text-yellow-400 fill-yellow-400" : "text-gray-300"}`}
+                  />
 
 
                 </button>
@@ -35551,7 +35545,7 @@ export default function DeliveryHome() {
                       if (earnings > 0) {
 
 
-                        toast.success(`?${earnings.toFixed(2)} added to your wallet! ??`)
+                        toast.success(`Rs ${earnings.toFixed(2)} added to your wallet!`)
 
 
                       }

@@ -8,9 +8,16 @@ import { buildImageFallback } from "@/lib/utils/imageFallback"
 import { toast } from "sonner"
 
 export default function RestaurantReport({ platformOverride = "mofood", entityLabel = "Restaurant" }) {
+  const [searchInput, setSearchInput] = useState("")
   const [searchQuery, setSearchQuery] = useState("")
   const [restaurants, setRestaurants] = useState([])
   const [loading, setLoading] = useState(true)
+  const [draftFilters, setDraftFilters] = useState({
+    zone: "All Zones",
+    all: "All",
+    type: "All types",
+    time: "All Time",
+  })
   const [filters, setFilters] = useState({
     zone: "All Zones",
     all: "All",
@@ -81,12 +88,15 @@ export default function RestaurantReport({ platformOverride = "mofood", entityLa
   const totalRestaurants = filteredRestaurants.length
 
   const handleReset = () => {
-    setFilters({
+    const resetFilters = {
       zone: "All Zones",
       all: "All",
       type: "All types",
       time: "All Time",
-    })
+    }
+    setDraftFilters(resetFilters)
+    setFilters(resetFilters)
+    setSearchInput("")
     setSearchQuery("")
   }
 
@@ -117,10 +127,11 @@ export default function RestaurantReport({ platformOverride = "mofood", entityLa
   }
 
   const handleFilterApply = () => {
+    setFilters({ ...draftFilters })
     toast.success("Filters applied")
   }
 
-  const activeFiltersCount = (filters.zone !== "All Zones" ? 1 : 0) + (filters.all !== "All" ? 1 : 0) + (filters.type !== "All types" ? 1 : 0) + (filters.time !== "All Time" ? 1 : 0)
+  const activeFiltersCount = (draftFilters.zone !== "All Zones" ? 1 : 0) + (draftFilters.all !== "All" ? 1 : 0) + (draftFilters.type !== "All types" ? 1 : 0) + (draftFilters.time !== "All Time" ? 1 : 0)
 
   const renderStars = (rating, reviews) => {
     const rawRating = Number(rating || 0)
@@ -176,8 +187,8 @@ export default function RestaurantReport({ platformOverride = "mofood", entityLa
                   Zone
                 </label>
                 <select
-                  value={filters.zone}
-                  onChange={(e) => setFilters(prev => ({ ...prev, zone: e.target.value }))}
+                  value={draftFilters.zone}
+                  onChange={(e) => setDraftFilters(prev => ({ ...prev, zone: e.target.value }))}
                   className="w-full px-4 py-2.5 pr-8 text-sm rounded-lg border border-slate-300 bg-white text-slate-700 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="All Zones">All Zones</option>
@@ -193,8 +204,8 @@ export default function RestaurantReport({ platformOverride = "mofood", entityLa
                   All
                 </label>
                 <select
-                  value={filters.all}
-                  onChange={(e) => setFilters(prev => ({ ...prev, all: e.target.value }))}
+                  value={draftFilters.all}
+                  onChange={(e) => setDraftFilters(prev => ({ ...prev, all: e.target.value }))}
                   className="w-full px-4 py-2.5 pr-8 text-sm rounded-lg border border-slate-300 bg-white text-slate-700 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="All">All</option>
@@ -209,8 +220,8 @@ export default function RestaurantReport({ platformOverride = "mofood", entityLa
                   Type
                 </label>
                 <select
-                  value={filters.type}
-                  onChange={(e) => setFilters(prev => ({ ...prev, type: e.target.value }))}
+                  value={draftFilters.type}
+                  onChange={(e) => setDraftFilters(prev => ({ ...prev, type: e.target.value }))}
                   className="w-full px-4 py-2.5 pr-8 text-sm rounded-lg border border-slate-300 bg-white text-slate-700 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="All types">All types</option>
@@ -225,8 +236,8 @@ export default function RestaurantReport({ platformOverride = "mofood", entityLa
                   Time
                 </label>
                 <select
-                  value={filters.time}
-                  onChange={(e) => setFilters(prev => ({ ...prev, time: e.target.value }))}
+                  value={draftFilters.time}
+                  onChange={(e) => setDraftFilters(prev => ({ ...prev, time: e.target.value }))}
                   className="w-full px-4 py-2.5 pr-8 text-sm rounded-lg border border-slate-300 bg-white text-slate-700 appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
                   <option value="All Time">All Time</option>
@@ -275,11 +286,12 @@ export default function RestaurantReport({ platformOverride = "mofood", entityLa
                 <input
                   type="text"
                   placeholder="Ex: search restaurant nam"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
                       e.preventDefault()
+                      setSearchQuery(searchInput.trim())
                     }
                   }}
                   className="pl-4 pr-10 py-2.5 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -327,7 +339,7 @@ export default function RestaurantReport({ platformOverride = "mofood", entityLa
 
           {/* Table */}
           <div className="overflow-x-auto">
-            <table className="w-full">
+            <table className="w-full min-w-[980px]">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
                   <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">

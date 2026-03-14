@@ -56,7 +56,9 @@ export default function CreateSupportTicket() {
       // Keep payload minimal to stay compatible with strict backend validators.
       const requestData = {
         subject: formData.subject.trim(),
-        description: formData.description.trim()
+        description: formData.description.trim(),
+        category: formData.category,
+        priority: formData.priority
       }
       
       console.log('Sending ticket creation request:', requestData)

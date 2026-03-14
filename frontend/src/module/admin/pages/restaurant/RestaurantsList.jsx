@@ -405,7 +405,10 @@ export default function RestaurantsList() {
       result = result.filter(restaurant =>
         restaurant.name.toLowerCase().includes(query) ||
         restaurant.ownerName.toLowerCase().includes(query) ||
-        restaurant.ownerPhone.includes(query)
+        restaurant.ownerPhone.includes(query) ||
+        String(restaurant?.originalData?.restaurantId || "").toLowerCase().includes(query) ||
+        String(restaurant?.originalData?._id || "").toLowerCase().includes(query) ||
+        formatRestaurantId(restaurant?.originalData?.restaurantId || restaurant?.originalData?._id || restaurant?._id || restaurant?.id).toLowerCase().includes(query)
       )
     }
 
@@ -853,7 +856,12 @@ export default function RestaurantsList() {
                 ownerName: updatedRestaurant?.ownerName || restaurant.ownerName,
                 ownerPhone: updatedRestaurant?.ownerPhone || updatedRestaurant?.phone || restaurant.ownerPhone,
                 zone: updatedRestaurant?.location?.area || updatedRestaurant?.location?.city || restaurant.zone,
+                cuisine:
+                  Array.isArray(updatedRestaurant?.cuisines) && updatedRestaurant.cuisines.length > 0
+                    ? updatedRestaurant.cuisines[0]
+                    : (updatedRestaurant?.cuisine || restaurant.cuisine),
                 logo: updatedRestaurant?.profileImage?.url || updatedRestaurant?.logo || restaurant.logo,
+                address: formatRestaurantAddress(updatedRestaurant || restaurant.originalData),
                 originalData: updatedRestaurant || restaurant.originalData,
               }
             : restaurant
@@ -861,7 +869,12 @@ export default function RestaurantsList() {
       )
 
       if (selectedRestaurant?._id === editingRestaurant._id) {
-        setRestaurantDetails(updatedRestaurant || restaurantDetails)
+        const normalizedUpdated = normalizeRestaurantRecord(updatedRestaurant || restaurantDetails || {})
+        setRestaurantDetails(normalizedUpdated)
+        setSelectedRestaurant((prevSelected) => ({
+          ...(prevSelected || {}),
+          ...normalizedUpdated,
+        }))
       }
 
       setEditRestaurantDialog(false)
@@ -1100,7 +1113,7 @@ export default function RestaurantsList() {
               <div className="relative flex-1 sm:flex-initial min-w-[250px]">
                 <input
                   type="text"
-                  placeholder={`Ex: search by ${entityLabel} name`}
+                  placeholder={`Search by ${entityLabel} name`}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 pr-4 py-2.5 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"

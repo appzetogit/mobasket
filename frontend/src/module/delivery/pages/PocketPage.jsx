@@ -189,14 +189,16 @@ export default function PocketPage() {
     }
   }, [walletState, balances])
 
-  // Calculate weekly earnings from wallet transactions (payment + earning_addon bonus)
-  // Include both payment and earning_addon transactions in weekly earnings
+  // Calculate weekly earnings from wallet transactions (payment + earning_addon + bonus)
   const weeklyEarnings = walletState?.transactions
     ?.filter(t => {
-      // Include both payment and earning_addon transactions
+      // Include payment and bonus-like earnings transactions
       const transactionType = normalizeTransactionType(t)
       const transactionStatus = normalizeTransactionStatus(t)
-      if ((transactionType !== 'payment' && transactionType !== 'earning_addon') || !isCompletedLikeStatus(transactionStatus)) return false
+      if (
+        (transactionType !== "payment" && transactionType !== "earning_addon" && transactionType !== "bonus") ||
+        !isCompletedLikeStatus(transactionStatus)
+      ) return false
       const now = new Date()
       const startOfWeek = new Date(now)
       startOfWeek.setDate(now.getDate() - now.getDay())
@@ -312,8 +314,9 @@ export default function PocketPage() {
 
     return walletState.transactions
       .filter(t => {
-        // Only count earning_addon type transactions
-        if (t.type !== 'earning_addon' || t.status !== 'Completed') return false
+        // Only count bonus-like transactions for active offer progress
+        const normalizedType = normalizeTransactionType(t)
+        if ((normalizedType !== "earning_addon" && normalizedType !== "bonus") || !isCompletedLikeStatus(normalizeTransactionStatus(t))) return false
 
         // Filter by date range if offer has dates
         if (startDate || endDate) {

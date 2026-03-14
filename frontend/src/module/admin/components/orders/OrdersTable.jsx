@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react"
-import { Eye, Printer, ArrowUpDown, ArrowUp, ArrowDown, Loader2, CheckCircle2, XCircle, BellRing, Info, Trash2 } from "lucide-react"
+import { Eye, Download, ArrowUpDown, ArrowUp, ArrowDown, Loader2, CheckCircle2, XCircle, BellRing, Info, Trash2 } from "lucide-react"
 
 const getStatusColor = (orderStatus, isGrocery = false) => {
   // Grocery (Blinkit-style) status colors
@@ -506,9 +506,9 @@ export default function OrdersTable({
                       <button
                         onClick={() => onPrintOrder(order)}
                         className="p-1.5 rounded text-blue-600 hover:bg-blue-50 transition-colors"
-                        title="Print Order"
+                        title="Download Order"
                       >
-                        <Printer className="w-4 h-4" />
+                        <Download className="w-4 h-4" />
                       </button>
                       {enableApprovalActions &&
                         typeof onAcceptOrder === "function" &&
