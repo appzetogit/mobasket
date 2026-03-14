@@ -1808,7 +1808,7 @@ export default function Home() {
   );
 
   return (
-    <div className="relative min-h-screen bg-white dark:bg-[#0a0a0a] pb-28 md:pb-24">
+    <div className="relative min-h-screen bg-white dark:bg-[#0a0a0a] pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
       {/* Unified Background for Entire Page - Vibrant Food Theme */}
       <div className="absolute top-0 left-0 right-0 bottom-0 pointer-events-none overflow-hidden z-0">
         {/* Main Background */}
@@ -2734,7 +2734,7 @@ export default function Home() {
 
         {/* Restaurants - Enhanced with Animations */}
         <motion.section
-          className="space-y-0 pt-3 sm:pt-4 lg:pt-6 pb-20 md:pb-24"
+          className="space-y-0 pt-3 sm:pt-4 lg:pt-6 pb-4 md:pb-6"
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
           viewport={{ once: true, margin: "-100px" }}
