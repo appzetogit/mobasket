@@ -780,15 +780,15 @@ export default function CreatePercentageDiscount() {
 
 
                       {/* Make Offer Button */}
-                      <div className="-mt-13.5 pt-2">
-                  <button
+                      <div className="pt-2 flex justify-end flex-shrink-0">
+                        <button
                           onClick={() => openMakeOfferModal(item)}
-                          className="ml-32 mb-2 w-30  py-1.5 px-3 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5"
-                  >
+                          className="mb-2 py-1.5 px-3 bg-green-600 text-white rounded-lg text-xs font-semibold hover:bg-green-700 transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap"
+                        >
                           <Tag className="w-3.5 h-3.5" />
                           Make Offer
-                  </button>
-                  </div>
+                        </button>
+                      </div>
                 </div>
               </div>
                 </motion.div>

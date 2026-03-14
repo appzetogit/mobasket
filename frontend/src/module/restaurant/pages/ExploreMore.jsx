@@ -1110,13 +1110,25 @@ export default function ExploreMore() {
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 sticky top-0 bg-white z-10">
                 <h2 className="text-lg font-bold text-gray-900">My profile</h2>
-                <button
-                  onClick={() => setProfileOpen(false)}
-                  className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-                  aria-label="Close"
-                >
-                  <X className="w-5 h-5 text-gray-900" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => {
+                      setProfileOpen(false)
+                      navigate(`${baseRoute}/outlet-info`)
+                    }}
+                    className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                    aria-label="Edit profile"
+                  >
+                    <Edit className="w-5 h-5 text-gray-900" />
+                  </button>
+                  <button
+                    onClick={() => setProfileOpen(false)}
+                    className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                    aria-label="Close"
+                  >
+                    <X className="w-5 h-5 text-gray-900" />
+                  </button>
+                </div>
               </div>
 
               {/* User Information Section */}

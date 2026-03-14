@@ -1928,9 +1928,9 @@ export default function Home() {
         </div>
 
       {/* 2. Search Bar Section (Pinned on mobile scroll) */}
-      <div className="sticky top-[56px] z-40 bg-white py-2 pb-4 px-3 sm:px-6 md:static md:top-auto md:z-auto md:pt-20">
+      <div className="sticky top-[56px] z-40 bg-white dark:bg-[#0a0a0a] py-2 pb-4 px-3 sm:px-6 md:static md:top-auto md:z-auto md:pt-20 border-b border-gray-100 dark:border-gray-800">
         {/* 2. Search Bar Section (White Background) */}
-        <div className="bg-white dark:bg-[#0a0a0a] py-2 pb-4 px-3 sm:px-6 md:pt-20 border-b border-gray-100 dark:border-gray-800">
+        <div className="bg-white dark:bg-[#0a0a0a] py-2 pb-4 px-3 sm:px-6 md:pt-20">
         <div className="w-full lg:max-w-[1100px] mx-auto lg:px-8 xl:px-0 flex items-center gap-3 sm:gap-4 lg:gap-6">
           {/* Enhanced Search Bar */}
           <motion.div
@@ -2027,6 +2027,7 @@ export default function Home() {
           </motion.div>
         </div>
         </div>
+      </div>
       </div>
 
       {/* 3. Hero Banner Carousel Section */}
@@ -2421,20 +2422,6 @@ export default function Home() {
               msOverflowStyle: "none",
             }}
           >
-            {/* Filter Button - Opens Modal */}
-            <motion.div className="flex-shrink-0" whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
-              <Button
-                variant="outline"
-                onClick={() => setIsFilterOpen(true)}
-                className="h-7 sm:h-8 px-2 sm:px-3 rounded-md flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 font-medium transition-all bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-white"
-              >
-                <SlidersHorizontal className="h-3 w-3 sm:h-4 sm:w-4" />
-                <span className="text-xs sm:text-sm font-bold text-black dark:text-white">
-                  Filters
-                </span>
-              </Button>
-            </motion.div>
-
             {/* Filter Buttons */}
             {[
               { id: "delivery-under-30", label: "Under 30 mins" },

@@ -130,24 +130,12 @@ export default function HubMenu() {
   const filterOptions = useMemo(() => [
     { id: "recommended", label: "Recommended", count: calculateFilterCounts.recommended },
     { id: "out-of-stock", label: "Out of stock", count: calculateFilterCounts["out-of-stock"] },
-    { id: "goods", label: "Goods", count: calculateFilterCounts.goods },
-    { id: "services", label: "Services", count: calculateFilterCounts.services },
-    { id: "item-not-live", label: "Item not live", count: calculateFilterCounts["item-not-live"] },
-    { id: "photos-rejected", label: "Photos rejected", count: calculateFilterCounts["photos-rejected"] },
-    { id: "no-photos", label: "No photos", count: calculateFilterCounts["no-photos"] },
-    { id: "under-review", label: "Under review", count: calculateFilterCounts["under-review"] },
-    { id: "without-description", label: "Without description", count: calculateFilterCounts["without-description"] },
-    { id: "without-serving-info", label: "Without serving info", count: calculateFilterCounts["without-serving-info"] },
   ], [calculateFilterCounts])
 
   // Quick filter buttons (horizontally scrollable) - only show filters with count > 0
   const quickFilters = useMemo(() => {
     const filters = [
       { id: "out-of-stock", label: "Out of stock", count: calculateFilterCounts["out-of-stock"] },
-      { id: "no-photos", label: "No photos", count: calculateFilterCounts["no-photos"] },
-      { id: "recommended", label: "Recommended", count: calculateFilterCounts.recommended },
-      { id: "services", label: "Services", count: calculateFilterCounts.services },
-      { id: "photos-rejected", label: "Photos Rejected", count: calculateFilterCounts["photos-rejected"] },
     ]
     // Only return filters with count > 0
     return filters.filter(f => f.count > 0)
@@ -365,9 +353,11 @@ export default function HubMenu() {
       if (showLoading) setLoadingAddons(true)
       const response = await restaurantAPI.getAddons()
       const data = response?.data?.data?.addons || response?.data?.addons || []
-      // Filter to show only approved add-ons
-      const approvedAddons = data.filter(addon => addon.approvalStatus === 'approved')
-      setAddons(approvedAddons)
+      const normalizedAddons = data.map((addon) => ({
+        ...addon,
+        approvalStatus: addon?.approvalStatus || "pending",
+      }))
+      setAddons(normalizedAddons)
     } catch (error) {
       console.error('Error fetching add-ons:', error)
       toast.error('Failed to load add-ons')
@@ -1028,6 +1018,24 @@ export default function HubMenu() {
                 display: none;
               }
             `}</style>
+            <button
+              onClick={() => setIsFilterOpen(true)}
+              className="bg-black p-2 text-white border-2 border-black flex items-center gap-2 px-2 py-1 text-semibold rounded-md text-sm font-medium whitespace-nowrap shrink-0"
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              <span>Filter</span>
+            </button>
+            {activeFilter && !quickFilters.some((filter) => filter.id === activeFilter) && (
+              <button
+                onClick={() => handleFilterSelect(activeFilter)}
+                className="flex items-center gap-2 px-2 py-1 text-semibold border-2 rounded-md text-sm font-medium whitespace-nowrap shrink-0 bg-gray-900 text-white border-gray-900"
+              >
+                <span>{filterOptions.find((filter) => filter.id === activeFilter)?.label || activeFilter}</span>
+                <span className="bg-white/10 border-2 border-white/20 text-white text-xs font-bold p-0.5 py-0.25 rounded-sm">
+                  {filterOptions.find((filter) => filter.id === activeFilter)?.count ?? 0}
+                </span>
+              </button>
+            )}
             {activeFilter && (
               <button
                 onClick={() => {
@@ -1056,13 +1064,6 @@ export default function HubMenu() {
               </button>
 
             ))}
-            <button
-              onClick={() => setIsFilterOpen(true)}
-              className="sticky right-0 z-10 bg-black p-2 text-white border-2 border-black flex items-center gap-2 px-2 py-1 text-semibold rounded-l-lg text-sm font-medium whitespace-nowrap"
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-              <span>Filter</span>
-            </button>
           </div>
         </div>
 
