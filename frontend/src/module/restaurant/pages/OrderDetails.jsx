@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { useNavigate, useParams } from "react-router-dom"
+import { useLocation, useNavigate, useParams } from "react-router-dom"
 import Lenis from "lenis"
 import { jsPDF } from "jspdf"
 import autoTable from "jspdf-autotable"
-import { restaurantAPI } from "@/lib/api"
+import { groceryStoreAPI, restaurantAPI } from "@/lib/api"
 import {
   ArrowLeft,
   Printer,
@@ -137,7 +137,10 @@ const formatPaymentStatusLabel = (rawMethod, rawStatus) => {
 
 export default function OrderDetails() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { orderId } = useParams()
+  const isStore = location.pathname.startsWith("/store")
+  const orderAPI = isStore ? groceryStoreAPI : restaurantAPI
   
   // State for order data
   const [orderData, setOrderData] = useState(null)
@@ -156,7 +159,7 @@ export default function OrderDetails() {
         setLoading(true)
         setError(null)
         
-        const response = await restaurantAPI.getOrderById(orderId)
+        const response = await orderAPI.getOrderById(orderId)
         
         if (response.data?.success && response.data.data?.order) {
           const order = response.data.data.order
@@ -167,7 +170,7 @@ export default function OrderDetails() {
             status: order.status?.toUpperCase() || 'PENDING',
             date: new Date(order.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
             time: new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
-            restaurant: order.restaurantName || 'Restaurant',
+            restaurant: order.restaurantName || (isStore ? 'Store' : 'Restaurant'),
             address: order.address?.street || order.address?.city || 'Address not available',
             customer: {
               name: order.userId?.name || 'Customer',
@@ -222,7 +225,7 @@ export default function OrderDetails() {
     if (orderId) {
       fetchOrder()
     }
-  }, [orderId])
+  }, [isStore, orderAPI, orderId])
 
   // Lenis smooth scrolling
   useEffect(() => {

@@ -788,6 +788,18 @@ export const groceryStoreAPI = {
   updateProfile: (data) => {
     return apiClient.put(API_ENDPOINTS.GROCERY_STORE.PROFILE, data);
   },
+  updateDeliveryStatus: (isAcceptingOrders) => {
+    return apiClient.put(API_ENDPOINTS.GROCERY_STORE.DELIVERY_STATUS, { isAcceptingOrders });
+  },
+  getOutletTimings: () => {
+    return apiClient.get(API_ENDPOINTS.GROCERY_STORE.OUTLET_TIMINGS);
+  },
+  upsertOutletTimings: (payload) => {
+    return apiClient.put(API_ENDPOINTS.GROCERY_STORE.OUTLET_TIMINGS, payload);
+  },
+  updateOutletDayTiming: (day, payload) => {
+    return apiClient.patch(API_ENDPOINTS.GROCERY_STORE.OUTLET_TIMINGS_DAY.replace(':day', day), payload);
+  },
   updateFcmToken: (token, platform) => {
     return apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.FCM_TOKEN, { token, platform });
   },

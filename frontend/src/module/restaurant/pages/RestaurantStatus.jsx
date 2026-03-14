@@ -378,7 +378,11 @@ export default function RestaurantStatus() {
       
       // Update backend
       try {
-        await restaurantAPI.updateDeliveryStatus(checked)
+        if (isGroceryStore) {
+          await groceryStoreAPI.updateDeliveryStatus(checked)
+        } else {
+          await restaurantAPI.updateDeliveryStatus(checked)
+        }
         console.log('✅ Delivery status updated in backend:', checked)
       } catch (apiError) {
         console.error('Error updating delivery status in backend:', apiError)

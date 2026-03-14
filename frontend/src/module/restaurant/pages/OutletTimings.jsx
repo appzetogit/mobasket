@@ -8,7 +8,7 @@ import { MobileTimePicker } from "@mui/x-date-pickers/MobileTimePicker"
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider"
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
-import { restaurantAPI } from "@/lib/api"
+import { groceryStoreAPI, restaurantAPI } from "@/lib/api"
 import { toast } from "sonner"
 
 const STORAGE_KEY = "restaurant_outlet_timings"
@@ -93,6 +93,7 @@ export default function OutletTimings() {
   const location = useLocation()
   const isStore = location.pathname.startsWith("/store")
   const baseRoute = isStore ? "/store" : "/restaurant"
+  const outletTimingsAPI = isStore ? groceryStoreAPI : restaurantAPI
   const [expandedDay, setExpandedDay] = useState("Monday")
   const saveTimeoutRef = useRef(null)
   const hasMountedRef = useRef(false)
@@ -163,7 +164,7 @@ export default function OutletTimings() {
       }
       saveTimeoutRef.current = setTimeout(async () => {
         try {
-          await restaurantAPI.upsertOutletTimings({
+          await outletTimingsAPI.upsertOutletTimings({
             outletType: "MoBasket delivery",
             timings: mapDaysToApiTimings(days),
           })
@@ -185,7 +186,7 @@ export default function OutletTimings() {
   useEffect(() => {
     const loadFromApi = async () => {
       try {
-        const response = await restaurantAPI.getOutletTimings()
+        const response = await outletTimingsAPI.getOutletTimings()
         const apiTimings =
           response?.data?.data?.outletTimings?.timings ||
           response?.data?.outletTimings?.timings ||
@@ -206,7 +207,7 @@ export default function OutletTimings() {
     }
 
     loadFromApi()
-  }, [])
+  }, [outletTimingsAPI])
 
   // Listen for updates from other components
   useEffect(() => {
