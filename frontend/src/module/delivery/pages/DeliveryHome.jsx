@@ -35499,7 +35499,7 @@ export default function DeliveryHome() {
                       if (earnings > 0) {
 
 
-                        toast.success(`?${earnings.toFixed(2)} added to your wallet! ??`)
+                      toast.success(`₹${earnings.toFixed(2)} added to your wallet!`)
 
 
                       }

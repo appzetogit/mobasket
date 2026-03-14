@@ -402,27 +402,27 @@ const SectionItem = ({ icon: Icon, title, subtitle, onClick, showArrow = true, r
 
     onClick={onClick}
 
-    className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors text-left border-b border-dashed border-gray-200 last:border-0"
+    className="w-full flex items-center gap-3 p-4 hover:bg-gray-50 transition-colors text-left border-b border-dashed border-gray-200 last:border-0 dark:border-white/10 dark:hover:bg-white/5"
 
     whileTap={{ scale: 0.99 }}
 
   >
 
-    <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0">
+    <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0 dark:bg-[#0f172a]">
 
-      <Icon className="w-5 h-5 text-gray-600" />
+      <Icon className="w-5 h-5 text-gray-600 dark:text-gray-300" />
 
     </div>
 
     <div className="flex-1 min-w-0">
 
-      <p className="font-medium text-gray-900 truncate">{title}</p>
+      <p className="font-medium text-gray-900 truncate dark:text-gray-100">{title}</p>
 
-      {subtitle && <p className="text-sm text-gray-500 truncate">{subtitle}</p>}
+      {subtitle && <p className="text-sm text-gray-500 truncate dark:text-gray-400">{subtitle}</p>}
 
     </div>
 
-    {rightContent || (showArrow && <ChevronRight className="w-5 h-5 text-gray-400" />)}
+    {rightContent || (showArrow && <ChevronRight className="w-5 h-5 text-gray-400 dark:text-gray-500" />)}
 
   </motion.button>
 
@@ -3101,13 +3101,13 @@ export default function OrderTracking() {
 
     return (
 
-      <AnimatedPage className="min-h-screen bg-gray-50 p-4">
+      <AnimatedPage className="min-h-screen bg-gray-50 p-4 dark:bg-[#0a0a0a] dark:text-gray-100">
 
         <div className="max-w-lg mx-auto text-center py-20">
 
-          <Loader2 className="w-8 h-8 animate-spin text-gray-600 mx-auto mb-4" />
+          <Loader2 className="w-8 h-8 animate-spin text-gray-600 mx-auto mb-4 dark:text-gray-400" />
 
-          <p className="text-gray-600">Loading order details...</p>
+          <p className="text-gray-600 dark:text-gray-400">Loading order details...</p>
 
         </div>
 
@@ -3125,13 +3125,13 @@ export default function OrderTracking() {
 
     return (
 
-      <AnimatedPage className="min-h-screen bg-gray-50 p-4">
+      <AnimatedPage className="min-h-screen bg-gray-50 p-4 dark:bg-[#0a0a0a] dark:text-gray-100">
 
         <div className="max-w-lg mx-auto text-center py-20">
 
           <h1 className="text-lg sm:text-xl md:text-2xl font-bold mb-4">Order Not Found</h1>
 
-          <p className="text-gray-600 mb-6">{error || 'The order you\'re looking for doesn\'t exist.'}</p>
+          <p className="text-gray-600 mb-6 dark:text-gray-400">{error || 'The order you\'re looking for doesn\'t exist.'}</p>
 
           <Link to={shouldBackToHome ? "/home" : "/orders"} replace>
             <Button>Back to Orders</Button>
@@ -3269,7 +3269,7 @@ export default function OrderTracking() {
 
   return (
 
-    <div className="min-h-screen bg-gray-100 dark:bg-[#0a0a0a]">
+    <div className="min-h-screen bg-gray-100 text-gray-900 dark:bg-[#0a0a0a] dark:text-gray-100">
 
       {/* Order Confirmed Modal */}
 
@@ -3311,7 +3311,7 @@ export default function OrderTracking() {
 
                 transition={{ delay: 0.9 }}
 
-                className="text-2xl font-bold text-gray-900 mt-6"
+              className="text-2xl font-bold text-gray-900 mt-6 dark:text-gray-100"
 
               >
 
@@ -3327,7 +3327,7 @@ export default function OrderTracking() {
 
                 transition={{ delay: 1.1 }}
 
-                className="text-gray-600 mt-2"
+                className="text-gray-600 mt-2 dark:text-gray-300"
 
               >
 
@@ -3353,7 +3353,7 @@ export default function OrderTracking() {
 
                 <div className="w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full animate-spin mx-auto" />
 
-                <p className="text-sm text-gray-500 mt-3">Loading order details...</p>
+                <p className="text-sm text-gray-500 mt-3 dark:text-gray-400">Loading order details...</p>
 
               </motion.div>
 
@@ -3531,7 +3531,7 @@ export default function OrderTracking() {
 
           <motion.div
 
-            className="bg-white rounded-xl p-5 shadow-sm"
+            className="bg-white rounded-xl p-5 shadow-sm dark:bg-[#151a23] dark:border dark:border-white/10"
 
             initial={{ opacity: 0, y: 20 }}
 
@@ -3543,11 +3543,11 @@ export default function OrderTracking() {
 
               <Check className="w-6 h-6 text-green-600" />
 
-              <p className="font-semibold text-gray-900">Plan activated for your account</p>
+              <p className="font-semibold text-gray-900 dark:text-gray-100">Plan activated for your account</p>
 
             </div>
 
-            <p className="text-sm text-gray-600 mb-2">
+            <p className="text-sm text-gray-600 mb-2 dark:text-gray-400">
 
               {purchasedPlanName}
 
@@ -3555,7 +3555,7 @@ export default function OrderTracking() {
 
             {purchasedPlanDurationDays > 0 && (
 
-              <p className="text-sm text-gray-600 mb-1">
+              <p className="text-sm text-gray-600 mb-1 dark:text-gray-400">
 
                 Validity: {purchasedPlanDurationDays} day{purchasedPlanDurationDays === 1 ? "" : "s"}
 
@@ -3563,7 +3563,7 @@ export default function OrderTracking() {
 
             )}
 
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
 
               {purchasedPlanOfferCount > 0
 
@@ -3613,7 +3613,7 @@ export default function OrderTracking() {
 
                   <motion.div
 
-                    className="bg-white rounded-xl p-4 shadow-sm"
+                    className="bg-white rounded-xl p-4 shadow-sm dark:bg-[#151a23] dark:border dark:border-white/10"
 
                     initial={{ opacity: 0, y: 20 }}
 
@@ -3625,7 +3625,7 @@ export default function OrderTracking() {
 
                     <div className="flex items-center gap-3">
 
-                      <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center overflow-hidden">
+                      <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center overflow-hidden dark:bg-orange-500/20">
 
                         <img
 
@@ -3639,7 +3639,7 @@ export default function OrderTracking() {
 
                       </div>
 
-                      <p className="font-semibold text-gray-900">
+                      <p className="font-semibold text-gray-900 dark:text-gray-100">
 
                         {isPendingGroceryAdminAcceptance ? "Yet to accept by grocery admin" : "Food is Cooking"}
 
@@ -3697,7 +3697,7 @@ export default function OrderTracking() {
 
             {!isDeliveryCompleted && (
               <motion.div
-                className="bg-yellow-50 rounded-xl p-4 text-center"
+                className="bg-yellow-50 rounded-xl p-4 text-center dark:bg-yellow-500/10"
 
                 initial={{ opacity: 0, y: 20 }}
 
@@ -3707,7 +3707,7 @@ export default function OrderTracking() {
 
               >
 
-                <p className="text-yellow-800 font-medium">
+                <p className="text-yellow-800 font-medium dark:text-yellow-200">
 
                   {driverDistanceKm != null && (orderStatus === 'pickup' || order?.status === 'out_for_delivery')
 
@@ -3725,7 +3725,7 @@ export default function OrderTracking() {
 
             <motion.div
 
-              className="bg-white rounded-xl shadow-sm overflow-hidden"
+              className="bg-white rounded-xl shadow-sm overflow-hidden dark:bg-[#151a23] dark:border dark:border-white/10"
 
               initial={{ opacity: 0, y: 20 }}
 
@@ -3735,9 +3735,9 @@ export default function OrderTracking() {
 
             >
 
-              <div className="p-4 border-b border-dashed border-gray-200">
+              <div className="p-4 border-b border-dashed border-gray-200 dark:border-white/10">
 
-                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3 dark:text-gray-400">
 
                   Delivery Partner Details
 
@@ -3745,7 +3745,7 @@ export default function OrderTracking() {
 
                 <div className="flex items-center gap-3">
 
-                  <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                  <div className="w-11 h-11 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0 dark:bg-green-500/20">
 
                     <Phone className="w-5 h-5 text-green-700" />
 
@@ -3753,14 +3753,14 @@ export default function OrderTracking() {
 
                   <div className="flex-1 min-w-0">
 
-                    <p className="font-semibold text-gray-900 truncate">
+                    <p className="font-semibold text-gray-900 truncate dark:text-gray-100">
 
                       {hasAssignedRider
                         ? (riderInfo?.name || "Delivery partner assigned")
                         : "Assigning delivery partner..."}
                     </p>
 
-                    <p className="text-sm text-gray-500 truncate">
+                    <p className="text-sm text-gray-500 truncate dark:text-gray-400">
 
                       {hasAssignedRider
                         ? (riderInfo?.phone || "Phone number not available")
@@ -3771,7 +3771,7 @@ export default function OrderTracking() {
 
                   <motion.button
 
-                    className={`w-10 h-10 rounded-full flex items-center justify-center ${riderDialNumber ? "bg-green-600 text-white" : "bg-gray-100 text-gray-400"
+                    className={`w-10 h-10 rounded-full flex items-center justify-center ${riderDialNumber ? "bg-green-600 text-white" : "bg-gray-100 text-gray-400 dark:bg-white/10 dark:text-gray-500"
 
                       }`}
 
@@ -3825,7 +3825,7 @@ export default function OrderTracking() {
 
         <motion.div
 
-          className="bg-white rounded-xl shadow-sm overflow-hidden"
+          className="bg-white rounded-xl shadow-sm overflow-hidden dark:bg-[#151a23] dark:border dark:border-white/10"
 
           initial={{ opacity: 0, y: 20 }}
 
@@ -3835,9 +3835,9 @@ export default function OrderTracking() {
 
         >
 
-          <div className="flex items-center gap-3 p-4 border-b border-dashed border-gray-200">
+          <div className="flex items-center gap-3 p-4 border-b border-dashed border-gray-200 dark:border-white/10">
 
-            <div className="w-12 h-12 rounded-full bg-orange-100 overflow-hidden flex items-center justify-center">
+            <div className="w-12 h-12 rounded-full bg-orange-100 overflow-hidden flex items-center justify-center dark:bg-orange-500/20">
 
               <span className="text-2xl">🍔</span>
 
@@ -3845,15 +3845,15 @@ export default function OrderTracking() {
 
             <div className="flex-1">
 
-              <p className="font-semibold text-gray-900">{isPlanSubscriptionOrder ? purchasedPlanName : restaurantDisplayName}</p>
+              <p className="font-semibold text-gray-900 dark:text-gray-100">{isPlanSubscriptionOrder ? purchasedPlanName : restaurantDisplayName}</p>
 
               {restaurantDisplayPhone ? (
 
-                <p className="text-xs text-gray-500">{restaurantDisplayPhone}</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">{restaurantDisplayPhone}</p>
 
               ) : null}
 
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-500 dark:text-gray-400">
 
                 {isPlanSubscriptionOrder
 
@@ -3869,7 +3869,7 @@ export default function OrderTracking() {
 
               <motion.button
 
-                className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center"
+                className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center dark:bg-green-500/20"
 
                 whileTap={{ scale: 0.9 }}
 
@@ -3903,7 +3903,7 @@ export default function OrderTracking() {
 
               >
 
-                <Phone className="w-5 h-5 text-green-700" />
+                <Phone className="w-5 h-5 text-green-700 dark:text-green-300" />
 
               </motion.button>
 
@@ -3915,7 +3915,7 @@ export default function OrderTracking() {
 
           {/* Order Items */}
 
-          <div className="p-4 border-b border-dashed border-gray-200">
+          <div className="p-4 border-b border-dashed border-gray-200 dark:border-white/10">
 
             <button
 
@@ -3927,17 +3927,17 @@ export default function OrderTracking() {
 
             >
 
-              <Receipt className="w-5 h-5 text-gray-500 mt-0.5" />
+              <Receipt className="w-5 h-5 text-gray-500 mt-0.5 dark:text-gray-400" />
 
               <div className="flex-1">
 
-                <p className="font-medium text-gray-900">Order #{order?.id || order?.orderId || 'N/A'}</p>
+                <p className="font-medium text-gray-900 dark:text-gray-100">Order #{order?.id || order?.orderId || 'N/A'}</p>
 
                 <div className="mt-2 space-y-1">
 
                   {order?.items?.map((item, index) => (
 
-                    <div key={index} className="flex items-center gap-2 text-sm text-gray-600">
+                    <div key={index} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
 
                       <span className="w-4 h-4 rounded border border-green-600 flex items-center justify-center">
 
@@ -3955,7 +3955,7 @@ export default function OrderTracking() {
 
               </div>
 
-              <ChevronRight className="w-5 h-5 text-gray-400" />
+              <ChevronRight className="w-5 h-5 text-gray-400 dark:text-gray-500" />
 
             </button>
 
@@ -3967,9 +3967,9 @@ export default function OrderTracking() {
 
         {!isPlanSubscriptionOrder && (
 
-          <motion.div
+        <motion.div
 
-            className="bg-white rounded-xl shadow-sm overflow-hidden"
+            className="bg-white rounded-xl shadow-sm overflow-hidden dark:bg-[#151a23] dark:border dark:border-white/10"
 
             initial={{ opacity: 0, y: 20 }}
 
@@ -4033,11 +4033,11 @@ export default function OrderTracking() {
 
       <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
 
-        <DialogContent className="sm:max-w-xl w-[95%] max-w-[600px]">
+        <DialogContent className="sm:max-w-xl w-[95%] max-w-[600px] dark:bg-[#151a23] dark:border dark:border-white/10">
 
           <DialogHeader>
 
-            <DialogTitle className="text-xl font-bold text-gray-900">
+            <DialogTitle className="text-xl font-bold text-gray-900 dark:text-gray-100">
 
               Cancel Order
 
@@ -4059,7 +4059,7 @@ export default function OrderTracking() {
 
                 placeholder="e.g., Changed my mind, Wrong address, etc."
 
-                className="w-full min-h-[100px] resize-none border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:border-red-500 focus:ring-2 focus:ring-red-200 focus:outline-none transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed disabled:border-gray-200"
+                className="w-full min-h-[100px] resize-none border-2 border-gray-300 rounded-lg px-4 py-3 text-sm focus:border-red-500 focus:ring-2 focus:ring-red-200 focus:outline-none transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed disabled:border-gray-200 dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500 dark:focus:ring-red-500/20 dark:disabled:bg-white/5 dark:disabled:border-white/10"
 
                 disabled={isCancelling}
 
@@ -4083,7 +4083,7 @@ export default function OrderTracking() {
 
                 disabled={isCancelling}
 
-                className="flex-1"
+                className="flex-1 dark:border-white/10 dark:text-gray-100"
 
               >
 
@@ -4147,11 +4147,11 @@ export default function OrderTracking() {
 
       >
 
-        <DialogContent className="sm:max-w-xl w-[95%] max-w-[600px]">
+        <DialogContent className="sm:max-w-xl w-[95%] max-w-[600px] dark:bg-[#151a23] dark:border dark:border-white/10">
 
           <DialogHeader>
 
-            <DialogTitle className="text-xl font-bold text-gray-900">
+            <DialogTitle className="text-xl font-bold text-gray-900 dark:text-gray-100">
 
               Edit Order
 
@@ -4161,7 +4161,7 @@ export default function OrderTracking() {
 
           <div className="space-y-4 py-4">
 
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-gray-400">
 
               {canModifyOrder
 
@@ -4175,13 +4175,13 @@ export default function OrderTracking() {
 
               {editableItems.map((item) => (
 
-                <div key={item.key} className="flex items-center justify-between border rounded-lg p-3">
+                <div key={item.key} className="flex items-center justify-between border rounded-lg p-3 dark:border-white/10 dark:bg-[#0f172a]">
 
                   <div className="min-w-0 pr-3">
 
-                    <p className="font-medium text-sm text-gray-900 truncate">{item.name}</p>
+                    <p className="font-medium text-sm text-gray-900 truncate dark:text-gray-100">{item.name}</p>
 
-                    <p className="text-xs text-gray-500">Rs {Number(item.price || 0).toFixed(2)}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Rs {Number(item.price || 0).toFixed(2)}</p>
 
                   </div>
 
@@ -4205,7 +4205,7 @@ export default function OrderTracking() {
 
                     </Button>
 
-                    <span className="w-8 text-center font-semibold text-sm">{item.quantity}</span>
+                    <span className="w-8 text-center font-semibold text-sm dark:text-gray-100">{item.quantity}</span>
 
                     <Button
 
@@ -4233,9 +4233,9 @@ export default function OrderTracking() {
 
             </div>
 
-            <div className="space-y-2 border rounded-lg p-3">
+            <div className="space-y-2 border rounded-lg p-3 dark:border-white/10 dark:bg-[#0f172a]">
 
-              <p className="text-sm font-semibold text-gray-900">
+              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
 
                 Add more from this restaurant
 
@@ -4243,7 +4243,7 @@ export default function OrderTracking() {
 
               {loadingEditMenuItems ? (
 
-                <div className="flex items-center gap-2 text-sm text-gray-500">
+                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
 
                   <Loader2 className="w-4 h-4 animate-spin" />
 
@@ -4253,7 +4253,7 @@ export default function OrderTracking() {
 
               ) : availableEditMenuItems.length === 0 ? (
 
-                <p className="text-xs text-gray-500">No additional items available right now.</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">No additional items available right now.</p>
 
               ) : (
 
@@ -4261,13 +4261,13 @@ export default function OrderTracking() {
 
                   {availableEditMenuItems.map((item) => (
 
-                    <div key={`menu-${item.itemId}`} className="flex items-center justify-between rounded-md border p-2">
+                    <div key={`menu-${item.itemId}`} className="flex items-center justify-between rounded-md border p-2 dark:border-white/10 dark:bg-[#0b1220]">
 
                       <div className="min-w-0 pr-2">
 
-                        <p className="text-sm font-medium text-gray-900 truncate">{item.name}</p>
+                        <p className="text-sm font-medium text-gray-900 truncate dark:text-gray-100">{item.name}</p>
 
-                        <p className="text-xs text-gray-500">Rs {Number(item.price || 0).toFixed(2)}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Rs {Number(item.price || 0).toFixed(2)}</p>
 
                       </div>
 
@@ -4282,6 +4282,7 @@ export default function OrderTracking() {
                         disabled={!canModifyOrder || isEditingOrder}
 
                         onClick={() => addMenuItemToEditableOrder(item)}
+                        className="dark:border-white/10 dark:text-gray-100"
 
                       >
 
@@ -4307,7 +4308,7 @@ export default function OrderTracking() {
 
                 variant="outline"
 
-                className="flex-1"
+                className="flex-1 dark:border-white/10 dark:text-gray-100"
 
                 onClick={() => setShowEditDialog(false)}
 

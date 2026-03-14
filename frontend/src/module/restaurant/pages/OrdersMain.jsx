@@ -2643,7 +2643,7 @@ function OrderCard({
             deliveryPartnerId,
           })
         }
-        className="w-full text-left flex gap-3 items-stretch cursor-pointer"
+        className="w-full text-left flex gap-3 items-stretch cursor-pointer pr-10"
       >
         {/* Photo */}
         <div className="h-20 w-20 rounded-xl overflow-hidden bg-gray-100 flex items-center justify-center flex-shrink-0 my-auto">

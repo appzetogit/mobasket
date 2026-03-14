@@ -198,7 +198,7 @@ export default function Checkout() {
     return (
       <AnimatedPage className="min-h-screen bg-gradient-to-b from-yellow-50/30 via-white to-orange-50/20 p-4">
         <div className="max-w-4xl mx-auto space-y-6">
-          <Card>
+          <Card className="dark:bg-[#1a1a1a] dark:border-gray-800">
             <CardHeader>
               <CardTitle className="text-base sm:text-lg md:text-xl">Checkout</CardTitle>
             </CardHeader>
@@ -234,7 +234,7 @@ export default function Checkout() {
           {/* Left Column - Order Details */}
           <div className="lg:col-span-2 space-y-6">
             <ScrollReveal delay={0.05}>
-              <Card className="border-yellow-200 bg-gradient-to-r from-yellow-50 to-orange-50">
+              <Card className="border-yellow-200 bg-gradient-to-r from-yellow-50 to-orange-50 dark:border-gray-800 dark:from-[#111827] dark:to-[#111827] dark:bg-[#111827]">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-base md:text-lg">
                     <User className="h-5 w-5 text-orange-600" />
@@ -246,8 +246,8 @@ export default function Checkout() {
                     type="button"
                     className={`rounded-xl border px-4 py-3 text-left transition-colors ${
                       !orderingForSomeoneElse
-                        ? "border-orange-500 bg-white shadow-sm"
-                        : "border-yellow-200 bg-white/70 hover:border-orange-300"
+                        ? "border-orange-500 bg-white shadow-sm dark:bg-[#1a1a1a] dark:border-orange-400"
+                        : "border-yellow-200 bg-white/70 hover:border-orange-300 dark:bg-[#111827] dark:border-gray-700 dark:hover:border-orange-400/70"
                     }`}
                     onClick={() => setOrderingForSomeoneElse(false)}
                   >
@@ -258,8 +258,8 @@ export default function Checkout() {
                     type="button"
                     className={`rounded-xl border px-4 py-3 text-left transition-colors ${
                       orderingForSomeoneElse
-                        ? "border-orange-500 bg-white shadow-sm"
-                        : "border-yellow-200 bg-white/70 hover:border-orange-300"
+                        ? "border-orange-500 bg-white shadow-sm dark:bg-[#1a1a1a] dark:border-orange-400"
+                        : "border-yellow-200 bg-white/70 hover:border-orange-300 dark:bg-[#111827] dark:border-gray-700 dark:hover:border-orange-400/70"
                     }`}
                     onClick={() => setOrderingForSomeoneElse(true)}
                   >
@@ -272,7 +272,7 @@ export default function Checkout() {
 
             {orderingForSomeoneElse ? (
               <ScrollReveal delay={0.1}>
-                <Card>
+                <Card className="dark:bg-[#1a1a1a] dark:border-gray-800">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <MapPin className="h-5 w-5 text-yellow-600" />
@@ -402,7 +402,7 @@ export default function Checkout() {
               </ScrollReveal>
             ) : (
             <ScrollReveal delay={0.1}>
-              <Card>
+              <Card className="dark:bg-[#1a1a1a] dark:border-gray-800">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <MapPin className="h-5 w-5 text-yellow-600" />
@@ -421,8 +421,8 @@ export default function Checkout() {
                           <div
                             key={addressId}
                             className={`border-2 rounded-lg p-4 cursor-pointer transition-colors ${isSelected
-                                ? "border-yellow-500 bg-yellow-50"
-                                : "border-gray-200 hover:border-yellow-300"
+                                ? "border-yellow-500 bg-yellow-50 dark:bg-[#1f2937] dark:border-yellow-400"
+                                : "border-gray-200 hover:border-yellow-300 dark:border-gray-700 dark:bg-[#111827] dark:hover:border-yellow-400/70"
                               }`}
                             onClick={() => setSelectedAddress(addressId)}
                           >
@@ -456,7 +456,7 @@ export default function Checkout() {
 
             {/* Payment Method */}
             <ScrollReveal delay={0.2}>
-              <Card>
+              <Card className="dark:bg-[#1a1a1a] dark:border-gray-800">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <CreditCard className="h-5 w-5 text-yellow-600" />
@@ -475,8 +475,8 @@ export default function Checkout() {
                           <div
                             key={paymentId}
                             className={`border-2 rounded-lg p-4 cursor-pointer transition-colors ${isSelected
-                                ? "border-yellow-500 bg-yellow-50"
-                                : "border-gray-200 hover:border-yellow-300"
+                                ? "border-yellow-500 bg-yellow-50 dark:bg-[#1f2937] dark:border-yellow-400"
+                                : "border-gray-200 hover:border-yellow-300 dark:border-gray-700 dark:bg-[#111827] dark:hover:border-yellow-400/70"
                               }`}
                             onClick={() => setSelectedPayment(paymentId)}
                           >

@@ -2731,22 +2731,22 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
               <Label className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
                 Save address as
               </Label>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-3">
                 {["Home", "Office", "Other"].map((label) => (
-                  <Button
-                    key={label}
-                    type="button"
-                    onClick={() => setAddressFormData(prev => ({ ...prev, label }))}
-                    variant={addressFormData.label === label ? "default" : "outline"}
-                    className={`flex-1 ${
-                      addressFormData.label === label
-                        ? "bg-green-600 hover:bg-green-700 text-white"
-                        : "bg-white dark:bg-[#1a1a1a]"
-                    }`}
-                  >
-                    {label}
-                  </Button>
-                ))}
+                  <Button
+                    key={label}
+                    type="button"
+                    onClick={() => setAddressFormData(prev => ({ ...prev, label }))}
+                    variant={addressFormData.label === label ? "default" : "outline"}
+                    className={`w-full min-w-0 rounded-full text-xs sm:text-sm font-semibold ${
+                      addressFormData.label === label
+                        ? "bg-green-600 hover:bg-green-700 text-white shadow-sm"
+                        : "bg-white dark:bg-[#1a1a1a] text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-[#232323]"
+                    }`}
+                  >
+                    {label}
+                  </Button>
+                ))}
               </div>
             </div>
 
