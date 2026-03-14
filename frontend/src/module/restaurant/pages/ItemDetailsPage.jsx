@@ -102,7 +102,10 @@ export default function ItemDetailsPage() {
         setIsRecommended(item.isRecommended || false)
         setIsInStock(item.isAvailable !== false)
         setSelectedTags(item.tags || [])
-        setImages(item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : []))
+        const initialImages =
+          item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : []);
+        setImages(initialImages.length > 0 ? [initialImages[0]] : [])
+        setCurrentImageIndex(0)
 
         // Parse nutrition data
         if (item.nutrition && Array.isArray(item.nutrition)) {
@@ -193,7 +196,12 @@ export default function ItemDetailsPage() {
             setIsRecommended(foundItem.isRecommended || false)
             setIsInStock(foundItem.isAvailable !== false)
             setSelectedTags(foundItem.tags || [])
-            setImages(foundItem.images && foundItem.images.length > 0 ? foundItem.images : (foundItem.image ? [foundItem.image] : []))
+            const initialImages =
+              foundItem.images && foundItem.images.length > 0
+                ? foundItem.images
+                : (foundItem.image ? [foundItem.image] : []);
+            setImages(initialImages.length > 0 ? [initialImages[0]] : [])
+            setCurrentImageIndex(0)
 
             // Parse nutrition data
             if (foundItem.nutrition && Array.isArray(foundItem.nutrition)) {
@@ -334,24 +342,29 @@ export default function ItemDetailsPage() {
 
     if (validFiles.length === 0) return
 
-    // Create preview URLs for display and map them to File objects
-    const newImagePreviews = []
-    const previewEntries = []
+    // Only allow a single image; new upload replaces the previous one
+    const nextFile = validFiles[0]
 
-    validFiles.forEach(file => {
-      const previewUrl = URL.createObjectURL(file)
-      newImagePreviews.push(previewUrl)
-      previewEntries.push([previewUrl, file])
+    // Create preview URLs for display and map them to File objects
+    const previewUrl = URL.createObjectURL(nextFile)
+    const previewEntries = [[previewUrl, nextFile]]
+
+    // Revoke previous blob URLs to avoid memory leaks
+    images.forEach((img) => {
+      if (img && img.startsWith("blob:")) {
+        URL.revokeObjectURL(img)
+      }
     })
 
-    setImages(prev => [...prev, ...newImagePreviews])
-    setImageFiles(prev => {
-      const newMap = new Map(prev)
-      previewEntries.forEach(([previewUrl, file]) => {
-        newMap.set(previewUrl, file)
+    setImages([previewUrl])
+    setImageFiles(() => {
+      const newMap = new Map()
+      previewEntries.forEach(([url, file]) => {
+        newMap.set(url, file)
       })
       return newMap
     })
+    setCurrentImageIndex(0)
 
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
@@ -1057,7 +1070,6 @@ export default function ItemDetailsPage() {
               ref={fileInputRef}
               type="file"
               accept="image/*"
-              multiple
               onChange={handleImageAdd}
               className="hidden"
               id="image-upload-gallery"

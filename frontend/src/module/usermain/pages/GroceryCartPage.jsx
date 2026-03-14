@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useCart } from "../../user/context/CartContext";
-import { adminAPI, orderAPI, restaurantAPI } from "@/lib/api";
+import api, { adminAPI, orderAPI, restaurantAPI } from "@/lib/api";
 import { useProfile } from "../../user/context/ProfileContext";
 import { useZone } from "../../user/hooks/useZone";
 import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
@@ -401,15 +401,23 @@ const GroceryCartPage = () => {
 
       try {
         if (isMounted) setCheckingStoreAvailability(true);
-        const response = await restaurantAPI.getRestaurantById(resolvedRestaurant.restaurantId);
+        const [restaurantResponse, outletTimingsResponse] = await Promise.all([
+          restaurantAPI.getRestaurantById(resolvedRestaurant.restaurantId),
+          api.get(`/restaurant/${String(resolvedRestaurant.restaurantId)}/outlet-timings`),
+        ]);
         const restaurant =
-          response?.data?.data?.restaurant ||
-          response?.data?.restaurant ||
-          response?.data?.data ||
+          restaurantResponse?.data?.data?.restaurant ||
+          restaurantResponse?.data?.restaurant ||
+          restaurantResponse?.data?.data ||
           null;
+        const outletTimings =
+          outletTimingsResponse?.data?.data?.outletTimings?.timings ||
+          outletTimingsResponse?.data?.outletTimings?.timings ||
+          [];
 
         const availability = evaluateStoreAvailability({
           store: restaurant,
+          outletTimings,
           label: "Store",
         });
 
@@ -475,6 +483,14 @@ const GroceryCartPage = () => {
     subtotal + summaryDeliveryFee + summaryPlatformFee + summaryTax - summaryDiscount,
   );
   const isStoreOffline = !storeAvailability.isAvailable;
+  const storeAvailabilityMessage = (() => {
+    const raw = String(
+      storeAvailability.reason || "Store is currently offline. Please try again later.",
+    ).trim();
+    if (!raw) return "Store is currently offline. Please try again later.";
+    const replaced = raw.replace(/restaurant/gi, "store");
+    return replaced.replace(/^store\b/i, "Store");
+  })();
   const shouldDisableOrderNow =
     checkingStoreAvailability ||
     isStoreOffline ||
@@ -722,7 +738,7 @@ const GroceryCartPage = () => {
       <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-[#111111] border-t border-gray-100 dark:border-gray-800 p-4 pb-6 z-[100] md:max-w-md md:mx-auto">
         {isStoreOffline && !checkingStoreAvailability && (
           <div className="mb-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] font-semibold text-rose-700">
-            {storeAvailability.reason || "Store is currently offline. Please try again later."}
+            {storeAvailabilityMessage}
           </div>
         )}
         {hasMixedStoreItems && (
