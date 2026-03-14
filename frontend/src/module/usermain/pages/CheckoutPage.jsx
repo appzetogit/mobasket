@@ -21,7 +21,7 @@ import { useCart } from "../../user/context/CartContext";
 import { useProfile } from "../../user/context/ProfileContext";
 import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
-import api, { adminAPI, orderAPI, restaurantAPI, userAPI, zoneAPI } from "@/lib/api";
+import api, { adminAPI, locationAPI, orderAPI, restaurantAPI, userAPI, zoneAPI } from "@/lib/api";
 import { initRazorpayPayment } from "@/lib/utils/razorpay";
 import { Loader } from "@googlemaps/js-api-loader";
 import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey";
@@ -415,21 +415,78 @@ export default function CheckoutPage() {
       .join(", ");
 
   const handleSaveNewAddress = async () => {
+    const lat = Number(newAddress.latitude);
+    const lng = Number(newAddress.longitude);
+    const hasPinnedCoordinates = Number.isFinite(lat) && Number.isFinite(lng);
+
+    if (!hasPinnedCoordinates) {
+      toast.error("Please set the map pin before saving this address.");
+      return;
+    }
+
+    let resolvedFromPin = null;
+    try {
+      const response = await locationAPI.reverseGeocode(lat, lng);
+      const firstResult = response?.data?.data?.results?.[0] || {};
+      const components = firstResult?.address_components || [];
+      const byType = (type) =>
+        Array.isArray(components)
+          ? components.find((component) => component?.types?.includes(type))?.long_name || ""
+          : "";
+
+      const streetNumber = byType("street_number");
+      const route = byType("route");
+      const premise = byType("premise") || byType("subpremise");
+      const sublocality =
+        byType("sublocality_level_1") || byType("sublocality") || byType("neighborhood");
+      const city = byType("locality") || byType("administrative_area_level_2");
+      const state = byType("administrative_area_level_1");
+      const zipCode = byType("postal_code");
+      const formattedAddress = String(
+        firstResult?.formatted_address || response?.data?.data?.formattedAddress || "",
+      ).trim();
+
+      const fallbackStreet = [streetNumber, route].filter(Boolean).join(" ").trim();
+      const firstPart = formattedAddress.split(",").map((part) => part.trim()).filter(Boolean)[0] || "";
+
+      resolvedFromPin = {
+        street: resolveStreetForForm(fallbackStreet, route, premise, firstPart),
+        additionalDetails: resolveStreetForForm(sublocality, premise, route, ""),
+        city: String(city || "").trim(),
+        state: String(state || "").trim(),
+        zipCode: String(zipCode || "").trim(),
+        formattedAddress,
+      };
+    } catch (error) {
+      console.error("Reverse geocode before save failed:", error);
+    }
+
     const payload = {
       label: newAddress.label,
-      street: String(newAddress.street || "").trim(),
-      additionalDetails: String(newAddress.additionalDetails || "").trim(),
-      city: String(newAddress.city || "").trim(),
-      state: String(newAddress.state || "").trim(),
-      zipCode: String(newAddress.zipCode || "").trim(),
-      latitude: newAddress.latitude || undefined,
-      longitude: newAddress.longitude || undefined,
+      street: String(resolvedFromPin?.street || newAddress.street || "").trim(),
+      additionalDetails: String(
+        resolvedFromPin?.additionalDetails || newAddress.additionalDetails || "",
+      ).trim(),
+      city: String(resolvedFromPin?.city || newAddress.city || "").trim(),
+      state: String(resolvedFromPin?.state || newAddress.state || "").trim(),
+      zipCode: String(resolvedFromPin?.zipCode || newAddress.zipCode || "").trim(),
+      latitude: String(lat),
+      longitude: String(lng),
       isDefault: Boolean(newAddress.isDefault),
     };
 
     if (!payload.street || !payload.city || !payload.state) {
-      toast.error("Street, city and state are required.");
+      toast.error("Pin moved, but full address is not resolved yet. Please wait a second and try again.");
       return;
+    }
+
+    if (resolvedFromPin) {
+      setNewAddress((prev) => ({
+        ...prev,
+        ...resolvedFromPin,
+        latitude: String(lat),
+        longitude: String(lng),
+      }));
     }
 
     setIsSavingAddress(true);
@@ -1473,6 +1530,7 @@ export default function CheckoutPage() {
                       <AddressLocationPicker
                         value={recipientDetails}
                         onChange={setRecipientDetails}
+                        fallbackLocation={liveLocation}
                         title="Recipient exact delivery pin"
                         description="Set exact pin. Address must be inside any active delivery zone."
                       />
@@ -1610,6 +1668,7 @@ export default function CheckoutPage() {
                         <AddressLocationPicker
                           value={newAddress}
                           onChange={setNewAddress}
+                          fallbackLocation={liveLocation}
                           title="Exact delivery location"
                           description="For family or out-of-station orders, drag the pin to the exact drop point before saving."
                         />

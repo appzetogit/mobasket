@@ -83,7 +83,13 @@ function BottomPopup({
   );
 }
 
-export default function FeedNavbar({ className = "" }) {
+export default function FeedNavbar({
+  className = "",
+  showRouteSimulationToggle = false,
+  isRouteSimulationEnabled = false,
+  isRouteSimulationRunning = false,
+  onToggleRouteSimulation = null,
+}) {
   const companyName = useCompanyName()
   const navigate = useNavigate();
 
@@ -529,8 +535,22 @@ export default function FeedNavbar({ className = "" }) {
       </div>
 
       {/* Right Icons */}
-      <div className="flex items-center gap-3">
-        {/* Emergency */}
+      <div className="flex items-center gap-3">
+        {showRouteSimulationToggle && (
+          <button
+            onClick={() => onToggleRouteSimulation?.()}
+            className={`h-9 rounded-full px-2.5 text-[10px] font-bold transition-colors ${
+              isRouteSimulationEnabled
+                ? "bg-blue-600 text-white"
+                : "bg-blue-100 text-blue-700"
+            }`}
+            title="Route simulation"
+            type="button"
+          >
+            {isRouteSimulationRunning ? "Simulating..." : isRouteSimulationEnabled ? "Sim ON" : "Sim OFF"}
+          </button>
+        )}
+        {/* Emergency */}
         <button
             onClick={() => setShowEmergencyPopup(true)}
           className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center hover:bg-red-600 transition-colors relative"
