@@ -27,8 +27,9 @@ export default function ItemDetailsPage() {
   const location = useLocation()
   const isNewItem = id === "new"
   const groupId = location.state?.groupId
-  const defaultCategory = location.state?.category || "Varieties"
+  const defaultCategory = location.state?.category || ""
   const fileInputRef = useRef(null)
+  const cameraInputRef = useRef(null)
 
   // Initialize state with empty values - will be populated from API
   const [itemData, setItemData] = useState(null) // Store the full item data for saving
@@ -40,7 +41,7 @@ export default function ItemDetailsPage() {
   const [itemSizeUnit, setItemSizeUnit] = useState("piece")
   const [itemDescription, setItemDescription] = useState("")
   const [foodType, setFoodType] = useState("Non-Veg")
-  const [basePrice, setBasePrice] = useState("0")
+  const [basePrice, setBasePrice] = useState("")
   const [preparationTime, setPreparationTime] = useState("")
   const [gst, setGst] = useState("5.0")
   const [isRecommended, setIsRecommended] = useState(false)
@@ -87,7 +88,7 @@ export default function ItemDetailsPage() {
         setItemData(item)
 
         setItemName(item.name || "")
-        setCategory(item.category || defaultCategory)
+        setCategory(item.category || defaultCategory || "")
         setSubCategory(item.subCategory || item.category || "Starters")
         setServesInfo(item.servesInfo || "")
         setItemSizeQuantity(item.itemSizeQuantity || "")
@@ -178,7 +179,7 @@ export default function ItemDetailsPage() {
             setItemData(foundItem)
 
             setItemName(foundItem.name || "")
-            setCategory(foundItem.category || defaultCategory)
+            setCategory(foundItem.category || defaultCategory || "")
             setSubCategory(foundItem.subCategory || foundItem.category || "Starters")
             setServesInfo(foundItem.servesInfo || "")
             setItemSizeQuantity(foundItem.itemSizeQuantity || "")
@@ -437,6 +438,7 @@ export default function ItemDetailsPage() {
 
   const handleCategorySelect = (catId, subCat) => {
     const selectedCategory = categories.find(c => c.id === catId)
+    if (!selectedCategory) return
     setCategory(selectedCategory.name)
     setSubCategory(subCat)
     setIsCategoryPopupOpen(false)
@@ -472,6 +474,23 @@ export default function ItemDetailsPage() {
     }
     if (!String(category || "").trim()) {
       toast.error("Please select a category")
+      return
+    }
+    const parsedBasePrice = parseFloat(basePrice)
+    if (!basePrice || Number.isNaN(parsedBasePrice) || parsedBasePrice <= 0) {
+      toast.error("Please enter a valid base price greater than 0")
+      return
+    }
+    if (!preparationTime.trim()) {
+      toast.error("Please select preparation time")
+      return
+    }
+    if (itemDescription.trim().length < minDescriptionLength) {
+      toast.error(`Item description must be at least ${minDescriptionLength} characters`)
+      return
+    }
+    if (!Array.isArray(images) || images.length === 0) {
+      toast.error("Please add at least one image")
       return
     }
 
@@ -641,7 +660,7 @@ export default function ItemDetailsPage() {
         category: category,
         rating: itemData?.rating || 0.0,
         reviews: itemData?.reviews || 0,
-        price: parseFloat(basePrice) || 0,
+        price: parsedBasePrice,
         preparationTime: preparationTime || "",
         stock: "Unlimited",
         discount: null,
@@ -658,7 +677,7 @@ export default function ItemDetailsPage() {
         tags: [],
         nutrition: nutritionStrings,
         allergies: [],
-        photoCount: allImageUrls.length || 1,
+        photoCount: allImageUrls.length,
         // Additional fields for complete item details
         subCategory: subCategory || "",
         servesInfo: "",
@@ -977,20 +996,40 @@ export default function ItemDetailsPage() {
               ref={fileInputRef}
               type="file"
               accept="image/*"
+              multiple
+              onChange={handleImageAdd}
+              className="hidden"
+              id="image-upload-gallery"
+            />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
               capture="environment"
               onChange={handleImageAdd}
               className="hidden"
-              id="image-upload"
+              id="image-upload-camera"
             />
-            <label
-              htmlFor="image-upload"
-              className="flex items-center justify-center gap-2.5 px-6 py-3.5 bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-xl text-sm font-semibold cursor-pointer hover:from-gray-800 hover:to-gray-700 transition-all shadow-md hover:shadow-lg active:scale-95"
-            >
-              <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
-                <Plus className="w-4 h-4" />
-              </div>
-              <span>Add Images</span>
-            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <label
+                htmlFor="image-upload-gallery"
+                className="flex items-center justify-center gap-2.5 px-4 py-3.5 bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-xl text-sm font-semibold cursor-pointer hover:from-gray-800 hover:to-gray-700 transition-all shadow-md hover:shadow-lg active:scale-95"
+              >
+                <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
+                  <Plus className="w-4 h-4" />
+                </div>
+                <span>From Gallery</span>
+              </label>
+              <label
+                htmlFor="image-upload-camera"
+                className="flex items-center justify-center gap-2.5 px-4 py-3.5 bg-white text-gray-900 border border-gray-300 rounded-xl text-sm font-semibold cursor-pointer hover:bg-gray-50 transition-all shadow-sm hover:shadow-md active:scale-95"
+              >
+                <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center">
+                  <Camera className="w-4 h-4" />
+                </div>
+                <span>Use Camera</span>
+              </label>
+            </div>
           </div>
         </div>
 
@@ -1005,8 +1044,8 @@ export default function ItemDetailsPage() {
               onClick={() => setIsCategoryPopupOpen(true)}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg text-left flex items-center justify-between bg-white hover:bg-gray-50 transition-colors"
             >
-              <span className="text-sm text-gray-900">
-                {category}
+              <span className={`text-sm ${category ? "text-gray-900" : "text-gray-500"}`}>
+                {category || "Select category"}
               </span>
               <ChevronDown className="w-5 h-5 text-gray-500" />
             </button>

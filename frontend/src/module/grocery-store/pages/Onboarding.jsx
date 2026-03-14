@@ -80,6 +80,10 @@ export default function GroceryStoreOnboarding() {
   const markerRef = useRef(null)
   const autocompleteInputRef = useRef(null)
   const autocompleteRef = useRef(null)
+  const storeImageCameraInputRef = useRef(null)
+  const storeImageGalleryInputRef = useRef(null)
+  const additionalImagesCameraInputRef = useRef(null)
+  const additionalImagesGalleryInputRef = useRef(null)
   const [mapLoading, setMapLoading] = useState(true)
   const [mapError, setMapError] = useState("")
   const [locationSearch, setLocationSearch] = useState("")
@@ -559,6 +563,78 @@ export default function GroceryStoreOnboarding() {
     }
   }
 
+  const uploadCapturedImage = async (base64Data, filename, mimeType, folder) => {
+    const byteCharacters = atob(base64Data)
+    const byteNumbers = new Array(byteCharacters.length)
+    for (let i = 0; i < byteCharacters.length; i += 1) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i)
+    }
+    const byteArray = new Uint8Array(byteNumbers)
+    const file = new File([byteArray], filename, { type: mimeType || "image/jpeg" })
+    return handleUpload(file, folder)
+  }
+
+  const handleStoreImageCameraCapture = async () => {
+    if (!window.flutter_inappwebview?.callHandler) {
+      storeImageCameraInputRef.current?.click()
+      return
+    }
+
+    try {
+      setSaving(true)
+      const result = await window.flutter_inappwebview.callHandler("openCamera")
+      if (!result?.success || !result?.base64) {
+        toast.error("Camera capture failed or cancelled")
+        return
+      }
+
+      const uploaded = await uploadCapturedImage(
+        result.base64,
+        result.fileName || `store_${Date.now()}.jpg`,
+        result.mimeType || "image/jpeg",
+        "mobasket/grocery-store/store"
+      )
+      setImages((prev) => ({ ...prev, storeImage: uploaded }))
+      toast.success("Store image uploaded successfully")
+    } catch (err) {
+      toast.error(err?.message || "Failed to capture store image")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const handleAdditionalImagesCameraCapture = async () => {
+    if (!window.flutter_inappwebview?.callHandler) {
+      additionalImagesCameraInputRef.current?.click()
+      return
+    }
+
+    try {
+      setSaving(true)
+      const result = await window.flutter_inappwebview.callHandler("openCamera")
+      if (!result?.success || !result?.base64) {
+        toast.error("Camera capture failed or cancelled")
+        return
+      }
+
+      const uploaded = await uploadCapturedImage(
+        result.base64,
+        result.fileName || `additional_${Date.now()}.jpg`,
+        result.mimeType || "image/jpeg",
+        "mobasket/grocery-store/additional"
+      )
+      setImages((prev) => ({
+        ...prev,
+        additionalImages: [...prev.additionalImages, uploaded],
+      }))
+      toast.success("Image uploaded successfully")
+    } catch (err) {
+      toast.error(err?.message || "Failed to capture additional image")
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const validateFieldRealTime = (field, value) => {
     let error = "";
     const val = value ? value.trim() : "";
@@ -617,19 +693,29 @@ export default function GroceryStoreOnboarding() {
   };
 
   const handleFieldChange = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }))
-    validateFieldRealTime(field, value);
+    let nextValue = value
+    if (field === "ownerPhone" || field === "primaryContactNumber") {
+      nextValue = String(value || "").replace(/\D/g, "").slice(0, 10)
+    }
+
+    setForm((prev) => ({ ...prev, [field]: nextValue }))
+    validateFieldRealTime(field, nextValue);
   }
 
   const handleLocationChange = (field, value) => {
+    let nextValue = value
+    if (field === "zipCode") {
+      nextValue = String(value || "").replace(/\D/g, "").slice(0, 6)
+    }
+
     setForm((prev) => ({
       ...prev,
       location: {
         ...prev.location,
-        [field]: value,
+        [field]: nextValue,
       },
     }))
-    validateFieldRealTime(field, value);
+    validateFieldRealTime(field, nextValue);
   }
 
   const removeStoreImage = () => {
@@ -999,11 +1085,45 @@ export default function GroceryStoreOnboarding() {
                       <ImageIcon className="w-8 h-8 text-gray-400" />
                     </div>
                   )}
-                  <label htmlFor="storeImageInput" className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer">
-                    <Upload className="w-4 h-4" />
-                    <span>{images.storeImage ? "Change" : "Upload"}</span>
-                  </label>
-                  <input id="storeImageInput" type="file" accept="image/*" capture="environment" className="hidden" onChange={handleStoreImageChange} disabled={saving} />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleStoreImageCameraCapture}
+                      disabled={saving}
+                      className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium disabled:opacity-60"
+                    >
+                      <Upload className="w-4 h-4" />
+                      <span>Camera</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => storeImageGalleryInputRef.current?.click()}
+                      disabled={saving}
+                      className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium disabled:opacity-60"
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                      <span>{images.storeImage ? "Change" : "Gallery"}</span>
+                    </button>
+                  </div>
+                  <input
+                    ref={storeImageCameraInputRef}
+                    id="storeImageCameraInput"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={handleStoreImageChange}
+                    disabled={saving}
+                  />
+                  <input
+                    ref={storeImageGalleryInputRef}
+                    id="storeImageGalleryInput"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleStoreImageChange}
+                    disabled={saving}
+                  />
                 </div>
               </div>
 
@@ -1018,11 +1138,43 @@ export default function GroceryStoreOnboarding() {
                       </button>
                     </div>
                   ))}
-                  <label htmlFor="additionalImagesInput" className="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-gray-400">
+                  <button
+                    type="button"
+                    onClick={handleAdditionalImagesCameraCapture}
+                    disabled={saving}
+                    className="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 disabled:opacity-60"
+                  >
                     <Upload className="w-6 h-6 text-gray-400 mb-1" />
-                    <span className="text-xs text-gray-500">Add image</span>
-                  </label>
-                  <input id="additionalImagesInput" type="file" accept="image/*" capture="environment" className="hidden" onChange={handleAdditionalImageChange} disabled={saving} />
+                    <span className="text-xs text-gray-500">Camera</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => additionalImagesGalleryInputRef.current?.click()}
+                    disabled={saving}
+                    className="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 disabled:opacity-60"
+                  >
+                    <ImageIcon className="w-6 h-6 text-gray-400 mb-1" />
+                    <span className="text-xs text-gray-500">Gallery</span>
+                  </button>
+                  <input
+                    ref={additionalImagesCameraInputRef}
+                    id="additionalImagesCameraInput"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={handleAdditionalImageChange}
+                    disabled={saving}
+                  />
+                  <input
+                    ref={additionalImagesGalleryInputRef}
+                    id="additionalImagesGalleryInput"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAdditionalImageChange}
+                    disabled={saving}
+                  />
                 </div>
               </div>
             </section>

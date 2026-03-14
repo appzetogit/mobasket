@@ -1074,13 +1074,18 @@ export default function CreatePercentageDiscount() {
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
-              <div className="px-4 py-4 border-b border-gray-200 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-gray-900">
-                  {makeOfferModal.editingOffer ? "Edit Offer" : "Make Offer"} - {makeOfferModal.item.name || makeOfferModal.item.itemName}
-                </h2>
+              <div className="px-4 py-4 border-b border-gray-200 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-lg font-bold text-gray-900">
+                    {makeOfferModal.editingOffer ? "Edit Offer" : "Make Offer"}
+                  </h2>
+                  <p className="text-sm text-gray-600 truncate">
+                    {makeOfferModal.item.name || makeOfferModal.item.itemName}
+                  </p>
+                </div>
                 <button
                   onClick={closeMakeOfferModal}
-                  className="p-1 rounded-full hover:bg-gray-100"
+                  className="p-1 rounded-full hover:bg-gray-100 shrink-0"
                 >
                   <X className="w-5 h-5 text-gray-600" />
                 </button>

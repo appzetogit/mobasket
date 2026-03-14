@@ -365,9 +365,8 @@ export default function HubMenu() {
       if (showLoading) setLoadingAddons(true)
       const response = await restaurantAPI.getAddons()
       const data = response?.data?.data?.addons || response?.data?.addons || []
-      // Filter to show only approved add-ons
-      const approvedAddons = data.filter(addon => addon.approvalStatus === 'approved')
-      setAddons(approvedAddons)
+      // Show all add-ons so pending/rejected states are visible.
+      setAddons(data)
     } catch (error) {
       console.error('Error fetching add-ons:', error)
       toast.error('Failed to load add-ons')
@@ -767,6 +766,12 @@ export default function HubMenu() {
 
   // Handle filter selection
   const handleFilterSelect = (filterId) => {
+    if (activeFilter === filterId) {
+      setSelectedFilter(null)
+      setActiveFilter(null)
+      setIsFilterOpen(false)
+      return
+    }
     setSelectedFilter(filterId)
     setActiveFilter(filterId)
     setIsFilterOpen(false)
@@ -1022,43 +1027,49 @@ export default function HubMenu() {
           </AnimatePresence>
 
           {/* Horizontally scrollable filters */}
-          <div className="flex pl-4 relative items-center gap-2 overflow-x-auto pb-2" ref={scrollContainerRef} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <div className="flex px-4 relative items-center gap-2 pb-2">
             <style>{`
               .scrollbar-hide::-webkit-scrollbar {
                 display: none;
               }
             `}</style>
-            {activeFilter && (
-              <button
-                onClick={() => {
-                  setActiveFilter(null)
-                  setSelectedFilter(null)
-                }}
-                className="flex items-center gap-2 px-2 py-1 text-semibold border-2 border-gray-300 rounded-md text-sm font-medium whitespace-nowrap shrink-0 bg-white text-gray-900"
-              >
-                <X className="w-3 h-3" />
-                <span>Clear</span>
-              </button>
-            )}
-            {quickFilters.map((filter) => (
-              <button
-                key={filter.id}
-                onClick={() => handleFilterSelect(filter.id)}
-                className={`flex items-center gap-2 px-2 py-1 text-semibold border-2 rounded-md text-sm font-medium whitespace-nowrap shrink-0 ${activeFilter === filter.id
+            <div
+              className="flex-1 flex items-center gap-2 overflow-x-auto scrollbar-hide"
+              ref={scrollContainerRef}
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              {activeFilter && (
+                <button
+                  onClick={() => {
+                    setActiveFilter(null)
+                    setSelectedFilter(null)
+                  }}
+                  className="flex items-center gap-2 px-2 py-1 text-semibold border-2 border-gray-300 rounded-md text-sm font-medium whitespace-nowrap shrink-0 bg-white text-gray-900"
+                >
+                  <X className="w-3 h-3" />
+                  <span>Clear</span>
+                </button>
+              )}
+              {quickFilters.map((filter) => (
+                <button
+                  key={filter.id}
+                  onClick={() => handleFilterSelect(filter.id)}
+                  className={`flex items-center gap-2 px-2 py-1 text-semibold border-2 rounded-md text-sm font-medium whitespace-nowrap shrink-0 ${activeFilter === filter.id
                     ? "bg-gray-900 text-white border-gray-900"
                     : "bg-white border-gray-200 text-gray-900"
-                  }`}
-              >
-                <span>{filter.label}</span>
-                <span className="bg-red-100 border-2 border-red-400 text-red-400 text-xs  font-bold p-0.5 py-0.25 rounded-sm">
-                  {filter.count}
-                </span>
-              </button>
+                    }`}
+                >
+                  <span>{filter.label}</span>
+                  <span className="bg-red-100 border-2 border-red-400 text-red-400 text-xs  font-bold p-0.5 py-0.25 rounded-sm">
+                    {filter.count}
+                  </span>
+                </button>
 
-            ))}
+              ))}
+            </div>
             <button
               onClick={() => setIsFilterOpen(true)}
-              className="sticky right-0 z-10 bg-black p-2 text-white border-2 border-black flex items-center gap-2 px-2 py-1 text-semibold rounded-l-lg text-sm font-medium whitespace-nowrap"
+              className="shrink-0 z-10 bg-black p-2 text-white border-2 border-black flex items-center gap-2 px-2 py-1 text-semibold rounded-lg text-sm font-medium whitespace-nowrap"
             >
               <SlidersHorizontal className="w-4 h-4" />
               <span>Filter</span>

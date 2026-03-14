@@ -14,11 +14,13 @@ import {
   ClipboardList
 } from "lucide-react"
 import BottomNavOrders from "../components/BottomNavOrders"
+import { toast } from "sonner"
 
 export default function HelpCentre() {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState("")
+  const [language, setLanguage] = useState("en")
   const isStore = location.pathname.startsWith("/store")
   const baseRoute = isStore ? "/store" : "/restaurant"
 
@@ -65,6 +67,42 @@ export default function HelpCentre() {
     topic.subtitle.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
+  const copyHelpSummary = async () => {
+    const lines = filteredTopics.map((topic, index) => `${index + 1}. ${topic.title} - ${topic.subtitle}`)
+    const textToCopy = lines.length > 0
+      ? `Help topics:\n${lines.join("\n")}`
+      : "No help topics available."
+
+    try {
+      await navigator.clipboard.writeText(textToCopy)
+      toast.success("Copied help topics")
+    } catch (error) {
+      console.error("Failed to copy help topics:", error)
+      toast.error("Unable to copy right now")
+    }
+  }
+
+  const toggleLanguage = () => {
+    setLanguage((prev) => (prev === "en" ? "hi" : "en"))
+  }
+
+  const translations = {
+    en: {
+      header: "Help centre",
+      prompt: "How can we help you",
+      search: "Search by issue",
+      noResults: `No help topics found matching "${searchQuery}"`,
+    },
+    hi: {
+      header: "सहायता केंद्र",
+      prompt: "हम आपकी कैसे मदद कर सकते हैं",
+      search: "समस्या खोजें",
+      noResults: `"${searchQuery}" के लिए कोई सहायता विषय नहीं मिला`,
+    },
+  }
+
+  const t = translations[language] || translations.en
+
   return (
     <div className="min-h-screen bg-white flex flex-col">
       {/* Header */}
@@ -77,13 +115,21 @@ export default function HelpCentre() {
             >
               <ChevronLeft className="w-6 h-6 text-gray-900" />
             </button>
-            <h1 className="text-lg font-bold text-gray-900">Help centre</h1>
+            <h1 className="text-lg font-bold text-gray-900">{t.header}</h1>
           </div>
           <div className="flex items-center gap-4">
-            <button className="p-1 hover:bg-gray-100 rounded-full transition-colors">
+            <button
+              onClick={toggleLanguage}
+              className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+              aria-label="Toggle language"
+            >
               <Languages className="w-6 h-6 text-gray-700" />
             </button>
-            <button className="p-1 hover:bg-gray-100 rounded-full transition-colors">
+            <button
+              onClick={copyHelpSummary}
+              className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+              aria-label="Copy help topics"
+            >
               <ClipboardList className="w-6 h-6 text-gray-700" />
             </button>
           </div>
@@ -95,7 +141,7 @@ export default function HelpCentre() {
         {/* How can we help you section */}
         <div className="mb-6">
           <h2 className="text-base font-bold text-gray-900 mb-3">
-            How can we help you
+            {t.prompt}
           </h2>
           
           {/* Search Bar */}
@@ -105,7 +151,7 @@ export default function HelpCentre() {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by issue"
+              placeholder={t.search}
               className="w-full pl-10 pr-4 py-3 text-sm text-gray-900 placeholder-gray-400 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-gray-400"
             />
           </div>
@@ -156,7 +202,7 @@ export default function HelpCentre() {
         {filteredTopics.length === 0 && (
           <div className="text-center py-12">
             <p className="text-sm text-gray-500">
-              No help topics found matching "{searchQuery}"
+              {t.noResults}
             </p>
           </div>
         )}

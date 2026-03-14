@@ -9,9 +9,11 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider"
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 import { groceryStoreAPI, restaurantAPI } from "@/lib/api"
+import { normalizeTimeTo24Hour } from "@/lib/utils/outletTimingsStatus"
 import { toast } from "sonner"
 
-const STORAGE_KEY = "restaurant_outlet_timings"
+const RESTAURANT_STORAGE_KEY = "restaurant_outlet_timings"
+const GROCERY_STORAGE_KEY = "grocery_store_outlet_timings"
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 // Helper function to convert "HH:mm" string to Date object
@@ -57,9 +59,7 @@ const getDefaultDays = () => ({
 })
 
 const normalizeTime = (value, fallback) => {
-  if (!value || typeof value !== "string") return fallback
-  const parsed = stringToTime(value)
-  return timeToString(parsed)
+  return normalizeTimeTo24Hour(value, fallback)
 }
 
 const mapApiTimingsToDays = (timings) => {
@@ -92,6 +92,7 @@ export default function OutletTimings() {
   const navigate = useNavigate()
   const location = useLocation()
   const isStore = location.pathname.startsWith("/store")
+  const storageKey = isStore ? GROCERY_STORAGE_KEY : RESTAURANT_STORAGE_KEY
   const baseRoute = isStore ? "/store" : "/restaurant"
   const outletTimingsAPI = isStore ? groceryStoreAPI : restaurantAPI
   const [expandedDay, setExpandedDay] = useState("Monday")
@@ -100,7 +101,7 @@ export default function OutletTimings() {
   const hasLocalEditRef = useRef(false)
   const [days, setDays] = useState(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY)
+      const saved = localStorage.getItem(storageKey)
       if (saved) {
         const parsed = JSON.parse(saved)
         // Validate and ensure all days have proper structure
@@ -146,7 +147,7 @@ export default function OutletTimings() {
   // Persist day changes locally for other pages and debounce backend sync.
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(days))
+      localStorage.setItem(storageKey, JSON.stringify(days))
       // Dispatch event to notify other components
       window.dispatchEvent(new Event("outletTimingsUpdated"))
     } catch (error) {
@@ -180,7 +181,7 @@ export default function OutletTimings() {
         clearTimeout(saveTimeoutRef.current)
       }
     }
-  }, [days])
+  }, [days, outletTimingsAPI, storageKey])
 
   // Load outlet timings from backend first so user-side availability uses real saved timings.
   useEffect(() => {
@@ -198,7 +199,7 @@ export default function OutletTimings() {
         if (Array.isArray(apiTimings) && apiTimings.length > 0) {
           const mapped = mapApiTimingsToDays(apiTimings)
           setDays(mapped)
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped))
+      localStorage.setItem(storageKey, JSON.stringify(mapped))
           window.dispatchEvent(new Event("outletTimingsUpdated"))
         }
       } catch (error) {
@@ -207,13 +208,13 @@ export default function OutletTimings() {
     }
 
     loadFromApi()
-  }, [outletTimingsAPI])
+  }, [outletTimingsAPI, storageKey])
 
   // Listen for updates from other components
   useEffect(() => {
     const handleUpdate = () => {
       try {
-        const saved = localStorage.getItem(STORAGE_KEY)
+        const saved = localStorage.getItem(storageKey)
         if (saved) {
           const newDays = JSON.parse(saved)
           setDays(prevDays => {
@@ -230,7 +231,7 @@ export default function OutletTimings() {
 
     window.addEventListener("outletTimingsUpdated", handleUpdate)
     return () => window.removeEventListener("outletTimingsUpdated", handleUpdate)
-  }, [])
+  }, [storageKey])
 
   // Lenis smooth scrolling
   useEffect(() => {

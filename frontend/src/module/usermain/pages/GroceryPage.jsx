@@ -1180,13 +1180,24 @@ const GroceryPage = () => {
       (store) => getNormalizedStoreId(store) === String(selectedStoreId)
     );
     const selectedCandidateIds = new Set(
-      selectedStore
-        ? getStoreIdCandidates(selectedStore)
-        : [String(selectedStoreId)]
+      [
+        String(selectedStoreId || "").trim(),
+        String(selectedStore?._id || "").trim(),
+        String(selectedStore?.id || "").trim(),
+      ].filter(Boolean)
     );
 
     return allProducts.filter(
-      (product) => getStoreIdCandidates(product).some((candidateId) => selectedCandidateIds.has(candidateId))
+      (product) => {
+        const productStoreIds = [
+          String(product?.storeId?._id || "").trim(),
+          String(product?.storeId?.id || "").trim(),
+          String(typeof product?.storeId === "string" ? product.storeId : "").trim(),
+          String(product?._storeId || "").trim(),
+        ].filter(Boolean);
+
+        return productStoreIds.some((candidateId) => selectedCandidateIds.has(candidateId));
+      }
     );
   }, [allProducts, groceryStores, selectedStoreId]);
 

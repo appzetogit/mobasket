@@ -465,15 +465,9 @@ export const getOrders = asyncHandler(async (req, res) => {
               ]
             },
             {
-              $or: [
-                {
-                  'assignmentInfo.zoneId': {
-                    $in: currentZoneIds
-                  }
-                },
-                { 'assignmentInfo.zoneId': { $exists: false } },
-                { 'assignmentInfo.zoneId': null }
-              ]
+              'assignmentInfo.zoneId': {
+                $in: currentZoneIds
+              }
             }
           ]
         }
@@ -771,7 +765,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         normalizedPriorityIds.length > 0 || normalizedExpandedIds.length > 0;
       const orderZoneId = normalizeZoneId(assignmentInfo?.zoneId);
       const currentZoneIds = await getCurrentDeliveryZoneIds(delivery._id);
-      const isSameZoneEligible = !orderZoneId || currentZoneIds.includes(orderZoneId);
+      const isSameZoneEligible = Boolean(orderZoneId) && currentZoneIds.includes(orderZoneId);
       
       console.log(`🔍 Checking notification status for order acceptance:`, {
         currentDeliveryId: normalizedCurrentId,

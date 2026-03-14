@@ -2,6 +2,7 @@ import Order from '../models/Order.js';
 import Delivery from '../../delivery/models/Delivery.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import GroceryStore from '../../grocery/models/GroceryStore.js';
+import Zone from '../../admin/models/Zone.js';
 import {
   isDeliveryEligibleForOrders
 } from '../../delivery/utils/deliveryEligibility.js';
@@ -69,6 +70,149 @@ const fetchStoreByIdentifier = async (identifier) => {
   ]);
 
   return pickBestStoreDetails(groceryByAlt, restaurantByAlt);
+};
+
+const getPlatformZoneFilter = (platform = 'mofood') =>
+  platform === 'mogrocery'
+    ? { platform: 'mogrocery' }
+    : { $or: [{ platform: 'mofood' }, { platform: { $exists: false } }] };
+
+const normalizeZoneId = (value) => {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+  if (typeof value === 'object') {
+    const candidate = value._id || value.id || value.zoneId || value.zone;
+    if (!candidate) return null;
+    return String(candidate).trim() || null;
+  }
+  if (typeof value.toString === 'function') {
+    const stringified = value.toString().trim();
+    return stringified || null;
+  }
+  return String(value).trim() || null;
+};
+
+const normalizeDeliveryPartnerZoneIds = (rawZones = []) => {
+  if (!Array.isArray(rawZones)) return [];
+  return rawZones
+    .map((zoneValue) => normalizeZoneId(zoneValue))
+    .filter(Boolean);
+};
+
+const getDeliveryPartnerCoordinates = (deliveryPartner = null) => {
+  const coordinates = deliveryPartner?.availability?.currentLocation?.coordinates;
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
+  const [lng, lat] = coordinates;
+  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return null;
+  return { lat: Number(lat), lng: Number(lng) };
+};
+
+const isPointInZoneBoundary = (lat, lng, zoneCoordinates = []) => {
+  if (!Array.isArray(zoneCoordinates) || zoneCoordinates.length < 3) return false;
+  let inside = false;
+
+  for (let i = 0, j = zoneCoordinates.length - 1; i < zoneCoordinates.length; j = i++) {
+    const xi = zoneCoordinates[i]?.longitude;
+    const yi = zoneCoordinates[i]?.latitude;
+    const xj = zoneCoordinates[j]?.longitude;
+    const yj = zoneCoordinates[j]?.latitude;
+
+    if (
+      !Number.isFinite(xi) ||
+      !Number.isFinite(yi) ||
+      !Number.isFinite(xj) ||
+      !Number.isFinite(yj)
+    ) {
+      continue;
+    }
+
+    const intersect =
+      ((yi > lat) !== (yj > lat)) &&
+      (lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi);
+
+    if (intersect) inside = !inside;
+  }
+
+  return inside;
+};
+
+const isDeliveryPartnerZoneEligible = (deliveryPartner, zoneContext = {}) => {
+  const { requiredZoneId = null, requiredZone = null, activeZones = [] } = zoneContext;
+  if (!deliveryPartner) return false;
+
+  const partnerZoneIds = normalizeDeliveryPartnerZoneIds(deliveryPartner.availability?.zones);
+  const partnerCoords = getDeliveryPartnerCoordinates(deliveryPartner);
+
+  if (requiredZoneId) {
+    if (!requiredZone) return false;
+    if (partnerZoneIds.length > 0) {
+      return partnerZoneIds.includes(String(requiredZoneId));
+    }
+    if (!partnerCoords) return false;
+    return isPointInZoneBoundary(partnerCoords.lat, partnerCoords.lng, requiredZone.coordinates);
+  }
+
+  if (!Array.isArray(activeZones) || activeZones.length === 0) {
+    return true;
+  }
+
+  const activeZoneIds = new Set(
+    activeZones.map((zone) => normalizeZoneId(zone?._id)).filter(Boolean)
+  );
+
+  if (partnerZoneIds.length > 0) {
+    return partnerZoneIds.some((zoneId) => activeZoneIds.has(zoneId));
+  }
+
+  if (!partnerCoords) return false;
+  return activeZones.some((zone) =>
+    isPointInZoneBoundary(partnerCoords.lat, partnerCoords.lng, zone.coordinates)
+  );
+};
+
+const resolveRequiredZoneForOrder = async ({ order, store = null, platform = 'mofood' }) => {
+  const platformFilter = getPlatformZoneFilter(platform);
+  const activeZones = await Zone.find({ isActive: true, ...platformFilter })
+    .select('_id coordinates')
+    .lean();
+
+  const assignmentZoneId = normalizeZoneId(order?.assignmentInfo?.zoneId);
+  const storeZoneId = normalizeZoneId(
+    store?.zoneId?._id ||
+      store?.zoneId?.id ||
+      store?.zoneId ||
+      null
+  );
+  const requiredZoneId = assignmentZoneId || storeZoneId || null;
+
+  if (requiredZoneId) {
+    const requiredZone =
+      activeZones.find((zone) => String(zone._id) === String(requiredZoneId)) || null;
+    return { requiredZoneId: String(requiredZoneId), requiredZone, activeZones };
+  }
+
+  const coords = store?.location?.coordinates;
+  if (Array.isArray(coords) && coords.length >= 2) {
+    const [lng, lat] = coords;
+    if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
+      const matchingZone =
+        activeZones.find((zone) =>
+          isPointInZoneBoundary(Number(lat), Number(lng), zone.coordinates)
+        ) || null;
+      if (matchingZone) {
+        return {
+          requiredZoneId: String(matchingZone._id),
+          requiredZone: matchingZone,
+          activeZones
+        };
+      }
+    }
+  }
+
+  return { requiredZoneId: null, requiredZone: null, activeZones };
 };
 
 // Dynamic import to avoid circular dependency
@@ -259,6 +403,23 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
       restaurantLocation?.address ||
       restaurant?.address ||
       'Restaurant address';
+    const resolvedPlatform =
+      orderWithUser?.platform ||
+      order?.platform ||
+      restaurant?.platform ||
+      'mofood';
+    const zoneContext = await resolveRequiredZoneForOrder({
+      order: orderWithUser || order,
+      store: restaurant,
+      platform: resolvedPlatform
+    });
+
+    if (!isDeliveryPartnerZoneEligible(deliveryPartner, zoneContext)) {
+      console.warn(
+        `Skipping out-of-zone delivery partner ${deliveryPartnerId} for order ${order.orderId}`
+      );
+      return { success: false, reason: 'delivery_partner_out_of_zone' };
+    }
 
     // Calculate distances
     let pickupDistance = null;
@@ -508,6 +669,7 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
     let restaurantAddress = 'Restaurant address';
     let restaurantLocation = null;
     let resolvedRestaurantName = orderWithUser.restaurantName || '';
+    let resolvedStoreDetails = null;
     
     if (orderWithUser.restaurantId) {
       try {
@@ -518,6 +680,7 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
         const resolvedStore = pickBestStoreDetails(populatedStore, fetchedStore);
 
         if (resolvedStore) {
+          resolvedStoreDetails = resolvedStore;
           resolvedRestaurantName = resolvedRestaurantName || resolvedStore.name || '';
           restaurantAddress =
             resolvedStore.address ||
@@ -608,6 +771,23 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
       console.log(`⚠️ Using fallback earnings: ₹${typeof estimatedEarnings === 'object' ? estimatedEarnings.totalEarning : estimatedEarnings}`);
     }
 
+    const zoneContext = await resolveRequiredZoneForOrder({
+      order: orderWithUser,
+      store:
+        resolvedStoreDetails ||
+        {
+          ...(restaurantLocation ? { location: restaurantLocation } : {}),
+          ...(orderWithUser?.restaurantId && typeof orderWithUser.restaurantId === 'object'
+            ? { zoneId: orderWithUser.restaurantId.zoneId }
+            : {}),
+          ...(orderWithUser?.restaurantPlatform ? { platform: orderWithUser.restaurantPlatform } : {}),
+        },
+      platform:
+        orderWithUser?.platform ||
+        orderWithUser?.restaurantPlatform ||
+        'mofood'
+    });
+
     // Prepare notification payload
     const resolvedDeliveryDistance =
       Number(deliveryDistance || orderWithUser?.assignmentInfo?.distance || orderWithUser?.deliveryState?.routeToDelivery?.distance || 0);
@@ -666,10 +846,14 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
     for (const deliveryPartnerId of deliveryPartnerIds) {
       try {
         const deliveryPartner = await Delivery.findById(deliveryPartnerId)
-          .select('phoneVerified status isActive')
+          .select('phoneVerified status isActive availability.currentLocation availability.zones')
           .lean();
         if (!isDeliveryEligibleForOrders(deliveryPartner)) {
           console.warn(`⚠️ Skipping ineligible delivery partner ${deliveryPartnerId} for order ${order.orderId}`);
+          continue;
+        }
+        if (!isDeliveryPartnerZoneEligible(deliveryPartner, zoneContext)) {
+          console.warn(`Skipping out-of-zone delivery partner ${deliveryPartnerId} for order ${order.orderId}`);
           continue;
         }
 

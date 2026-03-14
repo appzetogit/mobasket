@@ -600,6 +600,7 @@ export default function OrdersMain() {
   const acceptSlidePointerIdRef = useRef(null)
   const [restaurantStatus, setRestaurantStatus] = useState({
     isActive: null,
+    isAcceptingOrders: null,
     rejectionReason: null,
     onboarding: null,
     isLoading: true
@@ -614,7 +615,7 @@ export default function OrdersMain() {
     String(restaurantStatus.rejectionReason || "").trim()
   )
   const canAccessLiveOrders =
-    restaurantStatus.isActive === true
+    restaurantStatus.isActive === true && restaurantStatus.isAcceptingOrders !== false
   const shouldShowVerificationState =
     !restaurantStatus.isLoading &&
     (hasCompletedVerificationSubmission || hasRejectedVerification) &&
@@ -745,6 +746,7 @@ export default function OrdersMain() {
           const normalizedStatus = String(restaurant.status || "").trim().toLowerCase()
           setRestaurantStatus({
             isActive: restaurant.isActive,
+            isAcceptingOrders: restaurant.isAcceptingOrders !== false,
             status: restaurant.status || null,
             rejectionReason: restaurant.rejectionReason || null,
             onboarding: restaurant.onboarding || null,
@@ -831,6 +833,7 @@ export default function OrdersMain() {
       if (restaurant) {
         setRestaurantStatus({
           isActive: restaurant.isActive,
+          isAcceptingOrders: restaurant.isAcceptingOrders !== false,
           status: restaurant.status || null,
           rejectionReason: restaurant.rejectionReason || null,
           onboarding: restaurant.onboarding || null,

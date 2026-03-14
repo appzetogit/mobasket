@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import AnimatedPage from "../../components/AnimatedPage"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,9 @@ import { useProfile } from "../../context/ProfileContext"
 
 export default function AddPayment() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const returnTo = location.state?.returnTo || "/user/profile/payments"
+  const returnState = location.state?.giftCard ? { giftCard: location.state.giftCard } : undefined
   const { addPaymentMethod } = useProfile()
   const [formData, setFormData] = useState({
     cardNumber: "",
@@ -21,14 +24,26 @@ export default function AddPayment() {
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    setFormData({
-      ...formData,
-      [name]: value,
-    })
+    const numericValue = String(value || "").replace(/\D/g, "")
+
+    if (name === "cardNumber") {
+      setFormData((prev) => ({ ...prev, cardNumber: numericValue.slice(0, 4) }))
+    } else if (name === "expiryMonth") {
+      setFormData((prev) => ({ ...prev, expiryMonth: numericValue.slice(0, 2) }))
+    } else if (name === "expiryYear") {
+      setFormData((prev) => ({ ...prev, expiryYear: numericValue.slice(0, 4) }))
+    } else if (name === "cvv") {
+      setFormData((prev) => ({ ...prev, cvv: numericValue.slice(0, 4) }))
+    } else {
+      setFormData({
+        ...formData,
+        [name]: value,
+      })
+    }
 
     // Auto-detect card type based on first digit
-    if (name === "cardNumber" && value.length > 0) {
-      const firstDigit = value[0]
+    if (name === "cardNumber" && numericValue.length > 0) {
+      const firstDigit = numericValue[0]
       if (firstDigit === "4") {
         setFormData((prev) => ({ ...prev, type: "visa" }))
       } else if (firstDigit === "5" || firstDigit === "2") {
@@ -62,8 +77,30 @@ export default function AddPayment() {
       return
     }
 
+    const month = Number(formData.expiryMonth)
+    const year = Number(formData.expiryYear)
+    const now = new Date()
+    const currentMonth = now.getMonth() + 1
+    const currentYear = now.getFullYear()
+    if (!Number.isInteger(month) || month < 1 || month > 12) {
+      alert("Please enter a valid expiry month (01-12)")
+      return
+    }
+    if (!Number.isInteger(year) || String(formData.expiryYear).length !== 4) {
+      alert("Please enter a valid 4-digit expiry year")
+      return
+    }
+    if (year < currentYear || year > currentYear + 30) {
+      alert("Please enter a valid expiry year")
+      return
+    }
+    if (year === currentYear && month < currentMonth) {
+      alert("This card is expired")
+      return
+    }
+
     addPaymentMethod(formData)
-    navigate("/user/profile/payments")
+    navigate(returnTo, returnState ? { state: returnState } : undefined)
   }
 
   return (
@@ -104,10 +141,11 @@ export default function AddPayment() {
                   <Input
                     id="expiryMonth"
                     name="expiryMonth"
-                    placeholder="12"
+                    placeholder="MM"
                     value={formData.expiryMonth}
                     onChange={handleChange}
                     maxLength={2}
+                    inputMode="numeric"
                     required
                   />
                 </div>
@@ -116,10 +154,11 @@ export default function AddPayment() {
                   <Input
                     id="expiryYear"
                     name="expiryYear"
-                    placeholder="2025"
+                    placeholder="YYYY"
                     value={formData.expiryYear}
                     onChange={handleChange}
                     maxLength={4}
+                    inputMode="numeric"
                     required
                   />
                 </div>
@@ -132,6 +171,7 @@ export default function AddPayment() {
                     value={formData.cvv}
                     onChange={handleChange}
                     maxLength={4}
+                    inputMode="numeric"
                     type="password"
                     required
                   />
@@ -140,7 +180,7 @@ export default function AddPayment() {
               <div className="flex gap-2 pt-4">
                 <Button
                   type="button"
-                  onClick={() => navigate("/user/profile/payments")}
+                  onClick={() => navigate(returnTo, returnState ? { state: returnState } : undefined)}
                   variant="outline"
                 >
                   Cancel

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react"
-import { useNavigate } from "react-router-dom"
-import { ArrowLeft, X, Pencil, Loader2 } from "lucide-react"
+import { useLocation, useNavigate } from "react-router-dom"
+import { ArrowLeft, X, Loader2, Camera, Image, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -53,6 +53,7 @@ const saveProfileToStorage = (data) => {
 
 export default function EditProfile() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { userProfile, updateUserProfile } = useProfile()
 
   // Load from localStorage or use context
@@ -84,6 +85,7 @@ export default function EditProfile() {
   const [profileImage, setProfileImage] = useState(initialProfile?.profileImage || "")
   const [imagePreview, setImagePreview] = useState(initialProfile?.profileImage || "")
   const fileInputRef = useRef(null)
+  const cameraInputRef = useRef(null)
 
   // Update form data when profile changes
   useEffect(() => {
@@ -235,8 +237,11 @@ export default function EditProfile() {
 
         toast.success('Profile updated successfully')
 
-        // Navigate back
-        navigate("/user/profile")
+        // Navigate back to previous flow (e.g. checkout), else profile.
+        const returnTo = typeof location.state?.returnTo === "string"
+          ? location.state.returnTo
+          : "/user/profile"
+        navigate(returnTo, { replace: true })
       }
     } catch (error) {
       console.error('Error updating profile:', error)
@@ -272,6 +277,23 @@ export default function EditProfile() {
     }
 
     input.click()
+  }
+
+  const handleCameraPickerOpen = () => {
+    const input = cameraInputRef.current
+    if (!input || isUploadingImage) return
+    input.click()
+  }
+
+  const handleRemoveProfilePhoto = () => {
+    setProfileImage("")
+    setImagePreview("")
+    updateUserProfile({ profileImage: "" })
+    saveProfileToStorage({
+      ...(loadProfileFromStorage() || {}),
+      profileImage: "",
+    })
+    toast.success("Profile photo removed")
   }
 
   return (
@@ -310,15 +332,41 @@ export default function EditProfile() {
               onClick={handleImagePickerOpen}
               disabled={isUploadingImage}
               className="absolute bottom-0 right-0 w-8 h-8 bg-green-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Upload from gallery"
             >
               {isUploadingImage ? (
                 <Loader2 className="h-4 w-4 text-white animate-spin" />
               ) : (
-                <Pencil className="h-4 w-4 text-white" />
+                <Image className="h-4 w-4 text-white" />
               )}
             </button>
+            <button
+              onClick={handleCameraPickerOpen}
+              disabled={isUploadingImage}
+              className="absolute bottom-0 -right-10 w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Use camera"
+            >
+              <Camera className="h-4 w-4 text-white" />
+            </button>
+            {!!imagePreview && (
+              <button
+                onClick={handleRemoveProfilePhoto}
+                disabled={isUploadingImage}
+                className="absolute -top-2 -right-2 w-8 h-8 bg-red-600 rounded-full flex items-center justify-center shadow-lg border-2 border-white hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Remove profile photo"
+              >
+                <Trash2 className="h-4 w-4 text-white" />
+              </button>
+            )}
             <input
               ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleImageSelect}
+              className="sr-only"
+            />
+            <input
+              ref={cameraInputRef}
               type="file"
               accept="image/*"
               capture="environment"
@@ -398,11 +446,13 @@ export default function EditProfile() {
               </Label>
               <LocalizationProvider dateAdapter={AdapterDayjs}>
                 <DatePicker
+                  format="DD/MM/YYYY"
                   value={formData.dateOfBirth}
                   onChange={(newValue) => handleChange('dateOfBirth', newValue)}
                   slotProps={{
                     textField: {
                       className: "w-full",
+                      inputProps: { placeholder: "DD/MM/YYYY" },
                       sx: {
                         '& .MuiOutlinedInput-root': {
                           height: '48px',
@@ -463,11 +513,13 @@ export default function EditProfile() {
               </Label>
               <LocalizationProvider dateAdapter={AdapterDayjs}>
                 <DatePicker
+                  format="DD/MM/YYYY"
                   value={formData.anniversary}
                   onChange={(newValue) => handleChange('anniversary', newValue)}
                   slotProps={{
                     textField: {
                       className: "w-full",
+                      inputProps: { placeholder: "DD/MM/YYYY" },
                       sx: {
                         '& .MuiOutlinedInput-root': {
                           height: '48px',
@@ -538,7 +590,7 @@ export default function EditProfile() {
                     <SelectItem
                       key={option.value}
                       value={option.value}
-                      className="text-gray-900 dark:text-gray-100 focus:bg-gray-100 dark:focus:bg-gray-700 border-gray-200 dark:border-gray-700"
+                      className="text-gray-900 dark:text-gray-100 data-[highlighted]:bg-gray-100 dark:data-[highlighted]:bg-gray-700 data-[state=checked]:font-semibold"
                     >
                       {option.label}
                     </SelectItem>

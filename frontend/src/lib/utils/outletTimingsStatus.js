@@ -1,4 +1,5 @@
 const DAY_ORDER = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_NAMES_MONDAY_FIRST = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
 export const parseTimeToMinutes = (value) => {
   if (!value || typeof value !== 'string') return null;
@@ -21,6 +22,54 @@ export const parseTimeToMinutes = (value) => {
   }
 
   return hours * 60 + minutes;
+};
+
+export const normalizeTimeTo24Hour = (value, fallback = '09:00') => {
+  if (!value || typeof value !== 'string') return fallback;
+  const parsedMinutes = parseTimeToMinutes(value);
+  if (!Number.isFinite(parsedMinutes)) return fallback;
+  const hours = Math.floor(parsedMinutes / 60) % 24;
+  const minutes = parsedMinutes % 60;
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+};
+
+const slotTo24Hour = (time, period) => {
+  if (!time || typeof time !== 'string' || !time.includes(':')) return null;
+  const [rawHour, rawMinute] = time.split(':').map(Number);
+  if (!Number.isFinite(rawHour) || !Number.isFinite(rawMinute)) return null;
+  let hour = rawHour;
+  const minute = Math.max(0, Math.min(59, rawMinute));
+  const p = String(period || '').toLowerCase();
+  if (p === 'pm' && hour !== 12) hour += 12;
+  if (p === 'am' && hour === 12) hour = 0;
+  hour = Math.max(0, Math.min(23, hour));
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+};
+
+export const normalizeOutletTimingsMap = (raw) => {
+  if (!raw) return null;
+  const next = {};
+
+  const assignDay = (day, value) => {
+    if (!DAY_NAMES_MONDAY_FIRST.includes(day) || !value || typeof value !== 'object') return;
+    const slot = Array.isArray(value?.slots) && value.slots.length > 0 ? value.slots[0] : null;
+    const openingFromSlot = slot ? slotTo24Hour(slot.start, slot.startPeriod) : null;
+    const closingFromSlot = slot ? slotTo24Hour(slot.end, slot.endPeriod) : null;
+
+    next[day] = {
+      isOpen: value.isOpen !== false,
+      openingTime: normalizeTimeTo24Hour(value.openingTime || openingFromSlot, '09:00'),
+      closingTime: normalizeTimeTo24Hour(value.closingTime || closingFromSlot, '22:00'),
+    };
+  };
+
+  if (Array.isArray(raw)) {
+    raw.forEach((entry) => assignDay(entry?.day, entry));
+  } else if (typeof raw === 'object') {
+    DAY_NAMES_MONDAY_FIRST.forEach((day) => assignDay(day, raw[day]));
+  }
+
+  return Object.keys(next).length > 0 ? next : null;
 };
 
 export const isOpenFromOutletTimingsMap = (timingsByDay, now = new Date()) => {

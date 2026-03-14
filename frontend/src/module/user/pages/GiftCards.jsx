@@ -20,7 +20,7 @@ const giftCardCategories = [
     gradient: 'from-rose-400 via-red-400 to-rose-500',
     bgColor: '#f87171',
     emojis: ['🎂', '🎁', '🥳', '🎉'],
-    message: 'Have a yumazing birthday!'
+    message: 'Have an amazing birthday!'
   },
   {
     id: 'anniversary',

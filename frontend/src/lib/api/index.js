@@ -804,8 +804,33 @@ export const groceryStoreAPI = {
     return apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.FCM_TOKEN, { token, platform });
   },
 
-  reverify: () => {
-    return apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.REVERIFY);
+  reverify: async () => {
+    try {
+      return await apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.REVERIFY);
+    } catch (error) {
+      if (Number(error?.response?.status || 0) !== 404) {
+        throw error;
+      }
+
+      const fallbackEndpoints = [
+        "/grocery-store/auth/reverify",
+        "/grocery/auth/reverify",
+      ];
+
+      let lastError = error;
+      for (const endpoint of fallbackEndpoints) {
+        try {
+          return await apiClient.post(endpoint);
+        } catch (fallbackError) {
+          lastError = fallbackError;
+          if (Number(fallbackError?.response?.status || 0) !== 404) {
+            throw fallbackError;
+          }
+        }
+      }
+
+      throw lastError;
+    }
   },
 
   // Onboarding
