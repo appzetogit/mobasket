@@ -22,6 +22,7 @@ export default function RestaurantsList() {
   const entityLabelPlural = isGrocery ? "Stores" : "Restaurants"
   const [searchQuery, setSearchQuery] = useState("")
   const [restaurants, setRestaurants] = useState([])
+  const [zones, setZones] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedRestaurant, setSelectedRestaurant] = useState(null)
@@ -119,6 +120,27 @@ export default function RestaurantsList() {
     location: resolveRestaurantLocation(restaurant),
   })
 
+  const isPointInPolygon = (latitude, longitude, coordinates = []) => {
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !Array.isArray(coordinates) || coordinates.length < 3) {
+      return false
+    }
+
+    let inside = false
+    for (let i = 0, j = coordinates.length - 1; i < coordinates.length; j = i++) {
+      const xi = Number(coordinates[i]?.latitude)
+      const yi = Number(coordinates[i]?.longitude)
+      const xj = Number(coordinates[j]?.latitude)
+      const yj = Number(coordinates[j]?.longitude)
+      if (![xi, yi, xj, yj].every(Number.isFinite)) continue
+
+      const intersect =
+        yi > longitude !== yj > longitude &&
+        latitude < ((xj - xi) * (longitude - yi)) / (yj - yi) + xi
+      if (intersect) inside = !inside
+    }
+    return inside
+  }
+
   // Format Restaurant ID to REST format (e.g., REST422829)
   const formatRestaurantId = (id) => {
     if (!id) return "REST000000"
@@ -187,7 +209,7 @@ export default function RestaurantsList() {
         try {
           // Try admin API first
           response = await adminAPI.getRestaurants()
-        } catch (adminErr) {
+        } catch {
           // Fallback to regular restaurant API if admin endpoint doesn't exist
           console.log("Admin restaurants endpoint not available, using fallback")
           response = await restaurantAPI.getRestaurants()
@@ -235,6 +257,21 @@ export default function RestaurantsList() {
   }, [])
 
   useEffect(() => {
+    const fetchZones = async () => {
+      try {
+        const response = await adminAPI.getZones({ platform, limit: 1000 })
+        const zoneList = response?.data?.data?.zones || response?.data?.zones || []
+        setZones(Array.isArray(zoneList) ? zoneList : [])
+      } catch (zoneError) {
+        console.error("Error fetching zones for restaurant filter:", zoneError)
+        setZones([])
+      }
+    }
+
+    fetchZones()
+  }, [platform])
+
+  useEffect(() => {
     if (!editRestaurantDialog || !editingRestaurant?._id) return
     const timer = setTimeout(() => {
       initializeEditMap(editingRestaurant)
@@ -277,11 +314,34 @@ export default function RestaurantsList() {
     }
 
     if (filters.zone) {
-      result = result.filter(restaurant => restaurant.zone === filters.zone)
+      const selectedZone = zones.find((zone) => String(zone?._id || zone?.id || "") === filters.zone)
+      const hasValidPolygon = Array.isArray(selectedZone?.coordinates) && selectedZone.coordinates.length >= 3
+      if (!selectedZone || !hasValidPolygon) {
+        return []
+      }
+
+      result = result.filter((restaurant) => {
+        const restaurantLat = Number(
+          restaurant?.originalData?.location?.latitude ??
+            restaurant?.originalData?.location?.coordinates?.[1],
+        )
+        const restaurantLng = Number(
+          restaurant?.originalData?.location?.longitude ??
+            restaurant?.originalData?.location?.coordinates?.[0],
+        )
+        if (
+          Number.isFinite(restaurantLat) &&
+          Number.isFinite(restaurantLng) &&
+          isPointInPolygon(restaurantLat, restaurantLng, selectedZone.coordinates)
+        ) {
+          return true
+        }
+        return false
+      })
     }
 
     return result
-  }, [restaurants, searchQuery, filters])
+  }, [restaurants, searchQuery, filters, zones])
 
   const parseAddressComponents = (components = []) => {
     const byType = (type) => components.find((c) => c.types?.includes(type))
@@ -458,15 +518,18 @@ export default function RestaurantsList() {
   const activeRestaurants = restaurants.filter(r => r.status).length
   const inactiveRestaurants = restaurants.filter(r => !r.status).length
 
-  // Get unique cuisines from restaurants for filter dropdown
-  const uniqueCuisines = useMemo(() => {
-    const cuisines = restaurants
-      .map(r => r.cuisine)
-      .filter(c => c && c !== "N/A")
-      .filter((value, index, self) => self.indexOf(value) === index)
-      .sort()
-    return cuisines
-  }, [restaurants])
+  const zoneOptions = useMemo(() => {
+    const seen = new Set()
+    return (Array.isArray(zones) ? zones : [])
+      .map((zone) => {
+        const id = String(zone?._id || zone?.id || "").trim()
+        const name = String(zone?.name || zone?.zoneName || zone?.serviceLocation || "Unnamed Zone").trim()
+        if (!id || !name || seen.has(id)) return null
+        seen.add(id)
+        return { id, name }
+      })
+      .filter(Boolean)
+  }, [zones])
 
   // Show full phone number without masking
   const formatPhone = (phone) => {
@@ -907,6 +970,20 @@ export default function RestaurantsList() {
                 <option value="All">All Status</option>
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
+              </select>
+              <select
+                value={filters.zone}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, zone: e.target.value }))
+                }
+                className="px-3 py-2.5 text-sm rounded-lg border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All Zones</option>
+                {zoneOptions.map((zone) => (
+                  <option key={zone.id} value={zone.id}>
+                    {zone.name}
+                  </option>
+                ))}
               </select>
               <div className="relative flex-1 sm:flex-initial min-w-[250px]">
                 <input

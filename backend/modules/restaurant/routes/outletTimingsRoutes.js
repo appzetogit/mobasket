@@ -14,11 +14,19 @@ import Joi from 'joi';
 const router = express.Router();
 
 // Validation schemas
+const slotSchema = Joi.object({
+  start: Joi.string().pattern(/^(0?[1-9]|1[0-2]):[0-5][0-9]$/).required(),
+  end: Joi.string().pattern(/^(0?[1-9]|1[0-2]):[0-5][0-9]$/).required(),
+  startPeriod: Joi.string().valid('am', 'pm', 'AM', 'PM').required(),
+  endPeriod: Joi.string().valid('am', 'pm', 'AM', 'PM').required(),
+});
+
 const dayTimingSchema = Joi.object({
   day: Joi.string().valid('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday').required(),
   isOpen: Joi.boolean().default(true),
   openingTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]\s?(AM|PM|am|pm)?$/).optional(),
-  closingTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]\s?(AM|PM|am|pm)?$/).optional()
+  closingTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]\s?(AM|PM|am|pm)?$/).optional(),
+  slots: Joi.array().items(slotSchema).max(3).optional(),
 });
 
 const upsertOutletTimingsSchema = Joi.object({
@@ -29,8 +37,9 @@ const upsertOutletTimingsSchema = Joi.object({
 const updateDayTimingSchema = Joi.object({
   isOpen: Joi.boolean().optional(),
   openingTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]\s?(AM|PM|am|pm)?$/).optional(),
-  closingTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]\s?(AM|PM|am|pm)?$/).optional()
-}).or('isOpen', 'openingTime', 'closingTime');
+  closingTime: Joi.string().pattern(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]\s?(AM|PM|am|pm)?$/).optional(),
+  slots: Joi.array().items(slotSchema).max(3).optional(),
+}).or('isOpen', 'openingTime', 'closingTime', 'slots');
 
 const toggleStatusSchema = Joi.object({
   isActive: Joi.boolean().required()

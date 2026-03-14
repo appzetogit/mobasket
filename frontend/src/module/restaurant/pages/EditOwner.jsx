@@ -21,15 +21,17 @@ import { restaurantAPI } from "@/lib/api"
 import OptimizedImage from "@/components/OptimizedImage"
 import { clearModuleAuth } from "@/lib/utils/auth"
 import { firebaseAuth } from "@/lib/firebase"
+import { useCompanyName } from "@/lib/hooks/useCompanyName"
 
 const STORAGE_KEY = "restaurant_owner_contact"
 
 export default function EditOwner() {
+  const companyName = useCompanyName()
   const navigate = useNavigate()
   const location = useLocation()
   const isStore = location.pathname.startsWith("/store")
   const moduleName = isStore ? "grocery-store" : "restaurant"
-  const appName = "MoFood"
+  const appName = companyName || "MoFood"
   const welcomeRoute = isStore ? "/store/login" : "/restaurant/welcome"
   const storagePrefix = isStore ? "grocery-store" : "restaurant"
   const [ownerData, setOwnerData] = useState({

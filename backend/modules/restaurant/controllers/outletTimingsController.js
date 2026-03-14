@@ -14,6 +14,41 @@ const minutesToTime24 = (totalMinutes) => {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 };
 
+const parseSlotTimeToMinutes = (timeValue, periodValue) => {
+  if (!timeValue || typeof timeValue !== 'string') return null;
+  const normalizedTime = timeValue.trim();
+  const normalizedPeriod = String(periodValue || '').trim().toUpperCase();
+  if (!normalizedPeriod || (normalizedPeriod !== 'AM' && normalizedPeriod !== 'PM')) return null;
+  return parseTimeToMinutes(`${normalizedTime} ${normalizedPeriod}`);
+};
+
+const deriveBoundsFromSlots = (slots = []) => {
+  if (!Array.isArray(slots) || slots.length === 0) return null;
+  const starts = slots
+    .map((slot) => parseSlotTimeToMinutes(slot?.start, slot?.startPeriod))
+    .filter((value) => Number.isFinite(value));
+  const ends = slots
+    .map((slot) => parseSlotTimeToMinutes(slot?.end, slot?.endPeriod))
+    .filter((value) => Number.isFinite(value));
+
+  if (starts.length === 0 || ends.length === 0) return null;
+  return {
+    openingTime: minutesToTime24(Math.min(...starts)),
+    closingTime: minutesToTime24(Math.max(...ends)),
+  };
+};
+
+const normalizeTimingEntry = (timing = {}) => {
+  if (!timing || typeof timing !== 'object') return timing;
+  const next = { ...timing };
+  const bounds = deriveBoundsFromSlots(next.slots);
+  if (bounds) {
+    if (!next.openingTime) next.openingTime = bounds.openingTime;
+    if (!next.closingTime) next.closingTime = bounds.closingTime;
+  }
+  return next;
+};
+
 const syncRestaurantTimingFields = async (restaurantId, timings) => {
   if (!restaurantId || !Array.isArray(timings) || timings.length === 0) return;
 
@@ -155,9 +190,11 @@ export const upsertOutletTimings = asyncHandler(async (req, res) => {
         return errorResponse(res, 400, `Invalid day: ${timing.day}`);
       }
 
+      const normalizedTiming = normalizeTimingEntry(timing);
+
       // If day is open, validate times
-      if (timing.isOpen) {
-        if (!timing.openingTime || !timing.closingTime) {
+      if (normalizedTiming.isOpen) {
+        if (!normalizedTiming.openingTime || !normalizedTiming.closingTime) {
           return errorResponse(res, 400, `Opening and closing times are required for ${timing.day} when open`);
         }
       }
@@ -173,7 +210,7 @@ export const upsertOutletTimings = asyncHandler(async (req, res) => {
     if (timings) {
       // Sort timings by day order
       timings.sort((a, b) => DAY_ORDER.indexOf(a.day) - DAY_ORDER.indexOf(b.day));
-      outletTimings.timings = timings;
+      outletTimings.timings = timings.map((timing) => normalizeTimingEntry(timing));
     }
     await outletTimings.save();
   } else {
@@ -191,7 +228,7 @@ export const upsertOutletTimings = asyncHandler(async (req, res) => {
     outletTimings = await OutletTimings.create({
       restaurantId,
       outletType: outletType || 'MoBasket delivery',
-      timings: defaultTimings
+      timings: defaultTimings.map((timing) => normalizeTimingEntry(timing))
     });
   }
 
@@ -209,7 +246,7 @@ export const upsertOutletTimings = asyncHandler(async (req, res) => {
 export const updateDayTiming = asyncHandler(async (req, res) => {
   const restaurantId = req.restaurant._id;
   const { day } = req.params;
-  const { isOpen, openingTime, closingTime } = req.body;
+  const { isOpen, openingTime, closingTime, slots } = req.body;
 
   const validDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
   if (!validDays.includes(day)) {
@@ -251,6 +288,11 @@ export const updateDayTiming = asyncHandler(async (req, res) => {
   if (closingTime !== undefined) {
     outletTimings.timings[dayIndex].closingTime = closingTime;
   }
+  if (slots !== undefined) {
+    outletTimings.timings[dayIndex].slots = Array.isArray(slots) ? slots : [];
+  }
+
+  outletTimings.timings[dayIndex] = normalizeTimingEntry(outletTimings.timings[dayIndex]);
 
   // Validate: if opening, times must be provided
   if (outletTimings.timings[dayIndex].isOpen) {

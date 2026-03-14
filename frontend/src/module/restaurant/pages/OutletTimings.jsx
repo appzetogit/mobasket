@@ -49,13 +49,13 @@ const formatTime12Hour = (time24) => {
 }
 
 const getDefaultDays = () => ({
-  Monday: { isOpen: true, openingTime: "09:00", closingTime: "22:00" },
-  Tuesday: { isOpen: true, openingTime: "09:00", closingTime: "22:00" },
-  Wednesday: { isOpen: true, openingTime: "09:00", closingTime: "22:00" },
-  Thursday: { isOpen: true, openingTime: "09:00", closingTime: "22:00" },
-  Friday: { isOpen: true, openingTime: "09:00", closingTime: "22:00" },
-  Saturday: { isOpen: true, openingTime: "09:00", closingTime: "22:00" },
-  Sunday: { isOpen: true, openingTime: "09:00", closingTime: "22:00" },
+  Monday: { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] },
+  Tuesday: { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] },
+  Wednesday: { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] },
+  Thursday: { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] },
+  Friday: { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] },
+  Saturday: { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] },
+  Sunday: { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] },
 })
 
 const normalizeTime = (value, fallback) => {
@@ -73,6 +73,7 @@ const mapApiTimingsToDays = (timings) => {
       isOpen: entry?.isOpen !== false,
       openingTime: normalizeTime(entry?.openingTime, "09:00"),
       closingTime: normalizeTime(entry?.closingTime, "22:00"),
+      slots: Array.isArray(entry?.slots) ? entry.slots : [],
     }
   })
 
@@ -85,6 +86,7 @@ const mapDaysToApiTimings = (days) =>
     isOpen: days?.[day]?.isOpen !== false,
     openingTime: normalizeTime(days?.[day]?.openingTime, "09:00"),
     closingTime: normalizeTime(days?.[day]?.closingTime, "22:00"),
+    slots: Array.isArray(days?.[day]?.slots) ? days[day].slots : [],
   }))
 
 export default function OutletTimings() {
@@ -124,16 +126,18 @@ export default function OutletTimings() {
                 isOpen: parsed[day].isOpen !== undefined ? parsed[day].isOpen : true,
                 openingTime: parseSlotTime(firstSlot.start, firstSlot.startPeriod || "am"),
                 closingTime: parseSlotTime(firstSlot.end, firstSlot.endPeriod || "pm"),
+                slots: parsed[day].slots,
               }
             } else {
               validated[day] = {
                 isOpen: parsed[day].isOpen !== undefined ? parsed[day].isOpen : true,
                 openingTime: parsed[day].openingTime || "09:00",
                 closingTime: parsed[day].closingTime || "22:00",
+                slots: Array.isArray(parsed[day].slots) ? parsed[day].slots : [],
               }
             }
           } else {
-            validated[day] = { isOpen: true, openingTime: "09:00", closingTime: "22:00" }
+            validated[day] = { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] }
           }
         })
         return validated
@@ -322,7 +326,7 @@ export default function OutletTimings() {
           {/* Day-wise Accordion */}
           <div className="space-y-2">
             {DAY_NAMES.map((day, index) => {
-              const dayData = days[day] || { isOpen: true, openingTime: "09:00", closingTime: "22:00" }
+              const dayData = days[day] || { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] }
               const isExpanded = expandedDay === day
 
               return (
@@ -349,6 +353,14 @@ export default function OutletTimings() {
                       <span className="text-base font-medium text-gray-900">{day}</span>
                     </button>
                     <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`${baseRoute}/outlet-timings/${day.toLowerCase()}`)}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Slots
+                      </button>
                       <span className="text-sm text-gray-700">{dayData.isOpen ? "Open" : "Close"}</span>
                       <div onClick={(e) => e.stopPropagation()}>
                         <Switch

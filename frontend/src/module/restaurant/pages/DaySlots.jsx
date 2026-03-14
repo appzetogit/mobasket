@@ -26,8 +26,10 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
+import { groceryStoreAPI, restaurantAPI } from "@/lib/api"
 
-const STORAGE_KEY = "restaurant_outlet_timings"
+const RESTAURANT_STORAGE_KEY = "restaurant_outlet_timings"
+const GROCERY_STORAGE_KEY = "grocery_store_outlet_timings"
 
 const getDefaultDayData = () => ({
   isOpen: true,
@@ -384,11 +386,13 @@ export default function DaySlots() {
   const { day } = useParams()
   const isGroceryStore = location.pathname.startsWith("/store")
   const baseRoute = isGroceryStore ? "/store" : "/restaurant"
+  const storageKey = isGroceryStore ? GROCERY_STORAGE_KEY : RESTAURANT_STORAGE_KEY
+  const outletTimingsAPI = isGroceryStore ? groceryStoreAPI : restaurantAPI
   const dayName = day ? day.charAt(0).toUpperCase() + day.slice(1) : "Monday"
   
   const [dayData, setDayData] = useState(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY)
+      const saved = localStorage.getItem(storageKey)
       if (saved) {
         const allDays = JSON.parse(saved)
         const dayData = allDays[dayName]
@@ -579,7 +583,7 @@ export default function DaySlots() {
 
   const handleSave = () => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY)
+      const saved = localStorage.getItem(storageKey)
       let allDays = saved ? JSON.parse(saved) : {}
 
       if (copyToAllDays) {
@@ -593,8 +597,63 @@ export default function DaySlots() {
         allDays[dayName] = dayData
       }
 
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(allDays))
+      localStorage.setItem(storageKey, JSON.stringify(allDays))
       window.dispatchEvent(new Event("outletTimingsUpdated"))
+      const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+      const normalizeTimeTo24 = (time, period) => {
+        if (!time || typeof time !== "string" || !time.includes(":")) return null
+        const [rawHour, rawMinute] = time.split(":").map(Number)
+        if (!Number.isFinite(rawHour) || !Number.isFinite(rawMinute)) return null
+        let hour = rawHour
+        const minute = Math.max(0, Math.min(59, rawMinute))
+        const p = String(period || "").toLowerCase()
+        if (p === "pm" && hour !== 12) hour += 12
+        if (p === "am" && hour === 12) hour = 0
+        if (!Number.isFinite(hour)) return null
+        return `${String(Math.max(0, Math.min(23, hour))).padStart(2, "0")}:${String(minute).padStart(2, "0")}`
+      }
+
+      const timingsPayload = dayNames.map((dayLabel) => {
+        const current = allDays?.[dayLabel] || getDefaultDayData()
+        const normalizedSlots = Array.isArray(current?.slots)
+          ? current.slots
+              .map((slot) => ({
+                start: String(slot?.start || "").trim(),
+                end: String(slot?.end || "").trim(),
+                startPeriod: String(slot?.startPeriod || "am").toLowerCase(),
+                endPeriod: String(slot?.endPeriod || "pm").toLowerCase(),
+              }))
+              .filter((slot) => slot.start && slot.end)
+          : []
+
+        const openingFromSlot = normalizedSlots.length > 0
+          ? normalizeTimeTo24(normalizedSlots[0].start, normalizedSlots[0].startPeriod)
+          : "09:00"
+        const closingFromSlot = normalizedSlots.length > 0
+          ? normalizeTimeTo24(
+              normalizedSlots[normalizedSlots.length - 1].end,
+              normalizedSlots[normalizedSlots.length - 1].endPeriod,
+            )
+          : "22:00"
+
+        return {
+          day: dayLabel,
+          isOpen: current?.isOpen !== false,
+          openingTime: openingFromSlot || "09:00",
+          closingTime: closingFromSlot || "22:00",
+          slots: normalizedSlots,
+        }
+      })
+
+      outletTimingsAPI
+        .upsertOutletTimings({
+          outletType: "MoBasket delivery",
+          timings: timingsPayload,
+        })
+        .catch((error) => {
+          console.error("Error syncing day slots to backend:", error)
+        })
+
       navigate(`${baseRoute}/outlet-timings`)
     } catch (error) {
       console.error("Error saving day slots:", error)

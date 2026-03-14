@@ -46,13 +46,40 @@ const slotTo24Hour = (time, period) => {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 };
 
+const normalizeSlot = (slot) => {
+  if (!slot || typeof slot !== 'object') return null;
+  const start = String(slot.start || '').trim();
+  const end = String(slot.end || '').trim();
+  const startPeriod = String(slot.startPeriod || '').toLowerCase();
+  const endPeriod = String(slot.endPeriod || '').toLowerCase();
+  if (!start || !end) return null;
+  if (!['am', 'pm'].includes(startPeriod) || !['am', 'pm'].includes(endPeriod)) return null;
+  return { start, end, startPeriod, endPeriod };
+};
+
+const isWithinWindow = (currentMinutes, openingMinutes, closingMinutes) => {
+  if (
+    !Number.isFinite(currentMinutes) ||
+    !Number.isFinite(openingMinutes) ||
+    !Number.isFinite(closingMinutes)
+  ) {
+    return false;
+  }
+  if (openingMinutes === closingMinutes) return true;
+  if (closingMinutes > openingMinutes) {
+    return currentMinutes >= openingMinutes && currentMinutes <= closingMinutes;
+  }
+  return currentMinutes >= openingMinutes || currentMinutes <= closingMinutes;
+};
+
 export const normalizeOutletTimingsMap = (raw) => {
   if (!raw) return null;
   const next = {};
 
   const assignDay = (day, value) => {
     if (!DAY_NAMES_MONDAY_FIRST.includes(day) || !value || typeof value !== 'object') return;
-    const slot = Array.isArray(value?.slots) && value.slots.length > 0 ? value.slots[0] : null;
+    const slots = Array.isArray(value?.slots) ? value.slots.map(normalizeSlot).filter(Boolean) : [];
+    const slot = slots.length > 0 ? slots[0] : null;
     const openingFromSlot = slot ? slotTo24Hour(slot.start, slot.startPeriod) : null;
     const closingFromSlot = slot ? slotTo24Hour(slot.end, slot.endPeriod) : null;
 
@@ -60,6 +87,7 @@ export const normalizeOutletTimingsMap = (raw) => {
       isOpen: value.isOpen !== false,
       openingTime: normalizeTimeTo24Hour(value.openingTime || openingFromSlot, '09:00'),
       closingTime: normalizeTimeTo24Hour(value.closingTime || closingFromSlot, '22:00'),
+      slots,
     };
   };
 
@@ -79,13 +107,21 @@ export const isOpenFromOutletTimingsMap = (timingsByDay, now = new Date()) => {
   if (!dayData) return null;
   if (dayData.isOpen === false) return false;
 
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const slots = Array.isArray(dayData?.slots) ? dayData.slots : [];
+  if (slots.length > 0) {
+    return slots.some((slot) => {
+      const start24 = slotTo24Hour(slot?.start, slot?.startPeriod);
+      const end24 = slotTo24Hour(slot?.end, slot?.endPeriod);
+      const startMinutes = parseTimeToMinutes(start24);
+      const endMinutes = parseTimeToMinutes(end24);
+      return isWithinWindow(nowMinutes, startMinutes, endMinutes);
+    });
+  }
+
   const openingMinutes = parseTimeToMinutes(dayData.openingTime);
   const closingMinutes = parseTimeToMinutes(dayData.closingTime);
   if (!Number.isFinite(openingMinutes) || !Number.isFinite(closingMinutes)) return true;
 
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  if (closingMinutes > openingMinutes) {
-    return nowMinutes >= openingMinutes && nowMinutes <= closingMinutes;
-  }
-  return nowMinutes >= openingMinutes || nowMinutes <= closingMinutes;
+  return isWithinWindow(nowMinutes, openingMinutes, closingMinutes);
 };

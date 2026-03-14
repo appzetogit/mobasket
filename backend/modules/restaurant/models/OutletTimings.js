@@ -1,5 +1,40 @@
 import mongoose from 'mongoose';
 
+const timingSlotSchema = new mongoose.Schema({
+  start: {
+    type: String,
+    required: true,
+    validate: {
+      validator: function(v) {
+        if (!v) return false;
+        return /^(0?[1-9]|1[0-2]):[0-5][0-9]$/.test(v);
+      },
+      message: 'Slot start must be in format H:MM or HH:MM (12-hour clock)'
+    }
+  },
+  end: {
+    type: String,
+    required: true,
+    validate: {
+      validator: function(v) {
+        if (!v) return false;
+        return /^(0?[1-9]|1[0-2]):[0-5][0-9]$/.test(v);
+      },
+      message: 'Slot end must be in format H:MM or HH:MM (12-hour clock)'
+    }
+  },
+  startPeriod: {
+    type: String,
+    enum: ['am', 'pm', 'AM', 'PM'],
+    required: true
+  },
+  endPeriod: {
+    type: String,
+    enum: ['am', 'pm', 'AM', 'PM'],
+    required: true
+  }
+}, { _id: false });
+
 const dayTimingSchema = new mongoose.Schema({
   day: {
     type: String,
@@ -36,6 +71,17 @@ const dayTimingSchema = new mongoose.Schema({
                /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(v);
       },
       message: 'Closing time must be in format HH:MM AM/PM or HH:MM'
+    }
+  },
+  slots: {
+    type: [timingSlotSchema],
+    default: [],
+    validate: {
+      validator: function(v) {
+        if (!Array.isArray(v)) return false;
+        return v.length <= 3;
+      },
+      message: 'A maximum of 3 timing slots are allowed per day'
     }
   }
 }, { _id: false });

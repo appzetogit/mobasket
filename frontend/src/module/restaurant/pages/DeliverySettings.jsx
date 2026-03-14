@@ -128,8 +128,42 @@ export default function DeliverySettings() {
       const currentTimeInMinutes = currentHour * 60 + currentMinute
 
       const dayData = days[currentDay]
-      if (!dayData || !dayData.isOpen || !dayData.slots || dayData.slots.length === 0) {
+      if (!dayData || !dayData.isOpen) {
         return false
+      }
+
+      const parseTimeToMinutes = (timeStr) => {
+        if (!timeStr || typeof timeStr !== "string") return null
+        const normalized = timeStr.trim().toUpperCase()
+        const match = normalized.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/)
+        if (!match) return null
+        let hours = Number(match[1])
+        const minutes = Number(match[2])
+        const period = match[3] || null
+        if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null
+        if (minutes < 0 || minutes > 59) return null
+        if (period) {
+          if (hours < 1 || hours > 12) return null
+          if (period === "PM" && hours !== 12) hours += 12
+          if (period === "AM" && hours === 12) hours = 0
+        } else if (hours < 0 || hours > 23) {
+          return null
+        }
+        return hours * 60 + minutes
+      }
+
+      const isWithinWindow = (startMinutes, endMinutes) => {
+        if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes)) return false
+        if (endMinutes < startMinutes) {
+          return currentTimeInMinutes >= startMinutes || currentTimeInMinutes <= endMinutes
+        }
+        return currentTimeInMinutes >= startMinutes && currentTimeInMinutes <= endMinutes
+      }
+
+      if (!dayData.slots || dayData.slots.length === 0) {
+        const start = parseTimeToMinutes(dayData.openingTime)
+        const end = parseTimeToMinutes(dayData.closingTime)
+        return isWithinWindow(start, end)
       }
 
       // Check if current time falls within any slot for today
@@ -149,14 +183,7 @@ export default function DeliverySettings() {
         const startMinutes = parseTime(slot.start, slot.startPeriod || "am")
         const endMinutes = parseTime(slot.end, slot.endPeriod || "pm")
         
-        // Handle slots that span midnight (e.g., 11pm to 2am)
-        if (endMinutes < startMinutes) {
-          // Slot spans midnight
-          return currentTimeInMinutes >= startMinutes || currentTimeInMinutes <= endMinutes
-        } else {
-          // Normal slot within same day
-          return currentTimeInMinutes >= startMinutes && currentTimeInMinutes <= endMinutes
-        }
+        return isWithinWindow(startMinutes, endMinutes)
       })
     } catch (error) {
       console.error("Error checking outlet timings:", error)
