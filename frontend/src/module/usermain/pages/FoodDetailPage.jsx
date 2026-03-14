@@ -336,16 +336,16 @@ export default function FoodDetailPage() {
 
     toast.custom(
       (t) => (
-        <div className="bg-white border-l-4 border-emerald-500 shadow-lg rounded-lg p-4 flex flex-col gap-3 min-w-[280px] overflow-hidden relative">
+        <div className="bg-white dark:bg-[#0f172a] border-l-4 border-emerald-500 dark:border-emerald-400/60 shadow-lg rounded-lg p-4 flex flex-col gap-3 min-w-[280px] overflow-hidden relative">
           <div className="flex items-center gap-3">
-            <div className="bg-emerald-100 p-1.5 rounded-full">
-              <CheckCircle className="text-emerald-600 w-5 h-5" />
+            <div className="bg-emerald-100 dark:bg-emerald-900/40 p-1.5 rounded-full">
+              <CheckCircle className="text-emerald-600 dark:text-emerald-300 w-5 h-5" />
             </div>
             <div className="flex-1">
-              <p className="text-sm font-bold text-gray-900">Added to Cart</p>
-              <p className="text-xs text-gray-500">{targetProduct.name}</p>
+              <p className="text-sm font-bold text-gray-900 dark:text-slate-100">Added to Cart</p>
+              <p className="text-xs text-gray-500 dark:text-slate-400">{targetProduct.name}</p>
             </div>
-            <button onClick={() => toast.dismiss(t)} className="text-gray-400 hover:text-gray-600">
+            <button onClick={() => toast.dismiss(t)} className="text-gray-400 dark:text-slate-400 hover:text-gray-600 dark:hover:text-slate-200">
               <X size={14} />
             </button>
           </div>
@@ -373,13 +373,13 @@ export default function FoodDetailPage() {
 
   const quickActions = (
     <div className="flex items-center gap-2">
-      <WishlistButton item={wishlistItem} type="food" className="w-10 h-10 bg-white/70 backdrop-blur-md border border-white/60" />
+      <WishlistButton item={wishlistItem} type="food" className="w-10 h-10 bg-white/70 dark:bg-black/40 backdrop-blur-md border border-white/60 dark:border-white/10" />
       <button
         onClick={handleShareClick}
-        className="w-10 h-10 rounded-full bg-white/70 backdrop-blur-md border border-white/60 flex items-center justify-center"
+        className="w-10 h-10 rounded-full bg-white/70 dark:bg-black/40 backdrop-blur-md border border-white/60 dark:border-white/10 flex items-center justify-center"
         aria-label="Share"
       >
-        <Share2 className="w-5 h-5 text-slate-900" />
+        <Share2 className="w-5 h-5 text-slate-900 dark:text-slate-100" />
       </button>
       <AddToCartAnimation
         bottomOffset={20}
@@ -392,22 +392,22 @@ export default function FoodDetailPage() {
   );
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#edf5ff] via-[#f5f8ff] to-white relative pb-24">
+    <div className="min-h-screen bg-gradient-to-b from-[#edf5ff] via-[#f5f8ff] to-white dark:from-[#0a0a0a] dark:via-[#0b0f16] dark:to-[#0a0a0a] dark:text-slate-100 relative pb-24">
       {isLoading && (
-        <div className="fixed inset-0 z-[100] bg-white/70 backdrop-blur-[2px] flex items-center justify-center">
-          <div className="px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-semibold">Loading product...</div>
+        <div className="fixed inset-0 z-[100] bg-white/70 dark:bg-black/60 backdrop-blur-[2px] flex items-center justify-center">
+          <div className="px-4 py-2 rounded-full bg-slate-900 dark:bg-white/10 text-white text-xs font-semibold">Loading product...</div>
         </div>
       )}
 
-      <div className={`fixed top-0 left-0 right-0 bg-white/95 backdrop-blur-md z-50 px-4 py-3 flex items-center gap-3 shadow-sm transition-transform duration-300 ${showStickyHeader ? "translate-y-0" : "-translate-y-full"}`}>
+      <div className={`fixed top-0 left-0 right-0 bg-white/95 dark:bg-[#0b0f16]/95 dark:border-b dark:border-slate-800 backdrop-blur-md z-50 px-4 py-3 flex items-center gap-3 shadow-sm transition-transform duration-300 ${showStickyHeader ? "translate-y-0" : "-translate-y-full"}`}>
         <button
           onClick={() => navigate(-1)}
-          className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center"
+          className="w-8 h-8 rounded-full bg-slate-100 dark:bg-white/10 flex items-center justify-center"
           aria-label="Back"
         >
-          <ArrowLeft className="w-5 h-5 text-slate-800" />
+          <ArrowLeft className="w-5 h-5 text-slate-800 dark:text-slate-100" />
         </button>
-        <h1 className="flex-1 text-sm font-bold text-slate-800 truncate">{product.name}</h1>
+        <h1 className="flex-1 text-sm font-bold text-slate-800 dark:text-slate-100 truncate">{product.name}</h1>
         <div className="scale-90 origin-right">{quickActions}</div>
       </div>
 
@@ -415,7 +415,7 @@ export default function FoodDetailPage() {
         {/* Desktop Back Button */}
         <button
           onClick={() => navigate(-1)}
-          className="hidden md:flex absolute top-8 left-8 items-center justify-center w-10 h-10 bg-white rounded-full border border-slate-200 shadow-sm text-slate-700 hover:bg-slate-50 transition-colors z-20"
+          className="hidden md:flex absolute top-8 left-8 items-center justify-center w-10 h-10 bg-white dark:bg-[#0f172a] rounded-full border border-slate-200 dark:border-slate-700 shadow-sm text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors z-20"
           aria-label="Go back"
         >
           <ArrowLeft size={20} />
@@ -428,27 +428,27 @@ export default function FoodDetailPage() {
           <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between md:justify-end z-20">
             <button
               onClick={() => navigate(-1)}
-              className="w-10 h-10 bg-white/55 backdrop-blur-md rounded-full flex items-center justify-center shadow-sm md:hidden"
+              className="w-10 h-10 bg-white/55 dark:bg-black/40 backdrop-blur-md rounded-full flex items-center justify-center shadow-sm md:hidden"
               aria-label="Back"
             >
-              <ArrowLeft className="w-6 h-6 text-slate-900" />
+              <ArrowLeft className="w-6 h-6 text-slate-900 dark:text-slate-100" />
             </button>
             <div>{quickActions}</div>
           </div>
 
-          <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-white/70 to-transparent z-10 md:hidden" />
-          <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white via-white/90 to-transparent z-10 md:hidden" />
+          <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-white/70 to-transparent dark:from-[#0b0f16]/70 z-10 md:hidden" />
+          <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white via-white/90 to-transparent dark:from-[#0b0f16] dark:via-[#0b0f16]/80 z-10 md:hidden" />
 
           {isAddedToCart ? (
-            <div className="absolute bottom-4 right-4 z-20 h-10 px-2 rounded-xl bg-white border border-emerald-300 shadow-sm flex items-center gap-2 md:hidden">
+            <div className="absolute bottom-4 right-4 z-20 h-10 px-2 rounded-xl bg-white dark:bg-[#0f172a] border border-emerald-300 dark:border-emerald-400/40 shadow-sm flex items-center gap-2 md:hidden">
               <button
                 type="button"
                 onClick={handleDecreaseQuantity}
-                className="w-7 h-7 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center"
+                className="w-7 h-7 rounded-full bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-200 flex items-center justify-center"
               >
                 <Minus size={14} />
               </button>
-              <span className="min-w-[20px] text-center text-sm font-black text-emerald-800">{currentQuantity}</span>
+              <span className="min-w-[20px] text-center text-sm font-black text-emerald-800 dark:text-emerald-100">{currentQuantity}</span>
               <button
                 type="button"
                 onClick={handleIncreaseQuantity}
@@ -460,7 +460,7 @@ export default function FoodDetailPage() {
           ) : (
             <button
               onClick={(e) => handleAddToCart(null, e)}
-              className="absolute bottom-4 right-4 text-xs font-black px-6 py-2 rounded-md shadow-sm transition-colors z-20 border bg-white border-[#facd01] text-slate-900 hover:bg-[#facd01] md:hidden"
+              className="absolute bottom-4 right-4 text-xs font-black px-6 py-2 rounded-md shadow-sm transition-colors z-20 border bg-white dark:bg-[#0f172a] border-[#facd01] dark:border-amber-500/60 text-slate-900 dark:text-slate-100 hover:bg-[#facd01] md:hidden"
             >
               ADD
             </button>
@@ -469,27 +469,27 @@ export default function FoodDetailPage() {
 
         {/* Right Side: Details Layout */}
         <div className="relative -mt-10 z-10 md:w-[55%] md:mt-0 md:z-auto">
-          <div className="bg-white rounded-t-[26px] shadow-[0_-6px_26px_rgba(15,23,42,0.08)] px-5 pt-5 pb-4 border-t border-slate-100 md:rounded-none md:shadow-none md:border-none md:p-0 md:bg-transparent md:flex md:flex-col md:justify-center">
+          <div className="bg-white dark:bg-[#0f172a] rounded-t-[26px] shadow-[0_-6px_26px_rgba(15,23,42,0.08)] px-5 pt-5 pb-4 border-t border-slate-100 dark:border-slate-800 md:rounded-none md:shadow-none md:border-none md:p-0 md:bg-transparent md:flex md:flex-col md:justify-center">
 
             {/* Breadcrumb style text on desktop */}
-            <p className="hidden md:block text-xs font-semibold text-slate-400 mb-3">
+            <p className="hidden md:block text-xs font-semibold text-slate-400 dark:text-slate-500 mb-3">
               Home / {product.restaurant || "MoGrocery"} / {product.name}
             </p>
 
 
-            <h1 className="text-[20px] md:text-3xl font-[900] text-slate-900 leading-snug">{product.name}</h1>
+            <h1 className="text-[20px] md:text-3xl font-[900] text-slate-900 dark:text-slate-100 leading-snug">{product.name}</h1>
 
             {product.storeName && (
-              <p className="text-[12px] md:text-sm text-slate-600 mt-1.5 font-medium">
-                Sold by <span className="font-semibold text-slate-800">{product.storeName}</span>
+              <p className="text-[12px] md:text-sm text-slate-600 dark:text-slate-300 mt-1.5 font-medium">
+                Sold by <span className="font-semibold text-slate-800 dark:text-slate-100">{product.storeName}</span>
               </p>
             )}
 
-            <p className="text-[13px] md:text-base font-bold text-[#2ca34a] mt-1 md:mt-3">{displayedWeight}</p>
+            <p className="text-[13px] md:text-base font-bold text-[#2ca34a] dark:text-emerald-400 mt-1 md:mt-3">{displayedWeight}</p>
 
             {Array.isArray(product.variants) && product.variants.length > 0 && (
               <div className="mt-4 md:mt-5">
-                <p className="text-[12px] md:text-sm font-bold text-slate-700 mb-2">Choose size</p>
+                <p className="text-[12px] md:text-sm font-bold text-slate-700 dark:text-slate-200 mb-2">Choose size</p>
                 <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
                   {product.variants.map((variant) => {
                     const isSelected = selectedVariant?.key === variant.key;
@@ -504,23 +504,23 @@ export default function FoodDetailPage() {
                         onClick={() => setSelectedVariantKey(variant.key)}
                         className={`min-w-[112px] rounded-2xl border px-3 py-2.5 text-left transition-all ${
                           isSelected
-                            ? "border-emerald-500 bg-emerald-50 shadow-sm"
-                            : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                            ? "border-emerald-500 dark:border-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 shadow-sm"
+                            : "border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0b1220] text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600"
                         }`}
                       >
-                        <div className={`text-[12px] md:text-sm font-bold ${isSelected ? "text-emerald-700" : "text-[#2ca34a]"}`}>
+                        <div className={`text-[12px] md:text-sm font-bold ${isSelected ? "text-emerald-700 dark:text-emerald-200" : "text-[#2ca34a] dark:text-emerald-400"}`}>
                           {variant.name}
                         </div>
-                        <div className="mt-1 text-[15px] leading-none font-black text-slate-900">
+                        <div className="mt-1 text-[15px] leading-none font-black text-slate-900 dark:text-slate-100">
                           Rs {variant.price}
                         </div>
                         {variant.mrp > variant.price && (
-                          <div className="mt-1 text-[11px] leading-none text-slate-400 line-through">
+                          <div className="mt-1 text-[11px] leading-none text-slate-400 dark:text-slate-500 line-through">
                             Rs {variant.mrp}
                           </div>
                         )}
                         {variantDiscount > 0 && (
-                          <div className="mt-1 text-[10px] font-bold text-blue-600">{variantDiscount}% OFF</div>
+                          <div className="mt-1 text-[10px] font-bold text-blue-600 dark:text-blue-300">{variantDiscount}% OFF</div>
                         )}
                       </button>
                     );
@@ -530,12 +530,12 @@ export default function FoodDetailPage() {
             )}
 
             <div className="flex items-center gap-2 mt-2.5 md:mt-6">
-              <span className="text-xl md:text-3xl font-[900] text-slate-900">Rs {displayedPrice}</span>
+              <span className="text-xl md:text-3xl font-[900] text-slate-900 dark:text-slate-100">Rs {displayedPrice}</span>
               {displayedMrp > displayedPrice && (
-                <span className="text-[11px] md:text-sm font-bold text-slate-400 line-through">MRP Rs {displayedMrp}</span>
+                <span className="text-[11px] md:text-sm font-bold text-slate-400 dark:text-slate-500 line-through">MRP Rs {displayedMrp}</span>
               )}
               {(displayedDiscount || product.discount) && (
-                <span className="bg-[#e8f0fe] md:bg-blue-100 text-[#2c73eb] md:text-blue-700 text-[10px] md:text-xs font-[800] px-1.5 py-0.5 md:px-2 md:py-1 rounded-md">
+                <span className="bg-[#e8f0fe] md:bg-blue-100 dark:bg-[#1d2a44] text-[#2c73eb] md:text-blue-700 dark:text-blue-300 text-[10px] md:text-xs font-[800] px-1.5 py-0.5 md:px-2 md:py-1 rounded-md">
                   {displayedDiscount || product.discount}
                 </span>
               )}
@@ -571,10 +571,10 @@ export default function FoodDetailPage() {
               )}
             </div>
 
-            <div className="mt-4 md:mt-6 border-t border-slate-100 md:border-slate-200 pt-3 md:pt-6">
+            <div className="mt-4 md:mt-6 border-t border-slate-100 dark:border-slate-800 md:border-slate-200 pt-3 md:pt-6">
               <button
                 type="button"
-                className="flex items-center gap-1 text-[13px] font-[700] text-[#11a652] md:text-slate-800 md:text-sm"
+                className="flex items-center gap-1 text-[13px] font-[700] text-[#11a652] dark:text-emerald-400 md:text-slate-800 md:dark:text-slate-200 md:text-sm"
                 onClick={() => setIsDetailsOpen((prev) => !prev)}
               >
                 View product details
@@ -582,7 +582,7 @@ export default function FoodDetailPage() {
               </button>
 
               <div className={`overflow-hidden transition-all duration-300 ${isDetailsOpen ? "max-h-64 mt-3 md:mt-4" : "max-h-0"}`}>
-                <div className="bg-[#f8f9ff] md:bg-white md:border md:border-slate-100 rounded-xl p-3 md:p-4 text-[12px] md:text-sm text-slate-600 md:text-slate-500 leading-relaxed shadow-sm">
+                <div className="bg-[#f8f9ff] md:bg-white dark:bg-[#111827] md:dark:bg-[#0f172a] md:border md:border-slate-100 dark:border-slate-800 rounded-xl p-3 md:p-4 text-[12px] md:text-sm text-slate-600 dark:text-slate-300 md:text-slate-500 leading-relaxed shadow-sm">
                   {product.description || "Fresh quality grocery item delivered quickly. Store in a cool place and consume before expiry for best taste."}
                 </div>
               </div>
@@ -592,9 +592,9 @@ export default function FoodDetailPage() {
       </div>
 
       <div className="px-5 pt-6 pb-8 md:max-w-6xl md:mx-auto md:px-8 md:pt-12">
-        <h2 className="text-lg md:text-xl font-[900] text-slate-900 mb-4 md:mb-6">Similar products</h2>
+        <h2 className="text-lg md:text-xl font-[900] text-slate-900 dark:text-slate-100 mb-4 md:mb-6">Similar products</h2>
         {similarProducts.length === 0 ? (
-          <div className="text-sm text-slate-500">No similar products found in this category.</div>
+          <div className="text-sm text-slate-500 dark:text-slate-400">No similar products found in this category.</div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-x-3 md:gap-x-5 gap-y-6 md:gap-y-8">
             {similarProducts.map((item) => {
@@ -617,38 +617,38 @@ export default function FoodDetailPage() {
               return (
                 <div
                   key={item.id}
-                  className="flex flex-col h-full bg-white relative cursor-pointer group"
+                  className="flex flex-col h-full bg-white dark:bg-[#0f172a] relative cursor-pointer group"
                   onClick={() => {
                     navigate(`/food/${item.id}`, { state: { item } });
                     window.scrollTo(0, 0);
                   }}
                 >
                   {/* Image Section */}
-                  <div className="w-full aspect-square bg-[#f8f9fb] rounded-[24px] overflow-hidden relative mb-3 flex items-center justify-center p-4">
+                  <div className="w-full aspect-square bg-[#f8f9fb] dark:bg-[#111827] rounded-[24px] overflow-hidden relative mb-3 flex items-center justify-center p-4">
                     <img src={item.image} className="w-full h-full object-contain transition-transform duration-500 group-hover:scale-110" alt={item.name} />
 
                     {/* Heart Icon Overlay */}
                     <div className="absolute top-2.5 right-2.5 z-10">
                       <WishlistButton
                         item={item}
-                        className="w-7 h-7 bg-white shadow-md border-none flex items-center justify-center p-0"
+                        className="w-7 h-7 bg-white dark:bg-[#0f172a] shadow-md border-none flex items-center justify-center p-0"
                       />
                     </div>
 
                     {/* ADD / Quantity Control Overlay */}
                     <div className="absolute bottom-2.5 right-2.5 z-10">
                       {itemInCart ? (
-                        <div className="flex items-center gap-3 bg-white rounded-full border border-emerald-500/30 px-1.5 py-1 shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
+                        <div className="flex items-center gap-3 bg-white dark:bg-[#0b1220] rounded-full border border-emerald-500/30 dark:border-emerald-400/40 px-1.5 py-1 shadow-[0_4px_12px_rgba(0,0,0,0.08)]">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                               updateQuantityByPlatform(itemCartId, itemQty - 1, "mogrocery");
                             }}
-                            className="w-6 h-6 rounded-full bg-emerald-50 text-emerald-700 flex items-center justify-center active:scale-90 transition-transform"
+                            className="w-6 h-6 rounded-full bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-200 flex items-center justify-center active:scale-90 transition-transform"
                           >
                             <Minus size={12} strokeWidth={3} />
                           </button>
-                          <span className="text-[11px] font-[900] text-emerald-900 min-w-[14px] text-center">{itemQty}</span>
+                          <span className="text-[11px] font-[900] text-emerald-900 dark:text-emerald-100 min-w-[14px] text-center">{itemQty}</span>
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -662,7 +662,7 @@ export default function FoodDetailPage() {
                       ) : (
                         <button
                           onClick={(e) => handleAddToCart(item, e)}
-                          className="bg-white border border-[#facd01] text-slate-900 text-[10px] font-black px-5 py-1.5 rounded-full shadow-sm hover:bg-[#facd01] transition-all active:scale-95"
+                          className="bg-white dark:bg-[#0b1220] border border-[#facd01] dark:border-amber-500/60 text-slate-900 dark:text-slate-100 text-[10px] font-black px-5 py-1.5 rounded-full shadow-sm hover:bg-[#facd01] transition-all active:scale-95"
                         >
                           ADD
                         </button>
@@ -675,10 +675,10 @@ export default function FoodDetailPage() {
                     <div className="w-3 h-3 border border-green-600 flex items-center justify-center p-[1px]">
                       <div className="w-full h-full bg-green-600 rounded-full" />
                     </div>
-                    <span className="text-[10px] font-bold text-[#2ca34a]">{itemWeight}</span>
+                    <span className="text-[10px] font-bold text-[#2ca34a] dark:text-emerald-400">{itemWeight}</span>
                   </div>
 
-                  <p className="text-[12px] font-bold text-slate-900 leading-tight line-clamp-2 min-h-[32px] mb-1">
+                  <p className="text-[12px] font-bold text-slate-900 dark:text-slate-100 leading-tight line-clamp-2 min-h-[32px] mb-1">
                     {item.name}
                   </p>
 
@@ -691,8 +691,8 @@ export default function FoodDetailPage() {
                             key={`${item.id}-${variant.key}`}
                             className={`rounded-full px-2 py-0.5 text-[9px] font-bold ${
                               isDefault
-                                ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                : "bg-slate-100 text-slate-500 border border-slate-200"
+                                ? "bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-700/60"
+                                : "bg-slate-100 dark:bg-[#0b1220] text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700"
                             }`}
                           >
                             {variant.name}
@@ -704,20 +704,20 @@ export default function FoodDetailPage() {
 
                   {/* Time with Icon */}
                   <div className="flex items-center gap-1 mb-1.5">
-                    <Clock size={10} className="text-slate-400" />
-                    <span className="text-[9px] font-extrabold text-slate-500 uppercase">{item.time || "11 MINS"}</span>
+                    <Clock size={10} className="text-slate-400 dark:text-slate-500" />
+                    <span className="text-[9px] font-extrabold text-slate-500 dark:text-slate-400 uppercase">{item.time || "11 MINS"}</span>
                   </div>
 
                   {/* Price Info */}
                   <div className="mt-auto">
-                    {discountVal > 0 && <p className="text-[11px] font-black text-blue-600 leading-none mb-1.5">{discountVal}% OFF</p>}
+                    {discountVal > 0 && <p className="text-[11px] font-black text-blue-600 dark:text-blue-300 leading-none mb-1.5">{discountVal}% OFF</p>}
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[15px] font-[900] text-slate-900 leading-none">₹{item.price}</span>
+                      <span className="text-[15px] font-[900] text-slate-900 dark:text-slate-100 leading-none">₹{item.price}</span>
                       {item.mrp > item.price && (
-                        <span className="text-[12px] text-slate-400 line-through leading-none font-medium">₹{item.mrp}</span>
+                        <span className="text-[12px] text-slate-400 dark:text-slate-500 line-through leading-none font-medium">₹{item.mrp}</span>
                       )}
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-1.5 font-medium tracking-tight">
+                    <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-1.5 font-medium tracking-tight">
                       {calculateUnitPrice(item.price, item.weight) || `₹${item.price}/unit`}
                     </p>
                   </div>

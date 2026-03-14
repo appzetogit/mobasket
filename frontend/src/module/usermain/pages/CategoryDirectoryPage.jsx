@@ -219,13 +219,13 @@ export default function CategoryDirectoryPage() {
   }, [userLocation]);
 
   return (
-    <div className="min-h-screen bg-white pb-24 font-sans w-full">
+    <div className="min-h-screen bg-white dark:bg-[#0a0a0a] dark:text-slate-100 pb-24 font-sans w-full">
       {/* Top Navbar Header */}
-      <div className="bg-[#FACC15] rounded-b-[2.5rem] pb-6 shadow-sm">
+      <div className="bg-[#FACC15] dark:bg-[#0f172a] rounded-b-[2.5rem] pb-6 shadow-sm">
         <div className="px-4 pt-4 md:max-w-7xl md:mx-auto">
           {/* Top Info Row */}
           <div className="flex justify-between items-start mb-0">
-            <div className="flex flex-col text-[#3e3212]">
+            <div className="flex flex-col text-[#3e3212] dark:text-slate-100">
               <h1 className="text-[10px] uppercase font-black tracking-[0.15em] leading-none mb-1">
                 MOBASKET IN
               </h1>
@@ -238,7 +238,7 @@ export default function CategoryDirectoryPage() {
                 <span className="text-[13px] font-bold tracking-tight leading-tight line-clamp-2">
                   {topAddress}
                 </span>
-                <ChevronDown size={16} className="stroke-[3]" />
+                <ChevronDown size={16} className="stroke-[3] dark:text-slate-200" />
               </div>
             </div>
           </div>
@@ -247,18 +247,18 @@ export default function CategoryDirectoryPage() {
 
       {/* Search Bar */}
       <div className="px-4 mt-4 mb-2 md:max-w-xl md:mx-auto">
-        <div className="bg-gray-100 rounded-xl h-11 flex items-center px-4 shadow-sm w-full cursor-text relative">
+        <div className="bg-gray-100 dark:bg-[#111827] dark:border dark:border-slate-700 rounded-xl h-11 flex items-center px-4 shadow-sm w-full cursor-text relative">
           <label htmlFor="category-search" className="cursor-text absolute inset-0 z-0"></label>
-          <Search className="text-slate-400 w-5 h-5 stroke-[2.5] mr-3 z-10 pointer-events-none" />
+          <Search className="text-slate-400 dark:text-slate-500 w-5 h-5 stroke-[2.5] mr-3 z-10 pointer-events-none" />
           <input
             id="category-search"
             type="text"
             placeholder='Search categories...'
-            className="flex-1 bg-transparent text-slate-800 text-[14px] font-semibold outline-none placeholder:text-slate-400 z-10"
+            className="flex-1 bg-transparent text-slate-800 dark:text-slate-100 text-[14px] font-semibold outline-none placeholder:text-slate-400 dark:placeholder:text-slate-500 z-10"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
-          <div className="w-[1px] h-5 bg-slate-200 mx-2 z-10 pointer-events-none"></div>
+          <div className="w-[1px] h-5 bg-slate-200 dark:bg-slate-700 mx-2 z-10 pointer-events-none"></div>
 {/* <Mic className="text-slate-400 w-5 h-5 stroke-[2.5] z-10 pointer-events-none" /> */}
         </div>
       </div>
@@ -266,13 +266,13 @@ export default function CategoryDirectoryPage() {
       {/* Categories Grid */}
       <div className="px-4 py-2 md:max-w-7xl md:mx-auto">
         {isLoading && (
-          <p className="text-sm text-slate-500 px-1 py-3">Loading categories...</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 px-1 py-3">Loading categories...</p>
         )}
         {!isLoading && error && (
           <p className="text-sm text-red-500 px-1 py-3">{error}</p>
         )}
         {!isLoading && !error && categories.length === 0 && (
-          <p className="text-sm text-slate-500 px-1 py-3">No categories available.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 px-1 py-3">No categories available.</p>
         )}
 
         {categories.map((rawSection) => {
@@ -299,7 +299,7 @@ export default function CategoryDirectoryPage() {
 
           return (
             <div key={section._id} className="mb-6">
-              <h2 className="text-[15px] font-[800] text-slate-800 mb-3 ml-1">
+              <h2 className="text-[15px] font-[800] text-slate-800 dark:text-slate-100 mb-3 ml-1">
                 {section.name}
               </h2>
               <div className="grid grid-cols-4 gap-x-2 gap-y-6 md:grid-cols-6 lg:grid-cols-8 md:gap-6">
@@ -309,7 +309,7 @@ export default function CategoryDirectoryPage() {
                     to={`/grocery/subcategory/${item._id}`}
                     className="flex flex-col items-center gap-2 cursor-pointer group"
                   >
-                    <div className="w-full aspect-square bg-[#e6f7f5] rounded-2xl p-2.5 flex items-center justify-center relative overflow-hidden group-hover:bg-[#d8edd6] transition-colors">
+                    <div className="w-full aspect-square bg-[#e6f7f5] dark:bg-[#0f172a] rounded-2xl p-2.5 flex items-center justify-center relative overflow-hidden group-hover:bg-[#d8edd6] dark:group-hover:bg-[#122238] transition-colors">
                       {item.image ? (
                         <img
                           src={item.image}
@@ -317,19 +317,19 @@ export default function CategoryDirectoryPage() {
                           className="w-full h-full object-contain drop-shadow-[0_10px_8px_rgba(0,0,0,0.2)]"
                         />
                       ) : (
-                        <div className="w-full h-full rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-2xl font-black">
+                        <div className="w-full h-full rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-200 flex items-center justify-center text-2xl font-black">
                           {(item.name || "?").slice(0, 1).toUpperCase()}
                         </div>
                       )}
                     </div>
-                    <span className="text-[10px] font-bold text-center text-slate-800 leading-tight px-1 break-words w-full">
+                    <span className="text-[10px] font-bold text-center text-slate-800 dark:text-slate-200 leading-tight px-1 break-words w-full">
                       {item.name}
                     </span>
                   </Link>
                 ))}
               </div>
               {(!section.subcategories || section.subcategories.length === 0) && (
-                <p className="text-xs text-slate-500 ml-1">No subcategories available.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 ml-1">No subcategories available.</p>
               )}
             </div>
           );
@@ -337,9 +337,9 @@ export default function CategoryDirectoryPage() {
       </div>
 
       {/* Bottom Navigation */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-100 py-3 px-6 flex justify-between md:justify-center md:gap-28 items-end z-50 md:max-w-md md:mx-auto">
+      <div className="fixed bottom-0 left-0 right-0 bg-white/95 dark:bg-[#0a0a0a]/95 backdrop-blur-md border-t border-slate-100 dark:border-slate-800 py-3 px-6 flex justify-between md:justify-center md:gap-28 items-end z-50 md:max-w-md md:mx-auto">
         <div
-          className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 hover:text-slate-600"
+          className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
           onClick={() => navigate("/grocery")}
         >
           <Home size={24} />
@@ -347,7 +347,7 @@ export default function CategoryDirectoryPage() {
         </div>
 
         <div
-          className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 hover:text-slate-600"
+          className="flex flex-col items-center gap-1 cursor-pointer text-slate-400 dark:text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
           onClick={() => navigate("/plans")}
         >
           <ShoppingBag size={24} />
@@ -357,12 +357,12 @@ export default function CategoryDirectoryPage() {
         <div className="flex flex-col items-center gap-1 cursor-pointer">
           <LayoutGrid
             size={24}
-            className="text-slate-900 fill-current bg-green-100 rounded-sm p-0.5"
+            className="text-slate-900 dark:text-slate-100 fill-current bg-green-100 dark:bg-green-900/30 rounded-sm p-0.5"
           />
-          <span className="text-[10px] font-bold text-slate-900">
+          <span className="text-[10px] font-bold text-slate-900 dark:text-slate-100">
             Categories
           </span>
-          <div className="w-8 h-1 bg-slate-900 rounded-full mt-0.5"></div>
+          <div className="w-8 h-1 bg-slate-900 dark:bg-slate-100 rounded-full mt-0.5"></div>
         </div>
 
         <button

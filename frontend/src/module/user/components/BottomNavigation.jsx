@@ -26,18 +26,26 @@ export default function BottomNavigation() {
   const deliveryPath = preference === "grocery" ? "/grocery" : "/home";
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 w-full bg-white p-4 border-t border-gray-200 z-50 md:hidden">
+    <div className="fixed bottom-0 left-0 right-0 w-full bg-white dark:bg-[#0a0a0a] p-4 border-t border-gray-200 dark:border-gray-800 z-50 md:hidden">
       <div className="flex items-center justify-between max-w-md mx-auto lg:max-w-[1100px] lg:px-8 xl:px-0">
         {/* 1. Delivery Option (Active/Red) */}
         <Link
           to="/home"
           className="flex flex-col items-center gap-1 cursor-pointer"
         >
-          <div className={isDelivery ? "text-[#EF4F5F]" : "text-gray-500"}>
+          <div
+            className={
+              isDelivery ? "text-[#EF4F5F]" : "text-gray-500 dark:text-gray-400"
+            }
+          >
             <Bike size={26} strokeWidth={2} />
           </div>
           <span
-            className={`text-xs font-bold ${isDelivery ? "text-[#EF4F5F]" : "text-gray-500 font-medium"}`}
+            className={`text-xs font-bold ${
+              isDelivery
+                ? "text-[#EF4F5F]"
+                : "text-gray-500 dark:text-gray-400 font-medium"
+            }`}
           >
             Delivery
           </span>
@@ -50,11 +58,19 @@ export default function BottomNavigation() {
         {/* 2. Under ₹250 Option */}
         <Link
           to="/under-250"
-          className={`flex flex-col items-center gap-1 cursor-pointer ${isUnder250 ? "text-[#EF4F5F]" : "text-gray-500 hover:text-gray-700"}`}
+          className={`flex flex-col items-center gap-1 cursor-pointer ${
+            isUnder250
+              ? "text-[#EF4F5F]"
+              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+          }`}
         >
           <Tag size={24} strokeWidth={1.5} />
           <span
-            className={`text-xs ${isUnder250 ? "font-bold text-[#EF4F5F]" : "font-medium text-gray-500"}`}
+            className={`text-xs ${
+              isUnder250
+                ? "font-bold text-[#EF4F5F]"
+                : "font-medium text-gray-500 dark:text-gray-400"
+            }`}
           >
             Under ₹250
           </span>
@@ -66,11 +82,19 @@ export default function BottomNavigation() {
         {/* 3. Profile Option */}
         <Link
           to="/profile"
-          className={`flex flex-col items-center gap-1 cursor-pointer ${isProfile ? "text-[#EF4F5F]" : "text-gray-500 hover:text-gray-700"}`}
+          className={`flex flex-col items-center gap-1 cursor-pointer ${
+            isProfile
+              ? "text-[#EF4F5F]"
+              : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+          }`}
         >
           <User size={24} strokeWidth={1.5} />
           <span
-            className={`text-xs ${isProfile ? "font-bold text-[#EF4F5F]" : "font-medium text-gray-500"}`}
+            className={`text-xs ${
+              isProfile
+                ? "font-bold text-[#EF4F5F]"
+                : "font-medium text-gray-500 dark:text-gray-400"
+            }`}
           >
             Profile
           </span>

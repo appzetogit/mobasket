@@ -422,6 +422,33 @@ export default function EditProfile() {
                           padding: '12px 14px',
                           fontSize: '16px',
                         },
+                        '.dark &': {
+                          '& .MuiOutlinedInput-root': {
+                            backgroundColor: '#0f172a',
+                            color: '#e2e8f0',
+                            '& fieldset': {
+                              borderColor: '#334155',
+                            },
+                            '&:hover fieldset': {
+                              borderColor: '#475569',
+                            },
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#16a34a',
+                              borderWidth: '1px',
+                            },
+                          },
+                          '& .MuiInputBase-input': {
+                            color: '#e2e8f0',
+                            WebkitTextFillColor: '#e2e8f0',
+                          },
+                          '& .MuiInputBase-input::placeholder': {
+                            color: '#94a3b8',
+                            opacity: 1,
+                          },
+                          '& .MuiSvgIcon-root': {
+                            color: '#94a3b8',
+                          },
+                        },
                       },
                     },
                   }}
@@ -460,6 +487,33 @@ export default function EditProfile() {
                           padding: '12px 14px',
                           fontSize: '16px',
                         },
+                        '.dark &': {
+                          '& .MuiOutlinedInput-root': {
+                            backgroundColor: '#0f172a',
+                            color: '#e2e8f0',
+                            '& fieldset': {
+                              borderColor: '#334155',
+                            },
+                            '&:hover fieldset': {
+                              borderColor: '#475569',
+                            },
+                            '&.Mui-focused fieldset': {
+                              borderColor: '#16a34a',
+                              borderWidth: '1px',
+                            },
+                          },
+                          '& .MuiInputBase-input': {
+                            color: '#e2e8f0',
+                            WebkitTextFillColor: '#e2e8f0',
+                          },
+                          '& .MuiInputBase-input::placeholder': {
+                            color: '#94a3b8',
+                            opacity: 1,
+                          },
+                          '& .MuiSvgIcon-root': {
+                            color: '#94a3b8',
+                          },
+                        },
                       },
                     },
                   }}
@@ -479,9 +533,13 @@ export default function EditProfile() {
                 <SelectTrigger className="h-12 text-base border border-gray-300 dark:border-gray-700 focus:border-green-600 focus:ring-1 focus:ring-green-600 rounded-lg bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white">
                   <SelectValue placeholder="Gender" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-100">
                   {genderOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
+                    <SelectItem
+                      key={option.value}
+                      value={option.value}
+                      className="text-gray-900 dark:text-gray-100 focus:bg-gray-100 dark:focus:bg-gray-700 border-gray-200 dark:border-gray-700"
+                    >
                       {option.label}
                     </SelectItem>
                   ))}
