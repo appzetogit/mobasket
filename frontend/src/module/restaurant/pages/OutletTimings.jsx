@@ -9,9 +9,11 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider"
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 import { groceryStoreAPI, restaurantAPI } from "@/lib/api"
+import { normalizeTimeTo24Hour } from "@/lib/utils/outletTimingsStatus"
 import { toast } from "sonner"
 
-const STORAGE_KEY = "restaurant_outlet_timings"
+const RESTAURANT_STORAGE_KEY = "restaurant_outlet_timings"
+const GROCERY_STORAGE_KEY = "grocery_store_outlet_timings"
 const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 // Helper function to convert "HH:mm" string to Date object
@@ -47,19 +49,17 @@ const formatTime12Hour = (time24) => {
 }
 
 const getDefaultDays = () => ({
-  Monday: { isOpen: true, openingTime: "09:00", closingTime: "22:00" },
-  Tuesday: { isOpen: true, openingTime: "09:00", closingTime: "22:00" },
-  Wednesday: { isOpen: true, openingTime: "09:00", closingTime: "22:00" },
-  Thursday: { isOpen: true, openingTime: "09:00", closingTime: "22:00" },
-  Friday: { isOpen: true, openingTime: "09:00", closingTime: "22:00" },
-  Saturday: { isOpen: true, openingTime: "09:00", closingTime: "22:00" },
-  Sunday: { isOpen: true, openingTime: "09:00", closingTime: "22:00" },
+  Monday: { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] },
+  Tuesday: { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] },
+  Wednesday: { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] },
+  Thursday: { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] },
+  Friday: { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] },
+  Saturday: { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] },
+  Sunday: { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] },
 })
 
 const normalizeTime = (value, fallback) => {
-  if (!value || typeof value !== "string") return fallback
-  const parsed = stringToTime(value)
-  return timeToString(parsed)
+  return normalizeTimeTo24Hour(value, fallback)
 }
 
 const mapApiTimingsToDays = (timings) => {
@@ -73,6 +73,7 @@ const mapApiTimingsToDays = (timings) => {
       isOpen: entry?.isOpen !== false,
       openingTime: normalizeTime(entry?.openingTime, "09:00"),
       closingTime: normalizeTime(entry?.closingTime, "22:00"),
+      slots: Array.isArray(entry?.slots) ? entry.slots : [],
     }
   })
 
@@ -85,6 +86,7 @@ const mapDaysToApiTimings = (days) =>
     isOpen: days?.[day]?.isOpen !== false,
     openingTime: normalizeTime(days?.[day]?.openingTime, "09:00"),
     closingTime: normalizeTime(days?.[day]?.closingTime, "22:00"),
+    slots: Array.isArray(days?.[day]?.slots) ? days[day].slots : [],
   }))
 
 export default function OutletTimings() {
@@ -92,6 +94,7 @@ export default function OutletTimings() {
   const navigate = useNavigate()
   const location = useLocation()
   const isStore = location.pathname.startsWith("/store")
+  const storageKey = isStore ? GROCERY_STORAGE_KEY : RESTAURANT_STORAGE_KEY
   const baseRoute = isStore ? "/store" : "/restaurant"
   const outletTimingsAPI = isStore ? groceryStoreAPI : restaurantAPI
   const [expandedDay, setExpandedDay] = useState("Monday")
@@ -100,7 +103,7 @@ export default function OutletTimings() {
   const hasLocalEditRef = useRef(false)
   const [days, setDays] = useState(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY)
+      const saved = localStorage.getItem(storageKey)
       if (saved) {
         const parsed = JSON.parse(saved)
         // Validate and ensure all days have proper structure
@@ -123,16 +126,18 @@ export default function OutletTimings() {
                 isOpen: parsed[day].isOpen !== undefined ? parsed[day].isOpen : true,
                 openingTime: parseSlotTime(firstSlot.start, firstSlot.startPeriod || "am"),
                 closingTime: parseSlotTime(firstSlot.end, firstSlot.endPeriod || "pm"),
+                slots: parsed[day].slots,
               }
             } else {
               validated[day] = {
                 isOpen: parsed[day].isOpen !== undefined ? parsed[day].isOpen : true,
                 openingTime: parsed[day].openingTime || "09:00",
                 closingTime: parsed[day].closingTime || "22:00",
+                slots: Array.isArray(parsed[day].slots) ? parsed[day].slots : [],
               }
             }
           } else {
-            validated[day] = { isOpen: true, openingTime: "09:00", closingTime: "22:00" }
+            validated[day] = { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] }
           }
         })
         return validated
@@ -146,7 +151,7 @@ export default function OutletTimings() {
   // Persist day changes locally for other pages and debounce backend sync.
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(days))
+      localStorage.setItem(storageKey, JSON.stringify(days))
       // Dispatch event to notify other components
       window.dispatchEvent(new Event("outletTimingsUpdated"))
     } catch (error) {
@@ -180,7 +185,7 @@ export default function OutletTimings() {
         clearTimeout(saveTimeoutRef.current)
       }
     }
-  }, [days])
+  }, [days, outletTimingsAPI, storageKey])
 
   // Load outlet timings from backend first so user-side availability uses real saved timings.
   useEffect(() => {
@@ -198,7 +203,7 @@ export default function OutletTimings() {
         if (Array.isArray(apiTimings) && apiTimings.length > 0) {
           const mapped = mapApiTimingsToDays(apiTimings)
           setDays(mapped)
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(mapped))
+      localStorage.setItem(storageKey, JSON.stringify(mapped))
           window.dispatchEvent(new Event("outletTimingsUpdated"))
         }
       } catch (error) {
@@ -207,13 +212,13 @@ export default function OutletTimings() {
     }
 
     loadFromApi()
-  }, [outletTimingsAPI])
+  }, [outletTimingsAPI, storageKey])
 
   // Listen for updates from other components
   useEffect(() => {
     const handleUpdate = () => {
       try {
-        const saved = localStorage.getItem(STORAGE_KEY)
+        const saved = localStorage.getItem(storageKey)
         if (saved) {
           const newDays = JSON.parse(saved)
           setDays(prevDays => {
@@ -230,7 +235,7 @@ export default function OutletTimings() {
 
     window.addEventListener("outletTimingsUpdated", handleUpdate)
     return () => window.removeEventListener("outletTimingsUpdated", handleUpdate)
-  }, [])
+  }, [storageKey])
 
   // Lenis smooth scrolling
   useEffect(() => {
@@ -321,7 +326,7 @@ export default function OutletTimings() {
           {/* Day-wise Accordion */}
           <div className="space-y-2">
             {DAY_NAMES.map((day, index) => {
-              const dayData = days[day] || { isOpen: true, openingTime: "09:00", closingTime: "22:00" }
+              const dayData = days[day] || { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] }
               const isExpanded = expandedDay === day
 
               return (
@@ -348,6 +353,14 @@ export default function OutletTimings() {
                       <span className="text-base font-medium text-gray-900">{day}</span>
                     </button>
                     <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`${baseRoute}/outlet-timings/${day.toLowerCase()}`)}
+                        className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Slots
+                      </button>
                       <span className="text-sm text-gray-700">{dayData.isOpen ? "Open" : "Close"}</span>
                       <div onClick={(e) => e.stopPropagation()}>
                         <Switch

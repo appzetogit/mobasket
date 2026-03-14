@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"
+﻿import { useState, useRef, useEffect } from "react"
 import { useNavigate, useParams, useLocation } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -27,7 +27,7 @@ export default function ItemDetailsPage() {
   const location = useLocation()
   const isNewItem = id === "new"
   const groupId = location.state?.groupId
-  const defaultCategory = location.state?.category || "Varieties"
+  const defaultCategory = location.state?.category || ""
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
 
@@ -41,7 +41,7 @@ export default function ItemDetailsPage() {
   const [itemSizeUnit, setItemSizeUnit] = useState("piece")
   const [itemDescription, setItemDescription] = useState("")
   const [foodType, setFoodType] = useState("Non-Veg")
-  const [basePrice, setBasePrice] = useState("0")
+  const [basePrice, setBasePrice] = useState("")
   const [preparationTime, setPreparationTime] = useState("")
   const [gst, setGst] = useState("5.0")
   const [isRecommended, setIsRecommended] = useState(false)
@@ -89,7 +89,7 @@ export default function ItemDetailsPage() {
         setItemData(item)
 
         setItemName(item.name || "")
-        setCategory(item.category || defaultCategory)
+        setCategory(item.category || defaultCategory || "")
         setSubCategory(item.subCategory || item.category || "Starters")
         setServesInfo(item.servesInfo || "")
         setItemSizeQuantity(item.itemSizeQuantity || "")
@@ -180,7 +180,7 @@ export default function ItemDetailsPage() {
             setItemData(foundItem)
 
             setItemName(foundItem.name || "")
-            setCategory(foundItem.category || defaultCategory)
+            setCategory(foundItem.category || defaultCategory || "")
             setSubCategory(foundItem.subCategory || foundItem.category || "Starters")
             setServesInfo(foundItem.servesInfo || "")
             setItemSizeQuantity(foundItem.itemSizeQuantity || "")
@@ -495,6 +495,7 @@ export default function ItemDetailsPage() {
 
   const handleCategorySelect = (catId, subCat) => {
     const selectedCategory = categories.find(c => c.id === catId)
+    if (!selectedCategory) return
     setCategory(selectedCategory.name)
     setSubCategory(subCat)
     setIsCategoryPopupOpen(false)
@@ -536,20 +537,21 @@ export default function ItemDetailsPage() {
       toast.error("Please select a category")
       return
     }
-    if (!categories.some((cat) => cat?.name === category)) {
-      toast.error("Please select a valid category")
+    const parsedBasePrice = parseFloat(basePrice)
+    if (!basePrice || Number.isNaN(parsedBasePrice) || parsedBasePrice <= 0) {
+      toast.error("Please enter a valid base price greater than 0")
+      return
+    }
+    if (!preparationTime.trim()) {
+      toast.error("Please select preparation time")
       return
     }
     if (itemDescription.trim().length < minDescriptionLength) {
       toast.error(`Item description must be at least ${minDescriptionLength} characters`)
       return
     }
-    if (!basePrice || Number.parseFloat(basePrice) <= 0) {
-      toast.error("Please enter a valid base price")
-      return
-    }
-    if (!String(preparationTime || "").trim()) {
-      toast.error("Please select preparation time")
+    if (!Array.isArray(images) || images.length === 0) {
+      toast.error("Please add at least one image")
       return
     }
 
@@ -719,7 +721,7 @@ export default function ItemDetailsPage() {
         category: category,
         rating: itemData?.rating || 0.0,
         reviews: itemData?.reviews || 0,
-        price: parseFloat(basePrice) || 0,
+        price: parsedBasePrice,
         preparationTime: preparationTime || "",
         stock: "Unlimited",
         discount: null,
@@ -736,7 +738,7 @@ export default function ItemDetailsPage() {
         tags: [],
         nutrition: nutritionStrings,
         allergies: [],
-        photoCount: allImageUrls.length || 1,
+        photoCount: allImageUrls.length,
         // Additional fields for complete item details
         subCategory: subCategory || "",
         servesInfo: "",
@@ -1055,9 +1057,10 @@ export default function ItemDetailsPage() {
               ref={fileInputRef}
               type="file"
               accept="image/*"
+              multiple
               onChange={handleImageAdd}
               className="hidden"
-              id="image-upload"
+              id="image-upload-gallery"
             />
             <input
               ref={cameraInputRef}
@@ -1066,28 +1069,26 @@ export default function ItemDetailsPage() {
               capture="environment"
               onChange={handleImageAdd}
               className="hidden"
-              id="image-capture"
+              id="image-upload-camera"
             />
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleCameraCapture}
-                disabled={isCameraLoading}
-                className="flex-1 flex items-center justify-center gap-2.5 px-4 py-3.5 bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-xl text-sm font-semibold cursor-pointer hover:from-gray-800 hover:to-gray-700 transition-all shadow-md hover:shadow-lg active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
+            <div className="grid grid-cols-2 gap-3">
+              <label
+                htmlFor="image-upload-gallery"
+                className="flex items-center justify-center gap-2.5 px-4 py-3.5 bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-xl text-sm font-semibold cursor-pointer hover:from-gray-800 hover:to-gray-700 transition-all shadow-md hover:shadow-lg active:scale-95"
               >
                 <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
-                  <Camera className="w-4 h-4" />
-                </div>
-                <span>{isCameraLoading ? "Opening..." : "Camera"}</span>
-              </button>
-              <label
-                htmlFor="image-upload"
-                className="flex-1 flex items-center justify-center gap-2.5 px-4 py-3.5 bg-white text-gray-900 rounded-xl text-sm font-semibold cursor-pointer border border-gray-300 hover:bg-gray-50 transition-all shadow-sm active:scale-95"
-              >
-                <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center">
                   <Plus className="w-4 h-4" />
                 </div>
-                <span>Gallery</span>
+                <span>From Gallery</span>
+              </label>
+              <label
+                htmlFor="image-upload-camera"
+                className="flex items-center justify-center gap-2.5 px-4 py-3.5 bg-white text-gray-900 border border-gray-300 rounded-xl text-sm font-semibold cursor-pointer hover:bg-gray-50 transition-all shadow-sm hover:shadow-md active:scale-95"
+              >
+                <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center">
+                  <Camera className="w-4 h-4" />
+                </div>
+                <span>Use Camera</span>
               </label>
             </div>
           </div>
@@ -1104,8 +1105,8 @@ export default function ItemDetailsPage() {
               onClick={() => setIsCategoryPopupOpen(true)}
               className="w-full px-4 py-3 border border-gray-300 rounded-lg text-left flex items-center justify-between bg-white hover:bg-gray-50 transition-colors"
             >
-              <span className="text-sm text-gray-900">
-                {category}
+              <span className={`text-sm ${category ? "text-gray-900" : "text-gray-500"}`}>
+                {category || "Select category"}
               </span>
               <ChevronDown className="w-5 h-5 text-gray-500" />
             </button>
@@ -1212,7 +1213,7 @@ export default function ItemDetailsPage() {
                     value={basePrice}
                     onChange={(e) => {
                       // Remove rupee symbol and any non-numeric characters except decimal point
-                      const value = e.target.value.replace(/[₹\s,]/g, '').replace(/[^0-9.]/g, '')
+                      const value = e.target.value.replace(/[â‚¹\s,]/g, '').replace(/[^0-9.]/g, '')
 
                       // Strip leading zeros only if followed by another digit (e.g. 080 -> 80)
                       const withoutLeadingZeros = value.replace(/^0+(?=\d)/, '')
@@ -1226,14 +1227,14 @@ export default function ItemDetailsPage() {
                     }}
                     onFocus={(e) => {
                       // Remove rupee symbol when focused for easier editing
-                      if (e.target.value.startsWith('₹')) {
-                        e.target.value = e.target.value.replace(/₹\s*/g, '')
+                      if (e.target.value.startsWith('â‚¹')) {
+                        e.target.value = e.target.value.replace(/â‚¹\s*/g, '')
                       }
                     }}
                     placeholder="Enter price"
                     className="w-full pl-8 pr-12 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-600">₹</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-600">â‚¹</span>
                   <button className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-gray-100">
                     <EditIcon className="w-4 h-4 text-gray-500" />
                   </button>

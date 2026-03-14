@@ -5,7 +5,7 @@ import { ArrowLeft, Settings, ChevronRight } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent } from "@/components/ui/card"
 import { groceryStoreAPI, restaurantAPI } from "@/lib/api"
-import { parseTimeToMinutes, isOpenFromOutletTimingsMap } from "@/lib/utils/outletTimingsStatus"
+import { parseTimeToMinutes, isOpenFromOutletTimingsMap, normalizeOutletTimingsMap } from "@/lib/utils/outletTimingsStatus"
 import {
   Dialog,
   DialogContent,
@@ -17,60 +17,16 @@ import {
 import { Button } from "@/components/ui/button"
 
 const OUTLET_TIMINGS_STORAGE_KEY = "restaurant_outlet_timings"
-const DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-
-const normalizeHHMM = (value, fallback) => {
-  if (!value || typeof value !== "string") return fallback
-  const match = value.trim().match(/^(\d{1,2}):(\d{2})$/)
-  if (!match) return fallback
-  const hours = Math.max(0, Math.min(23, Number(match[1])))
-  const minutes = Math.max(0, Math.min(59, Number(match[2])))
-  if (!Number.isFinite(hours) || !Number.isFinite(minutes)) return fallback
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`
-}
-
-const slotTo24Hour = (time, period) => {
-  if (!time || typeof time !== "string" || !time.includes(":")) return null
-  const [rawHour, rawMinute] = time.split(":").map(Number)
-  if (!Number.isFinite(rawHour) || !Number.isFinite(rawMinute)) return null
-  let hour = rawHour
-  const minute = Math.max(0, Math.min(59, rawMinute))
-  const p = String(period || "").toLowerCase()
-  if (p === "pm" && hour !== 12) hour += 12
-  if (p === "am" && hour === 12) hour = 0
-  hour = Math.max(0, Math.min(23, hour))
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`
-}
-
-const normalizeOutletTimings = (raw) => {
-  if (!raw) return null
-  const next = {}
-  const assignDay = (day, value) => {
-    if (!DAY_NAMES.includes(day) || !value || typeof value !== "object") return
-    const slot = Array.isArray(value?.slots) && value.slots.length > 0 ? value.slots[0] : null
-    const openingFromSlot = slot ? slotTo24Hour(slot.start, slot.startPeriod) : null
-    const closingFromSlot = slot ? slotTo24Hour(slot.end, slot.endPeriod) : null
-    next[day] = {
-      isOpen: value.isOpen !== false,
-      openingTime: normalizeHHMM(value.openingTime || openingFromSlot, "09:00"),
-      closingTime: normalizeHHMM(value.closingTime || closingFromSlot, "22:00"),
-    }
-  }
-
-  if (Array.isArray(raw)) {
-    raw.forEach((entry) => assignDay(entry?.day, entry))
-  } else if (typeof raw === "object") {
-    DAY_NAMES.forEach((day) => assignDay(day, raw[day]))
-  }
-
-  return Object.keys(next).length > 0 ? next : null
-}
+const STORE_OUTLET_TIMINGS_STORAGE_KEY = "grocery_store_outlet_timings"
 
 export default function RestaurantStatus() {
   const navigate = useNavigate()
   const routeLocation = useLocation()
   const isGroceryStore = routeLocation.pathname.startsWith("/store")
   const baseRoute = isGroceryStore ? "/store" : "/restaurant"
+  const outletTimingsStorageKey = isGroceryStore
+    ? STORE_OUTLET_TIMINGS_STORAGE_KEY
+    : OUTLET_TIMINGS_STORAGE_KEY
   const statusStorageKey = isGroceryStore ? "grocery-store_online_status" : "restaurant_online_status"
   const statusEventName = isGroceryStore ? "groceryStoreStatusChanged" : "restaurantStatusChanged"
   const entityLabel = isGroceryStore ? "store" : "restaurant"
@@ -126,19 +82,6 @@ export default function RestaurantStatus() {
   // Load outlet timings from localStorage + outlet timings API into one normalized map.
   useEffect(() => {
     const loadOutletTimings = async () => {
-      try {
-        const saved = localStorage.getItem(OUTLET_TIMINGS_STORAGE_KEY)
-        if (saved) {
-          const parsed = JSON.parse(saved)
-          const normalized = normalizeOutletTimings(parsed)
-          if (normalized) {
-            setOutletTimings(normalized)
-          }
-        }
-      } catch (error) {
-        console.error("Error loading outlet timings:", error)
-      }
-
       if (!isGroceryStore) {
         try {
           const response = await restaurantAPI.getOutletTimings()
@@ -146,14 +89,28 @@ export default function RestaurantStatus() {
             response?.data?.data?.outletTimings?.timings ||
             response?.data?.outletTimings?.timings ||
             []
-          const normalizedApi = normalizeOutletTimings(apiTimings)
+          const normalizedApi = normalizeOutletTimingsMap(apiTimings)
           if (normalizedApi) {
             setOutletTimings(normalizedApi)
-            localStorage.setItem(OUTLET_TIMINGS_STORAGE_KEY, JSON.stringify(normalizedApi))
+            localStorage.setItem(outletTimingsStorageKey, JSON.stringify(normalizedApi))
+            return
           }
         } catch (apiError) {
           console.error("Error loading outlet timings from API:", apiError)
         }
+      }
+
+      try {
+        const saved = localStorage.getItem(outletTimingsStorageKey)
+        if (saved) {
+          const parsed = JSON.parse(saved)
+          const normalized = normalizeOutletTimingsMap(parsed)
+          if (normalized) {
+            setOutletTimings(normalized)
+          }
+        }
+      } catch (error) {
+        console.error("Error loading outlet timings:", error)
       }
     }
 
@@ -162,7 +119,7 @@ export default function RestaurantStatus() {
     // Listen for outlet timings updates
     window.addEventListener("outletTimingsUpdated", loadOutletTimings)
     const handleStorageChange = (event) => {
-      if (event.key === OUTLET_TIMINGS_STORAGE_KEY) {
+      if (event.key === outletTimingsStorageKey) {
         loadOutletTimings()
       }
     }
@@ -172,7 +129,7 @@ export default function RestaurantStatus() {
       window.removeEventListener("outletTimingsUpdated", loadOutletTimings)
       window.removeEventListener("storage", handleStorageChange)
     }
-  }, [isGroceryStore, entityLabel])
+  }, [isGroceryStore, entityLabel, outletTimingsStorageKey])
 
   // Check if restaurant is currently open based on timings
   useEffect(() => {

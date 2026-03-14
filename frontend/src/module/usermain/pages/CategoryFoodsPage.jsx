@@ -26,17 +26,6 @@ const extractId = (value) => {
   return "";
 };
 
-const extractStoreId = (product) =>
-  String(
-    product?.storeId?._id ||
-      product?.storeId?.id ||
-      product?.storeId ||
-      product?.restaurantId?._id ||
-      product?.restaurantId?.id ||
-      product?.restaurantId ||
-      "",
-  ).trim();
-
 const getStoreIdCandidates = (storeLike) => {
   const rawCandidates = [
     storeLike?._id,
@@ -164,6 +153,7 @@ export function CategoryFoodsContent({
   const [selectedStoreId, setSelectedStoreId] = useState(initialStoreId || "all-stores");
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
+  const [categoryScopeProducts, setCategoryScopeProducts] = useState([]);
   const [isCategoriesLoading, setIsCategoriesLoading] = useState(true);
   const [isProductsLoading, setIsProductsLoading] = useState(true);
 
@@ -178,6 +168,16 @@ export function CategoryFoodsContent({
   useEffect(() => {
     setSelectedStoreId(initialStoreId || "all-stores");
   }, [initialStoreId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const normalizedStoreId = String(selectedStoreId || "").trim();
+    if (normalizedStoreId && normalizedStoreId !== "all-stores") {
+      localStorage.setItem("mogrocery:selectedStoreId", normalizedStoreId);
+      return;
+    }
+    localStorage.removeItem("mogrocery:selectedStoreId");
+  }, [selectedStoreId]);
 
   useEffect(() => {
     let mounted = true;
@@ -312,15 +312,137 @@ export function CategoryFoodsContent({
     zoneLoading,
   ]);
 
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchCategoryScopeProducts = async () => {
+      if ((locationLoading || zoneLoading) && !effectiveZoneId) {
+        return;
+      }
+
+      try {
+        const params = {
+          page: 1,
+          limit: 200,
+          ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
+          ...(selectedSubcategoryId ? { subcategoryId: selectedSubcategoryId } : {}),
+          ...(selectedStoreId && selectedStoreId !== "all-stores"
+            ? { storeId: selectedStoreId }
+            : {}),
+        };
+
+        const response = await api.get("/grocery/products", { params });
+        const data = Array.isArray(response?.data?.data) ? response.data.data : [];
+        let zoneSafeData = data.filter((product) => {
+          if (!effectiveZoneId) return true;
+          const productZoneId = String(
+            product?.zoneId?._id ||
+            product?.zoneId?.id ||
+            product?.zoneId ||
+            product?.storeId?.zoneId?._id ||
+            product?.storeId?.zoneId?.id ||
+            product?.storeId?.zoneId ||
+            "",
+          ).trim();
+          return !productZoneId || productZoneId === String(effectiveZoneId);
+        });
+
+        if (zoneSafeData.length === 0) {
+          const fallbackResponse = await api.get("/grocery/products", {
+            params: {
+              limit: 1000,
+              ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
+            },
+          });
+          const fallbackData = Array.isArray(fallbackResponse?.data?.data) ? fallbackResponse.data.data : [];
+          zoneSafeData = fallbackData.filter((product) => {
+            const productSubcategoryIds = [
+              ...(Array.isArray(product?.subcategories) ? product.subcategories : []),
+              product?.subcategory,
+            ]
+              .map((subcategory) => extractId(subcategory))
+              .filter(Boolean);
+
+            const subcategoryMatch =
+              !selectedSubcategoryId ||
+              productSubcategoryIds.includes(String(selectedSubcategoryId));
+            const storeMatch =
+              !selectedStoreId ||
+              selectedStoreId === "all-stores" ||
+              doesProductMatchStore(product, selectedStoreId);
+
+            return subcategoryMatch && storeMatch;
+          });
+        }
+
+        if (selectedStoreId && selectedStoreId !== "all-stores") {
+          zoneSafeData = zoneSafeData.filter(
+            (product) => doesProductMatchStore(product, selectedStoreId),
+          );
+        }
+
+        if (!mounted) return;
+        setCategoryScopeProducts(zoneSafeData);
+      } catch {
+        if (!mounted) return;
+        setCategoryScopeProducts([]);
+      }
+    };
+
+    fetchCategoryScopeProducts();
+
+    return () => {
+      mounted = false;
+    };
+  }, [
+    effectiveZoneId,
+    locationLoading,
+    selectedStoreId,
+    selectedSubcategoryId,
+    zoneLoading,
+  ]);
+
   const sidebarCategories = useMemo(() => {
-    const dynamic = categories.map((category) => ({
-      id: String(category?._id || ""),
-      name: category?.name || "Category",
-      icon: category?.image || FALLBACK_IMAGE,
-    })).filter((category) => category.id);
+    const categoryIdsWithProducts = new Set();
+    const categoryNamesWithProducts = new Set();
+    categoryScopeProducts.forEach((product) => {
+      const categoryId = String(
+        product?.category?._id || product?.category?.id || product?.category || ""
+      ).trim();
+      if (categoryId) categoryIdsWithProducts.add(categoryId);
+
+      const categoryName = String(product?.category?.name || "").trim().toLowerCase();
+      if (categoryName) categoryNamesWithProducts.add(categoryName);
+    });
+
+    const dynamic = categories
+      .filter((category) => {
+        const categoryId = String(category?._id || "").trim();
+        const categorySlug = String(category?.slug || "").trim();
+        const categoryName = String(category?.name || "").trim().toLowerCase();
+        return (
+          (categoryId && categoryIdsWithProducts.has(categoryId)) ||
+          (categorySlug && categoryIdsWithProducts.has(categorySlug)) ||
+          (categoryName && categoryNamesWithProducts.has(categoryName))
+        );
+      })
+      .map((category) => ({
+        id: String(category?._id || ""),
+        name: category?.name || "Category",
+        icon: category?.image || FALLBACK_IMAGE,
+      }))
+      .filter((category) => category.id);
 
     return [{ id: "all", name: "All", icon: dynamic[0]?.icon || FALLBACK_IMAGE }, ...dynamic];
-  }, [categories]);
+  }, [categories, categoryScopeProducts]);
+
+  useEffect(() => {
+    if (selectedCategory === "all") return;
+    const exists = sidebarCategories.some(
+      (category) => String(category?.id || "") === String(selectedCategory)
+    );
+    if (!exists) setSelectedCategory("all");
+  }, [selectedCategory, sidebarCategories]);
 
   const handleProductCardClick = (product) => {
     const productId = product?._id || product?.id;
@@ -643,8 +765,12 @@ const CategoryFoodsPage = () => {
   const stateCategoryId = String(location?.state?.categoryId || "").trim();
   const stateStoreId = String(location?.state?.storeId || "").trim();
   const queryStoreId = String(new URLSearchParams(location?.search || "").get("storeId") || "").trim();
+  const cachedStoreId =
+    typeof window !== "undefined"
+      ? String(localStorage.getItem("mogrocery:selectedStoreId") || "").trim()
+      : "";
   const initialCategory = isCategoriesRootPage ? "all" : (id || stateCategoryId || "all");
-  const initialStoreId = stateStoreId || queryStoreId || "all-stores";
+  const initialStoreId = queryStoreId || stateStoreId || cachedStoreId || "all-stores";
 
   return (
     <CategoryFoodsContent

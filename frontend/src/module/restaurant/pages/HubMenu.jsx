@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react"
+﻿import { useState, useMemo, useRef, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   Search,
@@ -329,7 +329,7 @@ export default function HubMenu() {
           }))
 
           await restaurantAPI.updateMenu({ sections: normalizedSections })
-          console.log('✅ Menu saved successfully with', normalizedSections.length, 'sections')
+          console.log('âœ… Menu saved successfully with', normalizedSections.length, 'sections')
         } catch (error) {
           console.error('Error saving menu:', error)
           // Check if it's a network error (backend not running)
@@ -353,11 +353,8 @@ export default function HubMenu() {
       if (showLoading) setLoadingAddons(true)
       const response = await restaurantAPI.getAddons()
       const data = response?.data?.data?.addons || response?.data?.addons || []
-      const normalizedAddons = data.map((addon) => ({
-        ...addon,
-        approvalStatus: addon?.approvalStatus || "pending",
-      }))
-      setAddons(normalizedAddons)
+      // Show all add-ons so pending/rejected states are visible.
+      setAddons(data)
     } catch (error) {
       console.error('Error fetching add-ons:', error)
       toast.error('Failed to load add-ons')
@@ -757,6 +754,12 @@ export default function HubMenu() {
 
   // Handle filter selection
   const handleFilterSelect = (filterId) => {
+    if (activeFilter === filterId) {
+      setSelectedFilter(null)
+      setActiveFilter(null)
+      setIsFilterOpen(false)
+      return
+    }
     setSelectedFilter(filterId)
     setActiveFilter(filterId)
     setIsFilterOpen(false)
@@ -1012,58 +1015,53 @@ export default function HubMenu() {
           </AnimatePresence>
 
           {/* Horizontally scrollable filters */}
-          <div className="flex pl-4 relative items-center gap-2 overflow-x-auto pb-2" ref={scrollContainerRef} style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          <div className="flex px-4 relative items-center gap-2 pb-2">
             <style>{`
               .scrollbar-hide::-webkit-scrollbar {
                 display: none;
               }
             `}</style>
+            <div
+              className="flex-1 flex items-center gap-2 overflow-x-auto scrollbar-hide"
+              ref={scrollContainerRef}
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              {activeFilter && (
+                <button
+                  onClick={() => {
+                    setActiveFilter(null)
+                    setSelectedFilter(null)
+                  }}
+                  className="flex items-center gap-2 px-2 py-1 text-semibold border-2 border-gray-300 rounded-md text-sm font-medium whitespace-nowrap shrink-0 bg-white text-gray-900"
+                >
+                  <X className="w-3 h-3" />
+                  <span>Clear</span>
+                </button>
+              )}
+              {quickFilters.map((filter) => (
+                <button
+                  key={filter.id}
+                  onClick={() => handleFilterSelect(filter.id)}
+                  className={`flex items-center gap-2 px-2 py-1 text-semibold border-2 rounded-md text-sm font-medium whitespace-nowrap shrink-0 ${activeFilter === filter.id
+                    ? "bg-gray-900 text-white border-gray-900"
+                    : "bg-white border-gray-200 text-gray-900"
+                    }`}
+                >
+                  <span>{filter.label}</span>
+                  <span className="bg-red-100 border-2 border-red-400 text-red-400 text-xs  font-bold p-0.5 py-0.25 rounded-sm">
+                    {filter.count}
+                  </span>
+                </button>
+
+              ))}
+            </div>
             <button
               onClick={() => setIsFilterOpen(true)}
-              className="bg-black p-2 text-white border-2 border-black flex items-center gap-2 px-2 py-1 text-semibold rounded-md text-sm font-medium whitespace-nowrap shrink-0"
+              className="shrink-0 z-10 bg-black p-2 text-white border-2 border-black flex items-center gap-2 px-2 py-1 text-semibold rounded-lg text-sm font-medium whitespace-nowrap"
             >
               <SlidersHorizontal className="w-4 h-4" />
               <span>Filter</span>
             </button>
-            {activeFilter && !quickFilters.some((filter) => filter.id === activeFilter) && (
-              <button
-                onClick={() => handleFilterSelect(activeFilter)}
-                className="flex items-center gap-2 px-2 py-1 text-semibold border-2 rounded-md text-sm font-medium whitespace-nowrap shrink-0 bg-gray-900 text-white border-gray-900"
-              >
-                <span>{filterOptions.find((filter) => filter.id === activeFilter)?.label || activeFilter}</span>
-                <span className="bg-white/10 border-2 border-white/20 text-white text-xs font-bold p-0.5 py-0.25 rounded-sm">
-                  {filterOptions.find((filter) => filter.id === activeFilter)?.count ?? 0}
-                </span>
-              </button>
-            )}
-            {activeFilter && (
-              <button
-                onClick={() => {
-                  setActiveFilter(null)
-                  setSelectedFilter(null)
-                }}
-                className="flex items-center gap-2 px-2 py-1 text-semibold border-2 border-gray-300 rounded-md text-sm font-medium whitespace-nowrap shrink-0 bg-white text-gray-900"
-              >
-                <X className="w-3 h-3" />
-                <span>Clear</span>
-              </button>
-            )}
-            {quickFilters.map((filter) => (
-              <button
-                key={filter.id}
-                onClick={() => handleFilterSelect(filter.id)}
-                className={`flex items-center gap-2 px-2 py-1 text-semibold border-2 rounded-md text-sm font-medium whitespace-nowrap shrink-0 ${activeFilter === filter.id
-                    ? "bg-gray-900 text-white border-gray-900"
-                    : "bg-white border-gray-200 text-gray-900"
-                  }`}
-              >
-                <span>{filter.label}</span>
-                <span className="bg-red-100 border-2 border-red-400 text-red-400 text-xs  font-bold p-0.5 py-0.25 rounded-sm">
-                  {filter.count}
-                </span>
-              </button>
-
-            ))}
           </div>
         </div>
 
@@ -1141,7 +1139,7 @@ export default function HubMenu() {
                         {addon.description && (
                           <p className="text-sm text-gray-600 mb-2">{addon.description}</p>
                         )}
-                        <p className="text-base font-bold text-gray-900">₹{addon.price}</p>
+                        <p className="text-base font-bold text-gray-900">â‚¹{addon.price}</p>
                         {addon.rejectionReason && (
                           <p className="text-xs text-red-600 mt-1">Reason: {addon.rejectionReason}</p>
                         )}
@@ -1275,7 +1273,7 @@ export default function HubMenu() {
                                     </span>
                                   )}
                                 </div>
-                                <p className="text-sm font-medium text-gray-700 mb-3">₹{item.price}</p>
+                                <p className="text-sm font-medium text-gray-700 mb-3">â‚¹{item.price}</p>
                               </div>
 
                               {/* Right: Image */}
@@ -2014,7 +2012,7 @@ export default function HubMenu() {
                                       {item.name}
                                     </h4>
                                   </div>
-                                  <p className="text-sm font-medium text-gray-700">₹{item.price}</p>
+                                  <p className="text-sm font-medium text-gray-700">â‚¹{item.price}</p>
                                   {!item.isAvailable && (
                                     <span className="text-xs text-red-600 font-medium">Out of stock</span>
                                   )}
@@ -2125,7 +2123,7 @@ export default function HubMenu() {
                 {/* Price Field */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Price (₹) <span className="text-red-500">*</span>
+                    Price (â‚¹) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="number"

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+﻿import { useState, useEffect, useRef } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import Lenis from "lenis"
@@ -8,6 +8,7 @@ import {
   Mail,
   CheckCircle2,
   Upload,
+  Camera,
   ImageIcon,
   X,
 } from "lucide-react"
@@ -32,26 +33,26 @@ import { restaurantAPI } from "@/lib/api"
 
 // Country codes
 const countryCodes = [
-  { code: "+1", country: "US/CA", flag: "🇺🇸" },
-  { code: "+44", country: "UK", flag: "🇬🇧" },
-  { code: "+91", country: "IN", flag: "🇮🇳" },
-  { code: "+86", country: "CN", flag: "🇨🇳" },
-  { code: "+81", country: "JP", flag: "🇯🇵" },
-  { code: "+49", country: "DE", flag: "🇩🇪" },
-  { code: "+33", country: "FR", flag: "🇫🇷" },
-  { code: "+39", country: "IT", flag: "🇮🇹" },
-  { code: "+34", country: "ES", flag: "🇪🇸" },
-  { code: "+61", country: "AU", flag: "🇦🇺" },
-  { code: "+7", country: "RU", flag: "🇷🇺" },
-  { code: "+55", country: "BR", flag: "🇧🇷" },
-  { code: "+52", country: "MX", flag: "🇲🇽" },
-  { code: "+82", country: "KR", flag: "🇰🇷" },
-  { code: "+65", country: "SG", flag: "🇸🇬" },
-  { code: "+971", country: "AE", flag: "🇦🇪" },
-  { code: "+966", country: "SA", flag: "🇸🇦" },
-  { code: "+27", country: "ZA", flag: "🇿🇦" },
-  { code: "+31", country: "NL", flag: "🇳🇱" },
-  { code: "+46", country: "SE", flag: "🇸🇪" },
+  { code: "+1", country: "US/CA", flag: "ðŸ‡ºðŸ‡¸" },
+  { code: "+44", country: "UK", flag: "ðŸ‡¬ðŸ‡§" },
+  { code: "+91", country: "IN", flag: "ðŸ‡®ðŸ‡³" },
+  { code: "+86", country: "CN", flag: "ðŸ‡¨ðŸ‡³" },
+  { code: "+81", country: "JP", flag: "ðŸ‡¯ðŸ‡µ" },
+  { code: "+49", country: "DE", flag: "ðŸ‡©ðŸ‡ª" },
+  { code: "+33", country: "FR", flag: "ðŸ‡«ðŸ‡·" },
+  { code: "+39", country: "IT", flag: "ðŸ‡®ðŸ‡¹" },
+  { code: "+34", country: "ES", flag: "ðŸ‡ªðŸ‡¸" },
+  { code: "+61", country: "AU", flag: "ðŸ‡¦ðŸ‡º" },
+  { code: "+7", country: "RU", flag: "ðŸ‡·ðŸ‡º" },
+  { code: "+55", country: "BR", flag: "ðŸ‡§ðŸ‡·" },
+  { code: "+52", country: "MX", flag: "ðŸ‡²ðŸ‡½" },
+  { code: "+82", country: "KR", flag: "ðŸ‡°ðŸ‡·" },
+  { code: "+65", country: "SG", flag: "ðŸ‡¸ðŸ‡¬" },
+  { code: "+971", country: "AE", flag: "ðŸ‡¦ðŸ‡ª" },
+  { code: "+966", country: "SA", flag: "ðŸ‡¸ðŸ‡¦" },
+  { code: "+27", country: "ZA", flag: "ðŸ‡¿ðŸ‡¦" },
+  { code: "+31", country: "NL", flag: "ðŸ‡³ðŸ‡±" },
+  { code: "+46", country: "SE", flag: "ðŸ‡¸ðŸ‡ª" },
 ]
 
 export default function InviteUser() {
@@ -73,11 +74,9 @@ export default function InviteUser() {
   const [addMethod, setAddMethod] = useState("phone") // "phone" or "email"
   const [photo, setPhoto] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
-  const [isCameraLoading, setIsCameraLoading] = useState(false)
-  const fileInputRef = useRef(null)
-  const cameraInputRef = useRef(null)
-  const [existingStaff, setExistingStaff] = useState([])
-  const [loadingExistingStaff, setLoadingExistingStaff] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const photoInputRef = useRef(null)
+  const photoCameraInputRef = useRef(null)
 
   // Lenis smooth scrolling
   useEffect(() => {
@@ -204,8 +203,8 @@ export default function InviteUser() {
     }
   }
 
-  const handlePhotoChange = (e) => {
-    const file = e.target.files?.[0]
+  const handlePhotoChange = (e, directFile = null) => {
+    const file = directFile || e?.target?.files?.[0]
     if (file) {
       setPhoto(file)
       // Create preview
@@ -230,50 +229,46 @@ export default function InviteUser() {
     return new File([bytes], fileName, { type: mimeType })
   }
 
-  const handleCameraCapture = async () => {
-    if (isCameraLoading) return
-    setIsCameraLoading(true)
-    try {
-      if (window?.flutter_inappwebview?.callHandler) {
-        const result = await window.flutter_inappwebview.callHandler("openCamera")
-        if (result?.success && result?.base64) {
-          const fileName = result?.fileName || `staff-${Date.now()}.jpg`
-          const mimeType = result?.mimeType || "image/jpeg"
-          const cleanedBase64 = result.base64.includes("base64,")
-            ? result.base64.split("base64,")[1]
-            : result.base64
-          const file = buildFileFromBase64(result.base64, fileName, mimeType)
-          setPhoto(file)
-          setPhotoPreview(`data:${mimeType};base64,${cleanedBase64}`)
-        } else if (result?.success === false) {
-          // User cancelled or failed; no action needed
-        } else {
-          alert("Failed to capture image")
-        }
-      } else {
-        cameraInputRef.current?.click()
-      }
-    } catch (error) {
-      console.error("Camera capture error:", error)
-      alert("Failed to capture image")
-    } finally {
-      setIsCameraLoading(false)
-    }
-  }
-
   const handleRemovePhoto = () => {
     setPhoto(null)
     setPhotoPreview(null)
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
+    if (photoInputRef.current) photoInputRef.current.value = ""
+    if (photoCameraInputRef.current) photoCameraInputRef.current.value = ""
+  }
+
+  const handleCameraCapture = async () => {
+    if (!window.flutter_inappwebview?.callHandler) {
+      photoCameraInputRef.current?.click()
+      return
     }
-    if (cameraInputRef.current) {
-      cameraInputRef.current.value = ""
+
+    try {
+      const result = await window.flutter_inappwebview.callHandler("openCamera")
+      if (!result?.success || !result?.base64) {
+        alert("Camera capture failed or cancelled.")
+        return
+      }
+
+      const byteCharacters = atob(result.base64)
+      const byteNumbers = new Array(byteCharacters.length)
+      for (let i = 0; i < byteCharacters.length; i += 1) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i)
+      }
+      const byteArray = new Uint8Array(byteNumbers)
+      const file = new File(
+        [byteArray],
+        result.fileName || `staff_${Date.now()}.jpg`,
+        { type: result.mimeType || "image/jpeg" }
+      )
+      handlePhotoChange(null, file)
+    } catch (error) {
+      console.error("Camera capture failed:", error)
+      alert("Failed to capture image. Please try again.")
     }
   }
 
   const handleAddUser = async () => {
+    if (submitting) return
     // Validate name
     if (!validateName(name)) return
 
@@ -310,6 +305,38 @@ export default function InviteUser() {
     }
 
     try {
+      setSubmitting(true)
+
+      // Prevent duplicate staff creation by phone/email + name.
+      const existingStaffResponse = await restaurantAPI.getStaff()
+      const existingStaffRaw =
+        existingStaffResponse?.data?.data?.staff ||
+        existingStaffResponse?.data?.staff ||
+        existingStaffResponse?.data?.data ||
+        []
+      const existingStaff = Array.isArray(existingStaffRaw) ? existingStaffRaw : []
+      const normalizedName = String(name || "").trim().toLowerCase()
+      const normalizedPhone = String(phoneNumber || "").replace(/\D/g, "")
+      const normalizedEmail = String(email || "").trim().toLowerCase()
+
+      const hasDuplicate = existingStaff.some((staff) => {
+        const staffName = String(staff?.name || "").trim().toLowerCase()
+        const staffPhone = String(staff?.phone || "").replace(/\D/g, "")
+        const staffEmail = String(staff?.email || "").trim().toLowerCase()
+
+        if (addMethod === "phone") {
+          return normalizedPhone && staffPhone && normalizedPhone === staffPhone && staffName === normalizedName
+        }
+
+        return normalizedEmail && staffEmail && normalizedEmail === staffEmail && staffName === normalizedName
+      })
+
+      if (hasDuplicate) {
+        alert("This staff member already exists with the same name and contact details.")
+        setSubmitting(false)
+        return
+      }
+
       // Prepare FormData for API (to support file upload)
       const formData = new FormData()
       formData.append('name', name.trim())
@@ -341,6 +368,8 @@ export default function InviteUser() {
       console.error("Error adding user:", error)
       const errorMessage = error.response?.data?.message || error.message || "Failed to add user. Please try again."
       alert(errorMessage)
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -425,7 +454,7 @@ export default function InviteUser() {
               onChange={handlePhoneChange}
               placeholder="Enter phone number"
               className={`flex-1 h-12 border-gray-200 rounded-lg ${phoneError ? "border-red-500" : ""}`}
-              maxLength={15}
+              maxLength={countryCode === "+91" ? 10 : 15}
             />
           </div>
           {phoneError && (
@@ -486,7 +515,7 @@ export default function InviteUser() {
               )}
             </div>
             <div className="flex-1 space-y-2">
-              {photo && (
+              {photo ? (
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-600">{photo.name}</span>
                   <button
@@ -497,28 +526,27 @@ export default function InviteUser() {
                     <X className="w-4 h-4" />
                   </button>
                 </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <label
+                    htmlFor="photoInput"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-300 text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>From Gallery</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleCameraCapture}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-300 text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
+                  >
+                    <Camera className="w-4 h-4" />
+                    <span>Use Camera</span>
+                  </button>
+                </div>
               )}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleCameraCapture}
-                  disabled={isCameraLoading}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-black text-white text-sm font-medium hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <ImageIcon className="w-4 h-4" />
-                  <span>{isCameraLoading ? "Opening..." : "Camera"}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-300 text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
-                >
-                  <Upload className="w-4 h-4" />
-                  <span>Gallery</span>
-                </button>
-              </div>
               <input
-                ref={fileInputRef}
+                ref={photoInputRef}
                 id="photoInput"
                 type="file"
                 accept="image/*"
@@ -526,7 +554,7 @@ export default function InviteUser() {
                 onChange={handlePhotoChange}
               />
               <input
-                ref={cameraInputRef}
+                ref={photoCameraInputRef}
                 id="photoCameraInput"
                 type="file"
                 accept="image/*"
@@ -572,14 +600,14 @@ export default function InviteUser() {
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-4 py-4 z-40">
         <Button
           onClick={handleAddUser}
-          disabled={!isFormValid}
+          disabled={!isFormValid || submitting}
           className={`w-full py-3 ${
-            isFormValid
+            isFormValid && !submitting
               ? "bg-blue-600 hover:bg-blue-700 text-white"
               : "bg-gray-200 text-gray-500 cursor-not-allowed"
           } transition-colors`}
         >
-          Add user
+          {submitting ? "Adding..." : "Add user"}
         </Button>
       </div>
 

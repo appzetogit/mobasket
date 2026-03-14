@@ -517,6 +517,50 @@ export default function App() {
           }
         />
         <Route
+          path="/store/manage-outlets"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <ManageOutlets />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/store/contact-details"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <ContactDetails />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/store/edit-owner"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <EditOwner />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/store/invite-user"
+          element={
+            <ProtectedRoute
+              module="grocery-store"
+              loginPath="/store/login"
+            >
+              <InviteUser />
+            </ProtectedRoute>
+          }
+        />
+        <Route
           path="/store/outlet-info"
           element={
             <ProtectedRoute

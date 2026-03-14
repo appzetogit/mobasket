@@ -695,10 +695,13 @@ export default function ExploreMore() {
   // Section data
   const manageOutletItems = isGroceryStore ? [
     { id: 1, label: "Store info", icon: Info, route: "/store/outlet-info" },
+    { id: 2, label: "Switch outlet", icon: Building2, route: "/store/switch-outlet" },
+    { id: 3, label: "Manage staff", icon: Users, route: "/store/contact-details" },
   ] : [
     { id: 1, label: "Outlet info", icon: Info, route: "/restaurant/outlet-info" },
     { id: 2, label: "Outlet timings", icon: Clock, route: "/restaurant/outlet-timings" },
-    { id: 3, label: "Manage staff", icon: Users, route: "/restaurant/contact-details" },
+    { id: 3, label: "Switch outlet", icon: Building2, route: "/restaurant/switch-outlet" },
+    { id: 4, label: "Manage staff", icon: Users, route: "/restaurant/contact-details" },
   ]
 
   const settingsItems = isGroceryStore ? [
@@ -727,11 +730,16 @@ export default function ExploreMore() {
     { id: 2, label: "Invoices", icon: Receipt, route: "/restaurant/hub-finance?tab=invoices" },
   ]
 
+  const growthItems = isGroceryStore ? [] : [
+    { id: 1, label: "Create offer", icon: Lightbulb, route: "/restaurant/hub-growth/create-offers" },
+  ]
+
   // All sections with their items
   const allSections = [
     { title: "Manage outlet", items: manageOutletItems, key: "manage-outlet" },
     { title: "Settings", items: settingsItems, key: "settings" },
     { title: "Orders", items: ordersItems, key: "orders" },
+    ...(!isGroceryStore ? [{ title: "Growth", items: growthItems, key: "growth" }] : []),
     { title: "Help", items: helpItems, key: "help" },
     { title: "Accounting", items: accountingItems, key: "accounting" },
   ]
@@ -1135,7 +1143,14 @@ export default function ExploreMore() {
               <div className="px-6 py-6">
                 <div className="flex items-start gap-4">
                   {/* Avatar */}
-                  <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center shrink-0 overflow-hidden">
+                  <button
+                    onClick={() => {
+                      setProfileOpen(false)
+                      navigate(`${baseRoute}/edit-owner`)
+                    }}
+                    className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center shrink-0 overflow-hidden hover:opacity-90 transition-opacity"
+                    aria-label="Edit profile details"
+                  >
                     {userData.profileImage?.url ? (
                       <img
                         src={userData.profileImage.url}
@@ -1145,7 +1160,7 @@ export default function ExploreMore() {
                     ) : (
                       <User className="w-8 h-8 text-gray-400" />
                     )}
-                  </div>
+                  </button>
 
                   {/* User Details */}
                   <div className="flex-1 min-w-0">
@@ -1165,6 +1180,15 @@ export default function ExploreMore() {
                     <p className="text-sm font-bold text-gray-900 mt-2">
                       {userData.role}
                     </p>
+                    <button
+                      onClick={() => {
+                        setProfileOpen(false)
+                        navigate(`${baseRoute}/edit-owner`)
+                      }}
+                      className="text-sm text-blue-600 hover:text-blue-700 font-medium mt-2"
+                    >
+                      Edit details
+                    </button>
                   </div>
                 </div>
               </div>

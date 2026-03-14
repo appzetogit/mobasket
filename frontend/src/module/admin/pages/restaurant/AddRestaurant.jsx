@@ -18,7 +18,59 @@ const cuisinesOptions = [
   "Cafe",
 ]
 
-const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+const toSlotFormat = (time24) => {
+  if (!time24 || typeof time24 !== "string" || !time24.includes(":")) return null
+  const [rawHour, rawMinute] = time24.split(":").map(Number)
+  if (!Number.isFinite(rawHour) || !Number.isFinite(rawMinute)) return null
+  const period = rawHour >= 12 ? "pm" : "am"
+  const hour12 = rawHour % 12 || 12
+  return {
+    time: `${hour12}:${String(rawMinute).padStart(2, "0")}`,
+    period,
+  }
+}
+
+const buildDefaultOutletTimings = () =>
+  dayNames.map((day) => ({
+    day,
+    isOpen: true,
+    slots: [{ id: `${day}-1`, start: "09:00", end: "22:00" }],
+  }))
+
+const buildOutletTimingsPayload = (editorTimings = []) =>
+  dayNames.map((day) => {
+    const entry = (Array.isArray(editorTimings) ? editorTimings : []).find((item) => item?.day === day) || {
+      day,
+      isOpen: true,
+      slots: [],
+    }
+    const normalizedSlots = (Array.isArray(entry.slots) ? entry.slots : [])
+      .map((slot) => {
+        const start = toSlotFormat(slot?.start)
+        const end = toSlotFormat(slot?.end)
+        if (!start || !end) return null
+        return {
+          start: start.time,
+          startPeriod: start.period,
+          end: end.time,
+          endPeriod: end.period,
+        }
+      })
+      .filter(Boolean)
+      .slice(0, 3)
+
+    const firstStart = normalizedSlots[0]
+    const lastEnd = normalizedSlots[normalizedSlots.length - 1]
+    return {
+      day,
+      isOpen: entry?.isOpen !== false,
+      openingTime: firstStart ? entry.slots?.[0]?.start || "09:00" : "09:00",
+      closingTime: lastEnd ? entry.slots?.[entry.slots.length - 1]?.end || "22:00" : "22:00",
+      slots: normalizedSlots,
+    }
+  })
 
 export default function AddRestaurant() {
   const navigate = useNavigate()
@@ -53,6 +105,7 @@ export default function AddRestaurant() {
     openingTime: "09:00",
     closingTime: "22:00",
     openDays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+    outletTimings: buildDefaultOutletTimings(),
   })
 
   // Step 3: Documents
@@ -90,13 +143,6 @@ export default function AddRestaurant() {
     signupMethod: "email",
   })
 
-  const languageTabs = [
-    { key: "default", label: "Default" },
-    { key: "en", label: "English(EN)" },
-    { key: "bn", label: "Bengali - বাংলা(BN)" },
-    { key: "ar", label: "Arabic - العربية (AR)" },
-    { key: "es", label: "Spanish - español(ES)" },
-  ]
 
   // Upload handler for images
   const handleUpload = async (file, folder) => {
@@ -130,9 +176,13 @@ export default function AddRestaurant() {
     if (!step2.menuImages || step2.menuImages.length === 0) errors.push("At least one menu image is required")
     if (!step2.profileImage) errors.push("Restaurant profile image is required")
     if (!step2.cuisines || step2.cuisines.length === 0) errors.push("Please select at least one cuisine")
-    if (!step2.openingTime?.trim()) errors.push("Opening time is required")
-    if (!step2.closingTime?.trim()) errors.push("Closing time is required")
-    if (!step2.openDays || step2.openDays.length === 0) errors.push("Please select at least one open day")
+    const openDayEntries = (Array.isArray(step2.outletTimings) ? step2.outletTimings : []).filter((d) => d?.isOpen !== false)
+    if (openDayEntries.length === 0) errors.push("Please keep at least one day open in outlet timings")
+    openDayEntries.forEach((dayEntry) => {
+      if (!Array.isArray(dayEntry.slots) || dayEntry.slots.length === 0) {
+        errors.push(`Please add at least one slot for ${dayEntry.day}`)
+      }
+    })
     return errors
   }
 
@@ -250,6 +300,11 @@ export default function AddRestaurant() {
         fssaiImageData = step3.fssaiImage
       }
 
+      const outletTimings = buildOutletTimingsPayload(step2.outletTimings)
+      const openEntries = outletTimings.filter((entry) => entry.isOpen !== false)
+      const derivedOpenDays = openEntries.map((entry) => entry.day.slice(0, 3))
+      const firstOpen = openEntries[0]
+
       // Prepare payload
       const payload = {
         // Step 1
@@ -263,9 +318,10 @@ export default function AddRestaurant() {
         menuImages: menuImagesData,
         profileImage: profileImageData,
         cuisines: step2.cuisines,
-        openingTime: step2.openingTime,
-        closingTime: step2.closingTime,
-        openDays: step2.openDays,
+        openingTime: firstOpen?.openingTime || "09:00",
+        closingTime: firstOpen?.closingTime || "22:00",
+        openDays: derivedOpenDays,
+        outletTimings,
         // Step 3
         panNumber: step3.panNumber,
         nameOnPan: step3.nameOnPan,
@@ -532,55 +588,125 @@ export default function AddRestaurant() {
           </div>
         </div>
 
-        <div className="space-y-3">
-          <Label className="text-xs text-gray-700">Delivery timings*</Label>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label className="text-xs text-gray-700 mb-1 block">Opening time</Label>
-              <Input
-                type="time"
-                value={step2.openingTime || ""}
-                onChange={(e) => setStep2({ ...step2, openingTime: e.target.value })}
-                className="bg-white text-sm"
-              />
-            </div>
-            <div>
-              <Label className="text-xs text-gray-700 mb-1 block">Closing time</Label>
-              <Input
-                type="time"
-                value={step2.closingTime || ""}
-                onChange={(e) => setStep2({ ...step2, closingTime: e.target.value })}
-                className="bg-white text-sm"
-              />
-            </div>
-          </div>
-        </div>
-
         <div className="space-y-2">
           <Label className="text-xs text-gray-700 flex items-center gap-1.5">
             <Calendar className="w-3.5 h-3.5 text-gray-800" />
-            <span>Open days*</span>
+            <span>Outlet timings (single source of truth)*</span>
           </Label>
-          <div className="mt-1 grid grid-cols-7 gap-1.5 sm:gap-2">
-            {daysOfWeek.map((day) => {
-              const active = step2.openDays.includes(day)
-              return (
-                <button
-                  key={day}
-                  type="button"
-                  onClick={() => {
-                    setStep2((prev) => {
-                      const exists = prev.openDays.includes(day)
-                      if (exists) return { ...prev, openDays: prev.openDays.filter((d) => d !== day) }
-                      return { ...prev, openDays: [...prev.openDays, day] }
-                    })
-                  }}
-                  className={`aspect-square flex items-center justify-center rounded-md text-[11px] font-medium ${active ? "bg-black text-white" : "bg-gray-100 text-gray-800"}`}
-                >
-                  {day.charAt(0)}
-                </button>
-              )
-            })}
+          <div className="space-y-2">
+            {step2.outletTimings.map((dayEntry) => (
+              <div key={dayEntry.day} className="rounded-md border border-gray-200 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-sm font-semibold text-gray-800">{dayEntry.day}</p>
+                  <label className="flex items-center gap-2 text-xs text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={dayEntry.isOpen !== false}
+                      onChange={(e) =>
+                        setStep2((prev) => ({
+                          ...prev,
+                          outletTimings: prev.outletTimings.map((entry) =>
+                            entry.day === dayEntry.day ? { ...entry, isOpen: e.target.checked } : entry,
+                          ),
+                        }))
+                      }
+                    />
+                    Open
+                  </label>
+                </div>
+
+                {dayEntry.isOpen !== false && (
+                  <div className="space-y-2">
+                    {dayEntry.slots.map((slot) => (
+                      <div key={slot.id} className="flex items-center gap-2">
+                        <Input
+                          type="time"
+                          value={slot.start}
+                          onChange={(e) =>
+                            setStep2((prev) => ({
+                              ...prev,
+                              outletTimings: prev.outletTimings.map((entry) =>
+                                entry.day === dayEntry.day
+                                  ? {
+                                      ...entry,
+                                      slots: entry.slots.map((s) =>
+                                        s.id === slot.id ? { ...s, start: e.target.value } : s,
+                                      ),
+                                    }
+                                  : entry,
+                              ),
+                            }))
+                          }
+                          className="bg-white text-sm"
+                        />
+                        <span className="text-xs text-gray-500">to</span>
+                        <Input
+                          type="time"
+                          value={slot.end}
+                          onChange={(e) =>
+                            setStep2((prev) => ({
+                              ...prev,
+                              outletTimings: prev.outletTimings.map((entry) =>
+                                entry.day === dayEntry.day
+                                  ? {
+                                      ...entry,
+                                      slots: entry.slots.map((s) =>
+                                        s.id === slot.id ? { ...s, end: e.target.value } : s,
+                                      ),
+                                    }
+                                  : entry,
+                              ),
+                            }))
+                          }
+                          className="bg-white text-sm"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() =>
+                            setStep2((prev) => ({
+                              ...prev,
+                              outletTimings: prev.outletTimings.map((entry) => {
+                                if (entry.day !== dayEntry.day || entry.slots.length <= 1) return entry
+                                return { ...entry, slots: entry.slots.filter((s) => s.id !== slot.id) }
+                              }),
+                            }))
+                          }
+                          className="text-xs"
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    ))}
+                    {dayEntry.slots.length < 3 && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() =>
+                          setStep2((prev) => ({
+                            ...prev,
+                            outletTimings: prev.outletTimings.map((entry) =>
+                              entry.day === dayEntry.day
+                                ? {
+                                    ...entry,
+                                    slots: [
+                                      ...entry.slots,
+                                      { id: `${dayEntry.day}-${Date.now()}-${Math.random()}`, start: "09:00", end: "22:00" },
+                                    ],
+                                  }
+                                : entry,
+                            ),
+                          }))
+                        }
+                        className="text-xs"
+                      >
+                        + Add slot
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </section>

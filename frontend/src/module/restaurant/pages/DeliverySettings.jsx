@@ -1,22 +1,37 @@
 import { useState, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import Lenis from "lenis"
 import { ArrowLeft, Truck, X, CheckCircle, AlertCircle } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent } from "@/components/ui/card"
+import { restaurantAPI, groceryStoreAPI } from "@/lib/api"
 
 const STORAGE_KEY = "restaurant_outlet_timings"
-const DELIVERY_STATUS_KEY = "restaurant_delivery_status"
 
 export default function DeliverySettings() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const isGroceryStore = location.pathname.startsWith("/store")
+  const statusStorageKey = isGroceryStore ? "grocery-store_online_status" : "restaurant_online_status"
+  const statusEventName = isGroceryStore ? "storeStatusChanged" : "restaurantStatusChanged"
   const [deliveryStatus, setDeliveryStatus] = useState(false)
   const [showWarning, setShowWarning] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [pendingStatus, setPendingStatus] = useState(false)
   const [showSuccessToast, setShowSuccessToast] = useState(false)
   const [toastMessage, setToastMessage] = useState("")
+
+  const normalizeStatusValue = (value) => {
+    if (typeof value === "boolean") return value
+    if (typeof value === "number") return value > 0
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase()
+      if (["true", "1", "active", "online", "on", "enabled"].includes(normalized)) return true
+      if (["false", "0", "inactive", "offline", "off", "disabled"].includes(normalized)) return false
+    }
+    return Boolean(value)
+  }
 
   // Lenis smooth scrolling
   useEffect(() => {
@@ -38,20 +53,54 @@ export default function DeliverySettings() {
     }
   }, [])
 
-  // Load delivery status from localStorage on mount
+  // Load delivery status from localStorage on mount, fallback to backend value.
   useEffect(() => {
-    try {
-      const savedStatus = localStorage.getItem(DELIVERY_STATUS_KEY)
-      if (savedStatus !== null) {
-        setDeliveryStatus(JSON.parse(savedStatus))
+    const loadStatus = async () => {
+      try {
+        const savedStatus = localStorage.getItem(statusStorageKey)
+        if (savedStatus !== null) {
+          setDeliveryStatus(normalizeStatusValue(JSON.parse(savedStatus)))
+        }
+      } catch (error) {
+        // Only log error if it's not a network/timeout error (backend might be down/slow)
+        if (error.code !== 'ERR_NETWORK' && error.code !== 'ECONNABORTED' && !error.message?.includes('timeout')) {
+          console.error("Error loading delivery status:", error)
+        }
       }
-    } catch (error) {
-      // Only log error if it's not a network/timeout error (backend might be down/slow)
-      if (error.code !== 'ERR_NETWORK' && error.code !== 'ECONNABORTED' && !error.message?.includes('timeout')) {
-        console.error("Error loading delivery status:", error)
+
+      try {
+        const response = isGroceryStore
+          ? await groceryStoreAPI.getCurrentStore()
+          : await restaurantAPI.getCurrentRestaurant()
+        const entity = isGroceryStore
+          ? (response?.data?.data?.store || response?.data?.store || response?.data?.data?.restaurant || response?.data?.restaurant || {})
+          : (response?.data?.data?.restaurant || response?.data?.restaurant || {})
+        const backendStatus = normalizeStatusValue(
+          entity.isAcceptingOrders ?? entity.isActive
+        )
+        setDeliveryStatus(backendStatus)
+        localStorage.setItem(statusStorageKey, JSON.stringify(backendStatus))
+      } catch (error) {
+        if (error.code !== 'ERR_NETWORK' && error.code !== 'ECONNABORTED' && !error.message?.includes('timeout')) {
+          console.error("Error loading delivery status from backend:", error)
+        }
       }
     }
-  }, [])
+
+    loadStatus()
+  }, [isGroceryStore, statusStorageKey])
+
+  // Keep status synchronized when changed from other pages/components.
+  useEffect(() => {
+    const handleStatusChange = (event) => {
+      if (typeof event?.detail?.isOnline === "boolean") {
+        setDeliveryStatus(event.detail.isOnline)
+      }
+    }
+
+    window.addEventListener(statusEventName, handleStatusChange)
+    return () => window.removeEventListener(statusEventName, handleStatusChange)
+  }, [statusEventName])
 
   // Prevent body scroll when dialog is open
   useEffect(() => {
@@ -79,8 +128,42 @@ export default function DeliverySettings() {
       const currentTimeInMinutes = currentHour * 60 + currentMinute
 
       const dayData = days[currentDay]
-      if (!dayData || !dayData.isOpen || !dayData.slots || dayData.slots.length === 0) {
+      if (!dayData || !dayData.isOpen) {
         return false
+      }
+
+      const parseTimeToMinutes = (timeStr) => {
+        if (!timeStr || typeof timeStr !== "string") return null
+        const normalized = timeStr.trim().toUpperCase()
+        const match = normalized.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/)
+        if (!match) return null
+        let hours = Number(match[1])
+        const minutes = Number(match[2])
+        const period = match[3] || null
+        if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null
+        if (minutes < 0 || minutes > 59) return null
+        if (period) {
+          if (hours < 1 || hours > 12) return null
+          if (period === "PM" && hours !== 12) hours += 12
+          if (period === "AM" && hours === 12) hours = 0
+        } else if (hours < 0 || hours > 23) {
+          return null
+        }
+        return hours * 60 + minutes
+      }
+
+      const isWithinWindow = (startMinutes, endMinutes) => {
+        if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes)) return false
+        if (endMinutes < startMinutes) {
+          return currentTimeInMinutes >= startMinutes || currentTimeInMinutes <= endMinutes
+        }
+        return currentTimeInMinutes >= startMinutes && currentTimeInMinutes <= endMinutes
+      }
+
+      if (!dayData.slots || dayData.slots.length === 0) {
+        const start = parseTimeToMinutes(dayData.openingTime)
+        const end = parseTimeToMinutes(dayData.closingTime)
+        return isWithinWindow(start, end)
       }
 
       // Check if current time falls within any slot for today
@@ -100,14 +183,7 @@ export default function DeliverySettings() {
         const startMinutes = parseTime(slot.start, slot.startPeriod || "am")
         const endMinutes = parseTime(slot.end, slot.endPeriod || "pm")
         
-        // Handle slots that span midnight (e.g., 11pm to 2am)
-        if (endMinutes < startMinutes) {
-          // Slot spans midnight
-          return currentTimeInMinutes >= startMinutes || currentTimeInMinutes <= endMinutes
-        } else {
-          // Normal slot within same day
-          return currentTimeInMinutes >= startMinutes && currentTimeInMinutes <= endMinutes
-        }
+        return isWithinWindow(startMinutes, endMinutes)
       })
     } catch (error) {
       console.error("Error checking outlet timings:", error)
@@ -123,12 +199,19 @@ export default function DeliverySettings() {
     setTimeout(() => setShowSuccessToast(false), 3000)
   }
 
-  const saveDeliveryStatus = (status) => {
+  const saveDeliveryStatus = async (status) => {
     try {
-      localStorage.setItem(DELIVERY_STATUS_KEY, JSON.stringify(status))
-      setDeliveryStatus(status)
+      const normalized = normalizeStatusValue(status)
+      if (isGroceryStore) {
+        await groceryStoreAPI.updateDeliveryStatus(normalized)
+      } else {
+        await restaurantAPI.updateDeliveryStatus(normalized)
+      }
+      localStorage.setItem(statusStorageKey, JSON.stringify(normalized))
+      setDeliveryStatus(normalized)
+      window.dispatchEvent(new CustomEvent(statusEventName, { detail: { isOnline: normalized } }))
       
-      if (status) {
+      if (normalized) {
         showToast("Delivery is now ON - You're receiving orders")
       } else {
         showToast("Delivery is now OFF - Not receiving orders")
@@ -155,11 +238,11 @@ export default function DeliverySettings() {
     }
 
     // Otherwise, update directly
-    saveDeliveryStatus(checked)
+    void saveDeliveryStatus(checked)
   }
 
   const handleConfirmStatusChange = () => {
-    saveDeliveryStatus(pendingStatus)
+    void saveDeliveryStatus(pendingStatus)
     setShowConfirmDialog(false)
     
     // Show warning if enabled outside timings

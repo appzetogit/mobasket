@@ -24,6 +24,30 @@ export const parseTimeToMinutes = (value) => {
   return hours * 60 + minutes;
 };
 
+const parseSlotTimeToMinutes = (timeValue, periodValue) => {
+  if (!timeValue || typeof timeValue !== 'string') return null;
+  const normalizedTime = timeValue.trim();
+  const normalizedPeriod = String(periodValue || '').trim().toUpperCase();
+  if (!normalizedPeriod || (normalizedPeriod !== 'AM' && normalizedPeriod !== 'PM')) return null;
+  return parseTimeToMinutes(`${normalizedTime} ${normalizedPeriod}`);
+};
+
+const isWithinTimeWindow = (currentMinutes, openingMinutes, closingMinutes) => {
+  if (
+    !Number.isFinite(currentMinutes) ||
+    !Number.isFinite(openingMinutes) ||
+    !Number.isFinite(closingMinutes)
+  ) {
+    return false;
+  }
+
+  if (openingMinutes === closingMinutes) return true;
+  if (closingMinutes > openingMinutes) {
+    return currentMinutes >= openingMinutes && currentMinutes <= closingMinutes;
+  }
+  return currentMinutes >= openingMinutes || currentMinutes <= closingMinutes;
+};
+
 export const isOpenFromOutletTimings = (timings, now = new Date()) => {
   if (!Array.isArray(timings) || timings.length === 0) return true;
 
@@ -32,13 +56,20 @@ export const isOpenFromOutletTimings = (timings, now = new Date()) => {
   if (!currentDayEntry) return true;
   if (currentDayEntry.isOpen === false) return false;
 
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const slots = Array.isArray(currentDayEntry.slots) ? currentDayEntry.slots : [];
+  if (slots.length > 0) {
+    const hasActiveSlot = slots.some((slot) => {
+      const startMinutes = parseSlotTimeToMinutes(slot?.start, slot?.startPeriod);
+      const endMinutes = parseSlotTimeToMinutes(slot?.end, slot?.endPeriod);
+      return isWithinTimeWindow(nowMinutes, startMinutes, endMinutes);
+    });
+    return hasActiveSlot;
+  }
+
   const openingMinutes = parseTimeToMinutes(currentDayEntry.openingTime);
   const closingMinutes = parseTimeToMinutes(currentDayEntry.closingTime);
   if (!Number.isFinite(openingMinutes) || !Number.isFinite(closingMinutes)) return true;
 
-  const nowMinutes = now.getHours() * 60 + now.getMinutes();
-  if (closingMinutes > openingMinutes) {
-    return nowMinutes >= openingMinutes && nowMinutes <= closingMinutes;
-  }
-  return nowMinutes >= openingMinutes || nowMinutes <= closingMinutes;
+  return isWithinTimeWindow(nowMinutes, openingMinutes, closingMinutes);
 };

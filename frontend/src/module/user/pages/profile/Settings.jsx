@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react"
 import { Link } from "react-router-dom"
 import { ArrowLeft } from "lucide-react"
 import AnimatedPage from "../../components/AnimatedPage"
@@ -7,6 +8,23 @@ import { Switch } from "@/components/ui/switch"
 import { Button } from "@/components/ui/button"
 
 export default function Settings() {
+  const [emailNotifications, setEmailNotifications] = useState(() => {
+    const saved = localStorage.getItem("user_setting_email_notifications")
+    return saved === null ? true : saved === "true"
+  })
+  const [pushNotifications, setPushNotifications] = useState(() => {
+    const saved = localStorage.getItem("user_setting_push_notifications")
+    return saved === null ? true : saved === "true"
+  })
+
+  useEffect(() => {
+    localStorage.setItem("user_setting_email_notifications", String(emailNotifications))
+  }, [emailNotifications])
+
+  useEffect(() => {
+    localStorage.setItem("user_setting_push_notifications", String(pushNotifications))
+  }, [pushNotifications])
+
   return (
     <AnimatedPage className="min-h-screen bg-[#f5f5f5] dark:bg-[#0a0a0a] p-4">
       <div className="max-w-[1100px] mx-auto space-y-6 md:pt-20 lg:pt-24 md:pb-6 lg:pb-8">
@@ -30,7 +48,7 @@ export default function Settings() {
                   Receive updates about your orders via email
                 </p>
               </div>
-              <Switch defaultChecked />
+              <Switch checked={emailNotifications} onCheckedChange={setEmailNotifications} />
             </div>
             <div className="flex items-center justify-between">
               <div className="space-y-0.5">
@@ -39,7 +57,7 @@ export default function Settings() {
                   Receive push notifications on your device
                 </p>
               </div>
-              <Switch defaultChecked />
+              <Switch checked={pushNotifications} onCheckedChange={setPushNotifications} />
             </div>
           </CardContent>
         </Card>

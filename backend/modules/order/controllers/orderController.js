@@ -277,6 +277,14 @@ const parseTimeToMinutes = (timeValue) => {
   return hours * 60 + minutes;
 };
 
+const parseSlotTimeToMinutes = (timeValue, periodValue) => {
+  if (!timeValue || typeof timeValue !== 'string') return null;
+  const normalizedTime = timeValue.trim();
+  const normalizedPeriod = String(periodValue || '').trim().toUpperCase();
+  if (!normalizedPeriod || (normalizedPeriod !== 'AM' && normalizedPeriod !== 'PM')) return null;
+  return parseTimeToMinutes(`${normalizedTime} ${normalizedPeriod}`);
+};
+
 const isWithinTimeWindow = (currentMinutes, openingMinutes, closingMinutes) => {
   if (
     !Number.isFinite(currentMinutes) ||
@@ -324,6 +332,19 @@ const evaluateRestaurantAvailabilityAt = async (restaurant, atDate = new Date())
   if (dayTiming) {
     if (dayTiming.isOpen === false) {
       return { isAvailable: false, reason: 'Restaurant is closed today' };
+    }
+
+    const slots = Array.isArray(dayTiming?.slots) ? dayTiming.slots : [];
+    if (slots.length > 0) {
+      const hasActiveSlot = slots.some((slot) => {
+        const startMinutes = parseSlotTimeToMinutes(slot?.start, slot?.startPeriod);
+        const endMinutes = parseSlotTimeToMinutes(slot?.end, slot?.endPeriod);
+        return isWithinTimeWindow(currentMinutes, startMinutes, endMinutes);
+      });
+      if (!hasActiveSlot) {
+        return { isAvailable: false, reason: 'Restaurant is currently closed' };
+      }
+      return { isAvailable: true, reason: '' };
     }
 
     const openingMinutes = parseTimeToMinutes(dayTiming.openingTime);

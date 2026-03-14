@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react"
-import { useNavigate } from "react-router-dom"
+﻿import { useState, useEffect, useRef } from "react"
+import { useLocation, useNavigate } from "react-router-dom"
 import Lenis from "lenis"
 import {
   ArrowLeft,
@@ -21,11 +21,19 @@ import { restaurantAPI } from "@/lib/api"
 import OptimizedImage from "@/components/OptimizedImage"
 import { clearModuleAuth } from "@/lib/utils/auth"
 import { firebaseAuth } from "@/lib/firebase"
+import { useCompanyName } from "@/lib/hooks/useCompanyName"
 
 const STORAGE_KEY = "restaurant_owner_contact"
 
 export default function EditOwner() {
+  const companyName = useCompanyName()
   const navigate = useNavigate()
+  const location = useLocation()
+  const isStore = location.pathname.startsWith("/store")
+  const moduleName = isStore ? "grocery-store" : "restaurant"
+  const appName = companyName || "MoFood"
+  const welcomeRoute = isStore ? "/store/login" : "/restaurant/welcome"
+  const storagePrefix = isStore ? "grocery-store" : "restaurant"
   const [ownerData, setOwnerData] = useState({
     name: "",
     phone: "",
@@ -281,27 +289,27 @@ export default function EditOwner() {
       }
 
       // Clear restaurant module authentication data
-      clearModuleAuth("restaurant")
+      clearModuleAuth(moduleName)
       
       // Clear all restaurant-related localStorage data
       localStorage.removeItem(STORAGE_KEY)
-      localStorage.removeItem("restaurant_onboarding")
-      localStorage.removeItem("restaurant_accessToken")
-      localStorage.removeItem("restaurant_authenticated")
-      localStorage.removeItem("restaurant_user")
-      localStorage.removeItem("restaurant_invited_users")
+      localStorage.removeItem(`${storagePrefix}_onboarding`)
+      localStorage.removeItem(`${storagePrefix}_accessToken`)
+      localStorage.removeItem(`${storagePrefix}_authenticated`)
+      localStorage.removeItem(`${storagePrefix}_user`)
+      localStorage.removeItem(`${storagePrefix}_invited_users`)
       
       // Clear sessionStorage
       sessionStorage.removeItem("restaurantAuthData")
       
       // Dispatch auth change event to notify other components
-      window.dispatchEvent(new Event("restaurantAuthChanged"))
+      window.dispatchEvent(new Event(isStore ? "storeAuthChanged" : "restaurantAuthChanged"))
       
       setShowDeleteDialog(false)
       
       // Navigate to welcome page
       setTimeout(() => {
-        navigate("/restaurant/welcome", { replace: true })
+        navigate(welcomeRoute, { replace: true })
       }, 300)
     } catch (error) {
       console.error("Error deleting account:", error)
@@ -429,7 +437,7 @@ export default function EditOwner() {
             className="flex items-center gap-2 text-red-600 hover:text-red-700 transition-colors"
           >
             <Trash2 className="w-5 h-5" />
-            <span className="text-sm font-normal">Delete your {restaurantName || "restaurant"} account</span>
+            <span className="text-sm font-normal">Delete your {appName} account</span>
           </button>
         </div>
       </div>
@@ -442,10 +450,10 @@ export default function EditOwner() {
               <span className="text-2xl leading-none text-red-600">!</span>
             </div>
             <DialogTitle className="text-base font-semibold text-gray-900 text-center">
-              You are about to delete your {restaurantName || "restaurant"} account
+              You are about to delete your {appName} account
             </DialogTitle>
             <DialogDescription className="mt-2 text-sm text-gray-600">
-              All information associated with your account will be deleted, and you will lose access to your restaurant permanently.
+              All information associated with your account will be deleted, and you will lose access to your {isStore ? "store" : "restaurant"} permanently.
               This information cannot be recovered once the account is deleted. Are you sure you want to proceed?
             </DialogDescription>
           </DialogHeader>

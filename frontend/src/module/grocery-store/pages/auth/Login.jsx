@@ -115,14 +115,6 @@ export default function GroceryStoreLogin() {
 
     const digitsOnly = phone.replace(/\D/g, "")
 
-    if (digitsOnly.length < 7) {
-      return "Phone number must be at least 7 digits"
-    }
-
-    if (digitsOnly.length > 15) {
-      return "Phone number is too long"
-    }
-
     if (countryCode === "+91") {
       if (digitsOnly.length !== 10) {
         return "Indian phone number must be 10 digits"
@@ -131,6 +123,15 @@ export default function GroceryStoreLogin() {
       if (!["6", "7", "8", "9"].includes(firstDigit)) {
         return "Invalid Indian mobile number"
       }
+      return ""
+    }
+
+    if (digitsOnly.length < 7) {
+      return "Phone number must be at least 7 digits"
+    }
+
+    if (digitsOnly.length > 15) {
+      return "Phone number is too long"
     }
 
     return ""
@@ -344,10 +345,12 @@ export default function GroceryStoreLogin() {
   }
 
   const handlePhoneChange = (e) => {
-    const value = e.target.value.replace(/\D/g, "")
+    const rawDigits = e.target.value.replace(/\D/g, "")
+    const maxLength = formData.countryCode === "+91" ? 10 : 15
+    const value = rawDigits.slice(0, maxLength)
     const newFormData = {
       ...formData,
-      phone: value.slice(0, 15),
+      phone: value,
     }
     setFormData(newFormData)
 

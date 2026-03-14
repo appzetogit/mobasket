@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import Lenis from "lenis"
 import {
@@ -16,6 +16,9 @@ import { ImageIcon } from "lucide-react"
 
 export default function ContactDetails() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const isStore = location.pathname.startsWith("/store")
+  const baseRoute = isStore ? "/store" : "/restaurant"
   const [invitedUsers, setInvitedUsers] = useState([])
   
   // Owner data - Load from backend
@@ -99,11 +102,11 @@ export default function ContactDetails() {
 
 
   const handleInviteClick = (role = "") => {
-    navigate(`/restaurant/invite-user?role=${role}`)
+    navigate(`${baseRoute}/invite-user?role=${role}`)
   }
 
   const handleEditOwner = () => {
-    navigate("/restaurant/edit-owner")
+    navigate(`${baseRoute}/edit-owner`)
   }
 
   // Load staff/manager from backend API
@@ -197,7 +200,7 @@ export default function ContactDetails() {
       <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-50">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate("/restaurant")}
+            onClick={() => navigate(baseRoute)}
             className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
             aria-label="Go back"
           >
@@ -211,7 +214,7 @@ export default function ContactDetails() {
       <div className=" bg-gray-100 space-y-6">
         {/* Owner Section */}
         <div>
-          <h2 className="px-4 text-base font-bold text-gray-900 my-3">Owner</h2>
+          <h2 className="px-4 text-base font-bold text-gray-900 my-3">{isStore ? "Store owner" : "Owner"}</h2>
           <div className="bg-white rounded-0 p-4 flex items-center gap-4">
             <div className="w-12 h-12 bg-gray-200 rounded-full flex items-center justify-center shrink-0 overflow-hidden">
               {ownerData.photo ? (

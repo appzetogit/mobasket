@@ -51,6 +51,7 @@ const GroceryProfile = () => {
       text: "Check out MoBasket",
       url: shareUrl,
     };
+    const shareText = `${payload.text} ${payload.url}`.trim();
 
     try {
       if (navigator.share) {
@@ -66,18 +67,17 @@ const GroceryProfile = () => {
         return;
       }
 
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(shareUrl);
-        try {
-          await userAPI.markAppShared();
-          updateUserProfile({ hasSharedApp: true, appSharedAt: new Date().toISOString() });
-          toast.success("App link copied. Shared-user coupons are now unlocked.");
-        } catch (rewardError) {
-          console.error("Share reward recording failed:", rewardError);
-          toast.success("App link copied");
-        }
-        return;
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+      window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+      try {
+        await userAPI.markAppShared();
+        updateUserProfile({ hasSharedApp: true, appSharedAt: new Date().toISOString() });
+        toast.success("Opening share options...");
+      } catch (rewardError) {
+        console.error("Share reward recording failed:", rewardError);
+        toast.success("Opening share options...");
       }
+      return;
     } catch (error) {
       console.error("Share app failed:", error);
     }

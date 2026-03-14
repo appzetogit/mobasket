@@ -21,7 +21,7 @@ import { useCart } from "../../user/context/CartContext";
 import { useProfile } from "../../user/context/ProfileContext";
 import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
-import api, { adminAPI, orderAPI, restaurantAPI, userAPI, zoneAPI } from "@/lib/api";
+import api, { adminAPI, locationAPI, orderAPI, restaurantAPI, userAPI, zoneAPI } from "@/lib/api";
 import { initRazorpayPayment } from "@/lib/utils/razorpay";
 import { Loader } from "@googlemaps/js-api-loader";
 import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey";
@@ -415,21 +415,78 @@ export default function CheckoutPage() {
       .join(", ");
 
   const handleSaveNewAddress = async () => {
+    const lat = Number(newAddress.latitude);
+    const lng = Number(newAddress.longitude);
+    const hasPinnedCoordinates = Number.isFinite(lat) && Number.isFinite(lng);
+
+    if (!hasPinnedCoordinates) {
+      toast.error("Please set the map pin before saving this address.");
+      return;
+    }
+
+    let resolvedFromPin = null;
+    try {
+      const response = await locationAPI.reverseGeocode(lat, lng);
+      const firstResult = response?.data?.data?.results?.[0] || {};
+      const components = firstResult?.address_components || [];
+      const byType = (type) =>
+        Array.isArray(components)
+          ? components.find((component) => component?.types?.includes(type))?.long_name || ""
+          : "";
+
+      const streetNumber = byType("street_number");
+      const route = byType("route");
+      const premise = byType("premise") || byType("subpremise");
+      const sublocality =
+        byType("sublocality_level_1") || byType("sublocality") || byType("neighborhood");
+      const city = byType("locality") || byType("administrative_area_level_2");
+      const state = byType("administrative_area_level_1");
+      const zipCode = byType("postal_code");
+      const formattedAddress = String(
+        firstResult?.formatted_address || response?.data?.data?.formattedAddress || "",
+      ).trim();
+
+      const fallbackStreet = [streetNumber, route].filter(Boolean).join(" ").trim();
+      const firstPart = formattedAddress.split(",").map((part) => part.trim()).filter(Boolean)[0] || "";
+
+      resolvedFromPin = {
+        street: resolveStreetForForm(fallbackStreet, route, premise, firstPart),
+        additionalDetails: resolveStreetForForm(sublocality, premise, route, ""),
+        city: String(city || "").trim(),
+        state: String(state || "").trim(),
+        zipCode: String(zipCode || "").trim(),
+        formattedAddress,
+      };
+    } catch (error) {
+      console.error("Reverse geocode before save failed:", error);
+    }
+
     const payload = {
       label: newAddress.label,
-      street: String(newAddress.street || "").trim(),
-      additionalDetails: String(newAddress.additionalDetails || "").trim(),
-      city: String(newAddress.city || "").trim(),
-      state: String(newAddress.state || "").trim(),
-      zipCode: String(newAddress.zipCode || "").trim(),
-      latitude: newAddress.latitude || undefined,
-      longitude: newAddress.longitude || undefined,
+      street: String(resolvedFromPin?.street || newAddress.street || "").trim(),
+      additionalDetails: String(
+        resolvedFromPin?.additionalDetails || newAddress.additionalDetails || "",
+      ).trim(),
+      city: String(resolvedFromPin?.city || newAddress.city || "").trim(),
+      state: String(resolvedFromPin?.state || newAddress.state || "").trim(),
+      zipCode: String(resolvedFromPin?.zipCode || newAddress.zipCode || "").trim(),
+      latitude: String(lat),
+      longitude: String(lng),
       isDefault: Boolean(newAddress.isDefault),
     };
 
     if (!payload.street || !payload.city || !payload.state) {
-      toast.error("Street, city and state are required.");
+      toast.error("Pin moved, but full address is not resolved yet. Please wait a second and try again.");
       return;
+    }
+
+    if (resolvedFromPin) {
+      setNewAddress((prev) => ({
+        ...prev,
+        ...resolvedFromPin,
+        latitude: String(lat),
+        longitude: String(lng),
+      }));
     }
 
     setIsSavingAddress(true);
@@ -1000,7 +1057,11 @@ export default function CheckoutPage() {
     const sanitizedPhone = String(userProfile?.phone || "").replace(/\D/g, "");
     if (!sanitizedPhone || sanitizedPhone.length < 10) {
       toast.error("Please add your phone number in profile before ordering.");
-      navigate("/profile/edit");
+      navigate("/profile/edit", {
+        state: {
+          returnTo: `${location.pathname}${location.search || ""}`,
+        },
+      });
       return;
     }
 
@@ -1290,7 +1351,9 @@ export default function CheckoutPage() {
             className="p-2 hover:bg-orange-50 rounded-full transition-colors dark:hover:bg-white/10"
           >
             <ArrowLeft className="w-5 h-5 text-gray-800 dark:text-gray-100" />
+            <ArrowLeft className="w-5 h-5 text-gray-800 dark:text-gray-100" />
           </button>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">Checkout</h1>
           <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">Checkout</h1>
         </div>
       </div>
@@ -1302,6 +1365,7 @@ export default function CheckoutPage() {
             onClick={() => navigate(-1)}
             className="p-1 hover:bg-orange-50 rounded-full transition-colors dark:hover:bg-white/10"
           >
+            <ArrowLeft className="w-6 h-6 text-gray-800 dark:text-gray-100" />
             <ArrowLeft className="w-6 h-6 text-gray-800 dark:text-gray-100" />
           </button>
           <h1 className="text-xl font-bold text-gray-900 font-Inter dark:text-gray-100">Checkout</h1>
@@ -1456,9 +1520,11 @@ export default function CheckoutPage() {
                         </button>
                       </div>
                       <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                      <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
                         Address must be inside an active delivery zone.
                       </p>
                       {hasRecipientCoordinates ? (
+                        <p className="mt-1 text-[11px] text-yellow-700 dark:text-yellow-300">
                         <p className="mt-1 text-[11px] text-yellow-700 dark:text-yellow-300">
                           {Number(recipientDetails.latitude).toFixed(5)}, {Number(recipientDetails.longitude).toFixed(5)}
                         </p>
@@ -1469,6 +1535,7 @@ export default function CheckoutPage() {
                       <AddressLocationPicker
                         value={recipientDetails}
                         onChange={setRecipientDetails}
+                        fallbackLocation={liveLocation}
                         title="Recipient exact delivery pin"
                         description="Set exact pin. Address must be inside any active delivery zone."
                       />
@@ -1493,6 +1560,7 @@ export default function CheckoutPage() {
                               }`}
                           >
                             <p className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+                            <p className="text-xs font-semibold text-gray-900 dark:text-gray-100">
                               {address.label || "Address"} {address.isDefault ? "(Default)" : ""}
                             </p>
                             <p className="text-xs text-gray-600 dark:text-gray-400">{formatAddressLine(address)}</p>
@@ -1504,6 +1572,7 @@ export default function CheckoutPage() {
                     <button
                       type="button"
                       onClick={() => setShowAddAddressForm((prev) => !prev)}
+                      className="text-xs font-semibold text-yellow-700 dark:text-yellow-300"
                       className="text-xs font-semibold text-yellow-700 dark:text-yellow-300"
                     >
                       {showAddAddressForm ? "Close Add Address" : "+ Add New Address"}
@@ -1548,6 +1617,7 @@ export default function CheckoutPage() {
                             <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg dark:border-white/10 dark:bg-[#0f172a]">
                               {loadingAddressSuggestions ? (
                                 <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Loading suggestions...</p>
+                                <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Loading suggestions...</p>
                               ) : addressSuggestions.length > 0 ? (
                                 addressSuggestions.map((suggestion) => (
                                   <button
@@ -1561,6 +1631,7 @@ export default function CheckoutPage() {
                                   </button>
                                 ))
                               ) : (
+                                <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
                                 <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
                                   {googlePlacesReady
                                     ? "No address suggestions found."
@@ -1606,6 +1677,7 @@ export default function CheckoutPage() {
                         <AddressLocationPicker
                           value={newAddress}
                           onChange={setNewAddress}
+                          fallbackLocation={liveLocation}
                           title="Exact delivery location"
                           description="For family or out-of-station orders, drag the pin to the exact drop point before saving."
                         />
@@ -1713,6 +1785,7 @@ export default function CheckoutPage() {
             </p>
             {loadingCoupons ? (
               <p className="text-xs text-gray-500 dark:text-gray-400">Loading coupons...</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Loading coupons...</p>
             ) : availableCoupons.length > 0 ? (
               <>
                 <div className="flex flex-wrap gap-2">
@@ -1741,6 +1814,7 @@ export default function CheckoutPage() {
                 ) : null}
               </>
             ) : (
+              <p className="text-xs text-gray-500 dark:text-gray-400">No coupons available for current cart items.</p>
               <p className="text-xs text-gray-500 dark:text-gray-400">No coupons available for current cart items.</p>
             )}
           </div>

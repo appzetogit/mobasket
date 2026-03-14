@@ -211,6 +211,7 @@ function extractReverseGeocodedAddress(response, latitude, longitude) {
 export default function AddressLocationPicker({
   value,
   onChange,
+  fallbackLocation = null,
   className = "",
   title = "Set delivery location",
   description = "Drag the pin or tap on the map to lock the exact delivery point.",
@@ -559,7 +560,67 @@ export default function AddressLocationPicker({
   }, [locateTypedAddress, mapsReady, typedAddressQuery, value?.city, value?.street, value?.zipCode]);
 
   const handleUseCurrentLocation = useCallback(async () => {
+    const parseFallbackCoordinates = (candidate) => {
+      if (!candidate || typeof candidate !== "object") return null;
+      const lat = toFiniteNumber(
+        candidate.latitude ??
+          candidate.lat ??
+          candidate.location?.latitude ??
+          candidate.location?.lat ??
+          (Array.isArray(candidate.location?.coordinates)
+            ? candidate.location.coordinates[1]
+            : undefined),
+      );
+      const lng = toFiniteNumber(
+        candidate.longitude ??
+          candidate.lng ??
+          candidate.location?.longitude ??
+          candidate.location?.lng ??
+          (Array.isArray(candidate.location?.coordinates)
+            ? candidate.location.coordinates[0]
+            : undefined),
+      );
+      if (lat === null || lng === null) return null;
+      return { lat, lng };
+    };
+
+    const applyCoordinates = async (nextLat, nextLng, successMessage) => {
+      updateMarkerPosition({ lat: nextLat, lng: nextLng }, true);
+      if (mapRef.current) {
+        mapRef.current.setZoom(16);
+      }
+      await reverseGeocodeAt(nextLat, nextLng);
+      toast.success(successMessage);
+    };
+
+    const tryFallbackCoordinates = () => {
+      const fromProp = parseFallbackCoordinates(fallbackLocation);
+      if (fromProp) return fromProp;
+      try {
+        const cached = JSON.parse(localStorage.getItem("userLocation") || "null");
+        const fromCache = parseFallbackCoordinates(cached);
+        if (fromCache) return fromCache;
+      } catch {
+        // ignore storage parsing failures
+      }
+      return null;
+    };
+
     if (!navigator.geolocation) {
+      const fallback = tryFallbackCoordinates();
+      if (fallback) {
+        setIsReadingMapLocation(true);
+        try {
+          await applyCoordinates(
+            fallback.lat,
+            fallback.lng,
+            "Using your last known location.",
+          );
+        } finally {
+          setIsReadingMapLocation(false);
+        }
+        return;
+      }
       toast.error("Geolocation is not supported on this device.");
       return;
     }
@@ -589,11 +650,29 @@ export default function AddressLocationPicker({
       toast.success("Pinned to your current location.");
     } catch (error) {
       console.error("Current location pinning failed:", error);
-      toast.error("Unable to fetch current location for the map.");
+      const fallback = tryFallbackCoordinates();
+      if (fallback) {
+        await applyCoordinates(
+          fallback.lat,
+          fallback.lng,
+          "Using your last known location.",
+        );
+        return;
+      }
+      const code = Number(error?.code);
+      if (code === 1) {
+        toast.error("Location permission denied. Enable location permission and try again.");
+      } else if (code === 2) {
+        toast.error("Location unavailable right now. Please try again.");
+      } else if (code === 3) {
+        toast.error("Location request timed out. Please try again.");
+      } else {
+        toast.error("Unable to fetch current location for the map.");
+      }
     } finally {
       setIsReadingMapLocation(false);
     }
-  }, [reverseGeocodeAt, updateMarkerPosition]);
+  }, [fallbackLocation, reverseGeocodeAt, updateMarkerPosition]);
 
   return (
     <div className={`space-y-2 rounded-xl border border-gray-200 bg-white p-3 ${className}`}>

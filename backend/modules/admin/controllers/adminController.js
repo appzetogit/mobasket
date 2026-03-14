@@ -2,6 +2,7 @@ import Admin from '../models/Admin.js';
 import Order from '../../order/models/Order.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import GroceryStore from '../../grocery/models/GroceryStore.js';
+import OutletTimings from '../../restaurant/models/OutletTimings.js';
 import Offer from '../../restaurant/models/Offer.js';
 import AdminCommission from '../models/AdminCommission.js';
 import OrderSettlement from '../../order/models/OrderSettlement.js';
@@ -76,6 +77,175 @@ const normalizeRestaurantAddressRecord = (restaurant = {}) => ({
   ...restaurant,
   location: getRestaurantLocationSnapshot(restaurant),
 });
+
+const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+const parseTimeToMinutes = (timeValue) => {
+  if (!timeValue || typeof timeValue !== 'string') return null;
+  const normalized = timeValue.trim().toUpperCase();
+  const match = normalized.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/);
+  if (!match) return null;
+
+  let hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  const meridiem = match[3] || null;
+
+  if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null;
+  if (minutes < 0 || minutes > 59) return null;
+
+  if (meridiem) {
+    if (hours < 1 || hours > 12) return null;
+    if (meridiem === 'PM' && hours !== 12) hours += 12;
+    if (meridiem === 'AM' && hours === 12) hours = 0;
+  } else if (hours < 0 || hours > 23) {
+    return null;
+  }
+
+  return hours * 60 + minutes;
+};
+
+const minutesToTime24 = (totalMinutes) => {
+  if (!Number.isFinite(totalMinutes)) return null;
+  const normalized = ((Math.floor(totalMinutes) % 1440) + 1440) % 1440;
+  const hour = Math.floor(normalized / 60);
+  const minute = normalized % 60;
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+};
+
+const time24ToSlot = (time24) => {
+  const minutes = parseTimeToMinutes(time24);
+  if (!Number.isFinite(minutes)) return null;
+  const hour24 = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  const period = hour24 >= 12 ? 'pm' : 'am';
+  const hour12 = hour24 % 12 || 12;
+  return {
+    time: `${hour12}:${String(minute).padStart(2, '0')}`,
+    period,
+  };
+};
+
+const parseSlotTimeToMinutes = (timeValue, periodValue) => {
+  if (!timeValue || typeof timeValue !== 'string') return null;
+  const normalizedPeriod = String(periodValue || '').trim().toUpperCase();
+  if (!normalizedPeriod || (normalizedPeriod !== 'AM' && normalizedPeriod !== 'PM')) return null;
+  return parseTimeToMinutes(`${timeValue.trim()} ${normalizedPeriod}`);
+};
+
+const normalizeSlots = (slots = []) => {
+  if (!Array.isArray(slots)) return [];
+  return slots
+    .map((slot) => {
+      const startMinutes = parseSlotTimeToMinutes(slot?.start, slot?.startPeriod);
+      const endMinutes = parseSlotTimeToMinutes(slot?.end, slot?.endPeriod);
+      if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes)) return null;
+      return {
+        start: `${Math.floor(startMinutes / 60) % 12 || 12}:${String(startMinutes % 60).padStart(2, '0')}`,
+        end: `${Math.floor(endMinutes / 60) % 12 || 12}:${String(endMinutes % 60).padStart(2, '0')}`,
+        startPeriod: startMinutes >= 12 * 60 ? 'pm' : 'am',
+        endPeriod: endMinutes >= 12 * 60 ? 'pm' : 'am',
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 3);
+};
+
+const normalizeOutletTimingsPayload = (inputTimings = [], fallback = {}) => {
+  const mapByDay = new Map();
+  if (Array.isArray(inputTimings)) {
+    inputTimings.forEach((entry) => {
+      const day = String(entry?.day || '').trim();
+      if (!DAY_ORDER.includes(day)) return;
+      mapByDay.set(day, entry || {});
+    });
+  }
+
+  return DAY_ORDER.map((day) => {
+    const entry = mapByDay.get(day) || {};
+    const fallbackIsOpen = Array.isArray(fallback?.openDays)
+      ? fallback.openDays.some(
+          (d) => String(d || '').slice(0, 3).toLowerCase() === day.slice(0, 3).toLowerCase()
+        )
+      : true;
+    const isOpen = entry?.isOpen !== undefined ? Boolean(entry.isOpen) : fallbackIsOpen;
+
+    const slots = normalizeSlots(entry?.slots || []);
+    const openingTime =
+      String(entry?.openingTime || '').trim() ||
+      (slots[0]
+        ? minutesToTime24(parseSlotTimeToMinutes(slots[0].start, slots[0].startPeriod))
+        : String(fallback?.openingTime || '09:00'));
+    const closingTime =
+      String(entry?.closingTime || '').trim() ||
+      (slots[slots.length - 1]
+        ? minutesToTime24(
+            parseSlotTimeToMinutes(
+              slots[slots.length - 1].end,
+              slots[slots.length - 1].endPeriod
+            )
+          )
+        : String(fallback?.closingTime || '22:00'));
+
+    const slotList = slots.length > 0 ? slots : (() => {
+      const openSlot = time24ToSlot(openingTime);
+      const closeSlot = time24ToSlot(closingTime);
+      if (!openSlot || !closeSlot) return [];
+      return [{
+        start: openSlot.time,
+        end: closeSlot.time,
+        startPeriod: openSlot.period,
+        endPeriod: closeSlot.period,
+      }];
+    })();
+
+    return {
+      day,
+      isOpen,
+      openingTime: openingTime || '09:00',
+      closingTime: closingTime || '22:00',
+      slots: slotList,
+    };
+  });
+};
+
+const deriveRestaurantTimingFieldsFromOutletTimings = (timings = []) => {
+  const openEntries = (Array.isArray(timings) ? timings : []).filter((entry) => entry?.isOpen !== false);
+  const openDays = openEntries.map((entry) => entry?.day).filter((day) => DAY_ORDER.includes(day));
+  const openingMinutes = [];
+  const closingMinutes = [];
+
+  openEntries.forEach((entry) => {
+    const slots = Array.isArray(entry?.slots) ? entry.slots : [];
+    if (slots.length > 0) {
+      slots.forEach((slot) => {
+        const startMinutes = parseSlotTimeToMinutes(slot?.start, slot?.startPeriod);
+        const endMinutes = parseSlotTimeToMinutes(slot?.end, slot?.endPeriod);
+        if (Number.isFinite(startMinutes)) openingMinutes.push(startMinutes);
+        if (Number.isFinite(endMinutes)) closingMinutes.push(endMinutes);
+      });
+      return;
+    }
+
+    const openMin = parseTimeToMinutes(entry?.openingTime);
+    const closeMin = parseTimeToMinutes(entry?.closingTime);
+    if (Number.isFinite(openMin)) openingMinutes.push(openMin);
+    if (Number.isFinite(closeMin)) closingMinutes.push(closeMin);
+  });
+
+  return {
+    openDays,
+    deliveryTimings:
+      openingMinutes.length > 0 && closingMinutes.length > 0
+        ? {
+            openingTime: minutesToTime24(Math.min(...openingMinutes)) || '09:00',
+            closingTime: minutesToTime24(Math.max(...closingMinutes)) || '22:00',
+          }
+        : {
+            openingTime: '09:00',
+            closingTime: '22:00',
+          },
+  };
+};
 
 const normalizeSidebarAccess = (sidebarAccess) => {
   if (!Array.isArray(sidebarAccess)) return [];
@@ -1334,8 +1504,18 @@ export const getRestaurantById = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, 'Restaurant not found');
     }
 
+    const outletTimingsDoc = await OutletTimings.findOne({
+      restaurantId: restaurant._id,
+      isActive: true,
+    })
+      .select('outletType timings isActive')
+      .lean();
+
     return successResponse(res, 200, 'Restaurant retrieved successfully', {
-      restaurant: normalizeRestaurantAddressRecord(restaurant),
+      restaurant: {
+        ...normalizeRestaurantAddressRecord(restaurant),
+        outletTimings: outletTimingsDoc?.timings || [],
+      },
     });
   } catch (error) {
     logger.error(`Error fetching restaurant: ${error.message}`, { error: error.stack });
@@ -1397,7 +1577,8 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
       ownerEmail,
       primaryContactNumber,
       location,
-      profileImage
+      profileImage,
+      outletTimings
     } = req.body || {};
 
     const restaurant = await Restaurant.findById(id);
@@ -1491,6 +1672,19 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
       };
     }
 
+    let normalizedOutletTimings = null;
+    if (outletTimings !== undefined) {
+      normalizedOutletTimings = normalizeOutletTimingsPayload(outletTimings, {
+        openingTime: restaurant?.deliveryTimings?.openingTime || '09:00',
+        closingTime: restaurant?.deliveryTimings?.closingTime || '22:00',
+        openDays: restaurant?.openDays || [],
+      });
+      const derived = deriveRestaurantTimingFieldsFromOutletTimings(normalizedOutletTimings);
+      updateData.openDays = derived.openDays;
+      updateData.deliveryTimings = derived.deliveryTimings;
+      updateData.isAcceptingOrders = derived.openDays.length > 0;
+    }
+
     const updatedRestaurant = await Restaurant.findByIdAndUpdate(
       id,
       { $set: updateData },
@@ -1499,13 +1693,40 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
       .select('-password')
       .lean();
 
+    let outletTimingsDoc = null;
+    if (normalizedOutletTimings) {
+      outletTimingsDoc = await OutletTimings.findOneAndUpdate(
+        { restaurantId: updatedRestaurant._id },
+        {
+          $set: {
+            outletType: 'MoBasket delivery',
+            timings: normalizedOutletTimings,
+            isActive: true,
+          },
+        },
+        { upsert: true, new: true, runValidators: true }
+      )
+        .select('outletType timings isActive')
+        .lean();
+    } else {
+      outletTimingsDoc = await OutletTimings.findOne({
+        restaurantId: updatedRestaurant._id,
+        isActive: true,
+      })
+        .select('outletType timings isActive')
+        .lean();
+    }
+
     logger.info(`Restaurant updated: ${id}`, {
       updatedBy: req.user._id,
       fields: Object.keys(updateData),
     });
 
     return successResponse(res, 200, 'Restaurant updated successfully', {
-      restaurant: normalizeRestaurantAddressRecord(updatedRestaurant),
+      restaurant: {
+        ...normalizeRestaurantAddressRecord(updatedRestaurant),
+        outletTimings: outletTimingsDoc?.timings || [],
+      },
     });
   } catch (error) {
     logger.error(`Error updating restaurant: ${error.message}`, { error: error.stack });
@@ -1996,6 +2217,7 @@ export const createRestaurant = asyncHandler(async (req, res) => {
       openingTime,
       closingTime,
       openDays,
+      outletTimings,
       // Step 3: Documents
       panNumber,
       nameOnPan,
@@ -2253,6 +2475,36 @@ export const createRestaurant = asyncHandler(async (req, res) => {
 
     // Create restaurant
     const restaurant = await Restaurant.create(restaurantData);
+
+    const normalizedOutletTimings = normalizeOutletTimingsPayload(outletTimings, {
+      openingTime: openingTime || '09:00',
+      closingTime: closingTime || '22:00',
+      openDays: openDays || ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+    });
+    const derivedOutletTimingFields = deriveRestaurantTimingFieldsFromOutletTimings(normalizedOutletTimings);
+    await Restaurant.findByIdAndUpdate(
+      restaurant._id,
+      {
+        $set: {
+          openDays: derivedOutletTimingFields.openDays,
+          deliveryTimings: derivedOutletTimingFields.deliveryTimings,
+          isAcceptingOrders: derivedOutletTimingFields.openDays.length > 0,
+        },
+      },
+      { runValidators: true }
+    );
+    await OutletTimings.findOneAndUpdate(
+      { restaurantId: restaurant._id },
+      {
+        $set: {
+          restaurantId: restaurant._id,
+          outletType: 'MoBasket delivery',
+          timings: normalizedOutletTimings,
+          isActive: true,
+        },
+      },
+      { upsert: true, new: true, runValidators: true }
+    );
 
     logger.info(`Restaurant created by admin: ${restaurant._id}`, {
       createdBy: adminId,

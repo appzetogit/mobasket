@@ -45,6 +45,14 @@ const parseTimeToMinutes = (timeText) => {
   return hours * 60 + minutes;
 };
 
+const parseSlotTimeToMinutes = (timeValue, periodValue) => {
+  if (!timeValue || typeof timeValue !== "string") return null;
+  const normalizedTime = timeValue.trim();
+  const normalizedPeriod = String(periodValue || "").trim().toUpperCase();
+  if (!normalizedPeriod || (normalizedPeriod !== "AM" && normalizedPeriod !== "PM")) return null;
+  return parseTimeToMinutes(`${normalizedTime} ${normalizedPeriod}`);
+};
+
 const formatMinutesToLabel = (totalMinutes) => {
   const normalized = ((totalMinutes % 1440) + 1440) % 1440;
   const hour24 = Math.floor(normalized / 60);
@@ -86,10 +94,22 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
     if (outletDay) {
       const openMinutes = parseTimeToMinutes(outletDay.openingTime);
       const closeMinutes = parseTimeToMinutes(outletDay.closingTime);
+      const slots = Array.isArray(outletDay?.slots) ? outletDay.slots : [];
+      const slotWindows = slots
+        .map((slot) => {
+          const startMinutes = parseSlotTimeToMinutes(slot?.start, slot?.startPeriod);
+          const endMinutes = parseSlotTimeToMinutes(slot?.end, slot?.endPeriod);
+          if (startMinutes === null || endMinutes === null) return null;
+          return { startMinutes, endMinutes };
+        })
+        .filter(Boolean);
       return {
-        isOpen: Boolean(outletDay.isOpen) && openMinutes !== null && closeMinutes !== null,
+        isOpen:
+          Boolean(outletDay.isOpen) &&
+          (slotWindows.length > 0 || (openMinutes !== null && closeMinutes !== null)),
         openMinutes,
         closeMinutes,
+        slotWindows,
       };
     }
 
@@ -115,6 +135,7 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
       isOpen: dayIsOpen,
       openMinutes: hasTimings ? openMinutes : 8 * 60,
       closeMinutes: hasTimings ? closeMinutes : 22 * 60,
+      slotWindows: [],
     };
   }, [restaurantSchedule, selectedDayName, selectedDayShort]);
   
@@ -125,15 +146,27 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
 
     if (!resolvedWorkingHours.isOpen) return slots;
 
-    let openingMinutes = resolvedWorkingHours.openMinutes;
-    let closingMinutes = resolvedWorkingHours.closeMinutes;
-    if (openingMinutes === null || closingMinutes === null) {
-      openingMinutes = 8 * 60;
-      closingMinutes = 22 * 60;
-    }
-    if (closingMinutes <= openingMinutes) {
-      closingMinutes += 24 * 60;
-    }
+    const windows = Array.isArray(resolvedWorkingHours.slotWindows) && resolvedWorkingHours.slotWindows.length > 0
+      ? resolvedWorkingHours.slotWindows.map((window) => {
+          let startMinutes = window.startMinutes;
+          let endMinutes = window.endMinutes;
+          if (endMinutes <= startMinutes) {
+            endMinutes += 24 * 60;
+          }
+          return { startMinutes, endMinutes };
+        })
+      : (() => {
+          let openingMinutes = resolvedWorkingHours.openMinutes;
+          let closingMinutes = resolvedWorkingHours.closeMinutes;
+          if (openingMinutes === null || closingMinutes === null) {
+            openingMinutes = 8 * 60;
+            closingMinutes = 22 * 60;
+          }
+          if (closingMinutes <= openingMinutes) {
+            closingMinutes += 24 * 60;
+          }
+          return [{ startMinutes: openingMinutes, endMinutes: closingMinutes }];
+        })();
 
     const slotDurationMinutes = 120; // 2-hour windows
     const slotStepMinutes = 60; // 1-hour start step
@@ -141,23 +174,25 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
     const dayStart = startOfDay(selectedDate);
     const nowWithBuffer = type === "food" ? addMinutes(now, 60) : now;
 
-    for (
-      let slotStartMinutes = openingMinutes;
-      slotStartMinutes + slotDurationMinutes <= closingMinutes;
-      slotStartMinutes += slotStepMinutes
-    ) {
-      const slotEndMinutes = slotStartMinutes + slotDurationMinutes;
-      const slotStartDate = addMinutes(dayStart, slotStartMinutes);
+    windows.forEach(({ startMinutes, endMinutes }) => {
+      for (
+        let slotStartMinutes = startMinutes;
+        slotStartMinutes + slotDurationMinutes <= endMinutes;
+        slotStartMinutes += slotStepMinutes
+      ) {
+        const slotEndMinutes = slotStartMinutes + slotDurationMinutes;
+        const slotStartDate = addMinutes(dayStart, slotStartMinutes);
 
-      if (isToday && isAfter(nowWithBuffer, slotStartDate)) {
-        continue;
+        if (isToday && isAfter(nowWithBuffer, slotStartDate)) {
+          continue;
+        }
+
+        slots.push({
+          label: `${formatMinutesToLabel(slotStartMinutes)} - ${formatMinutesToLabel(slotEndMinutes)}`,
+          value: toSlotValue(slotStartMinutes, slotEndMinutes),
+        });
       }
-
-      slots.push({
-        label: `${formatMinutesToLabel(slotStartMinutes)} - ${formatMinutesToLabel(slotEndMinutes)}`,
-        value: toSlotValue(slotStartMinutes, slotEndMinutes),
-      });
-    }
+    });
 
     return slots;
   }, [selectedDate, type, resolvedWorkingHours]);

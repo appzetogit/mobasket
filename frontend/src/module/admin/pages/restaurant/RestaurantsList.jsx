@@ -14,6 +14,115 @@ import locationIcon from "../../assets/Dashboard-icons/image1.png"
 import restaurantIcon from "../../assets/Dashboard-icons/image2.png"
 import inactiveIcon from "../../assets/Dashboard-icons/image3.png"
 
+const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+const to24HourTime = (slotTime, slotPeriod) => {
+  if (!slotTime || typeof slotTime !== "string") return ""
+  const [rawHour, rawMinute] = slotTime.split(":").map(Number)
+  if (!Number.isFinite(rawHour) || !Number.isFinite(rawMinute)) return ""
+  let hour = rawHour
+  const period = String(slotPeriod || "").toLowerCase()
+  if (period === "pm" && hour !== 12) hour += 12
+  if (period === "am" && hour === 12) hour = 0
+  if (!Number.isFinite(hour)) return ""
+  return `${String(Math.max(0, Math.min(23, hour))).padStart(2, "0")}:${String(
+    Math.max(0, Math.min(59, rawMinute)),
+  ).padStart(2, "0")}`
+}
+
+const toSlotFormat = (time24) => {
+  if (!time24 || typeof time24 !== "string" || !time24.includes(":")) return null
+  const [rawHour, rawMinute] = time24.split(":").map(Number)
+  if (!Number.isFinite(rawHour) || !Number.isFinite(rawMinute)) return null
+  const period = rawHour >= 12 ? "pm" : "am"
+  const hour12 = rawHour % 12 || 12
+  return {
+    time: `${hour12}:${String(rawMinute).padStart(2, "0")}`,
+    period,
+  }
+}
+
+const normalizeOutletTimingsForEditor = (outletTimings = [], fallback = {}) => {
+  const byDay = new Map()
+  if (Array.isArray(outletTimings)) {
+    outletTimings.forEach((entry) => {
+      const day = String(entry?.day || "").trim()
+      if (DAY_ORDER.includes(day)) byDay.set(day, entry)
+    })
+  }
+
+  return DAY_ORDER.map((day) => {
+    const entry = byDay.get(day) || {}
+    const openDays = Array.isArray(fallback?.openDays) ? fallback.openDays : []
+    const fallbackOpen = openDays.length > 0
+      ? openDays.some((d) => String(d || "").slice(0, 3).toLowerCase() === day.slice(0, 3).toLowerCase())
+      : true
+    const fallbackOpenTime = String(fallback?.deliveryTimings?.openingTime || "09:00")
+    const fallbackCloseTime = String(fallback?.deliveryTimings?.closingTime || "22:00")
+
+    const rawSlots = Array.isArray(entry?.slots) ? entry.slots : []
+    const slots = rawSlots
+      .map((slot, index) => {
+        const start = to24HourTime(slot?.start, slot?.startPeriod)
+        const end = to24HourTime(slot?.end, slot?.endPeriod)
+        if (!start || !end) return null
+        return {
+          id: `${day}-${index}-${Date.now()}`,
+          start,
+          end,
+        }
+      })
+      .filter(Boolean)
+
+    if (slots.length === 0) {
+      slots.push({
+        id: `${day}-default`,
+        start: String(entry?.openingTime || fallbackOpenTime || "09:00"),
+        end: String(entry?.closingTime || fallbackCloseTime || "22:00"),
+      })
+    }
+
+    return {
+      day,
+      isOpen: entry?.isOpen !== undefined ? entry.isOpen !== false : fallbackOpen,
+      slots: slots.slice(0, 3),
+    }
+  })
+}
+
+const buildOutletTimingsPayloadFromEditor = (timings = []) =>
+  DAY_ORDER.map((day) => {
+    const dayEntry = (Array.isArray(timings) ? timings : []).find((entry) => entry?.day === day) || {
+      day,
+      isOpen: true,
+      slots: [],
+    }
+    const normalizedSlots = (Array.isArray(dayEntry.slots) ? dayEntry.slots : [])
+      .map((slot) => {
+        const start = toSlotFormat(slot?.start)
+        const end = toSlotFormat(slot?.end)
+        if (!start || !end) return null
+        return {
+          start: start.time,
+          startPeriod: start.period,
+          end: end.time,
+          endPeriod: end.period,
+        }
+      })
+      .filter(Boolean)
+      .slice(0, 3)
+
+    const firstStart = normalizedSlots[0]
+    const lastEnd = normalizedSlots[normalizedSlots.length - 1]
+    return {
+      day,
+      isOpen: dayEntry?.isOpen !== false,
+      openingTime: firstStart ? to24HourTime(firstStart.start, firstStart.startPeriod) : "09:00",
+      closingTime: lastEnd ? to24HourTime(lastEnd.end, lastEnd.endPeriod) : "22:00",
+      slots: normalizedSlots,
+    }
+  })
+
 export default function RestaurantsList() {
   const navigate = useNavigate()
   const { platform } = usePlatform()
@@ -22,6 +131,7 @@ export default function RestaurantsList() {
   const entityLabelPlural = isGrocery ? "Stores" : "Restaurants"
   const [searchQuery, setSearchQuery] = useState("")
   const [restaurants, setRestaurants] = useState([])
+  const [zones, setZones] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedRestaurant, setSelectedRestaurant] = useState(null)
@@ -53,6 +163,7 @@ export default function RestaurantsList() {
     latitude: "",
     longitude: "",
     address: "",
+    outletTimings: normalizeOutletTimingsForEditor([]),
   })
   const [mapInstances, setMapInstances] = useState({
     map: null,
@@ -118,6 +229,27 @@ export default function RestaurantsList() {
     ...restaurant,
     location: resolveRestaurantLocation(restaurant),
   })
+
+  const isPointInPolygon = (latitude, longitude, coordinates = []) => {
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !Array.isArray(coordinates) || coordinates.length < 3) {
+      return false
+    }
+
+    let inside = false
+    for (let i = 0, j = coordinates.length - 1; i < coordinates.length; j = i++) {
+      const xi = Number(coordinates[i]?.latitude)
+      const yi = Number(coordinates[i]?.longitude)
+      const xj = Number(coordinates[j]?.latitude)
+      const yj = Number(coordinates[j]?.longitude)
+      if (![xi, yi, xj, yj].every(Number.isFinite)) continue
+
+      const intersect =
+        yi > longitude !== yj > longitude &&
+        latitude < ((xj - xi) * (longitude - yi)) / (yj - yi) + xi
+      if (intersect) inside = !inside
+    }
+    return inside
+  }
 
   // Format Restaurant ID to REST format (e.g., REST422829)
   const formatRestaurantId = (id) => {
@@ -187,7 +319,7 @@ export default function RestaurantsList() {
         try {
           // Try admin API first
           response = await adminAPI.getRestaurants()
-        } catch (adminErr) {
+        } catch {
           // Fallback to regular restaurant API if admin endpoint doesn't exist
           console.log("Admin restaurants endpoint not available, using fallback")
           response = await restaurantAPI.getRestaurants()
@@ -235,6 +367,21 @@ export default function RestaurantsList() {
   }, [])
 
   useEffect(() => {
+    const fetchZones = async () => {
+      try {
+        const response = await adminAPI.getZones({ platform, limit: 1000 })
+        const zoneList = response?.data?.data?.zones || response?.data?.zones || []
+        setZones(Array.isArray(zoneList) ? zoneList : [])
+      } catch (zoneError) {
+        console.error("Error fetching zones for restaurant filter:", zoneError)
+        setZones([])
+      }
+    }
+
+    fetchZones()
+  }, [platform])
+
+  useEffect(() => {
     if (!editRestaurantDialog || !editingRestaurant?._id) return
     const timer = setTimeout(() => {
       initializeEditMap(editingRestaurant)
@@ -277,11 +424,34 @@ export default function RestaurantsList() {
     }
 
     if (filters.zone) {
-      result = result.filter(restaurant => restaurant.zone === filters.zone)
+      const selectedZone = zones.find((zone) => String(zone?._id || zone?.id || "") === filters.zone)
+      const hasValidPolygon = Array.isArray(selectedZone?.coordinates) && selectedZone.coordinates.length >= 3
+      if (!selectedZone || !hasValidPolygon) {
+        return []
+      }
+
+      result = result.filter((restaurant) => {
+        const restaurantLat = Number(
+          restaurant?.originalData?.location?.latitude ??
+            restaurant?.originalData?.location?.coordinates?.[1],
+        )
+        const restaurantLng = Number(
+          restaurant?.originalData?.location?.longitude ??
+            restaurant?.originalData?.location?.coordinates?.[0],
+        )
+        if (
+          Number.isFinite(restaurantLat) &&
+          Number.isFinite(restaurantLng) &&
+          isPointInPolygon(restaurantLat, restaurantLng, selectedZone.coordinates)
+        ) {
+          return true
+        }
+        return false
+      })
     }
 
     return result
-  }, [restaurants, searchQuery, filters])
+  }, [restaurants, searchQuery, filters, zones])
 
   const parseAddressComponents = (components = []) => {
     const byType = (type) => components.find((c) => c.types?.includes(type))
@@ -458,15 +628,18 @@ export default function RestaurantsList() {
   const activeRestaurants = restaurants.filter(r => r.status).length
   const inactiveRestaurants = restaurants.filter(r => !r.status).length
 
-  // Get unique cuisines from restaurants for filter dropdown
-  const uniqueCuisines = useMemo(() => {
-    const cuisines = restaurants
-      .map(r => r.cuisine)
-      .filter(c => c && c !== "N/A")
-      .filter((value, index, self) => self.indexOf(value) === index)
-      .sort()
-    return cuisines
-  }, [restaurants])
+  const zoneOptions = useMemo(() => {
+    const seen = new Set()
+    return (Array.isArray(zones) ? zones : [])
+      .map((zone) => {
+        const id = String(zone?._id || zone?.id || "").trim()
+        const name = String(zone?.name || zone?.zoneName || zone?.serviceLocation || "Unnamed Zone").trim()
+        if (!id || !name || seen.has(id)) return null
+        seen.add(id)
+        return { id, name }
+      })
+      .filter(Boolean)
+  }, [zones])
 
   // Show full phone number without masking
   const formatPhone = (phone) => {
@@ -580,6 +753,7 @@ export default function RestaurantsList() {
           ? Number(resolvedLocation.longitude).toFixed(6)
           : "",
         address: formatRestaurantAddress(restaurantData),
+        outletTimings: normalizeOutletTimingsForEditor(restaurantData?.outletTimings || [], restaurantData),
       })
       setEditRestaurantDialog(true)
     } catch (err) {
@@ -657,6 +831,7 @@ export default function RestaurantsList() {
           longitude: lng,
           coordinates: [lng, lat],
         },
+        outletTimings: buildOutletTimingsPayloadFromEditor(editForm.outletTimings),
       }
 
       if (uploadedProfileImage?.url) {
@@ -907,6 +1082,20 @@ export default function RestaurantsList() {
                 <option value="All">All Status</option>
                 <option value="Active">Active</option>
                 <option value="Inactive">Inactive</option>
+              </select>
+              <select
+                value={filters.zone}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, zone: e.target.value }))
+                }
+                className="px-3 py-2.5 text-sm rounded-lg border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="">All Zones</option>
+                {zoneOptions.map((zone) => (
+                  <option key={zone.id} value={zone.id}>
+                    {zone.name}
+                  </option>
+                ))}
               </select>
               <div className="relative flex-1 sm:flex-initial min-w-[250px]">
                 <input
@@ -1927,6 +2116,131 @@ export default function RestaurantsList() {
                       className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
                     />
                   </div>
+                </div>
+              </div>
+
+              <div className="border-t pt-5">
+                <h3 className="text-sm font-bold text-slate-900 mb-3">Outlet Timings (Source of Truth)</h3>
+                <div className="space-y-3">
+                  {(Array.isArray(editForm.outletTimings) ? editForm.outletTimings : []).map((dayTiming) => (
+                    <div key={dayTiming.day} className="rounded-lg border border-slate-200 p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <p className="text-sm font-semibold text-slate-800">{dayTiming.day}</p>
+                        <label className="flex items-center gap-2 text-xs text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={dayTiming.isOpen !== false}
+                            onChange={(e) =>
+                              setEditForm((prev) => ({
+                                ...prev,
+                                outletTimings: prev.outletTimings.map((entry) =>
+                                  entry.day === dayTiming.day ? { ...entry, isOpen: e.target.checked } : entry,
+                                ),
+                              }))
+                            }
+                          />
+                          Open
+                        </label>
+                      </div>
+
+                      {dayTiming.isOpen !== false && (
+                        <div className="space-y-2">
+                          {dayTiming.slots.map((slot) => (
+                            <div key={slot.id} className="flex items-center gap-2">
+                              <input
+                                type="time"
+                                value={slot.start}
+                                onChange={(e) =>
+                                  setEditForm((prev) => ({
+                                    ...prev,
+                                    outletTimings: prev.outletTimings.map((entry) =>
+                                      entry.day === dayTiming.day
+                                        ? {
+                                            ...entry,
+                                            slots: entry.slots.map((s) =>
+                                              s.id === slot.id ? { ...s, start: e.target.value } : s,
+                                            ),
+                                          }
+                                        : entry,
+                                    ),
+                                  }))
+                                }
+                                className="rounded border border-slate-300 px-2 py-1 text-xs"
+                              />
+                              <span className="text-xs text-slate-500">to</span>
+                              <input
+                                type="time"
+                                value={slot.end}
+                                onChange={(e) =>
+                                  setEditForm((prev) => ({
+                                    ...prev,
+                                    outletTimings: prev.outletTimings.map((entry) =>
+                                      entry.day === dayTiming.day
+                                        ? {
+                                            ...entry,
+                                            slots: entry.slots.map((s) =>
+                                              s.id === slot.id ? { ...s, end: e.target.value } : s,
+                                            ),
+                                          }
+                                        : entry,
+                                    ),
+                                  }))
+                                }
+                                className="rounded border border-slate-300 px-2 py-1 text-xs"
+                              />
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setEditForm((prev) => ({
+                                    ...prev,
+                                    outletTimings: prev.outletTimings.map((entry) => {
+                                      if (entry.day !== dayTiming.day) return entry
+                                      if (entry.slots.length <= 1) return entry
+                                      return {
+                                        ...entry,
+                                        slots: entry.slots.filter((s) => s.id !== slot.id),
+                                      }
+                                    }),
+                                  }))
+                                }
+                                className="rounded border border-slate-300 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                              >
+                                Remove
+                              </button>
+                            </div>
+                          ))}
+                          {dayTiming.slots.length < 3 && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setEditForm((prev) => ({
+                                  ...prev,
+                                  outletTimings: prev.outletTimings.map((entry) =>
+                                    entry.day === dayTiming.day
+                                      ? {
+                                          ...entry,
+                                          slots: [
+                                            ...entry.slots,
+                                            {
+                                              id: `${dayTiming.day}-${Date.now()}-${Math.random()}`,
+                                              start: "09:00",
+                                              end: "22:00",
+                                            },
+                                          ],
+                                        }
+                                      : entry,
+                                  ),
+                                }))
+                              }
+                              className="rounded border border-blue-300 px-2 py-1 text-xs text-blue-600 hover:bg-blue-50"
+                            >
+                              + Add Slot
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
 

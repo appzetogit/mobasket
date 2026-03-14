@@ -102,6 +102,8 @@ const DELIVERY_LOCATION_FALLBACK_INTERVAL_ACTIVE_MS = 15000
 const DELIVERY_LOCATION_FALLBACK_INTERVAL_IDLE_MS = 60000
 const DELIVERY_LOCATION_DISTANCE_THRESHOLD_ACTIVE_KM = 0.01
 const DELIVERY_LOCATION_DISTANCE_THRESHOLD_IDLE_KM = 0.03
+const ROUTE_SIMULATION_TEST_PHONE = "7223077890"
+const DELIVERY_ALERT_AUDIO_CACHE_VERSION = "delivery-audio-v1"
 
 
 import BottomPopup from "../components/BottomPopup"
@@ -1887,6 +1889,9 @@ export default function DeliveryHome() {
 
 
   const [riderLocation, setRiderLocation] = useState(null) // Will be set from GPS or saved location
+  const [canUseRouteSimulation, setCanUseRouteSimulation] = useState(false)
+  const [isRouteSimulationEnabled, setIsRouteSimulationEnabled] = useState(false)
+  const [isRouteSimulationRunning, setIsRouteSimulationRunning] = useState(false)
 
 
   const [locationPermissionState, setLocationPermissionState] = useState('unknown') // unknown | granted | prompt | denied | unsupported
@@ -2090,6 +2095,10 @@ export default function DeliveryHome() {
 
 
   const directionsResponseRef = useRef(null) // Store directions response for use in callbacks
+  const routeSimulationTimerRef = useRef(null)
+  const routeSimulationIndexRef = useRef(0)
+  const lastSimulationHeadingRef = useRef(0)
+  const isRouteSimulationEnabledRef = useRef(false)
 
 
   const directionsRouteCacheRef = useRef(new Map()) // Cache directions responses by rounded origin/destination
@@ -5124,9 +5133,13 @@ export default function DeliveryHome() {
 
 
       const selectedSound = localStorage.getItem('delivery_alert_sound') || 'zomato_tone'
-
-
-      const soundFile = selectedSound === 'original' ? originalSound : alertSound
+      const appendAudioCacheVersion = (src) => {
+        const safeSrc = String(src || "").trim()
+        if (!safeSrc) return safeSrc
+        const separator = safeSrc.includes('?') ? '&' : '?'
+        return `${safeSrc}${separator}v=${DELIVERY_ALERT_AUDIO_CACHE_VERSION}`
+      }
+      const soundFile = appendAudioCacheVersion(selectedSound === 'original' ? originalSound : alertSound)
 
 
 
@@ -6905,6 +6918,9 @@ export default function DeliveryHome() {
 
 
       (position) => {
+        if (isRouteSimulationEnabledRef.current) {
+          return
+        }
 
 
         // Validate coordinates first
@@ -16359,6 +16375,25 @@ export default function DeliveryHome() {
 
 
           const profile = response.data.data.profile
+          const normalizePhoneDigits = (value) => String(value || "").replace(/\D/g, "")
+          const phoneCandidates = [
+            profile?.phone,
+            profile?.mobile,
+            profile?.mobileNumber,
+            profile?.phoneNumber,
+            profile?.contactNumber,
+            profile?.ownerPhone,
+            profile?.documents?.phone,
+          ]
+          const isSimulationAllowed = phoneCandidates.some((phoneValue) => {
+            const digits = normalizePhoneDigits(phoneValue)
+            return digits === ROUTE_SIMULATION_TEST_PHONE || digits.endsWith(ROUTE_SIMULATION_TEST_PHONE)
+          })
+          setCanUseRouteSimulation(isSimulationAllowed)
+          if (!isSimulationAllowed) {
+            setIsRouteSimulationEnabled(false)
+            setIsRouteSimulationRunning(false)
+          }
 
 
           const bankDetails = profile?.documents?.bankDetails
@@ -25636,7 +25671,7 @@ export default function DeliveryHome() {
     // Round heading to nearest 5 degrees for caching
 
 
-    const roundedHeading = Math.round(heading / 5) * 5;
+    const roundedHeading = Math.round(heading);
 
 
     const cacheKey = `${roundedHeading}`;
@@ -26433,6 +26468,120 @@ export default function DeliveryHome() {
 
 
 
+
+  const stopRouteSimulation = useCallback(() => {
+    if (routeSimulationTimerRef.current) {
+      window.clearInterval(routeSimulationTimerRef.current)
+      routeSimulationTimerRef.current = null
+    }
+    routeSimulationIndexRef.current = 0
+    lastSimulationHeadingRef.current = 0
+    setIsRouteSimulationRunning(false)
+  }, [])
+
+  const startRouteSimulation = useCallback(() => {
+    if (!canUseRouteSimulation) return
+    const rawRoutePoints = Array.isArray(fullRoutePolylineRef.current) ? fullRoutePolylineRef.current : []
+    const readLatLng = (point) => {
+      if (!point) return null
+      const rawLat = typeof point.lat === "function" ? point.lat() : (point.lat ?? point.latitude)
+      const rawLng = typeof point.lng === "function" ? point.lng() : (point.lng ?? point.longitude)
+      const lat = Number(rawLat)
+      const lng = Number(rawLng)
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null
+      return { lat, lng }
+    }
+    const routePoints = rawRoutePoints.map((point) => readLatLng(point)).filter(Boolean)
+    if (routePoints.length < 2) {
+      toast.error("No active route found for simulation.")
+      setIsRouteSimulationEnabled(false)
+      return
+    }
+
+    stopRouteSimulation()
+    setIsRouteSimulationRunning(true)
+    let startIndex = 0
+    const seedLocation =
+      Array.isArray(lastLocationRef.current) && lastLocationRef.current.length === 2
+        ? lastLocationRef.current
+        : riderLocation
+    if (Array.isArray(seedLocation) && seedLocation.length === 2) {
+      const riderPoint = { lat: Number(seedLocation[0]), lng: Number(seedLocation[1]) }
+      if (Number.isFinite(riderPoint.lat) && Number.isFinite(riderPoint.lng)) {
+        const nearest = findNearestPointOnPolyline(routePoints, riderPoint)
+        startIndex = Math.max(0, Number(nearest?.segmentIndex) || 0)
+      }
+    }
+
+    const maxTicks = 220
+    const minTicks = 80
+    const totalTicks = Math.max(minTicks, Math.min(maxTicks, routePoints.length))
+    const stepSize = Math.min(3, Math.max(1, Math.ceil((routePoints.length - startIndex - 1) / totalTicks)))
+    routeSimulationIndexRef.current = startIndex
+
+    routeSimulationTimerRef.current = window.setInterval(() => {
+      const currentIndex = routeSimulationIndexRef.current
+      const nextIndex = Math.min(routePoints.length - 1, currentIndex + stepSize)
+      const currentPoint = routePoints[Math.max(0, currentIndex)]
+      const nextPoint = routePoints[nextIndex]
+      if (!nextPoint) {
+        stopRouteSimulation()
+        setIsRouteSimulationEnabled(false)
+        return
+      }
+
+      let heading = lastSimulationHeadingRef.current || 0
+      if (currentPoint && nextPoint) {
+        const lookAheadIndex = Math.min(routePoints.length - 1, nextIndex + 3)
+        const lookAheadPoint = routePoints[lookAheadIndex] || nextPoint
+        const computedHeading = calculateHeading(currentPoint.lat, currentPoint.lng, lookAheadPoint.lat, lookAheadPoint.lng)
+        if (Number.isFinite(computedHeading)) heading = computedHeading
+      }
+      lastSimulationHeadingRef.current = heading
+
+      const simulatedPosition = [nextPoint.lat, nextPoint.lng]
+      setRiderLocation(simulatedPosition)
+      lastLocationRef.current = simulatedPosition
+      try {
+        localStorage.setItem("deliveryBoyLastLocation", JSON.stringify(simulatedPosition))
+      } catch {}
+
+      createOrUpdateBikeMarker(nextPoint.lat, nextPoint.lng, heading, false)
+      if (directionsResponseRef.current) {
+        updateLiveTrackingPolyline(directionsResponseRef.current, simulatedPosition)
+      }
+      routeSimulationIndexRef.current = nextIndex
+      if (nextIndex >= routePoints.length - 1) {
+        stopRouteSimulation()
+        setIsRouteSimulationEnabled(false)
+        toast.success("Route simulation completed.")
+      }
+    }, 280)
+  }, [calculateHeading, canUseRouteSimulation, createOrUpdateBikeMarker, stopRouteSimulation, updateLiveTrackingPolyline, riderLocation])
+
+  useEffect(() => {
+    isRouteSimulationEnabledRef.current = isRouteSimulationEnabled
+  }, [isRouteSimulationEnabled])
+
+  useEffect(() => {
+    if (isRouteSimulationEnabled && canUseRouteSimulation) {
+      startRouteSimulation()
+      return
+    }
+    stopRouteSimulation()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canUseRouteSimulation, isRouteSimulationEnabled])
+
+  useEffect(() => {
+    return () => {
+      stopRouteSimulation()
+    }
+  }, [stopRouteSimulation])
+
+  const handleToggleRouteSimulation = useCallback(() => {
+    if (!canUseRouteSimulation) return
+    setIsRouteSimulationEnabled((prev) => !prev)
+  }, [canUseRouteSimulation])
 
   // Create or update route polyline (blue line showing traveled path) - LEGACY/FALLBACK
 
@@ -28540,6 +28689,88 @@ export default function DeliveryHome() {
 
 
 
+  const resolveOrderIdForNavigation = useCallback(() => {
+    return (
+      selectedRestaurant?.orderId ||
+      selectedRestaurant?.id ||
+      newOrder?.orderId ||
+      newOrder?.orderMongoId ||
+      null
+    )
+  }, [newOrder?.orderId, newOrder?.orderMongoId, selectedRestaurant?.id, selectedRestaurant?.orderId])
+
+  const openGoogleMapsNavigation = useCallback((rawLat, rawLng, label = "destination") => {
+    const lat = Number(rawLat)
+    const lng = Number(rawLng)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      toast.error(`${label} location not available.`)
+      return
+    }
+
+    const webUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=bicycling`
+    const userAgent = navigator.userAgent || navigator.vendor || window.opera
+    const isAndroid = /android/i.test(userAgent)
+    const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream
+
+    if (isAndroid) {
+      window.location.href = `google.navigation:q=${lat},${lng}&mode=b`
+      setTimeout(() => window.open(webUrl, "_blank", "noopener,noreferrer"), 500)
+    } else if (isIOS) {
+      window.location.href = `comgooglemaps://?daddr=${lat},${lng}&directionsmode=bicycling`
+      setTimeout(() => window.open(webUrl, "_blank", "noopener,noreferrer"), 500)
+    } else {
+      window.open(webUrl, "_blank", "noopener,noreferrer")
+    }
+
+    toast.success("Opening Google Maps navigation [MAP]", { duration: 2000 })
+  }, [])
+
+  const handleOpenRestaurantNavigation = useCallback(async () => {
+    let lat = Number(selectedRestaurant?.lat)
+    let lng = Number(selectedRestaurant?.lng)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      const orderId = resolveOrderIdForNavigation()
+      if (orderId) {
+        try {
+          const response = await deliveryAPI.getOrderDetails(orderId)
+          const order = response?.data?.data?.order || response?.data?.data || null
+          const storeCoords = resolveStoreCoordsFromOrder(order)
+          if (storeCoords) {
+            lat = Number(storeCoords.lat)
+            lng = Number(storeCoords.lng)
+            setSelectedRestaurant((prev) => (prev ? { ...prev, lat, lng } : prev))
+          }
+        } catch (error) {
+          console.warn("[MAP] Failed to fetch restaurant coords for navigation:", error?.message || error)
+        }
+      }
+    }
+    openGoogleMapsNavigation(lat, lng, "Restaurant")
+  }, [openGoogleMapsNavigation, resolveOrderIdForNavigation, selectedRestaurant?.lat, selectedRestaurant?.lng])
+
+  const handleOpenCustomerNavigation = useCallback(async () => {
+    let lat = Number(selectedRestaurant?.customerLat)
+    let lng = Number(selectedRestaurant?.customerLng)
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      const orderId = resolveOrderIdForNavigation()
+      if (orderId) {
+        try {
+          const response = await deliveryAPI.getOrderDetails(orderId)
+          const order = response?.data?.data?.order || response?.data?.data || null
+          const customerCoords = extractCustomerCoordsFromOrder(order)
+          if (customerCoords) {
+            lat = Number(customerCoords.lat)
+            lng = Number(customerCoords.lng)
+            setSelectedRestaurant((prev) => (prev ? { ...prev, customerLat: lat, customerLng: lng } : prev))
+          }
+        } catch (error) {
+          console.warn("[MAP] Failed to fetch customer coords for navigation:", error?.message || error)
+        }
+      }
+    }
+    openGoogleMapsNavigation(lat, lng, "Customer")
+  }, [openGoogleMapsNavigation, resolveOrderIdForNavigation, selectedRestaurant?.customerLat, selectedRestaurant?.customerLng])
+
   // Render normal feed view when offline or no gig booked
 
 
@@ -28565,6 +28796,10 @@ export default function DeliveryHome() {
 
 
         onHelpClick={() => setShowHelpPopup(true)}
+        showRouteSimulationToggle={canUseRouteSimulation}
+        isRouteSimulationEnabled={isRouteSimulationEnabled}
+        isRouteSimulationRunning={isRouteSimulationRunning}
+        onToggleRouteSimulation={handleToggleRouteSimulation}
 
 
       />
@@ -33509,193 +33744,7 @@ export default function DeliveryHome() {
             <button
 
 
-              onClick={() => {
-
-
-                // Get restaurant location coordinates
-
-
-                const restaurantLat = selectedRestaurant?.lat
-
-
-                const restaurantLng = selectedRestaurant?.lng
-
-
-
-
-
-                if (!restaurantLat || !restaurantLng) {
-
-
-                  toast.error('Restaurant location not available')
-
-
-                  console.error('[ERROR] Restaurant coordinates not found:', {
-
-
-                    lat: restaurantLat,
-
-
-                    lng: restaurantLng,
-
-
-                    selectedRestaurant
-
-
-                  })
-
-
-                  return
-
-
-                }
-
-
-
-
-
-                console.log('[MAP] Opening Google Maps navigation to restaurant:', {
-
-
-                  lat: restaurantLat,
-
-
-                  lng: restaurantLng,
-
-
-                  name: selectedRestaurant?.name
-
-
-                })
-
-
-
-
-
-                // Detect platform (Android or iOS)
-
-
-                const userAgent = navigator.userAgent || navigator.vendor || window.opera
-
-
-                const isAndroid = /android/i.test(userAgent)
-
-
-                const isIOS = /iPad|iPhone|iPod/.test(userAgent) && !window.MSStream
-
-
-
-
-
-                let mapsUrl = ''
-
-
-
-
-
-                if (isAndroid) {
-
-
-                  // Android: Use google.navigation: scheme (opens directly in navigation mode)
-
-
-                  mapsUrl = `google.navigation:q=${restaurantLat},${restaurantLng}&mode=b`
-
-
-
-
-
-                  // Try to open Google Maps app first
-
-
-                  window.location.href = mapsUrl
-
-
-
-
-
-                  // Fallback to web URL after a short delay (in case app is not installed)
-
-
-                  setTimeout(() => {
-
-
-                    const webUrl = `https://www.google.com/maps/dir/?api=1&destination=${restaurantLat},${restaurantLng}&travelmode=bicycling`
-
-
-                    window.open(webUrl, '_blank')
-
-
-                  }, 500)
-
-
-                } else if (isIOS) {
-
-
-                  // iOS: Use comgooglemaps:// scheme (opens Google Maps app)
-
-
-                  mapsUrl = `comgooglemaps://?daddr=${restaurantLat},${restaurantLng}&directionsmode=bicycling`
-
-
-
-
-
-                  // Try to open Google Maps app first
-
-
-                  window.location.href = mapsUrl
-
-
-
-
-
-                  // Fallback to web URL after a short delay (in case app is not installed)
-
-
-                  setTimeout(() => {
-
-
-                    const webUrl = `https://maps.google.com/?daddr=${restaurantLat},${restaurantLng}&directionsmode=bicycling`
-
-
-                    window.open(webUrl, '_blank')
-
-
-                  }, 500)
-
-
-                } else {
-
-
-                  // Web/Desktop: Use web URL with navigation
-
-
-                  mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${restaurantLat},${restaurantLng}&travelmode=bicycling`
-
-
-                  window.open(mapsUrl, '_blank')
-
-
-                }
-
-
-
-
-
-                // Show success message
-
-
-                toast.success('Opening Google Maps navigation [MAP]', {
-
-
-                  duration: 2000
-
-
-                })
-
-
-              }}
+              onClick={handleOpenRestaurantNavigation}
 
 
               className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
@@ -34562,7 +34611,10 @@ export default function DeliveryHome() {
             </button>
 
 
-            <button className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors">
+            <button
+              onClick={handleOpenCustomerNavigation}
+              className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors"
+            >
 
 
               <MapPin className="w-5 h-5 text-white" />
