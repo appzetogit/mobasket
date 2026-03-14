@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+﻿import { useState, useEffect, useRef } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import Lenis from "lenis"
@@ -33,26 +33,26 @@ import { restaurantAPI } from "@/lib/api"
 
 // Country codes
 const countryCodes = [
-  { code: "+1", country: "US/CA", flag: "🇺🇸" },
-  { code: "+44", country: "UK", flag: "🇬🇧" },
-  { code: "+91", country: "IN", flag: "🇮🇳" },
-  { code: "+86", country: "CN", flag: "🇨🇳" },
-  { code: "+81", country: "JP", flag: "🇯🇵" },
-  { code: "+49", country: "DE", flag: "🇩🇪" },
-  { code: "+33", country: "FR", flag: "🇫🇷" },
-  { code: "+39", country: "IT", flag: "🇮🇹" },
-  { code: "+34", country: "ES", flag: "🇪🇸" },
-  { code: "+61", country: "AU", flag: "🇦🇺" },
-  { code: "+7", country: "RU", flag: "🇷🇺" },
-  { code: "+55", country: "BR", flag: "🇧🇷" },
-  { code: "+52", country: "MX", flag: "🇲🇽" },
-  { code: "+82", country: "KR", flag: "🇰🇷" },
-  { code: "+65", country: "SG", flag: "🇸🇬" },
-  { code: "+971", country: "AE", flag: "🇦🇪" },
-  { code: "+966", country: "SA", flag: "🇸🇦" },
-  { code: "+27", country: "ZA", flag: "🇿🇦" },
-  { code: "+31", country: "NL", flag: "🇳🇱" },
-  { code: "+46", country: "SE", flag: "🇸🇪" },
+  { code: "+1", country: "US/CA", flag: "ðŸ‡ºðŸ‡¸" },
+  { code: "+44", country: "UK", flag: "ðŸ‡¬ðŸ‡§" },
+  { code: "+91", country: "IN", flag: "ðŸ‡®ðŸ‡³" },
+  { code: "+86", country: "CN", flag: "ðŸ‡¨ðŸ‡³" },
+  { code: "+81", country: "JP", flag: "ðŸ‡¯ðŸ‡µ" },
+  { code: "+49", country: "DE", flag: "ðŸ‡©ðŸ‡ª" },
+  { code: "+33", country: "FR", flag: "ðŸ‡«ðŸ‡·" },
+  { code: "+39", country: "IT", flag: "ðŸ‡®ðŸ‡¹" },
+  { code: "+34", country: "ES", flag: "ðŸ‡ªðŸ‡¸" },
+  { code: "+61", country: "AU", flag: "ðŸ‡¦ðŸ‡º" },
+  { code: "+7", country: "RU", flag: "ðŸ‡·ðŸ‡º" },
+  { code: "+55", country: "BR", flag: "ðŸ‡§ðŸ‡·" },
+  { code: "+52", country: "MX", flag: "ðŸ‡²ðŸ‡½" },
+  { code: "+82", country: "KR", flag: "ðŸ‡°ðŸ‡·" },
+  { code: "+65", country: "SG", flag: "ðŸ‡¸ðŸ‡¬" },
+  { code: "+971", country: "AE", flag: "ðŸ‡¦ðŸ‡ª" },
+  { code: "+966", country: "SA", flag: "ðŸ‡¸ðŸ‡¦" },
+  { code: "+27", country: "ZA", flag: "ðŸ‡¿ðŸ‡¦" },
+  { code: "+31", country: "NL", flag: "ðŸ‡³ðŸ‡±" },
+  { code: "+46", country: "SE", flag: "ðŸ‡¸ðŸ‡ª" },
 ]
 
 export default function InviteUser() {
@@ -74,17 +74,9 @@ export default function InviteUser() {
   const [addMethod, setAddMethod] = useState("phone") // "phone" or "email"
   const [photo, setPhoto] = useState(null)
   const [photoPreview, setPhotoPreview] = useState(null)
-<<<<<<< HEAD
   const [submitting, setSubmitting] = useState(false)
   const photoInputRef = useRef(null)
   const photoCameraInputRef = useRef(null)
-=======
-  const [isCameraLoading, setIsCameraLoading] = useState(false)
-  const fileInputRef = useRef(null)
-  const cameraInputRef = useRef(null)
-  const [existingStaff, setExistingStaff] = useState([])
-  const [loadingExistingStaff, setLoadingExistingStaff] = useState(false)
->>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
 
   // Lenis smooth scrolling
   useEffect(() => {
@@ -237,41 +229,9 @@ export default function InviteUser() {
     return new File([bytes], fileName, { type: mimeType })
   }
 
-  const handleCameraCapture = async () => {
-    if (isCameraLoading) return
-    setIsCameraLoading(true)
-    try {
-      if (window?.flutter_inappwebview?.callHandler) {
-        const result = await window.flutter_inappwebview.callHandler("openCamera")
-        if (result?.success && result?.base64) {
-          const fileName = result?.fileName || `staff-${Date.now()}.jpg`
-          const mimeType = result?.mimeType || "image/jpeg"
-          const cleanedBase64 = result.base64.includes("base64,")
-            ? result.base64.split("base64,")[1]
-            : result.base64
-          const file = buildFileFromBase64(result.base64, fileName, mimeType)
-          setPhoto(file)
-          setPhotoPreview(`data:${mimeType};base64,${cleanedBase64}`)
-        } else if (result?.success === false) {
-          // User cancelled or failed; no action needed
-        } else {
-          alert("Failed to capture image")
-        }
-      } else {
-        cameraInputRef.current?.click()
-      }
-    } catch (error) {
-      console.error("Camera capture error:", error)
-      alert("Failed to capture image")
-    } finally {
-      setIsCameraLoading(false)
-    }
-  }
-
   const handleRemovePhoto = () => {
     setPhoto(null)
     setPhotoPreview(null)
-<<<<<<< HEAD
     if (photoInputRef.current) photoInputRef.current.value = ""
     if (photoCameraInputRef.current) photoCameraInputRef.current.value = ""
   }
@@ -304,14 +264,6 @@ export default function InviteUser() {
     } catch (error) {
       console.error("Camera capture failed:", error)
       alert("Failed to capture image. Please try again.")
-=======
-    // Reset file input
-    if (fileInputRef.current) {
-      fileInputRef.current.value = ""
-    }
-    if (cameraInputRef.current) {
-      cameraInputRef.current.value = ""
->>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
     }
   }
 
@@ -563,7 +515,7 @@ export default function InviteUser() {
               )}
             </div>
             <div className="flex-1 space-y-2">
-              {photo && (
+              {photo ? (
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-600">{photo.name}</span>
                   <button
@@ -574,7 +526,6 @@ export default function InviteUser() {
                     <X className="w-4 h-4" />
                   </button>
                 </div>
-<<<<<<< HEAD
               ) : (
                 <div className="flex flex-wrap items-center gap-2">
                   <label
@@ -596,30 +547,6 @@ export default function InviteUser() {
               )}
               <input
                 ref={photoInputRef}
-=======
-              )}
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleCameraCapture}
-                  disabled={isCameraLoading}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-black text-white text-sm font-medium hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <ImageIcon className="w-4 h-4" />
-                  <span>{isCameraLoading ? "Opening..." : "Camera"}</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-300 text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
-                >
-                  <Upload className="w-4 h-4" />
-                  <span>Gallery</span>
-                </button>
-              </div>
-              <input
-                ref={fileInputRef}
->>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
                 id="photoInput"
                 type="file"
                 accept="image/*"
@@ -627,11 +554,7 @@ export default function InviteUser() {
                 onChange={handlePhotoChange}
               />
               <input
-<<<<<<< HEAD
                 ref={photoCameraInputRef}
-=======
-                ref={cameraInputRef}
->>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
                 id="photoCameraInput"
                 type="file"
                 accept="image/*"

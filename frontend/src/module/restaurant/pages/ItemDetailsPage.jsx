@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react"
+﻿import { useState, useRef, useEffect } from "react"
 import { useNavigate, useParams, useLocation } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -537,7 +537,6 @@ export default function ItemDetailsPage() {
       toast.error("Please select a category")
       return
     }
-<<<<<<< HEAD
     const parsedBasePrice = parseFloat(basePrice)
     if (!basePrice || Number.isNaN(parsedBasePrice) || parsedBasePrice <= 0) {
       toast.error("Please enter a valid base price greater than 0")
@@ -545,27 +544,14 @@ export default function ItemDetailsPage() {
     }
     if (!preparationTime.trim()) {
       toast.error("Please select preparation time")
-=======
-    if (!categories.some((cat) => cat?.name === category)) {
-      toast.error("Please select a valid category")
->>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
       return
     }
     if (itemDescription.trim().length < minDescriptionLength) {
       toast.error(`Item description must be at least ${minDescriptionLength} characters`)
       return
     }
-<<<<<<< HEAD
     if (!Array.isArray(images) || images.length === 0) {
       toast.error("Please add at least one image")
-=======
-    if (!basePrice || Number.parseFloat(basePrice) <= 0) {
-      toast.error("Please enter a valid base price")
-      return
-    }
-    if (!String(preparationTime || "").trim()) {
-      toast.error("Please select preparation time")
->>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
       return
     }
 
@@ -1071,7 +1057,6 @@ export default function ItemDetailsPage() {
               ref={fileInputRef}
               type="file"
               accept="image/*"
-<<<<<<< HEAD
               multiple
               onChange={handleImageAdd}
               className="hidden"
@@ -1082,13 +1067,10 @@ export default function ItemDetailsPage() {
               type="file"
               accept="image/*"
               capture="environment"
-=======
->>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
               onChange={handleImageAdd}
               className="hidden"
               id="image-upload-camera"
             />
-<<<<<<< HEAD
             <div className="grid grid-cols-2 gap-3">
               <label
                 htmlFor="image-upload-gallery"
@@ -1107,37 +1089,6 @@ export default function ItemDetailsPage() {
                   <Camera className="w-4 h-4" />
                 </div>
                 <span>Use Camera</span>
-=======
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              onChange={handleImageAdd}
-              className="hidden"
-              id="image-capture"
-            />
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleCameraCapture}
-                disabled={isCameraLoading}
-                className="flex-1 flex items-center justify-center gap-2.5 px-4 py-3.5 bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-xl text-sm font-semibold cursor-pointer hover:from-gray-800 hover:to-gray-700 transition-all shadow-md hover:shadow-lg active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
-                  <Camera className="w-4 h-4" />
-                </div>
-                <span>{isCameraLoading ? "Opening..." : "Camera"}</span>
-              </button>
-              <label
-                htmlFor="image-upload"
-                className="flex-1 flex items-center justify-center gap-2.5 px-4 py-3.5 bg-white text-gray-900 rounded-xl text-sm font-semibold cursor-pointer border border-gray-300 hover:bg-gray-50 transition-all shadow-sm active:scale-95"
-              >
-                <div className="w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center">
-                  <Plus className="w-4 h-4" />
-                </div>
-                <span>Gallery</span>
->>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
               </label>
             </div>
           </div>
@@ -1262,7 +1213,7 @@ export default function ItemDetailsPage() {
                     value={basePrice}
                     onChange={(e) => {
                       // Remove rupee symbol and any non-numeric characters except decimal point
-                      const value = e.target.value.replace(/[₹\s,]/g, '').replace(/[^0-9.]/g, '')
+                      const value = e.target.value.replace(/[â‚¹\s,]/g, '').replace(/[^0-9.]/g, '')
 
                       // Strip leading zeros only if followed by another digit (e.g. 080 -> 80)
                       const withoutLeadingZeros = value.replace(/^0+(?=\d)/, '')
@@ -1276,14 +1227,14 @@ export default function ItemDetailsPage() {
                     }}
                     onFocus={(e) => {
                       // Remove rupee symbol when focused for easier editing
-                      if (e.target.value.startsWith('₹')) {
-                        e.target.value = e.target.value.replace(/₹\s*/g, '')
+                      if (e.target.value.startsWith('â‚¹')) {
+                        e.target.value = e.target.value.replace(/â‚¹\s*/g, '')
                       }
                     }}
                     placeholder="Enter price"
                     className="w-full pl-8 pr-12 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-600">₹</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-600">â‚¹</span>
                   <button className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-gray-100">
                     <EditIcon className="w-4 h-4 text-gray-500" />
                   </button>

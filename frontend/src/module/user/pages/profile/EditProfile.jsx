@@ -1,11 +1,6 @@
-import { useState, useEffect, useRef } from "react"
-<<<<<<< HEAD
+﻿import { useState, useEffect, useRef } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import { ArrowLeft, X, Loader2, Camera, Image, Trash2 } from "lucide-react"
-=======
-import { useNavigate } from "react-router-dom"
-import { ArrowLeft, X, Loader2 } from "lucide-react"
->>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -289,7 +284,6 @@ export default function EditProfile() {
     input.click()
   }
 
-<<<<<<< HEAD
   const handleCameraPickerOpen = () => {
     const input = cameraInputRef.current
     if (!input || isUploadingImage) return
@@ -307,42 +301,6 @@ export default function EditProfile() {
     toast.success("Profile photo removed")
   }
 
-=======
-  const handleCameraPickerOpen = async () => {
-    if (isUploadingImage) return
-
-    try {
-      const handler = window?.flutter_inappwebview?.callHandler
-      if (typeof handler === 'function') {
-        const result = await handler('openCamera')
-        if (result?.success && result?.base64) {
-          const base64Data = String(result.base64 || '')
-          const cleanBase64 = base64Data.includes('base64,')
-            ? base64Data.split('base64,')[1]
-            : base64Data
-          const mimeType = String(result.mimeType || 'image/jpeg')
-          const fileName = String(result.fileName || `camera-${Date.now()}.jpg`)
-          const byteString = atob(cleanBase64)
-          const byteArray = new Uint8Array(byteString.length)
-          for (let i = 0; i < byteString.length; i += 1) {
-            byteArray[i] = byteString.charCodeAt(i)
-          }
-          const file = new File([byteArray], fileName, { type: mimeType })
-          await uploadProfileImage(file)
-          return
-        }
-      }
-    } catch (error) {
-      console.error('Error opening camera handler:', error)
-    }
-
-    // Fallback to native file input with camera capture
-    const input = cameraInputRef.current
-    if (!input) return
-    input.click()
-  }
-
->>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
   return (
     <div className="min-h-screen bg-[#f5f5f5] dark:bg-[#0a0a0a]">
       {/* Header */}
@@ -374,7 +332,6 @@ export default function EditProfile() {
                 {avatarInitial}
               </AvatarFallback>
             </Avatar>
-<<<<<<< HEAD
             {/* Edit Icon */}
             <button
               onClick={handleImagePickerOpen}
@@ -406,33 +363,6 @@ export default function EditProfile() {
                 <Trash2 className="h-4 w-4 text-white" />
               </button>
             )}
-=======
-            <div className="mt-4 flex items-center justify-center gap-3 w-full mb-4">
-              <button
-                type="button"
-                onClick={handleCameraPickerOpen}
-                disabled={isUploadingImage}
-                className="h-9 px-4 text-xs font-semibold rounded-full bg-green-600 text-white hover:bg-green-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isUploadingImage ? (
-                  <span className="inline-flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Uploading
-                  </span>
-                ) : (
-                  "Camera"
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={handleImagePickerOpen}
-                disabled={isUploadingImage}
-                className="h-9 px-4 text-xs font-semibold rounded-full bg-gray-200 text-gray-900 hover:bg-gray-300 transition-colors shadow-sm dark:bg-[#2a2a2a] dark:text-white dark:hover:bg-[#3a3a3a] disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Gallery
-              </button>
-            </div>
->>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
             <input
               ref={fileInputRef}
               type="file"

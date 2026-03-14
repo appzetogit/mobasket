@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+﻿import { useState, useEffect, useRef } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import Lenis from "lenis"
 import {
@@ -435,11 +435,7 @@ export default function EditOwner() {
             className="flex items-center gap-2 text-red-600 hover:text-red-700 transition-colors"
           >
             <Trash2 className="w-5 h-5" />
-<<<<<<< HEAD
             <span className="text-sm font-normal">Delete your {appName} account</span>
-=======
-            <span className="text-sm font-normal">Delete your {restaurantName || "restaurant"} account</span>
->>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
           </button>
         </div>
       </div>
@@ -452,11 +448,7 @@ export default function EditOwner() {
               <span className="text-2xl leading-none text-red-600">!</span>
             </div>
             <DialogTitle className="text-base font-semibold text-gray-900 text-center">
-<<<<<<< HEAD
               You are about to delete your {appName} account
-=======
-              You are about to delete your {restaurantName || "restaurant"} account
->>>>>>> 398af20ae7dcba9762a4ad1c7f3ef140712dcbf7
             </DialogTitle>
             <DialogDescription className="mt-2 text-sm text-gray-600">
               All information associated with your account will be deleted, and you will lose access to your {isStore ? "store" : "restaurant"} permanently.
