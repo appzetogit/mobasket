@@ -905,6 +905,53 @@ export default function RestaurantOnboarding() {
     }
   };
 
+  const extractFirstFlutterGalleryFile = (result) => {
+    if (!result) return null
+    if (Array.isArray(result?.files) && result.files.length) return result.files[0]
+    if (Array.isArray(result) && result.length) return result[0]
+    if (result?.base64) return result
+    return null
+  }
+
+  const buildFileFromFlutterResult = (fileData, fallbackPrefix = "gallery") => {
+    if (!fileData?.base64) return null
+    const cleanBase64 = String(fileData.base64).replace(/^data:[^;]+;base64,/, "")
+    const mimeType = fileData.mimeType || "image/jpeg"
+    const fileName = fileData.fileName || `${fallbackPrefix}_${Date.now()}.jpg`
+    const byteCharacters = atob(cleanBase64)
+    const byteNumbers = new Array(byteCharacters.length)
+    for (let i = 0; i < byteCharacters.length; i += 1) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i)
+    }
+    return new File([new Uint8Array(byteNumbers)], fileName, { type: mimeType })
+  }
+
+  const handleGalleryPick = async (onSuccess, fallbackInputId, fallbackPrefix = "gallery") => {
+    if (!window.flutter_inappwebview?.callHandler) {
+      document.getElementById(fallbackInputId)?.click()
+      return
+    }
+
+    try {
+      toast.loading("Opening gallery...", { id: "galleryPick" })
+      const result = await window.flutter_inappwebview.callHandler("openGallery")
+      const fileData = extractFirstFlutterGalleryFile(result)
+      const file = buildFileFromFlutterResult(fileData, fallbackPrefix)
+      if (file) {
+        onSuccess(file)
+        toast.success("Image selected successfully", { id: "galleryPick" })
+        return
+      }
+
+      toast.dismiss("galleryPick")
+      document.getElementById(fallbackInputId)?.click()
+    } catch (error) {
+      console.error("Gallery pick failed:", error)
+      toast.dismiss("galleryPick")
+      document.getElementById(fallbackInputId)?.click()
+    }
+  }
+
   // Validation functions for each step
   const validateStep1 = () => {
     const errors = []
@@ -1607,7 +1654,7 @@ export default function RestaurantOnboarding() {
                       }))
                     });
                   } else {
-                    document.getElementById("menuImagesInput").click();
+                    document.getElementById("menuImagesCameraInput").click();
                   }
                 }}
                 className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
@@ -1615,19 +1662,29 @@ export default function RestaurantOnboarding() {
                 <Camera className="w-4 h-4" />
                 <span>Camera</span>
               </button>
-              <label
-                htmlFor="menuImagesInput"
+              <button
+                type="button"
+                onClick={() =>
+                  handleGalleryPick(
+                    (file) =>
+                      setStep2((prev) => ({
+                        ...prev,
+                        menuImages: [file],
+                      })),
+                    "menuImagesInput",
+                    "menu_gallery"
+                  )
+                }
                 className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
               >
                 <ImageIcon className="w-4 h-4" />
                 <span>Gallery</span>
-              </label>
+              </button>
             </div>
             <input
               id="menuImagesInput"
               type="file"
               accept="image/*"
-              capture="environment"
               className="hidden"
               onChange={(e) => {
                 const files = Array.from(e.target.files || [])
@@ -1640,6 +1697,22 @@ export default function RestaurantOnboarding() {
                 }))
                 // Reset input to allow selecting same file again
                 e.target.value = ''
+              }}
+            />
+            <input
+              id="menuImagesCameraInput"
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0] || null
+                if (!file) return
+                setStep2((prev) => ({
+                  ...prev,
+                  menuImages: [file],
+                }))
+                e.target.value = ""
               }}
             />
           </div>
@@ -1748,7 +1821,7 @@ export default function RestaurantOnboarding() {
                     }))
                   });
                 } else {
-                  document.getElementById("profileImageInput").click();
+                  document.getElementById("profileImageCameraInput").click();
                 }
               }}
               className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
@@ -1756,19 +1829,29 @@ export default function RestaurantOnboarding() {
               <Camera className="w-4 h-4" />
               <span>Camera</span>
             </button>
-            <label
-              htmlFor="profileImageInput"
+            <button
+              type="button"
+              onClick={() =>
+                handleGalleryPick(
+                  (file) =>
+                    setStep2((prev) => ({
+                      ...prev,
+                      profileImage: file,
+                    })),
+                  "profileImageInput",
+                  "profile_gallery"
+                )
+              }
               className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
             >
               <ImageIcon className="w-4 h-4" />
               <span>Gallery</span>
-            </label>
+            </button>
           </div>
           <input
             id="profileImageInput"
             type="file"
             accept="image/*"
-            capture="environment"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0] || null
@@ -1781,6 +1864,23 @@ export default function RestaurantOnboarding() {
               }
               // Reset input to allow selecting same file again
               e.target.value = ''
+            }}
+          />
+          <input
+            id="profileImageCameraInput"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0] || null
+              if (file) {
+                setStep2((prev) => ({
+                  ...prev,
+                  profileImage: file,
+                }))
+              }
+              e.target.value = ""
             }}
           />
         </div>
@@ -1862,6 +1962,8 @@ export default function RestaurantOnboarding() {
 
     // Reusable styled file upload box
     const FileUploadBox = ({ id, file, onFileChange, label }) => {
+      const galleryInputId = `${id}Gallery`
+      const cameraInputId = `${id}Camera`
       const fileName = file instanceof File ? file.name : (file?.name || null)
       return (
         <div>
@@ -1885,7 +1987,7 @@ export default function RestaurantOnboarding() {
                   if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
                     handleCameraCapture((f) => onFileChange(f));
                   } else {
-                    document.getElementById(id).click();
+                    document.getElementById(cameraInputId)?.click();
                   }
                 }}
                 className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-gray-300 text-xs font-medium cursor-pointer hover:bg-gray-50"
@@ -1893,16 +1995,34 @@ export default function RestaurantOnboarding() {
                 <Camera className="w-4 h-4" />
                 <span>Camera</span>
               </button>
-              <label
-                htmlFor={id}
+              <button
+                type="button"
+                onClick={() =>
+                  handleGalleryPick(
+                    (f) => onFileChange(f),
+                    galleryInputId,
+                    "doc_gallery"
+                  )
+                }
                 className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-gray-300 text-xs font-medium cursor-pointer hover:bg-gray-50"
               >
                 <ImageIcon className="w-4 h-4" />
                 <span>Gallery</span>
-              </label>
+              </button>
             </div>
             <input
-              id={id}
+              id={galleryInputId}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0] || null
+                if (f) onFileChange(f)
+                e.target.value = ''
+              }}
+            />
+            <input
+              id={cameraInputId}
               type="file"
               accept="image/*"
               capture="environment"

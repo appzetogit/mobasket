@@ -52,8 +52,10 @@ export default function EditOwner() {
   const [saving, setSaving] = useState(false)
   const [profileImageFile, setProfileImageFile] = useState(null)
   const [isCameraLoading, setIsCameraLoading] = useState(false)
+  const [isGalleryLoading, setIsGalleryLoading] = useState(false)
   const [restaurantName, setRestaurantName] = useState("restaurant")
   const fileInputRef = useRef(null)
+  const cameraInputRef = useRef(null)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
@@ -192,13 +194,49 @@ export default function EditOwner() {
           alert("Failed to capture image")
         }
       } else {
-        fileInputRef.current?.click()
+        cameraInputRef.current?.click()
       }
     } catch (error) {
       console.error("Camera capture error:", error)
       alert("Failed to capture image")
     } finally {
       setIsCameraLoading(false)
+    }
+  }
+
+  const handleGalleryPick = async () => {
+    if (isGalleryLoading) return
+    setIsGalleryLoading(true)
+    try {
+      if (window?.flutter_inappwebview?.callHandler) {
+        const result = await window.flutter_inappwebview.callHandler("openGallery")
+        const fileData = Array.isArray(result?.files) && result.files.length
+          ? result.files[0]
+          : (Array.isArray(result) && result.length ? result[0] : result)
+
+        if (fileData?.success === false) {
+          return
+        }
+
+        if (fileData?.base64) {
+          const fileName = fileData?.fileName || `owner-gallery-${Date.now()}.jpg`
+          const mimeType = fileData?.mimeType || "image/jpeg"
+          const file = buildFileFromBase64(fileData.base64, fileName, mimeType)
+          setProfileImageFile(file)
+          setFormData((prev) => ({
+            ...prev,
+            photo: `data:${mimeType};base64,${String(fileData.base64).includes("base64,") ? String(fileData.base64).split("base64,")[1] : fileData.base64}`
+          }))
+          return
+        }
+      }
+
+      fileInputRef.current?.click()
+    } catch (error) {
+      console.error("Gallery pick error:", error)
+      fileInputRef.current?.click()
+    } finally {
+      setIsGalleryLoading(false)
     }
   }
 
@@ -362,17 +400,26 @@ export default function EditOwner() {
               {isCameraLoading ? "Opening..." : "Camera"}
             </button>
             <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={loading || saving}
+              onClick={handleGalleryPick}
+              disabled={loading || saving || isGalleryLoading}
               className="px-4 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Gallery
+              {isGalleryLoading ? "Opening..." : "Gallery"}
             </button>
           </div>
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
+            className="hidden"
+            onChange={handlePhotoChange}
+            disabled={loading || saving}
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
             className="hidden"
             onChange={handlePhotoChange}
             disabled={loading || saving}

@@ -2,7 +2,6 @@ import React, { Suspense, lazy } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AuthRedirect from "@/components/AuthRedirect";
-import { isModuleAuthenticated } from "@/lib/utils/auth";
 import UserLayout from "./UserLayout";
 
 import SignIn from "../pages/auth/SignIn";
@@ -83,7 +82,7 @@ export default function UserRouter() {
       <Routes>
         <Route element={<UserLayout />}>
         <Route path="/sign-in" element={<SignIn />} />
-        <Route path="/" element={<RootLanding />} />
+        <Route path="/" element={<Navigate to="/home" replace />} />
         <Route
           path="/welcome"
           element={
@@ -496,20 +495,4 @@ export default function UserRouter() {
       </Routes>
     </Suspense>
   );
-}
-
-// Helper component for redirection
-// Helper component for redirection
-function RootLanding() {
-  const preference = localStorage.getItem("mobasket_preference");
-
-  if (isModuleAuthenticated("user")) {
-    if (preference === "food") {
-      return <Navigate to="/home" replace />;
-    } else if (preference === "grocery") {
-      return <Navigate to="/grocery" replace />;
-    }
-    return <Navigate to="/welcome" replace />;
-  }
-  return <SignIn />;
 }
