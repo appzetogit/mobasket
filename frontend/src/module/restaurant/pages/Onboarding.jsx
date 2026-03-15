@@ -1674,7 +1674,7 @@ export default function RestaurantOnboarding() {
             <input
               id="menuImagesInput"
               type="file"
-              accept="image/*"
+              accept=".jpg,.jpeg,.png,.webp"
               className="hidden"
               onChange={(e) => {
                 const files = Array.from(e.target.files || [])
@@ -1831,7 +1831,7 @@ export default function RestaurantOnboarding() {
           <input
             id="profileImageInput"
             type="file"
-            accept="image/*"
+            accept=".jpg,.jpeg,.png,.webp"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0] || null
@@ -1993,7 +1993,7 @@ export default function RestaurantOnboarding() {
             <input
               id={galleryInputId}
               type="file"
-              accept="image/*"
+              accept=".jpg,.jpeg,.png,.webp"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0] || null
