@@ -1351,9 +1351,7 @@ export default function CheckoutPage() {
             className="p-2 hover:bg-orange-50 rounded-full transition-colors dark:hover:bg-white/10"
           >
             <ArrowLeft className="w-5 h-5 text-gray-800 dark:text-gray-100" />
-            <ArrowLeft className="w-5 h-5 text-gray-800 dark:text-gray-100" />
           </button>
-          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">Checkout</h1>
           <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">Checkout</h1>
         </div>
       </div>
@@ -1365,7 +1363,6 @@ export default function CheckoutPage() {
             onClick={() => navigate(-1)}
             className="p-1 hover:bg-orange-50 rounded-full transition-colors dark:hover:bg-white/10"
           >
-            <ArrowLeft className="w-6 h-6 text-gray-800 dark:text-gray-100" />
             <ArrowLeft className="w-6 h-6 text-gray-800 dark:text-gray-100" />
           </button>
           <h1 className="text-xl font-bold text-gray-900 font-Inter dark:text-gray-100">Checkout</h1>
@@ -1520,11 +1517,9 @@ export default function CheckoutPage() {
                         </button>
                       </div>
                       <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
-                      <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
                         Address must be inside an active delivery zone.
                       </p>
                       {hasRecipientCoordinates ? (
-                        <p className="mt-1 text-[11px] text-yellow-700 dark:text-yellow-300">
                         <p className="mt-1 text-[11px] text-yellow-700 dark:text-yellow-300">
                           {Number(recipientDetails.latitude).toFixed(5)}, {Number(recipientDetails.longitude).toFixed(5)}
                         </p>
@@ -1560,7 +1555,6 @@ export default function CheckoutPage() {
                               }`}
                           >
                             <p className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-                            <p className="text-xs font-semibold text-gray-900 dark:text-gray-100">
                               {address.label || "Address"} {address.isDefault ? "(Default)" : ""}
                             </p>
                             <p className="text-xs text-gray-600 dark:text-gray-400">{formatAddressLine(address)}</p>
@@ -1572,7 +1566,6 @@ export default function CheckoutPage() {
                     <button
                       type="button"
                       onClick={() => setShowAddAddressForm((prev) => !prev)}
-                      className="text-xs font-semibold text-yellow-700 dark:text-yellow-300"
                       className="text-xs font-semibold text-yellow-700 dark:text-yellow-300"
                     >
                       {showAddAddressForm ? "Close Add Address" : "+ Add New Address"}
@@ -1617,7 +1610,6 @@ export default function CheckoutPage() {
                             <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg dark:border-white/10 dark:bg-[#0f172a]">
                               {loadingAddressSuggestions ? (
                                 <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Loading suggestions...</p>
-                                <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Loading suggestions...</p>
                               ) : addressSuggestions.length > 0 ? (
                                 addressSuggestions.map((suggestion) => (
                                   <button
@@ -1631,7 +1623,6 @@ export default function CheckoutPage() {
                                   </button>
                                 ))
                               ) : (
-                                <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
                                 <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
                                   {googlePlacesReady
                                     ? "No address suggestions found."
@@ -1785,7 +1776,6 @@ export default function CheckoutPage() {
             </p>
             {loadingCoupons ? (
               <p className="text-xs text-gray-500 dark:text-gray-400">Loading coupons...</p>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Loading coupons...</p>
             ) : availableCoupons.length > 0 ? (
               <>
                 <div className="flex flex-wrap gap-2">
@@ -1814,7 +1804,6 @@ export default function CheckoutPage() {
                 ) : null}
               </>
             ) : (
-              <p className="text-xs text-gray-500 dark:text-gray-400">No coupons available for current cart items.</p>
               <p className="text-xs text-gray-500 dark:text-gray-400">No coupons available for current cart items.</p>
             )}
           </div>
