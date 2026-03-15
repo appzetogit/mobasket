@@ -36,6 +36,8 @@ const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 const DEFAULT_OPENING_TIME = "09:00"
 const DEFAULT_CLOSING_TIME = "22:00"
 const GOOGLE_MAP_ID = String(import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "").trim()
+const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"])
+const ALLOWED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"]
 
 const waitForGoogleMaps = (timeoutMs = 12000) =>
   new Promise((resolve, reject) => {
@@ -905,6 +907,14 @@ export default function RestaurantOnboarding() {
     }
   };
 
+  const isAllowedImageFile = (file) => {
+    if (!(file instanceof File)) return false
+    const mime = String(file.type || "").toLowerCase()
+    if (ALLOWED_IMAGE_MIME_TYPES.has(mime)) return true
+    const name = String(file.name || "").toLowerCase()
+    return ALLOWED_IMAGE_EXTENSIONS.some((ext) => name.endsWith(ext))
+  }
+
   const extractFirstFlutterGalleryFile = (result) => {
     if (!result) return null
     if (Array.isArray(result?.files) && result.files.length) return result.files[0]
@@ -1694,12 +1704,17 @@ export default function RestaurantOnboarding() {
             <input
               id="menuImagesInput"
               type="file"
-              accept=".jpg,.jpeg,.png,.webp"
+              accept="*/*"
               className="hidden"
               onChange={(e) => {
                 const files = Array.from(e.target.files || [])
                 if (!files.length) return
                 const selectedFile = files[0]
+                if (!isAllowedImageFile(selectedFile)) {
+                  toast.error("Please choose a JPG, PNG, or WEBP image")
+                  e.target.value = ""
+                  return
+                }
                 console.log('Menu image selected:', selectedFile?.name || '1 file')
                 setStep2((prev) => ({
                   ...prev,
@@ -1840,11 +1855,16 @@ export default function RestaurantOnboarding() {
           <input
             id="profileImageInput"
             type="file"
-            accept=".jpg,.jpeg,.png,.webp"
+            accept="*/*"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0] || null
               if (file) {
+                if (!isAllowedImageFile(file)) {
+                  toast.error("Please choose a JPG, PNG, or WEBP image")
+                  e.target.value = ""
+                  return
+                }
                 console.log('Profile image selected:', file.name)
                 setStep2((prev) => ({
                   ...prev,
@@ -1985,11 +2005,18 @@ export default function RestaurantOnboarding() {
             <input
               id={galleryInputId}
               type="file"
-              accept=".jpg,.jpeg,.png,.webp"
+              accept="*/*"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0] || null
-                if (f) onFileChange(f)
+                if (f) {
+                  if (!isAllowedImageFile(f)) {
+                    toast.error("Please choose a JPG, PNG, or WEBP image")
+                    e.target.value = ''
+                    return
+                  }
+                  onFileChange(f)
+                }
                 e.target.value = ''
               }}
             />
