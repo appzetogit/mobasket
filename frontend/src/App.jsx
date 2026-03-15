@@ -224,6 +224,37 @@ export default function App() {
     };
   }, [location.pathname]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const pathname = location.pathname || "";
+    if (!pathname.startsWith("/store") || pathname === "/store") return;
+
+    const isStoreAuthPage = /^\/store\/(login|signup|otp)$/.test(pathname);
+    if (isStoreAuthPage) return;
+
+    const hasStoreToken = Boolean(
+      localStorage.getItem("grocery-store_accessToken") ||
+      localStorage.getItem("grocery-store_refreshToken")
+    );
+    if (!hasStoreToken) return;
+
+    if (sessionStorage.getItem("storeBackStackInjected") === "1") return;
+
+    const currentUrl = window.location.pathname + window.location.search + window.location.hash;
+    const currentState = window.history.state || {};
+    window.history.replaceState(
+      { ...currentState, __storeBackStack: true },
+      "",
+      "/store"
+    );
+    window.history.pushState(
+      { ...currentState, __storeBackStack: true },
+      "",
+      currentUrl
+    );
+    sessionStorage.setItem("storeBackStackInjected", "1");
+  }, [location.pathname]);
+
   return (
     <>
       <RestaurantOrderSoundListener />

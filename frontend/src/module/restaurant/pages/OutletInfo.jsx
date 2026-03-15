@@ -726,21 +726,23 @@ export default function OutletInfo() {
               <div className="w-full h-full rounded-full bg-gray-50 flex items-center justify-center border border-gray-200" />
             )}
 
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                profileImageInputRef.current?.click();
-              }}
-              disabled={uploadingImage}
-              className="absolute bottom-0 right-0 p-1.5 bg-blue-600 hover:bg-blue-700 rounded-full text-white shadow-sm transition-all border-2 border-white disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 flex items-center justify-center z-20"
-              aria-label="Edit photo"
-            >
-              {uploadingImage && imageType === 'profile' ? (
-                <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              ) : (
-                <Camera className="w-3.5 h-3.5" />
-              )}
-            </button>
+            {!isGroceryStoreRoute && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  profileImageInputRef.current?.click();
+                }}
+                disabled={uploadingImage}
+                className="absolute bottom-0 right-0 p-1.5 bg-blue-600 hover:bg-blue-700 rounded-full text-white shadow-sm transition-all border-2 border-white disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 flex items-center justify-center z-20"
+                aria-label="Edit photo"
+              >
+                {uploadingImage && imageType === 'profile' ? (
+                  <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <Camera className="w-3.5 h-3.5" />
+                )}
+              </button>
+            )}
           </div>
 
           <input

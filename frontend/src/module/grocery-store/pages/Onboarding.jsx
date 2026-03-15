@@ -613,17 +613,35 @@ export default function GroceryStoreOnboarding() {
     try {
       setSaving(true)
       const result = await window.flutter_inappwebview.callHandler("openCamera")
-      if (!result?.success || !result?.base64) {
+      if (!result) {
         toast.error("Camera capture failed or cancelled")
         return
       }
 
-      const uploaded = await uploadCapturedImage(
-        result.base64,
-        result.fileName || `store_${Date.now()}.jpg`,
-        result.mimeType || "image/jpeg",
-        "mobasket/grocery-store/store"
-      )
+      let uploaded = null
+      if (result instanceof File) {
+        uploaded = await handleUpload(result, "mobasket/grocery-store/store")
+      } else if (result?.file instanceof File) {
+        uploaded = await handleUpload(result.file, "mobasket/grocery-store/store")
+      } else if (Array.isArray(result?.files) && result.files[0] instanceof File) {
+        uploaded = await handleUpload(result.files[0], "mobasket/grocery-store/store")
+      } else if (result?.base64) {
+        uploaded = await uploadCapturedImage(
+          result.base64,
+          result.fileName || `store_${Date.now()}.jpg`,
+          result.mimeType || "image/jpeg",
+          "mobasket/grocery-store/store"
+        )
+      } else if (result?.success === false) {
+        toast.error("Camera capture failed or cancelled")
+        return
+      }
+
+      if (!uploaded) {
+        toast.error("Camera capture failed or cancelled")
+        return
+      }
+
       setImages((prev) => ({ ...prev, storeImage: uploaded }))
       toast.success("Store image uploaded successfully")
     } catch (err) {
@@ -642,17 +660,33 @@ export default function GroceryStoreOnboarding() {
     try {
       setSaving(true)
       const result = await window.flutter_inappwebview.callHandler("openGallery")
-      if (!result?.success || !result?.base64) {
+      const files = normalizeGalleryResults(result)
+      const first = files?.[0]
+
+      if (!first) {
         storeImageGalleryInputRef.current?.click()
         return
       }
 
-      const uploaded = await uploadCapturedImage(
-        result.base64,
-        result.fileName || `store_gallery_${Date.now()}.jpg`,
-        result.mimeType || "image/jpeg",
-        "mobasket/grocery-store/store"
-      )
+      let uploaded = null
+      if (first instanceof File) {
+        uploaded = await handleUpload(first, "mobasket/grocery-store/store")
+      } else if (first?.file instanceof File) {
+        uploaded = await handleUpload(first.file, "mobasket/grocery-store/store")
+      } else if (first?.base64) {
+        uploaded = await uploadCapturedImage(
+          first.base64,
+          first.fileName || `store_gallery_${Date.now()}.jpg`,
+          first.mimeType || "image/jpeg",
+          "mobasket/grocery-store/store"
+        )
+      }
+
+      if (!uploaded) {
+        storeImageGalleryInputRef.current?.click()
+        return
+      }
+
       setImages((prev) => ({ ...prev, storeImage: uploaded }))
       toast.success("Store image uploaded successfully")
     } catch {
@@ -664,6 +698,8 @@ export default function GroceryStoreOnboarding() {
 
   const normalizeGalleryResults = (result) => {
     if (!result) return []
+    if (result instanceof File) return [result]
+    if (result?.file instanceof File) return [result.file]
     if (Array.isArray(result?.files)) return result.files
     if (Array.isArray(result)) return result
     if (result?.base64) return [result]
@@ -687,6 +723,14 @@ export default function GroceryStoreOnboarding() {
 
       const uploads = []
       for (const fileData of files) {
+        if (fileData instanceof File) {
+          uploads.push(await handleUpload(fileData, "mobasket/grocery-store/additional"))
+          continue
+        }
+        if (fileData?.file instanceof File) {
+          uploads.push(await handleUpload(fileData.file, "mobasket/grocery-store/additional"))
+          continue
+        }
         if (!fileData?.base64) continue
         const uploaded = await uploadCapturedImage(
           fileData.base64,
@@ -722,17 +766,35 @@ export default function GroceryStoreOnboarding() {
     try {
       setSaving(true)
       const result = await window.flutter_inappwebview.callHandler("openCamera")
-      if (!result?.success || !result?.base64) {
+      if (!result) {
         toast.error("Camera capture failed or cancelled")
         return
       }
 
-      const uploaded = await uploadCapturedImage(
-        result.base64,
-        result.fileName || `additional_${Date.now()}.jpg`,
-        result.mimeType || "image/jpeg",
-        "mobasket/grocery-store/additional"
-      )
+      let uploaded = null
+      if (result instanceof File) {
+        uploaded = await handleUpload(result, "mobasket/grocery-store/additional")
+      } else if (result?.file instanceof File) {
+        uploaded = await handleUpload(result.file, "mobasket/grocery-store/additional")
+      } else if (Array.isArray(result?.files) && result.files[0] instanceof File) {
+        uploaded = await handleUpload(result.files[0], "mobasket/grocery-store/additional")
+      } else if (result?.base64) {
+        uploaded = await uploadCapturedImage(
+          result.base64,
+          result.fileName || `additional_${Date.now()}.jpg`,
+          result.mimeType || "image/jpeg",
+          "mobasket/grocery-store/additional"
+        )
+      } else if (result?.success === false) {
+        toast.error("Camera capture failed or cancelled")
+        return
+      }
+
+      if (!uploaded) {
+        toast.error("Camera capture failed or cancelled")
+        return
+      }
+
       setImages((prev) => ({
         ...prev,
         additionalImages: [...prev.additionalImages, uploaded],
