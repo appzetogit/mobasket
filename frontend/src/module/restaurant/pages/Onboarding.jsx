@@ -1664,17 +1664,7 @@ export default function RestaurantOnboarding() {
               </button>
               <button
                 type="button"
-                onClick={() =>
-                  handleGalleryPick(
-                    (file) =>
-                      setStep2((prev) => ({
-                        ...prev,
-                        menuImages: [file],
-                      })),
-                    "menuImagesInput",
-                    "menu_gallery"
-                  )
-                }
+                onClick={() => document.getElementById("menuImagesInput")?.click()}
                 className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
               >
                 <ImageIcon className="w-4 h-4" />
@@ -1831,17 +1821,7 @@ export default function RestaurantOnboarding() {
             </button>
             <button
               type="button"
-              onClick={() =>
-                handleGalleryPick(
-                  (file) =>
-                    setStep2((prev) => ({
-                      ...prev,
-                      profileImage: file,
-                    })),
-                  "profileImageInput",
-                  "profile_gallery"
-                )
-              }
+              onClick={() => document.getElementById("profileImageInput")?.click()}
               className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
             >
               <ImageIcon className="w-4 h-4" />
