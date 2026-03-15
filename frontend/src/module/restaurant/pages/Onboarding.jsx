@@ -915,53 +915,6 @@ export default function RestaurantOnboarding() {
     return ALLOWED_IMAGE_EXTENSIONS.some((ext) => name.endsWith(ext))
   }
 
-  const extractFirstFlutterGalleryFile = (result) => {
-    if (!result) return null
-    if (Array.isArray(result?.files) && result.files.length) return result.files[0]
-    if (Array.isArray(result) && result.length) return result[0]
-    if (result?.base64) return result
-    return null
-  }
-
-  const buildFileFromFlutterResult = (fileData, fallbackPrefix = "gallery") => {
-    if (!fileData?.base64) return null
-    const cleanBase64 = String(fileData.base64).replace(/^data:[^;]+;base64,/, "")
-    const mimeType = fileData.mimeType || "image/jpeg"
-    const fileName = fileData.fileName || `${fallbackPrefix}_${Date.now()}.jpg`
-    const byteCharacters = atob(cleanBase64)
-    const byteNumbers = new Array(byteCharacters.length)
-    for (let i = 0; i < byteCharacters.length; i += 1) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i)
-    }
-    return new File([new Uint8Array(byteNumbers)], fileName, { type: mimeType })
-  }
-
-  const handleGalleryPick = async (onSuccess, fallbackInputId, fallbackPrefix = "gallery") => {
-    if (!window.flutter_inappwebview?.callHandler) {
-      document.getElementById(fallbackInputId)?.click()
-      return
-    }
-
-    try {
-      toast.loading("Opening gallery...", { id: "galleryPick" })
-      const result = await window.flutter_inappwebview.callHandler("openGallery")
-      const fileData = extractFirstFlutterGalleryFile(result)
-      const file = buildFileFromFlutterResult(fileData, fallbackPrefix)
-      if (file) {
-        onSuccess(file)
-        toast.success("Image selected successfully", { id: "galleryPick" })
-        return
-      }
-
-      toast.dismiss("galleryPick")
-      document.getElementById(fallbackInputId)?.click()
-    } catch (error) {
-      console.error("Gallery pick failed:", error)
-      toast.dismiss("galleryPick")
-      document.getElementById(fallbackInputId)?.click()
-    }
-  }
-
   const openFallbackCameraInput = (onSuccess) => {
     const input = document.createElement("input")
     input.type = "file"
@@ -971,6 +924,28 @@ export default function RestaurantOnboarding() {
     input.onchange = (event) => {
       const file = event.target?.files?.[0] || null
       if (file) onSuccess(file)
+      input.remove()
+    }
+    document.body.appendChild(input)
+    input.click()
+  }
+
+  const openBrowserGalleryInput = (onSuccess) => {
+    const input = document.createElement("input")
+    input.type = "file"
+    // Leave accept unset on purpose to avoid Android Chrome forcing camera intent.
+    input.multiple = false
+    input.style.position = "fixed"
+    input.style.left = "-9999px"
+    input.onchange = (event) => {
+      const file = event.target?.files?.[0] || null
+      if (file) {
+        if (!isAllowedImageFile(file)) {
+          toast.error("Please choose a JPG, PNG, or WEBP image")
+        } else {
+          onSuccess(file)
+        }
+      }
       input.remove()
     }
     document.body.appendChild(input)
@@ -1694,36 +1669,20 @@ export default function RestaurantOnboarding() {
               </button>
               <button
                 type="button"
-                onClick={() => document.getElementById("menuImagesInput")?.click()}
+                onClick={() =>
+                  openBrowserGalleryInput((selectedFile) => {
+                    setStep2((prev) => ({
+                      ...prev,
+                      menuImages: [selectedFile],
+                    }))
+                  })
+                }
                 className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
               >
                 <ImageIcon className="w-4 h-4" />
                 <span>Gallery</span>
               </button>
             </div>
-            <input
-              id="menuImagesInput"
-              type="file"
-              accept="*/*"
-              className="hidden"
-              onChange={(e) => {
-                const files = Array.from(e.target.files || [])
-                if (!files.length) return
-                const selectedFile = files[0]
-                if (!isAllowedImageFile(selectedFile)) {
-                  toast.error("Please choose a JPG, PNG, or WEBP image")
-                  e.target.value = ""
-                  return
-                }
-                console.log('Menu image selected:', selectedFile?.name || '1 file')
-                setStep2((prev) => ({
-                  ...prev,
-                  menuImages: [selectedFile],
-                }))
-                // Reset input to allow selecting same file again
-                e.target.value = ''
-              }}
-            />
           </div>
 
           {/* Menu image previews */}
@@ -1845,36 +1804,20 @@ export default function RestaurantOnboarding() {
             </button>
             <button
               type="button"
-              onClick={() => document.getElementById("profileImageInput")?.click()}
+              onClick={() =>
+                openBrowserGalleryInput((selectedFile) => {
+                  setStep2((prev) => ({
+                    ...prev,
+                    profileImage: selectedFile,
+                  }))
+                })
+              }
               className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
             >
               <ImageIcon className="w-4 h-4" />
               <span>Gallery</span>
             </button>
           </div>
-          <input
-            id="profileImageInput"
-            type="file"
-            accept="*/*"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0] || null
-              if (file) {
-                if (!isAllowedImageFile(file)) {
-                  toast.error("Please choose a JPG, PNG, or WEBP image")
-                  e.target.value = ""
-                  return
-                }
-                console.log('Profile image selected:', file.name)
-                setStep2((prev) => ({
-                  ...prev,
-                  profileImage: file,
-                }))
-              }
-              // Reset input to allow selecting same file again
-              e.target.value = ''
-            }}
-          />
         </div>
       </section>
 
@@ -1954,7 +1897,6 @@ export default function RestaurantOnboarding() {
 
     // Reusable styled file upload box
     const FileUploadBox = ({ id, file, onFileChange, label }) => {
-      const galleryInputId = `${id}Gallery`
       const cameraInputId = `${id}Camera`
       const fileName = file instanceof File ? file.name : (file?.name || null)
       return (
@@ -1989,37 +1931,13 @@ export default function RestaurantOnboarding() {
               </button>
               <button
                 type="button"
-                onClick={() =>
-                  handleGalleryPick(
-                    (f) => onFileChange(f),
-                    galleryInputId,
-                    "doc_gallery"
-                  )
-                }
+                onClick={() => openBrowserGalleryInput((f) => onFileChange(f))}
                 className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-gray-300 text-xs font-medium cursor-pointer hover:bg-gray-50"
               >
                 <ImageIcon className="w-4 h-4" />
                 <span>Gallery</span>
               </button>
             </div>
-            <input
-              id={galleryInputId}
-              type="file"
-              accept="*/*"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0] || null
-                if (f) {
-                  if (!isAllowedImageFile(f)) {
-                    toast.error("Please choose a JPG, PNG, or WEBP image")
-                    e.target.value = ''
-                    return
-                  }
-                  onFileChange(f)
-                }
-                e.target.value = ''
-              }}
-            />
             <input
               id={cameraInputId}
               type="file"
