@@ -408,16 +408,6 @@ if (!rootElement) {
 }
 
 const bootstrap = async () => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/env/public`, { method: 'GET' })
-    if (response.ok) {
-      const payload = await response.json()
-      window.__PUBLIC_ENV = payload?.data || {}
-    }
-  } catch {
-    window.__PUBLIC_ENV = window.__PUBLIC_ENV || {}
-  }
-
   const { default: App } = await import('./App.jsx')
 
   createRoot(rootElement).render(
@@ -428,6 +418,21 @@ const bootstrap = async () => {
       </BrowserRouter>
     </StrictMode>,
   )
+
+  // Fetch public env in background so first paint and routing are not blocked.
+  ;(async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/env/public`, { method: 'GET' })
+      if (response.ok) {
+        const payload = await response.json()
+        window.__PUBLIC_ENV = payload?.data || {}
+        return
+      }
+    } catch {
+      // Ignore and keep any existing fallback env.
+    }
+    window.__PUBLIC_ENV = window.__PUBLIC_ENV || {}
+  })()
 }
 
 bootstrap()

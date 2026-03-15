@@ -416,6 +416,32 @@ export default function ItemDetailsPage() {
     }
   }
 
+  const handleGalleryPick = async () => {
+    if (!window?.flutter_inappwebview?.callHandler) {
+      fileInputRef.current?.click()
+      return
+    }
+
+    try {
+      const result = await window.flutter_inappwebview.callHandler("openGallery")
+      const fileData = Array.isArray(result?.files) && result.files.length
+        ? result.files[0]
+        : (Array.isArray(result) && result.length ? result[0] : result)
+
+      if (fileData?.base64) {
+        const fileName = fileData.fileName || `gallery-${Date.now()}.jpg`
+        const mimeType = fileData.mimeType || "image/jpeg"
+        const file = buildFileFromBase64(fileData.base64, fileName, mimeType)
+        appendImageFiles([file])
+        return
+      }
+    } catch (error) {
+      console.error("Gallery pick error:", error)
+    }
+
+    fileInputRef.current?.click()
+  }
+
   const handleImageAdd = (e) => {
     appendImageFiles(Array.from(e.target.files || []))
   }
@@ -1084,15 +1110,16 @@ export default function ItemDetailsPage() {
               id="image-upload-camera"
             />
             <div className="grid grid-cols-2 gap-3">
-              <label
-                htmlFor="image-upload-gallery"
+              <button
+                type="button"
+                onClick={handleGalleryPick}
                 className="flex items-center justify-center gap-2.5 px-4 py-3.5 bg-gradient-to-r from-gray-900 to-gray-800 text-white rounded-xl text-sm font-semibold cursor-pointer hover:from-gray-800 hover:to-gray-700 transition-all shadow-md hover:shadow-lg active:scale-95"
               >
                 <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center">
                   <Plus className="w-4 h-4" />
                 </div>
                 <span>From Gallery</span>
-              </label>
+              </button>
               <label
                 htmlFor="image-upload-camera"
                 className="flex items-center justify-center gap-2.5 px-4 py-3.5 bg-white text-gray-900 border border-gray-300 rounded-xl text-sm font-semibold cursor-pointer hover:bg-gray-50 transition-all shadow-sm hover:shadow-md active:scale-95"

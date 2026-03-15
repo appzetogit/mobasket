@@ -277,6 +277,60 @@ export default function GroceryStoreProductDetailsPage() {
     }
   };
 
+  const handleGalleryAdd = async (index) => {
+    if (uploadingImages) return;
+
+    if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+      try {
+        setUploadingImages(true);
+        const result = await window.flutter_inappwebview.callHandler('openGallery');
+        const fileData = Array.isArray(result?.files) && result.files.length
+          ? result.files[0]
+          : (Array.isArray(result) && result.length ? result[0] : result);
+
+        if (fileData?.base64) {
+          const base64Data = fileData.base64;
+          const mimeType = fileData.mimeType || 'image/jpeg';
+          const filename = fileData.fileName || `gallery_${Date.now()}.jpg`;
+
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const file = new File([byteArray], filename, { type: mimeType });
+
+          const uploaded = await uploadAPI.uploadMedia(file, { folder: "mobasket/grocery-store/products" });
+          const url = uploaded?.data?.data?.url || uploaded?.data?.url;
+
+          if (url) {
+            if (index !== null) {
+              setImages(prev => {
+                const next = [...prev];
+                next[index] = url;
+                return next;
+              });
+              toast.success("Image updated successfully");
+            } else {
+              setImages(prev => [...prev, url]);
+              toast.success("Image uploaded successfully");
+            }
+            return;
+          }
+        }
+      } catch (error) {
+        console.error('Gallery error:', error);
+      } finally {
+        setUploadingImages(false);
+        setUpdatingImageIndex(null);
+      }
+    }
+
+    setUpdatingImageIndex(index);
+    galleryInputRef.current?.click();
+  };
+
   const removeImage = (index) => {
     setImages(prev => prev.filter((_, i) => i !== index))
   }
@@ -804,7 +858,7 @@ export default function GroceryStoreProductDetailsPage() {
                       onClick={(e) => {
                         e.stopPropagation()
                         setUpdatingImageIndex(idx)
-                        galleryInputRef.current?.click()
+                        handleGalleryAdd(idx)
                       }}
                       className="p-1 rounded-full bg-white/20 hover:bg-white/40"
                     >
@@ -836,7 +890,7 @@ export default function GroceryStoreProductDetailsPage() {
               <div
                 onClick={() => {
                   setUpdatingImageIndex(null)
-                  galleryInputRef.current?.click()
+                  handleGalleryAdd(null)
                 }}
                 className="aspect-square border-2 border-dashed border-slate-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors bg-slate-50"
               >

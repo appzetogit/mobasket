@@ -267,6 +267,34 @@ export default function InviteUser() {
     }
   }
 
+  const handleGalleryPick = async () => {
+    if (!window.flutter_inappwebview?.callHandler) {
+      photoInputRef.current?.click()
+      return
+    }
+
+    try {
+      const result = await window.flutter_inappwebview.callHandler("openGallery")
+      const fileData = Array.isArray(result?.files) && result.files.length
+        ? result.files[0]
+        : (Array.isArray(result) && result.length ? result[0] : result)
+
+      if (fileData?.base64) {
+        const file = buildFileFromBase64(
+          fileData.base64,
+          fileData.fileName || `staff_gallery_${Date.now()}.jpg`,
+          fileData.mimeType || "image/jpeg"
+        )
+        handlePhotoChange(null, file)
+        return
+      }
+    } catch (error) {
+      console.error("Gallery pick failed:", error)
+    }
+
+    photoInputRef.current?.click()
+  }
+
   const handleAddUser = async () => {
     if (submitting) return
     // Validate name
@@ -528,13 +556,14 @@ export default function InviteUser() {
                 </div>
               ) : (
                 <div className="flex flex-wrap items-center gap-2">
-                  <label
-                    htmlFor="photoInput"
+                  <button
+                    type="button"
+                    onClick={handleGalleryPick}
                     className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white border border-gray-300 text-sm font-medium text-gray-700 cursor-pointer hover:bg-gray-50 transition-colors"
                   >
                     <Upload className="w-4 h-4" />
                     <span>From Gallery</span>
-                  </label>
+                  </button>
                   <button
                     type="button"
                     onClick={handleCameraCapture}
