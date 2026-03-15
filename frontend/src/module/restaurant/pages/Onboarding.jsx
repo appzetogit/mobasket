@@ -952,6 +952,21 @@ export default function RestaurantOnboarding() {
     }
   }
 
+  const openFallbackCameraInput = (onSuccess) => {
+    const input = document.createElement("input")
+    input.type = "file"
+    input.accept = "image/*"
+    input.setAttribute("capture", "environment")
+    input.style.display = "none"
+    input.onchange = (event) => {
+      const file = event.target?.files?.[0] || null
+      if (file) onSuccess(file)
+      input.remove()
+    }
+    document.body.appendChild(input)
+    input.click()
+  }
+
   // Validation functions for each step
   const validateStep1 = () => {
     const errors = []
@@ -1654,7 +1669,12 @@ export default function RestaurantOnboarding() {
                       }))
                     });
                   } else {
-                    document.getElementById("menuImagesCameraInput").click();
+                    openFallbackCameraInput((file) => {
+                      setStep2((prev) => ({
+                        ...prev,
+                        menuImages: [file],
+                      }))
+                    })
                   }
                 }}
                 className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
@@ -1687,22 +1707,6 @@ export default function RestaurantOnboarding() {
                 }))
                 // Reset input to allow selecting same file again
                 e.target.value = ''
-              }}
-            />
-            <input
-              id="menuImagesCameraInput"
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0] || null
-                if (!file) return
-                setStep2((prev) => ({
-                  ...prev,
-                  menuImages: [file],
-                }))
-                e.target.value = ""
               }}
             />
           </div>
@@ -1811,7 +1815,12 @@ export default function RestaurantOnboarding() {
                     }))
                   });
                 } else {
-                  document.getElementById("profileImageCameraInput").click();
+                  openFallbackCameraInput((file) => {
+                    setStep2((prev) => ({
+                      ...prev,
+                      profileImage: file,
+                    }))
+                  })
                 }
               }}
               className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
@@ -1844,23 +1853,6 @@ export default function RestaurantOnboarding() {
               }
               // Reset input to allow selecting same file again
               e.target.value = ''
-            }}
-          />
-          <input
-            id="profileImageCameraInput"
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0] || null
-              if (file) {
-                setStep2((prev) => ({
-                  ...prev,
-                  profileImage: file,
-                }))
-              }
-              e.target.value = ""
             }}
           />
         </div>
