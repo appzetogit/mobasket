@@ -95,8 +95,10 @@ const getCardProductData = (product) => {
   const defaultVariant = getDefaultVariant(product);
   const price = Number(defaultVariant?.price ?? product?.sellingPrice ?? product?.price ?? 0);
   const mrp = Number(defaultVariant?.mrp ?? product?.mrp ?? price);
-  const weight = defaultVariant?.name || product?.unit || product?.weight || "";
-  const cartItemId = defaultVariant ? `${productId}::${defaultVariant.key}` : productId;
+  const weight = defaultVariant?.name || product?.weight || product?.unit || "";
+  const variantLabel = defaultVariant?.name || weight || "";
+  const variantKey = normalizeVariantKey(variantLabel);
+  const cartItemId = variantKey ? `${productId}::${variantKey}` : productId;
 
   return { productId, defaultVariant, price, mrp, weight, cartItemId };
 };

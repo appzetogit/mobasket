@@ -1079,6 +1079,10 @@ export default function Inventory() {
     return category.items.filter(item => !item.inStock).length
   }
 
+  const isPendingStatus = (value) => {
+    return String(value || '').trim().toLowerCase() === 'pending'
+  }
+
   const getItemStatusLabel = (item = {}) => {
     const raw = String(item?.approvalStatus || item?.status || '').trim().toLowerCase()
     if (!raw) return ''
@@ -1093,6 +1097,29 @@ export default function Inventory() {
     if (normalized === 'rejected' || normalized === 'inactive') return 'bg-red-100 text-red-800'
     return 'bg-gray-100 text-gray-700'
   }
+
+  const pendingApprovalCount = useMemo(() => {
+    let count = 0
+
+    categories.forEach((category) => {
+      const items = Array.isArray(category?.items) ? category.items : []
+      items.forEach((item) => {
+        if (isPendingStatus(item?.approvalStatus || item?.status)) {
+          count += 1
+        }
+      })
+    })
+
+    addons.forEach((addon) => {
+      if (isPendingStatus(addon?.approvalStatus || addon?.status)) {
+        count += 1
+      }
+    })
+
+    return count
+  }, [categories, addons])
+
+  // Pending approval text is rendered inline in the UI.
 
   // Handle filter apply
   const handleFilterApply = () => {
@@ -1608,6 +1635,16 @@ export default function Inventory() {
               <Plus className="w-4 h-4" />
               Add add-on
             </button>
+          </div>
+        )}
+        {activeTab === "add-ons" && pendingApprovalCount > 0 && (
+          <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">
+            Product is under admin approval
+          </div>
+        )}
+        {activeTab !== "add-ons" && pendingApprovalCount > 0 && (
+          <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700">
+            Product is under admin approval
           </div>
         )}
 

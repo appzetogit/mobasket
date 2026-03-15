@@ -53,6 +53,12 @@ const normalizeVariants = (variants = []) =>
         .filter(Boolean)
     : [];
 
+const getGroceryCartItemId = (productId, variantLabel) => {
+  const normalizedId = String(productId || "").trim();
+  const variantKey = normalizeVariantKey(variantLabel);
+  return variantKey ? `${normalizedId}::${variantKey}` : normalizedId;
+};
+
 const normalizeProduct = (item = {}, fallbackId = "") => {
   const id = item?.id || item?._id || fallbackId;
   const variants = normalizeVariants(item?.variants);
@@ -163,11 +169,20 @@ export default function FoodDetailPage() {
     displayedMrp > displayedPrice && displayedMrp > 0
       ? `${Math.max(1, Math.round(((displayedMrp - displayedPrice) / displayedMrp) * 100))}% OFF`
       : "";
-  const cartItemId = selectedVariant ? `${productId}::${selectedVariant.key}` : productId;
-  const groceryCartItem = useMemo(
-    () => groceryCart.find((item) => String(item?.id || "") === cartItemId),
-    [cartItemId, groceryCart],
+  const cartItemId = getGroceryCartItemId(
+    productId,
+    selectedVariant?.name || product?.variantName || product?.weight || product?.unit || "",
   );
+  const groceryCartItem = useMemo(() => {
+    const exactMatch = groceryCart.find((item) => String(item?.id || "") === String(cartItemId));
+    if (exactMatch) return exactMatch;
+    const productMatches = groceryCart.filter(
+      (item) => String(item?.productId || item?.id || "").trim() === String(productId || "").trim(),
+    );
+    if (productMatches.length === 1) return productMatches[0];
+    return null;
+  }, [cartItemId, groceryCart, productId]);
+  const activeCartItemId = String(groceryCartItem?.id || cartItemId || "").trim();
   const isAddedToCart = Boolean(groceryCartItem);
   const currentQuantity = Number(groceryCartItem?.quantity || 0);
 
@@ -304,17 +319,16 @@ export default function FoodDetailPage() {
       return;
     }
 
+    const resolvedProductId = String(targetProduct.id || id || "").trim();
+    const resolvedVariantLabel =
+      targetVariant?.name || targetProduct?.variantName || targetProduct?.weight || targetProduct?.unit || "";
+    const resolvedCartItemId = getGroceryCartItemId(resolvedProductId, resolvedVariantLabel);
+
     addToCart({
       ...targetProduct,
-      id:
-        targetVariant && (targetProduct.id || id)
-          ? `${targetProduct.id || id}::${targetVariant.key}`
-          : targetProduct.id || id,
-      cartItemId:
-        targetVariant && (targetProduct.id || id)
-          ? `${targetProduct.id || id}::${targetVariant.key}`
-          : targetProduct.id || id,
-      productId: targetProduct.id || id,
+      id: resolvedCartItemId || targetProduct.id || id,
+      cartItemId: resolvedCartItemId || targetProduct.id || id,
+      productId: resolvedProductId || targetProduct.id || id,
       variantName: targetVariant?.name || "",
       selectedVariant: targetVariant
         ? {
@@ -365,13 +379,13 @@ export default function FoodDetailPage() {
       handleAddToCart(null, e);
       return;
     }
-    updateQuantityByPlatform(cartItemId, currentQuantity + 1, "mogrocery");
+    updateQuantityByPlatform(activeCartItemId, currentQuantity + 1, "mogrocery");
   };
 
   const handleDecreaseQuantity = (e) => {
     if (e) e.stopPropagation();
     if (!isAddedToCart) return;
-    updateQuantityByPlatform(cartItemId, currentQuantity - 1, "mogrocery");
+    updateQuantityByPlatform(activeCartItemId, currentQuantity - 1, "mogrocery");
   };
 
   const quickActions = (
@@ -605,7 +619,9 @@ export default function FoodDetailPage() {
                 Array.isArray(item?.variants) && item.variants.length > 0
                   ? item.variants.find((variant) => variant.key === item.defaultVariantKey) || item.variants[0]
                   : null;
-              const itemCartId = itemDefaultVariant ? `${item.id}::${itemDefaultVariant.key}` : item.id;
+              const itemVariantLabel =
+                itemDefaultVariant?.name || item?.variantName || item?.weight || item?.unit || "";
+              const itemCartId = getGroceryCartItemId(item?.id, itemVariantLabel);
               const itemCartRef = groceryCart.find((c) => String(c.id) === String(itemCartId));
               const itemInCart = Boolean(itemCartRef);
               const itemQty = itemCartRef?.quantity || 0;
