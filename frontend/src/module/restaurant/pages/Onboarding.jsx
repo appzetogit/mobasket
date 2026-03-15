@@ -952,6 +952,37 @@ export default function RestaurantOnboarding() {
     input.click()
   }
 
+  const handleMenuGalleryFileChange = (e) => {
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
+    const selectedFile = files[0]
+    if (!isAllowedImageFile(selectedFile)) {
+      toast.error("Please choose a JPG, PNG, or WEBP image")
+      e.target.value = ""
+      return
+    }
+    setStep2((prev) => ({
+      ...prev,
+      menuImages: [selectedFile],
+    }))
+    e.target.value = ""
+  }
+
+  const handleProfileGalleryFileChange = (e) => {
+    const file = e.target.files?.[0] || null
+    if (!file) return
+    if (!isAllowedImageFile(file)) {
+      toast.error("Please choose a JPG, PNG, or WEBP image")
+      e.target.value = ""
+      return
+    }
+    setStep2((prev) => ({
+      ...prev,
+      profileImage: file,
+    }))
+    e.target.value = ""
+  }
+
   // Validation functions for each step
   const validateStep1 = () => {
     const errors = []
@@ -1642,7 +1673,7 @@ export default function RestaurantOnboarding() {
                 </span>
               </div>
             </div>
-            <div className="flex w-full gap-2">
+            <div className="grid w-full grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -1667,6 +1698,16 @@ export default function RestaurantOnboarding() {
                 <Camera className="w-4 h-4" />
                 <span>Camera</span>
               </button>
+              <label className="relative flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer overflow-hidden">
+                <ImageIcon className="w-4 h-4" />
+                <span>Gallery</span>
+                <input
+                  type="file"
+                  accept="*/*"
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                  onChange={handleMenuGalleryFileChange}
+                />
+              </label>
               <button
                 type="button"
                 onClick={() =>
@@ -1677,10 +1718,10 @@ export default function RestaurantOnboarding() {
                     }))
                   })
                 }
-                className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
+                className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
               >
-                <ImageIcon className="w-4 h-4" />
-                <span>Gallery</span>
+                <Upload className="w-4 h-4" />
+                <span>Choose Files</span>
               </button>
             </div>
           </div>
@@ -1777,7 +1818,7 @@ export default function RestaurantOnboarding() {
             </div>
 
           </div>
-          <div className="flex w-full gap-2 mt-2">
+          <div className="grid w-full grid-cols-3 gap-2 mt-2">
             <button
               type="button"
               onClick={() => {
@@ -1802,6 +1843,16 @@ export default function RestaurantOnboarding() {
               <Camera className="w-4 h-4" />
               <span>Camera</span>
             </button>
+            <label className="relative flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer overflow-hidden">
+              <ImageIcon className="w-4 h-4" />
+              <span>Gallery</span>
+              <input
+                type="file"
+                accept="*/*"
+                className="absolute inset-0 opacity-0 cursor-pointer"
+                onChange={handleProfileGalleryFileChange}
+              />
+            </label>
             <button
               type="button"
               onClick={() =>
@@ -1812,10 +1863,10 @@ export default function RestaurantOnboarding() {
                   }))
                 })
               }
-              className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
+              className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
             >
-              <ImageIcon className="w-4 h-4" />
-              <span>Gallery</span>
+              <Upload className="w-4 h-4" />
+              <span>Choose Files</span>
             </button>
           </div>
         </div>
