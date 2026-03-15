@@ -1673,7 +1673,7 @@ export default function RestaurantOnboarding() {
                 </span>
               </div>
             </div>
-            <div className="grid w-full grid-cols-3 gap-2">
+            <div className="grid w-full grid-cols-2 sm:grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -1718,7 +1718,7 @@ export default function RestaurantOnboarding() {
                     }))
                   })
                 }
-                className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
+                className="col-span-2 sm:col-span-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
               >
                 <Upload className="w-4 h-4" />
                 <span>Choose Files</span>
@@ -1818,7 +1818,7 @@ export default function RestaurantOnboarding() {
             </div>
 
           </div>
-          <div className="grid w-full grid-cols-3 gap-2 mt-2">
+          <div className="grid w-full grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
             <button
               type="button"
               onClick={() => {
@@ -1863,7 +1863,7 @@ export default function RestaurantOnboarding() {
                   }))
                 })
               }
-              className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
+              className="col-span-2 sm:col-span-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
             >
               <Upload className="w-4 h-4" />
               <span>Choose Files</span>
