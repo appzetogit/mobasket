@@ -10,7 +10,7 @@ import {
   Coffee,
   Trash2,
 } from "lucide-react"
-import { restaurantAPI } from "@/lib/api"
+import { groceryStoreAPI, restaurantAPI } from "@/lib/api"
 import OptimizedImage from "@/components/OptimizedImage"
 import { ImageIcon } from "lucide-react"
 
@@ -22,7 +22,7 @@ export default function ContactDetails() {
   const [invitedUsers, setInvitedUsers] = useState([])
   
   // Owner data - Load from backend
-  const STORAGE_KEY = "restaurant_owner_contact"
+  const STORAGE_KEY = isStore ? "grocery-store_owner_contact" : "restaurant_owner_contact"
   const [ownerData, setOwnerData] = useState({
     name: "",
     phone: "",
@@ -37,8 +37,12 @@ export default function ContactDetails() {
     const fetchRestaurantData = async () => {
       try {
         setLoading(true)
-        const response = await restaurantAPI.getCurrentRestaurant()
-        const data = response?.data?.data?.restaurant || response?.data?.restaurant
+        const response = isStore
+          ? await groceryStoreAPI.getCurrentStore()
+          : await restaurantAPI.getCurrentRestaurant()
+        const data = isStore
+          ? (response?.data?.data?.store || response?.data?.store || response?.data?.data?.restaurant || response?.data?.restaurant)
+          : (response?.data?.data?.restaurant || response?.data?.restaurant)
         if (data) {
           setOwnerData({
             name: data.ownerName || data.name || "",
@@ -78,7 +82,7 @@ export default function ContactDetails() {
     return () => {
       window.removeEventListener("ownerDataUpdated", handleOwnerDataUpdate)
     }
-  }, [])
+  }, [isStore])
 
   // Lenis smooth scrolling
   useEffect(() => {
@@ -112,6 +116,11 @@ export default function ContactDetails() {
   // Load staff/manager from backend API
   useEffect(() => {
     const fetchStaff = async () => {
+      if (isStore) {
+        setInvitedUsers([])
+        setLoadingStaff(false)
+        return
+      }
       try {
         setLoadingStaff(true)
         const response = await restaurantAPI.getStaff()
@@ -145,11 +154,14 @@ export default function ContactDetails() {
       fetchStaff()
     }
 
-    window.addEventListener("invitesUpdated", handleStaffUpdate)
-    return () => {
-      window.removeEventListener("invitesUpdated", handleStaffUpdate)
+    if (!isStore) {
+      window.addEventListener("invitesUpdated", handleStaffUpdate)
+      return () => {
+        window.removeEventListener("invitesUpdated", handleStaffUpdate)
+      }
     }
-  }, [])
+    return undefined
+  }, [isStore])
 
   // Listen for owner data updates
   useEffect(() => {

@@ -17,19 +17,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { restaurantAPI } from "@/lib/api"
+import { groceryStoreAPI, restaurantAPI, uploadAPI } from "@/lib/api"
 import OptimizedImage from "@/components/OptimizedImage"
 import { clearModuleAuth } from "@/lib/utils/auth"
 import { firebaseAuth } from "@/lib/firebase"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
-
-const STORAGE_KEY = "restaurant_owner_contact"
 
 export default function EditOwner() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
   const location = useLocation()
   const isStore = location.pathname.startsWith("/store")
+  const STORAGE_KEY = isStore ? "grocery-store_owner_contact" : "restaurant_owner_contact"
   const moduleName = isStore ? "grocery-store" : "restaurant"
   const appName = companyName || "MoFood"
   const welcomeRoute = isStore ? "/store/login" : "/restaurant/welcome"
@@ -84,8 +83,12 @@ export default function EditOwner() {
     const fetchRestaurantData = async () => {
       try {
         setLoading(true)
-        const response = await restaurantAPI.getCurrentRestaurant()
-        const data = response?.data?.data?.restaurant || response?.data?.restaurant
+        const response = isStore
+          ? await groceryStoreAPI.getCurrentStore()
+          : await restaurantAPI.getCurrentRestaurant()
+        const data = isStore
+          ? (response?.data?.data?.store || response?.data?.store || response?.data?.data?.restaurant || response?.data?.restaurant)
+          : (response?.data?.data?.restaurant || response?.data?.restaurant)
         if (data) {
           const resolvedName = (data.name || data.restaurantName || "").trim()
           if (resolvedName) {
@@ -245,12 +248,22 @@ export default function EditOwner() {
       setSaving(true)
 
       // First, upload profile image if changed
+      let uploadedProfileImage = null
       if (profileImageFile) {
         try {
-          const imageResponse = await restaurantAPI.uploadProfileImage(profileImageFile)
-          const imageData = imageResponse?.data?.data?.image || imageResponse?.data?.image
-          if (imageData?.url) {
-            formData.photo = imageData.url
+          if (isStore) {
+            const imageResponse = await uploadAPI.uploadMedia(profileImageFile, { folder: "mobasket/grocery-store/store" })
+            const imageData = imageResponse?.data?.data || imageResponse?.data
+            if (imageData?.url) {
+              uploadedProfileImage = { url: imageData.url, publicId: imageData.publicId }
+              formData.photo = imageData.url
+            }
+          } else {
+            const imageResponse = await restaurantAPI.uploadProfileImage(profileImageFile)
+            const imageData = imageResponse?.data?.data?.image || imageResponse?.data?.image
+            if (imageData?.url) {
+              formData.photo = imageData.url
+            }
           }
         } catch (error) {
           console.error("Error uploading profile image:", error)
@@ -267,6 +280,10 @@ export default function EditOwner() {
         ownerPhone: formData.phone.trim(),
       }
 
+      if (isStore && uploadedProfileImage) {
+        updatePayload.profileImage = uploadedProfileImage
+      }
+
       // If profile image was uploaded, include it
       if (profileImageFile && formData.photo) {
         // Extract publicId from the uploaded image response if available
@@ -274,7 +291,9 @@ export default function EditOwner() {
         // The uploadProfileImage already updates it, so we might not need to send it again
       }
 
-      const response = await restaurantAPI.updateProfile(updatePayload)
+      const response = isStore
+        ? await groceryStoreAPI.updateProfile(updatePayload)
+        : await restaurantAPI.updateProfile(updatePayload)
       
       if (response?.data?.success) {
         // Save to localStorage as backup

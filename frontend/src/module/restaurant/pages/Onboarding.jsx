@@ -3,7 +3,7 @@ import { Navigate, useNavigate, useSearchParams } from "react-router-dom"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
-import { Image as ImageIcon, Upload, Clock, Calendar as CalendarIcon, Sparkles, ArrowLeft, Camera, Search, Loader2, MapPin } from "lucide-react"
+import { Image as ImageIcon, Upload, Clock, Calendar as CalendarIcon, ArrowLeft, Camera, Search, Loader2, MapPin } from "lucide-react"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Calendar } from "@/components/ui/calendar"
 import {
@@ -1057,70 +1057,6 @@ export default function RestaurantOnboarding() {
     return []
   }
 
-  // Fill dummy data for testing (development mode only)
-  const fillDummyData = () => {
-    if (step === 1) {
-      setStep1({
-        restaurantName: "Test Restaurant",
-        ownerName: "John Doe",
-        ownerEmail: "john.doe@example.com",
-        ownerPhone: "+91 9876543210",
-        primaryContactNumber: "+91 9876543210",
-        location: {
-          addressLine1: "123 Main Street",
-          addressLine2: "Building A, Floor 2",
-          area: "Downtown",
-          city: "Mumbai",
-          landmark: "Near Central Park",
-        },
-      })
-      toast.success("Step 1 filled with dummy data", { duration: 2000 })
-    } else if (step === 2) {
-      setStep2({
-        menuImages: [],
-        profileImage: null,
-        cuisines: ["North Indian", "Chinese"],
-        openingTime: "09:00",
-        closingTime: "22:00",
-        openDays: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-      })
-      toast.success("Step 2 filled with dummy data", { duration: 2000 })
-    } else if (step === 3) {
-      // Calculate expiry date 1 year from now
-      const expiryDate = new Date()
-      expiryDate.setFullYear(expiryDate.getFullYear() + 1)
-      const expiryDateString = expiryDate.toISOString().split("T")[0]
-
-      setStep3({
-        panNumber: "ABCDE1234F",
-        nameOnPan: "John Doe",
-        panImage: null,
-        gstRegistered: true,
-        gstNumber: "27ABCDE1234F1Z5",
-        gstLegalName: "Test Restaurant Private Limited",
-        gstAddress: "123 Main Street, Mumbai, Maharashtra 400001",
-        gstImage: null,
-        fssaiNumber: "12345678901234",
-        fssaiExpiry: expiryDateString,
-        fssaiImage: null,
-        accountNumber: "1234567890123",
-        confirmAccountNumber: "1234567890123",
-        ifscCode: "HDFC0001234",
-        accountHolderName: "John Doe",
-        accountType: "savings",
-      })
-      toast.success("Step 3 filled with dummy data", { duration: 2000 })
-    } else if (step === 4) {
-      setStep4({
-        estimatedDeliveryTime: "25-30 mins",
-        featuredDish: "Butter Chicken Special",
-        featuredPrice: "249",
-        offer: "Flat Rs50 OFF above Rs199",
-      })
-      toast.success("Step 4 filled with dummy data", { duration: 2000 })
-    }
-  }
-
   const handleNext = async () => {
     setError("")
 
@@ -2015,7 +1951,6 @@ export default function RestaurantOnboarding() {
               id={cameraInputId}
               type="file"
               accept="image/*"
-              capture="environment"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0] || null
@@ -2331,18 +2266,6 @@ export default function RestaurantOnboarding() {
         <header className="px-4 py-4 sm:px-6 sm:py-5 bg-white flex items-center justify-between">
           <div className="text-sm font-semibold text-black">Restaurant onboarding</div>
           <div className="flex items-center gap-3">
-            {import.meta.env.DEV && (
-              <Button
-                onClick={fillDummyData}
-                variant="outline"
-                size="sm"
-                className="text-xs bg-yellow-50 border-yellow-300 text-yellow-700 hover:bg-yellow-100 flex items-center gap-1.5"
-                title="Fill with dummy data (Dev only)"
-              >
-                <Sparkles className="w-3 h-3" />
-                Fill Dummy
-              </Button>
-            )}
             <div className="text-xs text-gray-600">
               Step {step} of 4
             </div>

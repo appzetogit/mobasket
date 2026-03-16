@@ -1,126 +1,28 @@
+import { Suspense, lazy, useEffect } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
-import { useEffect } from "react";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AuthRedirect from "@/components/AuthRedirect";
-
-import UserRouter from "@/module/user/components/UserRouter";
-import HomePage from "@/module/usermain/pages/HomePage";
-
-import CategoryPage from "@/module/user/pages/CategoryPage";
-import CategoryDirectoryPage from "@/module/usermain/pages/CategoryDirectoryPage";
-import FoodDetailPage from "@/module/usermain/pages/FoodDetailPage";
-import Wallet from "@/module/user/pages/Wallet";
-import { ProfileProvider } from "@/module/user/context/ProfileContext";
-
-import RestaurantOrdersPage from "@/module/restaurant/pages/OrdersPage";
-import AllOrdersPage from "@/module/restaurant/pages/AllOrdersPage";
-import RestaurantDetailsPage from "@/module/restaurant/pages/RestaurantDetailsPage";
-import EditRestaurantPage from "@/module/restaurant/pages/EditRestaurantPage";
-import WalletPage from "@/module/restaurant/pages/WalletPage";
-import RestaurantNotifications from "@/module/restaurant/pages/Notifications";
-import OrderDetails from "@/module/restaurant/pages/OrderDetails";
-import OrdersMain from "@/module/restaurant/pages/OrdersMain";
-import RestaurantOnboarding from "@/module/restaurant/pages/Onboarding";
-
-import RestaurantSignIn from "@/module/restaurant/pages/auth/SignIn";
-import RestaurantLogin from "@/module/restaurant/pages/auth/Login";
-import RestaurantSignup from "@/module/restaurant/pages/auth/Signup";
-import RestaurantSignupEmail from "@/module/restaurant/pages/auth/SignupEmail";
-import RestaurantForgotPassword from "@/module/restaurant/pages/auth/ForgotPassword";
-import RestaurantOTP from "@/module/restaurant/pages/auth/OTP";
-import RestaurantGoogleCallback from "@/module/restaurant/pages/auth/GoogleCallback";
-import RestaurantWelcome from "@/module/restaurant/pages/auth/Welcome";
-
-// Grocery Store imports
-import GroceryStoreOnboarding from "@/module/grocery-store/pages/Onboarding";
-import GroceryStoreLogin from "@/module/grocery-store/pages/auth/Login";
-import GroceryStoreSignup from "@/module/grocery-store/pages/auth/Signup";
-import GroceryStoreOTP from "@/module/grocery-store/pages/auth/OTP";
-import GroceryStoreProductDetailsPage from "@/module/grocery-store/pages/ProductDetailsPage";
-import GroceryStoreProductsListPage from "@/module/grocery-store/pages/ProductsListPage";
-import GroceryStoreCategoriesPage from "@/module/grocery-store/pages/CategoriesPage";
-
-import AdvertisementsPage from "@/module/restaurant/pages/AdvertisementsPage";
-import AdDetailsPage from "@/module/restaurant/pages/AdDetailsPage";
-import NewAdvertisementPage from "@/module/restaurant/pages/NewAdvertisementPage";
-import EditAdvertisementPage from "@/module/restaurant/pages/EditAdvertisementPage";
-import CouponListPage from "@/module/restaurant/pages/CouponListPage";
-import AddCouponPage from "@/module/restaurant/pages/AddCouponPage";
-import EditCouponPage from "@/module/restaurant/pages/EditCouponPage";
-import ReviewsPage from "@/module/restaurant/pages/ReviewsPage";
-import UpdateReplyPage from "@/module/restaurant/pages/UpdateReplyPage";
-import SettingsPage from "@/module/restaurant/pages/SettingsPage";
-import PrivacyPolicyPage from "@/module/restaurant/pages/PrivacyPolicyPage";
-import TermsAndConditionsPage from "@/module/restaurant/pages/TermsAndConditionsPage";
-import RestaurantConfigPage from "@/module/restaurant/pages/RestaurantConfigPage";
-import RestaurantCategoriesPage from "@/module/restaurant/pages/RestaurantCategoriesPage";
-import MenuCategoriesPage from "@/module/restaurant/pages/MenuCategoriesPage";
-import BusinessPlanPage from "@/module/restaurant/pages/BusinessPlanPage";
-import ConversationListPage from "@/module/restaurant/pages/ConversationListPage";
-import ChatDetailPage from "@/module/restaurant/pages/ChatDetailPage";
-import RestaurantStatus from "@/module/restaurant/pages/RestaurantStatus";
 import RestaurantOrderSoundListener from "@/module/restaurant/components/RestaurantOrderSoundListener";
 import DeliveryOrderSoundListener from "@/module/delivery/components/DeliveryOrderSoundListener";
-import ExploreMore from "@/module/restaurant/pages/ExploreMore";
-import DeliverySettings from "@/module/restaurant/pages/DeliverySettings";
-import RushHour from "@/module/restaurant/pages/RushHour";
-import SwitchOutlet from "@/module/restaurant/pages/SwitchOutlet";
-import OutletTimings from "@/module/restaurant/pages/OutletTimings";
-import DaySlots from "@/module/restaurant/pages/DaySlots";
-import OutletInfo from "@/module/restaurant/pages/OutletInfo";
-import RatingsReviews from "@/module/restaurant/pages/RatingsReviews";
-import ContactDetails from "@/module/restaurant/pages/ContactDetails";
-import EditOwner from "@/module/restaurant/pages/EditOwner";
-import InviteUser from "@/module/restaurant/pages/InviteUser";
-import EditCuisines from "@/module/restaurant/pages/EditCuisines";
-import EditRestaurantAddress from "@/module/restaurant/pages/EditRestaurantAddress";
-import Inventory from "@/module/restaurant/pages/Inventory";
-import Feedback from "@/module/restaurant/pages/Feedback";
-import ShareFeedback from "@/module/restaurant/pages/ShareFeedback";
-import DishRatings from "@/module/restaurant/pages/DishRatings";
-import HelpCentre from "@/module/restaurant/pages/HelpCentre";
-import FssaiDetails from "@/module/restaurant/pages/FssaiDetails";
-import FssaiUpdate from "@/module/restaurant/pages/FssaiUpdate";
-import Hyperpure from "@/module/restaurant/pages/Hyperpure";
-import HubGrowth from "@/module/restaurant/pages/HubGrowth";
-import CreateOffers from "@/module/restaurant/pages/CreateOffers";
-import ChooseDiscountType from "@/module/restaurant/pages/ChooseDiscountType";
-import ChooseMenuDiscountType from "@/module/restaurant/pages/ChooseMenuDiscountType";
-import CreatePercentageDiscount from "@/module/restaurant/pages/CreatePercentageDiscount";
-import CreateFreebies from "@/module/restaurant/pages/CreateFreebies";
-import FreebiesTiming from "@/module/restaurant/pages/FreebiesTiming";
-import CreatePercentageMenuDiscount from "@/module/restaurant/pages/CreatePercentageMenuDiscount";
-import CreateFlatPriceMenuDiscount from "@/module/restaurant/pages/CreateFlatPriceMenuDiscount";
-import CreateBOGOMenuDiscount from "@/module/restaurant/pages/CreateBOGOMenuDiscount";
-import MenuDiscountTiming from "@/module/restaurant/pages/MenuDiscountTiming";
-import HubMenu from "@/module/restaurant/pages/HubMenu";
-import ItemDetailsPage from "@/module/restaurant/pages/ItemDetailsPage";
-import HubFinance from "@/module/restaurant/pages/HubFinance";
-import FinanceDetailsPage from "@/module/restaurant/pages/FinanceDetailsPage";
-import WithdrawalHistoryPage from "@/module/restaurant/pages/WithdrawalHistoryPage";
-import PhoneNumbersPage from "@/module/restaurant/pages/PhoneNumbersPage";
-import DownloadReport from "@/module/restaurant/pages/DownloadReport";
-import ToHub from "@/module/restaurant/pages/ToHub";
-import ManageOutlets from "@/module/restaurant/pages/ManageOutlets";
-import UpdateBankDetails from "@/module/restaurant/pages/UpdateBankDetails";
-import ZoneSetup from "@/module/restaurant/pages/ZoneSetup";
-import RestaurantPendingApproval from "@/module/restaurant/pages/PendingApproval";
-
-import AdminRouter from "@/module/admin/components/AdminRouter";
-import AdminLogin from "@/module/admin/pages/auth/AdminLogin";
-import AdminForgotPassword from "@/module/admin/pages/auth/AdminForgotPassword";
-import DeliveryRouter from "@/module/delivery/components/DeliveryRouter";
-import DeliverySignIn from "@/module/delivery/pages/auth/SignIn";
-import DeliverySignup from "@/module/delivery/pages/auth/Signup";
-import DeliveryOTP from "@/module/delivery/pages/auth/OTP";
-import DeliverySignupStep1 from "@/module/delivery/pages/auth/SignupStep1";
-import DeliverySignupStep2 from "@/module/delivery/pages/auth/SignupStep2";
-import DeliveryWelcome from "@/module/delivery/pages/auth/Welcome";
-import DeliveryTermsAndConditions from "@/module/delivery/pages/TermsAndConditions";
-import TermsPublic from "@/module/user/pages/legal/TermsPublic";
-import PrivacyPublic from "@/module/user/pages/legal/PrivacyPublic";
-import ContentPolicyPublic from "@/module/user/pages/legal/ContentPolicyPublic";
 import { setupWebPushForCurrentSession, teardownWebPushListener } from "@/lib/webPush";
+
+const UserRouter = lazy(() => import("@/module/user/components/UserRouter"));
+const RestaurantAppRoutes = lazy(() => import("@/route-groups/RestaurantAppRoutes"));
+const StoreAppRoutes = lazy(() => import("@/route-groups/StoreAppRoutes"));
+const AdminRouter = lazy(() => import("@/module/admin/components/AdminRouter"));
+const AdminLogin = lazy(() => import("@/module/admin/pages/auth/AdminLogin"));
+const AdminForgotPassword = lazy(() => import("@/module/admin/pages/auth/AdminForgotPassword"));
+const DeliveryRouter = lazy(() => import("@/module/delivery/components/DeliveryRouter"));
+const DeliverySignIn = lazy(() => import("@/module/delivery/pages/auth/SignIn"));
+const DeliverySignup = lazy(() => import("@/module/delivery/pages/auth/Signup"));
+const DeliveryOTP = lazy(() => import("@/module/delivery/pages/auth/OTP"));
+const DeliverySignupStep1 = lazy(() => import("@/module/delivery/pages/auth/SignupStep1"));
+const DeliverySignupStep2 = lazy(() => import("@/module/delivery/pages/auth/SignupStep2"));
+const DeliveryWelcome = lazy(() => import("@/module/delivery/pages/auth/Welcome"));
+const DeliveryTermsAndConditions = lazy(() => import("@/module/delivery/pages/TermsAndConditions"));
+const TermsPublic = lazy(() => import("@/module/user/pages/legal/TermsPublic"));
+const PrivacyPublic = lazy(() => import("@/module/user/pages/legal/PrivacyPublic"));
+const ContentPolicyPublic = lazy(() => import("@/module/user/pages/legal/ContentPolicyPublic"));
 
 function UserPathRedirect() {
   const location = useLocation();
@@ -222,6 +124,37 @@ export default function App() {
       document.removeEventListener("visibilitychange", onVisibilityChange);
       teardownWebPushListener();
     };
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const pathname = location.pathname || "";
+    if (!pathname.startsWith("/store") || pathname === "/store") return;
+
+    const isStoreAuthPage = /^\/store\/(login|signup|otp)$/.test(pathname);
+    if (isStoreAuthPage) return;
+
+    const hasStoreToken = Boolean(
+      localStorage.getItem("grocery-store_accessToken") ||
+      localStorage.getItem("grocery-store_refreshToken")
+    );
+    if (!hasStoreToken) return;
+
+    if (sessionStorage.getItem("storeBackStackInjected") === "1") return;
+
+    const currentUrl = window.location.pathname + window.location.search + window.location.hash;
+    const currentState = window.history.state || {};
+    window.history.replaceState(
+      { ...currentState, __storeBackStack: true },
+      "",
+      "/store"
+    );
+    window.history.pushState(
+      { ...currentState, __storeBackStack: true },
+      "",
+      currentUrl
+    );
+    sessionStorage.setItem("storeBackStackInjected", "1");
   }, [location.pathname]);
 
   return (
