@@ -6,6 +6,7 @@ import Delivery from '../../modules/delivery/models/Delivery.js';
 const INVALID_TOKEN_CODES = new Set([
   'messaging/registration-token-not-registered',
   'messaging/invalid-registration-token',
+  'messaging/mismatched-credential',
 ]);
 
 const chunkArray = (items = [], size = 500) => {

@@ -6,7 +6,7 @@ import { toast } from "sonner"
 
 export default function PushNotification() {
   const { platform } = usePlatform()
-  const sendToOptions = ["Customer", "All", "Restaurant", "Store"]
+  const sendToOptions = ["Customer", "All", "Restaurant", "Store", "Delivery"]
   const [formData, setFormData] = useState({
     title: "",
     zone: "All",
