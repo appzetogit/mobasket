@@ -497,6 +497,8 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
       cleanupModels: pushCleanupModels.delivery,
       source: 'delivery_order',
       sendTo: 'Delivery',
+      platform: 'all',
+      zone: 'All',
       data: {
         notificationType: 'new_order',
         orderId: String(order.orderId || ''),
@@ -902,6 +904,8 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
           cleanupModels: pushCleanupModels.delivery,
           source: 'delivery_order',
           sendTo: 'Delivery',
+          platform: 'all',
+          zone: 'All',
           data: {
             notificationType: 'new_order_available',
             orderId: String(order.orderId || ''),

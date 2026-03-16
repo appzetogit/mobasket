@@ -67,6 +67,8 @@ export async function sendOrderPushNotification({
   cleanupModels = [],
   source = 'order_notification',
   sendTo = '',
+  platform = '',
+  zone = '',
 }) {
   const normalizedRecipients = Array.isArray(recipients) ? recipients.filter(Boolean) : [recipients].filter(Boolean);
   const tokens = collectRecipientTokens(normalizedRecipients);
@@ -94,6 +96,10 @@ export async function sendOrderPushNotification({
 
   const resolvedSource = String(source || 'order_notification').trim() || 'order_notification';
   const resolvedSendTo = String(sendTo || '').trim();
+  const resolvedPlatform = String(platform || '').trim();
+  const resolvedZone = String(zone || '').trim();
+  const resolvedTag = String(tag || 'order_notification').trim() || 'order_notification';
+  const resolvedLink = String(link || '/').trim() || '/';
 
   const payload = {
     notification: {
@@ -103,10 +109,14 @@ export async function sendOrderPushNotification({
     data: sanitizeDataPayload({
       title: String(title || 'New Order').trim(),
       body: String(body || '').trim(),
-      link: String(link || '/').trim(),
-      click_action: String(link || '/').trim(),
+      pushId: resolvedTag,
+      link: resolvedLink,
+      click_action: resolvedLink,
+      url: resolvedLink,
       source: resolvedSource,
       ...(resolvedSendTo ? { sendTo: resolvedSendTo } : {}),
+      ...(resolvedPlatform ? { platform: resolvedPlatform } : {}),
+      ...(resolvedZone ? { zone: resolvedZone } : {}),
       ...data,
     }),
     android: {
@@ -130,12 +140,12 @@ export async function sendOrderPushNotification({
         Urgency: 'high',
       },
       fcmOptions: {
-        link: String(link || '/').trim(),
+        link: resolvedLink,
       },
       notification: {
         title: String(title || 'New Order').trim(),
         body: String(body || '').trim(),
-        tag: String(tag || 'order_notification').trim(),
+        tag: resolvedTag,
         requireInteraction: true,
       },
     },
@@ -150,9 +160,11 @@ export async function sendOrderPushNotification({
   console.info('Order push notification dispatch starting', {
     source: resolvedSource,
     sendTo: resolvedSendTo,
-    link: String(link || '/').trim(),
+    platform: resolvedPlatform,
+    zone: resolvedZone,
+    link: resolvedLink,
     attempted: tokens.length,
-    tag: String(tag || 'order_notification').trim(),
+    tag: resolvedTag,
     dataKeys: Object.keys(payload.data || {}),
   });
 
@@ -184,6 +196,8 @@ export async function sendOrderPushNotification({
   console.info('Order push notification dispatch completed', {
     source: resolvedSource,
     sendTo: resolvedSendTo,
+    platform: resolvedPlatform,
+    zone: resolvedZone,
     attempted: tokens.length,
     successCount,
     failureCount,
