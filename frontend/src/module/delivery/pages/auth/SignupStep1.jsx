@@ -48,7 +48,8 @@ export default function SignupStep1() {
 
   useEffect(() => {
     if (cachedUser?.status && cachedUser.status !== "onboarding") {
-      navigate("/delivery", { replace: true })
+      localStorage.removeItem("delivery_needsSignup")
+      navigate("/delivery/pending-approval", { replace: true })
       return
     }
 
@@ -69,7 +70,8 @@ export default function SignupStep1() {
           }
 
           if (user.status && user.status !== "onboarding") {
-            navigate("/delivery", { replace: true })
+            localStorage.removeItem("delivery_needsSignup")
+            navigate("/delivery/pending-approval", { replace: true })
             return
           }
 

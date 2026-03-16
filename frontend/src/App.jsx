@@ -23,6 +23,7 @@ const DeliverySignup = lazy(() => import("@/module/delivery/pages/auth/Signup"))
 const DeliveryOTP = lazy(() => import("@/module/delivery/pages/auth/OTP"));
 const DeliverySignupStep1 = lazy(() => import("@/module/delivery/pages/auth/SignupStep1"));
 const DeliverySignupStep2 = lazy(() => import("@/module/delivery/pages/auth/SignupStep2"));
+const DeliveryPendingApproval = lazy(() => import("@/module/delivery/pages/PendingApproval"));
 const DeliveryWelcome = lazy(() => import("@/module/delivery/pages/auth/Welcome"));
 const DeliveryTermsAndConditions = lazy(() => import("@/module/delivery/pages/TermsAndConditions"));
 const TermsPublic = lazy(() => import("@/module/user/pages/legal/TermsPublic"));
@@ -229,6 +230,14 @@ export default function App() {
             element={
               <ProtectedRoute requiredRole="delivery" loginPath="/delivery/sign-in">
                 <DeliverySignupStep2 />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/delivery/pending-approval"
+            element={
+              <ProtectedRoute requiredRole="delivery" loginPath="/delivery/sign-in">
+                <DeliveryPendingApproval />
               </ProtectedRoute>
             }
           />

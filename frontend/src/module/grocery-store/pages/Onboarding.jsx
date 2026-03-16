@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
-import { Image as ImageIcon, MapPin, Phone, Store, Upload, User, X, ArrowLeft, Search, Loader2 } from "lucide-react"
+import { Image as ImageIcon, MapPin, Phone, Store, Upload, User, X, ArrowLeft, Search, Loader2, Camera } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { uploadAPI, groceryStoreAPI } from "@/lib/api"
@@ -1259,7 +1259,7 @@ export default function GroceryStoreOnboarding() {
                       disabled={saving}
                       className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium disabled:opacity-60"
                     >
-                      <Upload className="w-4 h-4" />
+                      <Camera className="w-4 h-4" />
                       <span>Camera</span>
                     </button>
                     <button
@@ -1269,7 +1269,7 @@ export default function GroceryStoreOnboarding() {
                       className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium disabled:opacity-60"
                     >
                       <ImageIcon className="w-4 h-4" />
-                      <span>{images.storeImage ? "Change" : "Gallery"}</span>
+                      <span>Gallery</span>
                     </button>
                   </div>
                   <input

@@ -37,15 +37,40 @@ export default function ProtectedRoute({ children, requiredRole, loginPath, modu
     const rawUser = localStorage.getItem('delivery_user');
     const user = rawUser ? JSON.parse(rawUser) : null;
     const needsSignup = localStorage.getItem('delivery_needsSignup') === 'true';
+    const normalizedStatus = String(user?.status || '').trim().toLowerCase();
+    const isPendingPage = location.pathname === '/delivery/pending-approval';
+    const isSignupOrAuthPage = location.pathname.startsWith('/delivery/signup/') ||
+      location.pathname === '/delivery/otp' ||
+      location.pathname === '/delivery/sign-in';
 
-    // Redirect to signup only when OTP/login flow explicitly marked it as needed.
-    if (user && needsSignup) {
-      const isSignupPage = location.pathname.startsWith('/delivery/signup/') ||
-        location.pathname === '/delivery/otp' ||
-        location.pathname === '/delivery/sign-in';
-
-      if (!isSignupPage) {
+    // Redirect to signup only while the profile is actually in onboarding.
+    // This prevents stale `delivery_needsSignup=true` from causing redirect loops
+    // after onboarding is already submitted.
+    if (user && needsSignup && normalizedStatus === 'onboarding') {
+      if (!isSignupOrAuthPage) {
         return <Navigate to="/delivery/signup/details" replace />;
+      }
+    }
+
+    if (user) {
+      const isActiveApproved = user.isActive === true || normalizedStatus === 'active' || normalizedStatus === 'approved';
+      const pendingLikeStatuses = new Set([
+        'pending',
+        'rejected',
+        'declined',
+        'blocked',
+        'submitted',
+        'verification_pending',
+        'in_review',
+        'under_review',
+      ]);
+
+      if (!isActiveApproved && pendingLikeStatuses.has(normalizedStatus)) {
+        if (!isPendingPage && !isSignupOrAuthPage) {
+          return <Navigate to="/delivery/pending-approval" replace />;
+        }
+      } else if (isPendingPage && isActiveApproved) {
+        return <Navigate to="/delivery" replace />;
       }
     }
   }

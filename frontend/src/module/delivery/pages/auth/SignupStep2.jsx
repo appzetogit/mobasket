@@ -17,12 +17,6 @@ const getCachedDeliveryUser = () => {
 
 export default function SignupStep2() {
   const navigate = useNavigate()
-  const [documents, setDocuments] = useState({
-    profilePhoto: null,
-    aadharPhoto: null,
-    panPhoto: null,
-    drivingLicensePhoto: null
-  })
   const [uploadedDocs, setUploadedDocs] = useState({
     profilePhoto: null,
     aadharPhoto: null,
@@ -52,7 +46,8 @@ export default function SignupStep2() {
 
   useEffect(() => {
     if (cachedUser?.status && cachedUser.status !== "onboarding") {
-      navigate("/delivery", { replace: true })
+      localStorage.removeItem("delivery_needsSignup")
+      navigate("/delivery/pending-approval", { replace: true })
       return
     }
 
@@ -73,7 +68,8 @@ export default function SignupStep2() {
           }
 
           if (user.status && user.status !== "onboarding") {
-            navigate("/delivery", { replace: true })
+            localStorage.removeItem("delivery_needsSignup")
+            navigate("/delivery/pending-approval", { replace: true })
             return
           }
 
@@ -155,11 +151,6 @@ export default function SignupStep2() {
       if (response?.data?.success && response?.data?.data) {
         const { url, publicId } = response.data.data
 
-        setDocuments(prev => ({
-          ...prev,
-          [docType]: file
-        }))
-
         setUploadedDocs(prev => ({
           ...prev,
           [docType]: { url, publicId }
@@ -176,10 +167,6 @@ export default function SignupStep2() {
   }
 
   const handleRemove = (docType) => {
-    setDocuments(prev => ({
-      ...prev,
-      [docType]: null
-    }))
     setUploadedDocs(prev => ({
       ...prev,
       [docType]: null
@@ -218,13 +205,27 @@ export default function SignupStep2() {
           } catch (storageError) {
             console.warn("Failed to update local delivery profile cache:", storageError)
           }
+        } else {
+          // Fallback: mark local profile as pending so home can show verification state
+          try {
+            const rawUser = localStorage.getItem("delivery_user")
+            const parsedUser = rawUser ? JSON.parse(rawUser) : {}
+            localStorage.setItem("delivery_user", JSON.stringify({
+              ...parsedUser,
+              status: "pending"
+            }))
+          } catch {
+            // Ignore storage fallback failures.
+          }
         }
+
+        localStorage.removeItem("delivery_needsSignup")
 
         toast.success("Signup completed successfully!")
 
-        // Redirect to delivery home page
+        // Redirect to verification pending screen.
         setTimeout(() => {
-          navigate("/delivery", { replace: true })
+          navigate("/delivery/pending-approval", { replace: true })
         }, 1000)
       }
     } catch (error) {
@@ -237,7 +238,6 @@ export default function SignupStep2() {
   }
 
   const DocumentUpload = ({ docType, label, required = true }) => {
-    const file = documents[docType]
     const uploaded = uploadedDocs[docType]
     const isUploading = uploading[docType]
     const galleryInputId = `${docType}-gallery-input`
