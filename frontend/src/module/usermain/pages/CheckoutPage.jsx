@@ -128,13 +128,28 @@ export default function CheckoutPage() {
     Boolean(orderEditSession?.orderRouteId) &&
     (!orderEditSession?.restaurantId ||
       String(orderEditSession.restaurantId) === String(restaurantId || ""));
+  const hasLiveOrderEditSession =
+    editSecondsLeft > 0 && Boolean(orderEditSession?.orderRouteId);
   const hasSharedApp = Boolean(userProfile?.hasSharedApp || userProfile?.appSharedAt);
 
   useEffect(() => {
     if (foodItems.length > 0) return;
     if (isPlacingOrder || postOrderRedirecting) return;
+    if (hasLiveOrderEditSession && orderEditSession?.orderRouteId) {
+      navigate(`/orders/${encodeURIComponent(String(orderEditSession.orderRouteId))}`, {
+        replace: true,
+      });
+      return;
+    }
     navigate("/cart", { replace: true });
-  }, [foodItems.length, isPlacingOrder, postOrderRedirecting, navigate]);
+  }, [
+    foodItems.length,
+    hasLiveOrderEditSession,
+    isPlacingOrder,
+    navigate,
+    orderEditSession?.orderRouteId,
+    postOrderRedirecting,
+  ]);
 
   useEffect(() => {
     const incomingSession = location.state?.orderEditSession;
@@ -961,6 +976,12 @@ export default function CheckoutPage() {
     if (isPlacingOrder) return;
 
     if (foodItems.length === 0) {
+      if (hasLiveOrderEditSession && orderEditSession?.orderRouteId) {
+        navigate(`/orders/${encodeURIComponent(String(orderEditSession.orderRouteId))}`, {
+          replace: true,
+        });
+        return;
+      }
       toast.error("Your cart is empty. Add items to proceed.");
       return;
     }
@@ -1037,9 +1058,11 @@ export default function CheckoutPage() {
           toast.success("Order updated successfully.");
         }
 
+        const trackingOrderId = String(orderEditSession.orderRouteId || "").trim();
+        setPostOrderRedirecting(true);
         clearCart("mofood");
         clearOrderEditSession();
-        navigate(`/orders/${orderEditSession.orderRouteId}`);
+        navigate(`/orders/${encodeURIComponent(trackingOrderId)}`, { replace: true });
       } catch (error) {
         const backendMessage = error?.response?.data?.message;
         const localMessage = error?.message;
@@ -1048,6 +1071,7 @@ export default function CheckoutPage() {
         } else {
           toast.error(backendMessage || localMessage || "Failed to edit order.");
         }
+        setPostOrderRedirecting(false);
       } finally {
         setIsPlacingOrder(false);
       }

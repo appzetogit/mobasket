@@ -481,6 +481,27 @@ const buildMenuItemsMap = (menu) => {
   return map;
 };
 
+const buildGroceryItemsMap = (products = []) => {
+  const map = new Map();
+  (Array.isArray(products) ? products : []).forEach((product) => {
+    const itemId = String(product?._id || '').trim();
+    if (!itemId) return;
+
+    map.set(itemId, {
+      itemId,
+      name: product?.name || 'Item',
+      price: Number(product?.price || 0),
+      image:
+        product?.image ||
+        (Array.isArray(product?.images) ? product.images[0] : '') ||
+        '',
+      description: product?.description || '',
+      isVeg: false
+    });
+  });
+  return map;
+};
+
 const resolveRestaurantObjectId = async (restaurantId) => {
   if (!restaurantId) return null;
   const normalized = String(restaurantId).trim();
@@ -2680,6 +2701,13 @@ export const editOrderCart = async (req, res) => {
       });
     }
 
+    const platformFromOrderField = normalizePlatform(order.restaurantPlatform);
+    const platformFromLookup = await resolveOrderPlatform(order.restaurantId);
+    const platformForEdit =
+      platformFromOrderField === 'mogrocery' || platformFromLookup === 'mogrocery'
+        ? 'mogrocery'
+        : 'mofood';
+
     const resolvedRestaurantObjectId = await resolveRestaurantObjectId(order.restaurantId);
     if (!resolvedRestaurantObjectId) {
       return res.status(400).json({
@@ -2688,19 +2716,60 @@ export const editOrderCart = async (req, res) => {
       });
     }
 
-    const menu = await Menu.findOne({
-      restaurant: resolvedRestaurantObjectId,
-      isActive: true
-    }).lean();
-
-    if (!menu) {
+    const singleSourceValidation = await validateSingleSourceOrderItems({
+      items,
+      platform: platformForEdit,
+      expectedRestaurant: {
+        _id: resolvedRestaurantObjectId,
+        restaurantId: String(order.restaurantId || '').trim()
+      }
+    });
+    if (!singleSourceValidation.valid) {
       return res.status(400).json({
         success: false,
-        message: 'Restaurant menu is unavailable. Please try again later.'
+        message: singleSourceValidation.message || 'Unable to validate source for order edit items'
       });
     }
 
-    const menuItemsMap = buildMenuItemsMap(menu);
+    let menuItemsMap = new Map();
+    if (platformForEdit === 'mogrocery') {
+      const uniqueIncomingItemIds = Array.from(
+        new Set(
+          items
+            .map((item) => String(item?.itemId || '').trim())
+            .filter(Boolean)
+        )
+      );
+      const validObjectIds = uniqueIncomingItemIds.filter(
+        (itemId) => mongoose.Types.ObjectId.isValid(itemId)
+      );
+      const products = validObjectIds.length > 0
+        ? await GroceryProduct.find({
+            _id: { $in: validObjectIds.map((itemId) => new mongoose.Types.ObjectId(itemId)) },
+            storeId: new mongoose.Types.ObjectId(resolvedRestaurantObjectId),
+            isActive: true
+          })
+            .select('_id name price image images description')
+            .lean()
+        : [];
+
+      menuItemsMap = buildGroceryItemsMap(products);
+    } else {
+      const menu = await Menu.findOne({
+        restaurant: resolvedRestaurantObjectId,
+        isActive: true
+      }).lean();
+
+      if (!menu) {
+        return res.status(400).json({
+          success: false,
+          message: 'Restaurant menu is unavailable. Please try again later.'
+        });
+      }
+
+      menuItemsMap = buildMenuItemsMap(menu);
+    }
+
     const { nextItems, invalidItemIds } = buildEditedItemsForOrder({
       order,
       incomingItems: items,
@@ -2710,7 +2779,10 @@ export const editOrderCart = async (req, res) => {
     if (invalidItemIds.length > 0) {
       return res.status(400).json({
         success: false,
-        message: 'You can only add items from the same restaurant for this order edit window.',
+        message:
+          platformForEdit === 'mogrocery'
+            ? 'You can only add items from the same store for this order edit window.'
+            : 'You can only add items from the same restaurant for this order edit window.',
         data: {
           invalidItemIds
         }

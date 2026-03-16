@@ -2238,11 +2238,13 @@ export default function OrderTracking() {
 
       String(order?.restaurantId?.slug || order?.restaurantSlug || "").trim() ||
 
-      toSlug(order?.restaurant)
+      toSlug(order?.restaurantName || order?.restaurantId?.name || order?.restaurant)
+
+    const restaurantRouteIdentifier = restaurantSlug || (restaurantId ? String(restaurantId).trim() : "")
 
 
 
-    if (!isGroceryOrder && !restaurantSlug) {
+    if (!isGroceryOrder && !restaurantRouteIdentifier) {
 
       toast.error("Restaurant menu is unavailable for this order.")
 
@@ -2318,7 +2320,9 @@ export default function OrderTracking() {
 
 
 
-    const editTargetPath = isGroceryOrder ? "/grocery" : `/restaurants/${restaurantSlug}`
+    const editTargetPath = isGroceryOrder
+      ? `/grocery${restaurantId ? `?storeId=${encodeURIComponent(String(restaurantId))}` : ""}`
+      : `/restaurants/${restaurantRouteIdentifier}`
 
 
 

@@ -498,8 +498,21 @@ export const useDeliveryNotifications = (options = {}) => {
 
     // Listen for priority-based order notifications (new_order_available)
     socketRef.current.on('new_order_available', (orderData) => {
-      if (shouldIgnoreOrderNotification(orderData) || isOrderAlreadyInProgress(orderData)) {
+      if (isOrderAlreadyInProgress(orderData)) {
         return;
+      }
+      // Resend/priority notifications should be able to re-open the popup even
+      // if the same order was previously suppressed on this device.
+      const incomingIds = normalizeOrderIds(orderData);
+      let suppressionChanged = false;
+      incomingIds.forEach((id) => {
+        if (suppressedOrderIdsRef.current.has(id)) {
+          suppressedOrderIdsRef.current.delete(id);
+          suppressionChanged = true;
+        }
+      });
+      if (suppressionChanged) {
+        persistSuppressedOrderIds(suppressedOrderIdsRef.current);
       }
       // Treat it the same as new_order for now - delivery boy can accept it
       setNewOrder(orderData);
@@ -550,7 +563,7 @@ export const useDeliveryNotifications = (options = {}) => {
         socketRef.current = null;
       }
     };
-  }, [deliveryPartnerId, enabled, playNotificationSound, shouldIgnoreOrderNotification, suppressOrderNotifications, triggerOrderBuzz]);
+  }, [deliveryPartnerId, enabled, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, suppressOrderNotifications, triggerOrderBuzz]);
 
   useEffect(() => {
     if (!enabled || !deliveryPartnerId || isConnected) {

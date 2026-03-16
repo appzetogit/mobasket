@@ -117,12 +117,19 @@ export async function sendOrderPushNotification({
       ...(resolvedSendTo ? { sendTo: resolvedSendTo } : {}),
       ...(resolvedPlatform ? { platform: resolvedPlatform } : {}),
       ...(resolvedZone ? { zone: resolvedZone } : {}),
+      sound: 'alert',
+      playSound: 'true',
+      vibrate: 'true',
       ...data,
     }),
     android: {
       priority: 'high',
       notification: {
-        sound: 'default',
+        channelId: 'delivery_order_alerts_alert',
+        sound: 'alert',
+        defaultSound: true,
+        defaultVibrateTimings: true,
+        priority: 'max',
       },
     },
     apns: {

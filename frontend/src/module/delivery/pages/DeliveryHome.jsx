@@ -31949,7 +31949,7 @@ export default function DeliveryHome() {
                 transition={{ duration: 0.3 }}
 
 
-                className="fixed bottom-0 left-0 right-0 z-[115] flex justify-center pb-2"
+                className="fixed bottom-16 left-0 right-0 z-[115] flex justify-center pb-2"
 
 
                 onTouchStart={handleNewOrderPopupTouchStart}
