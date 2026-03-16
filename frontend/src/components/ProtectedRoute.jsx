@@ -65,6 +65,27 @@ export default function ProtectedRoute({ children, requiredRole, loginPath, modu
         location.pathname.includes('/login');
       const isPendingPage = location.pathname === `/${modulePrefix}/pending-approval`;
       const isAuthPage = location.pathname.includes('/login') || location.pathname.includes('/otp');
+      const pendingLikeStatuses = new Set([
+        'pending',
+        'rejected',
+        'declined',
+        'submitted',
+        'verification_pending',
+        'in_review',
+        'under_review',
+      ]);
+      const shouldStayOnPendingApproval =
+        !isApprovedAndActive &&
+        (
+          completedOnboardingSteps >= 4 ||
+          pendingLikeStatuses.has(normalizedStatus)
+        );
+
+      if (shouldStayOnPendingApproval) {
+        if (!isPendingPage && !isAuthPage) {
+          return <Navigate to={`/${modulePrefix}/pending-approval`} replace />;
+        }
+      }
 
       // Handle onboarding status
       if (!isApprovedAndActive && normalizedStatus === 'onboarding') {

@@ -3,6 +3,7 @@ import otpService from '../../auth/services/otpService.js';
 import jwtService from '../../auth/services/jwtService.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
+import { initializeFirebaseAdmin, admin } from '../../../shared/services/firebaseAdminService.js';
 import winston from 'winston';
 
 const logger = winston.createLogger({
@@ -33,6 +34,105 @@ const getFcmPatchFromBody = (body = {}) => {
   }
 
   return patch;
+};
+
+const INVALID_FCM_TOKEN_CODES = new Set([
+  'messaging/registration-token-not-registered',
+  'messaging/invalid-registration-token',
+  'messaging/mismatched-credential',
+]);
+
+const getFirebaseErrorCode = (error = null) => {
+  if (!error) return '';
+  const directCode = typeof error.code === 'string' ? error.code.trim() : '';
+  if (directCode) return directCode;
+  const nestedCode = typeof error?.errorInfo?.code === 'string' ? error.errorInfo.code.trim() : '';
+  if (nestedCode) return nestedCode;
+  return '';
+};
+
+const getFirebaseErrorMessage = (error = null) => {
+  if (!error) return '';
+  const directMessage = typeof error.message === 'string' ? error.message.trim() : '';
+  if (directMessage) return directMessage;
+  const nestedMessage = typeof error?.errorInfo?.message === 'string' ? error.errorInfo.message.trim() : '';
+  if (nestedMessage) return nestedMessage;
+  return '';
+};
+
+const validateFcmTokenAgainstCurrentProject = async ({ token = '', platform = 'unknown' } = {}) => {
+  const normalizedToken = String(token || '').trim();
+  if (!normalizedToken) {
+    return { valid: false, code: 'empty_token', message: 'Token is empty' };
+  }
+
+  const firebaseState = await initializeFirebaseAdmin();
+  if (!firebaseState.initialized) {
+    return {
+      valid: true,
+      skipped: true,
+      reason: firebaseState.reason || 'firebase_not_initialized',
+    };
+  }
+
+  const messaging = admin.messaging(firebaseState.app);
+  try {
+    await messaging.send(
+      {
+        token: normalizedToken,
+        data: {
+          source: 'delivery_token_validation',
+          platform: String(platform || 'unknown'),
+        },
+      },
+      true
+    );
+    return { valid: true };
+  } catch (error) {
+    const code = getFirebaseErrorCode(error) || 'unknown';
+    return {
+      valid: false,
+      code,
+      message: getFirebaseErrorMessage(error),
+      removable: INVALID_FCM_TOKEN_CODES.has(code),
+    };
+  }
+};
+
+const sanitizeValidatedFcmPatch = async (fcmPatch = {}, logContext = {}) => {
+  const sanitized = { ...fcmPatch };
+  const dropped = [];
+
+  if (sanitized.fcmTokenWeb) {
+    const result = await validateFcmTokenAgainstCurrentProject({
+      token: sanitized.fcmTokenWeb,
+      platform: 'web',
+    });
+    if (!result.valid && result.removable) {
+      dropped.push({ field: 'fcmTokenWeb', code: result.code, message: result.message || '' });
+      delete sanitized.fcmTokenWeb;
+    }
+  }
+
+  if (sanitized.fcmTokenMobile) {
+    const result = await validateFcmTokenAgainstCurrentProject({
+      token: sanitized.fcmTokenMobile,
+      platform: 'mobile',
+    });
+    if (!result.valid && result.removable) {
+      dropped.push({ field: 'fcmTokenMobile', code: result.code, message: result.message || '' });
+      delete sanitized.fcmTokenMobile;
+    }
+  }
+
+  if (dropped.length > 0) {
+    logger.warn('Dropped invalid/mismatched delivery FCM token(s) before persistence', {
+      context: logContext,
+      dropped,
+    });
+  }
+
+  return sanitized;
 };
 
 const getSafeOtpErrorMessage = (error) => {
@@ -176,7 +276,11 @@ export const sendOTP = asyncHandler(async (req, res) => {
  */
 export const verifyOTP = asyncHandler(async (req, res) => {
   const { phone, otp, purpose = 'login', name } = req.body;
-  const fcmPatch = getFcmPatchFromBody(req.body);
+  const incomingFcmPatch = getFcmPatchFromBody(req.body);
+  const fcmPatch = await sanitizeValidatedFcmPatch(incomingFcmPatch, {
+    stage: 'verifyOTP',
+    purpose: String(purpose || ''),
+  });
 
   // Validate inputs
   if (!phone || !otp) {
@@ -586,6 +690,32 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
     tokenLength: normalizedToken.length,
     tokenPreview: maskedToken,
   });
+
+  const validationResult = await validateFcmTokenAgainstCurrentProject({
+    token: normalizedToken,
+    platform: normalizedPlatform,
+  });
+
+  if (!validationResult.valid && validationResult.removable) {
+    req.delivery[field] = '';
+    await req.delivery.save();
+
+    logger.warn('Rejected delivery FCM token due to Firebase validation failure', {
+      deliveryMongoId: req.delivery?._id?.toString?.() || '',
+      deliveryId: req.delivery?.deliveryId || '',
+      phone: req.delivery?.phone || '',
+      platform: normalizedPlatform,
+      targetField: field,
+      code: validationResult.code || 'unknown',
+      message: validationResult.message || '',
+    });
+
+    return errorResponse(
+      res,
+      400,
+      `Invalid FCM token for current Firebase project (${validationResult.code || 'unknown'}).`
+    );
+  }
 
   req.delivery[field] = normalizedToken;
   await req.delivery.save();

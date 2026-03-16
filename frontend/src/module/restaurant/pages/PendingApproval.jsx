@@ -61,7 +61,15 @@ export default function PendingApproval() {
             return entity
         }
 
-        const approvalStates = new Set(["pending", "rejected", "declined"])
+        const approvalStates = new Set([
+            "pending",
+            "rejected",
+            "declined",
+            "submitted",
+            "verification_pending",
+            "in_review",
+            "under_review",
+        ])
         if (normalizedStatus && !approvalStates.has(normalizedStatus)) {
             navigate(isStore ? "/store" : "/restaurant", { replace: true })
         }
