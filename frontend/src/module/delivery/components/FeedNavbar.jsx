@@ -12,6 +12,7 @@ import { useCompanyName } from "@/lib/hooks/useCompanyName";
 const LS_KEY = "app:isOnline";
 const TOAST_ID_KEY = "feedNavbar-onlineStatus";
 const CASH_LIMIT_TOAST_ID = "feedNavbar-cashLimit";
+const COD_CAPACITY_WARNING_THRESHOLD = 300;
 
 const getCashLimitUsed = (walletState) =>
   Math.max(
@@ -22,13 +23,21 @@ const getCashLimitUsed = (walletState) =>
 const getTotalCashLimit = (walletState) =>
   Math.max(0, Number(walletState?.codLimit ?? walletState?.totalCashLimit) || 0);
 
+const getRemainingCodCapacity = (walletState) => {
+  const explicitRemaining = Number(walletState?.remainingLimit);
+  if (Number.isFinite(explicitRemaining)) {
+    return Math.max(0, explicitRemaining);
+  }
+  return Math.max(0, getTotalCashLimit(walletState) - getCashLimitUsed(walletState));
+};
+
 const isCashLimitReached = (walletState) =>
   getTotalCashLimit(walletState) > 0 && getCashLimitUsed(walletState) >= getTotalCashLimit(walletState);
 
 const shouldWarnDeposit = (walletState) => {
   const totalCashLimit = getTotalCashLimit(walletState);
   if (totalCashLimit <= 0) return false;
-  return getCashLimitUsed(walletState) >= totalCashLimit;
+  return getRemainingCodCapacity(walletState) < COD_CAPACITY_WARNING_THRESHOLD;
 };
 
 const getDepositEligibleCashInHand = (walletState) => {
@@ -149,13 +158,15 @@ export default function FeedNavbar({
 
   const handleProfileClick = () => navigate("/delivery/profile");
 
-  const promptCashDeposit = () => {
-    if (cashInHandForDeposit <= 0) {
-      return;
-    }
+  const promptCashDeposit = (remainingCapacity = null) => {
     setShowDepositCashPopup(true);
     toast.dismiss(CASH_LIMIT_TOAST_ID);
-    toast.error("Cash limit reached. Deposit cash to continue taking COD orders.", {
+    const numericRemaining = Number(remainingCapacity);
+    const message =
+      Number.isFinite(numericRemaining) && numericRemaining > 0
+        ? `Remaining COD capacity is Rs ${numericRemaining.toFixed(2)}. Deposit cash to continue receiving orders.`
+        : "Cash limit reached. Deposit cash to continue taking COD orders.";
+    toast.error(message, {
       id: CASH_LIMIT_TOAST_ID,
       style: { marginTop: "80px" }
     });
@@ -163,6 +174,7 @@ export default function FeedNavbar({
 
   const cashInHandForDeposit =
     getDepositEligibleCashInHand(walletState);
+  const remainingCodCapacity = getRemainingCodCapacity(walletState);
 
   useEffect(() => {
     const loadWallet = async () => {
@@ -192,7 +204,7 @@ export default function FeedNavbar({
   const cashLimitReached =
     walletLoaded && walletState != null && isCashLimitReached(walletState);
   const depositWarningNeeded =
-    walletLoaded && walletState != null && shouldWarnDeposit(walletState) && cashInHandForDeposit > 0;
+    walletLoaded && walletState != null && shouldWarnDeposit(walletState);
 
   useEffect(() => {
     if (!walletLoaded) return;
@@ -204,7 +216,7 @@ export default function FeedNavbar({
 
     if (!cashLimitPromptShownRef.current) {
       cashLimitPromptShownRef.current = true;
-      promptCashDeposit();
+      promptCashDeposit(remainingCodCapacity);
     }
 
     if (!cashLimitReached) return;
@@ -214,7 +226,7 @@ export default function FeedNavbar({
     deliveryAPI.updateOnlineStatus(false).catch((error) => {
       console.error("Error forcing rider offline after COD limit exhaustion:", error);
     });
-  }, [cashLimitReached, depositWarningNeeded, cashInHandForDeposit, isOnline, walletLoaded]);
+  }, [cashLimitReached, depositWarningNeeded, isOnline, remainingCodCapacity, walletLoaded]);
 
   const handleToggle = async (e) => {
     e?.preventDefault?.();
