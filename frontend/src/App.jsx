@@ -4,6 +4,7 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import AuthRedirect from "@/components/AuthRedirect";
 import RestaurantOrderSoundListener from "@/module/restaurant/components/RestaurantOrderSoundListener";
 import DeliveryOrderSoundListener from "@/module/delivery/components/DeliveryOrderSoundListener";
+import WelcomeSelectionPage from "@/module/user/pages/WelcomeSelectionPage";
 import { setupWebPushForCurrentSession, teardownWebPushListener } from "@/lib/webPush";
 
 const UserRouter = lazy(() => import("@/module/user/components/UserRouter"));
@@ -171,6 +172,8 @@ export default function App() {
           <Route path="/legal/terms" element={<TermsPublic />} />
           <Route path="/legal/privacy" element={<PrivacyPublic />} />
           <Route path="/legal/content-policy" element={<ContentPolicyPublic />} />
+          <Route path="/" element={<WelcomeSelectionPage />} />
+          <Route path="/welcome" element={<WelcomeSelectionPage />} />
 
           <Route path="/restaurant/*" element={<RestaurantAppRoutes />} />
           <Route path="/store/*" element={<StoreAppRoutes />} />
