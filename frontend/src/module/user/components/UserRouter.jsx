@@ -82,15 +82,8 @@ export default function UserRouter() {
       <Routes>
         <Route element={<UserLayout />}>
         <Route path="/sign-in" element={<SignIn />} />
-        <Route path="/" element={<Navigate to="/welcome" replace />} />
-        <Route
-          path="/welcome"
-          element={
-            <ProtectedRoute requiredRole="user" loginPath="/user/auth/sign-in">
-              <WelcomeSelectionPage />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/" element={<WelcomeSelectionPage />} />
+        <Route path="/welcome" element={<WelcomeSelectionPage />} />
         <Route
           path="/home"
           element={
