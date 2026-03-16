@@ -65,6 +65,8 @@ export async function sendOrderPushNotification({
   data = {},
   tag = 'order_notification',
   cleanupModels = [],
+  source = 'order_notification',
+  sendTo = '',
 }) {
   const normalizedRecipients = Array.isArray(recipients) ? recipients.filter(Boolean) : [recipients].filter(Boolean);
   const tokens = collectRecipientTokens(normalizedRecipients);
@@ -90,6 +92,9 @@ export async function sendOrderPushNotification({
     };
   }
 
+  const resolvedSource = String(source || 'order_notification').trim() || 'order_notification';
+  const resolvedSendTo = String(sendTo || '').trim();
+
   const payload = {
     notification: {
       title: String(title || 'New Order').trim(),
@@ -100,14 +105,15 @@ export async function sendOrderPushNotification({
       body: String(body || '').trim(),
       link: String(link || '/').trim(),
       click_action: String(link || '/').trim(),
-      source: 'order_notification',
-      sendTo: 'Delivery',
-      zone: 'All',
-      platform: 'all',
+      source: resolvedSource,
+      ...(resolvedSendTo ? { sendTo: resolvedSendTo } : {}),
       ...data,
     }),
     android: {
       priority: 'high',
+      notification: {
+        sound: 'default',
+      },
     },
     apns: {
       headers: {
@@ -138,7 +144,18 @@ export async function sendOrderPushNotification({
   let successCount = 0;
   let failureCount = 0;
   const invalidTokens = [];
+  const failureSamples = [];
   const messaging = admin.messaging(firebaseState.app);
+
+  console.info('Order push notification dispatch starting', {
+    source: resolvedSource,
+    sendTo: resolvedSendTo,
+    link: String(link || '/').trim(),
+    attempted: tokens.length,
+    tag: String(tag || 'order_notification').trim(),
+    dataKeys: Object.keys(payload.data || {}),
+  });
+
   for (const token of tokens) {
     try {
       await messaging.send({
@@ -152,10 +169,27 @@ export async function sendOrderPushNotification({
       if (INVALID_TOKEN_CODES.has(errorCode)) {
         invalidTokens.push(token);
       }
+      if (failureSamples.length < 5) {
+        failureSamples.push({
+          tokenPreview: token.length > 12 ? `${token.slice(0, 8)}...${token.slice(-4)}` : token,
+          code: errorCode || 'unknown',
+          message: String(error?.message || error?.errorInfo?.message || 'Unknown Firebase error'),
+        });
+      }
     }
   }
 
   await cleanupInvalidTokens(invalidTokens, cleanupModels);
+
+  console.info('Order push notification dispatch completed', {
+    source: resolvedSource,
+    sendTo: resolvedSendTo,
+    attempted: tokens.length,
+    successCount,
+    failureCount,
+    invalidTokenCount: invalidTokens.length,
+    failureSamples,
+  });
 
   return {
     initialized: true,
@@ -163,5 +197,6 @@ export async function sendOrderPushNotification({
     successCount,
     failureCount,
     invalidTokenCount: invalidTokens.length,
+    failureSamples,
   };
 }

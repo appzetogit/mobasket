@@ -495,6 +495,8 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
       link: '/delivery',
       tag: `delivery_new_order_${order.orderId}`,
       cleanupModels: pushCleanupModels.delivery,
+      source: 'delivery_order',
+      sendTo: 'Delivery',
       data: {
         notificationType: 'new_order',
         orderId: String(order.orderId || ''),
@@ -898,6 +900,8 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
           link: '/delivery',
           tag: `delivery_available_${order.orderId}_${phase}`,
           cleanupModels: pushCleanupModels.delivery,
+          source: 'delivery_order',
+          sendTo: 'Delivery',
           data: {
             notificationType: 'new_order_available',
             orderId: String(order.orderId || ''),
@@ -936,6 +940,15 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
           });
           }
         }
+        console.log('Delivery push result:', {
+          deliveryPartnerId: normalizedId,
+          orderId: order.orderId,
+          phase,
+          pushAttempted: pushResult?.attempted || 0,
+          pushSuccessCount: pushResult?.successCount || 0,
+          pushFailureCount: pushResult?.failureCount || 0,
+          pushFailureSamples: pushResult?.failureSamples || [],
+        });
         if (notificationSent || (pushResult?.successCount || 0) > 0) {
           notifiedCount++;
         }
