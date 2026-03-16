@@ -1869,6 +1869,7 @@ export default function DeliveryHome() {
 
 
   const [unreadNotificationCount, setUnreadNotificationCount] = useState(() => getUnreadDeliveryNotificationCount())
+  const [deliveryStatus, setDeliveryStatus] = useState(null) // Store delivery partner status
 
 
 
@@ -1877,7 +1878,21 @@ export default function DeliveryHome() {
   // Delivery notifications hook
 
 
+  const deliveryStatusNormalized = String(deliveryStatus || '').trim().toLowerCase()
+  const isVerificationPendingLikeStatus = [
+    'pending',
+    'submitted',
+    'verification_pending',
+    'in_review',
+    'under_review',
+    'rejected',
+    'declined',
+    'blocked',
+  ].includes(deliveryStatusNormalized)
+  const isDeliveryNotificationsEnabled = Boolean(deliveryStatusNormalized) && !isVerificationPendingLikeStatus
+
   const { newOrder, clearNewOrder, orderReady, clearOrderReady, isConnected, suppressOrderNotifications } = useDeliveryNotifications({
+    enabled: isDeliveryNotificationsEnabled,
     enableSound: false,
     enableBrowserNotification: false,
   })
@@ -1902,9 +1917,6 @@ export default function DeliveryHome() {
 
 
   const [bankDetailsFilled, setBankDetailsFilled] = useState(true)
-
-
-  const [deliveryStatus, setDeliveryStatus] = useState(null) // Store delivery partner status
 
 
   const [rejectionReason, setRejectionReason] = useState(null) // Store rejection reason

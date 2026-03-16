@@ -10,6 +10,8 @@ import {
 } from '@/lib/browserNotifications';
 
 const DELIVERY_ORDER_SUPPRESSION_KEY = 'delivery_suppressed_order_ids';
+const ORDER_POLL_INTERVAL_MS = 8000;
+const ORDER_POLL_FORBIDDEN_BACKOFF_MS = 120000;
 
 const readSuppressedOrderIds = () => {
   try {
@@ -102,6 +104,7 @@ export const useDeliveryNotifications = (options = {}) => {
   const socketRef = useRef(null);
   const audioRef = useRef(null);
   const suppressedOrderIdsRef = useRef(readSuppressedOrderIds());
+  const ordersPollBlockedUntilRef = useRef(0);
   
   // Step 2: All state hooks (unconditional)
   const [newOrder, setNewOrder] = useState(null);
@@ -550,13 +553,17 @@ export const useDeliveryNotifications = (options = {}) => {
   }, [deliveryPartnerId, enabled, playNotificationSound, shouldIgnoreOrderNotification, suppressOrderNotifications, triggerOrderBuzz]);
 
   useEffect(() => {
-    if (!enabled || !deliveryPartnerId) {
+    if (!enabled || !deliveryPartnerId || isConnected) {
       return undefined;
     }
 
     let cancelled = false;
 
     const syncAvailableOrders = async () => {
+      if (Date.now() < ordersPollBlockedUntilRef.current) {
+        return;
+      }
+
       try {
         const response = await deliveryAPI.getOrders({ page: 1, limit: 20 });
         const orders = response?.data?.data?.orders;
@@ -598,18 +605,23 @@ export const useDeliveryNotifications = (options = {}) => {
           triggerOrderBuzz();
         }
       } catch (error) {
-        // Socket remains primary. Polling is only a fallback, so fail silently.
+        const status = Number(error?.response?.status || 0);
+        // For auth/permission errors (e.g. pending verification), avoid hammering
+        // the orders endpoint every 8s.
+        if (status === 401 || status === 403) {
+          ordersPollBlockedUntilRef.current = Date.now() + ORDER_POLL_FORBIDDEN_BACKOFF_MS;
+        }
       }
     };
 
     void syncAvailableOrders();
-    const intervalId = window.setInterval(syncAvailableOrders, 8000);
+    const intervalId = window.setInterval(syncAvailableOrders, ORDER_POLL_INTERVAL_MS);
 
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [deliveryPartnerId, enabled, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, triggerOrderBuzz]);
+  }, [deliveryPartnerId, enabled, isConnected, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, triggerOrderBuzz]);
 
   // Helper functions
   const clearNewOrder = useCallback(() => {
