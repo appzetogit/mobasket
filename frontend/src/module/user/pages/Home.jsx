@@ -98,6 +98,9 @@ const CITY_PLACEHOLDERS = new Set([
   "unknown city",
 ]);
 
+const INITIAL_TOP_BRAND_RENDER_COUNT = 8;
+const INITIAL_RESTAURANT_RENDER_COUNT = 6;
+
 const isUsableCityValue = (value) => {
   const normalized = normalizeCityName(value);
   return normalized && !CITY_PLACEHOLDERS.has(normalized);
@@ -495,6 +498,8 @@ export default function Home() {
   const [fallbackCategories, setFallbackCategories] = useState([]);
   const [loadingRealCategories, setLoadingRealCategories] = useState(true);
   const [showAllCategoriesModal, setShowAllCategoriesModal] = useState(false);
+  const [showDeferredSections, setShowDeferredSections] = useState(false);
+  const [renderAllRestaurants, setRenderAllRestaurants] = useState(false);
   const isHandlingSwitchOff = useRef(false);
   const backendAssetBaseUrl = API_BASE_URL.replace(/\/api\/?$/, "");
 
@@ -643,6 +648,42 @@ export default function Home() {
   const autoSlideIntervalRef = useRef(null);
 
   // Sync prevVegMode when vegMode changes from context
+  useEffect(() => {
+    let timeoutId;
+
+    const enableDeferredSections = () => {
+      setShowDeferredSections(true);
+      timeoutId = window.setTimeout(() => {
+        setRenderAllRestaurants(true);
+      }, 800);
+    };
+
+    if (typeof window === "undefined") return undefined;
+
+    if ("requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(enableDeferredSections, {
+        timeout: 1200,
+      });
+
+      return () => {
+        window.cancelIdleCallback?.(idleId);
+        if (timeoutId) {
+          window.clearTimeout(timeoutId);
+        }
+      };
+    }
+
+    timeoutId = window.setTimeout(() => {
+      enableDeferredSections();
+    }, 500);
+
+    return () => {
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (vegMode !== prevVegMode && !isHandlingSwitchOff.current) {
       setPrevVegMode(vegMode);
@@ -1057,23 +1098,6 @@ export default function Home() {
         // Prefer strict same-zone listing on Home.
         // If zone detection is unavailable, gracefully fall back to non-zone listing.
         if (zoneLoading) {
-          return;
-        }
-
-        // First, test backend connection
-        try {
-          // Use API_BASE_URL from config (supports both dev and production)
-          const backendUrl = API_BASE_URL.replace("/api", "");
-          const healthCheck = await fetch(`${backendUrl}/health`);
-          if (!healthCheck.ok) {
-            throw new Error(
-              `Backend health check failed: ${healthCheck.status}`,
-            );
-          }
-        } catch (healthError) {
-          // Backend connection error - handled silently, toast notifications shown via axios interceptor
-          setRestaurantsData([]);
-          setLoadingRestaurants(false);
           return;
         }
 
@@ -1752,8 +1776,21 @@ export default function Home() {
         (restaurant) =>
           String(restaurant?.name || "").trim() &&
           (restaurant?.id || restaurant?.slug),
+      ).slice(
+        0,
+        showDeferredSections
+          ? topBrandRestaurants?.length || INITIAL_TOP_BRAND_RENDER_COUNT
+          : INITIAL_TOP_BRAND_RENDER_COUNT,
       ),
-    [topBrandRestaurants],
+    [showDeferredSections, topBrandRestaurants],
+  );
+
+  const displayedRestaurants = useMemo(
+    () =>
+      renderAllRestaurants
+        ? filteredRestaurants
+        : filteredRestaurants.slice(0, INITIAL_RESTAURANT_RENDER_COUNT),
+    [filteredRestaurants, renderAllRestaurants],
   );
 
   // Featured foods removed - will be handled by restaurants data from API
@@ -2471,6 +2508,8 @@ export default function Home() {
           </div>
         </motion.section>
 
+        {showDeferredSections ? (
+          <>
         {/* Explore More Section */}
         <motion.section
           className="pt-2 sm:pt-3 lg:pt-4"
@@ -2731,6 +2770,12 @@ export default function Home() {
         )}
 
         {/* Featured Foods - Horizontal Scroll */}
+          </>
+        ) : (
+          <div className="pt-4 px-1">
+            <div className="h-24 rounded-3xl bg-gray-100 dark:bg-gray-900 animate-pulse" />
+          </div>
+        )}
 
         {/* Restaurants - Enhanced with Animations */}
         <motion.section
@@ -2787,7 +2832,7 @@ export default function Home() {
             <div
               className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3  gap-3 sm:gap-4 lg:gap-5 xl:gap-6 pt-1 sm:pt-1.5 lg:pt-2 items-stretch ${isLoadingFilterResults || loadingRestaurants ? "opacity-50" : "opacity-100"} transition-opacity duration-300`}
             >
-              {filteredRestaurants.map((restaurant, index) => {
+              {displayedRestaurants.map((restaurant, index) => {
                 const restaurantSlug =
                   restaurant.slug ||
                   restaurant.name.toLowerCase().replace(/\s+/g, "-");
@@ -2878,7 +2923,7 @@ export default function Home() {
                               images={restaurant.images || [restaurant.image]}
                               restaurantName={restaurant.name}
                               restaurantId={restaurant.id}
-                              priority={index < 3}
+                              priority={index === 0}
                             />
 
                             {/* Promoted Badge */}
@@ -2954,6 +2999,11 @@ export default function Home() {
               })}
             </div>
           </div>
+          {!renderAllRestaurants && filteredRestaurants.length > displayedRestaurants.length && (
+            <div className="px-1 pt-3 text-center text-sm text-gray-500 dark:text-gray-400">
+              Loading more restaurants...
+            </div>
+          )}
           <div className="flex justify-center pt-2 sm:pt-3">
             {/* <Link to="/user/restaurants">
               <Button variant="outline" className="bg-transparent outline-none text-[#EF4F5F]/80 hover:opacity-80 border-none underline shadow-none  text-xs sm:text-sm md:text-base sm:hidden">

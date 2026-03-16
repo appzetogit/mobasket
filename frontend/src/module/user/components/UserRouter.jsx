@@ -82,7 +82,7 @@ export default function UserRouter() {
       <Routes>
         <Route element={<UserLayout />}>
         <Route path="/sign-in" element={<SignIn />} />
-        <Route path="/" element={<Navigate to="/home" replace />} />
+        <Route path="/" element={<Navigate to="/welcome" replace />} />
         <Route
           path="/welcome"
           element={
