@@ -27,9 +27,9 @@ const resolvePlatformMatch = (platformQuery) => {
   return { $in: ['mofood', 'food', '', null] };
 };
 
-const isUnapprovedApprovalStatus = (value) => {
+const isPendingApprovalStatus = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
-  return normalized !== 'approved';
+  return normalized === 'pending';
 };
 
 const buildApprovalMenuCandidates = async ({ platform, restaurantMongoId }) => {
@@ -58,33 +58,47 @@ const buildApprovalMenuCandidates = async ({ platform, restaurantMongoId }) => {
 export const getPendingFoodApprovals = asyncHandler(async (req, res) => {
   try {
     const platformMatch = resolvePlatformMatch(req.query?.platform || 'mofood');
-
-    const menus = await Menu.find({ isActive: true })
-      .populate({
-        path: 'restaurant',
-        select: 'name restaurantId platform',
-        match: { platform: platformMatch }
-      })
+    const restaurants = await Restaurant.find({ platform: platformMatch })
+      .select('_id name restaurantId')
       .lean();
 
-    const validMenus = menus.filter((menu) => menu.restaurant);
+    if (restaurants.length === 0) {
+      return successResponse(res, 200, 'Pending food approvals retrieved successfully', {
+        requests: [],
+        total: 0
+      });
+    }
+
+    const restaurantMap = new Map(
+      restaurants.map((restaurant) => [String(restaurant._id), restaurant])
+    );
+    const restaurantIds = restaurants.map((restaurant) => restaurant._id);
+
+    const menus = await Menu.find({
+      isActive: true,
+      restaurant: { $in: restaurantIds }
+    })
+      .select('restaurant sections addons createdAt')
+      .lean();
+
     const pendingRequests = [];
 
-    for (const menu of validMenus) {
-      if (!menu.restaurant) continue;
+    for (const menu of menus) {
+      const restaurant = restaurantMap.get(String(menu.restaurant));
+      if (!restaurant) continue;
 
       for (const section of menu.sections || []) {
         for (const item of section.items || []) {
-          if (isUnapprovedApprovalStatus(item.approvalStatus)) {
+          if (isPendingApprovalStatus(item.approvalStatus)) {
             pendingRequests.push({
               _id: item.id,
               id: item.id,
               type: 'item',
               itemName: item.name,
               category: item.category || '',
-              restaurantId: menu.restaurant.restaurantId,
-              restaurantName: menu.restaurant.name,
-              restaurantMongoId: menu.restaurant._id,
+              restaurantId: restaurant.restaurantId,
+              restaurantName: restaurant.name,
+              restaurantMongoId: restaurant._id,
               sectionName: section.name,
               sectionId: section.id,
               price: item.price,
@@ -102,16 +116,16 @@ export const getPendingFoodApprovals = asyncHandler(async (req, res) => {
 
         for (const subsection of section.subsections || []) {
           for (const item of subsection.items || []) {
-            if (isUnapprovedApprovalStatus(item.approvalStatus)) {
+            if (isPendingApprovalStatus(item.approvalStatus)) {
               pendingRequests.push({
                 _id: item.id,
                 id: item.id,
                 type: 'item',
                 itemName: item.name,
                 category: item.category || '',
-                restaurantId: menu.restaurant.restaurantId,
-                restaurantName: menu.restaurant.name,
-                restaurantMongoId: menu.restaurant._id,
+                restaurantId: restaurant.restaurantId,
+                restaurantName: restaurant.name,
+                restaurantMongoId: restaurant._id,
                 sectionName: section.name,
                 sectionId: section.id,
                 subsectionName: subsection.name,
@@ -132,16 +146,16 @@ export const getPendingFoodApprovals = asyncHandler(async (req, res) => {
       }
 
       for (const addon of menu.addons || []) {
-        if (isUnapprovedApprovalStatus(addon.approvalStatus)) {
+        if (isPendingApprovalStatus(addon.approvalStatus)) {
           pendingRequests.push({
             _id: addon.id,
             id: addon.id,
             type: 'addon',
             itemName: addon.name,
             category: 'Add-on',
-            restaurantId: menu.restaurant.restaurantId,
-            restaurantName: menu.restaurant.name,
-            restaurantMongoId: menu.restaurant._id,
+            restaurantId: restaurant.restaurantId,
+            restaurantName: restaurant.name,
+            restaurantMongoId: restaurant._id,
             price: addon.price,
             description: addon.description,
             image: addon.image || (addon.images && addon.images[0]) || '',

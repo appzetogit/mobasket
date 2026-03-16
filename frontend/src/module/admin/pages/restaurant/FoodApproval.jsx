@@ -26,6 +26,41 @@ export default function FoodApproval() {
   const userInteractedRef = useRef(false);
   const audioRef = useRef(null);
   const isAlarmActiveRef = useRef(false);
+  const isMountedRef = useRef(true);
+  const activeRequestIdRef = useRef(0);
+
+  const resolveRequestsFromResponse = (response) => {
+    const candidates = [
+      response?.data?.data?.requests,
+      response?.data?.requests,
+      response?.data?.data,
+    ];
+
+    for (const candidate of candidates) {
+      if (Array.isArray(candidate)) {
+        return candidate;
+      }
+    }
+
+    return [];
+  };
+
+  const withFetchTimeout = (promise, timeoutMs = 12000) =>
+    new Promise((resolve, reject) => {
+      const timer = window.setTimeout(() => {
+        reject(new Error("Food approvals request timed out"));
+      }, timeoutMs);
+
+      promise
+        .then((value) => {
+          window.clearTimeout(timer);
+          resolve(value);
+        })
+        .catch((error) => {
+          window.clearTimeout(timer);
+          reject(error);
+        });
+    });
 
   const stopNotificationAlarm = () => {
     if (!audioRef.current) return;
@@ -50,10 +85,19 @@ export default function FoodApproval() {
   };
 
   const fetchPendingApprovals = async ({ showLoader = true } = {}) => {
+    const requestId = activeRequestIdRef.current + 1;
+    activeRequestIdRef.current = requestId;
+
     try {
-      if (showLoader) setLoading(true);
-      const response = await adminAPI.getPendingFoodApprovals({ platform: "mofood" });
-      const data = response?.data?.data?.requests || response?.data?.requests || [];
+      if (showLoader && isMountedRef.current) setLoading(true);
+      const response = await withFetchTimeout(
+        adminAPI.getPendingFoodApprovals({ platform: "mofood" })
+      );
+      const data = resolveRequestsFromResponse(response);
+
+      if (!isMountedRef.current || requestId !== activeRequestIdRef.current) {
+        return;
+      }
 
       const previousCount = previousPendingCountRef.current;
       if ((previousCount === null && data.length > 0) || (previousCount !== null && data.length > previousCount)) {
@@ -68,14 +112,20 @@ export default function FoodApproval() {
       setRequests(data);
     } catch (error) {
       console.error("Error fetching food item approvals:", error);
-      toast.error("Failed to load pending food item approvals");
+      if (!isMountedRef.current || requestId !== activeRequestIdRef.current) {
+        return;
+      }
+      toast.error(error?.message || "Failed to load pending food item approvals");
       setRequests([]);
     } finally {
-      if (showLoader) setLoading(false);
+      if (showLoader && isMountedRef.current && requestId === activeRequestIdRef.current) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
+    isMountedRef.current = true;
     audioRef.current = new Audio(alertSound);
     audioRef.current.volume = 0.7;
 
@@ -96,6 +146,7 @@ export default function FoodApproval() {
     }, 10000);
 
     return () => {
+      isMountedRef.current = false;
       clearInterval(pollTimer);
       window.removeEventListener("click", markUserInteraction);
       window.removeEventListener("keydown", markUserInteraction);
