@@ -8,6 +8,10 @@ import {
 } from '../../delivery/utils/deliveryEligibility.js';
 import mongoose from 'mongoose';
 import { calculateDriverEarning } from './deliveryEarningService.js';
+import {
+  pushCleanupModels,
+  sendOrderPushNotification,
+} from '../../../shared/services/orderPushNotificationService.js';
 
 const normalizeStoreIdentifier = (value) => {
   if (!value) return '';
@@ -249,10 +253,12 @@ async function checkDeliveryPartnerConnection(deliveryPartnerId) {
         : [])
     ];
 
-    for (const room of roomVariations) {
-      const sockets = await deliveryNamespace.in(room).fetchSockets();
-      if (sockets.length > 0) {
-        return { connected: true, room, socketCount: sockets.length };
+    if (deliveryNamespace) {
+      for (const room of roomVariations) {
+        const sockets = await deliveryNamespace.in(room).fetchSockets();
+        if (sockets.length > 0) {
+          return { connected: true, room, socketCount: sockets.length };
+        }
       }
     }
 
@@ -278,8 +284,7 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
     const io = await getIOInstance();
     
     if (!io) {
-      console.warn('Socket.IO not initialized, skipping delivery boy notification');
-      return;
+      console.warn('Socket.IO not initialized, continuing with delivery push notification only');
     }
 
     // Never re-send "new order" once delivery flow has already progressed.
@@ -339,7 +344,7 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
 
     // Get delivery partner details
     const deliveryPartner = await Delivery.findById(deliveryPartnerId)
-      .select('name phone availability.currentLocation availability.isOnline status isActive')
+      .select('name phone availability.currentLocation availability.isOnline status isActive fcmTokenWeb fcmTokenMobile')
       .lean();
 
     if (!deliveryPartner) {
@@ -480,11 +485,27 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
       estimatedEarnings
     };
 
-    // Get delivery namespace
-    const deliveryNamespace = io.of('/delivery');
-    
     // Normalize deliveryPartnerId to string
     const normalizedDeliveryPartnerId = deliveryPartnerId?.toString() || deliveryPartnerId;
+
+    const pushResult = await sendOrderPushNotification({
+      recipients: [deliveryPartner],
+      title: 'New delivery order',
+      body: `${order.orderId} has been assigned to you.`,
+      link: '/delivery',
+      tag: `delivery_new_order_${order.orderId}`,
+      cleanupModels: pushCleanupModels.delivery,
+      data: {
+        notificationType: 'new_order',
+        orderId: String(order.orderId || ''),
+        orderMongoId: String(order._id || ''),
+        deliveryPartnerId: String(normalizedDeliveryPartnerId || ''),
+        targetPath: '/delivery',
+      },
+    });
+
+    // Get delivery namespace
+    const deliveryNamespace = io ? io.of('/delivery') : null;
     
     // Try multiple room formats to ensure we find the delivery partner
     const roomVariations = [
@@ -500,10 +521,11 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
     let foundRoom = null;
     
     // First, get all connected sockets in delivery namespace for debugging
-    const allSockets = await deliveryNamespace.fetchSockets();
+    const allSockets = deliveryNamespace ? await deliveryNamespace.fetchSockets() : [];
     console.log(`📊 Total connected delivery sockets: ${allSockets.length}`);
     
     // Check each room variation
+    if (deliveryNamespace) {
     for (const room of roomVariations) {
       const sockets = await deliveryNamespace.in(room).fetchSockets();
       if (sockets.length > 0) {
@@ -520,7 +542,8 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
         }
       }
     }
-    
+    }
+
     const primaryRoom = roomVariations[0];
     
     console.log(`📢 Attempting to notify delivery partner ${normalizedDeliveryPartnerId} about order ${order.orderId}`);
@@ -531,6 +554,7 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
     
     // Emit new order notification to all room variations (even if no sockets found, in case they connect)
     let notificationSent = false;
+    if (deliveryNamespace) {
     roomVariations.forEach(room => {
       deliveryNamespace.to(room).emit('new_order', orderNotification);
       deliveryNamespace.to(room).emit('play_notification_sound', {
@@ -582,11 +606,13 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
     } else {
       console.error(`❌ Failed to send notification - no sockets found and broadcast failed`);
     }
-    
+    }
+
     return {
       success: true,
       deliveryPartnerId,
-      orderId: order.orderId
+      orderId: order.orderId,
+      push: pushResult
     };
   } catch (error) {
     console.error('Error notifying delivery boy:', error);
@@ -647,11 +673,10 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
 
     const io = await getIOInstance();
     if (!io) {
-      console.warn('Socket.IO not initialized, skipping delivery boy notifications');
-      return { success: false, notified: 0 };
+      console.warn('Socket.IO not initialized, continuing with delivery push notifications only');
     }
 
-    const deliveryNamespace = io.of('/delivery');
+    const deliveryNamespace = io ? io.of('/delivery') : null;
     let notifiedCount = 0;
 
     // Populate userId if needed
@@ -846,7 +871,7 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
     for (const deliveryPartnerId of deliveryPartnerIds) {
       try {
         const deliveryPartner = await Delivery.findById(deliveryPartnerId)
-          .select('phoneVerified status isActive availability.currentLocation availability.zones')
+          .select('name phoneVerified status isActive availability.currentLocation availability.zones fcmTokenWeb fcmTokenMobile')
           .lean();
         if (!isDeliveryEligibleForOrders(deliveryPartner)) {
           console.warn(`⚠️ Skipping ineligible delivery partner ${deliveryPartnerId} for order ${order.orderId}`);
@@ -866,7 +891,25 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
             : [])
         ];
 
+        const pushResult = await sendOrderPushNotification({
+          recipients: [deliveryPartner],
+          title: phase === 'expanded' ? 'New order available nearby' : 'Priority order available',
+          body: `${order.orderId} is available for pickup.`,
+          link: '/delivery',
+          tag: `delivery_available_${order.orderId}_${phase}`,
+          cleanupModels: pushCleanupModels.delivery,
+          data: {
+            notificationType: 'new_order_available',
+            orderId: String(order.orderId || ''),
+            orderMongoId: String(orderWithUser._id || ''),
+            deliveryPartnerId: String(normalizedId || ''),
+            phase: String(phase || 'priority'),
+            targetPath: '/delivery',
+          },
+        });
+
         let notificationSent = false;
+        if (deliveryNamespace) {
         for (const room of roomVariations) {
           const sockets = await deliveryNamespace.in(room).fetchSockets();
           if (sockets.length > 0) {
@@ -878,18 +921,22 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
               phase: phase
             });
             notificationSent = true;
-            notifiedCount++;
             console.log(`📤 Notified delivery partner ${normalizedId} in room: ${room} (phase: ${phase})`);
             break;
           }
+        }
         }
 
         if (!notificationSent) {
           console.warn(`⚠️ Delivery partner ${normalizedId} not connected, but will receive notification when they connect`);
           // Still emit to room for when they connect
+          if (deliveryNamespace) {
           roomVariations.forEach(room => {
             deliveryNamespace.to(room).emit('new_order_available', orderNotification);
           });
+          }
+        }
+        if (notificationSent || (pushResult?.successCount || 0) > 0) {
           notifiedCount++;
         }
       } catch (partnerError) {

@@ -4,6 +4,10 @@ import Restaurant from '../../restaurant/models/Restaurant.js';
 import GroceryStore from '../../grocery/models/GroceryStore.js';
 import RestaurantNotification from '../../restaurant/models/RestaurantNotification.js';
 import mongoose from 'mongoose';
+import {
+  pushCleanupModels,
+  sendOrderPushNotification,
+} from '../../../shared/services/orderPushNotificationService.js';
 
 // Dynamic import to avoid circular dependency
 let getIO = null;
@@ -97,10 +101,8 @@ const createRestaurantNotification = async ({
 export async function notifyRestaurantNewOrder(order, restaurantId, paymentMethodOverride) {
   try {
     const io = await getIOInstance();
-
     if (!io) {
-      console.warn('Socket.IO not initialized, skipping restaurant notification');
-      return;
+      console.warn('Socket.IO not initialized, continuing with restaurant push notification only');
     }
 
     // CRITICAL: Validate restaurantId matches order's restaurantId
@@ -159,6 +161,7 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
     const isGroceryStore = inferredPlatform === 'mogrocery';
     const targetNamespacePath = isGroceryStore ? '/grocery-store' : '/restaurant';
     const roomPrefix = isGroceryStore ? 'grocery-store' : 'restaurant';
+    const dashboardLink = isGroceryStore ? '/store' : '/restaurant';
 
     // Prepare order notification data
     const orderNotification = {
@@ -187,8 +190,25 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
     };
     console.log('📢 Restaurant notification payload paymentMethod:', orderNotification.paymentMethod, { override: paymentMethodOverride, orderPaymentMethod: order.payment?.method });
 
+    const pushResult = await sendOrderPushNotification({
+      recipients: restaurant ? [restaurant] : [],
+      title: 'New order received',
+      body: `${order.orderId} is ready for review in ${order.restaurantName || (isGroceryStore ? 'your store' : 'your restaurant')}.`,
+      link: dashboardLink,
+      tag: `new_order_${order.orderId}`,
+      cleanupModels: isGroceryStore ? pushCleanupModels.store : pushCleanupModels.restaurant,
+      data: {
+        notificationType: 'new_order',
+        orderId: String(order.orderId || ''),
+        orderMongoId: String(order._id || ''),
+        restaurantId: String(normalizeIdentifier(restaurantId) || ''),
+        platform: isGroceryStore ? 'mogrocery' : 'mofood',
+        targetPath: dashboardLink,
+      },
+    });
+
     // Route notifications to the correct dashboard namespace (restaurant/store).
-    const restaurantNamespace = io.of(targetNamespacePath);
+    const restaurantNamespace = io ? io.of(targetNamespacePath) : null;
 
     const normalizedRestaurantId = normalizeIdentifier(restaurantId);
     const roomCandidateIds = Array.from(
@@ -206,6 +226,7 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
     // Get all connected sockets in the restaurant room
     let socketsInRoom = [];
     let resolvedRoom = roomVariations[0] || `${roomPrefix}:${normalizedRestaurantId}`;
+    if (restaurantNamespace) {
     for (const room of roomVariations) {
       const sockets = await restaurantNamespace.in(room).fetchSockets();
       if (sockets.length > 0) {
@@ -214,6 +235,7 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
         console.log(`📢 Found ${sockets.length} socket(s) in room: ${room}`);
         break;
       }
+    }
     }
 
     const primaryRoom = roomVariations[0] || resolvedRoom;
@@ -229,7 +251,7 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
 
     // CRITICAL: Only emit to the specific restaurant room - NEVER broadcast to all restaurants
     // This ensures orders only go to the correct restaurant
-    if (socketsInRoom.length > 0) {
+    if (restaurantNamespace && socketsInRoom.length > 0) {
       // Found sockets in the restaurant room - send notification only to that room
       restaurantNamespace.to(resolvedRoom).emit('new_order', orderNotification);
       restaurantNamespace.to(resolvedRoom).emit('play_notification_sound', {
@@ -239,7 +261,7 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
       });
       console.log(`📤 Sent notification to room: ${resolvedRoom}`);
       console.log(`✅ Notified restaurant ${normalizedRestaurantId} about new order ${order.orderId} (${socketsInRoom.length} socket(s) connected)`);
-    } else {
+    } else if (restaurantNamespace) {
       // No sockets found in restaurant room - log error but DO NOT broadcast to all restaurants
       console.error(`❌ CRITICAL: No sockets found for ${isGroceryStore ? 'store' : 'restaurant'} ${normalizedRestaurantId} in any room!`);
       console.error(`❌ Order ${order.orderId} will NOT be delivered to ${isGroceryStore ? 'store' : 'restaurant'} ${normalizedRestaurantId}`);
@@ -282,7 +304,8 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
         restaurantId,
         orderId: order.orderId,
         error: 'Restaurant not connected to Socket.IO',
-        message: `${isGroceryStore ? 'Store' : 'Restaurant'} ${normalizedRestaurantId} (${order.restaurantName}) is not connected. Order notification not sent.`
+        message: `${isGroceryStore ? 'Store' : 'Restaurant'} ${normalizedRestaurantId} (${order.restaurantName}) is not connected to Socket.IO. Push notification attempted.`,
+        push: pushResult
       };
     }
 
@@ -302,7 +325,8 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
     return {
       success: true,
       restaurantId,
-      orderId: order.orderId
+      orderId: order.orderId,
+      push: pushResult
     };
   } catch (error) {
     console.error('Error notifying restaurant:', error);
