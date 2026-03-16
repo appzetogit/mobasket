@@ -169,6 +169,26 @@ const fetchFlutterMobileToken = async () => {
   return "";
 };
 
+export const getNativeMobilePushMetaForCurrentSession = async (pathname = "") => {
+  if (typeof window === "undefined") return {};
+
+  const moduleName = getModuleFromPathname(pathname);
+
+  let token = readInjectedMobileToken(moduleName);
+  if (!token) {
+    token = await fetchFlutterMobileToken();
+  }
+
+  if (!token) return {};
+
+  return {
+    platform: "mobile",
+    token,
+    fcmToken: token,
+    fcmTokenMobile: token,
+  };
+};
+
 const parseNotificationPayload = (payload = {}) => {
   const title = payload?.notification?.title || payload?.data?.title || "New Notification";
   const body = payload?.notification?.body || payload?.data?.body || payload?.data?.message || "";
@@ -355,10 +375,8 @@ export const syncNativeMobilePushForCurrentSession = async (pathname = "", optio
 
   if (!updater || !hasAuthTokenForModule(moduleName)) return;
 
-  let token = readInjectedMobileToken(moduleName);
-  if (!token) {
-    token = await fetchFlutterMobileToken();
-  }
+  const mobilePushMeta = await getNativeMobilePushMetaForCurrentSession(pathname);
+  const token = mobilePushMeta?.fcmTokenMobile || mobilePushMeta?.token || "";
   if (!token) return;
 
   const tokenCacheKey = getMobileTokenCacheKey(moduleName);

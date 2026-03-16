@@ -200,6 +200,7 @@ export default function DeliveryOTP() {
 
     try {
       const phone = authData?.phone
+      const mobilePushMeta = authData?.mobilePushMeta || {}
       if (!phone) {
         setError("Phone number not found. Please try again.")
         setIsLoading(false)
@@ -207,7 +208,7 @@ export default function DeliveryOTP() {
       }
 
       // First attempt: verify OTP for login
-      const response = await deliveryAPI.verifyOTP(phone, code, "login")
+      const response = await deliveryAPI.verifyOTP(phone, code, "login", null, mobilePushMeta)
       const data = response?.data?.data || {}
 
       // Check if user needs to complete signup
@@ -338,13 +339,14 @@ export default function DeliveryOTP() {
 
     try {
       const phone = authData?.phone
+      const mobilePushMeta = authData?.mobilePushMeta || {}
       if (!phone) {
         setError("Phone number not found. Please try again.")
         return
       }
 
       // Second call with name to auto-register and login
-      const response = await deliveryAPI.verifyOTP(phone, verifiedOtp, "login", trimmedName)
+      const response = await deliveryAPI.verifyOTP(phone, verifiedOtp, "login", trimmedName, mobilePushMeta)
       const data = response?.data?.data || {}
 
       const accessToken = data.accessToken

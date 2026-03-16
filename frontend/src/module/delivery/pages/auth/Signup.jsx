@@ -15,6 +15,7 @@ import {
 import loginBg from "@/assets/deliveryloginbanner.png"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 import { deliveryAPI } from "@/lib/api"
+import { getNativeMobilePushMetaForCurrentSession } from "@/lib/webPush"
 
 // Common country codes
 const countryCodes = [
@@ -151,6 +152,13 @@ export default function DeliverySignup() {
       return
     }
 
+    let mobilePushMeta = {}
+    try {
+      mobilePushMeta = await getNativeMobilePushMetaForCurrentSession("/delivery")
+    } catch {
+      mobilePushMeta = {}
+    }
+
     // Store auth data in sessionStorage for OTP page
     const authData = {
       method: "phone",
@@ -158,6 +166,7 @@ export default function DeliverySignup() {
       name: formData.name,
       isSignUp: true,
       module: "delivery",
+      mobilePushMeta,
     }
     const serializedAuthData = JSON.stringify(authData)
     sessionStorage.setItem("deliveryAuthData", serializedAuthData)

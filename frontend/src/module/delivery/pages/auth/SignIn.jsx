@@ -13,6 +13,7 @@ import { deliveryAPI } from "@/lib/api"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 import { loadBusinessSettings } from "@/lib/utils/businessSettings"
 import PolicyModal from "@/components/legal/PolicyModal"
+import { getNativeMobilePushMetaForCurrentSession } from "@/lib/webPush"
 
 // Common country codes
 const countryCodes = [
@@ -102,12 +103,20 @@ export default function DeliverySignIn() {
       // Call backend to send OTP for delivery login
       await deliveryAPI.sendOTP(fullPhone, "login")
 
+      let mobilePushMeta = {}
+      try {
+        mobilePushMeta = await getNativeMobilePushMetaForCurrentSession("/delivery")
+      } catch {
+        mobilePushMeta = {}
+      }
+
       // Store auth data in sessionStorage for OTP page
       const authData = {
         method: "phone",
         phone: fullPhone,
         isSignUp: false,
         module: "delivery",
+        mobilePushMeta,
       }
       const serializedAuthData = JSON.stringify(authData)
       sessionStorage.setItem("deliveryAuthData", serializedAuthData)
