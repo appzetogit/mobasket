@@ -240,6 +240,17 @@ export default function SignupStep2() {
     const file = documents[docType]
     const uploaded = uploadedDocs[docType]
     const isUploading = uploading[docType]
+    const galleryInputId = `${docType}-gallery-input`
+    const cameraInputId = `${docType}-camera-input`
+
+    const handleSelect = (e) => {
+      const selectedFile = e.target.files?.[0]
+      if (selectedFile) {
+        handleFileSelect(docType, selectedFile)
+      }
+      // Allow selecting the same file again.
+      e.target.value = ""
+    }
 
     return (
       <div className="bg-white rounded-lg p-4 border border-gray-200">
@@ -267,8 +278,8 @@ export default function SignupStep2() {
             </div>
           </div>
         ) : (
-          <label className="flex flex-col items-center justify-center w-full h-48 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-green-500 transition-colors">
-            <div className="flex flex-col items-center justify-center pt-5 pb-6">
+          <div className="w-full h-48 border-2 border-dashed border-gray-300 rounded-lg transition-colors p-4 flex flex-col items-center justify-center">
+            <div className="flex flex-col items-center justify-center">
               {isUploading ? (
                 <>
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-500 mb-2"></div>
@@ -277,25 +288,48 @@ export default function SignupStep2() {
               ) : (
                 <>
                   <Upload className="w-8 h-8 text-gray-400 mb-2" />
-                  <p className="text-sm text-gray-500 mb-1">Click to upload</p>
-                  <p className="text-xs text-gray-400">PNG, JPG up to 5MB</p>
+                  <p className="text-sm text-gray-500 mb-1">Choose upload method</p>
+                  <p className="text-xs text-gray-400 mb-4">PNG, JPG up to 5MB</p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById(galleryInputId)?.click()}
+                      disabled={isUploading}
+                      className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      Gallery
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById(cameraInputId)?.click()}
+                      disabled={isUploading}
+                      className="px-3 py-2 text-sm font-medium rounded-lg bg-[#00B761] text-white hover:bg-[#00A055] disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      Camera
+                    </button>
+                  </div>
                 </>
               )}
             </div>
+
             <input
+              id={galleryInputId}
+              type="file"
+              className="hidden"
+              accept="image/*"
+              onChange={handleSelect}
+              disabled={isUploading}
+            />
+            <input
+              id={cameraInputId}
               type="file"
               className="hidden"
               accept="image/*"
               capture="environment"
-              onChange={(e) => {
-                const selectedFile = e.target.files[0]
-                if (selectedFile) {
-                  handleFileSelect(docType, selectedFile)
-                }
-              }}
+              onChange={handleSelect}
               disabled={isUploading}
             />
-          </label>
+          </div>
         )}
       </div>
     )

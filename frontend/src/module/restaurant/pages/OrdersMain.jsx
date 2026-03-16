@@ -767,6 +767,16 @@ export default function OrdersMain() {
           : (response?.data?.data?.restaurant || response?.data?.restaurant)
         if (restaurant) {
           const normalizedStatus = String(restaurant.status || "").trim().toLowerCase()
+          const completedOnboardingSteps = Number(restaurant?.onboarding?.completedSteps || 0)
+          const pendingLikeStatuses = new Set([
+            "pending",
+            "rejected",
+            "declined",
+            "submitted",
+            "verification_pending",
+            "in_review",
+            "under_review",
+          ])
           setRestaurantStatus({
             isActive: restaurant.isActive,
             isAcceptingOrders: restaurant.isAcceptingOrders !== false,
@@ -776,7 +786,19 @@ export default function OrdersMain() {
             isLoading: false
           })
 
-          // Once the restaurant has moved past onboarding, keep them on /restaurant.
+          const shouldRedirectToPendingApproval =
+            restaurant.isActive !== true &&
+            (
+              completedOnboardingSteps >= 4 ||
+              pendingLikeStatuses.has(normalizedStatus)
+            )
+
+          if (shouldRedirectToPendingApproval) {
+            navigate(isGroceryStore ? "/store/pending-approval" : "/restaurant/pending-approval", { replace: true })
+            return
+          }
+
+          // Once the restaurant/store has moved past onboarding and is not pending approval, keep them on home.
           if (normalizedStatus && normalizedStatus !== "onboarding") {
             return
           }
