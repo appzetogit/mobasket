@@ -6,11 +6,12 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { deliveryAPI } from "@/lib/api"
 import { setAuthData as storeAuthData } from "@/lib/utils/auth"
-import { setupWebPushForCurrentSession } from "@/lib/webPush"
+import { setupWebPushForCurrentSession, syncNativeMobilePushForCurrentSession } from "@/lib/webPush"
 
 const ensureDeliveryWebPushRegistration = async () => {
   try {
     await setupWebPushForCurrentSession("/delivery", { forceSync: true })
+    await syncNativeMobilePushForCurrentSession("/delivery", { forceSync: true })
   } catch (error) {
     console.warn("Delivery web push setup failed after auth:", error?.message || error)
   }

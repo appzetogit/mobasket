@@ -5,7 +5,11 @@ import AuthRedirect from "@/components/AuthRedirect";
 import RestaurantOrderSoundListener from "@/module/restaurant/components/RestaurantOrderSoundListener";
 import DeliveryOrderSoundListener from "@/module/delivery/components/DeliveryOrderSoundListener";
 import WelcomeSelectionPage from "@/module/user/pages/WelcomeSelectionPage";
-import { setupWebPushForCurrentSession, teardownWebPushListener } from "@/lib/webPush";
+import {
+  setupWebPushForCurrentSession,
+  syncNativeMobilePushForCurrentSession,
+  teardownWebPushListener,
+} from "@/lib/webPush";
 
 const UserRouter = lazy(() => import("@/module/user/components/UserRouter"));
 const RestaurantAppRoutes = lazy(() => import("@/route-groups/RestaurantAppRoutes"));
@@ -103,6 +107,10 @@ export default function App() {
         // eslint-disable-next-line no-console
         console.warn("Web push setup failed:", error?.message || error);
       });
+      syncNativeMobilePushForCurrentSession(location.pathname).catch((error) => {
+        // eslint-disable-next-line no-console
+        console.warn("Native mobile push sync failed:", error?.message || error);
+      });
     };
 
     runSetup();
@@ -121,15 +129,27 @@ export default function App() {
       runSetup();
     };
 
+    const onAuthChanged = () => {
+      runSetup();
+    };
+
     const intervalId = window.setInterval(runSetup, 60000);
     window.addEventListener("storage", onStorage);
     window.addEventListener("publicEnvReady", onPublicEnvReady);
+    window.addEventListener("userAuthChanged", onAuthChanged);
+    window.addEventListener("restaurantAuthChanged", onAuthChanged);
+    window.addEventListener("groceryStoreAuthChanged", onAuthChanged);
+    window.addEventListener("deliveryAuthChanged", onAuthChanged);
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       window.clearInterval(intervalId);
       window.removeEventListener("storage", onStorage);
       window.removeEventListener("publicEnvReady", onPublicEnvReady);
+      window.removeEventListener("userAuthChanged", onAuthChanged);
+      window.removeEventListener("restaurantAuthChanged", onAuthChanged);
+      window.removeEventListener("groceryStoreAuthChanged", onAuthChanged);
+      window.removeEventListener("deliveryAuthChanged", onAuthChanged);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       teardownWebPushListener();
     };

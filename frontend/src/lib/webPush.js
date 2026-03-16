@@ -8,6 +8,7 @@ import {
 } from "@/lib/browserNotifications";
 
 const FCM_TOKEN_CACHE_KEY = "fcm_web_token";
+const MOBILE_FCM_TOKEN_CACHE_KEY = "fcm_mobile_token";
 const PUSH_DEDUPE_WINDOW_MS = 10000;
 const PUSH_DEDUPE_STORAGE_PREFIX = "push_seen_";
 
@@ -72,6 +73,100 @@ const getTokenCacheKey = (moduleName) => {
   return recipientId
     ? `${FCM_TOKEN_CACHE_KEY}_${moduleName}_${recipientId}`
     : `${FCM_TOKEN_CACHE_KEY}_${moduleName}`;
+};
+
+const getMobileTokenCacheKey = (moduleName) => {
+  const recipientId = getRecipientIdForModule(moduleName);
+  return recipientId
+    ? `${MOBILE_FCM_TOKEN_CACHE_KEY}_${moduleName}_${recipientId}`
+    : `${MOBILE_FCM_TOKEN_CACHE_KEY}_${moduleName}`;
+};
+
+const normalizePossibleToken = (value) => {
+  const token = String(value || "").trim();
+  return token && token !== "null" && token !== "undefined" ? token : "";
+};
+
+const extractTokenFromValue = (value) => {
+  if (!value) return "";
+  if (typeof value === "string") return normalizePossibleToken(value);
+  if (typeof value === "object") {
+    return normalizePossibleToken(
+      value.token ||
+      value.fcmToken ||
+      value.fcm_token ||
+      value.firebaseToken ||
+      value.notificationToken ||
+      value.pushToken ||
+      value.data?.token ||
+      value.data?.fcmToken ||
+      value.data?.notificationToken
+    );
+  }
+  return "";
+};
+
+const readInjectedMobileToken = (moduleName) => {
+  if (typeof window === "undefined") return "";
+
+  const candidateKeys = [
+    `${moduleName}_fcmTokenMobile`,
+    `${moduleName}_fcmToken`,
+    `${moduleName}_notificationToken`,
+    "fcmTokenMobile",
+    "fcmToken",
+    "notificationToken",
+    "firebaseToken",
+    "pushToken",
+  ];
+
+  for (const key of candidateKeys) {
+    const localValue = extractTokenFromValue(localStorage.getItem(key));
+    if (localValue) return localValue;
+
+    const sessionValue = extractTokenFromValue(sessionStorage.getItem(key));
+    if (sessionValue) return sessionValue;
+  }
+
+  return extractTokenFromValue(
+    window.__PUBLIC_ENV?.FCM_TOKEN_MOBILE ||
+    window.__PUBLIC_ENV?.FCM_TOKEN ||
+    window.__PUBLIC_ENV?.NOTIFICATION_TOKEN ||
+    window.__FCM_TOKEN_MOBILE ||
+    window.__FCM_TOKEN ||
+    window.__NOTIFICATION_TOKEN
+  );
+};
+
+const getFlutterHandler = () => {
+  if (typeof window === "undefined") return null;
+  const handler = window.flutter_inappwebview?.callHandler;
+  return typeof handler === "function" ? handler.bind(window.flutter_inappwebview) : null;
+};
+
+const fetchFlutterMobileToken = async () => {
+  const callHandler = getFlutterHandler();
+  if (!callHandler) return "";
+
+  const handlerNames = [
+    "getFcmToken",
+    "getFCMToken",
+    "getFirebaseToken",
+    "getNotificationToken",
+    "getPushToken",
+  ];
+
+  for (const handlerName of handlerNames) {
+    try {
+      const result = await callHandler(handlerName);
+      const token = extractTokenFromValue(result);
+      if (token) return token;
+    } catch {
+      // Ignore missing/unsupported handlers and continue trying common names.
+    }
+  }
+
+  return "";
 };
 
 const parseNotificationPayload = (payload = {}) => {
@@ -249,6 +344,38 @@ export const setupWebPushForCurrentSession = async (pathname = "", options = {})
     });
 
   return setupInFlightPromise;
+};
+
+export const syncNativeMobilePushForCurrentSession = async (pathname = "", options = {}) => {
+  if (typeof window === "undefined") return;
+
+  const moduleName = getModuleFromPathname(pathname);
+  const updater = moduleToUpdater[moduleName];
+  const forceSync = options?.forceSync === true;
+
+  if (!updater || !hasAuthTokenForModule(moduleName)) return;
+
+  let token = readInjectedMobileToken(moduleName);
+  if (!token) {
+    token = await fetchFlutterMobileToken();
+  }
+  if (!token) return;
+
+  const tokenCacheKey = getMobileTokenCacheKey(moduleName);
+  const cachedToken = localStorage.getItem(tokenCacheKey);
+  if (!forceSync && cachedToken === token) return;
+
+  try {
+    await updater(token, "mobile");
+  } catch (error) {
+    const status = Number(error?.response?.status || 0);
+    if (status === 401 || status === 403) {
+      return;
+    }
+    throw error;
+  }
+
+  localStorage.setItem(tokenCacheKey, token);
 };
 
 export const teardownWebPushListener = () => {
