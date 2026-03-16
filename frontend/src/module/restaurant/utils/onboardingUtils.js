@@ -121,6 +121,28 @@ export const checkOnboardingStatus = async () => {
         ? profileResult.value?.data?.data?.restaurant || profileResult.value?.data?.restaurant
         : null
 
+    const normalizedStatus = String(restaurantProfile?.status || "").trim().toLowerCase()
+    const completedOnboardingSteps = Number(
+      restaurantProfile?.onboarding?.completedSteps ||
+      onboardingData?.completedSteps ||
+      0
+    )
+
+    // When onboarding is already complete but the restaurant is still awaiting approval,
+    // always prefer the pending-approval screen over bouncing back to onboarding/home.
+    if (
+      restaurantProfile &&
+      restaurantProfile.isActive !== true &&
+      (
+        normalizedStatus === "pending" ||
+        normalizedStatus === "rejected" ||
+        normalizedStatus === "declined" ||
+        completedOnboardingSteps >= 4
+      )
+    ) {
+      return "pending-approval"
+    }
+
     if (hasProvisionedRestaurantProfile(restaurantProfile)) {
       return null
     }
@@ -150,7 +172,12 @@ export const getPostAuthRestaurantPathFromCachedData = () => {
 export const redirectRestaurantAfterAuth = async (navigate, { replace = true } = {}) => {
   try {
     const step = await checkOnboardingStatus()
-    const targetPath = step ? `/restaurant/onboarding?step=${step}` : "/restaurant"
+    const targetPath =
+      step === "pending-approval"
+        ? "/restaurant/pending-approval"
+        : step
+          ? `/restaurant/onboarding?step=${step}`
+          : "/restaurant"
     navigate(targetPath, { replace })
   } catch {
     navigate("/restaurant", { replace })
