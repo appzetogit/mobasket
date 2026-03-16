@@ -112,9 +112,21 @@ const readInjectedMobileToken = (moduleName) => {
   const candidateKeys = [
     `${moduleName}_fcmTokenMobile`,
     `${moduleName}_fcmToken`,
+    `${moduleName}_mobileFcmToken`,
+    `${moduleName}_mobilePushToken`,
+    `${moduleName}_deviceToken`,
+    `${moduleName}_fcm_token_mobile`,
+    `${moduleName}_fcm_mobile_token`,
+    `${moduleName}FcmTokenMobile`,
+    `${moduleName}FcmToken`,
     `${moduleName}_notificationToken`,
     "fcmTokenMobile",
     "fcmToken",
+    "mobileFcmToken",
+    "mobilePushToken",
+    "deviceToken",
+    "fcm_mobile_token",
+    "fcm_token_mobile",
     "notificationToken",
     "firebaseToken",
     "pushToken",
@@ -134,7 +146,26 @@ const readInjectedMobileToken = (moduleName) => {
     window.__PUBLIC_ENV?.NOTIFICATION_TOKEN ||
     window.__FCM_TOKEN_MOBILE ||
     window.__FCM_TOKEN ||
-    window.__NOTIFICATION_TOKEN
+    window.__NOTIFICATION_TOKEN ||
+    window.fcmTokenMobile ||
+    window.fcmToken ||
+    window.mobileFcmToken ||
+    window.mobilePushToken ||
+    window.deviceToken ||
+    window.notificationToken ||
+    window.pushToken ||
+    window.firebaseToken ||
+    window.FCM_TOKEN_MOBILE ||
+    window.FCM_TOKEN ||
+    window.NOTIFICATION_TOKEN ||
+    window.PUSH_TOKEN ||
+    window.DEVICE_TOKEN ||
+    window.__APP_STATE__?.fcmTokenMobile ||
+    window.__APP_STATE__?.fcmToken ||
+    window.__APP_STATE__?.notificationToken ||
+    window.__MOBASKET__?.fcmTokenMobile ||
+    window.__MOBASKET__?.fcmToken ||
+    window.__MOBASKET__?.notificationToken
   );
 };
 
@@ -151,9 +182,13 @@ const fetchFlutterMobileToken = async () => {
   const handlerNames = [
     "getFcmToken",
     "getFCMToken",
+    "getMobileFcmToken",
+    "getNativeFcmToken",
     "getFirebaseToken",
     "getNotificationToken",
     "getPushToken",
+    "getDeviceToken",
+    "getToken",
   ];
 
   for (const handlerName of handlerNames) {
@@ -169,15 +204,38 @@ const fetchFlutterMobileToken = async () => {
   return "";
 };
 
+const delay = (ms) =>
+  new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+
+const resolveNativeMobileToken = async (moduleName) => {
+  let token = readInjectedMobileToken(moduleName);
+  if (token) return token;
+
+  token = await fetchFlutterMobileToken();
+  if (token) return token;
+
+  return "";
+};
+
+const resolveNativeMobileTokenWithRetry = async (moduleName, attempts = 6, waitMs = 500) => {
+  for (let index = 0; index < attempts; index += 1) {
+    const token = await resolveNativeMobileToken(moduleName);
+    if (token) return token;
+    if (index < attempts - 1) {
+      await delay(waitMs);
+    }
+  }
+
+  return "";
+};
+
 export const getNativeMobilePushMetaForCurrentSession = async (pathname = "") => {
   if (typeof window === "undefined") return {};
 
   const moduleName = getModuleFromPathname(pathname);
-
-  let token = readInjectedMobileToken(moduleName);
-  if (!token) {
-    token = await fetchFlutterMobileToken();
-  }
+  const token = await resolveNativeMobileTokenWithRetry(moduleName);
 
   if (!token) return {};
 
