@@ -9,14 +9,6 @@ const INVALID_TOKEN_CODES = new Set([
   'messaging/mismatched-credential',
 ]);
 
-const chunkArray = (items = [], size = 500) => {
-  const chunks = [];
-  for (let index = 0; index < items.length; index += size) {
-    chunks.push(items.slice(index, index + size));
-  }
-  return chunks;
-};
-
 const normalizeToken = (value) => {
   if (typeof value !== 'string') return '';
   return value.trim();
@@ -109,14 +101,13 @@ export async function sendOrderPushNotification({
       link: String(link || '/').trim(),
       click_action: String(link || '/').trim(),
       source: 'order_notification',
+      sendTo: 'Delivery',
+      zone: 'All',
+      platform: 'all',
       ...data,
     }),
     android: {
       priority: 'high',
-      notification: {
-        sound: 'default',
-        channelId: 'orders',
-      },
     },
     apns: {
       headers: {
@@ -148,23 +139,20 @@ export async function sendOrderPushNotification({
   let failureCount = 0;
   const invalidTokens = [];
   const messaging = admin.messaging(firebaseState.app);
-
-  for (const tokenChunk of chunkArray(tokens, 500)) {
-    const response = await messaging.sendEachForMulticast({
-      ...payload,
-      tokens: tokenChunk,
-    });
-
-    successCount += Number(response?.successCount || 0);
-    failureCount += Number(response?.failureCount || 0);
-
-    response.responses?.forEach((item, index) => {
-      if (item?.success) return;
-      const errorCode = String(item?.error?.code || item?.error?.errorInfo?.code || '').trim();
+  for (const token of tokens) {
+    try {
+      await messaging.send({
+        ...payload,
+        token,
+      });
+      successCount += 1;
+    } catch (error) {
+      failureCount += 1;
+      const errorCode = String(error?.code || error?.errorInfo?.code || '').trim();
       if (INVALID_TOKEN_CODES.has(errorCode)) {
-        invalidTokens.push(tokenChunk[index]);
+        invalidTokens.push(token);
       }
-    });
+    }
   }
 
   await cleanupInvalidTokens(invalidTokens, cleanupModels);
