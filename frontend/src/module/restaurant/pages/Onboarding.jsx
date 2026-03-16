@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { useNavigate, useSearchParams } from "react-router-dom"
+import { Navigate, useNavigate, useSearchParams } from "react-router-dom"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -38,6 +38,43 @@ const DEFAULT_CLOSING_TIME = "22:00"
 const GOOGLE_MAP_ID = String(import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "").trim()
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"])
 const ALLOWED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"]
+
+const getVerificationRedirectPath = (restaurant) => {
+  const normalizedStatus = String(restaurant?.status || "").trim().toLowerCase()
+  const completedSteps = Number(restaurant?.onboarding?.completedSteps || 0)
+  const isApprovalPendingStatus =
+    normalizedStatus === "pending" ||
+    normalizedStatus === "rejected" ||
+    normalizedStatus === "declined"
+
+  if (restaurant?.isActive === true) {
+    return "/restaurant"
+  }
+
+  if (completedSteps >= 4 || isApprovalPendingStatus) {
+    return "/restaurant/pending-approval"
+  }
+
+  if (normalizedStatus && normalizedStatus !== "onboarding") {
+    return "/restaurant"
+  }
+
+  return null
+}
+
+const getCachedRestaurantRedirectPath = () => {
+  if (typeof window === "undefined") return null
+
+  try {
+    const cachedRaw = localStorage.getItem("restaurant_user")
+    if (!cachedRaw) return null
+    const cachedRestaurant = JSON.parse(cachedRaw)
+    const redirectPath = getVerificationRedirectPath(cachedRestaurant)
+    return redirectPath === "/restaurant/pending-approval" ? redirectPath : null
+  } catch {
+    return null
+  }
+}
 
 const waitForGoogleMaps = (timeoutMs = 12000) =>
   new Promise((resolve, reject) => {
@@ -165,8 +202,9 @@ export default function RestaurantOnboarding() {
   const [searchParams] = useSearchParams()
   const requestedStepParam = searchParams.get("step")
   const isFreshStepOne = requestedStepParam === "1"
+  const cachedPendingRedirectPath = getCachedRestaurantRedirectPath()
   const [step, setStep] = useState(1)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
   const [signedInPhone, setSignedInPhone] = useState("")
@@ -236,26 +274,6 @@ export default function RestaurantOnboarding() {
     featuredPrice: "",
     offer: "",
   })
-
-  const getVerificationRedirectPath = (restaurant) => {
-    const normalizedStatus = String(restaurant?.status || "").trim().toLowerCase()
-    const completedSteps = Number(restaurant?.onboarding?.completedSteps || 0)
-    const isApprovalPendingStatus = normalizedStatus === "pending" || normalizedStatus === "rejected" || normalizedStatus === "declined"
-
-    if (restaurant?.isActive === true) {
-      return "/restaurant"
-    }
-
-    if (completedSteps >= 4 || isApprovalPendingStatus) {
-      return "/restaurant/pending-approval"
-    }
-
-    if (normalizedStatus && normalizedStatus !== "onboarding") {
-      return "/restaurant"
-    }
-
-    return null
-  }
 
   const normalizePhoneDigits = (value) => String(value || "").replace(/\D/g, "")
 
@@ -709,6 +727,10 @@ export default function RestaurantOnboarding() {
     }
     fetchData()
   }, [isFreshStepOne])
+
+  if (cachedPendingRedirectPath) {
+    return <Navigate to={cachedPendingRedirectPath} replace />
+  }
 
   useEffect(() => {
     if (isFreshStepOne) {

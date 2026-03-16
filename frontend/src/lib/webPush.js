@@ -136,38 +136,6 @@ const isEmbeddedFlutterWebView = () => {
   return Boolean(window.flutter_inappwebview);
 };
 
-const isLocalDevelopmentHost = (hostname = "") => {
-  const normalized = String(hostname || "").toLowerCase();
-  return (
-    normalized === "localhost" ||
-    normalized === "127.0.0.1" ||
-    normalized === "[::1]" ||
-    normalized.endsWith(".local")
-  );
-};
-
-const shouldDisableWebPushInCurrentSession = () => {
-  if (typeof window === "undefined") return false;
-  return Boolean(import.meta?.env?.DEV) && isLocalDevelopmentHost(window.location.hostname);
-};
-
-const cleanupDevMessagingServiceWorkers = async () => {
-  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
-
-  try {
-    const registrations = await navigator.serviceWorker.getRegistrations();
-    const messagingRegistrations = registrations.filter((registration) =>
-      registration?.active?.scriptURL?.includes("firebase-messaging-sw.js") ||
-      registration?.waiting?.scriptURL?.includes("firebase-messaging-sw.js") ||
-      registration?.installing?.scriptURL?.includes("firebase-messaging-sw.js"),
-    );
-
-    await Promise.all(messagingRegistrations.map((registration) => registration.unregister()));
-  } catch {
-    // Best effort cleanup only.
-  }
-};
-
 export const setupWebPushForCurrentSession = async (pathname = "") => {
   if (setupInFlightPromise) {
     return setupInFlightPromise;
@@ -175,10 +143,6 @@ export const setupWebPushForCurrentSession = async (pathname = "") => {
 
   setupInFlightPromise = (async () => {
   if (typeof window === "undefined") return;
-  if (shouldDisableWebPushInCurrentSession()) {
-    await cleanupDevMessagingServiceWorkers();
-    return;
-  }
   if (!window.isSecureContext || !("serviceWorker" in navigator) || !("Notification" in window)) return;
 
   const moduleName = getModuleFromPathname(pathname);

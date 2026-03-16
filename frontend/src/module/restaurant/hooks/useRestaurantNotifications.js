@@ -307,8 +307,14 @@ export const useRestaurantNotifications = (options = {}) => {
     });
 
     // Listen for order status updates
-    socketRef.current.on('order_status_update', () => {
-      // You can handle status updates here if needed
+    socketRef.current.on('order_status_update', (payload) => {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('restaurantOrderStatusUpdate', {
+            detail: payload || null,
+          })
+        );
+      }
     });
 
     // Load notification sound

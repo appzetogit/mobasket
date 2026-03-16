@@ -39,6 +39,12 @@ import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
 // Icons
 import imgBag3D from "@/assets/icons/shopping-bag_18008822.png";
 
+const INITIAL_GROCERY_BESTSELLER_COUNT = 6;
+const INITIAL_GROCERY_LAYOUT_PRODUCT_COUNT = 8;
+const INITIAL_GROCERY_SEARCH_PRODUCT_COUNT = 8;
+const INITIAL_GROCERY_CATEGORY_SECTION_COUNT = 4;
+const INITIAL_GROCERY_BESTSELLER_SECTION_COUNT = 2;
+
 const normalizeAddressText = (value) =>
   String(value || "")
     .trim()
@@ -217,6 +223,8 @@ const GroceryPage = () => {
   const [isStoresLoading, setIsStoresLoading] = useState(true);
   const [vegMode, setVegMode] = useState(false);
   const [showSnow, setShowSnow] = useState(false);
+  const [showDeferredSections, setShowDeferredSections] = useState(false);
+  const [renderAllProductGrids, setRenderAllProductGrids] = useState(false);
   const [homepageCategories, setHomepageCategories] = useState([]);
   const [bestSellerItems, setBestSellerItems] = useState([]);
   const [bestSellerSections, setBestSellerSections] = useState([]);
@@ -232,6 +240,40 @@ const GroceryPage = () => {
   const isAnySheetOpen = showCategorySheet || showCollectionSheet || showWishlistSheet;
   const collectionHandleStartYRef = useRef(null);
   const wishlistHandleStartYRef = useRef(null);
+
+  useEffect(() => {
+    let timeoutId;
+
+    const enableDeferredSections = () => {
+      setShowDeferredSections(true);
+      timeoutId = window.setTimeout(() => {
+        setRenderAllProductGrids(true);
+      }, 800);
+    };
+
+    if (typeof window === "undefined") return undefined;
+
+    if ("requestIdleCallback" in window) {
+      const idleId = window.requestIdleCallback(enableDeferredSections, {
+        timeout: 1200,
+      });
+
+      return () => {
+        window.cancelIdleCallback?.(idleId);
+        if (timeoutId) {
+          window.clearTimeout(timeoutId);
+        }
+      };
+    }
+
+    timeoutId = window.setTimeout(enableDeferredSections, 500);
+
+    return () => {
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (!isAnySheetOpen) return undefined;
@@ -1722,6 +1764,14 @@ const GroceryPage = () => {
       }));
   }, [bestSellerItems, hasActiveGroceryStore, searchQuery, selectedStoreId, storeFilteredProducts]);
 
+  const displayedBestSellers = useMemo(
+    () =>
+      showDeferredSections
+        ? visibleBestSellers
+        : visibleBestSellers.slice(0, INITIAL_GROCERY_BESTSELLER_COUNT),
+    [showDeferredSections, visibleBestSellers],
+  );
+
   const orderedBestSellerProductSections = useMemo(() => {
     const productMap = new Map(
       (Array.isArray(storeFilteredProducts) ? storeFilteredProducts : []).map((product) => [
@@ -1776,6 +1826,14 @@ const GroceryPage = () => {
         return a.name.localeCompare(b.name);
       });
   }, [bestSellerItems, bestSellerSections, storeFilteredProducts]);
+
+  const displayedBestSellerProductSections = useMemo(
+    () =>
+      showDeferredSections
+        ? orderedBestSellerProductSections
+        : orderedBestSellerProductSections.slice(0, INITIAL_GROCERY_BESTSELLER_SECTION_COUNT),
+    [orderedBestSellerProductSections, showDeferredSections],
+  );
 
   const storeFilterOptions = useMemo(() => {
     const normalizedStores = groceryStores
@@ -1954,6 +2012,30 @@ const GroceryPage = () => {
     // Base prep/packing + travel estimate (~4 min per km)
     return Math.max(8, Math.min(60, Math.round(8 + activeDistanceKm * 4)));
   }, [nearestStoreDistanceKm, selectedStoreDistanceKm, selectedStoreId]);
+
+  const displayedLayoutProducts = useMemo(
+    () =>
+      renderAllProductGrids
+        ? visibleLayoutProducts
+        : visibleLayoutProducts.slice(0, INITIAL_GROCERY_LAYOUT_PRODUCT_COUNT),
+    [renderAllProductGrids, visibleLayoutProducts],
+  );
+
+  const displayedSearchProducts = useMemo(
+    () =>
+      renderAllProductGrids
+        ? visibleSearchProducts
+        : visibleSearchProducts.slice(0, INITIAL_GROCERY_SEARCH_PRODUCT_COUNT),
+    [renderAllProductGrids, visibleSearchProducts],
+  );
+
+  const displayedHomepageCategorySections = useMemo(
+    () =>
+      showDeferredSections
+        ? homepageCategoryDisplaySections
+        : homepageCategoryDisplaySections.slice(0, INITIAL_GROCERY_CATEGORY_SECTION_COUNT),
+    [homepageCategoryDisplaySections, showDeferredSections],
+  );
 
   const savedHeaderAddress = useMemo(() => {
     const addressList = Array.isArray(addresses) && addresses.length > 0
@@ -2652,7 +2734,7 @@ const GroceryPage = () => {
         </div>
       )}
 
-      {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && bannerImages.length > 0 && (
+      {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && showDeferredSections && bannerImages.length > 0 && (
         <div className="relative z-0 -mt-1 animate-fade-in-up px-4 pt-2 pb-1 md:max-w-6xl mx-auto">
           <div className="relative w-full aspect-[2.3/1] md:aspect-[3.6/1] bg-white/20 backdrop-blur-sm rounded-2xl shadow-lg border border-white/30 overflow-hidden">
             {bannerImages.map((bannerImg, index) => (
@@ -2682,12 +2764,12 @@ const GroceryPage = () => {
         </div>
       )}
 
-      {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && visibleBestSellers.length > 0 && (
+      {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && displayedBestSellers.length > 0 && (
         <div className="px-4 pt-4 pb-2 relative z-10 md:max-w-6xl md:mx-auto">
           <h3 className="text-lg font-[800] text-[#3e2723] dark:text-slate-100 mb-4">Bestsellers</h3>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-6">
-            {visibleBestSellers.map((item, idx) => {
+            {displayedBestSellers.map((item, idx) => {
               const cardImages = Array.from({ length: 4 }).map(
                 (_, imageIndex) => item.previewImages?.[imageIndex] || item.image
               );
@@ -2721,6 +2803,11 @@ const GroceryPage = () => {
               );
             })}
           </div>
+          {!showDeferredSections && visibleBestSellers.length > displayedBestSellers.length && (
+            <p className="pt-3 text-center text-sm text-slate-500 dark:text-slate-400">
+              Loading more bestsellers...
+            </p>
+          )}
         </div>
       )}
 
@@ -2776,7 +2863,7 @@ const GroceryPage = () => {
                 <p className="px-1 py-6 text-sm text-slate-500 dark:text-slate-400">No products found in this subcategory.</p>
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
-                  {visibleLayoutProducts.map((product) => {
+                  {displayedLayoutProducts.map((product) => {
                     const productId = product?._id || product?.id;
                     const cartItemId = getGroceryCartItemId(product);
                     const cartItem = cartItemId ? getCartItem(cartItemId) : null;
@@ -2897,6 +2984,9 @@ const GroceryPage = () => {
                   })}
                 </div>
               )}
+              {!renderAllProductGrids && visibleLayoutProducts.length > displayedLayoutProducts.length && (
+                <p className="px-1 pt-3 text-sm text-slate-500 dark:text-slate-400">Loading more products...</p>
+              )}
             </section>
           </div>
         </div>
@@ -2910,11 +3000,11 @@ const GroceryPage = () => {
         </div>
       )}
 
-      {!shouldShowShimmer && !shouldShowUnavailableMap && hasActiveSearch && visibleBestSellers.length > 0 && (
+      {!shouldShowShimmer && !shouldShowUnavailableMap && hasActiveSearch && displayedBestSellers.length > 0 && (
         <div className="px-4 pt-2 pb-2 relative z-10 md:max-w-6xl md:mx-auto">
           <h4 className="text-base font-[800] text-[#3e2723] dark:text-slate-100 mb-3">Related Bestsellers</h4>
           <div className="grid grid-cols-3 gap-2.5">
-            {visibleBestSellers.map((item, idx) => {
+            {displayedBestSellers.map((item, idx) => {
               const cardImages = Array.from({ length: 4 }).map(
                 (_, imageIndex) => item.previewImages?.[imageIndex] || item.image
               );
@@ -2949,11 +3039,11 @@ const GroceryPage = () => {
         </div>
       )}
 
-      {!shouldShowShimmer && !shouldShowUnavailableMap && hasActiveSearch && visibleSearchProducts.length > 0 && (
+      {!shouldShowShimmer && !shouldShowUnavailableMap && hasActiveSearch && displayedSearchProducts.length > 0 && (
         <div className="px-4 pt-2 pb-2 relative z-10 md:max-w-6xl md:mx-auto">
           <h4 className="text-base font-[800] text-[#3e2723] dark:text-slate-100 mb-3">Products</h4>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            {visibleSearchProducts.map((product) => {
+            {displayedSearchProducts.map((product) => {
               const primarySubcategory =
                 (Array.isArray(product?.subcategories) && product.subcategories[0]?._id) ||
                 product?.subcategory?._id ||
@@ -2993,6 +3083,9 @@ const GroceryPage = () => {
               );
             })}
           </div>
+          {!renderAllProductGrids && visibleSearchProducts.length > displayedSearchProducts.length && (
+            <p className="pt-3 text-sm text-slate-500 dark:text-slate-400">Loading more search results...</p>
+          )}
         </div>
       )}
 
@@ -3002,10 +3095,10 @@ const GroceryPage = () => {
         </div>
       )}
 
-      {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && homepageCategoryDisplaySections.map((category, sectionIndex) => (
+      {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && displayedHomepageCategorySections.map((category, sectionIndex) => (
         <div
           key={category._id || category.slug || category.name}
-          className={`px-4 relative z-10 md:max-w-6xl md:mx-auto ${sectionIndex === homepageCategoryDisplaySections.length - 1 ? "pb-8" : "pb-6"
+          className={`px-4 relative z-10 md:max-w-6xl md:mx-auto ${sectionIndex === displayedHomepageCategorySections.length - 1 ? "pb-8" : "pb-6"
             }`}
         >
           <h3 className="text-lg font-[800] text-[#3e2723] dark:text-slate-100 mb-4">{category.name}</h3>
@@ -3071,9 +3164,15 @@ const GroceryPage = () => {
         </div>
       ))}
 
-      {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && orderedBestSellerProductSections.length > 0 && (
+      {!showDeferredSections && !shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && homepageCategoryDisplaySections.length > displayedHomepageCategorySections.length && (
+        <div className="px-4 pb-4 relative z-10 md:max-w-6xl md:mx-auto">
+          <p className="text-sm text-slate-500 dark:text-slate-400">Loading more categories...</p>
+        </div>
+      )}
+
+      {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && displayedBestSellerProductSections.length > 0 && (
         <div className="px-4 pb-24 relative z-10 md:max-w-6xl md:mx-auto space-y-6">
-          {orderedBestSellerProductSections.map((section) => (
+          {displayedBestSellerProductSections.map((section) => (
             <div key={section.id}>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-xl font-[800] text-[#1a1a1a] dark:text-slate-100">{section.name}</h3>
@@ -3181,6 +3280,9 @@ const GroceryPage = () => {
               </div>
             </div>
           ))}
+          {!showDeferredSections && orderedBestSellerProductSections.length > displayedBestSellerProductSections.length && (
+            <p className="text-sm text-slate-500 dark:text-slate-400">Loading more curated sections...</p>
+          )}
         </div>
       )}
 

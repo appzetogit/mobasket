@@ -4,6 +4,7 @@ import AdminPushNotification from '../models/AdminPushNotification.js';
 import RestaurantNotification from '../../restaurant/models/RestaurantNotification.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import GroceryStore from '../../grocery/models/GroceryStore.js';
+import Delivery from '../../delivery/models/Delivery.js';
 import User from '../../auth/models/User.js';
 import { initializeFirebaseAdmin, admin } from '../../../shared/services/firebaseAdminService.js';
 import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
@@ -12,6 +13,14 @@ const normalizePlatform = (value) => {
   const normalized = String(value || '').toLowerCase().trim();
   if (normalized === 'mofood' || normalized === 'mogrocery') return normalized;
   return 'all';
+};
+
+const getPushLinkForTarget = (sendTo = '') => {
+  const normalized = String(sendTo || '').trim();
+  if (normalized === 'Restaurant') return '/restaurant';
+  if (normalized === 'Store') return '/store';
+  if (normalized === 'Delivery') return '/delivery';
+  return '/';
 };
 
 const getRestaurantRecipients = async (platform) => {
@@ -35,6 +44,10 @@ const getRestaurantRecipients = async (platform) => {
 
 const getCustomerRecipients = async () => {
   return User.find({ role: 'user' }).select('_id fcmTokenWeb fcmTokenMobile').lean();
+};
+
+const getDeliveryRecipients = async () => {
+  return Delivery.find({}).select('_id fcmTokenWeb fcmTokenMobile').lean();
 };
 
 const getTokens = (recipients) => {
@@ -109,6 +122,14 @@ const cleanupInvalidTokens = async (invalidTokens = []) => {
       { $set: { fcmTokenWeb: '' } }
     ),
     GroceryStore.updateMany(
+      { fcmTokenMobile: { $in: tokenSet } },
+      { $set: { fcmTokenMobile: '' } }
+    ),
+    Delivery.updateMany(
+      { fcmTokenWeb: { $in: tokenSet } },
+      { $set: { fcmTokenWeb: '' } }
+    ),
+    Delivery.updateMany(
       { fcmTokenMobile: { $in: tokenSet } },
       { $set: { fcmTokenMobile: '' } }
     ),
@@ -324,7 +345,9 @@ const dispatchFirebasePush = async ({ tokens, title, description, sendTo, zone, 
     });
   };
 
-  const buildBaseMessage = () => ({
+  const buildBaseMessage = () => {
+    const link = getPushLinkForTarget(sendTo);
+    return ({
     notification: {
       title,
       body: description,
@@ -336,9 +359,14 @@ const dispatchFirebasePush = async ({ tokens, title, description, sendTo, zone, 
       sendTo: String(sendTo || ''),
       platform: String(platform || ''),
       zone: String(zone || 'All'),
+      link,
+      click_action: link,
       ...(image ? { image: String(image) } : {}),
     },
     webpush: {
+      fcmOptions: {
+        link,
+      },
       notification: {
         title,
         body: description,
@@ -353,6 +381,7 @@ const dispatchFirebasePush = async ({ tokens, title, description, sendTo, zone, 
       },
     } : {}),
   });
+  };
 
   const sendChunkIndividually = async (tokenChunk) => {
     const baseMessage = buildBaseMessage();
@@ -455,7 +484,8 @@ const dispatchFirebasePush = async ({ tokens, title, description, sendTo, zone, 
 
       if (
         code === 'messaging/registration-token-not-registered' ||
-        code === 'messaging/invalid-registration-token'
+        code === 'messaging/invalid-registration-token' ||
+        code === 'messaging/mismatched-credential'
       ) {
         invalidTokens.push(failedToken);
       }
@@ -523,8 +553,8 @@ export const createPushNotification = asyncHandler(async (req, res) => {
     return errorResponse(res, 400, 'Description is required');
   }
 
-  if (!['Customer', 'All', 'Restaurant', 'Store'].includes(safeSendTo)) {
-    return errorResponse(res, 400, `Unsupported target "${safeSendTo}". Currently supported: Customer, All, Restaurant, Store.`);
+  if (!['Customer', 'All', 'Restaurant', 'Store', 'Delivery'].includes(safeSendTo)) {
+    return errorResponse(res, 400, `Unsupported target "${safeSendTo}". Currently supported: Customer, All, Restaurant, Store, Delivery.`);
   }
 
   if (safeSendTo === 'Customer') {
@@ -535,6 +565,8 @@ export const createPushNotification = asyncHandler(async (req, res) => {
     safePlatform = 'mofood';
   } else if (safeSendTo === 'Store') {
     safePlatform = 'mogrocery';
+  } else if (safeSendTo === 'Delivery') {
+    safePlatform = 'all';
   }
 
   if (req.file) {
@@ -571,21 +603,26 @@ export const createPushNotification = asyncHandler(async (req, res) => {
 
   let customerRecipients = [];
   let businessRecipients = [];
+  let deliveryRecipients = [];
 
   if (safeSendTo === 'Customer') {
     customerRecipients = await getCustomerRecipients();
   } else if (safeSendTo === 'All') {
-    const [users, business] = await Promise.all([
+    const [users, business, delivery] = await Promise.all([
       getCustomerRecipients(),
       getRestaurantRecipients('all'),
+      getDeliveryRecipients(),
     ]);
     customerRecipients = users;
     businessRecipients = business;
+    deliveryRecipients = delivery;
+  } else if (safeSendTo === 'Delivery') {
+    deliveryRecipients = await getDeliveryRecipients();
   } else {
     businessRecipients = await getRestaurantRecipients(safePlatform);
   }
 
-  const recipientCount = customerRecipients.length + businessRecipients.length;
+  const recipientCount = customerRecipients.length + businessRecipients.length + deliveryRecipients.length;
 
   if (businessRecipients.length > 0) {
     const docs = businessRecipients.map((recipient) => ({
@@ -604,8 +641,9 @@ export const createPushNotification = asyncHandler(async (req, res) => {
     await RestaurantNotification.insertMany(docs, { ordered: false });
   }
 
-  const pushTokens = getTokens([...customerRecipients, ...businessRecipients]);
-  const tokenChannelMap = getTokenChannelMap([...customerRecipients, ...businessRecipients]);
+  const allRecipients = [...customerRecipients, ...businessRecipients, ...deliveryRecipients];
+  const pushTokens = getTokens(allRecipients);
+  const tokenChannelMap = getTokenChannelMap(allRecipients);
   const dispatchResult = await dispatchFirebasePush({
     tokens: pushTokens,
     title: safeTitle,

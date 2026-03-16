@@ -43,6 +43,29 @@ const filterTabs = [
   { id: "cancelled", label: "Cancelled" },
 ]
 
+const formatOrderStatusLabel = (status) => {
+  const normalizedStatus = String(status || "").trim().toLowerCase()
+
+  switch (normalizedStatus) {
+    case "out_for_delivery":
+    case "out-for-delivery":
+      return "Out for delivery"
+    case "delivered":
+    case "completed":
+      return "Delivered"
+    case "cancelled":
+      return "Cancelled"
+    case "ready":
+      return "Ready"
+    case "preparing":
+      return "Preparing"
+    case "scheduled":
+      return "Scheduled"
+    default:
+      return String(status || "").trim() || "Unknown"
+  }
+}
+
 // Completed Orders List Component
 function CompletedOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 0 }) {
   const [orders, setOrders] = useState([])
@@ -129,7 +152,7 @@ function CompletedOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTic
         clearInterval(intervalId)
       }
     }
-  }, [])
+  }, [orderAPI, refreshTick])
 
   if (loading) {
     return (
@@ -342,7 +365,7 @@ function CancelledOrders({ onSelectOrder, orderAPI, isGroceryStore = false, sear
         clearInterval(intervalId)
       }
     }
-  }, [])
+  }, [orderAPI, refreshTick])
 
   if (loading) {
     return (
@@ -986,6 +1009,63 @@ export default function OrdersMain() {
     clearNewOrder()
   }, [newOrder, clearNewOrder, hasOrderBeenShown, markOrderAsShown])
 
+  useEffect(() => {
+    const handleOrderStatusUpdate = (event) => {
+      const orderStatusUpdate = event?.detail
+      if (!orderStatusUpdate) return
+
+      setOrdersRefreshTick((prev) => prev + 1)
+
+      setSelectedOrder((current) => {
+        if (!current) return current
+
+        const incomingIds = [
+          orderStatusUpdate?.orderMongoId,
+          orderStatusUpdate?._id,
+          orderStatusUpdate?.mongoId,
+          orderStatusUpdate?.orderId,
+          orderStatusUpdate?.id,
+        ]
+          .map((value) => String(value || "").trim())
+          .filter(Boolean)
+
+        const currentIds = [
+          current?.mongoId,
+          current?.orderMongoId,
+          current?.orderId,
+          current?.id,
+        ]
+          .map((value) => String(value || "").trim())
+          .filter(Boolean)
+
+        const isSameOrder = incomingIds.some((id) => currentIds.includes(id))
+        if (!isSameOrder) return current
+
+        const nextStatusLabel = formatOrderStatusLabel(orderStatusUpdate?.status)
+        const updatedTime = orderStatusUpdate?.updatedAt
+          ? new Date(orderStatusUpdate.updatedAt).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+          : current.timePlaced
+
+        return {
+          ...current,
+          status: nextStatusLabel,
+          timePlaced: updatedTime,
+        }
+      })
+    }
+
+    window.addEventListener("restaurantOrderStatusUpdate", handleOrderStatusUpdate)
+    return () => {
+      window.removeEventListener("restaurantOrderStatusUpdate", handleOrderStatusUpdate)
+    }
+  }, [])
+
   // Track popup state with ref to avoid stale closures
   useEffect(() => {
     showNewOrderPopupRef.current = showNewOrderPopup
@@ -1396,6 +1476,7 @@ export default function OrdersMain() {
     setRejectReason("")
     setCountdown(240)
     setPrepTime(11)
+    setOrdersRefreshTick((prev) => prev + 1)
   }
 
   const handleRejectCancel = () => {
@@ -1420,6 +1501,7 @@ export default function OrdersMain() {
       const orderId = orderToCancel.mongoId || orderToCancel.orderId
       await orderAPI.rejectOrder(orderId, cancelReason.trim())
       toast.success('Order cancelled successfully')
+      setOrdersRefreshTick((prev) => prev + 1)
       setShowCancelPopup(false)
       setOrderToCancel(null)
       setCancelReason("")

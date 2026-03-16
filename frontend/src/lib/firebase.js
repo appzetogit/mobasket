@@ -32,13 +32,17 @@ let firebaseAuth;
 let googleProvider;
 let realtimeDb;
 export let firebaseApp = null;
+let hasWarnedAboutMissingFirebaseConfig = false;
 
 // Function to ensure Firebase is initialized
 function ensureFirebaseInitialized() {
   const firebaseConfig = getFirebaseConfigFromRuntimeEnv();
   const missingFields = requiredFields.filter(field => !firebaseConfig[field] || firebaseConfig[field] === 'undefined');
   if (missingFields.length > 0) {
-    console.warn(`Firebase configuration missing fields: ${missingFields.join(', ')}. Configure them in Admin > Env Setup.`);
+    if (!hasWarnedAboutMissingFirebaseConfig) {
+      console.warn(`Firebase configuration missing fields: ${missingFields.join(', ')}. Configure them in Admin > Env Setup.`);
+      hasWarnedAboutMissingFirebaseConfig = true;
+    }
     return false;
   }
 
@@ -88,9 +92,6 @@ export function ensureFirebaseAuthInitialized() {
 
   return true;
 }
-
-// Initialize immediately when config is available
-ensureFirebaseInitialized();
 
 export { firebaseAuth, googleProvider, realtimeDb, ensureFirebaseInitialized };
 

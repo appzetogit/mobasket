@@ -6,6 +6,15 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { deliveryAPI } from "@/lib/api"
 import { setAuthData as storeAuthData } from "@/lib/utils/auth"
+import { setupWebPushForCurrentSession } from "@/lib/webPush"
+
+const ensureDeliveryWebPushRegistration = async () => {
+  try {
+    await setupWebPushForCurrentSession("/delivery")
+  } catch (error) {
+    console.warn("Delivery web push setup failed after auth:", error?.message || error)
+  }
+}
 
 export default function DeliveryOTP() {
   const navigate = useNavigate()
@@ -227,6 +236,8 @@ export default function DeliveryOTP() {
         // Dispatch custom event
         window.dispatchEvent(new Event("deliveryAuthChanged"))
 
+        ensureDeliveryWebPushRegistration().catch(() => {})
+
         // Redirect to signup step 1 after token is stored
         setTimeout(() => {
           navigate("/delivery/signup/details", { replace: true })
@@ -263,6 +274,8 @@ export default function DeliveryOTP() {
 
       // Dispatch custom event for same-tab updates
       window.dispatchEvent(new Event("deliveryAuthChanged"))
+
+      ensureDeliveryWebPushRegistration().catch(() => {})
 
       setSuccess(true)
       setIsLoading(false)
@@ -359,6 +372,8 @@ export default function DeliveryOTP() {
 
       // Dispatch custom event for same-tab updates
       window.dispatchEvent(new Event("deliveryAuthChanged"))
+
+      ensureDeliveryWebPushRegistration().catch(() => {})
 
       setSuccess(true)
       setIsLoading(false)
