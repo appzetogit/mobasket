@@ -64,6 +64,38 @@ const getPushDedupId = (payload = {}) => {
   return `${title}::${body}`.trim();
 };
 
+const buildNotificationOptions = (payload = {}) => {
+  const title = payload?.notification?.title || payload?.data?.title || "New Notification";
+  const body = payload?.notification?.body || payload?.data?.body || payload?.data?.message || "";
+  const icon = payload?.notification?.icon || payload?.data?.icon || "/vite.svg";
+  const badge = payload?.notification?.badge || payload?.data?.badge || icon;
+  const tag =
+    payload?.notification?.tag ||
+    payload?.data?.tag ||
+    payload?.data?.pushId ||
+    payload?.messageId ||
+    "push_notification";
+  const link =
+    payload?.fcmOptions?.link ||
+    payload?.data?.link ||
+    payload?.data?.click_action ||
+    payload?.data?.url ||
+    "/";
+
+  return {
+    title,
+    options: {
+      body,
+      icon,
+      badge,
+      tag,
+      data: { link, raw: payload?.data || {} },
+      requireInteraction: true,
+      renotify: true,
+    },
+  };
+};
+
 const isDuplicatePush = (payload = {}) => {
   const dedupeId = getPushDedupId(payload);
   if (!dedupeId) return false;
@@ -108,28 +140,8 @@ const ensureMessaging = () => {
         return;
       }
 
-      // When notification payload exists, browsers/FCM may already render it.
-      // Avoid manually showing another one from SW.
-      if (payload?.notification) {
-        return;
-      }
-
-      const title = payload?.notification?.title || payload?.data?.title || "New Notification";
-      const body = payload?.notification?.body || payload?.data?.body || payload?.data?.message || "";
-      const icon = payload?.notification?.icon || "/vite.svg";
-      const link =
-        payload?.fcmOptions?.link ||
-        payload?.data?.link ||
-        payload?.data?.click_action ||
-        payload?.data?.url ||
-        "/";
-
-      await self.registration.showNotification(title, {
-        body,
-        icon,
-        data: { link, raw: payload?.data || {} },
-        requireInteraction: true,
-      });
+      const { title, options } = buildNotificationOptions(payload);
+      await self.registration.showNotification(title, options);
     });
   } catch {
     messagingInstance = null;

@@ -10,7 +10,7 @@ import { setupWebPushForCurrentSession } from "@/lib/webPush"
 
 const ensureDeliveryWebPushRegistration = async () => {
   try {
-    await setupWebPushForCurrentSession("/delivery")
+    await setupWebPushForCurrentSession("/delivery", { forceSync: true })
   } catch (error) {
     console.warn("Delivery web push setup failed after auth:", error?.message || error)
   }
@@ -67,7 +67,7 @@ export default function DeliveryOTP() {
     }
 
     // Get auth data from sessionStorage (delivery module key)
-    const stored = sessionStorage.getItem("deliveryAuthData")
+    const stored = sessionStorage.getItem("deliveryAuthData") || localStorage.getItem("deliveryAuthData")
     if (!stored) {
       // No auth data, redirect to sign in
       navigate("/delivery/sign-in", { replace: true })
@@ -257,6 +257,7 @@ export default function DeliveryOTP() {
 
       // Clear auth data from sessionStorage
       sessionStorage.removeItem("deliveryAuthData")
+      localStorage.removeItem("deliveryAuthData")
 
       // Store auth data using utility function to ensure proper role handling
       // The setAuthData function includes error handling and verification
@@ -355,6 +356,7 @@ export default function DeliveryOTP() {
 
       // Clear auth data from sessionStorage
       sessionStorage.removeItem("deliveryAuthData")
+      localStorage.removeItem("deliveryAuthData")
 
       // Store auth data using utility function to ensure proper role handling
       // The setAuthData function includes error handling and verification

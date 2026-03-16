@@ -571,8 +571,35 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
   }
 
   const field = normalizedPlatform === 'web' ? 'fcmTokenWeb' : 'fcmTokenMobile';
-  req.delivery[field] = token.trim();
+  const normalizedToken = token.trim();
+  const maskedToken =
+    normalizedToken.length > 12
+      ? `${normalizedToken.slice(0, 8)}...${normalizedToken.slice(-4)}`
+      : normalizedToken;
+
+  logger.info('Delivery FCM token update requested', {
+    deliveryMongoId: req.delivery?._id?.toString?.() || '',
+    deliveryId: req.delivery?.deliveryId || '',
+    phone: req.delivery?.phone || '',
+    platform: normalizedPlatform,
+    targetField: field,
+    tokenLength: normalizedToken.length,
+    tokenPreview: maskedToken,
+  });
+
+  req.delivery[field] = normalizedToken;
   await req.delivery.save();
+
+  logger.info('Delivery FCM token updated successfully', {
+    deliveryMongoId: req.delivery?._id?.toString?.() || '',
+    deliveryId: req.delivery?.deliveryId || '',
+    phone: req.delivery?.phone || '',
+    platform: normalizedPlatform,
+    targetField: field,
+    storedTokenLength: String(req.delivery?.[field] || '').length,
+    hasWebToken: Boolean(req.delivery?.fcmTokenWeb),
+    hasMobileToken: Boolean(req.delivery?.fcmTokenMobile),
+  });
 
   return successResponse(res, 200, 'FCM token updated successfully', {
     fcmTokenWeb: req.delivery.fcmTokenWeb || '',

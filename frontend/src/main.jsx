@@ -410,6 +410,8 @@ if (!rootElement) {
 const bootstrap = async () => {
   const { default: App } = await import('./App.jsx')
 
+  window.__PUBLIC_ENV_READY = false
+
   createRoot(rootElement).render(
     <StrictMode>
       <BrowserRouter>
@@ -426,12 +428,16 @@ const bootstrap = async () => {
       if (response.ok) {
         const payload = await response.json()
         window.__PUBLIC_ENV = payload?.data || {}
+        window.__PUBLIC_ENV_READY = true
+        window.dispatchEvent(new Event('publicEnvReady'))
         return
       }
     } catch {
       // Ignore and keep any existing fallback env.
     }
     window.__PUBLIC_ENV = window.__PUBLIC_ENV || {}
+    window.__PUBLIC_ENV_READY = true
+    window.dispatchEvent(new Event('publicEnvReady'))
   })()
 }
 

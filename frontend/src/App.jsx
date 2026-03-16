@@ -117,13 +117,19 @@ export default function App() {
       if (!document.hidden) runSetup();
     };
 
+    const onPublicEnvReady = () => {
+      runSetup();
+    };
+
     const intervalId = window.setInterval(runSetup, 60000);
     window.addEventListener("storage", onStorage);
+    window.addEventListener("publicEnvReady", onPublicEnvReady);
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       window.clearInterval(intervalId);
       window.removeEventListener("storage", onStorage);
+      window.removeEventListener("publicEnvReady", onPublicEnvReady);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       teardownWebPushListener();
     };

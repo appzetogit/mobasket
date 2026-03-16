@@ -5,6 +5,9 @@ import { getDatabase } from 'firebase/database';
 const getRuntimeEnv = () =>
   (typeof window !== 'undefined' && window.__PUBLIC_ENV) ? window.__PUBLIC_ENV : {};
 
+const isRuntimeEnvReady = () =>
+  typeof window === 'undefined' || window.__PUBLIC_ENV_READY === true;
+
 const getFirebaseConfigFromRuntimeEnv = () => {
   const runtimeEnv = getRuntimeEnv();
   return {
@@ -36,6 +39,10 @@ let hasWarnedAboutMissingFirebaseConfig = false;
 
 // Function to ensure Firebase is initialized
 function ensureFirebaseInitialized() {
+  if (!isRuntimeEnvReady()) {
+    return false;
+  }
+
   const firebaseConfig = getFirebaseConfigFromRuntimeEnv();
   const missingFields = requiredFields.filter(field => !firebaseConfig[field] || firebaseConfig[field] === 'undefined');
   if (missingFields.length > 0) {

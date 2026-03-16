@@ -109,7 +109,9 @@ export default function DeliverySignIn() {
         isSignUp: false,
         module: "delivery",
       }
-      sessionStorage.setItem("deliveryAuthData", JSON.stringify(authData))
+      const serializedAuthData = JSON.stringify(authData)
+      sessionStorage.setItem("deliveryAuthData", serializedAuthData)
+      localStorage.setItem("deliveryAuthData", serializedAuthData)
 
       // Navigate to OTP page
       navigate("/delivery/otp")

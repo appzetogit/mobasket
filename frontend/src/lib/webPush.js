@@ -41,6 +41,39 @@ const hasAuthTokenForModule = (moduleName) => {
   return hasUsableToken(localStorage.getItem(`${moduleName}_accessToken`));
 };
 
+const getStoredModuleUser = (moduleName) => {
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = localStorage.getItem(`${moduleName}_user`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+};
+
+const getRecipientIdForModule = (moduleName) => {
+  const user = getStoredModuleUser(moduleName);
+  if (!user || typeof user !== "object") return "";
+
+  return String(
+    user?._id ||
+    user?.id ||
+    user?.restaurantId ||
+    user?.deliveryId ||
+    user?.phone ||
+    user?.email ||
+    ""
+  ).trim();
+};
+
+const getTokenCacheKey = (moduleName) => {
+  const recipientId = getRecipientIdForModule(moduleName);
+  return recipientId
+    ? `${FCM_TOKEN_CACHE_KEY}_${moduleName}_${recipientId}`
+    : `${FCM_TOKEN_CACHE_KEY}_${moduleName}`;
+};
+
 const parseNotificationPayload = (payload = {}) => {
   const title = payload?.notification?.title || payload?.data?.title || "New Notification";
   const body = payload?.notification?.body || payload?.data?.body || payload?.data?.message || "";
@@ -136,7 +169,7 @@ const isEmbeddedFlutterWebView = () => {
   return Boolean(window.flutter_inappwebview);
 };
 
-export const setupWebPushForCurrentSession = async (pathname = "") => {
+export const setupWebPushForCurrentSession = async (pathname = "", options = {}) => {
   if (setupInFlightPromise) {
     return setupInFlightPromise;
   }
@@ -146,6 +179,7 @@ export const setupWebPushForCurrentSession = async (pathname = "") => {
   if (!window.isSecureContext || !("serviceWorker" in navigator) || !("Notification" in window)) return;
 
   const moduleName = getModuleFromPathname(pathname);
+  const forceSync = options?.forceSync === true;
   const updater = moduleToUpdater[moduleName];
   if (!updater || !hasAuthTokenForModule(moduleName)) return;
 
@@ -195,9 +229,9 @@ export const setupWebPushForCurrentSession = async (pathname = "") => {
 
   if (!token) return;
 
-  const tokenCacheKey = `${FCM_TOKEN_CACHE_KEY}_${moduleName}`;
+  const tokenCacheKey = getTokenCacheKey(moduleName);
   const cachedToken = localStorage.getItem(tokenCacheKey);
-  if (cachedToken === token) return;
+  if (!forceSync && cachedToken === token) return;
 
   try {
     await updater(token, "web");
