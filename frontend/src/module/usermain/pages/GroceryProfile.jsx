@@ -4,14 +4,11 @@ import {
   ChevronRight,
   ShoppingBag,
   Wallet,
-  Headphones,
   Smartphone,
   Moon,
   EyeOff,
   MapPin,
   Heart,
-  FileText,
-  Gift,
   Pill,
   CreditCard,
   HeartHandshake,
@@ -225,13 +222,6 @@ const GroceryProfile = () => {
               color: "text-orange-500",
               onClick: () => navigate("/wallet"),
             },
-            {
-              icon: Headphones,
-              label: "Need help?",
-              bg: "bg-white dark:bg-[#1a1a1a]",
-              color: "text-slate-700",
-              onClick: () => navigate("/help"),
-            },
           ].map((item, idx) => (
             <motion.div
               key={idx}
@@ -277,16 +267,6 @@ const GroceryProfile = () => {
             icon={Heart}
             title="Your wishlist"
             onClick={() => navigate("/wishlist")}
-          />
-          <MenuItem
-            icon={FileText}
-            title="GST details"
-            onClick={() => toast.info("GST details will be available here soon.")}
-          />
-          <MenuItem
-            icon={Gift}
-            title="E-gift cards"
-            onClick={() => navigate("/gift-card")}
           />
         </div>
 
