@@ -88,16 +88,24 @@ export default function OrdersTable({
   onCancelOrder,
   onDeleteOrder,
   isGrocery = false,
+  serverPagination = false,
+  currentPage: externalCurrentPage = 1,
+  totalItems = 0,
+  itemsPerPage: externalItemsPerPage = 10,
+  onPageChange,
 }) {
   const [currentPage, setCurrentPage] = useState(1)
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
-  const itemsPerPage = 10
-  const totalPages = Math.ceil(orders.length / itemsPerPage)
+  const itemsPerPage = serverPagination ? externalItemsPerPage : 10
+  const effectiveCurrentPage = serverPagination ? externalCurrentPage : currentPage
+  const totalPages = Math.max(1, Math.ceil((serverPagination ? totalItems : orders.length) / Math.max(1, itemsPerPage)))
 
   // Reset to page 1 when orders change
   useEffect(() => {
-    setCurrentPage(1)
-  }, [orders.length])
+    if (!serverPagination) {
+      setCurrentPage(1)
+    }
+  }, [orders.length, serverPagination])
 
   // Sort orders based on sortConfig
   const sortedOrders = useMemo(() => {
@@ -170,10 +178,11 @@ export default function OrdersTable({
   }, [orders, sortConfig])
 
   const paginatedOrders = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage
+    if (serverPagination) return sortedOrders
+    const start = (effectiveCurrentPage - 1) * itemsPerPage
     const end = start + itemsPerPage
     return sortedOrders.slice(start, end)
-  }, [sortedOrders, currentPage])
+  }, [sortedOrders, effectiveCurrentPage, itemsPerPage, serverPagination])
 
   const handleSort = (key) => {
     setSortConfig(prevConfig => {
@@ -187,7 +196,9 @@ export default function OrdersTable({
       // New column, default to ascending
       return { key, direction: 'asc' }
     })
-    setCurrentPage(1) // Reset to first page when sorting
+    if (!serverPagination) {
+      setCurrentPage(1) // Reset to first page when sorting
+    }
   }
 
   const getSortIcon = (columnKey) => {
@@ -340,7 +351,7 @@ export default function OrdersTable({
               >
                 {visibleColumns.si && (
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-medium text-slate-700">{(currentPage - 1) * itemsPerPage + index + 1}</span>
+                    <span className="text-sm font-medium text-slate-700">{(effectiveCurrentPage - 1) * itemsPerPage + index + 1}</span>
                   </td>
                 )}
                 {visibleColumns.orderId && (
@@ -644,14 +655,18 @@ export default function OrdersTable({
       {totalPages > 1 && (
         <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
           <div className="text-sm text-slate-600">
-            Showing <span className="font-semibold">{(currentPage - 1) * itemsPerPage + 1}</span> to{" "}
-            <span className="font-semibold">{Math.min(currentPage * itemsPerPage, orders.length)}</span> of{" "}
-            <span className="font-semibold">{orders.length}</span> orders
+            Showing <span className="font-semibold">{(effectiveCurrentPage - 1) * itemsPerPage + 1}</span> to{" "}
+            <span className="font-semibold">{Math.min(effectiveCurrentPage * itemsPerPage, serverPagination ? totalItems : orders.length)}</span> of{" "}
+            <span className="font-semibold">{serverPagination ? totalItems : orders.length}</span> orders
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-              disabled={currentPage === 1}
+              onClick={() => {
+                const next = Math.max(1, effectiveCurrentPage - 1)
+                if (serverPagination) onPageChange?.(next)
+                else setCurrentPage(next)
+              }}
+              disabled={effectiveCurrentPage === 1}
               className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               Previous
@@ -661,18 +676,21 @@ export default function OrdersTable({
                 let pageNum
                 if (totalPages <= 5) {
                   pageNum = i + 1
-                } else if (currentPage <= 3) {
+                } else if (effectiveCurrentPage <= 3) {
                   pageNum = i + 1
-                } else if (currentPage >= totalPages - 2) {
+                } else if (effectiveCurrentPage >= totalPages - 2) {
                   pageNum = totalPages - 4 + i
                 } else {
-                  pageNum = currentPage - 2 + i
+                  pageNum = effectiveCurrentPage - 2 + i
                 }
                 return (
                   <button
                     key={pageNum}
-                    onClick={() => setCurrentPage(pageNum)}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${currentPage === pageNum
+                    onClick={() => {
+                      if (serverPagination) onPageChange?.(pageNum)
+                      else setCurrentPage(pageNum)
+                    }}
+                    className={`px-3 py-1.5 text-sm font-medium rounded-lg transition-all ${effectiveCurrentPage === pageNum
                         ? "bg-emerald-500 text-white shadow-md"
                         : "border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                       }`}
@@ -683,8 +701,12 @@ export default function OrdersTable({
               })}
             </div>
             <button
-              onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-              disabled={currentPage === totalPages}
+              onClick={() => {
+                const next = Math.min(totalPages, effectiveCurrentPage + 1)
+                if (serverPagination) onPageChange?.(next)
+                else setCurrentPage(next)
+              }}
+              disabled={effectiveCurrentPage === totalPages}
               className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               Next

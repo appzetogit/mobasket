@@ -27,7 +27,8 @@ export default function FoodApproval() {
   const audioRef = useRef(null);
   const isAlarmActiveRef = useRef(false);
   const isMountedRef = useRef(true);
-  const activeRequestIdRef = useRef(0);
+  const fetchInFlightRef = useRef(false);
+  const [loadingError, setLoadingError] = useState("");
 
   const resolveRequestsFromResponse = (response) => {
     const candidates = [
@@ -44,23 +45,6 @@ export default function FoodApproval() {
 
     return [];
   };
-
-  const withFetchTimeout = (promise, timeoutMs = 12000) =>
-    new Promise((resolve, reject) => {
-      const timer = window.setTimeout(() => {
-        reject(new Error("Food approvals request timed out"));
-      }, timeoutMs);
-
-      promise
-        .then((value) => {
-          window.clearTimeout(timer);
-          resolve(value);
-        })
-        .catch((error) => {
-          window.clearTimeout(timer);
-          reject(error);
-        });
-    });
 
   const stopNotificationAlarm = () => {
     if (!audioRef.current) return;
@@ -85,17 +69,20 @@ export default function FoodApproval() {
   };
 
   const fetchPendingApprovals = async ({ showLoader = true } = {}) => {
-    const requestId = activeRequestIdRef.current + 1;
-    activeRequestIdRef.current = requestId;
+    if (fetchInFlightRef.current) return;
+    fetchInFlightRef.current = true;
 
     try {
-      if (showLoader && isMountedRef.current) setLoading(true);
-      const response = await withFetchTimeout(
-        adminAPI.getPendingFoodApprovals({ platform: "mofood" })
-      );
+      if (showLoader && isMountedRef.current) {
+        setLoading(true);
+      }
+      if (isMountedRef.current) {
+        setLoadingError("");
+      }
+      const response = await adminAPI.getPendingFoodApprovals({ platform: "mofood" });
       const data = resolveRequestsFromResponse(response);
 
-      if (!isMountedRef.current || requestId !== activeRequestIdRef.current) {
+      if (!isMountedRef.current) {
         return;
       }
 
@@ -111,14 +98,24 @@ export default function FoodApproval() {
       previousPendingCountRef.current = data.length;
       setRequests(data);
     } catch (error) {
-      console.error("Error fetching food item approvals:", error);
-      if (!isMountedRef.current || requestId !== activeRequestIdRef.current) {
+      const isBackgroundRefresh = !showLoader;
+      if (isBackgroundRefresh) {
+        console.warn("Background refresh failed for food approvals:", error);
+      } else {
+        console.error("Error fetching food item approvals:", error);
+      }
+      if (!isMountedRef.current) {
         return;
       }
-      toast.error(error?.message || "Failed to load pending food item approvals");
-      setRequests([]);
+      const message = error?.message || "Failed to load pending food item approvals";
+      if (!isBackgroundRefresh) {
+        toast.error(message);
+        setLoadingError(message);
+        setRequests([]);
+      }
     } finally {
-      if (showLoader && isMountedRef.current && requestId === activeRequestIdRef.current) {
+      fetchInFlightRef.current = false;
+      if (showLoader && isMountedRef.current) {
         setLoading(false);
       }
     }
@@ -147,6 +144,7 @@ export default function FoodApproval() {
 
     return () => {
       isMountedRef.current = false;
+      fetchInFlightRef.current = false;
       clearInterval(pollTimer);
       window.removeEventListener("click", markUserInteraction);
       window.removeEventListener("keydown", markUserInteraction);
@@ -250,6 +248,11 @@ export default function FoodApproval() {
             </div>
           ) : (
             <div className="border-t border-gray-200">
+              {loadingError ? (
+                <div className="px-3 py-3 text-sm text-red-600 bg-red-50 border-b border-red-100">
+                  {loadingError}
+                </div>
+              ) : null}
               <div className="w-full overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200 text-sm">
                   <thead style={{ backgroundColor: "rgba(0, 111, 189, 0.1)" }}>

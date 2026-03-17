@@ -38,6 +38,9 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
   const [orders, setOrders] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [totalCount, setTotalCount] = useState(0)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize] = useState(25)
+  const [loadError, setLoadError] = useState("")
   const [processingRefund, setProcessingRefund] = useState(null)
   const [refundModalOpen, setRefundModalOpen] = useState(false)
   const [selectedOrderForRefund, setSelectedOrderForRefund] = useState(null)
@@ -45,6 +48,9 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
   const previousIncomingCountRef = useRef(null)
   const isAudioUnlockedRef = useRef(false)
   const pendingSoundRef = useRef(false)
+  const fetchInFlightRef = useRef(false)
+  const isMountedRef = useRef(true)
+  const loadingGuardTimerRef = useRef(null)
 
   const playIncomingSound = () => {
     if (!audioRef.current) {
@@ -65,24 +71,51 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
     ).length
   }
 
-  const fetchOrders = async ({ showLoader = true } = {}) => {
+  const fetchOrders = async ({ showLoader = true, force = false } = {}) => {
+    if (fetchInFlightRef.current && !force) return
+    fetchInFlightRef.current = true
+
     try {
-      if (showLoader) setIsLoading(true)
-      const params = {
-        page: 1,
-        limit: 1000,
+      if (showLoader && isMountedRef.current) {
+        setIsLoading(true)
+        if (loadingGuardTimerRef.current) clearTimeout(loadingGuardTimerRef.current)
+        // Do not hard-fail the request; only prevent endless spinner.
+        loadingGuardTimerRef.current = setTimeout(() => {
+          if (!isMountedRef.current) return
+          setIsLoading(false)
+          setLoadError("Loading is taking longer than expected. Data will appear when ready.")
+        }, 25000)
+      }
+
+      const baseParams = {
         status: statusKey === "all" ? undefined :
           statusKey === "restaurant-cancelled" ? "cancelled" : statusKey,
         cancelledBy: statusKey === "restaurant-cancelled" ? "restaurant" : undefined,
         platform: activePlatform,
       }
 
-      const response = await adminAPI.getOrders(params)
+      let fetchedOrders = []
+      let totalFromApi = 0
+      let hasValidResponse = false
+
+      const response = await adminAPI.getOrders({
+        ...baseParams,
+        page: currentPage,
+        limit: pageSize,
+      })
 
       if (response.data?.success && response.data?.data?.orders) {
-        const fetchedOrders = response.data.data.orders
-        setOrders(fetchedOrders)
-        setTotalCount(response.data.data.pagination?.total || fetchedOrders.length)
+        hasValidResponse = true
+        fetchedOrders = response.data.data.orders || []
+        totalFromApi = Number(response.data?.data?.pagination?.total || fetchedOrders.length)
+      }
+
+      if (hasValidResponse) {
+        if (isMountedRef.current) {
+          setOrders(fetchedOrders)
+          setTotalCount(totalFromApi || fetchedOrders.length)
+          setLoadError("")
+        }
 
         // Play notification sound on new incoming requests in "All Orders" view.
         if (statusKey === "all") {
@@ -95,22 +128,56 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
           previousIncomingCountRef.current = incomingCount
         }
       } else {
-        console.error("Failed to fetch orders:", response.data)
-        toast.error("Failed to fetch orders")
-        setOrders([])
+        console.error("Failed to fetch orders: empty or invalid response")
+        if (showLoader) {
+          toast.error("Failed to fetch orders")
+        }
+        if (isMountedRef.current && showLoader) {
+          setLoadError("Failed to fetch orders")
+          setOrders([])
+        }
       }
     } catch (error) {
-      console.error("Error fetching orders:", error)
-      toast.error(error.response?.data?.message || "Failed to fetch orders")
-      setOrders([])
+      const isBackgroundRefresh = !showLoader
+      if (isBackgroundRefresh) {
+        console.warn("Background refresh failed for orders:", error)
+      } else {
+        console.error("Error fetching orders:", error)
+      }
+      const message = error.response?.data?.message || error.message || "Failed to fetch orders"
+      if (showLoader) {
+        toast.error(message)
+      }
+      if (isMountedRef.current && showLoader) {
+        setLoadError(message)
+        setOrders([])
+      }
     } finally {
-      if (showLoader) setIsLoading(false)
+      if (loadingGuardTimerRef.current) {
+        clearTimeout(loadingGuardTimerRef.current)
+        loadingGuardTimerRef.current = null
+      }
+      fetchInFlightRef.current = false
+      if (showLoader && isMountedRef.current) setIsLoading(false)
     }
   }
 
   // Fetch orders from backend API
   useEffect(() => {
+    isMountedRef.current = true
     fetchOrders({ showLoader: true })
+    return () => {
+      isMountedRef.current = false
+      fetchInFlightRef.current = false
+      if (loadingGuardTimerRef.current) {
+        clearTimeout(loadingGuardTimerRef.current)
+        loadingGuardTimerRef.current = null
+      }
+    }
+  }, [statusKey, activePlatform, currentPage, pageSize])
+
+  useEffect(() => {
+    setCurrentPage(1)
   }, [statusKey, activePlatform])
 
   // Poll orders list and trigger sound even when tab is in background.
@@ -142,14 +209,9 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
     // Try immediate unlock once (works when browser already has prior user gesture).
     unlockAudio()
 
-    const pollTimer = setInterval(() => {
-      fetchOrders({ showLoader: false })
-    }, 10000)
-
     return () => {
       window.removeEventListener("pointerdown", unlockAudio)
       window.removeEventListener("keydown", unlockAudio)
-      clearInterval(pollTimer)
       if (audioRef.current) {
         audioRef.current.pause()
         audioRef.current.currentTime = 0
@@ -378,8 +440,8 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         )
         // Refresh the orders list to get updated data
         const params = {
-          page: 1,
-          limit: 1000,
+          page: currentPage,
+          limit: pageSize,
           status: statusKey === "all" ? undefined :
             statusKey === "restaurant-cancelled" ? "cancelled" : statusKey,
           cancelledBy: statusKey === "restaurant-cancelled" ? "restaurant" : undefined,
@@ -513,7 +575,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen w-full max-w-full overflow-x-hidden">
       <OrdersTopbar
         title={config.title}
-        count={count}
+        count={totalCount}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         onFilterClick={() => setIsFilterOpen(true)}
@@ -521,6 +583,11 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         onExport={handleExport}
         onSettingsClick={() => setIsSettingsOpen(true)}
       />
+      {loadError ? (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {loadError}
+        </div>
+      ) : null}
       {activePlatform === "mogrocery" && pendingApprovalCount > 0 && (
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-center gap-3">
           <BellRing className="w-5 h-5 text-amber-700 shrink-0" />
@@ -574,6 +641,11 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         onCancelOrder={handleCancelApprovedOrder}
         onDeleteOrder={handleDeleteOrder}
         isGrocery={activePlatform === "mogrocery"}
+        serverPagination
+        currentPage={currentPage}
+        totalItems={totalCount}
+        itemsPerPage={pageSize}
+        onPageChange={setCurrentPage}
       />
     </div>
   )

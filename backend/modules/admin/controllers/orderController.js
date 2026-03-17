@@ -391,8 +391,16 @@ export const getOrders = asyncHandler(async (req, res) => {
       .skip(skip)
       .lean();
 
-    // Get total count
-    const total = await Order.countDocuments(query);
+    // Get total count.
+    // countDocuments can be very slow on large/unindexed filters; fail fast and fallback
+    // so the orders list can render instead of timing out.
+    let total = 0;
+    try {
+      total = await Order.countDocuments(query).maxTimeMS(5000);
+    } catch (countError) {
+      console.warn('Order count timed out, using fallback total:', countError?.message || countError);
+      total = skip + (orders?.length || 0);
+    }
 
     // Batch fetch settlements for platform fee and refund status (more efficient than individual queries)
     let settlementMap = new Map();

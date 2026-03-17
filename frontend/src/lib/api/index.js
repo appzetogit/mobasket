@@ -1561,7 +1561,8 @@ export const adminAPI = {
   // Get orders
   getOrders: (params = {}) => {
     return apiClient.get(API_ENDPOINTS.ADMIN.ORDERS, {
-      params: { ...params, platform: params.platform || getAdminPlatform() }
+      params: { ...params, platform: params.platform || getAdminPlatform() },
+      timeout: 180000,
     });
   },
   deleteOrder: (orderId) => {
@@ -2129,7 +2130,10 @@ export const adminAPI = {
 
   // Food Approval
   getPendingFoodApprovals: (params = {}) => {
-    return apiClient.get(API_ENDPOINTS.ADMIN.FOOD_APPROVALS, { params });
+    return apiClient.get(API_ENDPOINTS.ADMIN.FOOD_APPROVALS, {
+      params,
+      timeout: 180000,
+    });
   },
 
   approveFoodItem: (id) => {
