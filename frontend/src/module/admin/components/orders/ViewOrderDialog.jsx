@@ -71,7 +71,7 @@ const getPaymentStatusColor = (paymentStatus) => {
   return "text-slate-600"
 }
 
-export default function ViewOrderDialog({ isOpen, onOpenChange, order, isGrocery = false }) {
+export default function ViewOrderDialog({ isOpen, onOpenChange, order, isGrocery = false, isLoading = false }) {
   if (!order) return null
 
   // Debug: Log order data to check billImageUrl
@@ -126,6 +126,11 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order, isGrocery
           </DialogDescription>
         </DialogHeader>
         <div className="px-6 py-6 space-y-6">
+          {isLoading && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-700">
+              Loading full order details...
+            </div>
+          )}
           {/* Basic Order Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">

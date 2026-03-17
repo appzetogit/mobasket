@@ -44,6 +44,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
   const [processingRefund, setProcessingRefund] = useState(null)
   const [refundModalOpen, setRefundModalOpen] = useState(false)
   const [selectedOrderForRefund, setSelectedOrderForRefund] = useState(null)
+  const [viewOrderLoading, setViewOrderLoading] = useState(false)
   const audioRef = useRef(null)
   const previousIncomingCountRef = useRef(null)
   const isAudioUnlockedRef = useRef(false)
@@ -72,7 +73,13 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
   }
 
   const fetchOrders = async ({ showLoader = true, force = false } = {}) => {
-    if (fetchInFlightRef.current && !force) return
+    if (fetchInFlightRef.current && !force) {
+      // Prevent dead-lock spinner if an old in-flight flag gets stuck.
+      if (showLoader && isMountedRef.current) {
+        setIsLoading(false)
+      }
+      return
+    }
     fetchInFlightRef.current = true
 
     try {
@@ -175,6 +182,17 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
       }
     }
   }, [statusKey, activePlatform, currentPage, pageSize])
+
+  // Absolute fallback so UI never spins forever even if request lifecycle is interrupted.
+  useEffect(() => {
+    if (!isLoading) return
+    const hardStop = setTimeout(() => {
+      if (!isMountedRef.current) return
+      setIsLoading(false)
+      setLoadError((prev) => prev || "Loading is taking longer than expected. Please refresh.")
+    }, 35000)
+    return () => clearTimeout(hardStop)
+  }, [isLoading])
 
   useEffect(() => {
     setCurrentPage(1)
@@ -528,6 +546,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
     isViewOrderOpen,
     setIsViewOrderOpen,
     selectedOrder,
+    setSelectedOrder,
     filters,
     setFilters,
     visibleColumns,
@@ -538,11 +557,29 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
     handleApplyFilters,
     handleResetFilters,
     handleExport,
-    handleViewOrder,
     handlePrintOrder,
     toggleColumn,
     resetColumns,
   } = useOrdersManagement(orders, statusKey, config.title)
+
+  const handleViewOrder = async (order) => {
+    setSelectedOrder(order)
+    setIsViewOrderOpen(true)
+    setViewOrderLoading(true)
+
+    try {
+      const orderIdToUse = order.id || order._id || order.orderId
+      const response = await adminAPI.getOrderById(orderIdToUse)
+      const detailedOrder = response?.data?.data?.order
+      if (detailedOrder) {
+        setSelectedOrder(detailedOrder)
+      }
+    } catch (error) {
+      console.error("Error fetching order details:", error)
+    } finally {
+      setViewOrderLoading(false)
+    }
+  }
 
   useEffect(() => {
     const prefillOrderSearch = location.state?.prefillOrderSearch
@@ -618,6 +655,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         onOpenChange={setIsViewOrderOpen}
         order={selectedOrder}
         isGrocery={activePlatform === "mogrocery"}
+        isLoading={viewOrderLoading}
       />
       <RefundModal
         isOpen={refundModalOpen}

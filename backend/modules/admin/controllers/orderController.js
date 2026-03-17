@@ -11,6 +11,32 @@ import AuditLog from '../models/AuditLog.js';
 
 const normalizePlatform = (value) => (value === 'mogrocery' ? 'mogrocery' : 'mofood');
 
+const buildPlatformFallbackFilter = (platform) => {
+  if (platform === 'mogrocery') {
+    return {
+      $or: [
+        { restaurantPlatform: 'mogrocery' },
+        { platform: 'mogrocery' }
+      ]
+    };
+  }
+
+  // For mofood: exclude only orders that have explicit mogrocery platform markers.
+  // Avoid $nor with $regex — those cause full collection scans and timeouts.
+  return {
+    restaurantPlatform: { $ne: 'mogrocery' },
+    platform: { $ne: 'mogrocery' }
+  };
+};
+
+const buildPlatformPrimaryFilter = (platform) => {
+  if (platform === 'mogrocery') {
+    return { restaurantPlatform: 'mogrocery' };
+  }
+
+  return { restaurantPlatform: 'mofood' };
+};
+
 const ORDER_MODIFICATION_WINDOW_MS = 2 * 60 * 1000;
 const RESTAURANT_ACCEPT_TIMEOUT_MS = 4 * 60 * 1000;
 const RESTAURANT_ACCEPT_TIMEOUT_REASON_REGEX = /order not accepted within time limit|did not respond in time/i;
@@ -97,6 +123,11 @@ const findOrderByAdminIdentifier = async (id, session = null) => {
  */
 export const getOrders = asyncHandler(async (req, res) => {
   try {
+    const perfStart = Date.now();
+    const perfLog = (label) => {
+      console.log(`[ADMIN_ORDERS_PERF] ${label} (+${Date.now() - perfStart}ms)`);
+    };
+    perfLog('start');
     const { 
       status, 
       page = 1, 
@@ -122,47 +153,31 @@ export const getOrders = asyncHandler(async (req, res) => {
     // Build query
     const query = {};
     const normalizedPlatform = platform ? normalizePlatform(platform) : null;
+    const useDedicatedPlatformCollection = normalizedPlatform === 'mofood' || normalizedPlatform === 'mogrocery';
+    const useLegacyPlatformFilter = !useDedicatedPlatformCollection;
     let platformRestaurantIds = null;
 
-    if (normalizedPlatform) {
-      platformRestaurantIds = await getRestaurantIdsByPlatform(normalizedPlatform);
+    if (normalizedPlatform && useLegacyPlatformFilter) {
+      if (normalizedPlatform === 'mogrocery') {
+        platformRestaurantIds = await getRestaurantIdsByPlatform(normalizedPlatform);
+        const groceryFilter = buildPlatformFallbackFilter('mogrocery');
 
-      const platformOrderFilter =
-        normalizedPlatform === 'mogrocery'
-          ? {
-              $or: [
-                { restaurantPlatform: 'mogrocery' },
-                { platform: 'mogrocery' },
-                { restaurantName: { $regex: /grocery/i } }
-              ]
-            }
-          : {
-              $and: [
-                {
-                  $or: [
-                    { restaurantPlatform: 'mofood' },
-                    { platform: 'mofood' },
-                    { restaurantPlatform: { $exists: false } },
-                    { platform: { $exists: false } }
-                  ]
-                },
-                {
-                  restaurantName: { $not: /grocery/i }
-                }
-              ]
-            };
-
-      if (platformRestaurantIds.length > 0) {
-        addAndCondition({
-          $or: [
-            { restaurantId: { $in: platformRestaurantIds } },
-            platformOrderFilter
-          ]
-        });
+        if (platformRestaurantIds.length > 0) {
+          addAndCondition({
+            $or: [
+              { restaurantId: { $in: platformRestaurantIds } },
+              groceryFilter
+            ]
+          });
+        } else {
+          addAndCondition(groceryFilter);
+        }
       } else {
-        addAndCondition(platformOrderFilter);
+        // MoFood with fallbacks for legacy rows where platform flags were not persisted.
+        addAndCondition(buildPlatformFallbackFilter('mofood'));
       }
     }
+    perfLog('query-built');
 
     // Status filter
     if (status && status !== 'all') {
@@ -249,17 +264,9 @@ export const getOrders = asyncHandler(async (req, res) => {
       });
     }
 
-    // Default admin listings (including "all") should not show future scheduled orders.
-    // They become visible once scheduled time is reached.
-    if (status !== 'scheduled') {
-      query.$nor = [
-        {
-          status: 'scheduled',
-          'scheduledDelivery.isScheduled': true,
-          'scheduledDelivery.scheduledFor': { $gt: now }
-        }
-      ];
-    }
+    // NOTE: Future scheduled exclusion was removed from the primary query path to avoid
+    // expensive scans that can block admin order listing. Scheduled filtering is still
+    // handled explicitly when status === 'scheduled'.
 
     // Payment status filter
     if (paymentStatus) {
@@ -381,22 +388,157 @@ export const getOrders = asyncHandler(async (req, res) => {
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // Fetch orders with population
-    const orders = await Order.find(query)
-      .populate('userId', 'name email phone')
-      .populate('restaurantId', 'name slug platform')
-      .populate('deliveryPartnerId', 'name phone')
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .skip(skip)
-      .lean();
+    const primaryPlatformQuery = normalizedPlatform
+      ? { ...query, ...buildPlatformPrimaryFilter(normalizedPlatform) }
+      : query;
+    const fallbackQuery = normalizedPlatform
+      ? { $and: [query, buildPlatformFallbackFilter(normalizedPlatform)] }
+      : query;
+    const projectionObject = {
+      orderId: 1,
+      createdAt: 1,
+      userId: 1,
+      restaurantId: 1,
+      restaurantName: 1,
+      restaurantPlatform: 1,
+      platform: 1,
+      status: 1,
+      'payment.method': 1,
+      'payment.status': 1,
+      'pricing.subtotal': 1,
+      'pricing.deliveryFee': 1,
+      'pricing.platformFee': 1,
+      'pricing.tax': 1,
+      'pricing.discount': 1,
+      'pricing.total': 1,
+      'pricing.couponCode': 1,
+      deliveryFleet: 1,
+      'items.itemId': 1,
+      'items.name': 1,
+      'items.quantity': 1,
+      deliveryPartnerId: 1,
+      estimatedDeliveryTime: 1,
+      deliveredAt: 1,
+      cancellationReason: 1,
+      cancelledAt: 1,
+      cancelledBy: 1,
+      scheduledDelivery: 1,
+      adminApproval: 1
+    };
+
+    // Fetch orders (lean) and do lightweight batched lookups instead of heavy populate chains.
+    let orders = [];
+    const legacyOrdersCollection = mongoose.connection.db.collection('orders');
+    // Always query the legacy 'orders' collection directly since the dedicated platform
+    // collections (mofoodsorder, mogroceryorder) are not populated yet. Querying nonexistent
+    // or empty collections wastes time and forces an expensive fallback anyway.
+    const primaryQueryUsesPlatformIndex = Boolean(normalizedPlatform);
+    const primaryQueryHint = primaryQueryUsesPlatformIndex
+      ? { restaurantPlatform: 1, createdAt: -1 }
+      : { createdAt: -1 };
+    const sortOrder = { createdAt: -1 };
+    let effectiveQuery = primaryPlatformQuery;
+    console.log('[ADMIN_ORDERS_DEBUG] primaryQuery:', JSON.stringify(primaryPlatformQuery));
+    console.log('[ADMIN_ORDERS_DEBUG] fallbackQuery:', JSON.stringify(fallbackQuery));
+    console.log('[ADMIN_ORDERS_DEBUG] skip:', skip, 'limit:', parseInt(limit));
+    console.log('[ADMIN_ORDERS_DEBUG] mongoose readyState:', mongoose.connection.readyState);
+    try {
+      orders = await legacyOrdersCollection.find(effectiveQuery, { projection: projectionObject })
+        .sort(sortOrder)
+        .hint(primaryQueryHint)
+        .maxTimeMS(10000)
+        .limit(parseInt(limit))
+        .skip(skip)
+        .toArray();
+      perfLog(`orders-query-done rows=${orders.length}`);
+
+      if (normalizedPlatform && orders.length === 0) {
+        effectiveQuery = fallbackQuery;
+        orders = await legacyOrdersCollection.find(effectiveQuery, { projection: projectionObject })
+          .sort(sortOrder)
+          .maxTimeMS(10000)
+          .limit(parseInt(limit))
+          .skip(skip)
+          .toArray();
+        perfLog(`orders-fallback-query-done rows=${orders.length}`);
+      }
+    } catch (queryError) {
+      console.warn(
+        `Orders query failed, trying legacy platform fallback:`,
+        queryError?.message || queryError
+      );
+      try {
+        effectiveQuery = fallbackQuery;
+        orders = await legacyOrdersCollection.find(effectiveQuery, { projection: projectionObject })
+          .sort(sortOrder)
+          .maxTimeMS(10000)
+          .limit(parseInt(limit))
+          .skip(skip)
+          .toArray();
+        perfLog(`orders-fallback-after-error-done rows=${orders.length}`);
+      } catch (fallbackError) {
+        console.warn('Orders fallback query failed, trying unfiltered recent orders:', fallbackError?.message || fallbackError);
+        try {
+          effectiveQuery = {};
+          orders = await legacyOrdersCollection.find({}, { projection: projectionObject })
+            .sort(sortOrder)
+            .hint({ createdAt: -1 })
+            .maxTimeMS(5000)
+            .limit(parseInt(limit))
+            .skip(skip)
+            .toArray();
+          perfLog(`orders-noFilter-done rows=${orders.length}`);
+        } catch (lastResortError) {
+          console.error('Orders final fallback query failed:', lastResortError?.message || lastResortError);
+          orders = [];
+        }
+      }
+    }
+
+    const userIds = Array.from(
+      new Set(
+        orders
+          .map((order) => String(order?.userId || '').trim())
+          .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      )
+    ).map((id) => new mongoose.Types.ObjectId(id));
+
+    const deliveryIds = Array.from(
+      new Set(
+        orders
+          .map((order) => String(order?.deliveryPartnerId || '').trim())
+          .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      )
+    ).map((id) => new mongoose.Types.ObjectId(id));
+
+    const usersCollection = mongoose.connection.db.collection('users');
+    const deliveriesCollection = mongoose.connection.db.collection('deliveries');
+    const [users, deliveries] = await Promise.all([
+      userIds.length > 0
+        ? usersCollection.find(
+            { _id: { $in: userIds } },
+            { projection: { _id: 1, name: 1, email: 1, phone: 1 } }
+          ).toArray()
+        : [],
+      deliveryIds.length > 0
+        ? deliveriesCollection.find(
+            { _id: { $in: deliveryIds } },
+            { projection: { _id: 1, name: 1, phone: 1 } }
+          ).toArray()
+        : []
+    ]);
+    perfLog(`users-deliveries-done users=${users.length} deliveries=${deliveries.length}`);
+
+    const userMap = new Map(users.map((user) => [String(user._id), user]));
+    const deliveryMap = new Map(deliveries.map((delivery) => [String(delivery._id), delivery]));
 
     // Get total count.
     // countDocuments can be very slow on large/unindexed filters; fail fast and fallback
     // so the orders list can render instead of timing out.
     let total = 0;
     try {
-      total = await Order.countDocuments(query).maxTimeMS(5000);
+      total = await legacyOrdersCollection.countDocuments(effectiveQuery, { maxTimeMS: 8000 });
+      perfLog(`count-done total=${total}`);
     } catch (countError) {
       console.warn('Order count timed out, using fallback total:', countError?.message || countError);
       total = skip + (orders?.length || 0);
@@ -406,11 +548,13 @@ export const getOrders = asyncHandler(async (req, res) => {
     let settlementMap = new Map();
     let refundStatusMap = new Map();
     try {
-      const OrderSettlement = (await import('../../order/models/OrderSettlement.js')).default;
       const orderIds = orders.map(o => o._id);
-      const settlements = await OrderSettlement.find({ orderId: { $in: orderIds } })
-        .select('orderId userPayment.platformFee cancellationDetails.refundStatus')
-        .lean();
+      const settlementsCollection = mongoose.connection.db.collection('ordersettlements');
+      const settlements = await settlementsCollection.find(
+        { orderId: { $in: orderIds } },
+        { projection: { orderId: 1, 'userPayment.platformFee': 1, 'cancellationDetails.refundStatus': 1 } }
+      ).toArray();
+      perfLog(`settlements-done rows=${settlements.length}`);
       
       // Create maps for quick lookup
       settlements.forEach(s => {
@@ -428,7 +572,8 @@ export const getOrders = asyncHandler(async (req, res) => {
     }
 
     // Transform orders to match frontend format
-    const transformedOrders = orders.map((order, index) => {
+    const transformedOrders = orders.reduce((acc, order, index) => {
+      try {
       const orderDate = new Date(order.createdAt);
       const dateStr = orderDate.toLocaleDateString('en-GB', { 
         day: '2-digit', 
@@ -442,7 +587,9 @@ export const getOrders = asyncHandler(async (req, res) => {
       }).toUpperCase();
 
       // Get customer phone (unmasked - show full number for admin)
-      const customerPhone = order.userId?.phone || '';
+      const user = userMap.get(String(order.userId || '')) || null;
+      const delivery = deliveryMap.get(String(order.deliveryPartnerId || '')) || null;
+      const customerPhone = user?.phone || '';
 
       // Map payment status
       const paymentMethod = String(order.payment?.method || '').toLowerCase();
@@ -555,15 +702,15 @@ export const getOrders = asyncHandler(async (req, res) => {
         ? new Date(new Date(order.createdAt).getTime() + RESTAURANT_ACCEPT_TIMEOUT_MS)
         : null;
 
-      return {
+      acc.push({
         sl: skip + index + 1,
         orderId: order.orderId,
         id: order._id.toString(),
         date: dateStr,
         time: timeStr,
-        customerName: order.userId?.name || 'Unknown',
+        customerName: user?.name || 'Unknown',
         customerPhone: customerPhone,
-        customerEmail: order.userId?.email || '',
+        customerEmail: user?.email || '',
         restaurant: order.restaurantName || order.restaurantId?.name || 'Unknown Restaurant',
         restaurantId: order.restaurantId?.toString() || order.restaurantId || '',
         restaurantPlatform: derivedRestaurantPlatform,
@@ -602,9 +749,9 @@ export const getOrders = asyncHandler(async (req, res) => {
         deliveryType: deliveryType,
         items: order.items || [],
         address: order.address || {},
-        deliveryPartnerId: order.deliveryPartnerId?._id?.toString?.() || order.deliveryPartnerId?.toString?.() || null,
-        deliveryPartnerName: order.deliveryPartnerId?.name || null,
-        deliveryPartnerPhone: order.deliveryPartnerId?.phone || null,
+        deliveryPartnerId: delivery?._id?.toString?.() || (order.deliveryPartnerId ? String(order.deliveryPartnerId) : null),
+        deliveryPartnerName: delivery?.name || null,
+        deliveryPartnerPhone: delivery?.phone || null,
         estimatedDeliveryTime: order.estimatedDeliveryTime || 30,
         deliveredAt: order.deliveredAt,
         cancellationReason: order.cancellationReason || null,
@@ -631,8 +778,16 @@ export const getOrders = asyncHandler(async (req, res) => {
         scheduledDate,
         scheduledTime,
         scheduledTimeSlot: order?.scheduledDelivery?.timeSlot || ''
-      };
-    });
+      });
+      } catch (transformError) {
+        console.warn(
+          `Skipping malformed order during admin transform (id: ${order?._id || 'unknown'}):`,
+          transformError?.message || transformError
+        );
+      }
+      return acc;
+    }, []);
+    perfLog(`transform-done rows=${transformedOrders.length}`);
 
     return successResponse(res, 200, 'Orders retrieved successfully', {
       orders: transformedOrders,
@@ -756,9 +911,78 @@ export const getOrderById = asyncHandler(async (req, res) => {
       ? new Date(new Date(order.createdAt).getTime() + RESTAURANT_ACCEPT_TIMEOUT_MS)
       : null;
 
+    const orderDate = new Date(order.createdAt);
+    const user = order.userId || {};
+    const delivery = order.deliveryPartnerId || {};
+    const paymentMethod = String(order.payment?.method || '').toLowerCase();
+    const isCodPayment = paymentMethod === 'cash' || paymentMethod === 'cod';
+    const paymentStatusMap = {
+      completed: 'Paid',
+      pending: 'Pending',
+      failed: 'Failed',
+      refunded: 'Refunded',
+      processing: 'Processing'
+    };
+    const paymentStatusDisplay = isCodPayment
+      ? (order.status === 'delivered' ? 'Paid' : 'Pending')
+      : (paymentStatusMap[order.payment?.status] || 'Pending');
+    const displayStatusMap = {
+      pending: 'Pending',
+      confirmed: 'Accepted',
+      preparing: 'Processing',
+      ready: 'Ready',
+      out_for_delivery: 'Food On The Way',
+      delivered: 'Delivered',
+      scheduled: 'Scheduled',
+      dine_in: 'Dine In'
+    };
+    let orderStatusDisplay = displayStatusMap[order.status] || order.status;
+    if (order.status === 'cancelled') {
+      if (timedOutByRestaurant) {
+        orderStatusDisplay = 'Not Accepted in Time';
+      } else if (order.cancelledBy === 'restaurant') {
+        orderStatusDisplay = 'Cancelled by Restaurant';
+      } else if (order.cancelledBy === 'user') {
+        orderStatusDisplay = 'Cancelled by User';
+      } else {
+        orderStatusDisplay = 'Canceled';
+      }
+    }
+
     return successResponse(res, 200, 'Order retrieved successfully', {
       order: {
         ...order,
+        id: order._id?.toString?.() || String(order._id || ''),
+        date: orderDate.toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        }).toUpperCase(),
+        time: orderDate.toLocaleTimeString('en-US', {
+          hour: '2-digit',
+          minute: '2-digit',
+          hour12: true
+        }).toUpperCase(),
+        customerName: user?.name || 'Unknown',
+        customerPhone: user?.phone || '',
+        customerEmail: user?.email || '',
+        restaurant: order.restaurantName || order.restaurantId?.name || 'Unknown Restaurant',
+        paymentStatus: paymentStatusDisplay,
+        paymentType: isCodPayment ? 'Cash on Delivery' : (paymentMethod === 'wallet' ? 'Wallet' : 'Online'),
+        paymentCollectionStatus: isCodPayment
+          ? (order.status === 'delivered' ? 'Collected' : 'Not Collected')
+          : 'Collected',
+        orderStatus: orderStatusDisplay,
+        deliveryType: order.deliveryFleet === 'fast' ? 'Fast Delivery' : 'Home Delivery',
+        totalItemAmount: order.pricing?.subtotal || 0,
+        itemDiscount: order.pricing?.discount || 0,
+        couponDiscount: order.pricing?.couponCode ? (order.pricing?.discount || 0) : 0,
+        deliveryCharge: order.pricing?.deliveryFee || 0,
+        platformFee: order.pricing?.platformFee || 0,
+        vatTax: order.pricing?.tax || 0,
+        totalAmount: order.pricing?.total || 0,
+        deliveryPartnerName: delivery?.name || null,
+        deliveryPartnerPhone: delivery?.phone || null,
         timedOutByRestaurant,
         acceptanceTimeoutAt
       }

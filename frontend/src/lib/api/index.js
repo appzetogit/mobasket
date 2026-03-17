@@ -1565,6 +1565,9 @@ export const adminAPI = {
       timeout: 180000,
     });
   },
+  getOrderById: (orderId) => {
+    return apiClient.get(`${API_ENDPOINTS.ADMIN.ORDERS}/${encodeURIComponent(orderId)}`);
+  },
   deleteOrder: (orderId) => {
     return apiClient.delete(`${API_ENDPOINTS.ADMIN.ORDERS}/${encodeURIComponent(orderId)}`);
   },

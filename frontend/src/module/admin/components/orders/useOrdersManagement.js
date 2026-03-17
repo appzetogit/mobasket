@@ -322,6 +322,7 @@ export function useOrdersManagement(orders, statusKey, title) {
     isViewOrderOpen,
     setIsViewOrderOpen,
     selectedOrder,
+    setSelectedOrder,
     filters,
     setFilters,
     visibleColumns,
