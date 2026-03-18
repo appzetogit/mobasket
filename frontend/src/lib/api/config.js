@@ -252,6 +252,7 @@ export const API_ENDPOINTS = {
     AUTH: {
       SEND_OTP: '/delivery/auth/send-otp',
       VERIFY_OTP: '/delivery/auth/verify-otp',
+      FIREBASE_GOOGLE_LOGIN: '/auth/firebase/google-login',
       REFRESH_TOKEN: '/delivery/auth/refresh-token',
       LOGOUT: '/delivery/auth/logout',
       ME: '/delivery/auth/me',

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
-import { Mail, Phone, AlertCircle, Loader2 } from "lucide-react"
+import { AlertCircle, Loader2 } from "lucide-react"
 import AnimatedPage from "../../components/AnimatedPage"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -486,6 +486,7 @@ export default function SignIn() {
 
   const handleGoogleSignIn = async () => {
     setApiError("")
+    setErrors({ phone: "", email: "", name: "" })
     setIsLoading(true)
     redirectHandledRef.current = false // Reset flag when starting new sign-in
 
@@ -837,17 +838,42 @@ export default function SignIn() {
             </div>
           </div>
 
-          {/* Social Login Icons */}
-          <div className="flex justify-center gap-4 md:gap-6">
-            {/* Email Login */}
-            <button
+          {/* Social Login */}
+          <div className="space-y-3">
+            <Button
               type="button"
-              onClick={handleLoginMethodChange}
-              className="w-12 h-12 md:w-14 md:h-14 rounded-full border border-[#E23744] flex items-center justify-center hover:bg-[#d32f3d] transition-all hover:shadow-md active:scale-95 bg-[#E23744]"
-              aria-label="Sign in with Email"
+              variant="outline"
+              onClick={handleGoogleSignIn}
+              disabled={isLoading}
+              className="w-full h-12 md:h-14 rounded-xl border border-gray-300 bg-white text-gray-900 hover:bg-gray-50"
             >
-              {authMethod == "phone" ? <Mail className="h-5 w-5 md:h-6 md:w-6 text-white" /> : <Phone className="h-5 w-5 md:h-6 md:w-6 text-white" />}
-            </button>
+              <svg className="h-5 w-5 shrink-0" viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  fill="#4285F4"
+                  d="M21.805 10.023h-9.18v3.955h5.27c-.227 1.273-.955 2.352-2.045 3.08v2.56h3.307c1.936-1.782 3.048-4.41 3.048-7.548 0-.681-.061-1.335-.174-1.977Z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12.625 22c2.767 0 5.088-.918 6.783-2.482l-3.307-2.56c-.918.615-2.091.98-3.476.98-2.671 0-4.934-1.804-5.741-4.228H3.467v2.641A10.24 10.24 0 0 0 12.625 22Z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M6.884 13.71a6.148 6.148 0 0 1-.321-1.96c0-.681.117-1.34.321-1.96V7.149H3.467A10.25 10.25 0 0 0 2.375 11.75c0 1.64.393 3.195 1.092 4.601l3.417-2.641Z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12.625 5.563c1.505 0 2.857.518 3.92 1.537l2.938-2.938C17.708 2.52 15.388 1.5 12.625 1.5a10.24 10.24 0 0 0-9.158 5.649l3.417 2.641c.807-2.424 3.07-4.227 5.741-4.227Z"
+                />
+              </svg>
+              <span>{isLoading ? "Signing in..." : "Continue with Google"}</span>
+            </Button>
+
+            {apiError && (
+              <div className="flex items-center justify-center gap-1 text-xs text-red-600">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                <span>{apiError}</span>
+              </div>
+            )}
           </div>
 
         </div>

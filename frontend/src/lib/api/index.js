@@ -981,6 +981,17 @@ export const deliveryAPI = {
   sendOTP: (phone, purpose = 'login') => {
     return apiClient.post(API_ENDPOINTS.DELIVERY.AUTH.SEND_OTP, { phone, purpose });
   },
+  firebaseGoogleLogin: (idToken, meta = {}) => {
+    return apiClient.post(API_ENDPOINTS.DELIVERY.AUTH.FIREBASE_GOOGLE_LOGIN, {
+      idToken,
+      role: 'delivery',
+      token: meta?.token,
+      platform: meta?.platform,
+      fcmToken: meta?.fcmToken,
+      fcmTokenWeb: meta?.fcmTokenWeb,
+      fcmTokenMobile: meta?.fcmTokenMobile,
+    });
+  },
   verifyOTP: (phone, otp, purpose = 'login', name = null, meta = {}) => {
     const payload = { phone, otp, purpose };
     // Only include name if it's provided and is a string

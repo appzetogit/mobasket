@@ -657,7 +657,7 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
   }
 
   // Ensure Firebase Admin is configured
-  if (!firebaseAuthService.isEnabled()) {
+  if (!(await firebaseAuthService.isEnabled())) {
     return errorResponse(
       res,
       500,

@@ -15,6 +15,7 @@ const logger = winston.createLogger({
 class FirebaseAuthService {
   constructor() {
     this.initialized = false;
+    this.initializingPromise = null;
     // Initialize asynchronously (don't await in constructor)
     this.init().catch(err => {
       logger.error(`Error initializing Firebase: ${err.message}`);
@@ -22,25 +23,45 @@ class FirebaseAuthService {
   }
 
   async init() {
-    if (this.initialized) return;
-
-    try {
-      const init = await initializeFirebaseAdmin({ allowDbLookup: true });
-      if (!init.initialized) {
-        logger.warn(
-          'Firebase Admin not fully configured. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY and FIREBASE_DATABASE_URL to enable auth + realtime.'
-        );
-        return;
-      }
-      this.initialized = true;
-      logger.info('Firebase Admin initialized for auth verification');
-    } catch (error) {
-      logger.error(`Error in Firebase init: ${error.message}`);
+    if (this.initialized) return true;
+    if (this.initializingPromise) {
+      return this.initializingPromise;
     }
+
+    this.initializingPromise = (async () => {
+      try {
+        const init = await initializeFirebaseAdmin({ allowDbLookup: true });
+        if (!init.initialized) {
+          logger.warn(
+            'Firebase Admin not fully configured. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY and FIREBASE_DATABASE_URL to enable auth + realtime.'
+          );
+          this.initialized = false;
+          return false;
+        }
+        this.initialized = true;
+        logger.info('Firebase Admin initialized for auth verification');
+        return true;
+      } catch (error) {
+        this.initialized = false;
+        logger.error(`Error in Firebase init: ${error.message}`);
+        return false;
+      } finally {
+        this.initializingPromise = null;
+      }
+    })();
+
+    return this.initializingPromise;
   }
 
-  isEnabled() {
-    return this.initialized;
+  async ensureInitialized() {
+    if (this.initialized) {
+      return true;
+    }
+    return this.init();
+  }
+
+  async isEnabled() {
+    return this.ensureInitialized();
   }
 
   /**
@@ -49,7 +70,8 @@ class FirebaseAuthService {
    * @returns {Promise<admin.auth.DecodedIdToken>}
    */
   async verifyIdToken(idToken) {
-    if (!this.initialized) {
+    const ready = await this.ensureInitialized();
+    if (!ready) {
       throw new Error('Firebase Admin is not configured. Please set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY in Admin > ENV Setup');
     }
 
