@@ -551,10 +551,6 @@ export const getOrders = asyncHandler(async (req, res) => {
       adminApproval: 1
     };
     const snapshotOrders = normalizedPlatform ? await readOrderSnapshot(normalizedPlatform) : [];
-    if (snapshotOrders.length > 0) {
-      const snapshotResult = filterSnapshotOrders(snapshotOrders, req.query, normalizedPlatform);
-      return successResponse(res, 200, 'Orders retrieved successfully', snapshotResult);
-    }
 
     // Fetch orders (lean) and do lightweight batched lookups instead of heavy populate chains.
     let orders = [];
@@ -612,6 +608,10 @@ export const getOrders = asyncHandler(async (req, res) => {
             .toArray();
         } catch (lastResortError) {
           console.error('Orders final fallback query failed:', lastResortError?.message || lastResortError);
+          if (snapshotOrders.length > 0) {
+            const snapshotResult = filterSnapshotOrders(snapshotOrders, req.query, normalizedPlatform);
+            return successResponse(res, 200, 'Orders retrieved successfully', snapshotResult);
+          }
           orders = [];
         }
       }

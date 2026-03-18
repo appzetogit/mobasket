@@ -195,6 +195,16 @@ const shouldInvalidateCachedPath = (mutatedPath = "/", cachedPath = "/") => {
     return cachedPath === "/order" || cachedPath.startsWith("/order/");
   }
 
+  if (mutatedPath.startsWith("/admin/orders")) {
+    return (
+      cachedPath === "/restaurant/orders" ||
+      cachedPath === "/grocery/store/orders" ||
+      cachedPath === "/delivery/orders" ||
+      cachedPath === "/order" ||
+      cachedPath.startsWith("/order/")
+    );
+  }
+
   if (mutatedPath.startsWith("/restaurant/orders")) {
     return cachedPath === "/restaurant/orders";
   }
