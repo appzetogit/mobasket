@@ -192,6 +192,10 @@ export const useDeliveryNotifications = (options = {}) => {
       if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') {
         return;
       }
+      // Match the browser gesture requirement used by audio playback.
+      if (!userInteractedRef.current) {
+        return;
+      }
       // Two short pulses for new order alert.
       navigator.vibrate([180, 120, 220]);
     } catch (error) {
@@ -334,6 +338,16 @@ export const useDeliveryNotifications = (options = {}) => {
       return;
     }
 
+    const accessToken =
+      localStorage.getItem('delivery_accessToken') ||
+      localStorage.getItem('accessToken');
+    const refreshToken = localStorage.getItem('delivery_refreshToken');
+
+    if (!accessToken && !refreshToken) {
+      setDeliveryPartnerId(null);
+      return;
+    }
+
     const fetchDeliveryPartnerId = async () => {
       try {
         const response = await deliveryAPI.getCurrentDelivery();
@@ -352,11 +366,17 @@ export const useDeliveryNotifications = (options = {}) => {
         } else {
         }
       } catch (error) {
-        console.error('Error fetching delivery partner:', error);
+        const status = Number(error?.response?.status || 0);
+        if (status !== 401) {
+          console.error('Error fetching delivery partner:', error);
+        }
+        if (status === 401) {
+          setDeliveryPartnerId(null);
+        }
       }
     };
     fetchDeliveryPartnerId();
-  }, []);
+  }, [enabled]);
 
   // Socket connection effect
   useEffect(() => {
@@ -566,7 +586,10 @@ export const useDeliveryNotifications = (options = {}) => {
   }, [deliveryPartnerId, enabled, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, suppressOrderNotifications, triggerOrderBuzz]);
 
   useEffect(() => {
-    if (!enabled || !deliveryPartnerId || isConnected) {
+    // Keep polling even when the socket is connected so the rider still gets
+    // the slider popup if a targeted socket event is missed after a
+    // store/restaurant accepts the order.
+    if (!enabled || !deliveryPartnerId) {
       return undefined;
     }
 
@@ -634,7 +657,7 @@ export const useDeliveryNotifications = (options = {}) => {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [deliveryPartnerId, enabled, isConnected, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, triggerOrderBuzz]);
+  }, [deliveryPartnerId, enabled, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, triggerOrderBuzz]);
 
   // Helper functions
   const clearNewOrder = useCallback(() => {

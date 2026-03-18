@@ -907,7 +907,8 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
           platform: 'all',
           zone: 'All',
           data: {
-            notificationType: 'new_order_available',
+            notificationType: 'new_order',
+            availableNotificationType: 'new_order_available',
             orderId: String(order.orderId || ''),
             orderMongoId: String(orderWithUser._id || ''),
             deliveryPartnerId: String(normalizedId || ''),
@@ -921,9 +922,10 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
         for (const room of roomVariations) {
           const sockets = await deliveryNamespace.in(room).fetchSockets();
           if (sockets.length > 0) {
+            deliveryNamespace.to(room).emit('new_order', orderNotification);
             deliveryNamespace.to(room).emit('new_order_available', orderNotification);
             deliveryNamespace.to(room).emit('play_notification_sound', {
-              type: 'new_order_available',
+              type: 'new_order',
               orderId: order.orderId,
               message: `New order available: ${order.orderId}`,
               phase: phase
@@ -940,6 +942,7 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
           // Still emit to room for when they connect
           if (deliveryNamespace) {
           roomVariations.forEach(room => {
+            deliveryNamespace.to(room).emit('new_order', orderNotification);
             deliveryNamespace.to(room).emit('new_order_available', orderNotification);
           });
           }
