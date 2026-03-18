@@ -1820,6 +1820,10 @@ export const adminAPI = {
     return apiClient.get('/admin/grocery/products/pending', { params });
   },
 
+  getPendingGroceryProductById: (id) => {
+    return apiClient.get(`/admin/grocery/products/${id}`);
+  },
+
   approveGroceryProduct: (id) => {
     return apiClient.patch(`/admin/grocery/products/${id}/approve`);
   },

@@ -150,13 +150,13 @@ export default function Cashback() {
                   className="w-full px-4 py-2.5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 >
                   <option value="Percentage (%)">Percentage (%)</option>
-                  <option value="Amount ($)">Amount ($)</option>
+                  <option value="Amount (₹)">Amount (₹)</option>
                 </select>
               </div>
 
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Cashback Amount ({formData.cashbackType === "Percentage (%)" ? "%" : "$"}) <span className="text-red-500">*</span>
+                  Cashback Amount ({formData.cashbackType === "Percentage (%)" ? "%" : "₹"}) <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
@@ -169,7 +169,7 @@ export default function Cashback() {
 
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Minimum Purchase ($)
+                  Minimum Purchase (₹)
                 </label>
                 <input
                   type="number"
@@ -182,7 +182,7 @@ export default function Cashback() {
 
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-2">
-                  Maximum Discount ($)
+                  Maximum Discount (₹)
                 </label>
                 <input
                   type="number"

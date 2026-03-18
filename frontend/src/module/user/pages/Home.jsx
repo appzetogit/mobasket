@@ -1342,7 +1342,14 @@ export default function Home() {
                 images: allImages, // Array of cover images for carousel (separate from menu images)
                 menuImages: fallbackImages, // Product/menu images (preferred for category icons)
                 coverImages, // Store-front/banner images
-                priceRange: restaurant.priceRange && !["$", "$$", "$$$"].includes(restaurant.priceRange) ? restaurant.priceRange : (restaurant.featuredPrice || 200), // Use from API or default to featuredPrice
+                priceRange: (() => {
+                  const normalizedPriceRange = typeof restaurant.priceRange === "string"
+                    ? restaurant.priceRange.replace(/\$/g, "₹")
+                    : restaurant.priceRange
+                  return normalizedPriceRange && !["₹", "₹₹", "₹₹₹"].includes(normalizedPriceRange)
+                    ? normalizedPriceRange
+                    : (restaurant.featuredPrice || 200)
+                })(), // Use from API or default to featuredPrice
                 featuredDish:
                   restaurant.featuredDish ||
                   (restaurant.cuisines && restaurant.cuisines.length > 0
@@ -4243,3 +4250,5 @@ export default function Home() {
     </div>
   );
 }
+
+

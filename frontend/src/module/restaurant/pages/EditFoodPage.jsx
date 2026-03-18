@@ -390,7 +390,7 @@ export default function EditFoodPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Price ($)
+                    Price (₹)
                   </label>
                   <input
                     type="number"
@@ -543,7 +543,7 @@ export default function EditFoodPage() {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs text-gray-600 mb-1">Price ($)</label>
+                        <label className="block text-xs text-gray-600 mb-1">Price (₹)</label>
                         <input
                           type="number"
                           step="0.01"

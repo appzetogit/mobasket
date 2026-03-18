@@ -179,7 +179,7 @@ export default function SubscriberList() {
               <div>
                 <p className="font-semibold">TOTAL EARNING</p>
                 <p className="text-[11px] text-emerald-600 font-semibold">
-                  $ 4,795.00
+                  ₹ 4,795.00
                 </p>
               </div>
             </div>
@@ -192,7 +192,7 @@ export default function SubscriberList() {
               </span>
               <div>
                 <p className="font-semibold">EARNED THIS MONTH</p>
-                <p className="text-[11px] text-slate-500">$ 0.00</p>
+                <p className="text-[11px] text-slate-500">₹ 0.00</p>
               </div>
             </div>
           </div>

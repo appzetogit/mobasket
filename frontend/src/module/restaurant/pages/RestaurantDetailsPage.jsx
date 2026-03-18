@@ -262,7 +262,7 @@ export default function RestaurantDetailsPage() {
                       />
                       {item.discount && (
                         <div className="absolute top-0 left-0 bg-green-500 text-white text-[10px] md:text-xs font-bold px-1.5 py-0.5 rounded-tl-lg rounded-br-lg">
-                          {item.discount}$ OFF
+                          ₹{item.discount} OFF
                         </div>
                       )}
                     </div>

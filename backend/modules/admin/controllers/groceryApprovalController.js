@@ -31,12 +31,54 @@ const resolvePlatformMatch = (platformQuery) => {
   return { $in: ['mogrocery', 'grocery'] };
 };
 
+const GROCERY_APPROVAL_LIST_MENU_PROJECTION = [
+  'restaurant',
+  'createdAt',
+  'sections.id',
+  'sections.name',
+  'sections.items.id',
+  'sections.items.name',
+  'sections.items.category',
+  'sections.items.price',
+  'sections.items.foodType',
+  'sections.items.description',
+  'sections.items.approvalStatus',
+  'sections.items.requestedAt',
+  'sections.subsections.id',
+  'sections.subsections.name',
+  'sections.subsections.items.id',
+  'sections.subsections.items.name',
+  'sections.subsections.items.category',
+  'sections.subsections.items.price',
+  'sections.subsections.items.foodType',
+  'sections.subsections.items.description',
+  'sections.subsections.items.approvalStatus',
+  'sections.subsections.items.requestedAt',
+  'addons.id',
+  'addons.name',
+  'addons.description',
+  'addons.price',
+  'addons.approvalStatus',
+  'addons.requestedAt'
+].join(' ');
+
+const GROCERY_APPROVAL_LOOKUP_MENU_PROJECTION = [
+  'addons.id',
+  'addons.approvalStatus',
+  'sections.items.id',
+  'sections.items.approvalStatus',
+  'sections.subsections.items.id',
+  'sections.subsections.items.approvalStatus'
+].join(' ');
+
 const buildApprovalMenuCandidates = async ({ platform, restaurantMongoId }) => {
   const menuQuery = { isActive: true };
 
   if (restaurantMongoId && mongoose.Types.ObjectId.isValid(String(restaurantMongoId))) {
     menuQuery.restaurant = new mongoose.Types.ObjectId(String(restaurantMongoId));
-    return Menu.find(menuQuery).lean();
+    return Menu.find(menuQuery)
+      .select(GROCERY_APPROVAL_LOOKUP_MENU_PROJECTION)
+      .lean();
   }
 
   const normalizedPlatform = String(platform || 'mogrocery').toLowerCase();
@@ -54,7 +96,9 @@ const buildApprovalMenuCandidates = async ({ platform, restaurantMongoId }) => {
   if (restaurantIds.length === 0) return [];
 
   menuQuery.restaurant = { $in: restaurantIds };
-  return Menu.find(menuQuery).lean();
+  return Menu.find(menuQuery)
+    .select(GROCERY_APPROVAL_LOOKUP_MENU_PROJECTION)
+    .lean();
 };
 
 /**
@@ -65,23 +109,33 @@ const buildApprovalMenuCandidates = async ({ platform, restaurantMongoId }) => {
 export const getPendingGroceryApprovals = asyncHandler(async (req, res) => {
   try {
     const platformMatch = resolvePlatformMatch(req.query?.platform);
-
-    const menus = await Menu.find({ isActive: true })
-      .populate({
-        path: 'restaurant',
-        select: 'name restaurantId platform',
-        match: { platform: platformMatch }
-      })
+    const restaurants = await Restaurant.find({ platform: platformMatch })
+      .select('_id name restaurantId')
       .lean();
 
-    // Filter out menus where restaurant is null (due to populate match)
-    const validMenus = menus.filter(menu => menu.restaurant);
+    if (restaurants.length === 0) {
+      return successResponse(res, 200, 'Pending grocery approvals retrieved successfully', {
+        requests: [],
+        total: 0
+      });
+    }
+
+    const restaurantMap = new Map(restaurants.map((restaurant) => [String(restaurant._id), restaurant]));
+    const restaurantIds = restaurants.map((restaurant) => restaurant._id);
+
+    const menus = await Menu.find({
+      isActive: true,
+      restaurant: { $in: restaurantIds }
+    })
+      .select(GROCERY_APPROVAL_LIST_MENU_PROJECTION)
+      .lean();
 
     const pendingRequests = [];
 
     // Iterate through all menus and extract pending items
-    for (const menu of validMenus) {
-      if (!menu.restaurant) continue;
+    for (const menu of menus) {
+      const restaurant = restaurantMap.get(String(menu.restaurant));
+      if (!restaurant) continue;
 
       // Check items in sections
       for (const section of menu.sections || []) {
@@ -92,18 +146,14 @@ export const getPendingGroceryApprovals = asyncHandler(async (req, res) => {
               id: item.id,
               itemName: item.name,
               category: item.category || '',
-              restaurantId: menu.restaurant.restaurantId,
-              restaurantName: menu.restaurant.name,
-              restaurantMongoId: menu.restaurant._id,
+              restaurantId: restaurant.restaurantId,
+              restaurantName: restaurant.name,
+              restaurantMongoId: restaurant._id,
               sectionName: section.name,
               sectionId: section.id,
               price: item.price,
               foodType: item.foodType,
               description: item.description,
-              image: item.image || (item.images && item.images[0]) || '',
-              images: Array.isArray(item.images) && item.images.length > 0 
-                ? item.images.filter(img => img && typeof img === 'string' && img.trim() !== '')
-                : [],
               requestedAt: item.requestedAt || menu.createdAt,
               item: item // Full item data
             });
@@ -119,9 +169,9 @@ export const getPendingGroceryApprovals = asyncHandler(async (req, res) => {
                 id: item.id,
                 itemName: item.name,
                 category: item.category || '',
-                restaurantId: menu.restaurant.restaurantId,
-                restaurantName: menu.restaurant.name,
-                restaurantMongoId: menu.restaurant._id,
+                restaurantId: restaurant.restaurantId,
+                restaurantName: restaurant.name,
+                restaurantMongoId: restaurant._id,
                 sectionName: section.name,
                 sectionId: section.id,
                 subsectionName: subsection.name,
@@ -129,10 +179,6 @@ export const getPendingGroceryApprovals = asyncHandler(async (req, res) => {
                 price: item.price,
                 foodType: item.foodType,
                 description: item.description,
-                image: item.image || (item.images && item.images[0]) || '',
-                images: Array.isArray(item.images) && item.images.length > 0 
-                  ? item.images.filter(img => img && typeof img === 'string' && img.trim() !== '')
-                  : [],
                 requestedAt: item.requestedAt || menu.createdAt,
                 item: item // Full item data
               });
@@ -150,15 +196,11 @@ export const getPendingGroceryApprovals = asyncHandler(async (req, res) => {
             itemName: addon.name,
             category: 'Add-on',
             type: 'addon', // Mark as addon
-            restaurantId: menu.restaurant.restaurantId,
-            restaurantName: menu.restaurant.name,
-            restaurantMongoId: menu.restaurant._id,
+            restaurantId: restaurant.restaurantId,
+            restaurantName: restaurant.name,
+            restaurantMongoId: restaurant._id,
             price: addon.price,
             description: addon.description,
-            image: addon.image || (addon.images && addon.images[0]) || '',
-            images: Array.isArray(addon.images) && addon.images.length > 0 
-              ? addon.images.filter(img => img && typeof img === 'string' && img.trim() !== '')
-              : [],
             requestedAt: addon.requestedAt || menu.createdAt,
             item: addon // Full addon data
           });

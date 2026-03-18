@@ -32,12 +32,54 @@ const isPendingApprovalStatus = (value) => {
   return normalized === 'pending';
 };
 
+const FOOD_APPROVAL_LIST_MENU_PROJECTION = [
+  'restaurant',
+  'createdAt',
+  'sections.id',
+  'sections.name',
+  'sections.items.id',
+  'sections.items.name',
+  'sections.items.category',
+  'sections.items.price',
+  'sections.items.foodType',
+  'sections.items.description',
+  'sections.items.approvalStatus',
+  'sections.items.requestedAt',
+  'sections.subsections.id',
+  'sections.subsections.name',
+  'sections.subsections.items.id',
+  'sections.subsections.items.name',
+  'sections.subsections.items.category',
+  'sections.subsections.items.price',
+  'sections.subsections.items.foodType',
+  'sections.subsections.items.description',
+  'sections.subsections.items.approvalStatus',
+  'sections.subsections.items.requestedAt',
+  'addons.id',
+  'addons.name',
+  'addons.description',
+  'addons.price',
+  'addons.approvalStatus',
+  'addons.requestedAt'
+].join(' ');
+
+const FOOD_APPROVAL_LOOKUP_MENU_PROJECTION = [
+  'addons.id',
+  'addons.approvalStatus',
+  'sections.items.id',
+  'sections.items.approvalStatus',
+  'sections.subsections.items.id',
+  'sections.subsections.items.approvalStatus'
+].join(' ');
+
 const buildApprovalMenuCandidates = async ({ platform, restaurantMongoId }) => {
   const menuQuery = { isActive: true };
 
   if (restaurantMongoId && mongoose.Types.ObjectId.isValid(String(restaurantMongoId))) {
     menuQuery.restaurant = new mongoose.Types.ObjectId(String(restaurantMongoId));
-    return Menu.find(menuQuery).lean();
+    return Menu.find(menuQuery)
+      .select(FOOD_APPROVAL_LOOKUP_MENU_PROJECTION)
+      .lean();
   }
 
   const normalizedPlatform = String(platform || '').toLowerCase();
@@ -48,7 +90,9 @@ const buildApprovalMenuCandidates = async ({ platform, restaurantMongoId }) => {
   if (restaurantIds.length === 0) return [];
 
   menuQuery.restaurant = { $in: restaurantIds };
-  return Menu.find(menuQuery).lean();
+  return Menu.find(menuQuery)
+    .select(FOOD_APPROVAL_LOOKUP_MENU_PROJECTION)
+    .lean();
 };
 
 /**
@@ -78,7 +122,7 @@ export const getPendingFoodApprovals = asyncHandler(async (req, res) => {
       isActive: true,
       restaurant: { $in: restaurantIds }
     })
-      .select('restaurant sections addons createdAt')
+      .select(FOOD_APPROVAL_LIST_MENU_PROJECTION)
       .lean();
 
     const pendingRequests = [];

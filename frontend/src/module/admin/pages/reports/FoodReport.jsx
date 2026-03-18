@@ -284,7 +284,7 @@ export default function FoodReport() {
                             height: `${height}px`, 
                             minHeight: height > 0 ? '4px' : '0'
                           }}
-                          title={`${data.year}: $${data.amount.toLocaleString()}`}
+                          title={`${data.year}: ₹${data.amount.toLocaleString()}`}
                         />
                       </div>
                     </div>

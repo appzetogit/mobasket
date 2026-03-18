@@ -142,6 +142,7 @@ import {
 } from '../controllers/groceryApprovalController.js';
 import {
   getPendingGroceryProducts,
+  getPendingGroceryProductById,
   approveGroceryProduct,
   rejectGroceryProduct,
   bulkApproveGroceryProducts
@@ -449,6 +450,7 @@ router.patch('/grocery-addons/:restaurantId/:addonId/categories', updateGroceryA
 
 // Grocery Product Approval Management
 router.get('/grocery/products/pending', getPendingGroceryProducts);
+router.get('/grocery/products/:id', getPendingGroceryProductById);
 router.patch('/grocery/products/:id/approve', approveGroceryProduct);
 router.patch('/grocery/products/:id/reject', rejectGroceryProduct);
 router.post('/grocery/products/bulk-approve', bulkApproveGroceryProducts);

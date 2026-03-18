@@ -138,7 +138,7 @@ export default function DispatchOrdersTable({ orders, visibleColumns, onViewOrde
                 )}
                 {visibleColumns.total && (
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm font-medium text-slate-900">{order.total || `$ ${order.totalAmount?.toFixed(2) || '0.00'}`}</div>
+                    <div className="text-sm font-medium text-slate-900">{order.total || `₹ ${order.totalAmount?.toFixed(2) || '0.00'}`}</div>
                     {order.paymentStatus && (
                       <div className={`text-xs mt-0.5 ${
                         order.paymentStatus === "Paid" ? "text-emerald-600" : "text-red-600"

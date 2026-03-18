@@ -216,7 +216,7 @@ export default function AddEditFoodCampaignDialog({ isOpen, onOpenChange, campai
 
             <div>
               <label className="block text-sm font-semibold text-slate-700 mb-2">
-                Price ($) <span className="text-red-500">*</span>
+                Price (₹) <span className="text-red-500">*</span>
               </label>
               <div className="relative">
                 <input

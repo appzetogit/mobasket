@@ -439,7 +439,7 @@ export default function CollectCash() {
                       {visibleColumns.collectedAmount && (
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="text-sm font-medium text-slate-700">
-                            $ {transaction.collectedAmount.toLocaleString("en-US", {
+                            ₹{transaction.collectedAmount.toLocaleString("en-US", {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
                             })}
@@ -571,7 +571,7 @@ export default function CollectCash() {
               <div>
                 <label className="text-xs font-semibold text-slate-500 uppercase">Collected Amount</label>
                 <p className="text-sm font-medium text-slate-900 mt-1">
-                  $ {selectedTransaction.collectedAmount.toLocaleString("en-US", {
+                  ₹{selectedTransaction.collectedAmount.toLocaleString("en-US", {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                   })}

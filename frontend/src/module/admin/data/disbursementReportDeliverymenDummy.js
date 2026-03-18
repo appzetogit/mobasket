@@ -6,7 +6,7 @@ export const disbursementReportDeliverymenDummy = [
     id: "#1001",
     deliveryManName: "Kathryn Murphy",
     createdAt: "21 Nov 2023 04:32 pm",
-    disburseAmount: "$ 1,714.29",
+    disburseAmount: "? 1,714.29",
     paymentMethod: "6cash",
     status: "Pending",
   },
@@ -15,7 +15,7 @@ export const disbursementReportDeliverymenDummy = [
     id: "#1000",
     deliveryManName: "Leslie Alexander",
     createdAt: "20 Nov 2023 03:20 pm",
-    disburseAmount: "$ 1,208.61",
+    disburseAmount: "? 1,208.61",
     paymentMethod: "Bank Transfer",
     status: "Pending",
   },
@@ -24,15 +24,16 @@ export const disbursementReportDeliverymenDummy = [
     id: "#999",
     deliveryManName: "Jhon Doe",
     createdAt: "19 Nov 2023 02:15 pm",
-    disburseAmount: "$ 1,000.00",
+    disburseAmount: "? 1,000.00",
     paymentMethod: "6cash",
     status: "Pending",
   },
 ]
 
 export const disbursementStatsDeliverymen = {
-  pending: "$ 3,922.90",
-  completed: "$ 0.00",
-  canceled: "$ 0.00",
+  pending: "? 3,922.90",
+  completed: "? 0.00",
+  canceled: "? 0.00",
 }
+
 

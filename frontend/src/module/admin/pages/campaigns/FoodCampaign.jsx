@@ -152,7 +152,7 @@ export default function FoodCampaign() {
                       <span className="text-sm text-slate-700">{campaign.timeStart} - {campaign.timeEnd}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-medium text-slate-900">$ {campaign.price.toFixed(2)}</span>
+                      <span className="text-sm font-medium text-slate-900">₹{campaign.price.toFixed(2)}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button

@@ -220,7 +220,7 @@ export default function PaymentPage() {
               Total Amount
             </span>
             <span className="text-xl md:text-2xl font-bold text-[#ff8100]">
-              ${totalAmount.toFixed(2)}
+              ₹{totalAmount.toFixed(2)}
             </span>
           </div>
         </div>
@@ -316,7 +316,7 @@ export default function PaymentPage() {
             isProcessing || !cardNumber || !cardName || !expiryDate || !cvv
           }
         >
-          {isProcessing ? "Processing..." : `Pay $${totalAmount.toFixed(2)}`}
+          {isProcessing ? "Processing..." : `Pay ₹${totalAmount.toFixed(2)}`}
         </Button>
       </div>
 

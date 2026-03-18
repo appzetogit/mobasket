@@ -18,7 +18,8 @@
     "backfill:grocery-product-images": "node scripts/backfill-grocery-product-images.js",
     "migrate:grocery-categories-static": "node scripts/migrate-static-grocery-categories.js",
     "migrate:restaurant-platform-indexes": "node scripts/migrate-restaurant-platform-indexes.js",
-    "migrate:orders-platform-collections": "node scripts/migrate-orders-to-platform-collections.js"
+    "migrate:orders-platform-collections": "node scripts/migrate-orders-to-platform-collections.js",
+    "refresh:admin-order-snapshots": "node scripts/refresh-admin-order-snapshots.js"
   },
   "keywords": [
     "food-delivery",

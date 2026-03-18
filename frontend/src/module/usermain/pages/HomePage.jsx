@@ -753,7 +753,7 @@ export default function HomePage() {
       description: "Spicy chicken, beef",
       image:
         "https://images.unsplash.com/photo-1628840042765-356cda07504e?w=400&h=400&fit=crop",
-      price: "$9.50",
+      price: "₹9.50",
       rating: 4.5,
       reviews: 25,
     },
@@ -763,7 +763,7 @@ export default function HomePage() {
       description: "meat & Basil",
       image:
         "https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=400&h=400&fit=crop",
-      price: "$9.50",
+      price: "₹9.50",
       rating: 4.5,
       reviews: 25,
     },
@@ -773,7 +773,7 @@ export default function HomePage() {
       description: "topings & tomato",
       image:
         "https://images.unsplash.com/photo-1572442388796-11668a67e53d?w=400&h=400&fit=crop",
-      price: "$9.50",
+      price: "₹9.50",
       rating: 4.5,
       reviews: 25,
     },
@@ -783,7 +783,7 @@ export default function HomePage() {
       description: "Baked Salmon",
       image:
         "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=400&h=400&fit=crop",
-      price: "$9.50",
+      price: "₹9.50",
       rating: 4.5,
       reviews: 25,
     },

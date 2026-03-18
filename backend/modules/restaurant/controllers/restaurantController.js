@@ -1164,7 +1164,9 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
             cuisine: restaurant.cuisines && restaurant.cuisines.length > 0
               ? restaurant.cuisines.join(' • ')
               : "Multi-cuisine",
-            price: restaurant.priceRange || "$$",
+            price: typeof restaurant.priceRange === 'string'
+              ? restaurant.priceRange.replace(/\$/g, '₹')
+              : (restaurant.priceRange || "₹₹"),
             image: restaurant.profileImage?.url || restaurant.menuImages?.[0]?.url || "",
             menuItems: dishesUnder250.map(item => ({
               id: item.id,

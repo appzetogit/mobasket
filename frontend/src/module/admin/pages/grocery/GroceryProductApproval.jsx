@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Search, CheckCircle2, XCircle, Eye, Loader2, Package } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import {
@@ -20,10 +20,15 @@ const parseDateValue = (value) => {
   return Number.isFinite(tm) ? tm : 0;
 };
 
-const normalizeProductRequest = (product = {}) => {
-  const imageList = Array.isArray(product.images)
-    ? product.images.filter((img) => typeof img === "string" && img.trim() !== "")
-    : [];
+const isInlineBase64Image = (value = "") => /^data:image\//i.test(String(value).trim());
+
+const getSanitizedImages = (images = []) =>
+  (Array.isArray(images) ? images : []).filter(
+    (img) => typeof img === "string" && img.trim() !== "" && !isInlineBase64Image(img),
+  );
+
+const normalizeProductRequest = (product = {}, { includeImages = false } = {}) => {
+  const imageList = getSanitizedImages(product.images);
 
   return {
     approvalEntityType: "product",
@@ -41,7 +46,7 @@ const normalizeProductRequest = (product = {}) => {
     inStock: Boolean(product.inStock),
     stockQuantity: Number(product.stockQuantity || 0),
     requestedAt: product.createdAt || null,
-    images: imageList,
+    images: includeImages ? imageList : [],
     raw: product,
   };
 };
@@ -84,6 +89,7 @@ export default function GroceryProductApproval() {
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, pages: 0 });
   const previousPendingCountRef = useRef(null);
   const userInteractedRef = useRef(false);
@@ -112,7 +118,7 @@ export default function GroceryProductApproval() {
     }
   };
 
-  const fetchPendingRequests = async ({ showLoader = true } = {}) => {
+  const fetchPendingRequests = useCallback(async ({ showLoader = true } = {}) => {
     try {
       if (showLoader) setLoading(true);
 
@@ -164,7 +170,7 @@ export default function GroceryProductApproval() {
     } finally {
       if (showLoader) setLoading(false);
     }
-  };
+  }, [pagination.limit, pagination.page]);
 
   useEffect(() => {
     audioRef.current = new Audio(alertSound);
@@ -196,7 +202,7 @@ export default function GroceryProductApproval() {
         audioRef.current = null;
       }
     };
-  }, [pagination.page, pagination.limit]);
+  }, [fetchPendingRequests]);
 
   const filteredRequests = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -238,6 +244,36 @@ export default function GroceryProductApproval() {
       toast.error(error?.response?.data?.message || "Failed to approve request");
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const openRequestDetails = async (request) => {
+    if (!request) return;
+
+    if (request.approvalEntityType === "addon") {
+      setSelectedRequest(request);
+      setShowDetailModal(true);
+      return;
+    }
+
+    try {
+      setDetailLoading(true);
+      setSelectedRequest(request);
+      setShowDetailModal(true);
+
+      const response = await adminAPI.getPendingGroceryProductById(request.id);
+      const product = response?.data?.data?.product;
+
+      if (product) {
+        setSelectedRequest(normalizeProductRequest(product, { includeImages: true }));
+      }
+    } catch (error) {
+      console.error("Error fetching grocery product details:", error);
+      toast.error(error?.response?.data?.message || "Failed to load product details");
+      setShowDetailModal(false);
+      setSelectedRequest(null);
+    } finally {
+      setDetailLoading(false);
     }
   };
 
@@ -390,10 +426,7 @@ export default function GroceryProductApproval() {
                           <td className="px-3 py-3 whitespace-nowrap text-right text-sm">
                             <div className="flex justify-end gap-1.5">
                               <button
-                                onClick={() => {
-                                  setSelectedRequest(request);
-                                  setShowDetailModal(true);
-                                }}
+                                onClick={() => openRequestDetails(request)}
                                 className="inline-flex h-7 w-7 items-center justify-center rounded-md text-white transition-colors"
                                 style={{ backgroundColor: "#006fbd" }}
                                 title="View Details"
@@ -441,7 +474,11 @@ export default function GroceryProductApproval() {
             </DialogDescription>
           </DialogHeader>
 
-          {selectedRequest && (
+          {detailLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-8 h-8 animate-spin text-[#006fbd]" />
+            </div>
+          ) : selectedRequest ? (
             <div className="p-6 space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 {selectedRequest.images && selectedRequest.images.length > 0 && (
@@ -508,7 +545,7 @@ export default function GroceryProductApproval() {
                 </div>
               </div>
             </div>
-          )}
+          ) : null}
 
           <DialogFooter className="p-6 pt-4 border-t border-gray-200 flex gap-2">
             <button

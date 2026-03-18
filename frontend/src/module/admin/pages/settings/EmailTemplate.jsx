@@ -241,7 +241,7 @@ export default function EmailTemplate() {
       .replace(/{deliverymanName}/g, "Mike Johnson")
       .replace(/{vehicleType}/g, "Motorcycle")
       .replace(/{requestId}/g, "REQ-12345")
-      .replace(/{amount}/g, "$500.00")
+      .replace(/{amount}/g, "₹500.00")
       .replace(/{requestedBy}/g, "Restaurant Owner")
       .replace(/{accountDetails}/g, "Account: ****1234")
       .replace(/{campaignName}/g, "Summer Special")

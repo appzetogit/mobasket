@@ -195,10 +195,10 @@ export default function IncentivesHistory() {
                       <span className="text-sm text-slate-700">{item.zone}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-medium text-slate-900">$ {item.totalEarning.toFixed(2)}</span>
+                      <span className="text-sm font-medium text-slate-900">₹{item.totalEarning.toFixed(2)}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-medium text-slate-900">$ {item.incentive.toFixed(2)}</span>
+                      <span className="text-sm font-medium text-slate-900">₹{item.incentive.toFixed(2)}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm text-slate-700">{item.date}</span>

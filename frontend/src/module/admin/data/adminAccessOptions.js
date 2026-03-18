@@ -28,7 +28,7 @@ const flattenMenuAccess = (menu, platform) => {
           if (!subItem?.path) return;
           if (SUPER_ADMIN_ONLY_PATHS.has(subItem.path)) return;
           options.push({
-            label: `${item.label} - ${subItem.label || subItem.path}`,
+            label: `?{item.label} - ?{subItem.label || subItem.path}`,
             path: subItem.path,
             platform,
           });
@@ -63,3 +63,4 @@ Object.values(adminAccessOptions).forEach((groups) => {
 });
 
 export const allAdminAccessPaths = Array.from(dedupe);
+

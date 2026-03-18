@@ -16,6 +16,35 @@ const slugify = (value = '') =>
     .replace(/[^a-z0-9-]/g, '');
 
 const getValidObjectId = (value) => (mongoose.Types.ObjectId.isValid(value) ? new mongoose.Types.ObjectId(value) : null);
+const isInlineBase64Image = (value = '') => /^data:image\//i.test(String(value).trim());
+
+const sanitizeProductImages = (product) => {
+  if (!product || !Array.isArray(product.images)) return product;
+
+  return {
+    ...product,
+    images: product.images.filter((image) => typeof image === 'string' && image.trim() !== '' && !isInlineBase64Image(image)),
+  };
+};
+
+const PENDING_GROCERY_PRODUCT_LIST_PROJECTION = [
+  'name',
+  'description',
+  'mrp',
+  'sellingPrice',
+  'unit',
+  'inStock',
+  'stockQuantity',
+  'storeId',
+  'category',
+  'subcategory',
+  'subcategories',
+  'approvalStatus',
+  'rejectionReason',
+  'createdAt',
+  'requestedCategory',
+  'requestedSubcategories',
+].join(' ');
 
 const normalizeRequestedSubcategories = (requestedSubcategories = []) => {
   if (!Array.isArray(requestedSubcategories)) return [];
@@ -153,6 +182,7 @@ export const getPendingGroceryProducts = asyncHandler(async (req, res) => {
 
     const [products, total] = await Promise.all([
       GroceryProduct.find(filter)
+        .select(PENDING_GROCERY_PRODUCT_LIST_PROJECTION)
         .populate('category', 'name slug section')
         .populate('subcategories', 'name slug')
         .populate('subcategory', 'name slug')
@@ -176,6 +206,41 @@ export const getPendingGroceryProducts = asyncHandler(async (req, res) => {
   } catch (error) {
     console.error('Error fetching pending grocery products:', error);
     return errorResponse(res, 500, 'Failed to fetch pending products');
+  }
+});
+
+/**
+ * Get a single pending grocery product for approval details
+ * GET /api/admin/grocery/products/:id
+ */
+export const getPendingGroceryProductById = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return errorResponse(res, 400, 'Invalid product ID');
+    }
+
+    const product = await GroceryProduct.findOne({
+      _id: id,
+      approvalStatus: 'pending',
+    })
+      .populate('category', 'name slug section')
+      .populate('subcategories', 'name slug')
+      .populate('subcategory', 'name slug')
+      .populate('storeId', 'name email phone')
+      .lean();
+
+    if (!product) {
+      return errorResponse(res, 404, 'Pending product not found');
+    }
+
+    return successResponse(res, 200, 'Pending product retrieved successfully', {
+      product: sanitizeProductImages(product),
+    });
+  } catch (error) {
+    console.error('Error fetching pending grocery product:', error);
+    return errorResponse(res, 500, 'Failed to fetch pending product');
   }
 });
 

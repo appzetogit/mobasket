@@ -8,7 +8,7 @@ export const expenseReportDummy = [
     expenseType: "Discount On Product",
     customerName: "Jane Doe",
     customerPhone: "+8**********",
-    expenseAmount: "$ 1.85",
+    expenseAmount: "? 1.85",
   },
   {
     sl: 2,
@@ -17,7 +17,7 @@ export const expenseReportDummy = [
     expenseType: "Cashback",
     customerName: "John Doe",
     customerPhone: "+8**********",
-    expenseAmount: "$ 1.28",
+    expenseAmount: "? 1.28",
   },
   {
     sl: 3,
@@ -26,7 +26,7 @@ export const expenseReportDummy = [
     expenseType: "Free Delivery",
     customerName: "Mehedi Hasan",
     customerPhone: "+8**********",
-    expenseAmount: "$ 3.00",
+    expenseAmount: "? 3.00",
   },
   {
     sl: 4,
@@ -35,7 +35,7 @@ export const expenseReportDummy = [
     expenseType: "Add Fund Bonus",
     customerName: "Purno Test",
     customerPhone: "+8**********",
-    expenseAmount: "$ 276.27",
+    expenseAmount: "? 276.27",
   },
   {
     sl: 5,
@@ -44,7 +44,7 @@ export const expenseReportDummy = [
     expenseType: "Discount On Product",
     customerName: "Marvin McKinney",
     customerPhone: "+8**********",
-    expenseAmount: "$ 5.70",
+    expenseAmount: "? 5.70",
   },
   {
     sl: 6,
@@ -53,7 +53,7 @@ export const expenseReportDummy = [
     expenseType: "Cashback",
     customerName: "Munam ShahariEr",
     customerPhone: "+8**********",
-    expenseAmount: "$ 11.00",
+    expenseAmount: "? 11.00",
   },
   {
     sl: 7,
@@ -62,7 +62,7 @@ export const expenseReportDummy = [
     expenseType: "Free Delivery",
     customerName: "jhon",
     customerPhone: "+8**********",
-    expenseAmount: "$ 94.00",
+    expenseAmount: "? 94.00",
   },
   {
     sl: 8,
@@ -71,7 +71,7 @@ export const expenseReportDummy = [
     expenseType: "Add Fund Bonus",
     customerName: "Sultan Mahamud",
     customerPhone: "+8**********",
-    expenseAmount: "$ 0.00",
+    expenseAmount: "? 0.00",
   },
   {
     sl: 9,
@@ -80,7 +80,7 @@ export const expenseReportDummy = [
     expenseType: "Discount On Product",
     customerName: "Sultan O Mahamud 1",
     customerPhone: "+8**********",
-    expenseAmount: "$ 52.98",
+    expenseAmount: "? 52.98",
   },
   {
     sl: 10,
@@ -89,7 +89,7 @@ export const expenseReportDummy = [
     expenseType: "Cashback",
     customerName: "jane Cooper",
     customerPhone: "+8**********",
-    expenseAmount: "$ 2,416.94",
+    expenseAmount: "? 2,416.94",
   },
   {
     sl: 11,
@@ -98,7 +98,7 @@ export const expenseReportDummy = [
     expenseType: "Free Delivery",
     customerName: "Jane Doe",
     customerPhone: "+8**********",
-    expenseAmount: "$ 168.30",
+    expenseAmount: "? 168.30",
   },
   {
     sl: 12,
@@ -107,7 +107,7 @@ export const expenseReportDummy = [
     expenseType: "Add Fund Bonus",
     customerName: "John Doe",
     customerPhone: "+8**********",
-    expenseAmount: "$ 10.00",
+    expenseAmount: "? 10.00",
   },
   {
     sl: 13,
@@ -116,7 +116,7 @@ export const expenseReportDummy = [
     expenseType: "Discount On Product",
     customerName: "Mehedi Hasan",
     customerPhone: "+8**********",
-    expenseAmount: "$ 3.00",
+    expenseAmount: "? 3.00",
   },
   {
     sl: 14,
@@ -125,7 +125,7 @@ export const expenseReportDummy = [
     expenseType: "Cashback",
     customerName: "Purno Test",
     customerPhone: "+8**********",
-    expenseAmount: "$ 100.00",
+    expenseAmount: "? 100.00",
   },
   {
     sl: 15,
@@ -134,7 +134,7 @@ export const expenseReportDummy = [
     expenseType: "Free Delivery",
     customerName: "Marvin McKinney",
     customerPhone: "+8**********",
-    expenseAmount: "$ 33.75",
+    expenseAmount: "? 33.75",
   },
   {
     sl: 16,
@@ -143,7 +143,7 @@ export const expenseReportDummy = [
     expenseType: "Add Fund Bonus",
     customerName: "Munam ShahariEr",
     customerPhone: "+8**********",
-    expenseAmount: "$ 63.00",
+    expenseAmount: "? 63.00",
   },
   {
     sl: 17,
@@ -152,7 +152,7 @@ export const expenseReportDummy = [
     expenseType: "Discount On Product",
     customerName: "jhon",
     customerPhone: "+8**********",
-    expenseAmount: "$ 81.00",
+    expenseAmount: "? 81.00",
   },
   {
     sl: 18,
@@ -161,7 +161,7 @@ export const expenseReportDummy = [
     expenseType: "Cashback",
     customerName: "Sultan Mahamud",
     customerPhone: "+8**********",
-    expenseAmount: "$ 2.06",
+    expenseAmount: "? 2.06",
   },
   {
     sl: 19,
@@ -170,7 +170,7 @@ export const expenseReportDummy = [
     expenseType: "Free Delivery",
     customerName: "Sultan O Mahamud 1",
     customerPhone: "+8**********",
-    expenseAmount: "$ 9.30",
+    expenseAmount: "? 9.30",
   },
   {
     sl: 20,
@@ -179,7 +179,7 @@ export const expenseReportDummy = [
     expenseType: "Add Fund Bonus",
     customerName: "jane Cooper",
     customerPhone: "+8**********",
-    expenseAmount: "$ 4,297.41",
+    expenseAmount: "? 4,297.41",
   },
   {
     sl: 21,
@@ -188,7 +188,7 @@ export const expenseReportDummy = [
     expenseType: "Discount On Product",
     customerName: "Jane Doe",
     customerPhone: "+8**********",
-    expenseAmount: "$ 15.50",
+    expenseAmount: "? 15.50",
   },
   {
     sl: 22,
@@ -197,7 +197,7 @@ export const expenseReportDummy = [
     expenseType: "Cashback",
     customerName: "John Doe",
     customerPhone: "+8**********",
-    expenseAmount: "$ 25.75",
+    expenseAmount: "? 25.75",
   },
   {
     sl: 23,
@@ -206,7 +206,7 @@ export const expenseReportDummy = [
     expenseType: "Free Delivery",
     customerName: "Mehedi Hasan",
     customerPhone: "+8**********",
-    expenseAmount: "$ 7.20",
+    expenseAmount: "? 7.20",
   },
   {
     sl: 24,
@@ -215,7 +215,7 @@ export const expenseReportDummy = [
     expenseType: "Add Fund Bonus",
     customerName: "Purno Test",
     customerPhone: "+8**********",
-    expenseAmount: "$ 150.00",
+    expenseAmount: "? 150.00",
   },
   {
     sl: 25,
@@ -224,7 +224,7 @@ export const expenseReportDummy = [
     expenseType: "Discount On Product",
     customerName: "Marvin McKinney",
     customerPhone: "+8**********",
-    expenseAmount: "$ 45.60",
+    expenseAmount: "? 45.60",
   },
   {
     sl: 26,
@@ -233,7 +233,8 @@ export const expenseReportDummy = [
     expenseType: "Cashback",
     customerName: "Munam ShahariEr",
     customerPhone: "+8**********",
-    expenseAmount: "$ 88.90",
+    expenseAmount: "? 88.90",
   },
 ]
+
 

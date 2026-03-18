@@ -258,7 +258,7 @@ export default function RegularOrderReport() {
   )
 
   const formatAmount = (amount) =>
-    `$ ${Number(amount || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+    `₹ ${Number(amount || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
   const handleFilterChange = (key, value) => {
     setDraftFilters((prev) => ({ ...prev, [key]: value }))

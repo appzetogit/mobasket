@@ -250,7 +250,7 @@ export default function DisbursementPage({
                     <div className="text-right">
                       <p className="text-sm text-slate-500 mb-1">Total amount</p>
                       <p className="text-lg font-bold text-slate-900">
-                        $ {disbursement.totalAmount.toLocaleString("en-US", {
+                        ₹{disbursement.totalAmount.toLocaleString("en-US", {
                           minimumFractionDigits: 2,
                           maximumFractionDigits: 2,
                         })}
@@ -311,7 +311,7 @@ export default function DisbursementPage({
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Min Amount ($)</label>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Min Amount (₹)</label>
               <input
                 type="number"
                 value={filters.amountRange.min}
@@ -321,7 +321,7 @@ export default function DisbursementPage({
               />
             </div>
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">Max Amount ($)</label>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">Max Amount (₹)</label>
               <input
                 type="number"
                 value={filters.amountRange.max}

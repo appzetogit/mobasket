@@ -266,10 +266,10 @@ export default function IncentiveRequests() {
                       <span className="text-sm text-slate-700">{request.zone}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-medium text-slate-900">$ {request.totalEarning.toFixed(2)}</span>
+                      <span className="text-sm font-medium text-slate-900">₹{request.totalEarning.toFixed(2)}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-medium text-slate-900">$ {request.incentive.toFixed(2)}</span>
+                      <span className="text-sm font-medium text-slate-900">₹{request.incentive.toFixed(2)}</span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm text-slate-700">{request.date}</span>

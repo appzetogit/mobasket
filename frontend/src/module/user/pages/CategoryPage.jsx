@@ -472,7 +472,9 @@ export default function CategoryPage() {
                 distance: distance,
                 image: image,
                 images: allImages,
-                priceRange: restaurant.priceRange || null,
+                priceRange: typeof restaurant.priceRange === "string"
+                  ? restaurant.priceRange.replace(/\$/g, "₹")
+                  : (restaurant.priceRange || null),
                 featuredDish: featuredDish,
                 featuredPrice: featuredPrice,
                 offer: offer,

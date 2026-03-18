@@ -1562,7 +1562,9 @@ export default function RestaurantDetails() {
 
               "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop",
 
-            priceRange: apiRestaurant?.priceRange || "$$",
+            priceRange: typeof apiRestaurant?.priceRange === "string"
+              ? apiRestaurant.priceRange.replace(/\$/g, "₹")
+              : (apiRestaurant?.priceRange || "₹₹"),
 
             offers: Array.isArray(apiRestaurant?.offers)
 
@@ -4460,7 +4462,7 @@ export default function RestaurantDetails() {
 
             <div className="text-gray-800 dark:text-gray-200">
 
-              ₹{restaurant?.priceRange && !["$", "$$", "$$$"].includes(restaurant?.priceRange) ? restaurant?.priceRange : (restaurant?.featuredPrice || "200")} for one
+              ₹{restaurant?.priceRange && !["₹", "₹₹", "₹₹₹"].includes(restaurant?.priceRange) ? restaurant?.priceRange : (restaurant?.featuredPrice || "200")} for one
 
             </div>
 
@@ -8825,4 +8827,5 @@ export default function RestaurantDetails() {
   );
 
 }
+
 

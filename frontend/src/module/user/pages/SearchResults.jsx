@@ -336,7 +336,9 @@ export default function SearchResults() {
                 distance: distance,
                 image: image,
                 images: allImages,
-                priceRange: restaurant.priceRange || null,
+                priceRange: typeof restaurant.priceRange === "string"
+                  ? restaurant.priceRange.replace(/\$/g, "₹")
+                  : (restaurant.priceRange || null),
                 featuredDish: featuredDish, // Will be set from menu if available
                 featuredPrice: featuredPrice, // Will be set from menu if available
                 offer: offer, // Use backend offer or null (defaults filtered out)
