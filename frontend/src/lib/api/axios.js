@@ -907,8 +907,13 @@ apiClient.interceptors.response.use(
       networkErrorState.toastShown = false;
     }
 
-    // If response contains new access token, store it for the current module
-    if (response.data?.accessToken) {
+    const responseUrl = String(response?.config?.url || "");
+    const isOtpSendResponse = responseUrl.includes("/send-otp");
+
+    // If response contains new access token, store it for the current module.
+    // Never persist tokens from OTP-send endpoints; those responses can carry
+    // transient tokens and cause auth-page redirect flicker.
+    if (response.data?.accessToken && !isOtpSendResponse) {
       const currentPath = window.location.pathname;
       const currentModule = getModuleFromPath(currentPath);
       const { tokenKey, expectedRole } = getTokenMetaForModule(currentModule);

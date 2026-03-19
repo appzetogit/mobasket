@@ -146,6 +146,31 @@ export default function RestaurantLogin() {
       // Navigate to OTP page
       navigate("/restaurant/otp")
     } catch (error) {
+      if (Number(error?.response?.status || 0) === 404) {
+        try {
+          await restaurantAPI.sendOTP(fullPhone, "register")
+
+          const authData = {
+            method: "phone",
+            phone: fullPhone,
+            name: `Restaurant ${formData.phone.slice(-4) || "Partner"}`,
+            isSignUp: true,
+            module: "restaurant",
+          }
+          sessionStorage.setItem("restaurantAuthData", JSON.stringify(authData))
+
+          navigate("/restaurant/otp")
+          return
+        } catch (registerError) {
+          const registerMessage =
+            registerError?.response?.data?.message ||
+            registerError?.response?.data?.error ||
+            "Failed to start onboarding. Please try again."
+          setApiError(registerMessage)
+          return
+        }
+      }
+
       // Extract backend error message if available
       const message =
         error?.response?.data?.message ||
@@ -230,6 +255,31 @@ export default function RestaurantLogin() {
       // Navigate to OTP page
       navigate("/restaurant/otp")
     } catch (error) {
+      if (Number(error?.response?.status || 0) === 404) {
+        try {
+          await restaurantAPI.sendOTP(null, "register", formData.email.trim())
+
+          const authData = {
+            method: "email",
+            email: formData.email.trim(),
+            name: `Restaurant ${formData.email.trim().split("@")[0] || "Partner"}`,
+            isSignUp: true,
+            module: "restaurant",
+          }
+          sessionStorage.setItem("restaurantAuthData", JSON.stringify(authData))
+
+          navigate("/restaurant/otp")
+          return
+        } catch (registerError) {
+          const registerMessage =
+            registerError?.response?.data?.message ||
+            registerError?.response?.data?.error ||
+            "Failed to start onboarding. Please try again."
+          setApiError(registerMessage)
+          return
+        }
+      }
+
       const message =
         error?.response?.data?.message ||
         error?.response?.data?.error ||

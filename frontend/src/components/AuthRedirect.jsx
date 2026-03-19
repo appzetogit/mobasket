@@ -1,4 +1,4 @@
-import { Navigate } from "react-router-dom"
+import { Navigate, useLocation } from "react-router-dom"
 import { isModuleAuthenticated } from "@/lib/utils/auth"
 
 /**
@@ -12,6 +12,7 @@ import { isModuleAuthenticated } from "@/lib/utils/auth"
  * @param {string} props.redirectTo - Path to redirect to if authenticated (optional, defaults to module home)
  */
 export default function AuthRedirect({ children, module, redirectTo = null }) {
+  const location = useLocation()
   // Check if user is authenticated for this module
   const isAuthenticated = isModuleAuthenticated(module)
 
@@ -24,8 +25,19 @@ export default function AuthRedirect({ children, module, redirectTo = null }) {
     "grocery-store": "/store",
   }
 
+  const pendingOtpSessionByModule = {
+    restaurant: "restaurantAuthData",
+    "grocery-store": "groceryStoreAuthData",
+    user: "authData",
+    delivery: "deliveryAuthData",
+    admin: "adminAuthData",
+  }
+  const isOtpRoute = /\/otp$/.test(location.pathname)
+  const pendingOtpKey = pendingOtpSessionByModule[module]
+  const hasPendingOtpSession = pendingOtpKey ? Boolean(sessionStorage.getItem(pendingOtpKey)) : false
+
   // If authenticated, redirect to module home page
-  if (isAuthenticated) {
+  if (isAuthenticated && !(isOtpRoute && hasPendingOtpSession)) {
     const resolvedHomePath = moduleHomePages[module] || "/"
     const homePath = redirectTo || resolvedHomePath
     return <Navigate to={homePath} replace />

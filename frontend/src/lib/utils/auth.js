@@ -130,21 +130,15 @@ export function isModuleAuthenticated(module) {
   const token = getModuleToken(module);
   const hasRefreshToken = !!localStorage.getItem(`${module}_refreshToken`);
   if (!token) {
-    // Route guards should require an access token.
-    // A stale refresh token alone can trap users in redirect/loading loops on protected pages.
-    if (!hasRefreshToken) {
-      clearModuleAuth(module);
-    }
+    // Do not clear module session data here.
+    // OTP flows rely on sessionStorage (e.g. restaurantAuthData, groceryStoreAuthData),
+    // and clearing it during auth checks causes OTP pages to open and instantly close.
     return false;
   }
 
   if (isTokenExpired(token)) {
     // Keep session alive if a refresh token exists; axios/route guards can refresh access token lazily.
-    if (!hasRefreshToken) {
-      clearModuleAuth(module);
-      return false;
-    }
-    return true;
+    return hasRefreshToken;
   }
 
   return true;
