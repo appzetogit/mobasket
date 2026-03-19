@@ -170,6 +170,23 @@ function matchesRequestedCity(restaurant, requestedCity) {
   });
 }
 
+function buildRequestedCityMongoCondition(requestedCity) {
+  const normalizedRequestedCity = normalizeCityValue(requestedCity);
+  if (!normalizedRequestedCity) return null;
+
+  const cityRegex = new RegExp(normalizedRequestedCity, 'i');
+  return {
+    $or: [
+      { 'location.city': cityRegex },
+      { 'location.area': cityRegex },
+      { 'location.formattedAddress': cityRegex },
+      { 'location.address': cityRegex },
+      { 'onboarding.step1.location.city': cityRegex },
+      { 'onboarding.step1.location.formattedAddress': cityRegex }
+    ]
+  };
+}
+
 function getActiveZoneQueryByPlatform(platform = 'mofood') {
   return platform === 'mogrocery'
     ? { isActive: true, platform: 'mogrocery' }
@@ -244,7 +261,10 @@ export const getRestaurants = async (req, res) => {
       query.platform = requestedPlatform;
     }
     if (city) {
-      query['location.city'] = { $regex: new RegExp(String(city).trim(), 'i') };
+      const cityCondition = buildRequestedCityMongoCondition(city);
+      if (cityCondition) {
+        query.$and = [...(query.$and || []), cityCondition];
+      }
     }
 
     // Cuisine filter
@@ -334,7 +354,10 @@ export const getRestaurants = async (req, res) => {
         groceryQuery.cuisines = { $in: [new RegExp(cuisine, 'i')] };
       }
       if (city) {
-        groceryQuery['location.city'] = { $regex: new RegExp(String(city).trim(), 'i') };
+        const cityCondition = buildRequestedCityMongoCondition(city);
+        if (cityCondition) {
+          groceryQuery.$and = [...(groceryQuery.$and || []), cityCondition];
+        }
       }
 
       if (minRating) {
