@@ -130,8 +130,12 @@ export function isModuleAuthenticated(module) {
   const token = getModuleToken(module);
   const hasRefreshToken = !!localStorage.getItem(`${module}_refreshToken`);
   if (!token) {
-    // Allow refresh-only sessions; interceptors/guards can issue silent refresh.
-    return hasRefreshToken;
+    // Route guards should require an access token.
+    // A stale refresh token alone can trap users in redirect/loading loops on protected pages.
+    if (!hasRefreshToken) {
+      clearModuleAuth(module);
+    }
+    return false;
   }
 
   if (isTokenExpired(token)) {
