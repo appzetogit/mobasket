@@ -244,13 +244,6 @@ export default function DeliverySignIn() {
             )}
           </button>
 
-          <button
-            type="button"
-            onClick={() => navigate("/delivery/signup")}
-            className="w-full h-12 rounded-lg border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50"
-          >
-            New delivery partner? Complete onboarding
-          </button>
         </form>
       </div>
 
