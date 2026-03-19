@@ -1252,8 +1252,9 @@ export const adminAPI = {
   },
 
   // Get dashboard stats (platform-scoped)
-  getDashboardStats: (params = {}) => {
+  getDashboardStats: (params = {}, config = {}) => {
     return apiClient.get(API_ENDPOINTS.ADMIN.DASHBOARD_STATS, {
+      ...config,
       params: {
         ...params,
         platform: params.platform || getAdminPlatform(),

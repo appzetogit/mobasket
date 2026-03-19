@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import { ArrowLeft, Loader2 } from "lucide-react"
 import AnimatedPage from "../../components/AnimatedPage"
 import { Input } from "@/components/ui/input"
@@ -9,6 +9,7 @@ import { setAuthData as setUserAuthData } from "@/lib/utils/auth"
 
 export default function OTP() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [otp, setOtp] = useState(["", "", "", "", "", ""])
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
@@ -23,6 +24,10 @@ export default function OTP() {
   const [contactType, setContactType] = useState("phone")
   const inputRefs = useRef([])
   const resendIntervalRef = useRef(null)
+  const fallbackRedirectTo =
+    typeof location.state?.from === "string" && location.state.from.trim()
+      ? location.state.from
+      : "/"
 
   const clearResendInterval = useCallback(() => {
     if (resendIntervalRef.current) {
@@ -78,7 +83,7 @@ export default function OTP() {
     // Redirect to home if already authenticated
     const isAuthenticated = localStorage.getItem("user_authenticated") === "true"
     if (isAuthenticated) {
-      navigate("/welcome", { replace: true })
+      navigate(fallbackRedirectTo, { replace: true })
       return
     }
 
@@ -86,7 +91,7 @@ export default function OTP() {
     const stored = sessionStorage.getItem("userAuthData") || localStorage.getItem("userAuthData")
     if (!stored) {
       // No auth data, redirect to sign in
-      navigate("/user/auth/sign-in", { replace: true })
+      navigate("/user/auth/sign-in", { state: { from: fallbackRedirectTo }, replace: true })
       return
     }
     const data = JSON.parse(stored)
@@ -257,8 +262,12 @@ export default function OTP() {
       setSuccess(true)
 
       // Redirect to user home after short delay
+      const redirectTo =
+        typeof authData?.redirectTo === "string" && authData.redirectTo.trim()
+          ? authData.redirectTo
+          : fallbackRedirectTo
       setTimeout(() => {
-        navigate("/welcome")
+        navigate(redirectTo, { replace: true })
       }, 500)
     } catch (err) {
       const message =
@@ -323,8 +332,12 @@ export default function OTP() {
       setSuccess(true)
 
       // Redirect to user home after short delay
+      const redirectTo =
+        typeof authData?.redirectTo === "string" && authData.redirectTo.trim()
+          ? authData.redirectTo
+          : fallbackRedirectTo
       setTimeout(() => {
-        navigate("/welcome")
+        navigate(redirectTo, { replace: true })
       }, 500)
     } catch (err) {
       const message =

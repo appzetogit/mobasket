@@ -199,8 +199,22 @@ export default function App() {
           <Route path="/legal/terms" element={<TermsPublic />} />
           <Route path="/legal/privacy" element={<PrivacyPublic />} />
           <Route path="/legal/content-policy" element={<ContentPolicyPublic />} />
-          <Route path="/" element={<WelcomeSelectionPage />} />
-          <Route path="/welcome" element={<WelcomeSelectionPage />} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/user/auth/sign-in">
+                <WelcomeSelectionPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/welcome"
+            element={
+              <ProtectedRoute requiredRole="user" loginPath="/user/auth/sign-in">
+                <WelcomeSelectionPage />
+              </ProtectedRoute>
+            }
+          />
 
           <Route path="/restaurant/*" element={<RestaurantAppRoutes />} />
           <Route path="/store/*" element={<StoreAppRoutes />} />

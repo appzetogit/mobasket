@@ -38,6 +38,22 @@ export default function AdminHome() {
   const [isLoading, setIsLoading] = useState(true)
   const [dashboardData, setDashboardData] = useState(null)
   const [zoneOptions, setZoneOptions] = useState([])
+  const getDashboardCacheKey = (currentPlatform) => `adminDashboardCache:${currentPlatform}`
+
+  useEffect(() => {
+    try {
+      const cached = localStorage.getItem(getDashboardCacheKey(platform))
+      if (cached) {
+        const parsed = JSON.parse(cached)
+        if (parsed && typeof parsed === "object") {
+          setDashboardData(parsed)
+          setIsLoading(false)
+        }
+      }
+    } catch {
+      // Ignore cache parsing/storage errors
+    }
+  }, [platform])
 
   useEffect(() => {
     const fetchZoneOptions = async () => {
@@ -65,30 +81,46 @@ export default function AdminHome() {
 
   // Fetch dashboard stats for active platform + filters
   useEffect(() => {
+    let isCancelled = false
     const fetchDashboardStats = async () => {
       try {
-        setIsLoading(true)
+        setIsLoading((prev) => (dashboardData ? false : prev || true))
         const response = await adminAPI.getDashboardStats({
           platform,
           zoneId: selectedZoneOption?.id || undefined,
           zone: selectedZoneOption?.name || undefined,
           city: selectedZoneOption?.city || undefined,
           period: selectedPeriod,
+        }, {
+          timeout: 12000,
         })
-        if (response.data?.success && response.data?.data) {
+        if (isCancelled) return
+        if (response.data?.success && response.data?.data && typeof response.data.data === "object") {
           setDashboardData(response.data.data)
+          try {
+            localStorage.setItem(getDashboardCacheKey(platform), JSON.stringify(response.data.data))
+          } catch {
+            // Ignore storage errors
+          }
         } else {
-          setDashboardData(null)
+          setDashboardData((prev) => prev ?? null)
         }
       } catch (error) {
+        if (isCancelled) return
         console.error("Error fetching dashboard stats:", error)
-        setDashboardData(null)
+        setDashboardData((prev) => prev ?? null)
       } finally {
-        setIsLoading(false)
+        if (!isCancelled) {
+          setIsLoading(false)
+        }
       }
     }
 
+    setIsLoading(!dashboardData)
     fetchDashboardStats()
+    return () => {
+      isCancelled = true
+    }
   }, [platform, selectedZone, selectedPeriod, selectedZoneOption])
 
   // Get order stats from real data

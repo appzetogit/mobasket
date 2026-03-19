@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react"
-import { useNavigate, useSearchParams } from "react-router-dom"
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom"
 import { AlertCircle, Loader2 } from "lucide-react"
 import AnimatedPage from "../../components/AnimatedPage"
 import { Button } from "@/components/ui/button"
@@ -46,8 +46,13 @@ const countryCodes = [
 
 export default function SignIn() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [searchParams] = useSearchParams()
   const isSignUp = searchParams.get("mode") === "signup"
+  const redirectTo =
+    typeof location.state?.from === "string" && location.state.from.trim()
+      ? location.state.from
+      : "/"
 
   const [authMethod, setAuthMethod] = useState("phone") // "phone" or "email"
   const [formData, setFormData] = useState({
@@ -117,7 +122,7 @@ export default function SignIn() {
           window.history.replaceState({}, document.title, window.location.pathname)
         }
 
-        navigate("/welcome", { replace: true })
+        navigate(redirectTo, { replace: true })
       } else {
         redirectHandledRef.current = false
         setIsLoading(false)
@@ -461,6 +466,7 @@ export default function SignIn() {
         name: isSignUp ? formData.name.trim() : null,
         isSignUp,
         module: "user",
+        redirectTo,
       }
       const serializedAuthData = JSON.stringify(authData)
       sessionStorage.setItem("userAuthData", serializedAuthData)
@@ -468,7 +474,7 @@ export default function SignIn() {
       localStorage.setItem("userAuthData", serializedAuthData)
 
       // Navigate to OTP page
-      navigate("/user/auth/otp")
+      navigate("/user/auth/otp", { state: { from: redirectTo } })
     } catch (error) {
       const retryAfterSeconds = Math.max(
         Number(error?.response?.data?.errors?.retryAfterSeconds) || 0,
