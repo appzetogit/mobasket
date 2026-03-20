@@ -2294,49 +2294,6 @@ export const orderAPI = {
   },
 };
 
-// Export dining API helper functions
-export const diningAPI = {
-  // Get dining restaurants (with optional filters)
-  getRestaurants: (params = {}) => {
-    return apiClient.get(API_ENDPOINTS.DINING.RESTAURANTS, { params });
-  },
-
-  // Get restaurant by slug
-  getRestaurantBySlug: (slug) => {
-    return apiClient.get(API_ENDPOINTS.DINING.RESTAURANT_BY_SLUG.replace(':slug', slug));
-  },
-
-  // Get dining categories
-  getCategories: () => {
-    return apiClient.get(API_ENDPOINTS.DINING.CATEGORIES);
-  },
-
-  // Get limelight features
-  getLimelight: () => {
-    return apiClient.get(API_ENDPOINTS.DINING.LIMELIGHT);
-  },
-
-  // Get bank offers
-  getBankOffers: () => {
-    return apiClient.get(API_ENDPOINTS.DINING.BANK_OFFERS);
-  },
-
-  // Get must tries
-  getMustTries: () => {
-    return apiClient.get(API_ENDPOINTS.DINING.MUST_TRIES);
-  },
-
-  // Get offer banners (used as limelight in Dining.jsx)
-  getOfferBanners: () => {
-    return apiClient.get(API_ENDPOINTS.DINING.OFFER_BANNERS);
-  },
-
-  // Get dining stories
-  getStories: () => {
-    return apiClient.get(API_ENDPOINTS.DINING.STORIES);
-  },
-};
-
 // Export hero banner API helper functions
 export const heroBannerAPI = {
   // Get Top 10 restaurants (public)

@@ -853,11 +853,29 @@ io.on('connection', (socket) => {
   };
 
   const getOrderCurrentLocation = (orderDoc) => {
-    return (
+    const partnerLocation =
       orderDoc?.deliveryPartnerId?.availability?.currentLocation ||
       orderDoc?.deliveryPartnerResolvedLocation ||
-      null
-    );
+      null;
+
+    if (partnerLocation?.coordinates?.length >= 2) {
+      return partnerLocation;
+    }
+
+    // Fallback: some flows persist live location on order.deliveryState.currentLocation
+    // (lat/lng object) rather than partner availability GeoJSON coordinates.
+    const stateLocation = orderDoc?.deliveryState?.currentLocation;
+    if (
+      Number.isFinite(Number(stateLocation?.lat)) &&
+      Number.isFinite(Number(stateLocation?.lng))
+    ) {
+      return {
+        coordinates: [Number(stateLocation.lng), Number(stateLocation.lat)],
+        bearing: Number(stateLocation.bearing || 0)
+      };
+    }
+
+    return null;
   };
 
   const resolveAliasesFast = async (rawOrderId) => {
@@ -897,15 +915,19 @@ io.on('connection', (socket) => {
       });
 
       try {
-        const primaryOrderAlias = aliases?.[0] || String(data.orderId || '').trim();
-        if (primaryOrderAlias) {
-          await updateActiveOrderLocation(primaryOrderAlias, {
-            lat: data.lat,
-            lng: data.lng,
-            bearing: data.heading || 0,
-            speed: typeof data.speed === 'number' ? data.speed : undefined
-          });
-        }
+        const firebaseAliases = aliases?.length
+          ? aliases
+          : [String(data.orderId || '').trim()].filter(Boolean);
+        await Promise.all(
+          firebaseAliases.map((alias) =>
+            updateActiveOrderLocation(alias, {
+              lat: data.lat,
+              lng: data.lng,
+              bearing: data.heading || 0,
+              speed: typeof data.speed === 'number' ? data.speed : undefined
+            })
+          )
+        );
       } catch (firebaseErr) {
         console.warn('Firebase socket location sync failed:', firebaseErr.message);
       }
@@ -946,7 +968,7 @@ io.on('connection', (socket) => {
           const baseLocationData = {
             lat: coords[1],
             lng: coords[0],
-            heading: 0,
+            heading: Number(currentLocation?.bearing || 0),
             timestamp: Date.now()
           };
 
@@ -977,7 +999,7 @@ io.on('connection', (socket) => {
         const baseLocationData = {
           lat: coords[1],
           lng: coords[0],
-          heading: 0,
+          heading: Number(currentLocation?.bearing || 0),
           timestamp: Date.now()
         };
 

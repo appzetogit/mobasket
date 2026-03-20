@@ -127,8 +127,21 @@ const buildUniqueProductSlug = async ({ baseSlug, storeId, excludeId = null }) =
 const mapCreateProductError = (error) => {
   if (!error) return { status: 500, message: 'Failed to create product' };
 
-  // Duplicate index (likely storeId + slug race condition)
+  // Duplicate index (legacy slug_1 or scoped storeId+slug index)
   if (error.code === 11000) {
+    const hasStoreScopedSlug =
+      error?.keyPattern?.storeId && error?.keyPattern?.slug;
+    const hasGlobalSlugOnly =
+      !hasStoreScopedSlug && error?.keyPattern?.slug;
+
+    if (hasStoreScopedSlug) {
+      return { status: 409, message: 'Product with this name already exists in your store' };
+    }
+
+    if (hasGlobalSlugOnly) {
+      return { status: 409, message: 'Product slug conflict detected. Please contact support to refresh legacy indexes.' };
+    }
+
     return { status: 409, message: 'Product with this name already exists' };
   }
 

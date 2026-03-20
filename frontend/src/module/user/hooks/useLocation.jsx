@@ -91,7 +91,16 @@ function getSavedAddressLocation() {
       return null
     }
 
+    const selectedAddressId = String(localStorage.getItem("userSelectedAddressId") || "").trim()
+    const fromSelectedId = selectedAddressId
+      ? parsedAddresses.find((address) => {
+        const addressId = String(address?.id || address?._id || "").trim()
+        return Boolean(addressId) && addressId === selectedAddressId
+      })
+      : null
+
     const selectedAddress =
+      fromSelectedId ||
       parsedAddresses.find((address) => address?.isDefault) || parsedAddresses[0]
 
     if (!selectedAddress || typeof selectedAddress !== "object") {

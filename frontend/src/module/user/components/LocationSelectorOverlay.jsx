@@ -1084,6 +1084,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       // Increase timeout to 15 seconds to allow GPS to get accurate fix
       // The getLocation function already has a 15-second timeout, so we match it
       localStorage.setItem("userLocationSource", "current")
+      localStorage.removeItem("userSelectedAddressId")
       let locationData
 
       try {
@@ -1212,6 +1213,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         lastUpdated: Date.now(),
       }
       localStorage.setItem("userLocationSource", "current")
+      localStorage.removeItem("userSelectedAddressId")
       localStorage.setItem("userLocation", JSON.stringify(persistedCurrentLocation))
       window.dispatchEvent(new CustomEvent("userLocationChanged", { detail: persistedCurrentLocation }))
 
@@ -2025,6 +2027,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       toast.loading("Getting your fresh location...", { id: "current-location" })
       
       localStorage.setItem("userLocationSource", "current")
+      localStorage.removeItem("userSelectedAddressId")
       const locationData = await requestLocation(true, true, true) // forceFresh = true, updateDB = true
 
       console.log("?? Current location data received:", locationData)
@@ -2275,6 +2278,12 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       }
     }
 
+    const persistedSelectedAddressId =
+      selectedAddressId ||
+      String(normalizedAddressRecord?.id || normalizedAddressRecord?._id || "").trim()
+    if (persistedSelectedAddressId) {
+      localStorage.setItem("userSelectedAddressId", persistedSelectedAddressId)
+    }
     localStorage.setItem("userLocationSource", "saved")
     localStorage.setItem("userLocation", JSON.stringify(locationData))
     window.dispatchEvent(new CustomEvent("userLocationChanged", { detail: locationData }))

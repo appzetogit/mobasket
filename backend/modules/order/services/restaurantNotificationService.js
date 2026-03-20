@@ -124,11 +124,18 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
 
     // Get restaurant details
     let restaurant = null;
+    let resolvedStoreType = null;
     const restaurantLookupQuery = buildRestaurantLookupQuery(restaurantId);
     if (restaurantLookupQuery) {
       restaurant = await Restaurant.findOne(restaurantLookupQuery).lean();
+      if (restaurant) {
+        resolvedStoreType = 'restaurant';
+      }
       if (!restaurant) {
         restaurant = await GroceryStore.findOne(restaurantLookupQuery).lean();
+        if (restaurant) {
+          resolvedStoreType = 'grocery-store';
+        }
       }
     }
     
@@ -158,7 +165,7 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
       restaurant?.platform ||
       ''
     ).toLowerCase();
-    const isGroceryStore = inferredPlatform === 'mogrocery';
+    const isGroceryStore = inferredPlatform === 'mogrocery' || resolvedStoreType === 'grocery-store';
     const targetNamespacePath = isGroceryStore ? '/grocery-store' : '/restaurant';
     const roomPrefix = isGroceryStore ? 'grocery-store' : 'restaurant';
     const dashboardLink = isGroceryStore ? '/store' : '/restaurant';
@@ -186,7 +193,10 @@ export async function notifyRestaurantNewOrder(order, restaurantId, paymentMetho
       estimatedDeliveryTime: order.estimatedDeliveryTime || 30,
       note: order.note || '',
       sendCutlery: order.sendCutlery,
-      paymentMethod: resolvedPaymentMethod
+      paymentMethod: resolvedPaymentMethod,
+      isScheduledOrder: Boolean(order?.scheduledDelivery?.isScheduled),
+      scheduledDelivery: order?.scheduledDelivery || null,
+      scheduledFor: order?.scheduledDelivery?.scheduledFor || null
     };
     console.log('📢 Restaurant notification payload paymentMethod:', orderNotification.paymentMethod, { override: paymentMethodOverride, orderPaymentMethod: order.payment?.method });
 
