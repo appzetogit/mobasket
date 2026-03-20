@@ -113,16 +113,8 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
 
   const handlePlatformSwitch = (nextPlatform) => {
     if (nextPlatform === platform) return
-    const pathMapping = {
-      "/admin/hero-banner-management": "/admin/grocery-hero-banner-management",
-      "/admin/grocery-hero-banner-management": "/admin/hero-banner-management",
-    }
-    const nextPath =
-      location.pathname === "/admin/product-sections-management"
-        ? (nextPlatform === "mogrocery" ? "/admin/product-sections-management" : "/admin/hero-banner-management")
-        : (pathMapping[location.pathname] || location.pathname)
     switchPlatform(nextPlatform)
-    navigate(nextPath, {
+    navigate("/admin", {
       replace: true,
       state: { platformSwitchedAt: Date.now(), platform: nextPlatform },
     })

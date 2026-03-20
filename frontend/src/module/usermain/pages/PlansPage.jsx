@@ -28,6 +28,54 @@ import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
 import { toast } from "sonner";
 
+const resolvePlanProductImage = (product) => {
+  if (!product || typeof product !== "object") return "";
+
+  if (Array.isArray(product.images)) {
+    const fromImages = product.images
+      .map((image) => {
+        if (typeof image === "string") return image.trim();
+        return String(image?.url || image?.image || image?.imageUrl || image?.secure_url || "").trim();
+      })
+      .find(Boolean);
+    if (fromImages) return fromImages;
+  }
+
+  if (typeof product.image === "string" && product.image.trim()) return product.image.trim();
+  if (product.image && typeof product.image === "object") {
+    const nestedImage = String(
+      product.image.url ||
+      product.image.image ||
+      product.image.imageUrl ||
+      product.image.secure_url ||
+      ""
+    ).trim();
+    if (nestedImage) return nestedImage;
+  }
+
+  if (typeof product.thumbnail === "string" && product.thumbnail.trim()) return product.thumbnail.trim();
+  if (product.thumbnail && typeof product.thumbnail === "object") {
+    const nestedThumbnail = String(
+      product.thumbnail.url ||
+      product.thumbnail.image ||
+      product.thumbnail.imageUrl ||
+      product.thumbnail.secure_url ||
+      ""
+    ).trim();
+    if (nestedThumbnail) return nestedThumbnail;
+  }
+
+  return "";
+};
+
+const normalizePlanDisplayProducts = (products) =>
+  (Array.isArray(products) ? products : [])
+    .map((item) => ({
+      ...item,
+      image: resolvePlanProductImage(item),
+    }))
+    .filter((item) => Boolean(String(item?.name || "").trim()));
+
 const PlansPage = () => {
   const navigate = useNavigate();
   const [plans, setPlans] = useState([]);
@@ -99,9 +147,9 @@ const PlansPage = () => {
           color: plan.color || "bg-emerald-500",
           headerColor: plan.headerColor || plan.color || "bg-emerald-500",
           benefits: Array.isArray(plan.benefits) ? plan.benefits : [],
-          products: Array.isArray(plan.products) ? plan.products : [],
-          vegProducts: Array.isArray(plan.vegProducts) ? plan.vegProducts : [],
-          nonVegProducts: Array.isArray(plan.nonVegProducts) ? plan.nonVegProducts : [],
+          products: normalizePlanDisplayProducts(plan.products),
+          vegProducts: normalizePlanDisplayProducts(plan.vegProducts),
+          nonVegProducts: normalizePlanDisplayProducts(plan.nonVegProducts),
           zoneStoreRules: Array.isArray(plan.zoneStoreRules)
             ? plan.zoneStoreRules
                 .map((rule) => {
@@ -1099,34 +1147,38 @@ const PlansPage = () => {
                   )}
                   <div className="grid grid-cols-2 gap-3">
                     {displayedProducts.length > 0 ? (
-                      displayedProducts.map((prod, idx) => (
-                        <div key={idx} className="bg-slate-50 p-3 rounded-xl flex items-center gap-3 border border-slate-100">
-                          <div className="bg-white p-2 rounded-lg shadow-sm border border-slate-100">
-                            {prod?.image ? (
-                              <img
-                                src={prod.image}
-                                alt={prod?.name || "Product"}
-                                className="w-6 h-6 object-cover rounded"
-                                loading="lazy"
-                                onError={(e) => {
-                                  e.currentTarget.style.display = "none";
-                                  const fallback = e.currentTarget.nextElementSibling;
-                                  if (fallback) fallback.style.display = "block";
-                                }}
+                      displayedProducts.map((prod, idx) => {
+                        const productImage = resolvePlanProductImage(prod);
+
+                        return (
+                          <div key={idx} className="bg-slate-50 p-3 rounded-xl flex items-center gap-3 border border-slate-100">
+                            <div className="bg-white p-2 rounded-lg shadow-sm border border-slate-100">
+                              {productImage ? (
+                                <img
+                                  src={productImage}
+                                  alt={prod?.name || "Product"}
+                                  className="w-6 h-6 object-cover rounded"
+                                  loading="lazy"
+                                  onError={(e) => {
+                                    e.currentTarget.style.display = "none";
+                                    const fallback = e.currentTarget.nextElementSibling;
+                                    if (fallback) fallback.style.display = "block";
+                                  }}
+                                />
+                              ) : null}
+                              <Package
+                                size={16}
+                                className="text-slate-400"
+                                style={{ display: productImage ? "none" : "block" }}
                               />
-                            ) : null}
-                            <Package
-                              size={16}
-                              className="text-slate-400"
-                              style={{ display: prod?.image ? "none" : "block" }}
-                            />
+                            </div>
+                            <div>
+                              <p className="font-bold text-slate-900 text-sm leading-tight">{prod.name}</p>
+                              <p className="text-xs text-slate-500 font-medium mt-0.5">{prod.qty}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-bold text-slate-900 text-sm leading-tight">{prod.name}</p>
-                            <p className="text-xs text-slate-500 font-medium mt-0.5">{prod.qty}</p>
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     ) : (
                       <p className="text-sm text-slate-500 col-span-2">No products configured for this meal type.</p>
                     )}

@@ -107,17 +107,161 @@ const buildVariantBackedProductFields = ({
   };
 };
 
+const normalizePlanProductImage = (item) => {
+  if (!item || typeof item !== 'object') {
+    return '';
+  }
+
+  if (Array.isArray(item.images)) {
+    const fromImages = item.images
+      .map((image) => {
+        if (typeof image === 'string') return image.trim();
+        return String(image?.url || image?.image || image?.imageUrl || image?.secure_url || '').trim();
+      })
+      .find(Boolean);
+    if (fromImages) return fromImages;
+  }
+
+  if (typeof item.image === 'string' && item.image.trim()) {
+    return item.image.trim();
+  }
+
+  if (item.image && typeof item.image === 'object') {
+    const nestedImage = String(
+      item.image.url ||
+      item.image.image ||
+      item.image.imageUrl ||
+      item.image.secure_url ||
+      ''
+    ).trim();
+    if (nestedImage) return nestedImage;
+  }
+
+  if (typeof item.thumbnail === 'string' && item.thumbnail.trim()) {
+    return item.thumbnail.trim();
+  }
+
+  if (item.thumbnail && typeof item.thumbnail === 'object') {
+    const nestedThumbnail = String(
+      item.thumbnail.url ||
+      item.thumbnail.image ||
+      item.thumbnail.imageUrl ||
+      item.thumbnail.secure_url ||
+      ''
+    ).trim();
+    if (nestedThumbnail) return nestedThumbnail;
+  }
+
+  return '';
+};
+
 const normalizePlanProducts = (products) => {
   if (!Array.isArray(products)) {
     return [];
   }
 
   return products
-    .map((item) => ({
-      name: (item?.name || '').toString().trim(),
-      qty: (item?.qty || '').toString().trim(),
-    }))
+    .map((item) => {
+      const name = (item?.name || '').toString().trim();
+      const qty = (item?.qty || '').toString().trim();
+      const rawProductId = item?.productId || item?._id || item?.id || null;
+      const productId = isValidObjectId(rawProductId) ? rawProductId.toString() : undefined;
+      const image = normalizePlanProductImage(item);
+
+      return {
+        ...(productId ? { productId } : {}),
+        name,
+        qty,
+        ...(image ? { image } : {}),
+      };
+    })
     .filter((item) => item.name && item.qty);
+};
+
+const hydratePlanProductImages = async (plansOrPlan) => {
+  const plans = Array.isArray(plansOrPlan) ? plansOrPlan.filter(Boolean) : [plansOrPlan].filter(Boolean);
+  if (plans.length === 0) {
+    return Array.isArray(plansOrPlan) ? [] : null;
+  }
+
+  const productIds = new Set();
+  const productNames = new Set();
+
+  plans.forEach((plan) => {
+    ['products', 'vegProducts', 'nonVegProducts'].forEach((field) => {
+      (Array.isArray(plan?.[field]) ? plan[field] : []).forEach((item) => {
+        if (normalizePlanProductImage(item)) {
+          return;
+        }
+
+        if (isValidObjectId(item?.productId)) {
+          productIds.add(String(item.productId));
+        }
+
+        const productName = String(item?.name || '').trim();
+        if (productName) {
+          productNames.add(productName);
+        }
+      });
+    });
+  });
+
+  if (productIds.size === 0 && productNames.size === 0) {
+    return Array.isArray(plansOrPlan) ? plans : plans[0];
+  }
+
+  const productQuery = [];
+  if (productIds.size > 0) {
+    productQuery.push({
+      _id: { $in: Array.from(productIds).map((id) => new mongoose.Types.ObjectId(id)) },
+    });
+  }
+  if (productNames.size > 0) {
+    productQuery.push({ name: { $in: Array.from(productNames) } });
+  }
+
+  const matchedProducts = productQuery.length > 0
+    ? await GroceryProduct.find({ $or: productQuery }).select('name image images thumbnail').lean()
+    : [];
+
+  const productImageById = new Map();
+  const productImageByName = new Map();
+  matchedProducts.forEach((product) => {
+    const productImage = normalizePlanProductImage(product);
+    if (!productImage) return;
+
+    productImageById.set(String(product._id), productImage);
+    const nameKey = String(product?.name || '').trim().toLowerCase();
+    if (nameKey && !productImageByName.has(nameKey)) {
+      productImageByName.set(nameKey, productImage);
+    }
+  });
+
+  const enrichItems = (items) =>
+    (Array.isArray(items) ? items : []).map((item) => {
+      const existingImage = normalizePlanProductImage(item);
+      if (existingImage) {
+        return { ...item, image: existingImage };
+      }
+
+      const productId = isValidObjectId(item?.productId) ? String(item.productId) : '';
+      const nameKey = String(item?.name || '').trim().toLowerCase();
+      const resolvedImage =
+        (productId ? productImageById.get(productId) : '') ||
+        (nameKey ? productImageByName.get(nameKey) : '') ||
+        '';
+
+      return resolvedImage ? { ...item, image: resolvedImage } : item;
+    });
+
+  const enrichedPlans = plans.map((plan) => ({
+    ...plan,
+    products: enrichItems(plan?.products),
+    vegProducts: enrichItems(plan?.vegProducts),
+    nonVegProducts: enrichItems(plan?.nonVegProducts),
+  }));
+
+  return Array.isArray(plansOrPlan) ? enrichedPlans : enrichedPlans[0];
 };
 
 const normalizeObjectIdArray = (values) => {
@@ -995,10 +1139,11 @@ export const getPlans = async (req, res) => {
       .populate('zoneStoreRules.subcategoryIds', 'name slug isActive')
       .sort({ order: 1, createdAt: -1 })
       .lean();
+    const enrichedPlans = await hydratePlanProductImages(plans);
     return res.status(200).json({
       success: true,
-      count: plans.length,
-      data: plans,
+      count: enrichedPlans.length,
+      data: enrichedPlans,
     });
   } catch (error) {
     return res.status(500).json({
@@ -1027,7 +1172,8 @@ export const getPlanById = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Plan not found' });
     }
 
-    return res.status(200).json({ success: true, data: plan });
+    const enrichedPlan = await hydratePlanProductImages(plan);
+    return res.status(200).json({ success: true, data: enrichedPlan });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to fetch plan', error: error.message });
   }

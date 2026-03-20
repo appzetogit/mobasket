@@ -363,11 +363,11 @@ export default function PageNavbar({
               value={zoneValue}
               onClick={(e) => e.stopPropagation()}
               onChange={(e) => onZoneChange?.(e.target.value)}
-              className="mt-1 h-8 rounded-md border border-[#facc15] bg-white px-2 text-xs font-semibold text-gray-700"
+              className="mt-1 h-8 rounded-md border border-[#facc15] bg-white px-2 text-xs font-semibold text-gray-700 dark:border-yellow-400/70 dark:bg-[#111827] dark:text-gray-100 dark:[color-scheme:dark]"
             >
-              <option value="auto">Auto</option>
+              <option value="auto" className="bg-white text-gray-700 dark:bg-[#111827] dark:text-gray-100">Auto</option>
               {(Array.isArray(zoneOptions) ? zoneOptions : []).map((zone) => (
-                <option key={zone.id} value={zone.id}>
+                <option key={zone.id} value={zone.id} className="bg-white text-gray-700 dark:bg-[#111827] dark:text-gray-100">
                   {zone.name}
                 </option>
               ))}
@@ -401,7 +401,7 @@ export default function PageNavbar({
               title="Wallet"
             >
               <div
-                className={`h-full w-full rounded-full bg-white/20 flex items-center justify-center ring-2 ${ringColor}`}
+                className={`h-full w-full rounded-full bg-white/20 dark:bg-[#111827] flex items-center justify-center ring-2 ${ringColor}`}
               >
                 <Wallet
                   className={`h-4 w-4 sm:h-5 sm:w-5 ${actionIconClass}`}
@@ -420,7 +420,7 @@ export default function PageNavbar({
               title="Cart"
             >
               <div
-                className={`h-full w-full rounded-full bg-white/20 flex items-center justify-center ring-2 ${ringColor}`}
+                className={`h-full w-full rounded-full bg-white/20 dark:bg-[#111827] flex items-center justify-center ring-2 ${ringColor}`}
               >
                 <ShoppingCart
                   className={`h-4 w-4 sm:h-5 sm:w-5 ${actionIconClass}`}
@@ -449,7 +449,7 @@ export default function PageNavbar({
                 title="Profile"
               >
                 <div
-                  className={`h-full w-full rounded-full bg-white flex items-center justify-center shadow-lg ring-2 ${ringColor}`}
+                  className={`h-full w-full rounded-full bg-white dark:bg-[#111827] flex items-center justify-center shadow-lg ring-2 ${ringColor}`}
                 >
                   {profileImageUrl ? (
                     <img
@@ -458,7 +458,7 @@ export default function PageNavbar({
                       className="h-full w-full rounded-full object-cover"
                     />
                   ) : (
-                    <span className="text-black text-xs sm:text-sm font-extrabold">
+                    <span className="text-black dark:text-white text-xs sm:text-sm font-extrabold">
                       {profileInitial}
                     </span>
                   )}

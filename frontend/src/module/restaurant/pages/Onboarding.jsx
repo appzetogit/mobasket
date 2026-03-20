@@ -207,6 +207,7 @@ export default function RestaurantOnboarding() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
+  const [signedInEmail, setSignedInEmail] = useState("")
   const [signedInPhone, setSignedInPhone] = useState("")
   const [showBackPopup, setShowBackPopup] = useState(false)
   const mapRef = useRef(null)
@@ -276,6 +277,57 @@ export default function RestaurantOnboarding() {
   })
 
   const normalizePhoneDigits = (value) => String(value || "").replace(/\D/g, "")
+  const normalizeEmailValue = (value) => String(value || "").trim().toLowerCase()
+
+  const getAuthenticatedRestaurantEmail = (restaurant) => {
+    const directEmail = normalizeEmailValue(restaurant?.email || restaurant?.googleEmail)
+    if (directEmail) return directEmail
+
+    const ownerEmail = normalizeEmailValue(restaurant?.ownerEmail)
+    return /@restaurant\.mobasket\.com$/i.test(ownerEmail) ? "" : ownerEmail
+  }
+
+  const getAuthenticatedRestaurantPhone = (restaurant) =>
+    normalizePhoneDigits(restaurant?.phone || restaurant?.ownerPhone || restaurant?.primaryContactNumber)
+
+  const applyAuthenticatedRestaurantPrefill = (restaurant) => {
+    if (!restaurant || typeof restaurant !== "object") return
+
+    const authenticatedEmail = getAuthenticatedRestaurantEmail(restaurant)
+    const authenticatedPhone = getAuthenticatedRestaurantPhone(restaurant)
+
+    if (authenticatedEmail) {
+      setSignedInEmail(authenticatedEmail)
+    }
+
+    if (authenticatedPhone) {
+      setSignedInPhone(authenticatedPhone)
+    }
+
+    if (!authenticatedEmail && !authenticatedPhone) return
+
+    setStep1((prev) => {
+      const next = { ...prev }
+      let changed = false
+
+      if (!normalizeEmailValue(prev.ownerEmail) && authenticatedEmail) {
+        next.ownerEmail = authenticatedEmail
+        changed = true
+      }
+
+      if (!normalizePhoneDigits(prev.ownerPhone) && authenticatedPhone) {
+        next.ownerPhone = authenticatedPhone
+        changed = true
+      }
+
+      if (!normalizePhoneDigits(prev.primaryContactNumber) && authenticatedPhone) {
+        next.primaryContactNumber = authenticatedPhone
+        changed = true
+      }
+
+      return changed ? next : prev
+    })
+  }
 
   const getMarkerCoordinates = (marker) => {
     if (!marker) return null
@@ -616,6 +668,7 @@ export default function RestaurantOnboarding() {
           profileResponse?.data?.data?.restaurant ||
           profileResponse?.data?.restaurant ||
           null
+        applyAuthenticatedRestaurantPrefill(currentRestaurant)
         const redirectPath = getVerificationRedirectPath(currentRestaurant)
 
         if (redirectPath) {
@@ -634,9 +687,10 @@ export default function RestaurantOnboarding() {
             setStep1(() => ({
               restaurantName: data.step1.restaurantName || "",
               ownerName: data.step1.ownerName || "",
-              ownerEmail: data.step1.ownerEmail || "",
-              ownerPhone: data.step1.ownerPhone || "",
-              primaryContactNumber: data.step1.primaryContactNumber || "",
+              ownerEmail: data.step1.ownerEmail || getAuthenticatedRestaurantEmail(currentRestaurant) || "",
+              ownerPhone: data.step1.ownerPhone || getAuthenticatedRestaurantPhone(currentRestaurant) || "",
+              primaryContactNumber:
+                data.step1.primaryContactNumber || getAuthenticatedRestaurantPhone(currentRestaurant) || "",
               location: {
                 addressLine1: data.step1.location?.addressLine1 || "",
                 addressLine2: data.step1.location?.addressLine2 || "",
@@ -733,23 +787,19 @@ export default function RestaurantOnboarding() {
   }
 
   useEffect(() => {
-    if (isFreshStepOne) {
-      setSignedInPhone("")
-      return
+    let cancelled = false
+
+    const applyProfileIfActive = (restaurant) => {
+      if (cancelled) return
+      applyAuthenticatedRestaurantPrefill(restaurant)
     }
 
-    const resolveSignedInPhone = async () => {
+    const resolveSignedInContact = async () => {
       try {
         const cachedRaw = localStorage.getItem("restaurant_user")
         if (cachedRaw) {
           const cached = JSON.parse(cachedRaw)
-          const cachedPhone = normalizePhoneDigits(
-            cached?.ownerPhone || cached?.primaryContactNumber || cached?.phone
-          )
-          if (cachedPhone) {
-            setSignedInPhone(cachedPhone)
-            return
-          }
+          applyProfileIfActive(cached)
         }
       } catch (error) {
         console.error("Failed to parse cached restaurant user:", error)
@@ -758,36 +808,39 @@ export default function RestaurantOnboarding() {
       try {
         const response = await restaurantAPI.getCurrentRestaurant()
         const restaurant = response?.data?.data?.restaurant || response?.data?.data || {}
-        const profilePhone = normalizePhoneDigits(
-          restaurant?.ownerPhone || restaurant?.primaryContactNumber || restaurant?.phone
-        )
-        if (profilePhone) {
-          setSignedInPhone(profilePhone)
-        }
+        applyProfileIfActive(restaurant)
       } catch (error) {
-        console.error("Failed to fetch signed-in restaurant phone:", error)
+        console.error("Failed to fetch signed-in restaurant contact:", error)
       }
     }
 
-    resolveSignedInPhone()
-  }, [isFreshStepOne])
+    resolveSignedInContact()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
-    if (isFreshStepOne || !signedInPhone) return
+    if (!signedInEmail && !signedInPhone) return
     setStep1((prev) => {
       const next = { ...prev }
       let changed = false
-      if (!normalizePhoneDigits(prev.ownerPhone)) {
+      if (!normalizeEmailValue(prev.ownerEmail) && signedInEmail) {
+        next.ownerEmail = signedInEmail
+        changed = true
+      }
+      if (signedInPhone && !normalizePhoneDigits(prev.ownerPhone)) {
         next.ownerPhone = signedInPhone
         changed = true
       }
-      if (!normalizePhoneDigits(prev.primaryContactNumber)) {
+      if (signedInPhone && !normalizePhoneDigits(prev.primaryContactNumber)) {
         next.primaryContactNumber = signedInPhone
         changed = true
       }
       return changed ? next : prev
     })
-  }, [isFreshStepOne, signedInPhone])
+  }, [signedInEmail, signedInPhone])
 
   useEffect(() => {
     let cancelled = false
