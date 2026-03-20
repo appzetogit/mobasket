@@ -2205,10 +2205,8 @@ export function useLocation() {
               setPermissionGranted(true)
               setError(null)
             } else {
-              // Coordinates haven't changed significantly, skip state update to prevent re-renders
-              // Still update localStorage silently for persistence
-              localStorage.setItem("userLocation", JSON.stringify(loc))
-              window.dispatchEvent(new CustomEvent("userLocationChanged", { detail: loc }))
+              // Coordinates haven't changed significantly; avoid emitting another
+              // location-changed event to prevent UI refresh loops on /home.
             }
 
             // Debounce DB updates - timer + internal write guard both apply

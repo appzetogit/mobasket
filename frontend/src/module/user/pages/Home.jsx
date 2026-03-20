@@ -1405,7 +1405,7 @@ export default function Home() {
         setLoadingRestaurants(false);
       }
     },
-    [effectiveHomeZoneId, location?.city, location?.latitude, location?.longitude, zoneLoading],
+    [effectiveHomeZoneId, location?.city, zoneLoading],
   );
 
   // Fetch restaurants when appliedFilters change

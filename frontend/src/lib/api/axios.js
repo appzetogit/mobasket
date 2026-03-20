@@ -658,6 +658,41 @@ function clearModuleSession(module = "user") {
   localStorage.removeItem("accessToken");
 }
 
+const AUTH_REDIRECT_LOCK_KEY = "__authRedirectLock";
+const AUTH_REDIRECT_LOCK_MS = 3000;
+
+function safeAuthRedirect(targetPath = "/user/auth/sign-in") {
+  if (typeof window === "undefined") return;
+
+  const nextPath = String(targetPath || "").trim();
+  if (!nextPath) return;
+
+  const currentPath = window.location.pathname;
+  if (currentPath === nextPath) return;
+
+  try {
+    const rawLock = sessionStorage.getItem(AUTH_REDIRECT_LOCK_KEY);
+    if (rawLock) {
+      const parsed = JSON.parse(rawLock);
+      const lockPath = String(parsed?.path || "");
+      const lockTs = Number(parsed?.ts || 0);
+      const now = Date.now();
+      if (lockPath === nextPath && Number.isFinite(lockTs) && now - lockTs < AUTH_REDIRECT_LOCK_MS) {
+        return;
+      }
+    }
+
+    sessionStorage.setItem(
+      AUTH_REDIRECT_LOCK_KEY,
+      JSON.stringify({ path: nextPath, ts: Date.now() }),
+    );
+  } catch {
+    // Ignore sessionStorage access issues and continue with redirect.
+  }
+
+  window.location.replace(nextPath);
+}
+
 function isHardRefreshAuthFailure(refreshError) {
   const refreshStatus = Number(refreshError?.response?.status || 0);
   const refreshMessage = String(
@@ -1081,7 +1116,7 @@ apiClient.interceptors.response.use(
           if (isStorePath) {
             clearModuleSession("grocery-store");
             if (!currentPath.startsWith("/store/login")) {
-              window.location.href = "/store/login";
+              safeAuthRedirect("/store/login");
             }
           } else if (isRestaurantPath) {
             clearModuleSession("restaurant");
@@ -1093,12 +1128,12 @@ apiClient.interceptors.response.use(
               currentPath.startsWith("/restaurant/welcome") ||
               currentPath.startsWith("/restaurant/auth/");
             if (!isRestaurantAuthPath) {
-              window.location.href = "/restaurant/login";
+              safeAuthRedirect("/restaurant/login");
             }
           } else if (isDeliveryPath) {
             clearModuleSession("delivery");
             if (!currentPath.startsWith("/delivery/sign-in")) {
-              window.location.href = "/delivery/sign-in";
+              safeAuthRedirect("/delivery/sign-in");
             }
           } else if (isAdminPath) {
             clearModuleSession("admin");
@@ -1106,7 +1141,7 @@ apiClient.interceptors.response.use(
               currentPath.startsWith("/admin/login") ||
               currentPath.startsWith("/admin/forgot-password");
             if (!isAdminAuthPath) {
-              window.location.href = "/admin/login";
+              safeAuthRedirect("/admin/login");
             }
           } else if (isUserPath) {
             clearModuleSession("user");
@@ -1116,7 +1151,7 @@ apiClient.interceptors.response.use(
               currentPath.startsWith("/auth/otp") ||
               currentPath.startsWith("/auth/callback");
             if (!isUserAuthPath) {
-              window.location.href = "/user/auth/sign-in";
+              safeAuthRedirect("/user/auth/sign-in");
             }
           }
         }
@@ -1135,7 +1170,7 @@ apiClient.interceptors.response.use(
       if (requestModule === "grocery-store") {
         clearModuleSession("grocery-store");
         if (!window.location.pathname.startsWith("/store/login")) {
-          window.location.href = "/store/login";
+          safeAuthRedirect("/store/login");
         }
       } else if (requestModule === "restaurant") {
         clearModuleSession("restaurant");
@@ -1147,22 +1182,22 @@ apiClient.interceptors.response.use(
           window.location.pathname.startsWith("/restaurant/welcome") ||
           window.location.pathname.startsWith("/restaurant/auth/");
         if (!isRestaurantAuthPath) {
-          window.location.href = "/restaurant/login";
+          safeAuthRedirect("/restaurant/login");
         }
       } else if (requestModule === "delivery") {
         clearModuleSession("delivery");
         if (!window.location.pathname.startsWith("/delivery/sign-in")) {
-          window.location.href = "/delivery/sign-in";
+          safeAuthRedirect("/delivery/sign-in");
         }
       } else if (requestModule === "admin") {
         clearModuleSession("admin");
         if (!window.location.pathname.startsWith("/admin/login")) {
-          window.location.href = "/admin/login";
+          safeAuthRedirect("/admin/login");
         }
       } else {
         clearModuleSession("user");
         if (!window.location.pathname.startsWith("/user/auth/")) {
-          window.location.href = "/user/auth/sign-in";
+          safeAuthRedirect("/user/auth/sign-in");
         }
       }
       return Promise.reject(error);
