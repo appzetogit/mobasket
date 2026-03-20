@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react"
-import { Eye, Download, ArrowUpDown } from "lucide-react"
+import { Eye, Download } from "lucide-react"
 
 export default function DispatchOrdersTable({ orders, visibleColumns, onViewOrder, onPrintOrder }) {
   const [currentPage, setCurrentPage] = useState(1)
@@ -42,7 +42,6 @@ export default function DispatchOrdersTable({ orders, visibleColumns, onViewOrde
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
                     <span>Sl</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                   </div>
                 </th>
               )}
@@ -50,7 +49,6 @@ export default function DispatchOrdersTable({ orders, visibleColumns, onViewOrde
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
                     <span>Order</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                   </div>
                 </th>
               )}
@@ -58,7 +56,6 @@ export default function DispatchOrdersTable({ orders, visibleColumns, onViewOrde
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
                     <span>Date</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                   </div>
                 </th>
               )}
@@ -66,7 +63,6 @@ export default function DispatchOrdersTable({ orders, visibleColumns, onViewOrde
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
                     <span>Customer</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                   </div>
                 </th>
               )}
@@ -74,7 +70,6 @@ export default function DispatchOrdersTable({ orders, visibleColumns, onViewOrde
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
                     <span>Restaurant</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                   </div>
                 </th>
               )}
@@ -82,7 +77,6 @@ export default function DispatchOrdersTable({ orders, visibleColumns, onViewOrde
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
                     <span>Total Amount</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                   </div>
                 </th>
               )}
@@ -90,7 +84,6 @@ export default function DispatchOrdersTable({ orders, visibleColumns, onViewOrde
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <div className="flex items-center gap-2">
                     <span>Order Status</span>
-                    <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                   </div>
                 </th>
               )}

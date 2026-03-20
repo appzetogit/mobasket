@@ -4,10 +4,18 @@ import { Loader2, Pencil, Plus, Store } from "lucide-react";
 import { toast } from "sonner";
 
 function normalizeImage(value) {
-  if (typeof value === "string" && value.trim()) return value;
+  if (typeof value === "string") {
+    const normalized = value.trim();
+    if (!normalized) return "";
+
+    const lowered = normalized.toLowerCase();
+    if (lowered === "null" || lowered === "undefined" || lowered === "nan") return "";
+
+    return normalized;
+  }
   if (value && typeof value === "object") {
     const nested = value.url || value.image || value.imageUrl || value.secure_url;
-    if (typeof nested === "string" && nested.trim()) return nested;
+    return normalizeImage(nested);
   }
   return "";
 }
@@ -32,6 +40,28 @@ function getEntityImage(entity = {}) {
   }
 
   return "";
+}
+
+function MenuImage({ src, alt, className, fallback }) {
+  const normalizedSrc = normalizeImage(src);
+  const [hasError, setHasError] = useState(false);
+
+  useEffect(() => {
+    setHasError(false);
+  }, [normalizedSrc]);
+
+  if (!normalizedSrc || hasError) {
+    return fallback;
+  }
+
+  return (
+    <img
+      src={normalizedSrc}
+      alt={alt}
+      className={className}
+      onError={() => setHasError(true)}
+    />
+  );
 }
 
 export default function FoodMenuManager() {
@@ -279,15 +309,12 @@ export default function FoodMenuManager() {
     <div key={item.id} className="px-4 py-2.5 flex items-center justify-between gap-3 text-sm">
       <div className="flex items-center gap-3 min-w-0">
         <div className="h-10 w-10 overflow-hidden rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
-          {getEntityImage(item) ? (
-            <img
-              src={getEntityImage(item)}
-              alt={item.name}
-              className="h-full w-full object-cover"
-            />
-          ) : (
-            <Store className="w-4 h-4 text-slate-400" />
-          )}
+          <MenuImage
+            src={getEntityImage(item)}
+            alt={item.name}
+            className="h-full w-full object-cover"
+            fallback={<span className="text-[9px] font-medium uppercase text-slate-400">No image</span>}
+          />
         </div>
         <span className="text-slate-800 truncate">{item.name}</span>
       </div>
@@ -340,15 +367,12 @@ export default function FoodMenuManager() {
             {selectedRestaurant ? (
               <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center gap-3">
                 <div className="h-16 w-16 overflow-hidden rounded-xl bg-slate-200 flex items-center justify-center shrink-0">
-                  {selectedRestaurantImage ? (
-                    <img
-                      src={selectedRestaurantImage}
-                      alt={selectedRestaurant?.name || "Restaurant"}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <Store className="w-6 h-6 text-slate-500" />
-                  )}
+                  <MenuImage
+                    src={selectedRestaurantImage}
+                    alt={selectedRestaurant?.name || "Restaurant"}
+                    className="h-full w-full object-cover"
+                    fallback={<span className="text-[10px] font-medium uppercase text-slate-500">No image</span>}
+                  />
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-slate-900 truncate">
@@ -564,15 +588,12 @@ export default function FoodMenuManager() {
                 <span className="text-xs text-slate-500">Choose an image to preview and save.</span>
               </div>
               <div className="h-40 w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center">
-                {imagePreview ? (
-                  <img
-                    src={imagePreview}
-                    alt={editForm.name || "Dish preview"}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <span className="text-sm text-slate-400">No image preview</span>
-                )}
+                <MenuImage
+                  src={imagePreview}
+                  alt={editForm.name || "Dish preview"}
+                  className="h-full w-full object-cover"
+                  fallback={<span className="text-sm text-slate-400">No image</span>}
+                />
               </div>
             </div>
             <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
