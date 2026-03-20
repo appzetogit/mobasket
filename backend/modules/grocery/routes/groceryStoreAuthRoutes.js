@@ -8,7 +8,8 @@ import {
   logout,
   getCurrentStore,
   updateFcmToken,
-  firebaseGoogleLogin
+  firebaseGoogleLogin,
+  reverifyGroceryStore
 } from '../controllers/groceryStoreAuthController.js';
 import { authenticate } from '../middleware/groceryStoreAuth.js';
 import { validate } from '../../../shared/middleware/validate.js';
@@ -96,6 +97,7 @@ router.post('/firebase/google-login', validate(firebaseGoogleLoginSchema), fireb
 router.post('/refresh-token', refreshToken);
 router.post('/logout', logout);
 router.get('/me', authenticate, getCurrentStore);
+router.post('/reverify', authenticate, reverifyGroceryStore);
 router.post('/fcm-token', authenticate, validate(updateFcmTokenSchema), updateFcmToken);
 
 export default router;

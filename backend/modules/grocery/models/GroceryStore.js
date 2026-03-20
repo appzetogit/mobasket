@@ -11,6 +11,23 @@ const withGroceryPlatform = (query = {}) => ({
   platform: GROCERY_PLATFORM
 });
 
+const isPointInZone = (zone, lat, lng) => {
+  if (!zone.boundary || !zone.boundary.coordinates || !zone.boundary.coordinates[0]) {
+    return false;
+  }
+  const coords = zone.boundary.coordinates[0];
+  let inside = false;
+  for (let i = 0, j = coords.length - 1; i < coords.length; j = i++) {
+    const xi = Number(coords[i][0]), yi = Number(coords[i][1]);
+    const xj = Number(coords[j][0]), yj = Number(coords[j][1]);
+    if (![xi, yi, xj, yj].every(Number.isFinite)) continue;
+    const intersect = ((yi > lat) !== (yj > lat)) &&
+      (lng < ((xj - xi) * (lat - yi)) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+};
+
 const locationSchema = new mongoose.Schema({
   latitude: Number,
   longitude: Number,
@@ -289,6 +306,26 @@ groceryStoreSchema.pre('save', async function onSave(next) {
 
   if (this.email && !this.ownerEmail) {
     this.ownerEmail = this.email;
+  }
+
+  // Auto-detect zoneId if coordinates are present and zoneId is missing or location changed
+  if ((this.isModified('location') || !this.zoneId) && this.location?.latitude && this.location?.longitude) {
+    try {
+      const Zone = mongoose.model('Zone');
+      const activeZones = await Zone.find({ isActive: true, platform: GROCERY_PLATFORM }).lean();
+      let matchedZoneId = null;
+      for (const zone of activeZones) {
+        if (isPointInZone(zone, this.location.latitude, this.location.longitude)) {
+          matchedZoneId = zone._id;
+          break;
+        }
+      }
+      if (matchedZoneId) {
+        this.zoneId = matchedZoneId;
+      }
+    } catch (err) {
+      console.error('Error auto-detecting zone for grocery store:', err.message);
+    }
   }
 
   next();

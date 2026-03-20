@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { Edit, Loader2, Plus, Search, Trash2, X } from "lucide-react"
+import { Edit, Loader2, MapPin, Plus, Search, Store, Trash2, X } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
 
@@ -255,7 +255,7 @@ export default function GroceryPlans() {
         adminAPI.getGroceryCategories(),
         adminAPI.getGrocerySubcategories(),
         adminAPI.getZones({ limit: 1000, platform: "mogrocery", isActive: true }),
-        adminAPI.getGroceryStores({ page: 1, limit: 1000, status: "active" }),
+        adminAPI.getGroceryStores({ page: 1, limit: 1000 }),
       ])
       setPlans(Array.isArray(planRes?.data?.data) ? planRes.data.data : [])
       setOffers(Array.isArray(offerRes?.data?.data) ? offerRes.data.data : [])
@@ -560,23 +560,18 @@ export default function GroceryPlans() {
     return map
   }, [products, subcategories])
 
-  const addZoneStoreRule = () => {
+  const addShopToZone = (zoneId) => {
     setPlanForm((prev) => ({
       ...prev,
-      zoneStoreRules: [...(Array.isArray(prev.zoneStoreRules) ? prev.zoneStoreRules : []), { zoneId: "", storeId: "", subcategoryIds: [] }],
+      zoneStoreRules: [...(Array.isArray(prev.zoneStoreRules) ? prev.zoneStoreRules : []), { zoneId, storeId: "", subcategoryIds: [] }],
     }))
   }
 
   const updateZoneStoreRule = (index, nextRule) => {
     setPlanForm((prev) => {
       const current = Array.isArray(prev.zoneStoreRules) ? prev.zoneStoreRules : []
-      const nextZoneIds = Array.isArray(prev.zoneIds) ? [...prev.zoneIds] : []
-      if (nextRule?.zoneId && !nextZoneIds.includes(nextRule.zoneId)) {
-        nextZoneIds.push(nextRule.zoneId)
-      }
       return {
         ...prev,
-        zoneIds: nextZoneIds,
         zoneStoreRules: current.map((rule, idx) => (idx === index ? { ...rule, ...nextRule } : rule)),
       }
     })
@@ -875,81 +870,106 @@ export default function GroceryPlans() {
               />
               <p className="text-xs text-slate-500 mt-1">No zone selected means this plan is available in all grocery zones.</p>
             </div>
-            <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <p className="text-sm font-semibold text-slate-800">Zone to Store to Subcategories</p>
-                  <p className="text-xs text-slate-500">Pick a zone, then a store in that zone, then subcategories. Buyer must select one product per chosen subcategory.</p>
-                </div>
-                <button type="button" onClick={addZoneStoreRule} className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-xs hover:bg-indigo-700">
-                  Add Zone Rule
-                </button>
+            <div className="bg-white border border-slate-200 rounded-xl p-4 space-y-4">
+              <div>
+                <p className="text-sm font-semibold text-slate-800">Zone-Specific Shop Configuration</p>
+                <p className="text-xs text-slate-500">For each zone, add shops and pick their subcategories. Rules without a shop selected will be automatically removed on save.</p>
               </div>
-              {(Array.isArray(planForm.zoneStoreRules) ? planForm.zoneStoreRules : []).length === 0 ? (
-                <p className="text-xs text-slate-500 border border-dashed rounded-lg p-3">No rules added yet.</p>
+
+              {planForm.zoneIds.length === 0 ? (
+                <div className="text-center py-8 border border-dashed rounded-xl bg-slate-50">
+                  <p className="text-xs text-slate-500 font-medium">Select one or more applicable zones above to configure shops.</p>
+                </div>
               ) : (
-                <div className="space-y-3">
-                  {(Array.isArray(planForm.zoneStoreRules) ? planForm.zoneStoreRules : []).map((rule, idx) => {
-                    const zoneScopedOptions = planForm.zoneIds.length > 0
-                      ? zoneOptions.filter((zone) => planForm.zoneIds.includes(zone.id))
-                      : zoneOptions
-                    const storesInZone = storesByZoneId.get(String(rule.zoneId || "").trim()) || []
-                    const storeOptions = storesInZone.map((store) => ({
-                      id: normalizeEntityId(store),
-                      name: store?.name || store?.ownerName || "Store",
-                    }))
-                    const storeSubcategories = rule.storeId
-                      ? Array.from((subcategoriesByStoreId.get(String(rule.storeId)) || new Map()).values())
-                      : []
-                    const subcategoryOptions = storeSubcategories.map((subcategory) => ({
-                      id: String(subcategory.id),
-                      name: subcategory.name || "Subcategory",
+                <div className="space-y-6">
+                  {planForm.zoneIds.map((zoneId) => {
+                    const zone = zoneOptions.find((z) => z.id === zoneId)
+                    if (!zone) return null
+
+                    const storesInZone = storesByZoneId.get(zoneId) || []
+                    const storeOptions = storesInZone.map((s) => ({
+                      id: normalizeEntityId(s),
+                      name: s?.name || s?.ownerName || "Store",
                     }))
 
+                    const zoneRules = (Array.isArray(planForm.zoneStoreRules) ? planForm.zoneStoreRules : [])
+                      .map((r, i) => ({ ...r, originalIndex: i }))
+                      .filter((r) => String(r.zoneId) === String(zoneId))
+                    
                     return (
-                      <div key={`zone-store-rule-${idx}`} className="border rounded-xl p-3 bg-slate-50">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <div className="space-y-1">
-                            <label className="text-xs font-semibold text-slate-700">Zone</label>
-                            <select
-                              className="w-full px-3 py-2 border rounded"
-                              value={rule.zoneId || ""}
-                              onChange={(e) => updateZoneStoreRule(idx, { zoneId: e.target.value, storeId: "", subcategoryIds: [] })}
-                            >
-                              <option value="">Select zone</option>
-                              {zoneScopedOptions.map((zone) => (
-                                <option key={zone.id} value={zone.id}>{zone.name}</option>
-                              ))}
-                            </select>
+                      <div key={`zone-section-${zoneId}`} className="space-y-3 bg-slate-50/50 p-4 rounded-xl border border-slate-100">
+                        <div className="flex items-center justify-between gap-2 border-b border-slate-200 pb-2">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-indigo-600" />
+                            <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wide">{zone.name}</h3>
                           </div>
-                          <div className="space-y-1">
-                            <label className="text-xs font-semibold text-slate-700">Store</label>
-                            <select
-                              className="w-full px-3 py-2 border rounded"
-                              value={rule.storeId || ""}
-                              onChange={(e) => updateZoneStoreRule(idx, { storeId: e.target.value, subcategoryIds: [] })}
-                              disabled={!rule.zoneId}
-                            >
-                              <option value="">{rule.zoneId ? "Select store" : "Select zone first"}</option>
-                              {storeOptions.map((store) => (
-                                <option key={store.id} value={store.id}>{store.name}</option>
-                              ))}
-                            </select>
-                          </div>
-                        </div>
-                        <div className="mt-3">
-                          <MultiSelectPicker
-                            label="Subcategories"
-                            options={subcategoryOptions}
-                            selectedIds={Array.isArray(rule.subcategoryIds) ? rule.subcategoryIds : []}
-                            onChange={(next) => updateZoneStoreRule(idx, { subcategoryIds: next })}
-                          />
-                        </div>
-                        <div className="mt-2 flex justify-end">
-                          <button type="button" onClick={() => removeZoneStoreRule(idx)} className="text-xs text-red-600 hover:underline">
-                            Remove Rule
+                          <button
+                            type="button"
+                            onClick={() => addShopToZone(zoneId)}
+                            className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 bg-white px-2 py-1 rounded border shadow-sm"
+                          >
+                            <Plus className="w-3 h-3" /> Add Shop to Zone
                           </button>
                         </div>
+                        
+                        {zoneRules.length === 0 ? (
+                          <div className="py-4 text-center">
+                            <p className="text-[11px] text-slate-400 italic">No shops configured for this zone yet.</p>
+                          </div>
+                        ) : (
+                          <div className="space-y-4">
+                            {zoneRules.map((rule) => {
+                              const storeSubcategories = rule.storeId
+                                ? Array.from((subcategoriesByStoreId.get(rule.storeId) || new Map()).values())
+                                : []
+                              const subcategoryOptionsForStore = storeSubcategories.map((sub) => ({
+                                id: String(sub.id),
+                                name: sub.name || "Subcategory",
+                              }))
+
+                              return (
+                                <div key={`rule-${rule.originalIndex}`} className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm relative group">
+                                  <button
+                                    type="button"
+                                    onClick={() => removeZoneStoreRule(rule.originalIndex)}
+                                    className="absolute -top-2 -right-2 w-5 h-5 bg-red-50 text-red-500 rounded-full flex items-center justify-center border border-red-100 opacity-0 group-hover:opacity-100 transition-opacity shadow-sm"
+                                  >
+                                    <X className="w-3 h-3" />
+                                  </button>
+
+                                  <div className="grid grid-cols-1 gap-3">
+                                    <div className="space-y-1">
+                                      <label className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1">
+                                        <Store className="w-3 h-3" /> Available Shops
+                                      </label>
+                                      <select
+                                        className="w-full px-3 py-1.5 text-sm border rounded-md bg-slate-50 focus:bg-white focus:ring-1 focus:ring-indigo-500 transition-all outline-none"
+                                        value={rule.storeId || ""}
+                                        onChange={(e) => updateZoneStoreRule(rule.originalIndex, { storeId: e.target.value, subcategoryIds: [] })}
+                                      >
+                                        <option value="">Select a shop...</option>
+                                        {storeOptions.map((opt) => (
+                                          <option key={opt.id} value={opt.id}>{opt.name}</option>
+                                        ))}
+                                      </select>
+                                    </div>
+
+                                    {rule.storeId && (
+                                      <div className="pt-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                                        <MultiSelectPicker
+                                          label="Select Subcategories (Products)"
+                                          options={subcategoryOptionsForStore}
+                                          selectedIds={Array.isArray(rule.subcategoryIds) ? rule.subcategoryIds : []}
+                                          onChange={(next) => updateZoneStoreRule(rule.originalIndex, { subcategoryIds: next })}
+                                        />
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        )}
                       </div>
                     )
                   })}

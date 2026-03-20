@@ -650,3 +650,49 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
     fcmTokenMobile: req.store.fcmTokenMobile || ''
   });
 });
+
+/**
+ * Reverify Grocery Store (Resubmit for approval)
+ * POST /api/grocery/store/auth/reverify
+ */
+export const reverifyGroceryStore = asyncHandler(async (req, res) => {
+  try {
+    const store = req.store; // Already attached by authenticate middleware
+
+    // Only rejected stores can reverify.
+    if (!store?.rejectionReason) {
+      return errorResponse(
+        res,
+        400,
+        'Grocery store is not rejected. Only rejected grocery stores can be reverified.'
+      );
+    }
+
+    // Clear rejection details and mark as pending again.
+    store.rejectionReason = null;
+    store.rejectedAt = null;
+    store.rejectedBy = null;
+
+    // Keep inactive until approved by admin again.
+    store.isActive = false;
+    store.isAcceptingOrders = false;
+
+    // Clear approval fields as a safety measure (should already be null when rejected).
+    store.approvedAt = null;
+    store.approvedBy = null;
+
+    await store.save();
+
+    return successResponse(res, 200, 'Grocery store reverified successfully. Waiting for admin approval.', {
+      store: {
+        id: store._id.toString(),
+        name: store.name,
+        isActive: store.isActive,
+        rejectionReason: store.rejectionReason
+      }
+    });
+  } catch (error) {
+    logger.error(`Error reverifying grocery store: ${error.message}`, { error: error.stack });
+    return errorResponse(res, 500, 'Failed to reverify grocery store');
+  }
+});
