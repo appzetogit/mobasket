@@ -6048,7 +6048,7 @@ export default function DeliveryHome() {
 
 
 
-  const handleRejectConfirm = () => {
+  const handleRejectOrder = (overrideReason = "") => {
     const rejectOrder = async () => {
       const orderId = selectedRestaurant?.id ||
         selectedRestaurant?.orderId ||
@@ -6062,8 +6062,9 @@ export default function DeliveryHome() {
       }
 
       try {
+        const reasonToSend = (overrideReason || rejectReason || "Too far from current location").trim()
         setIsRejectingOrder(true)
-        await deliveryAPI.rejectOrder(orderId, rejectReason)
+        await deliveryAPI.rejectOrder(orderId, reasonToSend)
         markOrderAsUnavailable(orderId, newOrder?.orderMongoId, newOrder?.orderId, selectedRestaurant?.orderId)
         clearNewOrder()
         stopNewOrderAlertSound("order rejected")
@@ -6084,6 +6085,14 @@ export default function DeliveryHome() {
     }
 
     void rejectOrder()
+  }
+
+  const handleQuickDenyNewOrder = () => {
+    handleRejectOrder("Too far from current location")
+  }
+
+  const handleRejectConfirm = () => {
+    handleRejectOrder()
   }
 
 
@@ -32824,6 +32833,15 @@ export default function DeliveryHome() {
 
 
                   </div>
+
+                  <button
+                    type="button"
+                    onClick={handleQuickDenyNewOrder}
+                    disabled={isAcceptingNewOrder || isRejectingOrder}
+                    className="mt-3 w-full bg-red-600 text-white py-3 rounded-full font-semibold text-sm hover:bg-red-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isRejectingOrder ? "Denying..." : "Deny order"}
+                  </button>
 
 
                 </div>

@@ -18,7 +18,11 @@ export default function PageNavbar({
   zIndex = 20,
   showProfile = false,
   locationIconColor,
-  onNavClick,
+  onNavClick,
+  showZoneSelector = false,
+  zoneOptions = [],
+  zoneValue = "auto",
+  onZoneChange,
 }) {
   const { location, loading } = useLocation();
   const { getFoodCartCount } = useCart();
@@ -353,7 +357,22 @@ export default function PageNavbar({
                 )}
               </div>
             )}
-          </Button>
+          </Button>
+          {showZoneSelector && (
+            <select
+              value={zoneValue}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => onZoneChange?.(e.target.value)}
+              className="mt-1 h-8 rounded-md border border-[#facc15] bg-white px-2 text-xs font-semibold text-gray-700"
+            >
+              <option value="auto">Auto</option>
+              {(Array.isArray(zoneOptions) ? zoneOptions : []).map((zone) => (
+                <option key={zone.id} value={zone.id}>
+                  {zone.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
 
         {/* Center: Company Logo or Name - Removed as per request (now in banner) */}

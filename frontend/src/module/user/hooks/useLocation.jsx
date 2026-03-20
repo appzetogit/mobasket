@@ -206,6 +206,11 @@ export function useLocation() {
 
   useEffect(() => {
     const applySavedAddressLocation = () => {
+      const locationSource = getUserLocationSource()
+      // Respect explicit "Use current location" choice and avoid overwriting it
+      // when addresses are refreshed in the background.
+      if (locationSource === "current") return
+
       const savedAddressLocation = getSavedAddressLocation()
       if (!savedAddressLocation) return
 
@@ -2302,8 +2307,9 @@ export function useLocation() {
 
   /* ===================== INIT ===================== */
   useEffect(() => {
+    const locationSource = getUserLocationSource()
     const savedAddressLocation = getSavedAddressLocation()
-    if (savedAddressLocation) {
+    if (savedAddressLocation && locationSource !== "current") {
       setUserLocationSource("saved")
       localStorage.setItem("userLocation", JSON.stringify(savedAddressLocation))
       window.dispatchEvent(new CustomEvent("userLocationChanged", { detail: savedAddressLocation }))

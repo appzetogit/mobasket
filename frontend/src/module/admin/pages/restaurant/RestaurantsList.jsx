@@ -144,6 +144,7 @@ export default function RestaurantsList() {
   const [editRestaurantDialog, setEditRestaurantDialog] = useState(false)
   const [editingRestaurant, setEditingRestaurant] = useState(null)
   const [savingEditRestaurant, setSavingEditRestaurant] = useState(false)
+  const [updatingZoneFor, setUpdatingZoneFor] = useState("")
   const [uploadingRestaurantImage, setUploadingRestaurantImage] = useState(false)
   const [editMapLoading, setEditMapLoading] = useState(false)
   const [editMapError, setEditMapError] = useState("")
@@ -154,6 +155,7 @@ export default function RestaurantsList() {
     ownerName: "",
     ownerPhone: "",
     ownerEmail: "",
+    zoneId: "",
     addressLine1: "",
     addressLine2: "",
     area: "",
@@ -644,6 +646,101 @@ export default function RestaurantsList() {
       .filter(Boolean)
   }, [zones])
 
+  const getRestaurantAssignedZoneId = (restaurant) => {
+    const original = restaurant?.originalData || {}
+    const explicitZoneValue = String(
+      original?.zoneId?._id ||
+        original?.zoneId?.id ||
+        original?.zoneId ||
+        original?.zone?._id ||
+        original?.zone?.id ||
+        original?.zone ||
+        "",
+    ).trim()
+
+    if (explicitZoneValue) {
+      const directMatch = zoneOptions.find((zone) => zone.id === explicitZoneValue)
+      if (directMatch) return directMatch.id
+
+      const byNameMatch = zoneOptions.find(
+        (zone) => zone.name.toLowerCase() === explicitZoneValue.toLowerCase(),
+      )
+      if (byNameMatch) return byNameMatch.id
+    }
+
+    const restaurantLat = Number(
+      original?.location?.latitude ?? original?.location?.coordinates?.[1],
+    )
+    const restaurantLng = Number(
+      original?.location?.longitude ?? original?.location?.coordinates?.[0],
+    )
+
+    if (!Number.isFinite(restaurantLat) || !Number.isFinite(restaurantLng)) return ""
+
+    const inferredZone = (Array.isArray(zones) ? zones : []).find(
+      (zone) =>
+        Array.isArray(zone?.coordinates) &&
+        zone.coordinates.length >= 3 &&
+        isPointInPolygon(restaurantLat, restaurantLng, zone.coordinates),
+    )
+
+    return String(inferredZone?._id || inferredZone?.id || "").trim()
+  }
+
+  const handleInlineZoneAssign = async (restaurant, zoneId) => {
+    const restaurantId = restaurant?._id || restaurant?.id
+    if (!restaurantId) return
+
+    const nextZoneId = String(zoneId || "").trim()
+    const selectedZoneOption = zoneOptions.find((zone) => zone.id === nextZoneId)
+    const previousRestaurants = restaurants
+
+    setUpdatingZoneFor(String(restaurantId))
+    setRestaurants((prev) =>
+      prev.map((item) => {
+        if ((item?._id || item?.id) !== restaurantId) return item
+        return {
+          ...item,
+          zone: selectedZoneOption?.name || "N/A",
+          originalData: {
+            ...(item.originalData || {}),
+            zoneId: nextZoneId || null,
+            zone: selectedZoneOption?.name || item?.originalData?.zone || "",
+          },
+        }
+      }),
+    )
+
+    try {
+      const payload = { zoneId: nextZoneId || undefined }
+      if (selectedZoneOption?.name) payload.zone = selectedZoneOption.name
+
+      const response = await adminAPI.updateRestaurant(restaurantId, payload)
+      const updatedRestaurant = response?.data?.data?.restaurant || response?.data?.data
+
+      setRestaurants((prev) =>
+        prev.map((item) => {
+          if ((item?._id || item?.id) !== restaurantId) return item
+          return {
+            ...item,
+            zone:
+              selectedZoneOption?.name ||
+              updatedRestaurant?.zone?.name ||
+              updatedRestaurant?.zoneName ||
+              item.zone,
+            originalData: updatedRestaurant || item.originalData,
+          }
+        }),
+      )
+    } catch (err) {
+      console.error("Error updating restaurant zone:", err)
+      setRestaurants(previousRestaurants)
+      alert(err?.response?.data?.message || "Failed to update zone. Please try again.")
+    } finally {
+      setUpdatingZoneFor("")
+    }
+  }
+
   // Show full phone number without masking
   const formatPhone = (phone) => {
     if (!phone) return ""
@@ -735,6 +832,38 @@ export default function RestaurantsList() {
 
       restaurantData = normalizeRestaurantRecord(restaurantData)
       const resolvedLocation = resolveRestaurantLocation(restaurantData)
+      const explicitZoneId = String(
+        restaurantData?.zoneId?._id ||
+        restaurantData?.zoneId?.id ||
+        restaurantData?.zoneId ||
+        restaurantData?.zone?._id ||
+        restaurantData?.zone?.id ||
+        restaurantData?.zone ||
+        "",
+      ).trim()
+      const lat = Number(resolvedLocation?.latitude)
+      const lng = Number(resolvedLocation?.longitude)
+      const inferredZoneId =
+        explicitZoneId ||
+        (Number.isFinite(lat) && Number.isFinite(lng)
+          ? String(
+              (
+                (Array.isArray(zones) ? zones : []).find(
+                  (zone) =>
+                    Array.isArray(zone?.coordinates) &&
+                    zone.coordinates.length >= 3 &&
+                    isPointInPolygon(lat, lng, zone.coordinates),
+                )?._id ||
+                (Array.isArray(zones) ? zones : []).find(
+                  (zone) =>
+                    Array.isArray(zone?.coordinates) &&
+                    zone.coordinates.length >= 3 &&
+                    isPointInPolygon(lat, lng, zone.coordinates),
+                )?.id ||
+                ""
+              ),
+            ).trim()
+          : "")
       setEditingRestaurant(restaurantData)
       setEditRestaurantImageFile(null)
       setEditRestaurantImagePreview(restaurantData?.profileImage?.url || restaurantData?.logo || "")
@@ -743,6 +872,7 @@ export default function RestaurantsList() {
         ownerName: restaurantData?.ownerName || "",
         ownerPhone: restaurantData?.ownerPhone || restaurantData?.phone || "",
         ownerEmail: restaurantData?.ownerEmail || restaurantData?.email || "",
+        zoneId: inferredZoneId,
         addressLine1: resolvedLocation?.addressLine1 || "",
         addressLine2: resolvedLocation?.addressLine2 || "",
         area: resolvedLocation?.area || "",
@@ -811,6 +941,7 @@ export default function RestaurantsList() {
         ownerName: editForm.ownerName,
         ownerPhone: editForm.ownerPhone,
         ownerEmail: editForm.ownerEmail,
+        zoneId: editForm.zoneId || undefined,
         location: {
           addressLine1: editForm.addressLine1,
           addressLine2: editForm.addressLine2,
@@ -836,6 +967,10 @@ export default function RestaurantsList() {
         },
         outletTimings: buildOutletTimingsPayloadFromEditor(editForm.outletTimings),
       }
+      const selectedZoneOption = zoneOptions.find((zone) => zone.id === String(editForm.zoneId || "").trim())
+      if (selectedZoneOption?.name) {
+        payload.zone = selectedZoneOption.name
+      }
 
       if (uploadedProfileImage?.url) {
         payload.profileImage = {
@@ -855,7 +990,13 @@ export default function RestaurantsList() {
                 name: updatedRestaurant?.name || restaurant.name,
                 ownerName: updatedRestaurant?.ownerName || restaurant.ownerName,
                 ownerPhone: updatedRestaurant?.ownerPhone || updatedRestaurant?.phone || restaurant.ownerPhone,
-                zone: updatedRestaurant?.location?.area || updatedRestaurant?.location?.city || restaurant.zone,
+                zone:
+                  selectedZoneOption?.name ||
+                  updatedRestaurant?.zone?.name ||
+                  updatedRestaurant?.zoneName ||
+                  updatedRestaurant?.location?.area ||
+                  updatedRestaurant?.location?.city ||
+                  restaurant.zone,
                 cuisine:
                   Array.isArray(updatedRestaurant?.cuisines) && updatedRestaurant.cuisines.length > 0
                     ? updatedRestaurant.cuisines[0]
@@ -1235,7 +1376,24 @@ export default function RestaurantsList() {
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm text-slate-700">{restaurant.zone}</span>
+                          <div className="min-w-[180px]">
+                            <select
+                              value={getRestaurantAssignedZoneId(restaurant)}
+                              onChange={(e) => handleInlineZoneAssign(restaurant, e.target.value)}
+                              disabled={updatingZoneFor === String(restaurant._id || restaurant.id)}
+                              className="w-full px-2.5 py-1.5 text-sm rounded-md border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
+                            >
+                              <option value="">Unassigned</option>
+                              {zoneOptions.map((zone) => (
+                                <option key={zone.id} value={zone.id}>
+                                  {zone.name}
+                                </option>
+                              ))}
+                            </select>
+                            {updatingZoneFor === String(restaurant._id || restaurant.id) ? (
+                              <p className="mt-1 text-[11px] text-blue-600">Saving...</p>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="text-sm text-slate-700">{restaurant.cuisine}</span>
@@ -2043,6 +2201,21 @@ export default function RestaurantsList() {
                     onChange={(e) => setEditForm((prev) => ({ ...prev, ownerEmail: e.target.value }))}
                     className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
                   />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Assigned Zone</label>
+                  <select
+                    value={editForm.zoneId}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, zoneId: e.target.value }))}
+                    className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                  >
+                    <option value="">Select zone</option>
+                    {zoneOptions.map((zone) => (
+                      <option key={zone.id} value={zone.id}>
+                        {zone.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
