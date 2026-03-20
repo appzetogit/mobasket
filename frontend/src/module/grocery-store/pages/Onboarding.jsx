@@ -1028,7 +1028,7 @@ export default function GroceryStoreOnboarding() {
 
       toast.success("Onboarding completed successfully!")
       setTimeout(() => {
-        navigate("/store", { replace: true })
+        navigate("/store/pending-approval", { replace: true })
       }, 800)
     } catch (err) {
       const msg =
