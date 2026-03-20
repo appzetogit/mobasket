@@ -76,6 +76,8 @@ import exploreTop10 from "@/assets/explore more icons/top 10.png";
 import exploreCollection from "@/assets/explore more icons/collection.png";
 
 // Banner images for hero carousel - will be fetched from API
+const HERO_BANNER_SYNC_STORAGE_KEY = "hero_banners_updated_at";
+const HERO_BANNER_SYNC_EVENT = "hero-banners-updated";
 
 // Animated placeholder for search - moved outside component to prevent recreation
 const placeholders = [
@@ -483,6 +485,7 @@ export default function Home() {
   const [isSwitchingOffVegMode, setIsSwitchingOffVegMode] = useState(false);
   const [popupPosition, setPopupPosition] = useState({ top: 0, right: 0 });
   const vegModeToggleRef = useRef(null);
+  const hasLoadedHeroBannersRef = useRef(false);
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [heroBannerImages, setHeroBannerImages] = useState([]);
   const [heroBannersData, setHeroBannersData] = useState([]); // Store full banner data with linked restaurants
@@ -744,30 +747,67 @@ export default function Home() {
     };
   }, [showVegModePopup]);
 
-  // Fetch hero banners from API
-  useEffect(() => {
-    const fetchHeroBanners = async () => {
-      try {
+  const fetchHeroBanners = useCallback(async ({ showLoader = false } = {}) => {
+    try {
+      if (showLoader) {
         setLoadingBanners(true);
-        const response = await api.get("/hero-banners/public");
-        if (response.data.success && response.data.data.banners) {
-          const banners = response.data.data.banners;
-          setHeroBannersData(banners);
-          // Extract image URLs for display
-          setHeroBannerImages(banners.map((b) => b.imageUrl || b));
-        }
-      } catch (error) {
-        console.error("Error fetching hero banners:", error);
-        // Fallback to empty array if API fails
+      }
+      const response = await api.get("/hero-banners/public");
+      if (response.data.success && response.data.data.banners) {
+        const banners = response.data.data.banners;
+        setHeroBannersData(banners);
+        // Extract image URLs for display
+        setHeroBannerImages(banners.map((b) => b.imageUrl || b));
+        hasLoadedHeroBannersRef.current = true;
+      }
+    } catch (error) {
+      console.error("Error fetching hero banners:", error);
+      if (showLoader || !hasLoadedHeroBannersRef.current) {
+        // Fallback to empty array if the initial API load fails
         setHeroBannerImages([]);
         setHeroBannersData([]);
-      } finally {
+      }
+    } finally {
+      if (showLoader) {
         setLoadingBanners(false);
+      }
+    }
+  }, []);
+
+  // Fetch hero banners from API
+  useEffect(() => {
+    fetchHeroBanners({ showLoader: true });
+  }, [fetchHeroBanners]);
+
+  useEffect(() => {
+    const refreshHeroBanners = () => {
+      fetchHeroBanners();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchHeroBanners();
       }
     };
 
-    fetchHeroBanners();
-  }, []);
+    const handleStorage = (event) => {
+      if (event.key === HERO_BANNER_SYNC_STORAGE_KEY) {
+        fetchHeroBanners();
+      }
+    };
+
+    window.addEventListener("focus", refreshHeroBanners);
+    window.addEventListener(HERO_BANNER_SYNC_EVENT, refreshHeroBanners);
+    window.addEventListener("storage", handleStorage);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", refreshHeroBanners);
+      window.removeEventListener(HERO_BANNER_SYNC_EVENT, refreshHeroBanners);
+      window.removeEventListener("storage", handleStorage);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [fetchHeroBanners]);
 
   // Fetch fallback categories from backend API (used only when restaurant-derived categories are unavailable)
   useEffect(() => {
@@ -2106,7 +2146,12 @@ export default function Home() {
                   const image = heroBannerImages[index];
                   const bannerData = heroBannersData[index];
                   const linkedRestaurants = bannerData?.linkedRestaurants || [];
-                  const hasLinkedRestaurants = linkedRestaurants.length > 0;
+                  const firstRestaurant = linkedRestaurants[0];
+                  const restaurantSlug =
+                    firstRestaurant?.slug ||
+                    firstRestaurant?.restaurantId ||
+                    firstRestaurant?._id;
+                  const hasLinkedRestaurants = Boolean(restaurantSlug);
 
                   return (
                     <motion.div
@@ -2120,12 +2165,7 @@ export default function Home() {
                       <div
                         className="w-full h-full relative"
                         onClick={() => {
-                          if (hasLinkedRestaurants) {
-                            const firstRestaurant = linkedRestaurants[0];
-                            const restaurantSlug =
-                              firstRestaurant.slug ||
-                              firstRestaurant.restaurantId ||
-                              firstRestaurant._id;
+                          if (restaurantSlug) {
                             navigate(`/restaurants/${restaurantSlug}`);
                           }
                         }}

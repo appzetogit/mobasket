@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { Upload, Trash2, Image as ImageIcon, Loader2, AlertCircle, CheckCircle2, ArrowUp, ArrowDown, Layout, Tag, Trophy, ChefHat, Megaphone, Search, Plus } from "lucide-react"
 import api from "@/lib/api"
 import { adminAPI } from "@/lib/api"
@@ -10,6 +10,9 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { usePlatform } from "@/module/admin/context/PlatformContext"
+
+const HERO_BANNER_SYNC_STORAGE_KEY = "hero_banners_updated_at"
+const HERO_BANNER_SYNC_EVENT = "hero-banners-updated"
 
 const getValidInitialTab = (requestedTab, platform) => {
   if (platform === 'mogrocery' && requestedTab === 'product-sections') {
@@ -422,11 +425,13 @@ export default function LandingPageManagement({ forcedPlatform, initialTab = 'ba
       )
 
       if (response.data.success) {
-        setSuccess('Restaurants linked to banner successfully!')
+        setSuccess('Banner restaurants updated successfully!')
         setShowRestaurantModal(false)
         setSelectedBannerId(null)
         setSelectedRestaurantIds([])
         setRestaurantSearchQuery("")
+        localStorage.setItem(HERO_BANNER_SYNC_STORAGE_KEY, String(Date.now()))
+        window.dispatchEvent(new Event(HERO_BANNER_SYNC_EVENT))
         await fetchBanners()
         setTimeout(() => setSuccess(null), 3000)
       }
@@ -446,6 +451,14 @@ export default function LandingPageManagement({ forcedPlatform, initialTab = 'ba
       }
     })
   }
+
+  const currentBannerLinkedRestaurantIds = useMemo(() => {
+    const currentBanner = banners.find((banner) => banner._id === selectedBannerId)
+    return currentBanner?.linkedRestaurants?.map((restaurant) => restaurant?._id || restaurant).filter(Boolean) || []
+  }, [banners, selectedBannerId])
+
+  const canSubmitRestaurantSelection =
+    selectedRestaurantIds.length > 0 || currentBannerLinkedRestaurantIds.length > 0
 
   const filteredRestaurantsForModal = allRestaurants.filter(restaurant => {
     if (!restaurantSearchQuery.trim()) return true
@@ -2718,7 +2731,7 @@ export default function LandingPageManagement({ forcedPlatform, initialTab = 'ba
                   </Button>
                   <Button
                     onClick={handleLinkRestaurants}
-                    disabled={linkingRestaurants || selectedRestaurantIds.length === 0}
+                    disabled={linkingRestaurants || !canSubmitRestaurantSelection}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-6 min-w-[140px]"
                   >
                     {linkingRestaurants ? (
@@ -2727,10 +2740,17 @@ export default function LandingPageManagement({ forcedPlatform, initialTab = 'ba
                         Linking...
                       </>
                     ) : (
-                      <>
-                        <Megaphone className="w-4 h-4 mr-2" />
-                        Link {selectedRestaurantIds.length > 0 ? `(${selectedRestaurantIds.length})` : ''} Restaurant{selectedRestaurantIds.length !== 1 ? 's' : ''}
-                      </>
+                      selectedRestaurantIds.length === 0 && currentBannerLinkedRestaurantIds.length > 0 ? (
+                        <>
+                          <Megaphone className="w-4 h-4 mr-2" />
+                          Remove Linked Restaurants
+                        </>
+                      ) : (
+                        <>
+                          <Megaphone className="w-4 h-4 mr-2" />
+                          Link {selectedRestaurantIds.length > 0 ? `(${selectedRestaurantIds.length})` : ''} Restaurant{selectedRestaurantIds.length !== 1 ? 's' : ''}
+                        </>
+                      )
                     )}
                   </Button>
                 </div>
