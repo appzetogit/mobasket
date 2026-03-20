@@ -19,6 +19,99 @@ const cuisinesOptions = [
 ]
 
 const dayNames = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+const OWNER_NAME_REGEX = /^[A-Za-z\s-]+$/
+const OWNER_PHONE_REGEX = /^\d{10}$/
+const PINCODE_REGEX = /^\d{6}$/
+const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/
+const GST_REGEX = /^\d{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/
+const FSSAI_REGEX = /^\d{14}$/
+const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/
+
+const getOwnerPhoneError = (value) => {
+  const phone = String(value || "").trim()
+  if (!phone) return "Owner phone number is required"
+  if (!OWNER_PHONE_REGEX.test(phone)) return "Phone number must be 10 digits only"
+  return ""
+}
+
+const getPrimaryContactNumberError = (value) => {
+  const phone = String(value || "").trim()
+  if (!phone) return "Primary contact number is required"
+  if (!OWNER_PHONE_REGEX.test(phone)) return "Primary contact number must be 10 digits only"
+  return ""
+}
+
+const getMenuImagesError = (menuImages) => {
+  if (!Array.isArray(menuImages) || menuImages.length === 0) return "At least one menu image is required"
+  return ""
+}
+
+const getProfileImageError = (profileImage) => {
+  if (!profileImage) return "Restaurant profile image is required"
+  return ""
+}
+
+const getPanNumberError = (value) => {
+  const panNumber = String(value || "").trim().toUpperCase()
+  if (!panNumber) return "PAN number is required"
+  if (!PAN_REGEX.test(panNumber)) return "PAN number must be in ABCDE1234F format"
+  return ""
+}
+
+const getPanHolderNameError = (value) => {
+  const name = String(value || "").trim()
+  if (!name) return "Name on PAN is required"
+  if (!OWNER_NAME_REGEX.test(name)) return "Name on PAN should contain only letters, spaces, and hyphens"
+  return ""
+}
+
+const getGstNumberError = (value, gstRegistered) => {
+  if (!gstRegistered) return ""
+  const gstNumber = String(value || "").trim().toUpperCase()
+  if (!gstNumber) return "GST number is required when GST registered"
+  if (!GST_REGEX.test(gstNumber)) return "GST number must be in 22ABCDE1234F1Z5 format"
+  return ""
+}
+
+const getGstLegalNameError = (value, gstRegistered) => {
+  if (!gstRegistered) return ""
+  const legalName = String(value || "").trim()
+  if (!legalName) return "GST legal name is required when GST registered"
+  if (!OWNER_NAME_REGEX.test(legalName)) {
+    return "GST legal name should contain only letters, spaces, and hyphens"
+  }
+  return ""
+}
+
+const getFssaiNumberError = (value) => {
+  const fssaiNumber = String(value || "").trim()
+  if (!fssaiNumber) return ""
+  if (!FSSAI_REGEX.test(fssaiNumber)) return "FSSAI number must be 14 digits"
+  return ""
+}
+
+const getFssaiExpiryError = (value, todayDateString) => {
+  const expiryDate = String(value || "").trim()
+  if (!expiryDate) return ""
+  if (expiryDate < todayDateString) return "FSSAI expiry date cannot be in the past"
+  return ""
+}
+
+const getIfscCodeError = (value) => {
+  const ifscCode = String(value || "").trim().toUpperCase()
+  if (!ifscCode) return "IFSC code is required"
+  if (!IFSC_REGEX.test(ifscCode)) return "IFSC code must be in HDFC0001234 format"
+  return ""
+}
+
+const getAccountHolderNameError = (value) => {
+  const accountHolderName = String(value || "").trim()
+  if (!accountHolderName) return "Account holder name is required"
+  if (!OWNER_NAME_REGEX.test(accountHolderName)) {
+    return "Account holder name should contain only letters, spaces, and hyphens"
+  }
+  return ""
+}
 
 const toSlotFormat = (time24) => {
   if (!time24 || typeof time24 !== "string" || !time24.includes(":")) return null
@@ -74,6 +167,8 @@ const buildOutletTimingsPayload = (editorTimings = []) =>
 
 export default function AddRestaurant() {
   const navigate = useNavigate()
+  const today = new Date()
+  const todayDateString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`
   const [step, setStep] = useState(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
@@ -162,19 +257,29 @@ export default function AddRestaurant() {
     const errors = []
     if (!step1.restaurantName?.trim()) errors.push("Restaurant name is required")
     if (!step1.ownerName?.trim()) errors.push("Owner name is required")
+    if (step1.ownerName?.trim() && !OWNER_NAME_REGEX.test(step1.ownerName.trim())) {
+      errors.push("Full name should contain only letters, spaces, and hyphens")
+    }
     if (!step1.ownerEmail?.trim()) errors.push("Owner email is required")
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(step1.ownerEmail)) errors.push("Please enter a valid email address")
-    if (!step1.ownerPhone?.trim()) errors.push("Owner phone number is required")
-    if (!step1.primaryContactNumber?.trim()) errors.push("Primary contact number is required")
+    else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(step1.ownerEmail)) errors.push("Please enter a valid email address")
+    const ownerPhoneError = getOwnerPhoneError(step1.ownerPhone)
+    if (ownerPhoneError) errors.push(ownerPhoneError)
+    const primaryContactNumberError = getPrimaryContactNumberError(step1.primaryContactNumber)
+    if (primaryContactNumberError) errors.push(primaryContactNumberError)
     if (!step1.location?.area?.trim()) errors.push("Area/Sector/Locality is required")
     if (!step1.location?.city?.trim()) errors.push("City is required")
+    if (step1.location?.pincode?.trim() && !PINCODE_REGEX.test(step1.location.pincode.trim())) {
+      errors.push("Pin code must be 6 digits")
+    }
     return errors
   }
 
   const validateStep2 = () => {
     const errors = []
-    if (!step2.menuImages || step2.menuImages.length === 0) errors.push("At least one menu image is required")
-    if (!step2.profileImage) errors.push("Restaurant profile image is required")
+    const menuImagesError = getMenuImagesError(step2.menuImages)
+    if (menuImagesError) errors.push(menuImagesError)
+    const profileImageError = getProfileImageError(step2.profileImage)
+    if (profileImageError) errors.push(profileImageError)
     if (!step2.cuisines || step2.cuisines.length === 0) errors.push("Please select at least one cuisine")
     const openDayEntries = (Array.isArray(step2.outletTimings) ? step2.outletTimings : []).filter((d) => d?.isOpen !== false)
     if (openDayEntries.length === 0) errors.push("Please keep at least one day open in outlet timings")
@@ -188,22 +293,28 @@ export default function AddRestaurant() {
 
   const validateStep3 = () => {
     const errors = []
-    if (!step3.panNumber?.trim()) errors.push("PAN number is required")
-    if (!step3.nameOnPan?.trim()) errors.push("Name on PAN is required")
-    if (!step3.panImage) errors.push("PAN image is required")
-    if (!step3.fssaiNumber?.trim()) errors.push("FSSAI number is required")
-    if (!step3.fssaiExpiry?.trim()) errors.push("FSSAI expiry date is required")
-    if (!step3.fssaiImage) errors.push("FSSAI image is required")
+    const panNumberError = getPanNumberError(step3.panNumber)
+    if (panNumberError) errors.push(panNumberError)
+    const panHolderNameError = getPanHolderNameError(step3.nameOnPan)
+    if (panHolderNameError) errors.push(panHolderNameError)
+    const fssaiNumberError = getFssaiNumberError(step3.fssaiNumber)
+    if (fssaiNumberError) errors.push(fssaiNumberError)
+    const fssaiExpiryError = getFssaiExpiryError(step3.fssaiExpiry, todayDateString)
+    if (fssaiExpiryError) errors.push(fssaiExpiryError)
     if (step3.gstRegistered) {
-      if (!step3.gstNumber?.trim()) errors.push("GST number is required when GST registered")
-      if (!step3.gstLegalName?.trim()) errors.push("GST legal name is required when GST registered")
+      const gstNumberError = getGstNumberError(step3.gstNumber, step3.gstRegistered)
+      if (gstNumberError) errors.push(gstNumberError)
+      const gstLegalNameError = getGstLegalNameError(step3.gstLegalName, step3.gstRegistered)
+      if (gstLegalNameError) errors.push(gstLegalNameError)
       if (!step3.gstAddress?.trim()) errors.push("GST registered address is required when GST registered")
       if (!step3.gstImage) errors.push("GST image is required when GST registered")
     }
     if (!step3.accountNumber?.trim()) errors.push("Account number is required")
     if (step3.accountNumber !== step3.confirmAccountNumber) errors.push("Account number and confirmation do not match")
-    if (!step3.ifscCode?.trim()) errors.push("IFSC code is required")
-    if (!step3.accountHolderName?.trim()) errors.push("Account holder name is required")
+    const ifscCodeError = getIfscCodeError(step3.ifscCode)
+    if (ifscCodeError) errors.push(ifscCodeError)
+    const accountHolderNameError = getAccountHolderNameError(step3.accountHolderName)
+    if (accountHolderNameError) errors.push(accountHolderNameError)
     if (!step3.accountType?.trim()) errors.push("Account type is required")
     return errors
   }
@@ -229,20 +340,83 @@ export default function AddRestaurant() {
   const handleNext = () => {
     setFormErrors({})
     let validationErrors = []
+    let nextFormErrors = {}
     
     if (step === 1) {
       validationErrors = validateStep1()
+      const ownerPhoneError = getOwnerPhoneError(step1.ownerPhone)
+      if (ownerPhoneError) {
+        nextFormErrors.ownerPhone = ownerPhoneError
+        validationErrors = validationErrors.filter((error) => error !== ownerPhoneError)
+      }
+      const primaryContactNumberError = getPrimaryContactNumberError(step1.primaryContactNumber)
+      if (primaryContactNumberError) {
+        nextFormErrors.primaryContactNumber = primaryContactNumberError
+        validationErrors = validationErrors.filter((error) => error !== primaryContactNumberError)
+      }
     } else if (step === 2) {
       validationErrors = validateStep2()
+      const menuImagesError = getMenuImagesError(step2.menuImages)
+      if (menuImagesError) {
+        nextFormErrors.menuImages = menuImagesError
+      }
+      const profileImageError = getProfileImageError(step2.profileImage)
+      if (profileImageError) {
+        nextFormErrors.profileImage = profileImageError
+      }
     } else if (step === 3) {
       validationErrors = validateStep3()
+      const panNumberError = getPanNumberError(step3.panNumber)
+      if (panNumberError) {
+        nextFormErrors.panNumber = panNumberError
+        validationErrors = validationErrors.filter((error) => error !== panNumberError)
+      }
+      const panHolderNameError = getPanHolderNameError(step3.nameOnPan)
+      if (panHolderNameError) {
+        nextFormErrors.nameOnPan = panHolderNameError
+        validationErrors = validationErrors.filter((error) => error !== panHolderNameError)
+      }
+      const gstNumberError = getGstNumberError(step3.gstNumber, step3.gstRegistered)
+      if (gstNumberError) {
+        nextFormErrors.gstNumber = gstNumberError
+        validationErrors = validationErrors.filter((error) => error !== gstNumberError)
+      }
+      const gstLegalNameError = getGstLegalNameError(step3.gstLegalName, step3.gstRegistered)
+      if (gstLegalNameError) {
+        nextFormErrors.gstLegalName = gstLegalNameError
+        validationErrors = validationErrors.filter((error) => error !== gstLegalNameError)
+      }
+      const fssaiNumberError = getFssaiNumberError(step3.fssaiNumber)
+      if (fssaiNumberError) {
+        nextFormErrors.fssaiNumber = fssaiNumberError
+        validationErrors = validationErrors.filter((error) => error !== fssaiNumberError)
+      }
+      const fssaiExpiryError = getFssaiExpiryError(step3.fssaiExpiry, todayDateString)
+      if (fssaiExpiryError) {
+        nextFormErrors.fssaiExpiry = fssaiExpiryError
+        validationErrors = validationErrors.filter((error) => error !== fssaiExpiryError)
+      }
+      const ifscCodeError = getIfscCodeError(step3.ifscCode)
+      if (ifscCodeError) {
+        nextFormErrors.ifscCode = ifscCodeError
+        validationErrors = validationErrors.filter((error) => error !== ifscCodeError)
+      }
+      const accountHolderNameError = getAccountHolderNameError(step3.accountHolderName)
+      if (accountHolderNameError) {
+        nextFormErrors.accountHolderName = accountHolderNameError
+        validationErrors = validationErrors.filter((error) => error !== accountHolderNameError)
+      }
     } else if (step === 4) {
       validationErrors = validateStep4()
     } else if (step === 5) {
       validationErrors = validateAuth()
     }
     
-    if (validationErrors.length > 0) {
+    if (Object.keys(nextFormErrors).length > 0) {
+      setFormErrors(nextFormErrors)
+    }
+
+    if (validationErrors.length > 0 || Object.keys(nextFormErrors).length > 0) {
       validationErrors.forEach((error) => {
         toast.error(error)
       })
@@ -254,6 +428,14 @@ export default function AddRestaurant() {
     } else {
       handleSubmit()
     }
+  }
+
+  const handleBack = () => {
+    if (step === 1) {
+      navigate("/admin/restaurants")
+      return
+    }
+    setStep((s) => Math.max(1, s - 1))
   }
 
   const handleSubmit = async () => {
@@ -396,7 +578,9 @@ export default function AddRestaurant() {
             <Label className="text-xs text-gray-700">Full name*</Label>
             <Input
               value={step1.ownerName || ""}
-              onChange={(e) => setStep1({ ...step1, ownerName: e.target.value })}
+              onChange={(e) =>
+                setStep1({ ...step1, ownerName: e.target.value.replace(/[^A-Za-z\s-]/g, "") })
+              }
               className="mt-1 bg-white text-sm text-black placeholder-black"
               placeholder="Owner full name"
             />
@@ -414,11 +598,23 @@ export default function AddRestaurant() {
           <div>
             <Label className="text-xs text-gray-700">Phone number*</Label>
             <Input
+              type="tel"
+              inputMode="numeric"
+              maxLength={10}
               value={step1.ownerPhone || ""}
-              onChange={(e) => setStep1({ ...step1, ownerPhone: e.target.value })}
+              onChange={(e) => {
+                const phone = e.target.value.replace(/\D/g, "").slice(0, 10)
+                setStep1({ ...step1, ownerPhone: phone })
+                if (formErrors.ownerPhone) {
+                  setFormErrors((prev) => ({ ...prev, ownerPhone: getOwnerPhoneError(phone) }))
+                }
+              }}
               className="mt-1 bg-white text-sm text-black placeholder-black"
-              placeholder="+91 98XXXXXX"
+              placeholder="9876543210"
             />
+            {formErrors.ownerPhone && (
+              <div className="mt-1 text-xs text-red-600">{formErrors.ownerPhone}</div>
+            )}
           </div>
         </div>
       </section>
@@ -428,11 +624,26 @@ export default function AddRestaurant() {
         <div>
           <Label className="text-xs text-gray-700">Primary contact number*</Label>
           <Input
+            type="tel"
+            inputMode="numeric"
+            maxLength={10}
             value={step1.primaryContactNumber || ""}
-            onChange={(e) => setStep1({ ...step1, primaryContactNumber: e.target.value })}
+            onChange={(e) => {
+              const phone = e.target.value.replace(/\D/g, "").slice(0, 10)
+              setStep1({ ...step1, primaryContactNumber: phone })
+              if (formErrors.primaryContactNumber) {
+                setFormErrors((prev) => ({
+                  ...prev,
+                  primaryContactNumber: getPrimaryContactNumberError(phone),
+                }))
+              }
+            }}
             className="mt-1 bg-white text-sm text-black placeholder-black"
-            placeholder="Restaurant's primary contact number"
+            placeholder="9876543210"
           />
+          {formErrors.primaryContactNumber && (
+            <div className="mt-1 text-xs text-red-600">{formErrors.primaryContactNumber}</div>
+          )}
         </div>
         <div className="space-y-3">
           <Input
@@ -461,13 +672,23 @@ export default function AddRestaurant() {
           />
           <Input
             value={step1.location?.state || ""}
-            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, state: e.target.value } })}
+            onChange={(e) =>
+              setStep1({
+                ...step1,
+                location: { ...step1.location, state: e.target.value.replace(/[^A-Za-z\s]/g, "") },
+              })
+            }
             className="bg-white text-sm"
             placeholder="State (optional)"
           />
           <Input
             value={step1.location?.pincode || ""}
-            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, pincode: e.target.value } })}
+            onChange={(e) =>
+              setStep1({
+                ...step1,
+                location: { ...step1.location, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) },
+              })
+            }
             className="bg-white text-sm"
             placeholder="Pin code (optional)"
           />
@@ -503,11 +724,17 @@ export default function AddRestaurant() {
                 const files = Array.from(e.target.files || [])
                 if (files.length) {
                   setStep2((prev) => ({ ...prev, menuImages: [...(prev.menuImages || []), ...files] }))
+                  if (formErrors.menuImages) {
+                    setFormErrors((prev) => ({ ...prev, menuImages: "" }))
+                  }
                   e.target.value = ''
                 }
               }}
             />
           </div>
+          {formErrors.menuImages && (
+            <div className="text-xs text-red-600">{formErrors.menuImages}</div>
+          )}
           {step2.menuImages.length > 0 && (
             <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-3">
               {step2.menuImages.map((file, idx) => {
@@ -553,11 +780,19 @@ export default function AddRestaurant() {
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0] || null
-                if (file) setStep2((prev) => ({ ...prev, profileImage: file }))
+                if (file) {
+                  setStep2((prev) => ({ ...prev, profileImage: file }))
+                  if (formErrors.profileImage) {
+                    setFormErrors((prev) => ({ ...prev, profileImage: "" }))
+                  }
+                }
                 e.target.value = ''
               }}
             />
           </div>
+          {formErrors.profileImage && (
+            <div className="text-xs text-red-600">{formErrors.profileImage}</div>
+          )}
         </div>
       </section>
 
@@ -722,21 +957,42 @@ export default function AddRestaurant() {
             <Label className="text-xs text-gray-700">PAN number*</Label>
             <Input
               value={step3.panNumber || ""}
-              onChange={(e) => setStep3({ ...step3, panNumber: e.target.value })}
+              onChange={(e) => {
+                const panNumber = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10)
+                setStep3({ ...step3, panNumber })
+                if (formErrors.panNumber) {
+                  setFormErrors((prev) => ({ ...prev, panNumber: getPanNumberError(panNumber) }))
+                }
+              }}
               className="mt-1 bg-white text-sm text-black placeholder-black"
+              placeholder="ABCDE1234F"
+              maxLength={10}
             />
+            {formErrors.panNumber && (
+              <div className="mt-1 text-xs text-red-600">{formErrors.panNumber}</div>
+            )}
           </div>
           <div>
             <Label className="text-xs text-gray-700">Name on PAN*</Label>
             <Input
               value={step3.nameOnPan || ""}
-              onChange={(e) => setStep3({ ...step3, nameOnPan: e.target.value })}
+              onChange={(e) => {
+                const nameOnPan = e.target.value.replace(/[^A-Za-z\s-]/g, "")
+                setStep3({ ...step3, nameOnPan })
+                if (formErrors.nameOnPan) {
+                  setFormErrors((prev) => ({ ...prev, nameOnPan: getPanHolderNameError(nameOnPan) }))
+                }
+              }}
               className="mt-1 bg-white text-sm text-black placeholder-black"
+              placeholder="Name as on PAN card"
             />
+            {formErrors.nameOnPan && (
+              <div className="mt-1 text-xs text-red-600">{formErrors.nameOnPan}</div>
+            )}
           </div>
         </div>
         <div>
-          <Label className="text-xs text-gray-700">PAN image*</Label>
+          <Label className="text-xs text-gray-700">PAN image</Label>
           <Input
             type="file"
             accept="image/*"
@@ -767,8 +1023,47 @@ export default function AddRestaurant() {
         </div>
         {step3.gstRegistered && (
           <div className="space-y-3">
-            <Input value={step3.gstNumber || ""} onChange={(e) => setStep3({ ...step3, gstNumber: e.target.value })} className="bg-white text-sm" placeholder="GST number*" />
-            <Input value={step3.gstLegalName || ""} onChange={(e) => setStep3({ ...step3, gstLegalName: e.target.value })} className="bg-white text-sm" placeholder="Legal name*" />
+            <div>
+              <Input
+                value={step3.gstNumber || ""}
+                onChange={(e) => {
+                  const gstNumber = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 15)
+                  setStep3({ ...step3, gstNumber })
+                  if (formErrors.gstNumber) {
+                    setFormErrors((prev) => ({
+                      ...prev,
+                      gstNumber: getGstNumberError(gstNumber, step3.gstRegistered),
+                    }))
+                  }
+                }}
+                className="bg-white text-sm"
+                placeholder="GST number*"
+                maxLength={15}
+              />
+              {formErrors.gstNumber && (
+                <div className="mt-1 text-xs text-red-600">{formErrors.gstNumber}</div>
+              )}
+            </div>
+            <div>
+              <Input
+                value={step3.gstLegalName || ""}
+                onChange={(e) => {
+                  const gstLegalName = e.target.value.replace(/[^A-Za-z\s-]/g, "")
+                  setStep3({ ...step3, gstLegalName })
+                  if (formErrors.gstLegalName) {
+                    setFormErrors((prev) => ({
+                      ...prev,
+                      gstLegalName: getGstLegalNameError(gstLegalName, step3.gstRegistered),
+                    }))
+                  }
+                }}
+                className="bg-white text-sm"
+                placeholder="Legal name*"
+              />
+              {formErrors.gstLegalName && (
+                <div className="mt-1 text-xs text-red-600">{formErrors.gstLegalName}</div>
+              )}
+            </div>
             <Input value={step3.gstAddress || ""} onChange={(e) => setStep3({ ...step3, gstAddress: e.target.value })} className="bg-white text-sm" placeholder="Registered address*" />
             <Input type="file" accept="image/*" onChange={(e) => setStep3({ ...step3, gstImage: e.target.files?.[0] || null })} className="bg-white text-sm" />
           </div>
@@ -778,15 +1073,46 @@ export default function AddRestaurant() {
       <section className="bg-white p-4 sm:p-6 rounded-md space-y-4">
         <h2 className="text-lg font-semibold text-black">FSSAI details</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input value={step3.fssaiNumber || ""} onChange={(e) => setStep3({ ...step3, fssaiNumber: e.target.value })} className="bg-white text-sm" placeholder="FSSAI number*" />
           <div>
-            <Label className="text-xs text-gray-700 mb-1 block">FSSAI expiry date*</Label>
+            <Input
+              value={step3.fssaiNumber || ""}
+              onChange={(e) => {
+                const fssaiNumber = e.target.value.replace(/\D/g, "").slice(0, 14)
+                setStep3({ ...step3, fssaiNumber })
+                if (formErrors.fssaiNumber) {
+                  setFormErrors((prev) => ({ ...prev, fssaiNumber: getFssaiNumberError(fssaiNumber) }))
+                }
+              }}
+              className="bg-white text-sm"
+              placeholder="FSSAI number"
+              inputMode="numeric"
+              maxLength={14}
+            />
+            {formErrors.fssaiNumber && (
+              <div className="mt-1 text-xs text-red-600">{formErrors.fssaiNumber}</div>
+            )}
+          </div>
+          <div>
+            <Label className="text-xs text-gray-700 mb-1 block">FSSAI expiry date</Label>
             <Input
               type="date"
               value={step3.fssaiExpiry || ""}
-              onChange={(e) => setStep3({ ...step3, fssaiExpiry: e.target.value })}
+              min={todayDateString}
+              onChange={(e) => {
+                const fssaiExpiry = e.target.value
+                setStep3({ ...step3, fssaiExpiry })
+                if (formErrors.fssaiExpiry) {
+                  setFormErrors((prev) => ({
+                    ...prev,
+                    fssaiExpiry: getFssaiExpiryError(fssaiExpiry, todayDateString),
+                  }))
+                }
+              }}
               className="bg-white text-sm"
             />
+            {formErrors.fssaiExpiry && (
+              <div className="mt-1 text-xs text-red-600">{formErrors.fssaiExpiry}</div>
+            )}
           </div>
         </div>
         <Input type="file" accept="image/*" onChange={(e) => setStep3({ ...step3, fssaiImage: e.target.files?.[0] || null })} className="bg-white text-sm" />
@@ -799,10 +1125,46 @@ export default function AddRestaurant() {
           <Input value={step3.confirmAccountNumber || ""} onChange={(e) => setStep3({ ...step3, confirmAccountNumber: e.target.value.trim() })} className="bg-white text-sm" placeholder="Re-enter account number*" />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input value={step3.ifscCode || ""} onChange={(e) => setStep3({ ...step3, ifscCode: e.target.value })} className="bg-white text-sm" placeholder="IFSC code*" />
+          <div>
+            <Input
+              value={step3.ifscCode || ""}
+              onChange={(e) => {
+                const ifscCode = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 11)
+                setStep3({ ...step3, ifscCode })
+                if (formErrors.ifscCode) {
+                  setFormErrors((prev) => ({ ...prev, ifscCode: getIfscCodeError(ifscCode) }))
+                }
+              }}
+              className="bg-white text-sm"
+              placeholder="IFSC code*"
+              maxLength={11}
+            />
+            {formErrors.ifscCode && (
+              <div className="mt-1 text-xs text-red-600">{formErrors.ifscCode}</div>
+            )}
+          </div>
           <Input value={step3.accountType || ""} onChange={(e) => setStep3({ ...step3, accountType: e.target.value })} className="bg-white text-sm" placeholder="Account type (savings / current)*" />
         </div>
-        <Input value={step3.accountHolderName || ""} onChange={(e) => setStep3({ ...step3, accountHolderName: e.target.value })} className="bg-white text-sm" placeholder="Account holder name*" />
+        <div>
+          <Input
+            value={step3.accountHolderName || ""}
+            onChange={(e) => {
+              const accountHolderName = e.target.value.replace(/[^A-Za-z\s-]/g, "")
+              setStep3({ ...step3, accountHolderName })
+              if (formErrors.accountHolderName) {
+                setFormErrors((prev) => ({
+                  ...prev,
+                  accountHolderName: getAccountHolderNameError(accountHolderName),
+                }))
+              }
+            }}
+            className="bg-white text-sm"
+            placeholder="Account holder name*"
+          />
+          {formErrors.accountHolderName && (
+            <div className="mt-1 text-xs text-red-600">{formErrors.accountHolderName}</div>
+          )}
+        </div>
       </section>
     </div>
   )
@@ -890,8 +1252,8 @@ export default function AddRestaurant() {
         <div className="flex justify-between items-center">
           <Button
             variant="ghost"
-            disabled={step === 1 || isSubmitting}
-            onClick={() => setStep((s) => Math.max(1, s - 1))}
+            disabled={isSubmitting}
+            onClick={handleBack}
             className="text-sm text-gray-700 bg-transparent"
           >
             Back
