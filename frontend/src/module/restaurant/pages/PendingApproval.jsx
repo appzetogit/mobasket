@@ -129,7 +129,7 @@ export default function PendingApproval() {
         }
     }
 
-    const isRejected = verificationStatus === "rejected" || verificationStatus === "declined" || Boolean(rejectionReason)
+    const isRejected = verificationStatus === "rejected" || verificationStatus === "declined"
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-6 py-12 relative overflow-hidden">

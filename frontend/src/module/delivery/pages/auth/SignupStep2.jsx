@@ -34,6 +34,8 @@ export default function SignupStep2() {
   const [drivingLicenseNumber, setDrivingLicenseNumber] = useState("")
   const [showBackPopup, setShowBackPopup] = useState(false)
   const [cachedUser] = useState(() => getCachedDeliveryUser())
+  const normalizedDrivingLicenseNumber = drivingLicenseNumber.trim().toUpperCase()
+  const isDrivingLicenseNumberValid = /^[A-Z0-9]{8,20}$/.test(normalizedDrivingLicenseNumber)
 
   const handleBack = () => {
     setShowBackPopup(true)
@@ -166,6 +168,55 @@ export default function SignupStep2() {
     }
   }
 
+  const convertFlutterResultToFile = (result, fallbackName) => {
+    if (!result?.base64) return null
+    let base64Data = String(result.base64)
+    if (base64Data.includes(",")) {
+      base64Data = base64Data.split(",")[1]
+    }
+
+    const byteCharacters = atob(base64Data)
+    const byteNumbers = new Array(byteCharacters.length)
+    for (let i = 0; i < byteCharacters.length; i += 1) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i)
+    }
+    const byteArray = new Uint8Array(byteNumbers)
+    const mimeType = result.mimeType || "image/jpeg"
+    const blob = new Blob([byteArray], { type: mimeType })
+    return new File([blob], result.fileName || fallbackName, { type: mimeType })
+  }
+
+  const pickImageFromSource = async (docType, source, fallbackInputId) => {
+    if (uploading[docType]) return
+
+    if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function") {
+      try {
+        const result = await window.flutter_inappwebview.callHandler("openCamera", {
+          source,
+          accept: "image/*",
+          multiple: false,
+          quality: 0.8,
+        })
+
+        if (result?.success && result?.base64) {
+          const file = convertFlutterResultToFile(result, `${docType}-${Date.now()}.jpg`)
+          if (file) {
+            await handleFileSelect(docType, file)
+            return
+          }
+        }
+
+        if (result?.cancelled) {
+          return
+        }
+      } catch {
+        // Fall back to browser file picker.
+      }
+    }
+
+    document.getElementById(fallbackInputId)?.click()
+  }
+
   const handleRemove = (docType) => {
     setUploadedDocs(prev => ({
       ...prev,
@@ -182,6 +233,11 @@ export default function SignupStep2() {
       return
     }
 
+    if (!isDrivingLicenseNumberValid) {
+      toast.error("Driving license number must be 8-20 letters or digits")
+      return
+    }
+
     setIsSubmitting(true)
 
     try {
@@ -190,7 +246,7 @@ export default function SignupStep2() {
         aadharPhoto: uploadedDocs.aadharPhoto,
         panPhoto: uploadedDocs.panPhoto,
         drivingLicensePhoto: uploadedDocs.drivingLicensePhoto,
-        drivingLicenseNumber: drivingLicenseNumber
+        drivingLicenseNumber: normalizedDrivingLicenseNumber
       })
 
       if (response?.data?.success) {
@@ -293,7 +349,7 @@ export default function SignupStep2() {
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => document.getElementById(galleryInputId)?.click()}
+                      onClick={() => pickImageFromSource(docType, "gallery", galleryInputId)}
                       disabled={isUploading}
                       className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
                     >
@@ -301,7 +357,7 @@ export default function SignupStep2() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => document.getElementById(cameraInputId)?.click()}
+                      onClick={() => pickImageFromSource(docType, "camera", cameraInputId)}
                       disabled={isUploading}
                       className="px-3 py-2 text-sm font-medium rounded-lg bg-[#00B761] text-white hover:bg-[#00A055] disabled:opacity-60 disabled:cursor-not-allowed"
                     >
@@ -375,11 +431,18 @@ export default function SignupStep2() {
                 <input
                   type="text"
                   value={drivingLicenseNumber}
-                  onChange={(e) => setDrivingLicenseNumber(e.target.value)}
+                  onChange={(e) => {
+                    const sanitizedValue = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 20)
+                    setDrivingLicenseNumber(sanitizedValue)
+                  }}
                   placeholder="Enter Driving License Number"
                   className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#00B761] text-sm"
+                  pattern="[A-Z0-9]{8,20}"
                   required
                 />
+                {drivingLicenseNumber && !isDrivingLicenseNumberValid && (
+                  <p className="text-red-500 text-xs mt-1">Use 8-20 letters and numbers only</p>
+                )}
               </div>
 
               <DocumentUpload docType="drivingLicensePhoto" label="Driving License Photo (Optional)" required={false} />
@@ -387,8 +450,8 @@ export default function SignupStep2() {
               {/* Submit Button */}
               <button
                 type="submit"
-                disabled={isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !drivingLicenseNumber}
-                className={`w-full py-4 rounded-lg font-bold text-white text-base transition-colors mt-6 ${isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !drivingLicenseNumber
+                disabled={isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !isDrivingLicenseNumberValid}
+                className={`w-full py-4 rounded-lg font-bold text-white text-base transition-colors mt-6 ${isSubmitting || !uploadedDocs.profilePhoto || !uploadedDocs.aadharPhoto || !uploadedDocs.panPhoto || !isDrivingLicenseNumberValid
                   ? "bg-gray-400 cursor-not-allowed"
                   : "bg-[#00B761] hover:bg-[#00A055]"
                   }`}

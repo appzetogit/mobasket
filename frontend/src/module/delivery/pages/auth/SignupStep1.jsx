@@ -189,6 +189,22 @@ export default function SignupStep1() {
       return;
     }
 
+    // Validation for Aadhar Number - digits only, max 12
+    if (name === "aadharNumber") {
+      const digitsOnly = value.replace(/\D/g, "").slice(0, 12)
+      setFormData(prev => ({
+        ...prev,
+        [name]: digitsOnly
+      }))
+      if (errors[name]) {
+        setErrors(prev => ({
+          ...prev,
+          [name]: ""
+        }))
+      }
+      return
+    }
+
     // For other fields, update normally
     setFormData(prev => ({
       ...prev,
@@ -272,7 +288,13 @@ export default function SignupStep1() {
     e.preventDefault()
 
     if (!validate()) {
-      toast.error("Please fill all required fields correctly")
+      if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+        toast.error("Please enter a valid email format")
+      } else if (formData.aadharNumber && !/^\d{12}$/.test(formData.aadharNumber.replace(/\s/g, ""))) {
+        toast.error("Aadhar number must contain exactly 12 digits")
+      } else {
+        toast.error("Please fill all required fields correctly")
+      }
       return
     }
 
@@ -520,6 +542,8 @@ export default function SignupStep1() {
                   value={formData.aadharNumber}
                   onChange={handleChange}
                   maxLength={12}
+                  inputMode="numeric"
+                  pattern="[0-9]{12}"
                   className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.aadharNumber ? "border-red-500" : "border-gray-300"
                     }`}
                   placeholder="E.g., 123456789012"

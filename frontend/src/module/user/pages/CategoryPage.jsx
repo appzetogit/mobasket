@@ -25,11 +25,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-// Import shared food images - prevents duplication
-import { foodImages } from "@/constants/images";
 import api from "@/lib/api";
 import { restaurantAPI, adminAPI } from "@/lib/api";
 import { useProfile } from "../context/ProfileContext";
+import { useCart } from "../context/CartContext";
 import { useLocation } from "../hooks/useLocation";
 import { useZone } from "../hooks/useZone";
 
@@ -42,14 +41,140 @@ const filterOptions = [
   { id: "rating-4-plus", label: "Rating 4.0+" },
 ];
 
+const normalizeCityName = (value) => String(value || "").trim().toLowerCase();
+
+const CITY_PLACEHOLDERS = new Set([
+  "",
+  "current location",
+  "select location",
+  "unknown city",
+]);
+
+const isUsableCityValue = (value) => {
+  const normalized = normalizeCityName(value);
+  return normalized && !CITY_PLACEHOLDERS.has(normalized);
+};
+
+const extractCityFromAddressText = (value) => {
+  if (!value || typeof value !== "string") return "";
+  const parts = value
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  if (!parts.length) return "";
+
+  const pincodeIndex = parts.findIndex((part) => /^\d{5,6}$/.test(part));
+  if (pincodeIndex >= 1) {
+    return parts[pincodeIndex - 1] || "";
+  }
+
+  if (parts.length >= 2) {
+    return parts[parts.length - 2] || "";
+  }
+
+  return parts[0] || "";
+};
+
+const getSavedUserCity = () => {
+  if (typeof window === "undefined") return "";
+  try {
+    const savedLocation = JSON.parse(localStorage.getItem("userLocation") || "null");
+    if (!savedLocation || typeof savedLocation !== "object") return "";
+
+    const directCity = savedLocation.city || savedLocation.location?.city || "";
+    if (isUsableCityValue(directCity)) return String(directCity).trim();
+
+    const fromAddress =
+      extractCityFromAddressText(savedLocation.formattedAddress) ||
+      extractCityFromAddressText(savedLocation.address);
+    return isUsableCityValue(fromAddress) ? String(fromAddress).trim() : "";
+  } catch {
+    return "";
+  }
+};
+
+const resolveUserCity = (locationLike) => {
+  const directCity = locationLike?.city || locationLike?.location?.city || "";
+  if (isUsableCityValue(directCity)) return String(directCity).trim();
+
+  const fromAddress =
+    extractCityFromAddressText(locationLike?.formattedAddress) ||
+    extractCityFromAddressText(locationLike?.address);
+  if (isUsableCityValue(fromAddress)) return String(fromAddress).trim();
+
+  return getSavedUserCity();
+};
+
+const extractRestaurantCity = (restaurant) => {
+  const directCity =
+    restaurant?.location?.city ||
+    restaurant?.city ||
+    restaurant?.address?.city ||
+    "";
+
+  if (String(directCity || "").trim()) {
+    return String(directCity).trim();
+  }
+
+  const formattedAddress =
+    restaurant?.location?.formattedAddress ||
+    restaurant?.location?.address ||
+    restaurant?.address ||
+    "";
+
+  if (!formattedAddress || typeof formattedAddress !== "string") return "";
+
+  const parts = formattedAddress
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const pincodeIndex = parts.findIndex((part) => /^\d{5,6}$/.test(part));
+  if (pincodeIndex >= 1) {
+    return parts[pincodeIndex - 1] || "";
+  }
+
+  if (parts.length >= 2) {
+    return parts[parts.length - 2] || "";
+  }
+
+  return "";
+};
+
+const matchesRestaurantCity = (restaurant, normalizedUserCity) => {
+  if (!normalizedUserCity) return false;
+
+  const candidates = [
+    restaurant?.location?.city,
+    restaurant?.city,
+    restaurant?.address?.city,
+    restaurant?.location?.formattedAddress,
+    restaurant?.location?.address,
+    extractRestaurantCity(restaurant),
+  ]
+    .map((value) => normalizeCityName(value))
+    .filter(Boolean);
+
+  if (candidates.length === 0) return false;
+
+  return candidates.some(
+    (candidate) =>
+      candidate === normalizedUserCity ||
+      candidate.includes(normalizedUserCity) ||
+      normalizedUserCity.includes(candidate),
+  );
+};
+
 // Mock data removed - using backend data only
 
 export default function CategoryPage() {
   const { category } = useParams();
   const navigate = useNavigate();
   const { vegMode } = useProfile();
+  const { addToCart, getCartItem, updateQuantity } = useCart();
   const { location } = useLocation();
-  const { zoneId, isOutOfService } = useZone(location);
+  const { zoneId, isOutOfService, loading: zoneLoading } = useZone(location);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(
     category?.toLowerCase() || "all",
@@ -73,6 +198,7 @@ export default function CategoryPage() {
   // State for restaurants from backend
   const [restaurantsData, setRestaurantsData] = useState([]);
   const [loadingRestaurants, setLoadingRestaurants] = useState(true);
+  const [isCategorySwitching, setIsCategorySwitching] = useState(false);
   const [categoryKeywords, setCategoryKeywords] = useState({});
 
   const getCategoryKeywords = (categoryId) => {
@@ -119,13 +245,13 @@ export default function CategoryPage() {
             {
               id: "all",
               name: "All",
-              image: foodImages[7] || foodImages[0],
+              image: null,
               slug: "all",
             },
             ...filteredCategories.map((cat) => ({
               id: cat.slug || cat.id,
               name: cat.name,
-              image: cat.image || foodImages[0],
+              image: cat.image?.url || cat.image || null,
               slug: cat.slug || cat.name.toLowerCase().replace(/\s+/g, "-"),
               type: cat.type,
             })),
@@ -157,7 +283,7 @@ export default function CategoryPage() {
             {
               id: "all",
               name: "All",
-              image: foodImages[7] || foodImages[0],
+              image: null,
               slug: "all",
             },
           ]);
@@ -169,7 +295,7 @@ export default function CategoryPage() {
           {
             id: "all",
             name: "All",
-            image: foodImages[7] || foodImages[0],
+            image: null,
             slug: "all",
           },
         ]);
@@ -352,13 +478,32 @@ export default function CategoryPage() {
   // Fetch restaurants from API
   useEffect(() => {
     const fetchRestaurants = async () => {
+      if (zoneLoading) {
+        return;
+      }
+
       try {
         setLoadingRestaurants(true);
-        // Optional: Add zoneId if available (for sorting/filtering, but show all restaurants)
+
         const params = {};
-        if (zoneId) {
+        params.platform = "mofood";
+
+        const hasResolvedZone = Boolean(zoneId);
+        let normalizedUserCity = "";
+
+        if (hasResolvedZone) {
           params.zoneId = zoneId;
+          params.onlyZone = "true";
+        } else {
+          const resolvedUserCity = resolveUserCity(location);
+          normalizedUserCity = normalizeCityName(resolvedUserCity);
+          if (!normalizedUserCity) {
+            setRestaurantsData([]);
+            return;
+          }
+          params.city = resolvedUserCity;
         }
+
         const response = await restaurantAPI.getRestaurants(params);
 
         if (
@@ -367,7 +512,13 @@ export default function CategoryPage() {
           response.data.data &&
           response.data.data.restaurants
         ) {
-          const restaurantsArray = response.data.data.restaurants;
+          const restaurantsArrayRaw = response.data.data.restaurants || [];
+          const restaurantsArray = restaurantsArrayRaw.filter((restaurant) => {
+            const platform = String(restaurant?.platform || "").toLowerCase();
+            if (platform && platform !== "mofood") return false;
+            if (hasResolvedZone) return true;
+            return matchesRestaurantCity(restaurant, normalizedUserCity);
+          });
 
           // Helper function to check if value is a default/mock value
           const isDefaultValue = (value, fieldName) => {
@@ -406,11 +557,7 @@ export default function CategoryPage() {
             .filter((restaurant) => {
               const hasName =
                 restaurant.name && restaurant.name.trim().length > 0;
-              const hasRealImage =
-                restaurant.profileImage?.url ||
-                (restaurant.coverImages && restaurant.coverImages.length > 0) ||
-                (restaurant.menuImages && restaurant.menuImages.length > 0);
-              return hasName && hasRealImage;
+              return hasName;
             })
             .map((restaurant) => {
               let deliveryTime = restaurant.estimatedDeliveryTime || null;
@@ -451,7 +598,12 @@ export default function CategoryPage() {
                       : [];
 
               const image = allImages[0] || null;
-              const restaurantId = restaurant.restaurantId || restaurant._id;
+              const restaurantMongoId = String(
+                restaurant._id || restaurant.id || "",
+              ).trim();
+              const restaurantLookupId = String(
+                restaurant.restaurantId || restaurantMongoId,
+              ).trim();
 
               let featuredDish = restaurant.featuredDish || null;
               let featuredPrice = restaurant.featuredPrice || null;
@@ -464,7 +616,7 @@ export default function CategoryPage() {
               }
 
               return {
-                id: restaurantId,
+                id: restaurantLookupId,
                 name: restaurant.name,
                 cuisine: cuisine,
                 rating: restaurant.rating || null,
@@ -481,7 +633,8 @@ export default function CategoryPage() {
                 slug:
                   restaurant.slug ||
                   restaurant.name?.toLowerCase().replace(/\s+/g, "-"),
-                restaurantId: restaurantId,
+                restaurantId: restaurantLookupId,
+                restaurantMongoId: restaurantMongoId || restaurantLookupId,
                 hasPaneer: false,
                 category: "all",
               };
@@ -569,7 +722,14 @@ export default function CategoryPage() {
     };
 
     fetchRestaurants();
-  }, [zoneId, isOutOfService]);
+  }, [
+    zoneId,
+    zoneLoading,
+    isOutOfService,
+    location?.city,
+    location?.formattedAddress,
+    location?.address,
+  ]);
 
   // Update selected category when URL changes
   useEffect(() => {
@@ -715,7 +875,8 @@ export default function CategoryPage() {
         (r) =>
           r.name?.toLowerCase().includes(query) ||
           r.cuisine?.toLowerCase().includes(query) ||
-          r.featuredDish?.toLowerCase().includes(query),
+          r.featuredDish?.toLowerCase().includes(query) ||
+          r.categoryDishName?.toLowerCase().includes(query),
       );
     }
 
@@ -802,7 +963,8 @@ export default function CategoryPage() {
         (r) =>
           r.name?.toLowerCase().includes(query) ||
           r.cuisine?.toLowerCase().includes(query) ||
-          r.featuredDish?.toLowerCase().includes(query),
+          r.featuredDish?.toLowerCase().includes(query) ||
+          r.categoryDishName?.toLowerCase().includes(query),
       );
     }
 
@@ -818,17 +980,112 @@ export default function CategoryPage() {
 
   const handleCategorySelect = (category) => {
     const categorySlug = category.slug || category.id;
+    if (String(categorySlug) === String(selectedCategory)) {
+      return;
+    }
+    setIsCategorySwitching(true);
     setSelectedCategory(categorySlug);
-    // Update URL to reflect category change
+    // Keep route inside the same page to avoid full UI remount behavior.
     if (categorySlug === "all") {
-      navigate("/user/category/all");
+      navigate("/category/all", { replace: true });
     } else {
-      navigate(`/user/category/${categorySlug}`);
+      navigate(`/category/${categorySlug}`, { replace: true });
     }
   };
 
+  useEffect(() => {
+    if (loadingRestaurants) return;
+    const timeoutId = setTimeout(() => {
+      setIsCategorySwitching(false);
+    }, 180);
+    return () => clearTimeout(timeoutId);
+  }, [selectedCategory, loadingRestaurants]);
+
   // Check if should show grayscale (user out of service)
   const shouldShowGrayscale = isOutOfService;
+  const showDishSkeleton = loadingRestaurants || isCategorySwitching;
+
+  const getDishCartId = (dish) =>
+    String(
+      dish?.dishId ||
+      dish?.categoryDish?.itemId ||
+      dish?.categoryDish?.id ||
+      dish?.itemId ||
+      "",
+    ).trim();
+
+  const getDishPrice = (dish) =>
+    Number(dish?.categoryDishPrice ?? dish?.featuredPrice ?? dish?.price ?? 0) || 0;
+
+  const toCartDishItem = (dish) => {
+    const itemId = getDishCartId(dish);
+    return {
+      id: itemId,
+      itemId,
+      name: dish?.categoryDishName || dish?.featuredDish || "Dish",
+      price: getDishPrice(dish),
+      originalPrice:
+        Number(
+          dish?.categoryDish?.originalPrice ??
+          dish?.originalPrice ??
+          dish?.categoryDishPrice ??
+          dish?.featuredPrice ??
+          0,
+        ) || getDishPrice(dish),
+      image: dish?.categoryDishImage || dish?.image || "",
+      restaurantId: String(
+        dish?.restaurantMongoId || dish?.restaurantId || dish?.id || "",
+      ).trim(),
+      restaurant: dish?.name || "Restaurant",
+      foodType: dish?.categoryDish?.foodType || dish?.foodType || "",
+      platform: "mofood",
+      restaurantPlatform: "mofood",
+    };
+  };
+
+  const handleAddDishToCart = (dish, event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const cartItem = toCartDishItem(dish);
+    if (!cartItem.itemId || !cartItem.restaurantId) return;
+    addToCart(cartItem);
+  };
+
+  const handleDishQtyChange = (dish, nextQty, event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const itemId = getDishCartId(dish);
+    if (!itemId) return;
+    updateQuantity(itemId, nextQty);
+  };
+
+  const dishRowsByRestaurant = useMemo(() => {
+    if (selectedCategory === "all") return [];
+
+    const rowsMap = new Map();
+    filteredAllRestaurants.forEach((dishCard) => {
+      const restaurantId = String(
+        dishCard?.restaurantId || dishCard?.id || "",
+      ).trim();
+      if (!restaurantId) return;
+
+      if (!rowsMap.has(restaurantId)) {
+        rowsMap.set(restaurantId, {
+          restaurantId,
+          restaurantName: dishCard?.name || "Restaurant",
+          restaurantSlug:
+            dishCard?.slug ||
+            String(dishCard?.name || "")
+              .toLowerCase()
+              .replace(/\s+/g, "-"),
+          dishes: [],
+        });
+      }
+      rowsMap.get(restaurantId).dishes.push(dishCard);
+    });
+
+    return Array.from(rowsMap.values()).filter((row) => row.dishes.length > 0);
+  }, [selectedCategory, filteredAllRestaurants]);
 
   return (
     <div
@@ -889,7 +1146,16 @@ export default function CategoryPage() {
                     className={`flex flex-col items-center gap-1.5 flex-shrink-0 pb-2 transition-all ${isSelected ? "border-b-2 border-green-600" : ""
                       }`}
                   >
-                    {cat.image ? (
+                    {String(categorySlug) === "all" ? (
+                      <div
+                        className={`w-16 h-16 md:w-20 md:h-20 rounded-full flex items-center justify-center border-2 transition-all ${isSelected
+                          ? "border-green-600 shadow-lg bg-green-50 dark:bg-green-900/20"
+                          : "border-transparent bg-gray-100 dark:bg-gray-800"
+                          }`}
+                      >
+                        <UtensilsCrossed className="h-6 w-6 md:h-7 md:w-7 text-green-700 dark:text-green-400" />
+                      </div>
+                    ) : cat.image ? (
                       <div
                         className={`w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 transition-all ${isSelected
                           ? "border-green-600 shadow-lg"
@@ -901,10 +1167,7 @@ export default function CategoryPage() {
                           alt={cat.name}
                           className="w-full h-full object-cover"
                           onError={(e) => {
-                            // Fallback to default image if category image fails to load
-                            e.target.src =
-                              foodImages[0] ||
-                              "https://via.placeholder.com/100";
+                            e.target.style.display = "none";
                           }}
                         />
                       </div>
@@ -915,7 +1178,9 @@ export default function CategoryPage() {
                           : "border-transparent"
                           }`}
                       >
-                        <span className="text-xl md:text-2xl">🍽️</span>
+                        <span className="text-sm md:text-base font-bold uppercase text-gray-700 dark:text-gray-300">
+                          {String(cat.name || "?").trim().slice(0, 2)}
+                        </span>
                       </div>
                     )}
                     <span
@@ -1037,7 +1302,7 @@ export default function CategoryPage() {
       <div className="px-4 sm:px-6 md:px-6 lg:px-8 xl:px-0 py-4 sm:py-6 md:py-8 lg:py-10 space-y-6 md:space-y-8 lg:space-y-10">
         <div className="max-w-[1100px] mx-auto">
           {/* RECOMMENDED FOR YOU Section - Show only on "All" category */}
-          {filteredRecommended.length > 0 && selectedCategory === "all" && (
+          {!showDishSkeleton && filteredRecommended.length > 0 && selectedCategory === "all" && (
             <section>
               <h2 className="text-xs sm:text-sm md:text-base font-semibold text-gray-400 dark:text-gray-500 tracking-widest uppercase mb-4 md:mb-6">
                 RECOMMENDED FOR YOU
@@ -1140,10 +1405,137 @@ export default function CategoryPage() {
             </section>
           )}
 
+          {/* DISH ROWS Section - Selected Category */}
+          {selectedCategory !== "all" && (
+            <section className="space-y-6">
+              <h2 className="text-xs sm:text-sm md:text-base font-semibold text-gray-400 dark:text-gray-500 tracking-widest uppercase">
+                DISHES
+              </h2>
+
+              {showDishSkeleton ? (
+                <div className="space-y-5">
+                  {Array.from({ length: 3 }).map((_, rowIndex) => (
+                    <div key={`dish-row-skeleton-${rowIndex}`} className="space-y-3">
+                      <div className="h-4 w-40 bg-gray-200 dark:bg-gray-800 rounded animate-pulse" />
+                      <div className="flex gap-3 overflow-x-auto pb-1">
+                        {Array.from({ length: 5 }).map((__, cardIndex) => (
+                          <div
+                            key={`dish-card-skeleton-${rowIndex}-${cardIndex}`}
+                            className="w-44 min-w-[11rem] rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] overflow-hidden animate-pulse"
+                          >
+                            <div className="h-28 w-full bg-gray-200 dark:bg-gray-800" />
+                            <div className="p-3 space-y-2">
+                              <div className="h-3.5 w-3/4 bg-gray-200 dark:bg-gray-800 rounded" />
+                              <div className="h-3 w-1/2 bg-gray-200 dark:bg-gray-800 rounded" />
+                              <div className="h-7 w-16 bg-gray-200 dark:bg-gray-800 rounded-md ml-auto" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-7">
+                  {dishRowsByRestaurant.map((row) => (
+                    <div key={row.restaurantId} className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <h3 className="text-sm md:text-base font-bold text-gray-900 dark:text-gray-100">
+                          {row.restaurantName}
+                        </h3>
+                        <Link
+                          to={`/user/restaurants/${row.restaurantSlug}`}
+                          className="text-xs font-semibold text-green-700 dark:text-green-400 whitespace-nowrap"
+                        >
+                          View menu
+                        </Link>
+                      </div>
+
+                      <div className="flex gap-3 overflow-x-auto pb-1">
+                        {row.dishes.map((dish) => {
+                          const cartId = getDishCartId(dish);
+                          const cartDish = cartId ? getCartItem(cartId) : null;
+                          const qty = cartDish?.quantity || 0;
+                          return (
+                            <div
+                              key={dish.id}
+                              className="w-44 min-w-[11rem] rounded-2xl border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] overflow-hidden shadow-sm"
+                            >
+                              <div className="h-28 w-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+                                {dish.categoryDishImage || dish.image ? (
+                                  <img
+                                    src={dish.categoryDishImage || dish.image}
+                                    alt={dish.categoryDishName || "Dish"}
+                                    className="h-full w-full object-cover"
+                                  />
+                                ) : (
+                                  <div className="h-full w-full flex items-center justify-center text-3xl">🍽️</div>
+                                )}
+                              </div>
+
+                              <div className="p-3 space-y-2">
+                                <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 line-clamp-2">
+                                  {dish.categoryDishName || dish.featuredDish || "Dish"}
+                                </p>
+                                <p className="text-sm font-bold text-gray-900 dark:text-gray-100">
+                                  ₹{getDishPrice(dish)}
+                                </p>
+
+                                {qty > 0 ? (
+                                  <div className="ml-auto inline-flex items-center rounded-md border border-green-600 overflow-hidden">
+                                    <button
+                                      type="button"
+                                      onClick={(event) => handleDishQtyChange(dish, qty - 1, event)}
+                                      className="h-7 w-7 text-green-700 bg-green-50 dark:bg-green-900/20"
+                                    >
+                                      -
+                                    </button>
+                                    <span className="px-2 text-xs font-bold text-green-700 dark:text-green-400">
+                                      {qty}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={(event) => handleDishQtyChange(dish, qty + 1, event)}
+                                      className="h-7 w-7 text-green-700 bg-green-50 dark:bg-green-900/20"
+                                    >
+                                      +
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="ml-auto h-7 px-3 text-xs bg-green-600 hover:bg-green-700 text-white"
+                                    onClick={(event) => handleAddDishToCart(dish, event)}
+                                  >
+                                    Add
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!showDishSkeleton && dishRowsByRestaurant.length === 0 && (
+                <div className="text-center py-10">
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    No dishes found in this category.
+                  </p>
+                </div>
+              )}
+            </section>
+          )}
+
           {/* ALL RESTAURANTS Section */}
+          {selectedCategory === "all" && (
           <section className="relative">
             <h2 className="text-xs sm:text-sm md:text-base font-semibold text-gray-400 dark:text-gray-500 tracking-widest uppercase mb-4 md:mb-6">
-              ALL RESTAURANTS
+              {selectedCategory === "all" ? "ALL RESTAURANTS" : "DISHES"}
             </h2>
 
             {/* Loading Overlay */}
@@ -1163,9 +1555,26 @@ export default function CategoryPage() {
 
             {/* Large Restaurant Cards */}
             <div
-              className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 lg:gap-6 xl:gap-7 items-stretch ${isLoadingFilterResults ? "opacity-50" : "opacity-100"} transition-opacity duration-300`}
+              className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-5 lg:gap-6 xl:gap-7 items-stretch ${(isLoadingFilterResults || showDishSkeleton) ? "opacity-50" : "opacity-100"} transition-opacity duration-300`}
             >
-              {filteredAllRestaurants.map((restaurant) => {
+              {showDishSkeleton
+                ? Array.from({ length: 8 }).map((_, index) => (
+                  <div
+                    key={`dish-skeleton-${index}`}
+                    className="overflow-hidden border border-gray-100 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] rounded-[20px] h-full flex flex-col w-full animate-pulse"
+                  >
+                    <div className="aspect-[16/9] w-full rounded-t-[20px] bg-gray-200 dark:bg-gray-800" />
+                    <div className="p-3 sm:px-4 py-3">
+                      <div className="h-4 w-2/3 bg-gray-200 dark:bg-gray-800 rounded mb-2" />
+                      <div className="h-3 w-1/2 bg-gray-200 dark:bg-gray-800 rounded mb-3" />
+                      <div className="flex justify-between">
+                        <div className="h-3 w-16 bg-gray-200 dark:bg-gray-800 rounded" />
+                        <div className="h-3 w-12 bg-gray-200 dark:bg-gray-800 rounded" />
+                      </div>
+                    </div>
+                  </div>
+                ))
+                : filteredAllRestaurants.map((restaurant) => {
                 const restaurantSlug = restaurant.name
                   .toLowerCase()
                   .replace(/\s+/g, "-");
@@ -1310,7 +1719,7 @@ export default function CategoryPage() {
             </div>
 
             {/* Empty State */}
-            {filteredAllRestaurants.length === 0 && (
+            {!showDishSkeleton && filteredAllRestaurants.length === 0 && (
               <div className="text-center py-12 md:py-16">
                 <p className="text-gray-500 dark:text-gray-400 text-sm md:text-base">
                   {searchQuery
@@ -1331,6 +1740,7 @@ export default function CategoryPage() {
               </div>
             )}
           </section>
+          )}
         </div>
       </div>
 

@@ -657,9 +657,12 @@ export default function OrdersMain() {
   const hasCompletedVerificationSubmission = isGroceryStore
     ? completedOnboardingSteps >= 1
     : completedOnboardingSteps === 4 || (normalizedVerificationStatus && normalizedVerificationStatus !== "onboarding")
-  const hasRejectedVerification = Boolean(
-    String(restaurantStatus.rejectionReason || "").trim()
-  )
+  const hasRejectedVerification =
+    normalizedVerificationStatus === "rejected" ||
+    normalizedVerificationStatus === "declined"
+  const rejectionReasonText = hasRejectedVerification
+    ? String(restaurantStatus.rejectionReason || "").trim()
+    : ""
   const canAccessLiveOrders =
     restaurantStatus.isActive === true && restaurantStatus.isAcceptingOrders !== false
   const shouldShowVerificationState =
@@ -989,14 +992,6 @@ export default function OrdersMain() {
       if (error.response?.status === 401) {
         const errorMessage = error.response?.data?.message || 'Your session has expired. Please login again.'
         alert(errorMessage)
-        // The axios interceptor should handle redirecting to login
-        // But if it doesn't, we can manually redirect
-        if (!error.response?.data?.message?.includes('inactive')) {
-          // Only redirect if it's not an "inactive" error (which we handle differently)
-          setTimeout(() => {
-            window.location.href = isGroceryStore ? '/store/login' : '/restaurant/login'
-          }, 1500)
-        }
       } else {
         // Other errors (400, 500, etc.)
         const errorMessage = error.response?.data?.message || `Failed to reverify ${entityLabel}. Please try again.`
@@ -2078,12 +2073,12 @@ export default function OrdersMain() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.1 }}
-            className={`mt-4 mb-4 rounded-2xl shadow-sm px-6 py-4 ${restaurantStatus.rejectionReason
+            className={`mt-4 mb-4 rounded-2xl shadow-sm px-6 py-4 ${rejectionReasonText
               ? 'bg-white border border-red-200'
               : 'bg-white border border-yellow-200'
               }`}
           >
-            {restaurantStatus.rejectionReason ? (
+            {rejectionReasonText ? (
               <>
                 <div className="flex items-start gap-3 mb-3">
                   <div className="flex-shrink-0 rounded-full p-2 bg-red-100">
@@ -2094,16 +2089,16 @@ export default function OrdersMain() {
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
                       <p className="text-xs font-semibold text-red-800 mb-2">Reason for Rejection:</p>
                       <div className="text-xs text-red-700 space-y-1">
-                        {restaurantStatus.rejectionReason.split('\n').filter(line => line.trim()).length > 1 ? (
+                        {rejectionReasonText.split('\n').filter(line => line.trim()).length > 1 ? (
                           <ul className="space-y-1 list-disc list-inside">
-                            {restaurantStatus.rejectionReason.split('\n').map((point, index) => (
+                            {rejectionReasonText.split('\n').map((point, index) => (
                               point.trim() && (
                                 <li key={index}>{point.trim()}</li>
                               )
                             ))}
                           </ul>
                         ) : (
-                          <p className="text-red-700">{restaurantStatus.rejectionReason}</p>
+                          <p className="text-red-700">{rejectionReasonText}</p>
                         )}
                       </div>
                     </div>

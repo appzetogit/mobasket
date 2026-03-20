@@ -19,6 +19,43 @@ export default function GroceryStoreJoiningRequest() {
   const [storeDetails, setStoreDetails] = useState(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
 
+  const getRequestStatus = (request = {}) => {
+    return String(
+      request?.status ||
+      request?.requestStatus ||
+      request?.approvalStatus ||
+      request?.verificationStatus ||
+      "",
+    ).trim().toLowerCase()
+  }
+
+  const isRejectedRequest = (request = {}) => {
+    const status = getRequestStatus(request)
+    return status.includes("reject") || status.includes("declin")
+  }
+
+  const isPendingRequest = (request = {}) => !isRejectedRequest(request)
+
+  const getStoreIdFromRequest = (request = {}) => {
+    const candidates = [
+      request?.storeId?._id,
+      request?.storeId?.id,
+      request?.storeId,
+      request?.store?._id,
+      request?.store?.id,
+      request?.store?._id,
+      request?.groceryStoreId,
+      request?.restaurantId,
+      request?._id,
+      request?.id,
+    ]
+    for (const candidate of candidates) {
+      const value = String(candidate || "").trim()
+      if (value) return value
+    }
+    return ""
+  }
+
   useEffect(() => {
     fetchRequests()
   }, [activeTab])
@@ -35,36 +72,38 @@ export default function GroceryStoreJoiningRequest() {
       setLoading(true)
       setError(null)
 
-      const status = activeTab === "pending" ? "pending" : "rejected"
-      const response = await adminAPI.getGroceryStoreJoinRequests({
-        status,
+      const commonParams = {
         search: searchQuery || undefined,
         page: 1,
-        limit: 100
+        limit: 100,
+      }
+      const [pendingRes, rejectedRes] = await Promise.all([
+        adminAPI.getGroceryStoreJoinRequests({ ...commonParams, status: "pending" }),
+        adminAPI.getGroceryStoreJoinRequests({ ...commonParams, status: "rejected" }),
+      ])
+
+      const pendingFromApi = pendingRes?.data?.success ? (pendingRes?.data?.data?.requests || []) : []
+      const rejectedFromApi = rejectedRes?.data?.success ? (rejectedRes?.data?.data?.requests || []) : []
+
+      const mergedMap = new Map()
+      ;[...pendingFromApi, ...rejectedFromApi].forEach((request) => {
+        const requestId = String(request?._id || request?.id || request?.storeId?._id || request?.storeId || Math.random())
+        if (!mergedMap.has(requestId)) {
+          mergedMap.set(requestId, request)
+        }
       })
 
-      if (response.data && response.data.success && response.data.data) {
-        const requests = response.data.data.requests || []
-        if (activeTab === "pending") {
-          setPendingRequests(requests)
-        } else {
-          setRejectedRequests(requests)
-        }
-      } else {
-        if (activeTab === "pending") {
-          setPendingRequests([])
-        } else {
-          setRejectedRequests([])
-        }
-      }
+      const mergedRequests = Array.from(mergedMap.values())
+      const nextPending = mergedRequests.filter(isPendingRequest)
+      const nextRejected = mergedRequests.filter(isRejectedRequest)
+
+      setPendingRequests(nextPending)
+      setRejectedRequests(nextRejected)
     } catch (err) {
       console.error("Error fetching grocery store requests:", err)
       setError(err.message || "Failed to fetch grocery store requests")
-      if (activeTab === "pending") {
-        setPendingRequests([])
-      } else {
-        setRejectedRequests([])
-      }
+      setPendingRequests([])
+      setRejectedRequests([])
     } finally {
       setLoading(false)
     }
@@ -144,7 +183,7 @@ export default function GroceryStoreJoiningRequest() {
         return
       }
       
-      const storeId = request._id || request.id
+      const storeId = getStoreIdFromRequest(request)
       if (storeId && adminAPI.getGroceryStoreById) {
         const response = await adminAPI.getGroceryStoreById(storeId)
         if (response?.data?.success) {
@@ -466,7 +505,7 @@ export default function GroceryStoreJoiningRequest() {
   }, [activeStoreDetails, selectedRequest])
 
   return (
-    <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
+    <div className="p-4 lg:p-6 bg-slate-50 min-h-screen w-full max-w-full overflow-x-hidden">
       <div className="max-w-7xl mx-auto">
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
           <div className="flex items-center gap-3 mb-4">
@@ -558,10 +597,10 @@ export default function GroceryStoreJoiningRequest() {
                     </td>
                   </tr>
                 ) : (
-                  filteredRequests.map((request) => (
-                    <tr key={request.sl} className="hover:bg-slate-50 transition-colors">
+                  filteredRequests.map((request, index) => (
+                    <tr key={request._id || request.id || request.storeId || index} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-slate-700">{request.sl}</span>
+                        <span className="text-sm font-medium text-slate-700">{index + 1}</span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
@@ -586,11 +625,11 @@ export default function GroceryStoreJoiningRequest() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          request.status === "Pending"
+                          isPendingRequest(request)
                             ? "bg-green-100 text-green-700"
                             : "bg-red-100 text-red-700"
                         }`}>
-                          {request.status}
+                          {isPendingRequest(request) ? "Pending" : "Rejected"}
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
