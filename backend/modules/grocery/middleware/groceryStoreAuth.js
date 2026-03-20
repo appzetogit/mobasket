@@ -40,13 +40,14 @@ export const authenticate = async (req, res, next) => {
         reqPath.includes('onboarding');
       const isProfileRoute =
         requestPath.includes('/auth/me') ||
+        requestPath.includes('/auth/reverify') ||
         requestPath.includes('/auth/profile') ||
         requestPath.includes('/owner/me') ||
         requestPath.includes('/profile') ||
         reqPath === '/me' ||
-        reqPath === '/profile' ||
-        reqPath === '/owner/me' ||
-        (baseUrl.includes('/auth') && (reqPath === '/me' || reqPath === '/profile'));
+        reqPath === '/reverify' ||
+        (baseUrl.includes('/auth') &&
+          (reqPath === '/me' || reqPath === '/profile' || reqPath === '/reverify'));
       const isReadRequest = req.method === 'GET';
 
       if (!store.isActive && !isOnboardingRoute && !isProfileRoute && !isReadRequest) {
