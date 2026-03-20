@@ -10,6 +10,7 @@ import {
 } from '@/lib/browserNotifications';
 
 const DELIVERY_ORDER_SUPPRESSION_KEY = 'delivery_suppressed_order_ids';
+const DELIVERY_ONLINE_STATUS_KEY = 'app:isOnline';
 const ORDER_POLL_INTERVAL_MS = 8000;
 const ORDER_POLL_FORBIDDEN_BACKOFF_MS = 120000;
 const DELIVERY_AUDIO_CACHE_VERSION = `delivery-audio-${Date.now()}`;
@@ -386,6 +387,18 @@ export const useDeliveryNotifications = (options = {}) => {
     );
   };
 
+  const isRiderOnlineForOrders = useCallback(() => {
+    try {
+      return JSON.parse(localStorage.getItem(DELIVERY_ONLINE_STATUS_KEY) || 'false') === true;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const canReceiveOrderAlerts = useCallback(() => {
+    return enabled && isEligibleForOrders && isRiderOnlineForOrders();
+  }, [enabled, isEligibleForOrders, isRiderOnlineForOrders]);
+
   // Step 4: All effects (unconditional hook calls, conditional logic inside)
   // Track user interaction for autoplay policy
   useEffect(() => {
@@ -641,6 +654,9 @@ export const useDeliveryNotifications = (options = {}) => {
     });
 
     socketRef.current.on('new_order', (orderData) => {
+      if (!canReceiveOrderAlerts()) {
+        return;
+      }
       if (shouldIgnoreOrderNotification(orderData) || isOrderAlreadyInProgress(orderData)) {
         return;
       }
@@ -658,6 +674,9 @@ export const useDeliveryNotifications = (options = {}) => {
 
     // Listen for priority-based order notifications (new_order_available)
     socketRef.current.on('new_order_available', (orderData) => {
+      if (!canReceiveOrderAlerts()) {
+        return;
+      }
       if (isOrderAlreadyInProgress(orderData)) {
         return;
       }
@@ -688,11 +707,17 @@ export const useDeliveryNotifications = (options = {}) => {
     });
 
     socketRef.current.on('play_notification_sound', (data) => {
+      if (!canReceiveOrderAlerts()) {
+        return;
+      }
       playNotificationSound();
       triggerOrderBuzz();
     });
 
     socketRef.current.on('order_ready', (orderData) => {
+      if (!canReceiveOrderAlerts()) {
+        return;
+      }
       setOrderReady(orderData);
       playNotificationSound();
       if (enableBrowserNotificationRef.current && document.hidden) {
@@ -723,7 +748,7 @@ export const useDeliveryNotifications = (options = {}) => {
         socketRef.current = null;
       }
     };
-  }, [deliveryPartnerId, enabled, isEligibleForOrders, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, suppressOrderNotifications, triggerOrderBuzz]);
+  }, [canReceiveOrderAlerts, deliveryPartnerId, enabled, isEligibleForOrders, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, suppressOrderNotifications, triggerOrderBuzz]);
 
   useEffect(() => {
     // Keep polling even when the socket is connected so the rider still gets
@@ -736,6 +761,10 @@ export const useDeliveryNotifications = (options = {}) => {
     let cancelled = false;
 
     const syncAvailableOrders = async () => {
+      if (!isRiderOnlineForOrders()) {
+        return;
+      }
+
       if (Date.now() < ordersPollBlockedUntilRef.current) {
         return;
       }
@@ -797,7 +826,7 @@ export const useDeliveryNotifications = (options = {}) => {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [deliveryPartnerId, enabled, isEligibleForOrders, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, triggerOrderBuzz]);
+  }, [deliveryPartnerId, enabled, isEligibleForOrders, isRiderOnlineForOrders, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, triggerOrderBuzz]);
 
   // Helper functions
   const clearNewOrder = useCallback(() => {

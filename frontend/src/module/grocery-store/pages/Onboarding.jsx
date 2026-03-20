@@ -150,17 +150,17 @@ export default function GroceryStoreOnboarding() {
       const next = { ...prev }
       let changed = false
 
-      if (!normalizeEmailValue(prev.ownerEmail) && authenticatedEmail) {
+      if (authenticatedEmail && normalizeEmailValue(prev.ownerEmail) !== authenticatedEmail) {
         next.ownerEmail = authenticatedEmail
         changed = true
       }
 
-      if (!normalizePhoneDigits(prev.ownerPhone) && authenticatedPhone) {
+      if (authenticatedPhone && normalizePhoneDigits(prev.ownerPhone) !== authenticatedPhone) {
         next.ownerPhone = authenticatedPhone
         changed = true
       }
 
-      if (!normalizePhoneDigits(prev.primaryContactNumber) && authenticatedPhone) {
+      if (authenticatedPhone && normalizePhoneDigits(prev.primaryContactNumber) !== authenticatedPhone) {
         next.primaryContactNumber = authenticatedPhone
         changed = true
       }
@@ -1104,6 +1104,27 @@ export default function GroceryStoreOnboarding() {
       const response = await groceryStoreAPI.updateOnboarding(payload)
       if (response?.data) {
         window.dispatchEvent(new Event("groceryStoreAuthChanged"))
+      }
+
+      // If this account was previously rejected, move it back to re-verification
+      // immediately after submitting corrected details.
+      try {
+        await groceryStoreAPI.reverify()
+      } catch {
+        // Reverify can fail for accounts that are already pending; ignore safely.
+      }
+
+      try {
+        const latestProfileRes = await groceryStoreAPI.getCurrentStore()
+        const latestStore =
+          latestProfileRes?.data?.data?.store ||
+          latestProfileRes?.data?.store ||
+          null
+        if (latestStore) {
+          localStorage.setItem("grocery-store_user", JSON.stringify(latestStore))
+        }
+      } catch {
+        // Ignore profile refresh failures here.
       }
 
       toast.success("Onboarding completed successfully!")

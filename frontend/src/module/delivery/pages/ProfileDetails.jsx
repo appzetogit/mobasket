@@ -33,6 +33,7 @@ export default function ProfileDetails() {
   const [emailInput, setEmailInput] = useState("")
   const [isUpdatingEmail, setIsUpdatingEmail] = useState(false)
   const fileInputRef = useRef(null)
+  const cameraInputRef = useRef(null)
   const documentInputRef = useRef(null)
 
   // Note: All alternate phone related code has been removed
@@ -166,6 +167,9 @@ export default function ProfileDetails() {
       if (fileInputRef.current) {
         fileInputRef.current.value = ""
       }
+      if (cameraInputRef.current) {
+        cameraInputRef.current.value = ""
+      }
     }
   }
 
@@ -210,7 +214,12 @@ export default function ProfileDetails() {
       }
     }
 
-    // Web / fallback: open file picker
+    // Web / fallback: open source-specific file picker
+    if (source === "camera" && cameraInputRef.current) {
+      cameraInputRef.current.click()
+      return
+    }
+
     if (fileInputRef.current) {
       fileInputRef.current.click()
     }
@@ -297,9 +306,17 @@ export default function ProfileDetails() {
             onClick={() => handleProfileImageUpdate("camera")}
             disabled={isUploadingProfilePhoto || isDeletingProfilePhoto}
             className="absolute bottom-0 right-0 bg-[#00B761] text-white rounded-full p-1.5 shadow-md hover:bg-[#00A055] transition-colors disabled:opacity-50"
-            title="Change photo"
+            title="Open camera"
           >
             <Camera className="w-3.5 h-3.5" />
+          </button>
+          <button
+            onClick={() => handleProfileImageUpdate("gallery")}
+            disabled={isUploadingProfilePhoto || isDeletingProfilePhoto}
+            className="absolute bottom-0 right-9 bg-gray-700 text-white rounded-full p-1.5 shadow-md hover:bg-gray-800 transition-colors disabled:opacity-50"
+            title="Choose from gallery"
+          >
+            <Upload className="w-3.5 h-3.5" />
           </button>
 
           {/* Delete button - only when image exists */}
@@ -352,6 +369,18 @@ export default function ProfileDetails() {
           ref={fileInputRef}
           type="file"
           accept="image/png,image/jpeg,image/jpg,image/webp"
+          className="hidden"
+          onChange={async (e) => {
+            const file = e.target.files?.[0]
+            if (!file) return
+            await handleProfileImageFile(file)
+          }}
+        />
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/jpg,image/webp"
+          capture="environment"
           className="hidden"
           onChange={async (e) => {
             const file = e.target.files?.[0]
