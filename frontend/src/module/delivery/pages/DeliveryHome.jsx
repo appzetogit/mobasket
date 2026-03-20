@@ -791,10 +791,10 @@ function smoothLocation(locationHistory) {
 
 
 
-  // Use last 5 points for moving average
+  // Use last 3 points for moving average (lower lag on turns)
 
 
-  const pointsToUse = locationHistory.slice(-5)
+  const pointsToUse = locationHistory.slice(-3)
 
 
 
@@ -821,6 +821,38 @@ function smoothLocation(locationHistory) {
 
 
 
+
+function resolveDisplayLocation(rawLocation, smoothedLocation, accuracyMeters = 999) {
+  if (!Array.isArray(rawLocation) || rawLocation.length !== 2) return smoothedLocation
+  if (!Array.isArray(smoothedLocation) || smoothedLocation.length !== 2) return rawLocation
+
+  const rawLat = Number(rawLocation[0])
+  const rawLng = Number(rawLocation[1])
+  const smoothLat = Number(smoothedLocation[0])
+  const smoothLng = Number(smoothedLocation[1])
+  const accuracy = Number(accuracyMeters)
+
+  if (![rawLat, rawLng, smoothLat, smoothLng].every(Number.isFinite)) {
+    return smoothedLocation
+  }
+
+  // Strong GPS: keep marker on raw point for true live feel.
+  if (Number.isFinite(accuracy) && accuracy <= 20) {
+    return [rawLat, rawLng]
+  }
+
+  // If smoothing drifts away, bias towards raw to avoid visible offset.
+  const driftMeters = haversineDistance(rawLat, rawLng, smoothLat, smoothLng)
+  if (driftMeters > 20) {
+    const rawWeight = Number.isFinite(accuracy) && accuracy <= 50 ? 0.75 : 0.6
+    return [
+      smoothLat * (1 - rawWeight) + rawLat * rawWeight,
+      smoothLng * (1 - rawWeight) + rawLng * rawWeight,
+    ]
+  }
+
+  return smoothedLocation
+}
 function isPointInsideZoneBoundary(lat, lng, zoneCoordinates = []) {
 
 
@@ -1883,6 +1915,7 @@ export default function DeliveryHome() {
     'pending',
     'submitted',
     'verification_pending',
+    'under_verification',
     'in_review',
     'under_review',
     'rejected',
@@ -7133,10 +7166,10 @@ export default function DeliveryHome() {
 
 
 
-        // Keep only last 5 points for moving average
+        // Keep only last 3 points for moving average
 
 
-        if (locationHistoryRef.current.length > 5) {
+        if (locationHistoryRef.current.length > 3) {
 
 
           locationHistoryRef.current.shift()
@@ -7611,13 +7644,12 @@ export default function DeliveryHome() {
 
 
 
-        // Update state with smoothed location FIRST
+        const displayLocation = resolveDisplayLocation(rawLocation, smoothedLocation, accuracy)
+        const [displayLat, displayLng] = displayLocation
 
-
-        setRiderLocation(smoothedLocation)
-
-
-        lastLocationRef.current = smoothedLocation
+        // Update state with display location (closer to raw/live GPS)
+        setRiderLocation(displayLocation)
+        lastLocationRef.current = displayLocation
 
 
 
@@ -7635,7 +7667,7 @@ export default function DeliveryHome() {
             // Marker exists - animate smoothly to new position
 
 
-            animateMarkerSmoothly(bikeMarkerRef.current, newSmoothedLocation, 1500, markerAnimationRef)
+            animateMarkerSmoothly(bikeMarkerRef.current, { lat: displayLat, lng: displayLng }, 700, markerAnimationRef)
 
 
           } else {
@@ -7644,10 +7676,10 @@ export default function DeliveryHome() {
             // Marker doesn't exist yet, create it immediately with correct location
 
 
-            console.log('[LOC] Creating bike marker with smoothed location:', { lat: smoothedLat, lng: smoothedLng })
+            console.log('[LOC] Creating bike marker with display location:', { lat: displayLat, lng: displayLng })
 
 
-            createOrUpdateBikeMarker(smoothedLat, smoothedLng, heading, !isUserPanningRef.current)
+            createOrUpdateBikeMarker(displayLat, displayLng, heading, !isUserPanningRef.current)
 
 
           }
@@ -36062,6 +36094,8 @@ export default function DeliveryHome() {
 
 
 }
+
+
 
 
 

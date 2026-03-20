@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useCart } from "../../user/context/CartContext";
-import api, { adminAPI, orderAPI, restaurantAPI } from "@/lib/api";
+import { adminAPI, orderAPI, restaurantAPI } from "@/lib/api";
 import { useProfile } from "../../user/context/ProfileContext";
 import { useZone } from "../../user/hooks/useZone";
 import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
@@ -401,23 +401,18 @@ const GroceryCartPage = () => {
 
       try {
         if (isMounted) setCheckingStoreAvailability(true);
-        const [restaurantResponse, outletTimingsResponse] = await Promise.all([
-          restaurantAPI.getRestaurantById(resolvedRestaurant.restaurantId),
-          api.get(`/restaurant/${String(resolvedRestaurant.restaurantId)}/outlet-timings`),
-        ]);
+        const restaurantResponse = await restaurantAPI.getRestaurantById(
+          resolvedRestaurant.restaurantId,
+        );
         const restaurant =
           restaurantResponse?.data?.data?.restaurant ||
           restaurantResponse?.data?.restaurant ||
           restaurantResponse?.data?.data ||
           null;
-        const outletTimings =
-          outletTimingsResponse?.data?.data?.outletTimings?.timings ||
-          outletTimingsResponse?.data?.outletTimings?.timings ||
-          [];
 
         const availability = evaluateStoreAvailability({
           store: restaurant,
-          outletTimings,
+          outletTimings: [],
           label: "Store",
         });
 

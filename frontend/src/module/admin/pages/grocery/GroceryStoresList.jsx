@@ -95,12 +95,16 @@ export default function GroceryStoresList() {
       const response = await adminAPI.getGroceryStores({
         page: 1,
         limit: 1000,
+        status: "active",
       })
       
       if (response.data && response.data.success && response.data.data) {
         const storesData = response.data.data.stores || []
+        const approvedStores = storesData.filter(
+          (store) => store?.isActive === true || String(store?.status || "").toLowerCase() === "active",
+        )
         
-      const mappedStores = storesData.map((store, index) => ({
+        const mappedStores = approvedStores.map((store, index) => ({
           id: store._id || store.id || index + 1,
           _id: store._id || store.id || "",
           name: store.name || "N/A",

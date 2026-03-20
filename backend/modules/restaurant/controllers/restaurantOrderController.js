@@ -1032,6 +1032,8 @@ export const markOrderReady = asyncHandler(async (req, res) => {
       console.error('Error sending user ready notification:', userNotifError);
     }
 
+    const isScheduledOrder = Boolean(updatedOrderDoc?.scheduledDelivery?.isScheduled);
+
     // Notify delivery boy that order is ready for pickup
     if (populatedOrder.deliveryPartnerId) {
       try {
@@ -1044,17 +1046,65 @@ export const markOrderReady = asyncHandler(async (req, res) => {
       }
     } else {
       try {
-        const { notifyDeliveryPartnersForOrder } = await import('./resendDeliveryNotification.js');
-        const notifyResult = await notifyDeliveryPartnersForOrder({
-          order: updatedOrderDoc,
-          restaurant,
-          assignedBy: 'ready_auto_notify',
-        });
+        if (isScheduledOrder) {
+          const storeIdentifier = updatedOrderDoc?.restaurantId || restaurantId;
+          const storeDoc = await resolveStoreForAssignment(storeIdentifier);
 
-        if (!notifyResult.success) {
-          console.warn(`Ready auto-notify skipped for order ${updatedOrderDoc.orderId}: ${notifyResult.message}`);
+          if (!storeDoc || !hasValidStoreCoordinates(storeDoc)) {
+            console.warn(`Ready scheduled auto-notify skipped for order ${updatedOrderDoc.orderId}: store coordinates not found`);
+          } else {
+            const [restaurantLng, restaurantLat] = storeDoc.location.coordinates;
+            const assignmentInfo = updatedOrderDoc.assignmentInfo || {};
+            const rejectedIds = Array.isArray(assignmentInfo.rejectedDeliveryPartnerIds)
+              ? assignmentInfo.rejectedDeliveryPartnerIds
+                  .map((value) => String(value || '').trim())
+                  .filter(Boolean)
+              : [];
+            const requiredZoneId = assignmentInfo?.zoneId ? String(assignmentInfo.zoneId) : null;
+            const paymentMethod = String(updatedOrderDoc?.payment?.method || '').toLowerCase();
+            const incomingCodAmount = ['cash', 'cod', 'cash_on_delivery'].includes(paymentMethod)
+              ? Math.max(0, Number(updatedOrderDoc?.pricing?.total) || 0)
+              : 0;
+
+            const nearestDeliveryBoy = await findNearestDeliveryBoy(
+              restaurantLat,
+              restaurantLng,
+              storeIdentifier,
+              50,
+              rejectedIds,
+              { requiredZoneId, incomingCodAmount }
+            );
+
+            if (!nearestDeliveryBoy?.deliveryPartnerId) {
+              console.warn(`Ready scheduled auto-notify skipped for order ${updatedOrderDoc.orderId}: no eligible delivery partner found`);
+            } else {
+              await Order.findByIdAndUpdate(updatedOrderDoc._id, {
+                $set: {
+                  'assignmentInfo.priorityDeliveryPartnerIds': [nearestDeliveryBoy.deliveryPartnerId],
+                  'assignmentInfo.expandedDeliveryPartnerIds': [],
+                  'assignmentInfo.notificationPhase': 'priority',
+                  'assignmentInfo.priorityNotifiedAt': new Date(),
+                  'assignmentInfo.assignedBy': 'scheduled_ready_closest_notify',
+                }
+              });
+
+              await notifyDeliveryBoyNewOrder(populatedOrder, nearestDeliveryBoy.deliveryPartnerId);
+              console.log(`Ready scheduled auto-notify sent to nearest delivery partner ${nearestDeliveryBoy.deliveryPartnerId} for order ${updatedOrderDoc.orderId}`);
+            }
+          }
         } else {
-          console.log(`Ready auto-notify sent to ${notifyResult.notifiedCount} delivery partners for order ${updatedOrderDoc.orderId}`);
+          const { notifyDeliveryPartnersForOrder } = await import('./resendDeliveryNotification.js');
+          const notifyResult = await notifyDeliveryPartnersForOrder({
+            order: updatedOrderDoc,
+            restaurant,
+            assignedBy: 'ready_auto_notify',
+          });
+
+          if (!notifyResult.success) {
+            console.warn(`Ready auto-notify skipped for order ${updatedOrderDoc.orderId}: ${notifyResult.message}`);
+          } else {
+            console.log(`Ready auto-notify sent to ${notifyResult.notifiedCount} delivery partners for order ${updatedOrderDoc.orderId}`);
+          }
         }
       } catch (readyNotifyError) {
         console.error(`Failed ready auto-notify for order ${updatedOrderDoc.orderId}:`, readyNotifyError);

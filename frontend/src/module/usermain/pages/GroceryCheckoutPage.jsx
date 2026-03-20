@@ -22,7 +22,7 @@ import { useCart } from "../../user/context/CartContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { useProfile } from "../../user/context/ProfileContext";
 import { useZone } from "../../user/hooks/useZone";
-import api, { adminAPI, orderAPI, restaurantAPI, userAPI } from "@/lib/api";
+import { adminAPI, orderAPI, restaurantAPI, userAPI } from "@/lib/api";
 import { initRazorpayPayment } from "@/lib/utils/razorpay";
 import { toast } from "sonner";
 import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
@@ -754,22 +754,9 @@ export default function GroceryCheckoutPage() {
           store?.platform || resolvedRestaurant?.platform || "mogrocery",
         ).toLowerCase();
 
-        // Grocery stores may not have restaurant outlet timings endpoint.
-        // Fall back to store-level timing fields when timings fetch is unavailable.
-        let outletTimings = [];
-        if (storePlatform !== "mogrocery") {
-          try {
-            const outletTimingsResponse = await api.get(
-              `/restaurant/${String(resolvedRestaurant.restaurantId)}/outlet-timings`,
-            );
-            outletTimings =
-              outletTimingsResponse?.data?.data?.outletTimings?.timings ||
-              outletTimingsResponse?.data?.outletTimings?.timings ||
-              [];
-          } catch {
-            outletTimings = [];
-          }
-        }
+        // Keep checkout availability independent from restaurant outlet-timings endpoint.
+        // Use store-level timing fields only.
+        const outletTimings = [];
 
         setStoreAvailability(
           evaluateStoreAvailability({

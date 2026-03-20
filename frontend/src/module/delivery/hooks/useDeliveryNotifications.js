@@ -12,6 +12,77 @@ import {
 const DELIVERY_ORDER_SUPPRESSION_KEY = 'delivery_suppressed_order_ids';
 const ORDER_POLL_INTERVAL_MS = 8000;
 const ORDER_POLL_FORBIDDEN_BACKOFF_MS = 120000;
+const DELIVERY_AUDIO_CACHE_VERSION = `delivery-audio-${Date.now()}`;
+
+const withAudioCacheVersion = (url) => {
+  if (!url) return url;
+  // In dev, bypass flaky cached mp3 entries (ERR_CACHE_READ_FAILURE + 304).
+  if (import.meta.env.DEV) {
+    const separator = url.includes('?') ? '&' : '?';
+    return `${url}${separator}v=${DELIVERY_AUDIO_CACHE_VERSION}`;
+  }
+  return url;
+};
+
+const appendQueryParam = (url, key, value) => {
+  if (!url) return url;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}${key}=${value}`;
+};
+
+const PENDING_DELIVERY_STATUSES = new Set([
+  'pending',
+  'rejected',
+  'declined',
+  'blocked',
+  'submitted',
+  'verification_pending',
+  'under_verification',
+  'in_review',
+  'under_review',
+  'onboarding',
+  'suspended',
+  'inactive',
+]);
+
+const isDeliveryPartnerEligibleForOrders = (deliveryPartner = {}) => {
+  const statusCandidates = [
+    deliveryPartner?.status,
+    deliveryPartner?.verificationStatus,
+    deliveryPartner?.approvalStatus,
+    deliveryPartner?.kycStatus,
+    deliveryPartner?.accountStatus,
+    deliveryPartner?.documentVerificationStatus,
+  ]
+    .map((value) => String(value || '').trim().toLowerCase())
+    .filter(Boolean);
+
+  if (statusCandidates.some((status) => PENDING_DELIVERY_STATUSES.has(status))) {
+    return false;
+  }
+
+  const explicitFalseFlags = [
+    deliveryPartner?.isVerified,
+    deliveryPartner?.isApproved,
+    deliveryPartner?.isKycVerified,
+    deliveryPartner?.isDocumentVerified,
+  ];
+  if (explicitFalseFlags.some((flag) => flag === false)) {
+    return false;
+  }
+
+  if (deliveryPartner?.isActive === false) {
+    return false;
+  }
+
+  if (deliveryPartner?.isActive === true) {
+    return true;
+  }
+
+  // Fallback for payloads that don't include isActive.
+  if (statusCandidates.length === 0) return true;
+  return statusCandidates.some((status) => status === 'active' || status === 'approved');
+};
 
 const readSuppressedOrderIds = () => {
   try {
@@ -111,8 +182,36 @@ export const useDeliveryNotifications = (options = {}) => {
   const [orderReady, setOrderReady] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [deliveryPartnerId, setDeliveryPartnerId] = useState(null);
+  const [isEligibleForOrders, setIsEligibleForOrders] = useState(true);
   const enableSoundRef = useRef(enableSound);
   const enableBrowserNotificationRef = useRef(enableBrowserNotification);
+  const audioErrorRetriesRef = useRef(0);
+
+  const getSelectedSoundUrl = useCallback(() => {
+    const selectedSound = localStorage.getItem('delivery_alert_sound') || 'zomato_tone';
+    const baseFile = selectedSound === 'original' ? originalSound : alertSound;
+    return withAudioCacheVersion(baseFile);
+  }, []);
+
+  const attachAudioErrorRecovery = useCallback((audioEl) => {
+    if (!audioEl || audioEl.__deliveryRecoveryAttached) return;
+    audioEl.__deliveryRecoveryAttached = true;
+    audioEl.addEventListener('error', () => {
+      if (audioErrorRetriesRef.current >= 2) return;
+      audioErrorRetriesRef.current += 1;
+      const freshUrl = appendQueryParam(
+        getSelectedSoundUrl(),
+        'retry',
+        audioErrorRetriesRef.current
+      );
+      try {
+        audioEl.src = freshUrl;
+        audioEl.load();
+      } catch {
+        // Ignore hard audio failures.
+      }
+    });
+  }, [getSelectedSoundUrl]);
 
   useEffect(() => {
     enableSoundRef.current = enableSound;
@@ -141,9 +240,7 @@ export const useDeliveryNotifications = (options = {}) => {
   
   const playNotificationSound = useCallback(() => {
     try {
-      // Get current selected sound preference from localStorage
-      const selectedSound = localStorage.getItem('delivery_alert_sound') || 'zomato_tone';
-      const soundFile = selectedSound === 'original' ? originalSound : alertSound;
+      const soundFile = getSelectedSoundUrl();
       
       // Update audio source if preference changed or initialize if not exists
       if (audioRef.current) {
@@ -159,6 +256,7 @@ export const useDeliveryNotifications = (options = {}) => {
         // Initialize audio if not exists
         audioRef.current = new Audio(soundFile);
         audioRef.current.volume = 0.7;
+        attachAudioErrorRecovery(audioRef.current);
       }
       
       if (audioRef.current) {
@@ -173,6 +271,19 @@ export const useDeliveryNotifications = (options = {}) => {
         
         audioRef.current.currentTime = 0;
         audioRef.current.play().catch(error => {
+          const message = String(error?.message || '');
+          // Recover from broken cached media entries in dev.
+          if (message.includes('ERR_CACHE_READ_FAILURE')) {
+            try {
+              const retryUrl = appendQueryParam(getSelectedSoundUrl(), 'play_retry', Date.now());
+              audioRef.current.src = retryUrl;
+              audioRef.current.load();
+              audioRef.current.play().catch(() => {});
+            } catch {
+              // Ignore fallback failures.
+            }
+            return;
+          }
           // Don't log autoplay policy errors as they're expected
           if (!error.message?.includes('user didn\'t interact') && !error.name?.includes('NotAllowedError')) {
             console.warn('Error playing notification sound:', error);
@@ -185,7 +296,7 @@ export const useDeliveryNotifications = (options = {}) => {
         console.warn('Error playing sound:', error);
       }
     }
-  }, []);
+  }, [attachAudioErrorRecovery, getSelectedSoundUrl]);
 
   const triggerOrderBuzz = useCallback(() => {
     try {
@@ -306,13 +417,12 @@ export const useDeliveryNotifications = (options = {}) => {
       return undefined;
     }
 
-    // Get selected alert sound preference from localStorage
-    const selectedSound = localStorage.getItem('delivery_alert_sound') || 'zomato_tone';
-    const soundFile = selectedSound === 'original' ? originalSound : alertSound;
+    const soundFile = getSelectedSoundUrl();
     
     if (!audioRef.current) {
       audioRef.current = new Audio(soundFile);
       audioRef.current.volume = 0.7;
+      attachAudioErrorRecovery(audioRef.current);
     } else {
       // Update audio source if preference changed
       const currentSrc = audioRef.current.src;
@@ -329,8 +439,9 @@ export const useDeliveryNotifications = (options = {}) => {
         audioRef.current.pause();
         audioRef.current = null;
       }
+      audioErrorRetriesRef.current = 0;
     };
-  }, [enabled]); // Note: This runs once on mount. To update dynamically, we'd need to listen to storage events
+  }, [attachAudioErrorRecovery, enabled, getSelectedSoundUrl]); // Note: This runs once on mount. To update dynamically, we'd need to listen to storage events
 
   // Fetch delivery partner ID
   useEffect(() => {
@@ -345,6 +456,7 @@ export const useDeliveryNotifications = (options = {}) => {
 
     if (!accessToken && !refreshToken) {
       setDeliveryPartnerId(null);
+      setIsEligibleForOrders(false);
       return;
     }
 
@@ -354,16 +466,32 @@ export const useDeliveryNotifications = (options = {}) => {
         if (response.data?.success && response.data.data) {
           const deliveryPartner = response.data.data.user || response.data.data.deliveryPartner;
           if (deliveryPartner) {
+            const eligible = isDeliveryPartnerEligibleForOrders(deliveryPartner);
+            setIsEligibleForOrders(eligible);
+
+            if (!eligible) {
+              // Hard-stop order intake for under-verification/blocked riders.
+              setDeliveryPartnerId(null);
+              setNewOrder(null);
+              setOrderReady(null);
+              return;
+            }
+
             const id = deliveryPartner.id?.toString() || 
                       deliveryPartner._id?.toString() || 
                       deliveryPartner.deliveryId;
             if (id) {
               setDeliveryPartnerId(id);
             } else {
+              setDeliveryPartnerId(null);
             }
           } else {
+            setIsEligibleForOrders(false);
+            setDeliveryPartnerId(null);
           }
         } else {
+          setIsEligibleForOrders(false);
+          setDeliveryPartnerId(null);
         }
       } catch (error) {
         const status = Number(error?.response?.status || 0);
@@ -372,6 +500,7 @@ export const useDeliveryNotifications = (options = {}) => {
         }
         if (status === 401) {
           setDeliveryPartnerId(null);
+          setIsEligibleForOrders(false);
         }
       }
     };
@@ -381,6 +510,17 @@ export const useDeliveryNotifications = (options = {}) => {
   // Socket connection effect
   useEffect(() => {
     if (!enabled) {
+      return;
+    }
+
+    if (!isEligibleForOrders) {
+      setIsConnected(false);
+      setNewOrder(null);
+      setOrderReady(null);
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
       return;
     }
 
@@ -583,13 +723,13 @@ export const useDeliveryNotifications = (options = {}) => {
         socketRef.current = null;
       }
     };
-  }, [deliveryPartnerId, enabled, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, suppressOrderNotifications, triggerOrderBuzz]);
+  }, [deliveryPartnerId, enabled, isEligibleForOrders, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, suppressOrderNotifications, triggerOrderBuzz]);
 
   useEffect(() => {
     // Keep polling even when the socket is connected so the rider still gets
     // the slider popup if a targeted socket event is missed after a
     // store/restaurant accepts the order.
-    if (!enabled || !deliveryPartnerId) {
+    if (!enabled || !deliveryPartnerId || !isEligibleForOrders) {
       return undefined;
     }
 
@@ -657,7 +797,7 @@ export const useDeliveryNotifications = (options = {}) => {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [deliveryPartnerId, enabled, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, triggerOrderBuzz]);
+  }, [deliveryPartnerId, enabled, isEligibleForOrders, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, triggerOrderBuzz]);
 
   // Helper functions
   const clearNewOrder = useCallback(() => {

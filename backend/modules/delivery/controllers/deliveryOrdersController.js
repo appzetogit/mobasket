@@ -361,6 +361,109 @@ const extractRejectedDeliveryIds = (assignmentInfo = {}) => {
   return rejectedIds.map(normalizeDeliveryNotificationId).filter(Boolean);
 };
 
+const resolveStoreCoordinatesForOrder = async (order) => {
+  const storeId = String(order?.restaurantId || '').trim();
+  if (!storeId) return null;
+
+  const projection = 'location restaurantId';
+  let store = null;
+
+  if (mongoose.Types.ObjectId.isValid(storeId)) {
+    store = await Restaurant.findById(storeId).select(projection).lean();
+    if (!store) {
+      store = await GroceryStore.findById(storeId).select(projection).lean();
+    }
+  }
+
+  if (!store) {
+    store = await Restaurant.findOne({ restaurantId: storeId }).select(projection).lean();
+  }
+  if (!store) {
+    store = await GroceryStore.findOne({ restaurantId: storeId }).select(projection).lean();
+  }
+
+  const coordinates = store?.location?.coordinates;
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return null;
+
+  const [lng, lat] = coordinates;
+  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) return null;
+
+  return { lat: Number(lat), lng: Number(lng), storeId };
+};
+
+const notifyNextClosestForScheduledReadyOrder = async (orderId, additionalExcludedIds = []) => {
+  const latestOrder = await Order.findById(orderId).lean();
+  if (!latestOrder) return { success: false, reason: 'order_not_found' };
+  if (latestOrder.deliveryPartnerId) return { success: false, reason: 'already_assigned' };
+  if (String(latestOrder.status || '').toLowerCase() !== 'ready') return { success: false, reason: 'not_ready' };
+  if (!latestOrder?.scheduledDelivery?.isScheduled) return { success: false, reason: 'not_scheduled' };
+
+  const coords = await resolveStoreCoordinatesForOrder(latestOrder);
+  if (!coords) return { success: false, reason: 'missing_store_coordinates' };
+
+  const assignmentInfo = latestOrder.assignmentInfo || {};
+  const rejectedIds = extractRejectedDeliveryIds(assignmentInfo);
+  const excluded = new Set([
+    ...rejectedIds,
+    ...additionalExcludedIds.map((value) => String(value || '').trim()).filter(Boolean),
+  ]);
+  const requiredZoneId = assignmentInfo?.zoneId ? String(assignmentInfo.zoneId) : null;
+  const paymentMethod = String(latestOrder?.payment?.method || '').toLowerCase();
+  const incomingCodAmount = ['cash', 'cod', 'cash_on_delivery'].includes(paymentMethod)
+    ? Math.max(0, Number(latestOrder?.pricing?.total) || 0)
+    : 0;
+
+  const { findNearestDeliveryBoy } = await import('../../order/services/deliveryAssignmentService.js');
+  const { notifyDeliveryBoyNewOrder } = await import('../../order/services/deliveryNotificationService.js');
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const nearest = await findNearestDeliveryBoy(
+      coords.lat,
+      coords.lng,
+      coords.storeId,
+      50,
+      Array.from(excluded),
+      { requiredZoneId, incomingCodAmount }
+    );
+
+    if (!nearest?.deliveryPartnerId) {
+      return { success: false, reason: 'no_more_delivery_partners' };
+    }
+
+    const candidateId = String(nearest.deliveryPartnerId);
+    const notifyOrder = await Order.findById(orderId)
+      .populate('userId', 'name phone')
+      .populate('restaurantId', 'name location address phone ownerPhone')
+      .lean();
+
+    if (!notifyOrder) {
+      return { success: false, reason: 'order_not_found_for_notify' };
+    }
+
+    await Order.findByIdAndUpdate(orderId, {
+      $set: {
+        'assignmentInfo.priorityDeliveryPartnerIds': [candidateId],
+        'assignmentInfo.expandedDeliveryPartnerIds': [],
+        'assignmentInfo.notificationPhase': 'priority',
+        'assignmentInfo.priorityNotifiedAt': new Date(),
+        'assignmentInfo.assignedBy': 'scheduled_ready_next_closest',
+      }
+    });
+
+    const notifyResult = await notifyDeliveryBoyNewOrder(notifyOrder, candidateId);
+    if (notifyResult?.success !== false) {
+      return { success: true, deliveryPartnerId: candidateId };
+    }
+
+    excluded.add(candidateId);
+    await Order.findByIdAndUpdate(orderId, {
+      $addToSet: { 'assignmentInfo.rejectedDeliveryPartnerIds': candidateId }
+    });
+  }
+
+  return { success: false, reason: 'max_attempts_reached' };
+};
+
 const getCurrentDeliveryZoneIds = async (deliveryId) => {
   const deliveryPartner = await Delivery.findById(deliveryId)
     .select('availability.currentLocation availability.zones')
@@ -1420,6 +1523,15 @@ export const rejectOrder = asyncHandler(async (req, res) => {
         },
       }
     );
+
+    try {
+      const rerouteResult = await notifyNextClosestForScheduledReadyOrder(order._id, [deliveryIdString]);
+      if (rerouteResult.success) {
+        logger.info(`Scheduled ready order ${order.orderId} rerouted to next closest delivery partner ${rerouteResult.deliveryPartnerId}`);
+      }
+    } catch (rerouteError) {
+      logger.warn(`Failed to reroute scheduled ready order ${order.orderId}: ${rerouteError.message}`);
+    }
 
     try {
       const serverModule = await import('../../../server.js');

@@ -1,10 +1,11 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useDeliveryNotifications } from "../hooks/useDeliveryNotifications";
 
 export default function DeliveryOrderSoundListener() {
   const location = useLocation();
   const navigate = useNavigate();
+  const lastHandledEventKeyRef = useRef(null);
 
   const shouldEnable = useMemo(() => {
     const pathname = String(location.pathname || "");
@@ -29,16 +30,56 @@ export default function DeliveryOrderSoundListener() {
     enableBrowserNotification: true,
   });
 
+  const currentEventKey = useMemo(() => {
+    if (newOrder) {
+      const id =
+        newOrder?.orderMongoId ||
+        newOrder?.mongoId ||
+        newOrder?._id ||
+        newOrder?.orderId;
+      return id ? `new:${String(id)}` : "new:unknown";
+    }
+
+    if (orderReady) {
+      const id =
+        orderReady?.orderMongoId ||
+        orderReady?.mongoId ||
+        orderReady?._id ||
+        orderReady?.orderId;
+      return id ? `ready:${String(id)}` : "ready:unknown";
+    }
+
+    return null;
+  }, [newOrder, orderReady]);
+
   useEffect(() => {
-    const isOnDeliveryHome = location.pathname === "/delivery";
-    if (isOnDeliveryHome) {
+    if (!currentEventKey) {
       return;
     }
 
-    if (newOrder || orderReady) {
+    // Prime on first seen event to avoid redirecting because of stale state.
+    if (lastHandledEventKeyRef.current === null) {
+      lastHandledEventKeyRef.current = currentEventKey;
+      return;
+    }
+
+    // Only redirect for fresh order events.
+    if (lastHandledEventKeyRef.current === currentEventKey) {
+      return;
+    }
+
+    lastHandledEventKeyRef.current = currentEventKey;
+
+    if (location.pathname !== "/delivery") {
       navigate("/delivery");
     }
-  }, [location.pathname, navigate, newOrder, orderReady]);
+  }, [currentEventKey, location.pathname, navigate]);
+
+  useEffect(() => {
+    if (!shouldEnable) {
+      lastHandledEventKeyRef.current = null;
+    }
+  }, [shouldEnable]);
 
   return null;
 }

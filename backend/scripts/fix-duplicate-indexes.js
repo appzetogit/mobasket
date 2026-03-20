@@ -30,7 +30,7 @@ async function fixDuplicateIndexes() {
     const db = mongoose.connection.db;
 
     // Collections to check
-    const collections = ['users', 'restaurants', 'restaurantcategories'];
+    const collections = ['users', 'restaurants', 'restaurantcategories', 'groceryproducts'];
 
     for (const collectionName of collections) {
       console.log(`\n📋 Checking ${collectionName}...`);
@@ -86,10 +86,29 @@ async function fixDuplicateIndexes() {
         const problematicIndexes = {
           'users': ['email_1', 'phone_1', 'googleId_1'],
           'restaurants': ['email_1', 'phone_1', 'googleId_1'],
-          'restaurantcategories': ['name_1']
+          'restaurantcategories': ['name_1'],
+          // Legacy global unique slug index conflicts with scoped unique index { storeId, slug }.
+          'groceryproducts': ['slug_1'],
         };
         
         if (problematicIndexes[collectionName]) {
+          if (collectionName === 'groceryproducts') {
+            const slugIndex = indexes.find((idx) => idx.name === 'slug_1');
+            const scopedSlugIndex = indexes.find((idx) => idx.name === 'storeId_1_slug_1');
+            if (slugIndex?.unique && scopedSlugIndex?.unique) {
+              try {
+                await collection.dropIndex('slug_1');
+                console.log('   ✅ Dropped legacy index: slug_1 (global unique slug)');
+              } catch (err) {
+                if (err.code === 27) {
+                  console.log('   ℹ️  Legacy index slug_1 already removed');
+                } else {
+                  console.log(`   ⚠️  Error dropping slug_1: ${err.message}`);
+                }
+              }
+            }
+          }
+
           for (const indexName of problematicIndexes[collectionName]) {
             try {
               const index = indexes.find(idx => idx.name === indexName);

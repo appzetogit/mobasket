@@ -229,28 +229,41 @@ export const updateLocation = asyncHandler(async (req, res) => {
               timestamp: Date.now()
             };
             aliases.forEach((alias) => {
-              io.to(`order:${alias}`).emit(`location-receive-${alias}`, {
+              const payload = {
                 ...locationData,
                 orderId: alias
-              });
+              };
+              io.to(`order:${alias}`).emit(`location-receive-${alias}`, payload);
+              // Also emit as "current-location" so newly opened tracking pages can render immediately.
+              io.to(`order:${alias}`).emit(`current-location-${alias}`, payload);
             });
             logger.info(`Location broadcast to order rooms for ${activeOrder.orderId}`);
 
             try {
-              const firebaseOrderId = String(activeOrder.orderId || activeOrder._id || '').trim();
-              if (firebaseOrderId) {
-                await upsertActiveOrderTracking(firebaseOrderId, {
-                  boy_id: updatedDelivery._id?.toString(),
-                  status: 'in_transit'
-                });
-                await updateActiveOrderLocation(firebaseOrderId, {
-                  lat: latitude,
-                  lng: longitude,
-                  speed: 0,
-                  bearing: 0,
-                  boy_id: updatedDelivery._id?.toString()
-                });
-              }
+              const firebaseAliases = Array.from(
+                new Set(
+                  [
+                    String(activeOrder.orderId || '').trim(),
+                    String(activeOrder._id || '').trim()
+                  ].filter(Boolean)
+                )
+              );
+              await Promise.all(
+                firebaseAliases.map(async (alias) => {
+                  await upsertActiveOrderTracking(alias, {
+                    boy_id: updatedDelivery._id?.toString(),
+                    status: activeOrder?.deliveryState?.currentPhase || 'in_transit'
+                  });
+                  await updateActiveOrderLocation(alias, {
+                    lat: latitude,
+                    lng: longitude,
+                    speed: 0,
+                    bearing: 0,
+                    boy_id: updatedDelivery._id?.toString(),
+                    phase: activeOrder?.deliveryState?.currentPhase || undefined
+                  });
+                })
+              );
             } catch (firebaseErr) {
               logger.warn(`Firebase active order location sync failed: ${firebaseErr.message}`);
             }

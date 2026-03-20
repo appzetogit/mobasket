@@ -2105,6 +2105,21 @@ const GroceryPage = () => {
 
     if (!addressList.length) return "";
 
+    let selectedAddressId = "";
+    try {
+      selectedAddressId = String(localStorage.getItem("userSelectedAddressId") || "").trim();
+    } catch {
+      selectedAddressId = "";
+    }
+
+    if (selectedAddressId) {
+      const selectedAddress = addressList.find(
+        (address) => String(address?._id || address?.id || "").trim() === selectedAddressId,
+      );
+      const selectedAddressDisplay = formatSavedAddressForHeader(selectedAddress);
+      if (selectedAddressDisplay) return selectedAddressDisplay;
+    }
+
     const defaultAddress = getDefaultAddress?.();
     const defaultAddressId = String(defaultAddress?._id || defaultAddress?.id || "").trim();
 

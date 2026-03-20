@@ -2595,8 +2595,15 @@ export const cancelOrder = async (req, res) => {
     order.cancellationReason = reason.trim();
     order.cancelledBy = 'user';
     order.cancelledAt = new Date();
-    await order.save();
-    await restoreGroceryStockForOrder(order);
+    // Persist cancellation without re-validating unrelated legacy fields
+    // (older orders can contain values that no longer satisfy current schema enums).
+    await order.save({ validateBeforeSave: false });
+    try {
+      await restoreGroceryStockForOrder(order);
+    } catch (stockRestoreError) {
+      logger.error(`Error restoring grocery stock for cancelled order ${order.orderId}:`, stockRestoreError);
+      // Don't fail cancellation response if stock restoration fails.
+    }
 
     // Calculate refund amount only for online payments (Razorpay) and wallet
     // COD orders don't need refund since payment hasn't been made
@@ -2611,7 +2618,7 @@ export const cancelOrder = async (req, res) => {
         logger.error(`Error calculating cancellation refund for order ${order.orderId}:`, refundError);
         // Don't fail the cancellation if refund calculation fails
       }
-    } else if (actualPaymentMethod === 'cash') {
+    } else if (actualPaymentMethod === 'cash' || actualPaymentMethod === 'cod') {
       refundMessage = ' No refund required as payment was not made.';
     }
 

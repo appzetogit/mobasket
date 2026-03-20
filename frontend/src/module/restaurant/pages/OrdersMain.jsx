@@ -35,6 +35,7 @@ const isCodLikePaymentMethod = (value) => {
 
 // Top filter tabs
 const filterTabs = [
+  { id: "all", label: "All" },
   { id: "preparing", label: "Preparing" },
   { id: "ready", label: "Ready" },
   { id: "out-for-delivery", label: "Out for delivery" },
@@ -42,6 +43,27 @@ const filterTabs = [
   { id: "completed", label: "Completed" },
   { id: "cancelled", label: "Cancelled" },
 ]
+
+const DEFAULT_FILTER_COUNTS = {
+  all: 0,
+  preparing: 0,
+  ready: 0,
+  "out-for-delivery": 0,
+  scheduled: 0,
+  completed: 0,
+  cancelled: 0,
+}
+
+const isYetToBeDeliveredStatus = (status) => {
+  const normalizedStatus = String(status || "").trim().toLowerCase()
+  return ![
+    "delivered",
+    "completed",
+    "cancelled",
+    "rejected",
+    "refunded",
+  ].includes(normalizedStatus)
+}
 
 const formatOrderStatusLabel = (status) => {
   const normalizedStatus = String(status || "").trim().toLowerCase()
@@ -569,13 +591,14 @@ export default function OrdersMain() {
   const [activeFilter, setActiveFilter] = useState(() => {
     try {
       const saved = localStorage.getItem(ACTIVE_FILTER_STORAGE_KEY)
-      return filterTabs.some((tab) => tab.id === saved) ? saved : "preparing"
+      return filterTabs.some((tab) => tab.id === saved) ? saved : "all"
     } catch {
-      return "preparing"
+      return "all"
     }
   })
   const [searchQuery, setSearchQuery] = useState("")
   const [ordersRefreshTick, setOrdersRefreshTick] = useState(0)
+  const [filterCounts, setFilterCounts] = useState(DEFAULT_FILTER_COUNTS)
   const [isTransitioning, setIsTransitioning] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState(null)
   const [isSheetOpen, setIsSheetOpen] = useState(false)
@@ -684,7 +707,7 @@ export default function OrdersMain() {
     const currentState = window.history.state || {}
     if (currentState?.[filterHistoryKey] === undefined) {
       window.history.replaceState(
-        { ...currentState, [filterHistoryKey]: "preparing" },
+        { ...currentState, [filterHistoryKey]: "all" },
         "",
         currentUrl
       )
@@ -702,10 +725,10 @@ export default function OrdersMain() {
     const currentState = window.history.state || {}
     const currentValue = currentState?.[filterHistoryKey]
 
-    if (activeFilter === "preparing") {
-      if (currentValue !== "preparing") {
+    if (activeFilter === "all") {
+      if (currentValue !== "all") {
         window.history.replaceState(
-          { ...currentState, [filterHistoryKey]: "preparing" },
+          { ...currentState, [filterHistoryKey]: "all" },
           "",
           currentUrl
         )
@@ -728,7 +751,7 @@ export default function OrdersMain() {
 
     const handlePopState = (event) => {
       if (!window.location.pathname.startsWith(basePath)) return
-      const nextFilter = event.state?.[filterHistoryKey] || "preparing"
+      const nextFilter = event.state?.[filterHistoryKey] || "all"
       if (nextFilter === activeFilter) return
       skipFilterHistoryRef.current = true
       setActiveFilter(nextFilter)
@@ -739,6 +762,72 @@ export default function OrdersMain() {
       window.removeEventListener("popstate", handlePopState)
     }
   }, [activeFilter, filterHistoryKey, isGroceryStore])
+
+  const refreshFilterCounts = useCallback(async () => {
+    if (!canAccessLiveOrders) {
+      setFilterCounts(DEFAULT_FILTER_COUNTS)
+      return
+    }
+
+    try {
+      const response = await orderAPI.getOrders()
+      const rawOrders = response?.data?.data?.orders || []
+
+      const counts = {
+        all: 0,
+        preparing: 0,
+        ready: 0,
+        "out-for-delivery": 0,
+        scheduled: 0,
+        completed: 0,
+        cancelled: 0,
+      }
+
+      rawOrders.forEach((order) => {
+        const normalizedStatus = String(order?.status || "").trim().toLowerCase()
+        if (isYetToBeDeliveredStatus(normalizedStatus)) {
+          counts.all += 1
+        }
+
+        if (normalizedStatus === "preparing") counts.preparing += 1
+        else if (normalizedStatus === "ready") counts.ready += 1
+        else if (normalizedStatus === "out_for_delivery" || normalizedStatus === "out-for-delivery") {
+          counts["out-for-delivery"] += 1
+        } else if (normalizedStatus === "scheduled") counts.scheduled += 1
+        else if (normalizedStatus === "delivered" || normalizedStatus === "completed") counts.completed += 1
+        else if (normalizedStatus === "cancelled" || normalizedStatus === "rejected") counts.cancelled += 1
+      })
+
+      setFilterCounts(counts)
+    } catch (error) {
+      if (error?.response?.status !== 401) {
+        console.error("Error fetching order counts:", error)
+      }
+    }
+  }, [canAccessLiveOrders, orderAPI])
+
+  useEffect(() => {
+    if (!canAccessLiveOrders) {
+      setFilterCounts(DEFAULT_FILTER_COUNTS)
+      return
+    }
+
+    let mounted = true
+    let intervalId = null
+
+    const loadCounts = async () => {
+      if (!mounted) return
+      await refreshFilterCounts()
+    }
+
+    loadCounts()
+    intervalId = setInterval(loadCounts, 15000)
+
+    return () => {
+      mounted = false
+      if (intervalId) clearInterval(intervalId)
+    }
+  }, [canAccessLiveOrders, refreshFilterCounts, ordersRefreshTick])
 
   // Restaurant notifications hook for real-time orders
   const { newOrder, clearNewOrder, isConnected } = useRestaurantNotifications({
@@ -974,6 +1063,9 @@ export default function OrdersMain() {
     sendCutlery: order?.sendCutlery,
     paymentMethod: order?.paymentMethod ?? order?.payment?.method,
     payment: order?.payment,
+    scheduledDelivery: order?.scheduledDelivery || null,
+    isScheduledOrder: Boolean(order?.isScheduledOrder || order?.scheduledDelivery?.isScheduled),
+    scheduledFor: order?.scheduledFor || order?.scheduledDelivery?.scheduledFor || null,
   }), [])
 
   const checkConfirmedOrdersAndShowPopup = useCallback(async () => {
@@ -1809,6 +1901,15 @@ export default function OrdersMain() {
     }
 
     switch (activeFilter) {
+      case "all":
+        return (
+          <>
+            <PreparingOrders onSelectOrder={handleSelectOrder} onCancel={handleCancelClick} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
+            <ReadyOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
+            <OutForDeliveryOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
+            <ScheduledOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
+          </>
+        )
       case "preparing":
         return <PreparingOrders onSelectOrder={handleSelectOrder} onCancel={handleCancelClick} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
       case "ready":
@@ -1852,6 +1953,7 @@ export default function OrdersMain() {
             `}</style>
             {filterTabs.map((tab, index) => {
               const isActive = activeFilter === tab.id
+              const tabCount = Number(filterCounts?.[tab.id] || 0)
 
               return (
                 <motion.button
@@ -1890,7 +1992,7 @@ export default function OrdersMain() {
                       }}
                     />
                   )}
-                  <span className="relative z-10">{tab.label}</span>
+                  <span className="relative z-10">{tab.label} ({tabCount})</span>
                 </motion.button>
               )
             })}
@@ -2097,6 +2199,11 @@ export default function OrdersMain() {
                         ? String((popupOrder || newOrder)?.restaurantName || 'Store').replace(/\brestaurant\b/gi, 'Store').replace(/\s{2,}/g, ' ').trim()
                         : ((popupOrder || newOrder)?.restaurantName || 'Restaurant')}
                     </p>
+                    {Boolean((popupOrder || newOrder)?.isScheduledOrder || (popupOrder || newOrder)?.scheduledDelivery?.isScheduled) && (
+                      <div className="mt-1 inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                        Scheduled order
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <button
@@ -2132,6 +2239,11 @@ export default function OrdersMain() {
                         ? new Date((popupOrder || newOrder).createdAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
                         : 'Just now'}
                     </p>
+                    {Boolean((popupOrder || newOrder)?.isScheduledOrder || (popupOrder || newOrder)?.scheduledDelivery?.isScheduled) && (popupOrder || newOrder)?.scheduledFor && (
+                      <p className="text-xs text-amber-700 mt-1">
+                        Scheduled for {new Date((popupOrder || newOrder).scheduledFor).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    )}
                   </div>
 
                   {/* Details Accordion */}

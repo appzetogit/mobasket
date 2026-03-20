@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 import { useParams, useNavigate, useSearchParams, useLocation as useRouterLocation } from "react-router-dom";
 
-import { restaurantAPI, diningAPI, orderAPI } from "@/lib/api";
+import { restaurantAPI, orderAPI } from "@/lib/api";
 
 import { API_BASE_URL } from "@/lib/api/config";
 
@@ -839,171 +839,50 @@ export default function RestaurantDetails() {
           }
 
         }
-
-
-
-        // Try dining API first
-
-        if (!apiRestaurant) try {
-
-          response = await diningAPI.getRestaurantBySlug(slug);
-
-          if (response.data && response.data.success && response.data.data) {
-
-            apiRestaurant = response.data.data;
-
-          }
-
-        } catch (diningError) {
-
-          // If dining API fails with 404, try restaurant API
-
-          if (diningError.response?.status === 404) {
-
-
-            try {
-
-              // First, try to get restaurant directly by slug (getRestaurantById supports both ID and slug)
-
-              // This doesn't require zoneId, so it works even if zone is not detected
-
-              try {
-
-                response = await restaurantAPI.getRestaurantById(slug);
-
-                if (
-
-                  response.data &&
-
-                  response.data.success &&
-
-                  response.data.data
-
-                ) {
-
-                  apiRestaurant = response.data.data;
-
-
-                }
-
-              } catch (directLookupError) {
-
-                // If direct lookup fails, try searching by name (requires zoneId)
-
-
-
-
-                // Only search if zoneId is available (zoneId is required by backend for search)
-
-                if (!zoneId) {
-
-
-                  // Don't throw error - let it fall through to show "Restaurant not found" message
-
-                } else {
-
-                  // Include zoneId for zone-based filtering
-
-                  const searchParams = { limit: 100, zoneId: zoneId };
-
-                  const searchResponse =
-
-                    await restaurantAPI.getRestaurants(searchParams);
-
-                  const restaurants =
-
-                    searchResponse?.data?.data?.restaurants ||
-
-                    searchResponse?.data?.data ||
-
-                    [];
-
-
-
-                  // Try to find by slug match or name match
-
-                  const restaurantName = slug
-
-                    .replace(/-/g, " ")
-
-                    .replace(/\b\w/g, (l) => l.toUpperCase());
-
-                  const matchingRestaurant = restaurants.find(
-
-                    (r) =>
-
-                      r.slug === slug ||
-
-                      r.name?.toLowerCase().replace(/\s+/g, "-") ===
-
-                      slug.toLowerCase() ||
-
-                      r.name?.toLowerCase() === restaurantName.toLowerCase(),
-
-                  );
-
-
-
-                  if (matchingRestaurant) {
-
-                    // Get full restaurant details by ID
-
-                    const fullResponse = await restaurantAPI.getRestaurantById(
-
-                      matchingRestaurant._id || matchingRestaurant.restaurantId,
-
-                    );
-
-                    if (
-
-                      fullResponse.data &&
-
-                      fullResponse.data.success &&
-
-                      fullResponse.data.data
-
-                    ) {
-
-                      apiRestaurant = fullResponse.data.data;
-
-
-                    }
-
-                  }
-
-                }
-
-              }
-
-            } catch (restaurantError) {
-
-              console.error(
-
-                "❌ Restaurant not found in restaurant API either:",
-
-                restaurantError,
-
-              );
-
-              // Only throw if we haven't found the restaurant yet
-
-              if (!apiRestaurant) {
-
-                throw diningError; // Throw original error to show "Restaurant not found"
-
-              }
-
+        if (!apiRestaurant) {
+          try {
+            // Primary lookup by id/slug from restaurant APIs.
+            response = await restaurantAPI.getRestaurantById(slug);
+            if (response.data && response.data.success && response.data.data) {
+              apiRestaurant = response.data.data;
+            }
+          } catch (directLookupError) {
+            // Only attempt zone-scoped search for 404s.
+            if (directLookupError.response?.status !== 404) {
+              throw directLookupError;
             }
 
-          } else {
+            if (zoneId) {
+              const searchParams = { limit: 100, zoneId };
+              const searchResponse = await restaurantAPI.getRestaurants(searchParams);
+              const restaurants =
+                searchResponse?.data?.data?.restaurants ||
+                searchResponse?.data?.data ||
+                [];
 
-            throw diningError; // Re-throw if it's not a 404
+              const restaurantName = slug
+                .replace(/-/g, " ")
+                .replace(/\b\w/g, (l) => l.toUpperCase());
 
+              const matchingRestaurant = restaurants.find(
+                (r) =>
+                  r.slug === slug ||
+                  r.name?.toLowerCase().replace(/\s+/g, "-") === slug.toLowerCase() ||
+                  r.name?.toLowerCase() === restaurantName.toLowerCase(),
+              );
+
+              if (matchingRestaurant) {
+                const fullResponse = await restaurantAPI.getRestaurantById(
+                  matchingRestaurant._id || matchingRestaurant.restaurantId,
+                );
+                if (fullResponse.data && fullResponse.data.success && fullResponse.data.data) {
+                  apiRestaurant = fullResponse.data.data;
+                  response = fullResponse;
+                }
+              }
+            }
           }
-
         }
-
-
 
         if (apiRestaurant) {
 
