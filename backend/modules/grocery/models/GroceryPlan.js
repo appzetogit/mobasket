@@ -2,6 +2,11 @@ import mongoose from 'mongoose';
 
 const groceryPlanProductSchema = new mongoose.Schema(
   {
+    productId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'GroceryProduct',
+      default: null,
+    },
     name: {
       type: String,
       required: true,
@@ -13,6 +18,12 @@ const groceryPlanProductSchema = new mongoose.Schema(
       required: true,
       trim: true,
       maxlength: 120,
+    },
+    image: {
+      type: String,
+      trim: true,
+      default: '',
+      maxlength: 2048,
     },
   },
   { _id: false }

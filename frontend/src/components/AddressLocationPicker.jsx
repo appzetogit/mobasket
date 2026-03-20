@@ -675,45 +675,45 @@ export default function AddressLocationPicker({
   }, [fallbackLocation, reverseGeocodeAt, updateMarkerPosition]);
 
   return (
-    <div className={`space-y-2 rounded-xl border border-gray-200 bg-white p-3 ${className}`}>
+    <div className={`space-y-2 rounded-xl border border-gray-200 bg-white p-3 dark:border-white/10 dark:bg-[#0f172a] ${className}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold text-gray-900">{title}</p>
-          <p className="text-[11px] leading-4 text-gray-500">{description}</p>
+          <p className="text-xs font-semibold text-gray-900 dark:text-gray-100">{title}</p>
+          <p className="text-[11px] leading-4 text-gray-500 dark:text-gray-400">{description}</p>
         </div>
         <MapPin className="mt-0.5 h-4 w-4 text-[#ff8100]" />
       </div>
 
       <div
         ref={mapContainerRef}
-        className="h-44 w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-100"
+        className="h-44 w-full overflow-hidden rounded-lg border border-gray-200 bg-gray-100 dark:border-white/10 dark:bg-slate-900"
       />
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <Button
           type="button"
           variant="outline"
-          className="h-8 text-xs"
+          className="h-auto min-h-8 min-w-0 justify-start gap-1.5 whitespace-normal px-2 py-2 text-left text-[11px] leading-tight border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-white/10 dark:bg-[#111827] dark:text-gray-100 dark:hover:bg-[#172036] dark:hover:text-gray-100 dark:disabled:text-gray-300"
           onClick={handleLocateTypedAddress}
           disabled={mapsLoading || isLocatingTypedAddress}
         >
-          <Navigation className="mr-1 h-3.5 w-3.5" />
+          <Navigation className="h-3.5 w-3.5 shrink-0" />
           {isLocatingTypedAddress ? "Setting..." : "Set from typed address"}
         </Button>
         <Button
           type="button"
           variant="outline"
-          className="h-8 text-xs"
+          className="h-auto min-h-8 min-w-0 justify-start gap-1.5 whitespace-normal px-2 py-2 text-left text-[11px] leading-tight border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-white/10 dark:bg-[#111827] dark:text-gray-100 dark:hover:bg-[#172036] dark:hover:text-gray-100 dark:disabled:text-gray-300"
           onClick={handleUseCurrentLocation}
           disabled={mapsLoading || isReadingMapLocation}
         >
-          <LocateFixed className="mr-1 h-3.5 w-3.5" />
+          <LocateFixed className="h-3.5 w-3.5 shrink-0" />
           {isReadingMapLocation ? "Locating..." : "Use current location"}
         </Button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-600">
-        <span className="rounded-full bg-orange-50 px-2 py-1 text-[#c55f00]">
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-gray-600 dark:text-gray-400">
+        <span className="rounded-full bg-orange-50 px-2 py-1 text-[#c55f00] dark:bg-orange-500/10 dark:text-orange-300">
           {latitude !== null && longitude !== null
             ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
             : "No coordinates pinned yet"}

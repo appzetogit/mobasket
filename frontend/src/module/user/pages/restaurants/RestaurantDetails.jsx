@@ -38,8 +38,6 @@ import {
 
   Star,
 
-  SlidersHorizontal,
-
   Utensils,
 
   Flame,
@@ -4400,36 +4398,6 @@ export default function RestaurantDetails() {
         <div className="border-y border-gray-200 py-3 -mx-4 px-4 overflow-x-auto scrollbar-hide">
 
           <div className="flex items-center gap-2 w-max">
-
-            <Button
-
-              variant="outline"
-
-              size="sm"
-
-              className="flex items-center gap-1.5 whitespace-nowrap border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] relative"
-
-              onClick={() => setShowFilterSheet(true)}
-
-            >
-
-              <SlidersHorizontal className="h-4 w-4" />
-
-              Filters
-
-              {activeFilterCount > 0 && (
-
-                <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center font-semibold">
-
-                  {activeFilterCount}
-
-                </span>
-
-              )}
-
-              <ChevronDown className="h-3 w-3" />
-
-            </Button>
 
             <Button
 

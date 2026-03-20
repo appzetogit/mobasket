@@ -169,6 +169,302 @@ export default function GroceryStoreJoiningRequest() {
     setStoreDetails(null)
   }
 
+  const activeStoreDetails = storeDetails || selectedRequest?.fullData || selectedRequest || null
+  const onboardingStep1 = activeStoreDetails?.onboarding?.step1 || {}
+  const onboardingStep2 = activeStoreDetails?.onboarding?.step2 || {}
+  const onboardingStep3 = activeStoreDetails?.onboarding?.step3 || {}
+
+  const getMediaUrl = (media) => {
+    if (!media) return ""
+    if (typeof media === "string") return media
+    if (Array.isArray(media)) return getMediaUrl(media[0])
+    if (typeof media === "object") {
+      return media.url || media.secure_url || media.path || ""
+    }
+    return ""
+  }
+
+  const formatDateTime = (value) => {
+    if (!value) return "N/A"
+    const date = new Date(value)
+    if (Number.isNaN(date.getTime())) return "N/A"
+    return date.toLocaleString("en-IN", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    })
+  }
+
+  const formatListValue = (value) => {
+    if (!Array.isArray(value) || value.length === 0) return "N/A"
+    return value.filter(Boolean).join(", ")
+  }
+
+  const formatStoreAddress = (location) => {
+    if (!location) return "N/A"
+
+    const parts = [
+      location.formattedAddress,
+      location.address,
+      location.addressLine1,
+      location.addressLine2,
+      location.landmark,
+      location.area,
+      location.city,
+      location.state,
+      location.zipCode || location.pincode || location.postalCode,
+    ].filter(Boolean)
+
+    return parts.length ? [...new Set(parts)].join(", ") : "N/A"
+  }
+
+  const getStoreStatusMeta = (details, request) => {
+    const normalizedStatus = String(
+      request?.status ||
+        (details?.rejectedAt || details?.rejectionReason
+          ? "Rejected"
+          : details?.approvedAt
+            ? "Active"
+            : "Pending")
+    ).toLowerCase()
+
+    if (normalizedStatus.includes("reject")) {
+      return {
+        label: "Rejected",
+        className: "bg-red-100 text-red-700",
+      }
+    }
+
+    if (normalizedStatus.includes("active") || details?.approvedAt) {
+      return {
+        label: "Active",
+        className: "bg-emerald-100 text-emerald-700",
+      }
+    }
+
+    return {
+      label: "Pending Approval",
+      className: "bg-green-100 text-green-700",
+    }
+  }
+
+  const locationDetails = activeStoreDetails?.location || onboardingStep1?.location || {
+    formattedAddress: onboardingStep1?.formattedAddress,
+    address: onboardingStep1?.address,
+    addressLine1: onboardingStep1?.addressLine1,
+    addressLine2: onboardingStep1?.addressLine2,
+    landmark: onboardingStep1?.landmark,
+    area: onboardingStep1?.area,
+    city: onboardingStep1?.city,
+    state: onboardingStep1?.state,
+    zipCode: onboardingStep1?.zipCode || onboardingStep1?.pincode || onboardingStep1?.postalCode,
+    latitude: onboardingStep1?.latitude,
+    longitude: onboardingStep1?.longitude,
+  }
+
+  const deliveryTimings = activeStoreDetails?.deliveryTimings || onboardingStep2?.deliveryTimings || {
+    openingTime: activeStoreDetails?.openingTime || onboardingStep2?.openingTime,
+    closingTime: activeStoreDetails?.closingTime || onboardingStep2?.closingTime,
+  }
+
+  const storeCategories = activeStoreDetails?.cuisines || onboardingStep2?.cuisines || []
+  const storeOpenDays = activeStoreDetails?.openDays || onboardingStep2?.openDays || []
+  const statusMeta = getStoreStatusMeta(activeStoreDetails, selectedRequest)
+  const primaryImage =
+    getMediaUrl(activeStoreDetails?.profileImage) ||
+    getMediaUrl(activeStoreDetails?.onboarding?.storeImage) ||
+    selectedRequest?.storeImage ||
+    buildImageFallback(96, "STR")
+
+  const infoCards = [
+    {
+      icon: User,
+      title: "Owner Information",
+      items: [
+        {
+          label: "Owner Name",
+          value: activeStoreDetails?.ownerName || onboardingStep1?.ownerName || selectedRequest?.ownerName || "N/A",
+        },
+        {
+          label: "Owner Phone",
+          value: activeStoreDetails?.ownerPhone || onboardingStep1?.ownerPhone || selectedRequest?.ownerPhone || "N/A",
+        },
+        {
+          label: "Owner Email",
+          value: activeStoreDetails?.ownerEmail || onboardingStep1?.ownerEmail || activeStoreDetails?.email || "N/A",
+        },
+      ],
+    },
+    {
+      icon: MapPin,
+      title: "Location & Contact",
+      items: [
+        {
+          label: "Address",
+          value: formatStoreAddress(locationDetails),
+        },
+        {
+          label: "Primary Contact",
+          value: activeStoreDetails?.primaryContactNumber || activeStoreDetails?.phone || onboardingStep1?.primaryContactNumber || "N/A",
+        },
+        {
+          label: "Zone",
+          value:
+            activeStoreDetails?.zoneId?.name ||
+            activeStoreDetails?.zone?.name ||
+            activeStoreDetails?.zoneName ||
+            selectedRequest?.zone ||
+            "N/A",
+        },
+        {
+          label: "Coordinates",
+          value:
+            locationDetails?.latitude !== undefined && locationDetails?.longitude !== undefined
+              ? `${locationDetails.latitude}, ${locationDetails.longitude}`
+              : "N/A",
+        },
+      ],
+    },
+    {
+      icon: Clock,
+      title: "Store Operations",
+      items: [
+        {
+          label: "Opening Time",
+          value: deliveryTimings?.openingTime || "N/A",
+        },
+        {
+          label: "Closing Time",
+          value: deliveryTimings?.closingTime || "N/A",
+        },
+        {
+          label: "Open Days",
+          value: formatListValue(storeOpenDays),
+        },
+        {
+          label: "Business Model",
+          value: activeStoreDetails?.businessModel || "N/A",
+        },
+        {
+          label: "Accepting Orders",
+          value:
+            typeof activeStoreDetails?.isAcceptingOrders === "boolean"
+              ? activeStoreDetails.isAcceptingOrders
+                ? "Yes"
+                : "No"
+              : "N/A",
+        },
+      ],
+    },
+    {
+      icon: FileText,
+      title: "Registration Information",
+      items: [
+        {
+          label: "Store ID",
+          value: activeStoreDetails?.restaurantId || activeStoreDetails?._id || selectedRequest?._id || "N/A",
+        },
+        {
+          label: "Registered On",
+          value: formatDateTime(activeStoreDetails?.createdAt || selectedRequest?.createdAt),
+        },
+        {
+          label: "Approved On",
+          value: formatDateTime(activeStoreDetails?.approvedAt),
+        },
+        {
+          label: "Rejected On",
+          value: formatDateTime(activeStoreDetails?.rejectedAt),
+        },
+        {
+          label: "Signup Method",
+          value: activeStoreDetails?.signupMethod || "N/A",
+        },
+        {
+          label: "Phone Verified",
+          value:
+            typeof activeStoreDetails?.phoneVerified === "boolean"
+              ? activeStoreDetails.phoneVerified
+                ? "Yes"
+                : "No"
+              : "N/A",
+        },
+        {
+          label: "Completed Steps",
+          value:
+            activeStoreDetails?.onboarding?.completedSteps !== undefined
+              ? `${activeStoreDetails.onboarding.completedSteps}/4`
+              : "N/A",
+        },
+      ],
+    },
+  ]
+
+  const documentEntries = [
+    {
+      label: "PAN Number",
+      value: onboardingStep3?.panNumber || onboardingStep3?.pan || onboardingStep3?.panCardNumber,
+    },
+    {
+      label: "GST Number",
+      value: onboardingStep3?.gstNumber || onboardingStep3?.gst || onboardingStep3?.gstin,
+    },
+    {
+      label: "Bank Name",
+      value: onboardingStep3?.bankName || onboardingStep3?.bank?.bankName,
+    },
+    {
+      label: "Account Holder",
+      value: onboardingStep3?.accountHolderName || onboardingStep3?.bank?.accountHolderName,
+    },
+    {
+      label: "Account Number",
+      value: onboardingStep3?.accountNumber || onboardingStep3?.bank?.accountNumber,
+    },
+    {
+      label: "IFSC Code",
+      value: onboardingStep3?.ifscCode || onboardingStep3?.bank?.ifscCode,
+    },
+    {
+      label: "UPI ID",
+      value: onboardingStep3?.upiId || onboardingStep3?.bank?.upiId,
+    },
+    {
+      label: "FSSAI Number",
+      value: onboardingStep3?.fssaiNumber || onboardingStep3?.fssai || onboardingStep3?.licenseNumber,
+    },
+  ].filter((entry) => entry.value)
+
+  const documentLinks = [
+    {
+      label: "PAN Document",
+      value: getMediaUrl(onboardingStep3?.panImage || onboardingStep3?.panDocument || onboardingStep3?.panCardImage),
+    },
+    {
+      label: "GST Document",
+      value: getMediaUrl(onboardingStep3?.gstImage || onboardingStep3?.gstDocument),
+    },
+    {
+      label: "Cheque / Bank Proof",
+      value: getMediaUrl(onboardingStep3?.cancelledCheque || onboardingStep3?.bankDocument),
+    },
+    {
+      label: "License Document",
+      value: getMediaUrl(onboardingStep3?.licenseDocument || onboardingStep3?.fssaiDocument),
+    },
+  ].filter((entry) => entry.value)
+
+  const storeImages = useMemo(() => {
+    const images = [
+      getMediaUrl(activeStoreDetails?.profileImage),
+      getMediaUrl(activeStoreDetails?.onboarding?.storeImage),
+      selectedRequest?.storeImage,
+      ...(activeStoreDetails?.onboarding?.additionalImages || []).map((image) => getMediaUrl(image)),
+      ...(activeStoreDetails?.menuImages || []).map((image) => getMediaUrl(image)),
+    ].filter(Boolean)
+
+    return [...new Set(images)]
+  }, [activeStoreDetails, selectedRequest])
+
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
@@ -406,7 +702,9 @@ export default function GroceryStoreJoiningRequest() {
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4" onClick={closeDetailsModal}>
           <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between z-10">
-              <h2 className="text-2xl font-bold text-slate-900">Store Details - {selectedRequest.storeName || "N/A"}</h2>
+              <h2 className="text-2xl font-bold text-slate-900">
+                Store Details - {activeStoreDetails?.name || selectedRequest?.storeName || "N/A"}
+              </h2>
               <button
                 onClick={closeDetailsModal}
                 className="p-2 rounded-lg hover:bg-slate-100 transition-colors"
@@ -424,11 +722,11 @@ export default function GroceryStoreJoiningRequest() {
               )}
               {!loadingDetails && (storeDetails || selectedRequest) && (
                 <div className="space-y-6">
-                  <div className="flex items-start gap-6 pb-6 border-b border-slate-200">
+                  <div className="flex flex-col md:flex-row items-start gap-6 pb-6 border-b border-slate-200">
                     <div className="w-24 h-24 rounded-lg overflow-hidden bg-slate-100 flex-shrink-0">
                       <img
-                        src={storeDetails?.profileImage?.url || storeDetails?.onboarding?.storeImage?.url || selectedRequest?.storeImage || buildImageFallback(96, "STR")}
-                        alt={storeDetails?.name || selectedRequest?.storeName || "Store"}
+                        src={primaryImage}
+                        alt={activeStoreDetails?.name || selectedRequest?.storeName || "Store"}
                         className="w-full h-full object-cover"
                         onError={(e) => {
                           e.target.src = buildImageFallback(96, "STR")
@@ -437,41 +735,156 @@ export default function GroceryStoreJoiningRequest() {
                     </div>
                     <div className="flex-1">
                       <h3 className="text-2xl font-bold text-slate-900 mb-2">
-                        {storeDetails?.name || selectedRequest?.storeName || "N/A"}
+                        {activeStoreDetails?.name || selectedRequest?.storeName || "N/A"}
                       </h3>
-                      <div className="flex items-center gap-4 flex-wrap">
-                        <div className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          storeDetails?.isActive !== false ? "bg-green-100 text-green-700" : "bg-green-100 text-green-700"
-                        }`}>
-                          {storeDetails?.isActive !== false ? "Active" : "Pending Approval"}
+                      <div className="flex items-center gap-4 flex-wrap mb-3">
+                        <div className={`px-3 py-1 rounded-full text-xs font-medium ${statusMeta.className}`}>
+                          {statusMeta.label}
+                        </div>
+                        {(activeStoreDetails?.rating || activeStoreDetails?.totalRatings) ? (
+                          <div className="flex items-center gap-1 text-sm text-slate-600">
+                            <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                            <span>{activeStoreDetails?.rating || 0}</span>
+                            <span className="text-slate-400">
+                              ({activeStoreDetails?.totalRatings || 0} ratings)
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                          <p className="text-xs font-medium uppercase tracking-wide text-slate-500 mb-1">Store ID</p>
+                          <p className="text-sm font-semibold text-slate-900 break-all">
+                            {activeStoreDetails?.restaurantId || activeStoreDetails?._id || selectedRequest?._id || "N/A"}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                          <p className="text-xs font-medium uppercase tracking-wide text-slate-500 mb-1">Primary Contact</p>
+                          <p className="text-sm font-semibold text-slate-900">
+                            {activeStoreDetails?.primaryContactNumber || activeStoreDetails?.phone || onboardingStep1?.primaryContactNumber || "N/A"}
+                          </p>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {(storeDetails?.onboarding?.storeImage || storeDetails?.onboarding?.additionalImages) && (
-                    <div className="pt-6 border-t border-slate-200">
-                      <h4 className="text-lg font-semibold text-slate-900 mb-4">Store Images</h4>
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        {storeDetails.onboarding.storeImage && (
-                          <div className="rounded-lg overflow-hidden border border-slate-200">
-                            <img
-                              src={storeDetails.onboarding.storeImage.url || storeDetails.onboarding.storeImage}
-                              alt="Store"
-                              className="w-full h-32 object-cover"
-                            />
+                  {storeCategories.length > 0 && (
+                    <div className="rounded-xl border border-slate-200 p-5">
+                      <div className="flex items-center gap-2 mb-4">
+                        <Building2 className="w-5 h-5 text-green-600" />
+                        <h4 className="text-lg font-semibold text-slate-900">Store Categories</h4>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {storeCategories.map((category) => (
+                          <span
+                            key={category}
+                            className="px-3 py-1.5 rounded-full bg-green-50 text-green-700 text-sm font-medium"
+                          >
+                            {category}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                    {infoCards.map((card) => {
+                      const CardIcon = card.icon
+
+                      return (
+                        <div key={card.title} className="rounded-xl border border-slate-200 p-5">
+                          <div className="flex items-center gap-2 mb-4">
+                            <CardIcon className="w-5 h-5 text-green-600" />
+                            <h4 className="text-lg font-semibold text-slate-900">{card.title}</h4>
                           </div>
-                        )}
-                        {storeDetails.onboarding.additionalImages && storeDetails.onboarding.additionalImages.map((img, idx) => (
-                          <div key={idx} className="rounded-lg overflow-hidden border border-slate-200">
+                          <div className="space-y-3">
+                            {card.items.map((item) => (
+                              <div
+                                key={`${card.title}-${item.label}`}
+                                className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-4"
+                              >
+                                <span className="text-sm font-medium text-slate-500">{item.label}</span>
+                                <span className="text-sm text-slate-900 sm:text-right break-words">
+                                  {item.value || "N/A"}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+
+                  {(documentEntries.length > 0 || documentLinks.length > 0) && (
+                    <div className="rounded-xl border border-slate-200 p-5">
+                      <div className="flex items-center gap-2 mb-4">
+                        <CreditCard className="w-5 h-5 text-green-600" />
+                        <h4 className="text-lg font-semibold text-slate-900">Registration Documents</h4>
+                      </div>
+
+                      {documentEntries.length > 0 && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+                          {documentEntries.map((item) => (
+                            <div key={item.label} className="rounded-lg bg-slate-50 border border-slate-200 px-4 py-3">
+                              <p className="text-xs font-medium uppercase tracking-wide text-slate-500 mb-1">{item.label}</p>
+                              <p className="text-sm font-semibold text-slate-900 break-all">{item.value}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {documentLinks.length > 0 && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          {documentLinks.map((item) => (
+                            <a
+                              key={item.label}
+                              href={item.value}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="flex items-center justify-between rounded-lg border border-slate-200 px-4 py-3 hover:bg-slate-50 transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <FileText className="w-4 h-4 text-green-600" />
+                                <span className="text-sm font-medium text-slate-900">{item.label}</span>
+                              </div>
+                              <ExternalLink className="w-4 h-4 text-slate-500" />
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {storeImages.length > 0 && (
+                    <div className="rounded-xl border border-slate-200 p-5">
+                      <div className="flex items-center gap-2 mb-4">
+                        <ImageIcon className="w-5 h-5 text-green-600" />
+                        <h4 className="text-lg font-semibold text-slate-900">Store Images</h4>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {storeImages.map((imageUrl, index) => (
+                          <div key={`${imageUrl}-${index}`} className="rounded-lg overflow-hidden border border-slate-200">
                             <img
-                              src={img.url || img}
-                              alt={`Additional ${idx + 1}`}
-                              className="w-full h-32 object-cover"
+                              src={imageUrl}
+                              alt={`Store ${index + 1}`}
+                              className="w-full h-40 object-cover"
+                              onError={(e) => {
+                                e.target.src = buildImageFallback(320, "STR")
+                              }}
                             />
                           </div>
                         ))}
                       </div>
+                    </div>
+                  )}
+
+                  {activeStoreDetails?.rejectionReason && (
+                    <div className="rounded-xl border border-red-200 bg-red-50 p-5">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Calendar className="w-5 h-5 text-red-600" />
+                        <h4 className="text-lg font-semibold text-red-900">Rejection Reason</h4>
+                      </div>
+                      <p className="text-sm text-red-800 whitespace-pre-wrap">{activeStoreDetails.rejectionReason}</p>
                     </div>
                   )}
                 </div>

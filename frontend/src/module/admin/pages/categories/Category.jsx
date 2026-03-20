@@ -1137,14 +1137,6 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
               <ChevronDown className="w-3 h-3" />
             </button>
 
-            <button
-              type="button"
-              onClick={clearAllFilters}
-              className="px-4 py-2.5 text-sm font-medium rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-all"
-            >
-              Remove All Filters
-            </button>
-
             <button 
               onClick={handleAddNew}
               className="px-4 py-2.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2 transition-all shadow-sm"

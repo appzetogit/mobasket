@@ -90,6 +90,20 @@ const sanitizeInputByField = (field, value) => {
   }
 }
 
+const normalizePhoneDigits = (value) => String(value || "").replace(/\D/g, "")
+const normalizeEmailValue = (value) => String(value || "").trim().toLowerCase()
+
+const getAuthenticatedStoreEmail = (store) => {
+  const directEmail = normalizeEmailValue(store?.email || store?.googleEmail)
+  if (directEmail) return directEmail
+
+  const ownerEmail = normalizeEmailValue(store?.ownerEmail)
+  return /@store\.mobasket\.com$/i.test(ownerEmail) ? "" : ownerEmail
+}
+
+const getAuthenticatedStorePhone = (store) =>
+  normalizePhoneDigits(store?.phone || store?.ownerPhone || store?.primaryContactNumber)
+
 export default function GroceryStoreOnboarding() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
@@ -123,6 +137,37 @@ export default function GroceryStoreOnboarding() {
     storeImage: null,
     additionalImages: [],
   })
+
+  const applyAuthenticatedStorePrefill = (store) => {
+    if (!store || typeof store !== "object") return
+
+    const authenticatedEmail = getAuthenticatedStoreEmail(store)
+    const authenticatedPhone = getAuthenticatedStorePhone(store)
+
+    if (!authenticatedEmail && !authenticatedPhone) return
+
+    setForm((prev) => {
+      const next = { ...prev }
+      let changed = false
+
+      if (!normalizeEmailValue(prev.ownerEmail) && authenticatedEmail) {
+        next.ownerEmail = authenticatedEmail
+        changed = true
+      }
+
+      if (!normalizePhoneDigits(prev.ownerPhone) && authenticatedPhone) {
+        next.ownerPhone = authenticatedPhone
+        changed = true
+      }
+
+      if (!normalizePhoneDigits(prev.primaryContactNumber) && authenticatedPhone) {
+        next.primaryContactNumber = authenticatedPhone
+        changed = true
+      }
+
+      return changed ? next : prev
+    })
+  }
 
   const updateSelectedLocation = (lat, lng, address, components = []) => {
     const parsedAddress = parseAddressComponents(components)
@@ -393,10 +438,10 @@ export default function GroceryStoreOnboarding() {
           setForm({
             storeName: source.storeName || store?.name || "",
             ownerName: source.ownerName || store?.ownerName || "",
-            ownerEmail: source.ownerEmail || store?.ownerEmail || "",
-            ownerPhone: source.ownerPhone || store?.ownerPhone || store?.phone || "",
+            ownerEmail: source.ownerEmail || getAuthenticatedStoreEmail(store) || "",
+            ownerPhone: source.ownerPhone || getAuthenticatedStorePhone(store) || "",
             primaryContactNumber:
-              source.primaryContactNumber || store?.primaryContactNumber || store?.phone || "",
+              source.primaryContactNumber || getAuthenticatedStorePhone(store) || store?.primaryContactNumber || "",
             location: {
               addressLine1: source.location?.addressLine1 || store?.location?.addressLine1 || "",
               addressLine2: source.location?.addressLine2 || store?.location?.addressLine2 || "",
@@ -457,6 +502,41 @@ export default function GroceryStoreOnboarding() {
     }
     fetchData()
   }, [isFreshStepOne])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const applyStoreIfActive = (store) => {
+      if (cancelled) return
+      applyAuthenticatedStorePrefill(store)
+    }
+
+    const resolveSignedInStore = async () => {
+      try {
+        const cachedRaw = localStorage.getItem("grocery-store_user")
+        if (cachedRaw) {
+          const cachedStore = JSON.parse(cachedRaw)
+          applyStoreIfActive(cachedStore)
+        }
+      } catch (error) {
+        console.error("Failed to parse cached grocery store user:", error)
+      }
+
+      try {
+        const response = await groceryStoreAPI.getCurrentStore()
+        const store = response?.data?.data?.store || response?.data?.store || null
+        applyStoreIfActive(store)
+      } catch (error) {
+        console.error("Failed to fetch signed-in store contact:", error)
+      }
+    }
+
+    resolveSignedInStore()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const validateImage = (file) => {
     if (!file) return "No file selected";

@@ -45,9 +45,61 @@ const DEFAULT_OFFER_FORM = {
 
 const toIds = (arr) => (Array.isArray(arr) ? arr.map((x) => (typeof x === "string" ? x : x?._id)).filter(Boolean) : [])
 const parseBenefits = (value) => value.split("\n").map((x) => x.trim()).filter(Boolean)
+function getImageFromProduct(product) {
+  if (!product || typeof product !== "object") return ""
+
+  if (Array.isArray(product.images)) {
+    const fromImages = product.images
+      .map((image) => {
+        if (typeof image === "string") return image.trim()
+        return String(image?.url || image?.image || image?.imageUrl || image?.secure_url || "").trim()
+      })
+      .find(Boolean)
+    if (fromImages) return fromImages
+  }
+
+  if (typeof product.image === "string" && product.image.trim()) return product.image.trim()
+  if (product.image && typeof product.image === "object") {
+    const nestedImage = String(
+      product.image.url ||
+      product.image.image ||
+      product.image.imageUrl ||
+      product.image.secure_url ||
+      ""
+    ).trim()
+    if (nestedImage) return nestedImage
+  }
+
+  if (typeof product.thumbnail === "string" && product.thumbnail.trim()) return product.thumbnail.trim()
+  if (product.thumbnail && typeof product.thumbnail === "object") {
+    const nestedThumbnail = String(
+      product.thumbnail.url ||
+      product.thumbnail.image ||
+      product.thumbnail.imageUrl ||
+      product.thumbnail.secure_url ||
+      ""
+    ).trim()
+    if (nestedThumbnail) return nestedThumbnail
+  }
+
+  return ""
+}
+
 const normalizePlanProducts = (products) =>
   (Array.isArray(products) ? products : [])
-    .map((item) => ({ name: String(item?.name || "").trim(), qty: String(item?.qty || "").trim() }))
+    .map((item) => {
+      const name = String(item?.name || "").trim()
+      const qty = String(item?.qty || "").trim()
+      const productId = String(item?.productId || item?._id || item?.id || "").trim()
+      const image = getImageFromProduct(item)
+
+      return {
+        ...(productId ? { productId } : {}),
+        name,
+        qty,
+        ...(image ? { image } : {}),
+      }
+    })
     .filter((item) => item.name && item.qty)
 const normalizeEntityId = (value) =>
   String(
@@ -58,14 +110,6 @@ const normalizeEntityId = (value) =>
     value ||
     ""
   ).trim()
-
-const getImageFromProduct = (product) => {
-  if (!product || typeof product !== "object") return ""
-  if (Array.isArray(product.images) && product.images.length > 0) return String(product.images[0] || "").trim()
-  if (typeof product.image === "string") return product.image.trim()
-  if (typeof product.thumbnail === "string") return product.thumbnail.trim()
-  return ""
-}
 
 const PLAN_COLOR_OPTIONS = [
   { label: "Emerald", value: "bg-emerald-500" },
@@ -284,8 +328,8 @@ export default function GroceryPlans() {
             .filter((rule) => rule.zoneId && rule.storeId)
         : [],
       benefitsText: Array.isArray(plan.benefits) ? plan.benefits.join("\n") : "",
-      vegProducts: normalizePlanProducts(plan.vegProducts),
-      nonVegProducts: normalizePlanProducts(plan.nonVegProducts),
+      vegProducts: (Array.isArray(plan.vegProducts) ? plan.vegProducts : []).map(enrichPlanProductItem).filter(Boolean),
+      nonVegProducts: (Array.isArray(plan.nonVegProducts) ? plan.nonVegProducts : []).map(enrichPlanProductItem).filter(Boolean),
     })
     setVegSelection({ productId: "", qty: "" })
     setNonVegSelection({ productId: "", qty: "" })
@@ -357,8 +401,12 @@ export default function GroceryPlans() {
     e.preventDefault()
     try {
       setSaving(true)
-      const normalizedVegProducts = normalizePlanProducts(planForm.vegProducts)
-      const normalizedNonVegProducts = normalizePlanProducts(planForm.nonVegProducts)
+      const normalizedVegProducts = (Array.isArray(planForm.vegProducts) ? planForm.vegProducts : [])
+        .map(enrichPlanProductItem)
+        .filter(Boolean)
+      const normalizedNonVegProducts = (Array.isArray(planForm.nonVegProducts) ? planForm.nonVegProducts : [])
+        .map(enrichPlanProductItem)
+        .filter(Boolean)
       const mergedProducts = [...normalizedVegProducts, ...normalizedNonVegProducts]
       const manualProductCount = Number(planForm.productCount || 0)
       const payload = {
@@ -542,6 +590,25 @@ export default function GroceryPlans() {
     })
     return map
   }, [products])
+  const enrichPlanProductItem = (item) => {
+    const normalized = normalizePlanProducts([item])[0]
+    if (!normalized) return null
+
+    const byId = normalized.productId ? productsById.get(String(normalized.productId)) : null
+    const byName = normalized.name
+      ? products.find((product) => String(product?.name || "").trim().toLowerCase() === normalized.name.toLowerCase())
+      : null
+    const matchedProduct = byId || byName || null
+    const resolvedProductId = normalized.productId || String(matchedProduct?._id || "").trim()
+    const resolvedImage = normalized.image || getImageFromProduct(matchedProduct)
+
+    return {
+      ...(resolvedProductId ? { productId: resolvedProductId } : {}),
+      name: normalized.name,
+      qty: normalized.qty,
+      ...(resolvedImage ? { image: resolvedImage } : {}),
+    }
+  }
   const getPlanItemImage = (item) => {
     const direct = String(item?.image || "").trim()
     if (direct) return direct
