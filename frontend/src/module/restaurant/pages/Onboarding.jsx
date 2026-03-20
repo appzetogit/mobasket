@@ -707,7 +707,7 @@ export default function RestaurantOnboarding() {
           if (stepToShow) {
             setStep(stepToShow)
           } else {
-            navigate("/restaurant", { replace: true })
+            navigate("/restaurant/pending-approval", { replace: true })
             return
           }
         }

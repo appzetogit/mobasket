@@ -62,6 +62,7 @@ export default function PendingApproval() {
         }
 
         const approvalStates = new Set([
+            "onboarding",
             "pending",
             "rejected",
             "declined",
