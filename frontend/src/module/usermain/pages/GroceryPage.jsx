@@ -33,7 +33,7 @@ import { useLocationSelector } from "../../user/components/UserLayout";
 import { useProfile } from "../../user/context/ProfileContext";
 import { CategoryFoodsContent } from "./CategoryFoodsPage";
 import AddToCartAnimation from "../../user/components/AddToCartAnimation";
-import api, { restaurantAPI, userAPI } from "@/lib/api";
+import api, { restaurantAPI, userAPI, zoneAPI } from "@/lib/api";
 import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
 
 // Icons
@@ -169,9 +169,17 @@ const GroceryPage = () => {
   const { location: userLocation, loading: locationLoading } = useUserLocation();
   const { openLocationSelector } = useLocationSelector();
   const { zoneId, refreshZone, loading: zoneLoading } = useZone(userLocation, "mogrocery");
+  const [availableZones, setAvailableZones] = useState([]);
+  const [selectedGroceryZoneId, setSelectedGroceryZoneId] = useState("auto");
+  const [isZoneMenuOpen, setIsZoneMenuOpen] = useState(false);
+  const zoneMenuRef = useRef(null);
   const cachedZoneId =
     typeof window !== "undefined" ? localStorage.getItem("userZoneId:mogrocery") : "";
-  const effectiveZoneId = String(zoneId || cachedZoneId || "").trim();
+  const effectiveZoneId = String(
+    selectedGroceryZoneId && selectedGroceryZoneId !== "auto"
+      ? selectedGroceryZoneId
+      : zoneId || cachedZoneId || "",
+  ).trim();
   const isGroceryCategoriesRoute = routerLocation.pathname === "/grocery/categories";
   const hasUserSession = useMemo(() => {
     if (typeof window === "undefined") return false;
@@ -240,6 +248,50 @@ const GroceryPage = () => {
   const isAnySheetOpen = showCategorySheet || showCollectionSheet || showWishlistSheet;
   const collectionHandleStartYRef = useRef(null);
   const wishlistHandleStartYRef = useRef(null);
+
+  const selectedZoneLabel = useMemo(() => {
+    if (selectedGroceryZoneId === "auto") return "Auto";
+    const selectedZone = availableZones.find((zone) => zone.id === selectedGroceryZoneId);
+    return selectedZone?.name || "Auto";
+  }, [availableZones, selectedGroceryZoneId]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!zoneMenuRef.current?.contains(event.target)) {
+        setIsZoneMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    const fetchActiveZones = async () => {
+      try {
+        const response = await zoneAPI.getActiveZones("mogrocery");
+        const zoneList = response?.data?.data?.zones || response?.data?.zones || response?.data?.data || [];
+        const normalizedZones = (Array.isArray(zoneList) ? zoneList : [])
+          .map((zone) => ({
+            id: String(zone?._id || zone?.id || "").trim(),
+            name: String(zone?.name || zone?.zoneName || zone?.serviceLocation || "Unnamed Zone").trim(),
+          }))
+          .filter((zone) => zone.id && zone.name);
+        setAvailableZones(normalizedZones);
+      } catch {
+        setAvailableZones([]);
+      }
+    };
+    fetchActiveZones();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedGroceryZoneId || selectedGroceryZoneId === "auto") return;
+    const exists = availableZones.some((zone) => zone.id === selectedGroceryZoneId);
+    if (!exists) {
+      setSelectedGroceryZoneId("auto");
+    }
+  }, [availableZones, selectedGroceryZoneId]);
 
   useEffect(() => {
     let timeoutId;
@@ -956,7 +1008,7 @@ const GroceryPage = () => {
         const restaurants = Array.isArray(response?.data?.data?.restaurants)
           ? response.data.data.restaurants
           : [];
-        const availableMoGroceryStores = restaurants.filter((restaurant) => {
+        const zoneMappedMoGroceryStores = restaurants.filter((restaurant) => {
           if (String(restaurant?.platform || "").toLowerCase() !== "mogrocery") return false;
 
           const storeZoneId = String(
@@ -971,6 +1023,10 @@ const GroceryPage = () => {
           if (effectiveZoneId && storeZoneId !== String(effectiveZoneId)) return false;
 
           if (restaurant?.isActive === false) return false;
+          return true;
+        });
+
+        const currentlyAvailableStores = zoneMappedMoGroceryStores.filter((restaurant) => {
           if (restaurant?.isOnline === false) return false;
           if (restaurant?.isAcceptingOrders === false) return false;
 
@@ -980,8 +1036,13 @@ const GroceryPage = () => {
           }).isAvailable;
         });
 
-        setGroceryStores(availableMoGroceryStores);
-        setHasActiveGroceryStore(availableMoGroceryStores.length > 0);
+        // If all mapped stores are temporarily offline/closed, keep showing mapped stores
+        // so users can still browse instead of hitting a hard "service unavailable" wall.
+        const storesForBrowsing =
+          currentlyAvailableStores.length > 0 ? currentlyAvailableStores : zoneMappedMoGroceryStores;
+
+        setGroceryStores(storesForBrowsing);
+        setHasActiveGroceryStore(zoneMappedMoGroceryStores.length > 0);
       } catch (error) {
         const statusCode = Number(error?.response?.status || 0);
         const message = String(error?.response?.data?.message || "").toLowerCase();
@@ -2329,7 +2390,7 @@ const GroceryPage = () => {
         <div className="relative z-20">
           {/* Top Info Row - YELLOW BACKGROUND ADDED HERE */}
           <div
-            className={`rounded-b-[2.5rem] pb-10 shadow-sm relative z-20 transition-all duration-500 dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)] dark:border-b dark:border-white/10 ${activeTab === "Electronics" ? "" :
+            className={`rounded-b-[2.5rem] pb-10 shadow-sm relative ${isZoneMenuOpen ? "z-[80]" : "z-20"} transition-all duration-500 dark:shadow-[0_10px_30px_rgba(0,0,0,0.45)] dark:border-b dark:border-white/10 ${activeTab === "Electronics" ? "" :
               activeTab === "Beauty" ? "" :
                 activeTab === "Pharmacy" ? "" :
                   activeTab === "Valentine's" ? "" : "bg-[#FACC15]"
@@ -2387,48 +2448,102 @@ const GroceryPage = () => {
 
 
               {/* Profile & Cart Icons */}
-              <div className="flex gap-2 mt-1">
-                <button
-                  className="relative w-8 h-8 bg-[#1a1a1a] dark:bg-[#0e1624] dark:border dark:border-white/15 rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-transform"
-                  onClick={() => setShowWishlistSheet(true)}
-                >
-                  <Heart size={16} className="text-white" />
-                  {groceryWishlistedProducts.length > 0 && (
-                    <motion.div
-                      key={groceryWishlistedProducts.length}
-                      initial={{ scale: 0.5, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      className="absolute -top-1 -right-1 bg-[#EF4F5F] text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white"
-                    >
-                      {groceryWishlistedProducts.length}
-                    </motion.div>
-                  )}
-                </button>
+              <div className="relative z-[130] mt-1 flex flex-col items-end gap-2">
+                <div className="flex gap-2">
+                  <button
+                    className="relative w-8 h-8 bg-[#1a1a1a] dark:bg-[#0e1624] dark:border dark:border-white/15 rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+                    onClick={() => setShowWishlistSheet(true)}
+                  >
+                    <Heart size={16} className="text-white" />
+                    {groceryWishlistedProducts.length > 0 && (
+                      <motion.div
+                        key={groceryWishlistedProducts.length}
+                        initial={{ scale: 0.5, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="absolute -top-1 -right-1 bg-[#EF4F5F] text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white"
+                      >
+                        {groceryWishlistedProducts.length}
+                      </motion.div>
+                    )}
+                  </button>
 
-                {/* Cart Icon */}
-                <button
-                  className="relative w-8 h-8 bg-[#1a1a1a] dark:bg-[#0e1624] dark:border dark:border-white/15 rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-transform"
-                  onClick={() => navigate("/grocery/cart")}
-                >
-                  <ShoppingCart size={16} className="text-white" />
-                  {itemCount > 0 && (
-                    <motion.div
-                      key={itemCount}
-                      initial={{ scale: 0.5, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      className="absolute -top-1 -right-1 bg-[#EF4F5F] text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white"
-                    >
-                      {itemCount}
-                    </motion.div>
-                  )}
-                </button>
+                  {/* Cart Icon */}
+                  <button
+                    className="relative w-8 h-8 bg-[#1a1a1a] dark:bg-[#0e1624] dark:border dark:border-white/15 rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+                    onClick={() => navigate("/grocery/cart")}
+                  >
+                    <ShoppingCart size={16} className="text-white" />
+                    {itemCount > 0 && (
+                      <motion.div
+                        key={itemCount}
+                        initial={{ scale: 0.5, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        className="absolute -top-1 -right-1 bg-[#EF4F5F] text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center border border-white"
+                      >
+                        {itemCount}
+                      </motion.div>
+                    )}
+                  </button>
 
-                <button
-                  className="w-8 h-8 bg-[#1a1a1a] dark:bg-[#0e1624] dark:border dark:border-white/15 rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-transform"
-                  onClick={() => navigate("/grocery/profile")}
-                >
-                  <User size={16} className="text-white" />
-                </button>
+                  <button
+                    className="w-8 h-8 bg-[#1a1a1a] dark:bg-[#0e1624] dark:border dark:border-white/15 rounded-full flex items-center justify-center shadow-sm active:scale-95 transition-transform"
+                    onClick={() => navigate("/grocery/profile")}
+                  >
+                    <User size={16} className="text-white" />
+                  </button>
+                </div>
+
+                <div ref={zoneMenuRef} className="relative w-[132px]">
+                  <button
+                    type="button"
+                    onClick={() => setIsZoneMenuOpen((prev) => !prev)}
+                    className="flex h-7 w-full items-center justify-end gap-1 bg-transparent px-0 text-xs font-semibold text-[#1a1a1a] outline-none"
+                  >
+                    <span className="truncate">{selectedZoneLabel}</span>
+                    <ChevronDown size={12} className={`transition-transform ${isZoneMenuOpen ? "rotate-180" : ""}`} />
+                  </button>
+
+                  <AnimatePresence>
+                    {isZoneMenuOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute right-0 top-8 z-[400] w-44 max-w-[calc(100vw-1rem)] overflow-hidden rounded-lg border border-black/10 bg-white shadow-lg"
+                        style={{ maxHeight: "min(18rem, calc(100vh - 120px))" }}
+                      >
+                        <div className="max-h-[inherit] overflow-y-auto overscroll-contain">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedGroceryZoneId("auto");
+                              setSelectedStoreId("all-stores");
+                              setIsZoneMenuOpen(false);
+                            }}
+                            className={`block w-full truncate px-3 py-2 text-left text-xs font-semibold ${selectedGroceryZoneId === "auto" ? "bg-blue-600 text-white" : "text-gray-800 hover:bg-gray-100"}`}
+                          >
+                            Auto
+                          </button>
+                          {availableZones.map((zone) => (
+                            <button
+                              key={zone.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedGroceryZoneId(zone.id);
+                                setSelectedStoreId("all-stores");
+                                setIsZoneMenuOpen(false);
+                              }}
+                              className={`block w-full truncate px-3 py-2 text-left text-xs font-medium ${selectedGroceryZoneId === zone.id ? "bg-blue-600 text-white" : "text-gray-800 hover:bg-gray-100"}`}
+                            >
+                              {zone.name}
+                            </button>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               </div>
             </div>
           </div>

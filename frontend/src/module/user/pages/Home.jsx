@@ -66,7 +66,7 @@ import { useLocation } from "../hooks/useLocation";
 import { useZone } from "../hooks/useZone";
 import MoBasketLogo from "@/assets/mobasketlogo.png";
 import offerImage from "@/assets/offerimage.png";
-import api, { restaurantAPI } from "@/lib/api";
+import api, { restaurantAPI, zoneAPI } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api/config";
 import OptimizedImage from "@/components/OptimizedImage";
 // Explore More Icons
@@ -1021,6 +1021,8 @@ export default function Home() {
     isOutOfService,
     loading: zoneLoading,
   } = useZone(location);
+  const [availableZones, setAvailableZones] = useState([]);
+  const [selectedHomeZoneId, setSelectedHomeZoneId] = useState("auto");
   const [showToast, setShowToast] = useState(false);
   const [showManageCollections, setShowManageCollections] = useState(false);
   const [selectedRestaurantSlug, setSelectedRestaurantSlug] = useState(null);
@@ -1033,6 +1035,36 @@ export default function Home() {
 
   const cityName = location?.city || "Select";
   const stateName = location?.state || "Location";
+  const effectiveHomeZoneId =
+    selectedHomeZoneId && selectedHomeZoneId !== "auto" ? selectedHomeZoneId : zoneId;
+
+  useEffect(() => {
+    const fetchActiveZones = async () => {
+      try {
+        const response = await zoneAPI.getActiveZones("mofood");
+        const zoneList = response?.data?.data?.zones || response?.data?.zones || response?.data?.data || [];
+        const normalizedZones = (Array.isArray(zoneList) ? zoneList : [])
+          .map((zone) => ({
+            id: String(zone?._id || zone?.id || "").trim(),
+            name: String(zone?.name || zone?.zoneName || zone?.serviceLocation || "Unnamed Zone").trim(),
+          }))
+          .filter((zone) => zone.id && zone.name);
+        setAvailableZones(normalizedZones);
+      } catch {
+        setAvailableZones([]);
+      }
+    };
+
+    fetchActiveZones();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedHomeZoneId || selectedHomeZoneId === "auto") return;
+    const exists = availableZones.some((zone) => zone.id === selectedHomeZoneId);
+    if (!exists) {
+      setSelectedHomeZoneId("auto");
+    }
+  }, [availableZones, selectedHomeZoneId]);
 
   // Keep home location stable by default. Location is refreshed only from explicit user action.
 
@@ -1156,57 +1188,28 @@ export default function Home() {
           params.trusted = "true";
         }
 
-        // Home page is MoFood-only and should stay within the user's city.
+        // Home page is MoFood-only.
         params.platform = "mofood";
-        const resolvedUserCity = resolveUserCity(location);
-        const normalizedUserCity = normalizeCityName(resolvedUserCity);
-
-        if (!normalizedUserCity) {
-          // City is mandatory for home listing scope; avoid showing cross-city restaurants.
-          setRestaurantsData([]);
-          setLoadingRestaurants(false);
-          return;
-        }
-
-        if (normalizedUserCity) {
+        // When zone is selected (or auto-detected), fetch by zone only and ignore saved-location city.
+        const hasResolvedZone = Boolean(effectiveHomeZoneId);
+        let normalizedUserCity = "";
+        if (hasResolvedZone) {
+          params.zoneId = effectiveHomeZoneId;
+          params.onlyZone = "true";
+        } else {
+          // Fallback for no zone: keep city-based scope.
+          const resolvedUserCity = resolveUserCity(location);
+          normalizedUserCity = normalizeCityName(resolvedUserCity);
+          if (!normalizedUserCity) {
+            setRestaurantsData([]);
+            setLoadingRestaurants(false);
+            return;
+          }
           params.city = resolvedUserCity;
         }
 
-        // Strict zone filter: show only restaurants from the same detected zone when available.
-        const hasResolvedZone = Boolean(zoneId);
-        if (hasResolvedZone) {
-          params.zoneId = zoneId;
-          params.onlyZone = "true";
-        }
-
-        let response;
-        let restaurantsArrayRaw = [];
-        try {
-          response = await restaurantAPI.getRestaurants(params);
-          restaurantsArrayRaw = response?.data?.data?.restaurants || [];
-        } catch (zoneScopedFetchError) {
-          if (!hasResolvedZone) {
-            throw zoneScopedFetchError;
-          }
-          const fallbackParams = { ...params };
-          delete fallbackParams.zoneId;
-          delete fallbackParams.onlyZone;
-          response = await restaurantAPI.getRestaurants(fallbackParams);
-          restaurantsArrayRaw = response?.data?.data?.restaurants || [];
-        }
-
-        // If strict zone query returns empty, retry once without zone restriction.
-        if (
-          hasResolvedZone &&
-          Array.isArray(restaurantsArrayRaw) &&
-          restaurantsArrayRaw.length === 0
-        ) {
-          const fallbackParams = { ...params };
-          delete fallbackParams.zoneId;
-          delete fallbackParams.onlyZone;
-          response = await restaurantAPI.getRestaurants(fallbackParams);
-          restaurantsArrayRaw = response?.data?.data?.restaurants || [];
-        }
+        const response = await restaurantAPI.getRestaurants(params);
+        const restaurantsArrayRaw = response?.data?.data?.restaurants || [];
 
         if (
           response.data &&
@@ -1217,6 +1220,7 @@ export default function Home() {
           const restaurantsArray = (restaurantsArrayRaw || []).filter((restaurant) => {
             const platform = String(restaurant?.platform || "").toLowerCase();
             if (platform && platform !== "mofood") return false;
+            if (hasResolvedZone) return true;
             return matchesRestaurantCity(restaurant, normalizedUserCity);
           });
 
@@ -1401,7 +1405,7 @@ export default function Home() {
         setLoadingRestaurants(false);
       }
     },
-    [location?.city, location?.latitude, location?.longitude, zoneId, zoneLoading],
+    [effectiveHomeZoneId, location?.city, location?.latitude, location?.longitude, zoneLoading],
   );
 
   // Fetch restaurants when appliedFilters change
@@ -1968,6 +1972,10 @@ export default function Home() {
           <PageNavbar
             textColor="auto"
             zIndex={50}
+            showZoneSelector
+            zoneOptions={availableZones}
+            zoneValue={selectedHomeZoneId}
+            onZoneChange={setSelectedHomeZoneId}
           />
         </div>
 

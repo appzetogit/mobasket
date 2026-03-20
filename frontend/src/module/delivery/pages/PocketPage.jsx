@@ -138,6 +138,10 @@ export default function PocketPage() {
 
   // Calculate balances
   const balances = calculateDeliveryBalances(walletState)
+  const safeTransactions = useMemo(
+    () => (Array.isArray(walletState?.transactions) ? walletState.transactions : []),
+    [walletState]
+  )
 
   const normalizeTransactionType = (transaction = {}) =>
     String(transaction?.type || "").trim().toLowerCase()
@@ -180,18 +184,18 @@ export default function PocketPage() {
     console.log('💰 Total Balance (includes bonus):', walletState?.totalBalance || balances.totalBalance)
     console.log('💰 Cash In Hand:', walletState?.cashInHand || balances.cashInHand)
     // Check for bonus transactions
-    const bonusTransactions = walletState?.transactions?.filter(t => t.type === 'bonus' && t.status === 'Completed') || []
+    const bonusTransactions = safeTransactions.filter(t => t.type === 'bonus' && t.status === 'Completed')
     console.log('💰 Bonus Transactions:', bonusTransactions)
     if (bonusTransactions.length > 0) {
       const totalBonus = bonusTransactions.reduce((sum, t) => sum + (t.amount || 0), 0)
       console.log('💰 Total Bonus Amount:', totalBonus)
       console.log('💰 Pocket Balance should include this bonus:', totalBonus)
     }
-  }, [walletState, balances])
+  }, [walletState, balances, safeTransactions])
 
   // Calculate weekly earnings from wallet transactions (payment + earning_addon + bonus)
-  const weeklyEarnings = walletState?.transactions
-    ?.filter(t => {
+  const weeklyEarnings = safeTransactions
+    .filter(t => {
       // Include payment and bonus-like earnings transactions
       const transactionType = normalizeTransactionType(t)
       const transactionStatus = normalizeTransactionStatus(t)
@@ -211,7 +215,7 @@ export default function PocketPage() {
 
   // Calculate weekly orders count from transactions
   const calculateWeeklyOrders = () => {
-    if (!walletState || !walletState.transactions || !Array.isArray(walletState.transactions)) {
+    if (!walletState || safeTransactions.length === 0) {
       return 0
     }
 
@@ -220,7 +224,7 @@ export default function PocketPage() {
     startOfWeek.setDate(now.getDate() - now.getDay()) // Start of week (Sunday)
     startOfWeek.setHours(0, 0, 0, 0)
 
-    return walletState.transactions.filter(t => {
+    return safeTransactions.filter(t => {
       // Count payment transactions (completed orders)
       const transactionType = normalizeTransactionType(t)
       const transactionStatus = normalizeTransactionStatus(t)
@@ -306,13 +310,13 @@ export default function PocketPage() {
 
   // Calculate bonus earnings from earning_addon transactions (only for active offer)
   const calculateBonusEarnings = () => {
-    if (!activeEarningAddon || !walletState?.transactions) return 0
+    if (!activeEarningAddon || safeTransactions.length === 0) return 0
 
     const now = new Date()
     const startDate = activeEarningAddon.startDate ? new Date(activeEarningAddon.startDate) : null
     const endDate = activeEarningAddon.endDate ? new Date(activeEarningAddon.endDate) : null
 
-    return walletState.transactions
+    return safeTransactions
       .filter(t => {
         // Only count bonus-like transactions for active offer progress
         const normalizedType = normalizeTransactionType(t)
@@ -380,8 +384,8 @@ export default function PocketPage() {
   const hasActiveOffer = !!activeEarningAddon
 
   // Calculate total bonus amount from all bonus transactions
-  const totalBonus = walletState?.transactions
-    ?.filter(t => {
+  const totalBonus = safeTransactions
+    .filter(t => {
       const transactionType = normalizeTransactionType(t)
       const transactionStatus = normalizeTransactionStatus(t)
       return transactionType === 'bonus' && isCompletedLikeStatus(transactionStatus)
@@ -395,7 +399,7 @@ export default function PocketPage() {
 
   // Debug: Log pocket balance calculation
   useEffect(() => {
-    const bonusTransactions = walletState?.transactions?.filter(t => t.type === 'bonus' && t.status === 'Completed') || []
+    const bonusTransactions = safeTransactions.filter(t => t.type === 'bonus' && t.status === 'Completed')
     const calculatedTotalBonus = bonusTransactions.reduce((sum, t) => sum + (t.amount || 0), 0) || 0
 
     console.log('💰 FINAL Pocket Balance Display:', {
@@ -408,7 +412,7 @@ export default function PocketPage() {
       bonusTransactions: bonusTransactions
     })
     // Only depend on walletState and balances - totalBonus and weeklyEarnings are derived from these
-  }, [pocketBalance, walletState, balances])
+  }, [pocketBalance, walletState, balances, safeTransactions])
   // Rider-facing cash-limit flow:
   // totalCashLimit = admin COD limit
   // cashInHand/cashCollected = COD currently held by rider
@@ -445,8 +449,8 @@ export default function PocketPage() {
   const depositAmount = cashInHand > 0 ? cashInHand : 0
 
   // Customer tips balance - calculate from transactions
-  const customerTipsBalance = walletState.transactions
-    ?.filter(t => {
+  const customerTipsBalance = safeTransactions
+    .filter(t => {
       const transactionType = normalizeTransactionType(t)
       const transactionStatus = normalizeTransactionStatus(t)
       const description = String(t?.description || "").toLowerCase()
@@ -489,9 +493,11 @@ export default function PocketPage() {
         console.log('💰 Wallet data fetched:', walletData)
         console.log('💰 Total Balance from API:', walletData?.totalBalance)
         console.log('💰 Pocket Balance from API:', walletData?.pocketBalance)
-        console.log('💰 Bonus Transactions:', walletData?.transactions?.filter(t => t.type === 'bonus'))
-        const totalBonus = walletData?.transactions?.filter(t => t.type === 'bonus' && t.status === 'Completed')
-          .reduce((sum, t) => sum + (t.amount || 0), 0) || 0
+        const fetchedTransactions = Array.isArray(walletData?.transactions) ? walletData.transactions : []
+        console.log('💰 Bonus Transactions:', fetchedTransactions.filter(t => t.type === 'bonus'))
+        const totalBonus = fetchedTransactions
+          .filter(t => t.type === 'bonus' && t.status === 'Completed')
+          .reduce((sum, t) => sum + (t.amount || 0), 0)
         console.log('💰 Total Bonus Amount:', totalBonus)
       } catch (error) {
         console.error('Error fetching wallet data:', error)

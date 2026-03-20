@@ -87,6 +87,15 @@ export const fetchDeliveryWallet = async () => {
           : transformedRemainingLimit
       const transformedCashLimitUsed = transformedCashCollected
 
+      const rawTransactions = walletData.transactions ?? walletData.recentTransactions ?? []
+      const normalizedTransactions = Array.isArray(rawTransactions)
+        ? rawTransactions
+        : Array.isArray(rawTransactions?.transactions)
+          ? rawTransactions.transactions
+          : Array.isArray(rawTransactions?.items)
+            ? rawTransactions.items
+            : []
+
       // Transform API response to match expected format (support both camelCase and snake_case)
       const transformedData = {
         totalBalance: Number(walletData.totalBalance) || 0,
@@ -108,8 +117,8 @@ export const fetchDeliveryWallet = async () => {
         pendingWithdrawals: walletData.pendingWithdrawals || 0,
         joiningBonusClaimed: walletData.joiningBonusClaimed || false,
         joiningBonusAmount: walletData.joiningBonusAmount || 0,
-        // Use 'transactions' field (all transactions) for weekly calculations, fallback to recentTransactions for backward compatibility
-        transactions: walletData.transactions || walletData.recentTransactions || [],
+        // Normalize to a plain array to avoid .filter/.map runtime crashes in UI pages.
+        transactions: normalizedTransactions,
         totalTransactions: walletData.totalTransactions || 0
       }
 

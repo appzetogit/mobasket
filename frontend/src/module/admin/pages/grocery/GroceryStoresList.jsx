@@ -16,6 +16,7 @@ export default function GroceryStoresList() {
   const navigate = useNavigate()
   const [searchQuery, setSearchQuery] = useState("")
   const [stores, setStores] = useState([])
+  const [zones, setZones] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedStore, setSelectedStore] = useState(null)
@@ -28,6 +29,7 @@ export default function GroceryStoresList() {
   const [editStoreDialog, setEditStoreDialog] = useState(false)
   const [editingStore, setEditingStore] = useState(null)
   const [savingEditStore, setSavingEditStore] = useState(false)
+  const [updatingZoneFor, setUpdatingZoneFor] = useState("")
   const [uploadingStoreImage, setUploadingStoreImage] = useState(false)
   const [editMapLoading, setEditMapLoading] = useState(false)
   const [editMapError, setEditMapError] = useState("")
@@ -38,6 +40,7 @@ export default function GroceryStoresList() {
     ownerName: "",
     ownerPhone: "",
     ownerEmail: "",
+    zoneId: "",
     addressLine1: "",
     addressLine2: "",
     area: "",
@@ -97,13 +100,19 @@ export default function GroceryStoresList() {
       if (response.data && response.data.success && response.data.data) {
         const storesData = response.data.data.stores || []
         
-        const mappedStores = storesData.map((store, index) => ({
+      const mappedStores = storesData.map((store, index) => ({
           id: store._id || store.id || index + 1,
           _id: store._id || store.id || "",
           name: store.name || "N/A",
           ownerName: store.ownerName || "N/A",
           ownerPhone: store.ownerPhone || store.phone || "N/A",
-          zone: store.location?.area || store.location?.city || store.zone || "N/A",
+          zone:
+            store?.zone?.name ||
+            store?.zoneName ||
+            store?.location?.area ||
+            store?.location?.city ||
+            store?.zone ||
+            "N/A",
           status: store.isActive !== false,
           rating: store.ratings?.average || store.rating || 0,
           logo: store.profileImage?.url || store.logo || "",
@@ -125,6 +134,20 @@ export default function GroceryStoresList() {
 
   useEffect(() => {
     fetchStores()
+  }, [])
+
+  useEffect(() => {
+    const fetchZones = async () => {
+      try {
+        const response = await adminAPI.getZones({ platform: "mogrocery", limit: 1000 })
+        const zoneList = response?.data?.data?.zones || response?.data?.zones || []
+        setZones(Array.isArray(zoneList) ? zoneList : [])
+      } catch (zoneError) {
+        console.error("Error fetching zones for grocery stores:", zoneError)
+        setZones([])
+      }
+    }
+    fetchZones()
   }, [])
 
   useEffect(() => {
@@ -167,6 +190,134 @@ export default function GroceryStoresList() {
 
     return result
   }, [stores, searchQuery, filters])
+
+  const zoneOptions = useMemo(() => {
+    const seen = new Set()
+    return (Array.isArray(zones) ? zones : [])
+      .map((zone) => {
+        const id = String(zone?._id || zone?.id || "").trim()
+        const name = String(zone?.name || zone?.zoneName || zone?.serviceLocation || "Unnamed Zone").trim()
+        if (!id || !name || seen.has(id)) return null
+        seen.add(id)
+        return { id, name }
+      })
+      .filter(Boolean)
+  }, [zones])
+
+  const isPointInPolygon = (latitude, longitude, coordinates = []) => {
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !Array.isArray(coordinates) || coordinates.length < 3) {
+      return false
+    }
+
+    let inside = false
+    for (let i = 0, j = coordinates.length - 1; i < coordinates.length; j = i++) {
+      const xi = Number(coordinates[i]?.latitude)
+      const yi = Number(coordinates[i]?.longitude)
+      const xj = Number(coordinates[j]?.latitude)
+      const yj = Number(coordinates[j]?.longitude)
+      if (![xi, yi, xj, yj].every(Number.isFinite)) continue
+
+      const intersect =
+        yi > longitude !== yj > longitude &&
+        latitude < ((xj - xi) * (longitude - yi)) / (yj - yi) + xi
+      if (intersect) inside = !inside
+    }
+    return inside
+  }
+
+  const getStoreAssignedZoneId = (store) => {
+    const original = store?.originalData || {}
+    const explicitZoneValue = String(
+      original?.zoneId?._id ||
+        original?.zoneId?.id ||
+        original?.zoneId ||
+        original?.zone?._id ||
+        original?.zone?.id ||
+        original?.zone ||
+        "",
+    ).trim()
+
+    if (explicitZoneValue) {
+      const directMatch = zoneOptions.find((zone) => zone.id === explicitZoneValue)
+      if (directMatch) return directMatch.id
+
+      const byNameMatch = zoneOptions.find(
+        (zone) => zone.name.toLowerCase() === explicitZoneValue.toLowerCase(),
+      )
+      if (byNameMatch) return byNameMatch.id
+    }
+
+    const storeLat = Number(
+      original?.location?.latitude ?? original?.location?.coordinates?.[1],
+    )
+    const storeLng = Number(
+      original?.location?.longitude ?? original?.location?.coordinates?.[0],
+    )
+    if (!Number.isFinite(storeLat) || !Number.isFinite(storeLng)) return ""
+
+    const inferredZone = (Array.isArray(zones) ? zones : []).find(
+      (zone) =>
+        Array.isArray(zone?.coordinates) &&
+        zone.coordinates.length >= 3 &&
+        isPointInPolygon(storeLat, storeLng, zone.coordinates),
+    )
+
+    return String(inferredZone?._id || inferredZone?.id || "").trim()
+  }
+
+  const handleInlineZoneAssign = async (store, zoneId) => {
+    const storeId = getStoreObjectId(store)
+    if (!storeId) return
+
+    const nextZoneId = String(zoneId || "").trim()
+    const selectedZoneOption = zoneOptions.find((zone) => zone.id === nextZoneId)
+    const previousStores = stores
+
+    setUpdatingZoneFor(storeId)
+    setStores((prev) =>
+      prev.map((item) => {
+        if (getStoreObjectId(item) !== storeId) return item
+        return {
+          ...item,
+          zone: selectedZoneOption?.name || "N/A",
+          originalData: {
+            ...(item.originalData || {}),
+            zoneId: nextZoneId || null,
+            zone: selectedZoneOption?.name || item?.originalData?.zone || "",
+          },
+        }
+      }),
+    )
+
+    try {
+      const payload = { zoneId: nextZoneId || undefined }
+      if (selectedZoneOption?.name) payload.zone = selectedZoneOption.name
+
+      const response = await adminAPI.updateGroceryStore(storeId, payload)
+      const updatedStore = response?.data?.data?.store || response?.data?.data
+
+      setStores((prev) =>
+        prev.map((item) => {
+          if (getStoreObjectId(item) !== storeId) return item
+          return {
+            ...item,
+            zone:
+              selectedZoneOption?.name ||
+              updatedStore?.zone?.name ||
+              updatedStore?.zoneName ||
+              item.zone,
+            originalData: updatedStore || item.originalData,
+          }
+        }),
+      )
+    } catch (err) {
+      console.error("Error updating grocery store zone:", err)
+      setStores(previousStores)
+      alert(err?.response?.data?.message || "Failed to update zone. Please try again.")
+    } finally {
+      setUpdatingZoneFor("")
+    }
+  }
 
   const parseAddressComponents = (components = []) => {
     const byType = (type) => components.find((c) => c.types?.includes(type))
@@ -364,6 +515,7 @@ export default function GroceryStoresList() {
         ownerName: storeData?.ownerName || "",
         ownerPhone: storeData?.ownerPhone || storeData?.phone || "",
         ownerEmail: storeData?.ownerEmail || storeData?.email || "",
+        zoneId: getStoreAssignedZoneId({ originalData: storeData }),
         addressLine1: storeData?.location?.addressLine1 || "",
         addressLine2: storeData?.location?.addressLine2 || "",
         area: storeData?.location?.area || "",
@@ -447,6 +599,7 @@ export default function GroceryStoresList() {
         ownerName: editForm.ownerName,
         ownerPhone: editForm.ownerPhone,
         ownerEmail: editForm.ownerEmail,
+        zoneId: editForm.zoneId || undefined,
         location: {
           addressLine1: editForm.addressLine1,
           addressLine2: editForm.addressLine2,
@@ -462,6 +615,10 @@ export default function GroceryStoresList() {
           longitude: lng,
           coordinates: [lng, lat],
         },
+      }
+      const selectedZoneOption = zoneOptions.find((zone) => zone.id === String(editForm.zoneId || "").trim())
+      if (selectedZoneOption?.name) {
+        payload.zone = selectedZoneOption.name
       }
       if (uploadedProfileImage?.url) {
         payload.profileImage = {
@@ -481,7 +638,13 @@ export default function GroceryStoresList() {
                 name: updatedStore?.name || store.name,
                 ownerName: updatedStore?.ownerName || store.ownerName,
                 ownerPhone: updatedStore?.ownerPhone || updatedStore?.phone || store.ownerPhone,
-                zone: updatedStore?.location?.area || updatedStore?.location?.city || store.zone,
+                zone:
+                  selectedZoneOption?.name ||
+                  updatedStore?.zone?.name ||
+                  updatedStore?.zoneName ||
+                  updatedStore?.location?.area ||
+                  updatedStore?.location?.city ||
+                  store.zone,
                 logo: updatedStore?.profileImage?.url || updatedStore?.logo || store.logo,
                 originalData: updatedStore || store.originalData,
               }
@@ -630,6 +793,31 @@ export default function GroceryStoresList() {
                 <Plus className="w-4 h-4" />
                 <span>Add Store</span>
               </button>
+              <select
+                value={filters.all}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, all: e.target.value }))
+                }
+                className="px-3 py-2.5 text-sm rounded-lg border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="All">All Status</option>
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+              </select>
+              <select
+                value={filters.zone}
+                onChange={(e) =>
+                  setFilters((prev) => ({ ...prev, zone: e.target.value }))
+                }
+                className="px-3 py-2.5 text-sm rounded-lg border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="">All Zones</option>
+                {zoneOptions.map((zone) => (
+                  <option key={zone.id} value={zone.name}>
+                    {zone.name}
+                  </option>
+                ))}
+              </select>
               <div className="relative flex-1 sm:flex-initial min-w-[250px]">
                 <input
                   type="text"
@@ -692,7 +880,26 @@ export default function GroceryStoresList() {
                             <span className="text-slate-500">{store.ownerPhone}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 text-sm">{store.zone}</td>
+                        <td className="px-6 py-4">
+                          <div className="min-w-[180px]">
+                            <select
+                              value={getStoreAssignedZoneId(store)}
+                              onChange={(e) => handleInlineZoneAssign(store, e.target.value)}
+                              disabled={updatingZoneFor === getStoreObjectId(store)}
+                              className="w-full px-2.5 py-1.5 text-sm rounded-md border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
+                            >
+                              <option value="">Unassigned</option>
+                              {zoneOptions.map((zone) => (
+                                <option key={zone.id} value={zone.id}>
+                                  {zone.name}
+                                </option>
+                              ))}
+                            </select>
+                            {updatingZoneFor === getStoreObjectId(store) ? (
+                              <p className="mt-1 text-[11px] text-blue-600">Saving...</p>
+                            ) : null}
+                          </div>
+                        </td>
                         <td className="px-6 py-4">
                           <button
                             onClick={() => handleToggleStatus(store.id)}
@@ -862,6 +1069,21 @@ export default function GroceryStoresList() {
                     onChange={(e) => setEditForm((prev) => ({ ...prev, ownerEmail: e.target.value }))}
                     className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm"
                   />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-600">Assigned Zone</label>
+                  <select
+                    value={editForm.zoneId}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, zoneId: e.target.value }))}
+                    className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white"
+                  >
+                    <option value="">Select zone</option>
+                    {zoneOptions.map((zone) => (
+                      <option key={zone.id} value={zone.id}>
+                        {zone.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
