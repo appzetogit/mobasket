@@ -38,6 +38,14 @@ export default function RestaurantCommission({ platformOverride = "mofood", enti
     actions: true,
   })
 
+  const formatCommissionValue = (defaultCommission) => {
+    if (defaultCommission?.type === "percentage") {
+      return `${defaultCommission.value}%`
+    }
+
+    return `₹${defaultCommission?.value ?? 0}`
+  }
+
   const filteredCommissions = useMemo(() => {
     if (!commissionSearchQuery.trim()) {
       return commissions
@@ -419,11 +427,7 @@ export default function RestaurantCommission({ platformOverride = "mofood", enti
                         {visibleColumns.defaultCommission && (
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="text-sm font-medium text-slate-900">
-                              {commission.defaultCommission?.type === 'percentage' ? (
-                                <>{commission.defaultCommission.value}%</>
-                              ) : (
-                                <>${commission.defaultCommission.value}</>
-                              )}
+                              {formatCommissionValue(commission.defaultCommission)}
                             </span>
                           </td>
                         )}
