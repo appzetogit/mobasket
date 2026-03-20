@@ -1,16 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Menu,
   Search,
   User,
   ChevronDown,
-  UtensilsCrossed,
   LogOut,
   Settings,
-  FileText,
-  Package,
-  Users,
   AlertCircle,
   ArrowRight,
 } from "lucide-react";
@@ -25,7 +21,6 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -33,27 +28,193 @@ import { Input } from "@/components/ui/input";
 import { adminAPI } from "@/lib/api";
 import { clearModuleAuth } from "@/lib/utils/auth";
 import { getCachedSettings, loadBusinessSettings } from "@/lib/utils/businessSettings";
+import { sidebarMenuData, mogroceryMenuData } from "../data/sidebarMenu";
+import { usePlatform } from "../context/PlatformContext";
+
+const SEARCH_HISTORY_KEY = "adminUniversalSearchHistory";
+const MAX_SEARCH_HISTORY = 8;
+
+const getStoredAdminUser = () => {
+  try {
+    const adminUserStr = localStorage.getItem("admin_user");
+    return adminUserStr ? JSON.parse(adminUserStr) : null;
+  } catch {
+    return null;
+  }
+};
+
+const getStoredSearchHistory = () => {
+  try {
+    const stored = localStorage.getItem(SEARCH_HISTORY_KEY);
+    const parsed = stored ? JSON.parse(stored) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((item) => typeof item === "string" && item.trim())
+      : [];
+  } catch {
+    return [];
+  }
+};
+
+const buildAccessibleMenuData = (rawMenuData, adminUser) => {
+  const role = String(adminUser?.role || "").toLowerCase();
+  const isSuperAdmin = role === "super_admin";
+  const allowedPaths = new Set(
+    Array.isArray(adminUser?.sidebarAccess)
+      ? adminUser.sidebarAccess.map((entry) => String(entry || "").trim())
+      : []
+  );
+  const hasCustomAccess = allowedPaths.size > 0;
+
+  const canAccessPath = (path) => {
+    const normalized = String(path || "").trim();
+    if (!normalized) return false;
+    if (normalized === "/admin/manage-admin") return isSuperAdmin;
+    if (normalized === "/admin" || normalized === "/admin/profile") return true;
+    if (isSuperAdmin) return true;
+    if (!hasCustomAccess) return true;
+    return allowedPaths.has(normalized);
+  };
+
+  const filteredByAccess = rawMenuData.reduce((acc, entry) => {
+    if (entry?.type === "link") {
+      if (canAccessPath(entry.path)) acc.push(entry);
+      return acc;
+    }
+
+    if (entry?.type !== "section" || !Array.isArray(entry.items)) return acc;
+
+    const items = entry.items
+      .map((item) => {
+        if (item?.type === "link") {
+          return canAccessPath(item.path) ? item : null;
+        }
+        if (item?.type === "expandable" && Array.isArray(item.subItems)) {
+          const subItems = item.subItems.filter((subItem) => canAccessPath(subItem?.path));
+          if (subItems.length === 0) return null;
+          return { ...item, subItems };
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    if (items.length > 0) {
+      acc.push({ ...entry, items });
+    }
+    return acc;
+  }, []);
+
+  return filteredByAccess.map((entry) => {
+    if (entry.type !== "section" || !Array.isArray(entry.items)) {
+      return entry;
+    }
+
+    const items = entry.items.map((item) => {
+      if (
+        item.type === "expandable" &&
+        item.label === "Pages & Social Media" &&
+        Array.isArray(item.subItems)
+      ) {
+        const hasTerms = item.subItems.some(
+          (sub) => sub.path === "/admin/pages-social-media/terms"
+        );
+
+        if (hasTerms) return item;
+
+        return {
+          ...item,
+          subItems: [
+            { label: "Terms of Service", path: "/admin/pages-social-media/terms" },
+            ...item.subItems,
+          ],
+        };
+      }
+
+      return item;
+    });
+
+    return { ...entry, items };
+  });
+};
+
+const flattenMenuForSearch = (menuData) => {
+  const resultsByPath = new Map();
+
+  menuData.forEach((entry) => {
+    if (entry?.type === "link" && entry.path) {
+      resultsByPath.set(entry.path, {
+        title: entry.label,
+        path: entry.path,
+        type: "Navigation",
+        description: "Main menu",
+        sectionLabel: "",
+        parentLabel: "",
+      });
+      return;
+    }
+
+    if (entry?.type !== "section" || !Array.isArray(entry.items)) return;
+
+    entry.items.forEach((item) => {
+      if (item?.type === "link" && item.path) {
+        resultsByPath.set(item.path, {
+          title: item.label,
+          path: item.path,
+          type: "Navigation",
+          description: entry.label,
+          sectionLabel: entry.label,
+          parentLabel: "",
+        });
+        return;
+      }
+
+      if (item?.type === "expandable" && Array.isArray(item.subItems)) {
+        item.subItems.forEach((subItem) => {
+          if (!subItem?.path) return;
+          resultsByPath.set(subItem.path, {
+            title: subItem.label,
+            path: subItem.path,
+            type: item.label,
+            description: entry.label,
+            sectionLabel: entry.label,
+            parentLabel: item.label,
+          });
+        });
+      }
+    });
+  });
+
+  return Array.from(resultsByPath.values());
+};
+
+const persistSearchHistory = (term) => {
+  const normalizedTerm = String(term || "").trim();
+  if (!normalizedTerm) return getStoredSearchHistory();
+
+  const nextHistory = [
+    normalizedTerm,
+    ...getStoredSearchHistory().filter(
+      (entry) => entry.toLowerCase() !== normalizedTerm.toLowerCase()
+    ),
+  ].slice(0, MAX_SEARCH_HISTORY);
+
+  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(nextHistory));
+  return nextHistory;
+};
 
 export default function AdminNavbar({ onMenuClick }) {
   const navigate = useNavigate();
+  const { platform } = usePlatform();
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [adminData, setAdminData] = useState(null);
+  const [adminData, setAdminData] = useState(getStoredAdminUser);
   const [businessSettings, setBusinessSettings] = useState(null);
+  const [recentSearchHistory, setRecentSearchHistory] = useState(getStoredSearchHistory);
   const searchInputRef = useRef(null);
 
   // Load admin data from localStorage
   useEffect(() => {
     const loadAdminData = () => {
-      try {
-        const adminUserStr = localStorage.getItem('admin_user');
-        if (adminUserStr) {
-          const adminUser = JSON.parse(adminUserStr);
-          setAdminData(adminUser);
-        }
-      } catch (error) {
-        console.error('Error loading admin data:', error);
-      }
+      setAdminData(getStoredAdminUser());
     };
 
     loadAdminData();
@@ -126,17 +287,79 @@ export default function AdminNavbar({ onMenuClick }) {
     }
   }, [searchOpen]);
 
-  // Mock search results - replace with actual search logic
-  const searchResults = [
-    { type: "Order", title: "Order #12345", description: "Pending delivery", icon: Package },
-    { type: "User", title: "Sumit Jaiswal", description: "Customer profile", icon: Users },
-    { type: "Product", title: "Chicken Biryani", description: "Food item", icon: UtensilsCrossed },
-    { type: "Report", title: "Sales Report", description: "Monthly analytics", icon: FileText },
-  ].filter((item) =>
-    searchQuery.trim() === "" ||
-    item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    item.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const searchableMenuItems = useMemo(() => {
+    const rawMenuData = platform === "mogrocery" ? mogroceryMenuData : sidebarMenuData;
+    return flattenMenuForSearch(buildAccessibleMenuData(rawMenuData, adminData));
+  }, [adminData, platform]);
+
+  const searchResults = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return [];
+
+    const getMatchPriority = (item) => {
+      const title = item.title.toLowerCase();
+      const parentLabel = item.parentLabel.toLowerCase();
+      const sectionLabel = item.sectionLabel.toLowerCase();
+      const path = item.path.toLowerCase();
+
+      if (title === query) return 0;
+      if (title.startsWith(query)) return 1;
+      if (title.includes(query)) return 2;
+      if (parentLabel.startsWith(query)) return 3;
+      if (parentLabel.includes(query)) return 4;
+      if (sectionLabel.startsWith(query)) return 5;
+      if (sectionLabel.includes(query)) return 6;
+      if (path.includes(query)) return 7;
+      return 8;
+    };
+
+    return searchableMenuItems
+      .filter((item) => {
+        const searchableText = [
+          item.title,
+          item.type,
+          item.description,
+          item.sectionLabel,
+          item.parentLabel,
+          item.path,
+        ]
+          .join(" ")
+          .toLowerCase();
+
+        return searchableText.includes(query);
+      })
+      .sort((a, b) => {
+        const priorityDiff = getMatchPriority(a) - getMatchPriority(b);
+        if (priorityDiff !== 0) return priorityDiff;
+        return a.title.localeCompare(b.title);
+      });
+  }, [searchQuery, searchableMenuItems]);
+
+  const handleSearchResultSelect = (path) => {
+    const normalizedQuery = searchQuery.trim();
+
+    if (normalizedQuery) {
+      setRecentSearchHistory(persistSearchHistory(normalizedQuery));
+    }
+
+    navigate(path);
+    setSearchOpen(false);
+    setSearchQuery("");
+  };
+
+  const handleSearchHistoryClick = (term) => {
+    setSearchQuery(term);
+    if (searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  };
+
+  const handleSearchKeyDown = (event) => {
+    if (event.key === "Enter" && searchResults.length > 0) {
+      event.preventDefault();
+      handleSearchResultSelect(searchResults[0].path);
+    }
+  };
 
 
   // Handle logout
@@ -351,53 +574,39 @@ export default function AdminNavbar({ onMenuClick }) {
               <Input
                 ref={searchInputRef}
                 type="text"
-                placeholder="Search orders, users, products, reports..."
+                placeholder="Search sidebar sections and menu items..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={handleSearchKeyDown}
                 className="pl-10 pr-4 py-3 text-base border-neutral-300 bg-white text-neutral-900 placeholder:text-neutral-500 focus:border-black focus:ring-black"
               />
             </div>
 
             {searchQuery.trim() === "" ? (
               <div className="space-y-4">
-                <div className="text-sm text-neutral-500 mb-4">Quick Actions</div>
-                <div className="grid grid-cols-2 gap-3">
-                  {[
-                    { icon: Package, label: "Orders", path: "/admin/orders/all" },
-                    { icon: Users, label: "Users", path: "/admin/customers" },
-                    { icon: UtensilsCrossed, label: "Products", path: "/admin/foods" },
-                    { icon: FileText, label: "Reports", path: "/admin/transaction-report" },
-                  ].map((action, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => {
-                        navigate(action.path);
-                        setSearchOpen(false);
-                        setSearchQuery("");
-                      }}
-                      className="flex items-center gap-3 p-4 rounded-lg border border-neutral-200 bg-white hover:border-neutral-300 hover:bg-neutral-50 transition-all cursor-pointer"
-                    >
-                      <div className="p-2 rounded-md bg-black text-white">
-                        <action.icon className="w-5 h-5" />
-                      </div>
-                      <span className="text-sm font-medium text-neutral-900">{action.label}</span>
-                    </button>
-                  ))}
-                </div>
-                <div className="mt-6 pt-4 border-t border-neutral-200">
-                  <p className="text-xs text-neutral-500 mb-2">Recent Searches</p>
-                  <div className="flex flex-wrap gap-2">
-                    {["Order #12345", "Sumit Jaiswal", "Chicken Biryani"].map((term, idx) => (
-                      <button
-                        key={idx}
-                        onClick={() => setSearchQuery(term)}
-                        className="px-3 py-1 text-xs bg-neutral-100 hover:bg-neutral-200 rounded-full text-neutral-700 transition-colors"
-                      >
-                        {term}
-                      </button>
-                    ))}
+                {recentSearchHistory.length > 0 ? (
+                  <div>
+                    <p className="text-sm text-neutral-500 mb-3">Search History</p>
+                    <div className="flex flex-wrap gap-2">
+                      {recentSearchHistory.map((term, idx) => (
+                        <button
+                          key={`${term}-${idx}`}
+                          onClick={() => handleSearchHistoryClick(term)}
+                          className="px-3 py-1 text-xs bg-neutral-100 hover:bg-neutral-200 rounded-full text-neutral-700 transition-colors"
+                        >
+                          {term}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <Search className="w-12 h-12 text-neutral-300 mx-auto mb-3" />
+                    <p className="text-sm text-neutral-500">
+                      Start typing to search sidebar sections and menu items
+                    </p>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -414,6 +623,7 @@ export default function AdminNavbar({ onMenuClick }) {
                     {searchResults.map((result, idx) => (
                       <button
                         key={idx}
+                        onClick={() => handleSearchResultSelect(result.path)}
                         className="w-full flex items-center gap-4 p-4 rounded-lg border border-neutral-200 hover:border-neutral-300 hover:bg-neutral-50 transition-all text-left"
                       >
                         <div className="flex-1">
