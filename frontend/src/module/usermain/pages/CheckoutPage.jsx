@@ -1164,7 +1164,7 @@ export default function CheckoutPage() {
         if (!recipientName || !recipientPhone || !street || !city || !state || !zipCode) {
           throw new Error("Please fill recipient name, phone and complete delivery address.");
         }
-        if (phoneDigits.length < 10) {
+        if (phoneDigits.length !== 10) {
           throw new Error("Please enter a valid recipient phone number.");
         }
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
@@ -1471,9 +1471,14 @@ export default function CheckoutPage() {
                         <Phone className="absolute left-2 top-2 h-3.5 w-3.5 text-gray-400" />
                         <input
                           type="text"
+                          inputMode="numeric"
+                          maxLength={10}
                           value={recipientDetails.phone}
                           onChange={(e) =>
-                            setRecipientDetails((prev) => ({ ...prev, phone: e.target.value }))
+                            setRecipientDetails((prev) => ({
+                              ...prev,
+                              phone: e.target.value.replace(/\D/g, "").slice(0, 10),
+                            }))
                           }
                           placeholder="Recipient phone"
                           className="h-8 w-full rounded-lg border border-gray-200 bg-white pl-7 pr-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
