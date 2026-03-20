@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react"
-import { Search, Download, ChevronDown, Eye, Settings, Wallet, ArrowUpDown, FileText, FileSpreadsheet, Code, Check, Columns } from "lucide-react"
+import { Search, Download, ChevronDown, Eye, Settings, Wallet, FileText, FileSpreadsheet, Code, Check, Columns } from "lucide-react"
 import { collectCashDummy } from "../../data/collectCashDummy"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter as DialogFooterComponent } from "@/components/ui/dialog"
@@ -347,7 +347,6 @@ export default function CollectCash() {
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-2">
                         <span>SI</span>
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                       </div>
                     </th>
                   )}
@@ -355,7 +354,6 @@ export default function CollectCash() {
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-2">
                         <span>Collected From</span>
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                       </div>
                     </th>
                   )}
@@ -363,7 +361,6 @@ export default function CollectCash() {
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-2">
                         <span>User Type</span>
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                       </div>
                     </th>
                   )}
@@ -371,7 +368,6 @@ export default function CollectCash() {
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-2">
                         <span>Collected At</span>
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                       </div>
                     </th>
                   )}
@@ -379,7 +375,6 @@ export default function CollectCash() {
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-2">
                         <span>Collected Amount</span>
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                       </div>
                     </th>
                   )}
@@ -387,7 +382,6 @@ export default function CollectCash() {
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-2">
                         <span>Payment Method</span>
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                       </div>
                     </th>
                   )}
@@ -395,7 +389,6 @@ export default function CollectCash() {
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-2">
                         <span>Reference</span>
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                       </div>
                     </th>
                   )}

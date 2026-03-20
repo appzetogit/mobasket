@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react"
-import { Monitor, Info, Check, Copy, Edit, ExternalLink, Settings, ArrowUpDown, Columns } from "lucide-react"
+import { Monitor, Info, Check, Copy, Edit, ExternalLink, Settings, Columns } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 const panelLoginUrls = [
@@ -379,7 +379,6 @@ export default function LoginSetup() {
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                         <div className="flex items-center gap-2">
                           <span>SI</span>
-                          <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                         </div>
                       </th>
                     )}
@@ -387,7 +386,6 @@ export default function LoginSetup() {
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                         <div className="flex items-center gap-2">
                           <span>Panel Name</span>
-                          <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                         </div>
                       </th>
                     )}
@@ -395,7 +393,6 @@ export default function LoginSetup() {
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                         <div className="flex items-center gap-2">
                           <span>Login Page URL</span>
-                          <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                         </div>
                       </th>
                     )}
@@ -403,7 +400,6 @@ export default function LoginSetup() {
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                         <div className="flex items-center gap-2">
                           <span>Status</span>
-                          <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                         </div>
                       </th>
                     )}

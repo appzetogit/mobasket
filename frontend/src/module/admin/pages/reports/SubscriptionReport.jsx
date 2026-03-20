@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react"
-import { Search, Download, ChevronDown, Filter, ArrowUpDown, Settings, FileText, FileSpreadsheet, Code } from "lucide-react"
+import { Search, Download, ChevronDown, Filter, Settings, FileText, FileSpreadsheet, Code } from "lucide-react"
 import { subscriptionReportDummy } from "../../data/subscriptionReportDummy"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -236,55 +236,46 @@ export default function SubscriptionReport() {
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-1">
                       <span>SI</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-1">
                       <span>Transaction Id</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-1">
                       <span>Transaction Date</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-1">
                       <span>Restaurant Name</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-1">
                       <span>Package Name</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-1">
                       <span>Duration</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-1">
                       <span>Pricing</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-1">
                       <span>Payment Status</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-1">
                       <span>Payment Method</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="px-4 py-3 text-center text-[10px] font-bold text-slate-700 uppercase tracking-wider">Action</th>

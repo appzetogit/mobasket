@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react"
-import { Eye, Download, ArrowUpDown, ArrowUp, ArrowDown, Loader2, CheckCircle2, XCircle, BellRing, Info, Trash2 } from "lucide-react"
+import { Eye, Download, Loader2, CheckCircle2, XCircle, BellRing, Info, Trash2 } from "lucide-react"
 
 const getStatusColor = (orderStatus, isGrocery = false) => {
   // Grocery (Blinkit-style) status colors
@@ -201,16 +201,6 @@ export default function OrdersTable({
     }
   }
 
-  const getSortIcon = (columnKey) => {
-    if (sortConfig.key !== columnKey) {
-      return <ArrowUpDown className="w-4 h-4 text-slate-400 cursor-pointer hover:text-slate-600" />
-    }
-    if (sortConfig.direction === 'asc') {
-      return <ArrowUp className="w-4 h-4 text-blue-600 cursor-pointer hover:text-blue-700" />
-    }
-    return <ArrowDown className="w-4 h-4 text-blue-600 cursor-pointer hover:text-blue-700" />
-  }
-
   const formatRestaurantName = (name) => {
     if (name === "Cafe Monarch") return "Café Monarch"
     return name
@@ -240,100 +230,72 @@ export default function OrdersTable({
             <tr>
               {visibleColumns.si && (
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    <span>SI</span>
-                    <button onClick={() => handleSort('si')} className="flex items-center">
-                      {getSortIcon('si')}
-                    </button>
-                  </div>
+                  <button type="button" onClick={() => handleSort('si')} className="flex items-center text-left">
+                    SI
+                  </button>
                 </th>
               )}
               {visibleColumns.orderId && (
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    <span>Order ID</span>
-                    <button onClick={() => handleSort('orderId')} className="flex items-center">
-                      {getSortIcon('orderId')}
-                    </button>
-                  </div>
+                  <button type="button" onClick={() => handleSort('orderId')} className="flex items-center text-left">
+                    Order ID
+                  </button>
                 </th>
               )}
               {visibleColumns.orderDate && (
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    <span>Order Date</span>
-                    <button onClick={() => handleSort('orderDate')} className="flex items-center">
-                      {getSortIcon('orderDate')}
-                    </button>
-                  </div>
+                  <button type="button" onClick={() => handleSort('orderDate')} className="flex items-center text-left">
+                    Order Date
+                  </button>
                 </th>
               )}
               {visibleColumns.customer && (
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    <span>Customer Information</span>
-                    <button onClick={() => handleSort('customer')} className="flex items-center">
-                      {getSortIcon('customer')}
-                    </button>
-                  </div>
+                  <button type="button" onClick={() => handleSort('customer')} className="flex items-center text-left">
+                    Customer Information
+                  </button>
                 </th>
               )}
               {visibleColumns.restaurant && (
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    <span>{isGrocery ? "Store" : "Restaurant"}</span>
-                    <button onClick={() => handleSort('restaurant')} className="flex items-center">
-                      {getSortIcon('restaurant')}
-                    </button>
-                  </div>
+                  <button type="button" onClick={() => handleSort('restaurant')} className="flex items-center text-left">
+                    {isGrocery ? "Store" : "Restaurant"}
+                  </button>
                 </th>
               )}
               {visibleColumns.foodItems && (
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider min-w-[200px]">
-                  <div className="flex items-center gap-2">
-                    <span>{isGrocery ? "Items" : "Food Items"}</span>
-                    <ArrowUpDown className="w-4 h-4 text-slate-400 opacity-50" />
-                  </div>
+                  <span>{isGrocery ? "Items" : "Food Items"}</span>
                 </th>
               )}
               {visibleColumns.totalAmount && (
                 <th className="px-6 py-4 text-right text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                  <div className="flex items-center justify-end gap-2">
-                    <span>Total Amount</span>
-                    <button onClick={() => handleSort('totalAmount')} className="flex items-center">
-                      {getSortIcon('totalAmount')}
+                  <div className="flex justify-end">
+                    <button type="button" onClick={() => handleSort('totalAmount')} className="flex items-center text-right">
+                      Total Amount
                     </button>
                   </div>
                 </th>
               )}
               {(visibleColumns.paymentType !== false) && (
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    <span>Payment Type</span>
-                    <button onClick={() => handleSort('paymentType')} className="flex items-center">
-                      {getSortIcon('paymentType')}
-                    </button>
-                  </div>
+                  <button type="button" onClick={() => handleSort('paymentType')} className="flex items-center text-left">
+                    Payment Type
+                  </button>
                 </th>
               )}
               {(visibleColumns.paymentCollectionStatus !== false) && (
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    <span>Payment Status</span>
-                    <button onClick={() => handleSort('paymentStatus')} className="flex items-center">
-                      {getSortIcon('paymentStatus')}
-                    </button>
-                  </div>
+                  <button type="button" onClick={() => handleSort('paymentStatus')} className="flex items-center text-left">
+                    Payment Status
+                  </button>
                 </th>
               )}
               {visibleColumns.orderStatus && (
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                  <div className="flex items-center gap-2">
-                    <span>Order Status</span>
-                    <button onClick={() => handleSort('orderStatus')} className="flex items-center">
-                      {getSortIcon('orderStatus')}
-                    </button>
-                  </div>
+                  <button type="button" onClick={() => handleSort('orderStatus')} className="flex items-center text-left">
+                    Order Status
+                  </button>
                 </th>
               )}
               {visibleColumns.actions && (

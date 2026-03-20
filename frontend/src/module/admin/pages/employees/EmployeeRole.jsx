@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react"
-import { UserCog, ChevronDown, ArrowUpDown, Trash2, Search, Download, Edit, Settings, FileText, FileSpreadsheet, Code, Check, Columns } from "lucide-react"
+import { UserCog, ChevronDown, Trash2, Search, Download, Edit, Settings, FileText, FileSpreadsheet, Code, Check, Columns } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
@@ -383,7 +383,6 @@ export default function EmployeeRole() {
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-2">
                         <span>SI</span>
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                       </div>
                     </th>
                   )}
@@ -391,7 +390,6 @@ export default function EmployeeRole() {
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-2">
                         <span>Role Name</span>
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                       </div>
                     </th>
                   )}
@@ -399,7 +397,6 @@ export default function EmployeeRole() {
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-2">
                         <span>Modules</span>
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                       </div>
                     </th>
                   )}
@@ -407,7 +404,6 @@ export default function EmployeeRole() {
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-2">
                         <span>Created At</span>
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                       </div>
                     </th>
                   )}

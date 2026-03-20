@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Search, Download, Plus, Edit3, ChevronDown, Settings, ArrowUpDown, FileText, FileSpreadsheet, Code, Check, Columns, Trash2 } from "lucide-react";
+import { Search, Download, Plus, Edit3, ChevronDown, Settings, FileText, FileSpreadsheet, Code, Check, Columns, Trash2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
@@ -145,7 +145,7 @@ export default function CreateTaxes() {
                   <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-2">
                       <span>SI</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
+
                     </div>
                   </th>
                 )}
@@ -153,7 +153,7 @@ export default function CreateTaxes() {
                   <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-2">
                       <span>Tax Name</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
+
                     </div>
                   </th>
                 )}
@@ -161,7 +161,7 @@ export default function CreateTaxes() {
                   <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-2">
                       <span>Tax Rate</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
+
                     </div>
                   </th>
                 )}
@@ -169,7 +169,7 @@ export default function CreateTaxes() {
                   <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-2">
                       <span>Status</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
+
                     </div>
                   </th>
                 )}

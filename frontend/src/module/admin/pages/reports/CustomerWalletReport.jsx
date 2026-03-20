@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react"
-import { Search, Download, ChevronDown, Filter, Wallet, RefreshCw, Calendar, Plus, ArrowUpDown, Settings, FileText, FileSpreadsheet, Code, Loader2 } from "lucide-react"
+import { Search, Download, ChevronDown, Filter, Wallet, RefreshCw, Calendar, Plus, Settings, FileText, FileSpreadsheet, Code, Loader2 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { exportReportsToCSV, exportReportsToExcel, exportReportsToPDF, exportReportsToJSON } from "../../components/reports/reportsExportUtils"
@@ -317,55 +317,46 @@ export default function CustomerWalletReport() {
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-1">
                       <span>SI</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-1">
                       <span>Transaction Id</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-1">
                       <span>Customer</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-1">
                       <span>Credit</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-1">
                       <span>Debit</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-1">
                       <span>Balance</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-1">
                       <span>Transaction Type</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-1">
                       <span>Reference</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                   <th className="px-4 py-3 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                     <div className="flex items-center gap-1">
                       <span>Created At</span>
-                      <ArrowUpDown className="w-3 h-3 text-slate-400" />
                     </div>
                   </th>
                 </tr>

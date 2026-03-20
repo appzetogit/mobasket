@@ -159,16 +159,14 @@ export default function SearchOverlay({ isOpen, onClose, searchValue, onSearchCh
   const handleSearchSubmit = (e) => {
     e.preventDefault()
     if (searchValue.trim()) {
-      navigate(`/user/search?q=${encodeURIComponent(searchValue.trim())}`)
-      onClose()
-      onSearchChange("")
+      onClose({ restoreHistory: false })
+      navigate(`/search?q=${encodeURIComponent(searchValue.trim())}`, { replace: true })
     }
   }
 
   const handleFoodClick = (food) => {
-    navigate(`/user/search?q=${encodeURIComponent(food.name)}`)
-    onClose()
-    onSearchChange("")
+    onClose({ restoreHistory: false })
+    navigate(`/search?q=${encodeURIComponent(food.name)}`, { replace: true })
   }
 
   if (!isOpen) return null

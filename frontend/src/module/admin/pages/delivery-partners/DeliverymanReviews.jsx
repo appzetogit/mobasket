@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react"
 import { Link } from "react-router-dom"
-import { Search, Download, ChevronDown, Star, ArrowUpDown, Settings, FileText, FileSpreadsheet, Code, Check, Columns, Loader2, Eye } from "lucide-react"
+import { Search, Download, ChevronDown, Star, Settings, FileText, FileSpreadsheet, Code, Check, Columns, Loader2, Eye } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { exportReviewsToCSV, exportReviewsToExcel, exportReviewsToPDF, exportReviewsToJSON } from "../../components/deliveryman/deliverymanExportUtils"
@@ -222,7 +222,6 @@ export default function DeliverymanReviews() {
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                         <div className="flex items-center gap-2">
                           <span>SI</span>
-                          <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                         </div>
                       </th>
                     )}
@@ -230,7 +229,6 @@ export default function DeliverymanReviews() {
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                         <div className="flex items-center gap-2">
                           <span>Order ID</span>
-                          <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                         </div>
                       </th>
                     )}
@@ -238,7 +236,6 @@ export default function DeliverymanReviews() {
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                         <div className="flex items-center gap-2">
                           <span>Deliveryman</span>
-                          <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                         </div>
                       </th>
                     )}
@@ -246,7 +243,6 @@ export default function DeliverymanReviews() {
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                         <div className="flex items-center gap-2">
                           <span>Delivery Boy ID</span>
-                          <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                         </div>
                       </th>
                     )}
@@ -254,7 +250,6 @@ export default function DeliverymanReviews() {
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                         <div className="flex items-center gap-2">
                           <span>Customer</span>
-                          <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                         </div>
                       </th>
                     )}
@@ -262,7 +257,6 @@ export default function DeliverymanReviews() {
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                         <div className="flex items-center gap-2">
                           <span>Review</span>
-                          <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                         </div>
                       </th>
                     )}
@@ -270,7 +264,6 @@ export default function DeliverymanReviews() {
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                         <div className="flex items-center gap-2">
                           <span>Rating</span>
-                          <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                         </div>
                       </th>
                     )}
@@ -278,7 +271,6 @@ export default function DeliverymanReviews() {
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                         <div className="flex items-center gap-2">
                           <span>Date & Time</span>
-                          <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                         </div>
                       </th>
                     )}

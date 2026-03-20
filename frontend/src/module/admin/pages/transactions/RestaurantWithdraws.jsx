@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react"
-import { Search, Download, ChevronDown, Eye, Settings, Building, ArrowUpDown, FileText, FileSpreadsheet, Code, Check, Columns, CheckCircle, XCircle, Loader2 } from "lucide-react"
+import { Search, Download, ChevronDown, Eye, Settings, Building, FileText, FileSpreadsheet, Code, Check, Columns, CheckCircle, XCircle, Loader2 } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { exportTransactionsToExcel, exportTransactionsToPDF } from "../../components/transactions/transactionsExportUtils"
@@ -337,7 +337,6 @@ export default function RestaurantWithdraws({ platformOverride = null, entityLab
                     {visibleColumns.si && <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-2">
                         <span>SI</span>
-                        <ArrowUpDown className="w-3 h-3 text-slate-400 cursor-pointer hover:text-slate-600" />
                       </div>
                     </th>}
                     {visibleColumns.amount && <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Amount</th>}
