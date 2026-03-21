@@ -566,6 +566,7 @@ export default function Home() {
   const [renderAllRestaurants, setRenderAllRestaurants] = useState(false);
   const isHandlingSwitchOff = useRef(false);
   const restaurantsRequestRef = useRef(0);
+  const homepageMenuPrefetchStartedRef = useRef(new Set());
   const backendAssetBaseUrl = API_BASE_URL.replace(/\/api\/?$/, "");
   const prefetchRestaurant = useCallback((restaurantOrSlug) => {
     const restaurantSummary =
@@ -2048,6 +2049,79 @@ export default function Home() {
         : filteredRestaurants.slice(0, INITIAL_RESTAURANT_RENDER_COUNT),
     [filteredRestaurants, renderAllRestaurants],
   );
+
+  useEffect(() => {
+    if (loadingRestaurants) return undefined;
+
+    const toPrefetch = [];
+    const seen = new Set();
+    const candidates = [...visibleTopBrands, ...displayedRestaurants];
+
+    for (const restaurant of candidates) {
+      const key = String(
+        restaurant?.slug ||
+          restaurant?.restaurantId ||
+          restaurant?._id ||
+          restaurant?.id ||
+          "",
+      ).trim();
+      if (!key || seen.has(key) || homepageMenuPrefetchStartedRef.current.has(key)) {
+        continue;
+      }
+      seen.add(key);
+      toPrefetch.push({ key, restaurant });
+      if (toPrefetch.length >= 10) break;
+    }
+
+    if (toPrefetch.length === 0) return undefined;
+
+    let cancelled = false;
+    let timerId;
+    let idleId;
+
+    const runPrefetch = async () => {
+      const chunkSize = 2;
+      for (let i = 0; i < toPrefetch.length; i += chunkSize) {
+        if (cancelled) break;
+        const chunk = toPrefetch.slice(i, i + chunkSize);
+        await Promise.allSettled(
+          chunk.map(async ({ key, restaurant }) => {
+            homepageMenuPrefetchStartedRef.current.add(key);
+            await prefetchRestaurantForRoute({
+              slug: key,
+              restaurantSummary: restaurant,
+            });
+          }),
+        );
+        if (!cancelled) {
+          await new Promise((resolve) => setTimeout(resolve, 140));
+        }
+      }
+    };
+
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      idleId = window.requestIdleCallback(
+        () => {
+          runPrefetch().catch(() => {});
+        },
+        { timeout: 1200 },
+      );
+    } else {
+      timerId = setTimeout(() => {
+        runPrefetch().catch(() => {});
+      }, 250);
+    }
+
+    return () => {
+      cancelled = true;
+      if (typeof window !== "undefined" && idleId) {
+        window.cancelIdleCallback?.(idleId);
+      }
+      if (timerId) {
+        clearTimeout(timerId);
+      }
+    };
+  }, [displayedRestaurants, loadingRestaurants, visibleTopBrands]);
 
   // Featured foods removed - will be handled by restaurants data from API
   const filteredFeaturedFoods = useMemo(() => {

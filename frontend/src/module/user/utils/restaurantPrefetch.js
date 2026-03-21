@@ -56,6 +56,42 @@ const getRestaurantIdForMenu = (restaurantData, restaurantSummary) => {
   );
 };
 
+const getMenuSectionsByLookupIds = async (lookupIds = []) => {
+  const uniqueLookupIds = Array.from(
+    new Set(
+      (Array.isArray(lookupIds) ? lookupIds : [])
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+  if (uniqueLookupIds.length === 0) return null;
+
+  const menuPromises = uniqueLookupIds.map(async (lookupId) => {
+    try {
+      const menuResponse = await restaurantAPI.getMenuByRestaurantId(lookupId, {
+        timeout: 6000,
+      });
+      const menu = menuResponse?.data?.data?.menu;
+      if (menu && Array.isArray(menu.sections)) {
+        return menu.sections;
+      }
+      throw Object.assign(new Error("Menu not found"), { response: { status: 404 } });
+    } catch (error) {
+      if (error?.response?.status === 404) {
+        throw Object.assign(new Error("Menu not found"), { response: { status: 404 } });
+      }
+      throw error;
+    }
+  });
+
+  try {
+    return await Promise.any(menuPromises);
+  } catch {
+    return null;
+  }
+};
+
 export const getPrefetchedRestaurantForRoute = (slug) => {
   const key = normalizeKey(slug);
   if (!key) return null;
@@ -113,34 +149,47 @@ export const prefetchRestaurantForRoute = async ({ slug, restaurantSummary } = {
 
   const requestPromise = (async () => {
     try {
-      let restaurantData = null;
-      try {
-        const response = await restaurantAPI.getRestaurantById(normalizedSlug);
-        restaurantData =
-          response?.data?.data?.restaurant ||
-          response?.data?.data ||
-          response?.data?.restaurant ||
-          null;
-      } catch {
-        // Ignore and fallback to summary data.
-      }
-
-      const menuRestaurantId = getRestaurantIdForMenu(restaurantData, restaurantSummary);
-      let menuSections = [];
-      if (menuRestaurantId) {
+      const restaurantRequest = (async () => {
         try {
-          const menuResponse = await restaurantAPI.getMenuByRestaurantId(menuRestaurantId);
-          menuSections = menuResponse?.data?.data?.menu?.sections || [];
+          const response = await restaurantAPI.getRestaurantById(normalizedSlug, {
+            timeout: 6000,
+          });
+          return (
+            response?.data?.data?.restaurant ||
+            response?.data?.data ||
+            response?.data?.restaurant ||
+            null
+          );
         } catch {
-          // Ignore menu prefetch failures.
+          return null;
         }
+      })();
+
+      const fastMenuLookupIds = [
+        restaurantSummary?.restaurantId,
+        restaurantSummary?._id,
+        restaurantSummary?.id,
+        restaurantSummary?.slug,
+        normalizedSlug,
+      ];
+      const fastMenuRequest = getMenuSectionsByLookupIds(fastMenuLookupIds);
+
+      const [restaurantData, fastMenuSections] = await Promise.all([
+        restaurantRequest,
+        fastMenuRequest,
+      ]);
+
+      let menuSections = Array.isArray(fastMenuSections) ? fastMenuSections : null;
+      if (!menuSections) {
+        const menuRestaurantId = getRestaurantIdForMenu(restaurantData, restaurantSummary);
+        menuSections = await getMenuSectionsByLookupIds([menuRestaurantId, normalizedSlug]);
       }
 
       const payload = {
         fetchedAt: Date.now(),
         slug: normalizedSlug,
         restaurantData,
-        menuSections,
+        menuSections: Array.isArray(menuSections) ? menuSections : [],
       };
 
       putCache(normalizedSlug, payload);
