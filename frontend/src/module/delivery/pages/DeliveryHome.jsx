@@ -97,9 +97,9 @@ const DELIVERY_ACCEPT_SWIPE_START_THRESHOLD_PX = 12
 const DELIVERY_ACCEPT_MIN_TRAVEL_PX = 72
 const FETCH_ASSIGNED_ORDERS_MIN_INTERVAL_MS = 15000
 const ACTIVE_EARNING_ADDON_MIN_INTERVAL_MS = 20000
-const DELIVERY_LOCATION_SEND_INTERVAL_ACTIVE_MS = 5000
+const DELIVERY_LOCATION_SEND_INTERVAL_ACTIVE_MS = 4000
 const DELIVERY_LOCATION_SEND_INTERVAL_IDLE_MS = 20000
-const DELIVERY_LOCATION_FALLBACK_INTERVAL_ACTIVE_MS = 15000
+const DELIVERY_LOCATION_FALLBACK_INTERVAL_ACTIVE_MS = 12000
 const DELIVERY_LOCATION_FALLBACK_INTERVAL_IDLE_MS = 60000
 const DELIVERY_LOCATION_DISTANCE_THRESHOLD_ACTIVE_KM = 0.01
 const DELIVERY_LOCATION_DISTANCE_THRESHOLD_IDLE_KM = 0.03
@@ -6085,6 +6085,11 @@ export default function DeliveryHome() {
       if (!orderId) {
         setShowRejectPopup(false)
         setShowNewOrderPopup(false)
+        setShowreachedPickupPopup(false)
+        setShowOrderIdConfirmationPopup(false)
+        setShowReachedDropPopup(false)
+        setShowOrderDeliveredAnimation(false)
+        setSelectedRestaurant(null)
         toast.error('This order is no longer available to deny.')
         return
       }
@@ -6093,10 +6098,13 @@ export default function DeliveryHome() {
       }
 
       try {
+        // Cancel any in-flight accept UI state so deny cannot race into accepted UI.
+        setIsAcceptingNewOrder(false)
+        resetNewOrderAcceptProgress()
         const reasonToSend = (overrideReason || rejectReason || "Too far from current location").trim()
         rejectingOrderIdsRef.current.add(String(orderId))
         setIsRejectingOrder(true)
-        await deliveryAPI.rejectOrder(orderId, reasonToSend)
+        await deliveryAPI.rejectOrder(orderId, reasonToSend, { suppressErrorToast: true })
         markOrderAsUnavailable(orderId, newOrder?.orderMongoId, newOrder?.orderId, selectedRestaurant?.orderId)
         clearNewOrder()
         localStorage.removeItem('deliveryActiveOrder')
@@ -6114,22 +6122,34 @@ export default function DeliveryHome() {
         setCountdownSeconds(300)
         toast.success("Order denied")
       } catch (error) {
+        const statusCode = Number(error?.response?.status || 0)
         const message = String(error?.response?.data?.message || "").toLowerCase()
         if (
           message.includes("already accepted by you") ||
           message.includes("already assigned to another delivery partner") ||
           message.includes("not available for you") ||
-          message.includes("already denied")
+          message.includes("already denied") ||
+          message.includes("not assigned") ||
+          message.includes("forbidden") ||
+          statusCode === 403 ||
+          statusCode === 404
         ) {
           // Treat stale deny as resolved UI state; don't keep popup stuck.
           markOrderAsUnavailable(orderId, newOrder?.orderMongoId, newOrder?.orderId, selectedRestaurant?.orderId)
           clearNewOrder()
+          localStorage.removeItem('deliveryActiveOrder')
+          localStorage.removeItem('activeOrder')
           setShowRejectPopup(false)
           setShowNewOrderPopup(false)
+          setShowreachedPickupPopup(false)
+          setShowOrderIdConfirmationPopup(false)
+          setShowReachedDropPopup(false)
+          setShowOrderDeliveredAnimation(false)
+          setSelectedRestaurant(null)
           setIsNewOrderPopupMinimized(false)
           setNewOrderDragY(0)
           setRejectReason("")
-          toast.success("Order updated")
+          toast.success("Order is no longer available")
           return
         }
         const fallback = error?.response?.data?.message || "Failed to deny order. Please try again."
@@ -8258,13 +8278,6 @@ export default function DeliveryHome() {
       newOrderAcceptButtonMaxProgressRef.current = 1
       newOrderAcceptButtonRenderedProgressRef.current = 1
       setNewOrderAcceptButtonProgress(1)
-      setShowNewOrderPopup(false)
-      setIsNewOrderPopupMinimized(false)
-      setNewOrderDragY(0)
-      setShowOrderIdConfirmationPopup(false)
-      setShowReachedDropPopup(false)
-      setShowOrderDeliveredAnimation(false)
-      setShowreachedPickupPopup(true)
 
 
 
@@ -18917,6 +18930,13 @@ export default function DeliveryHome() {
 
 
 
+    const hasBillProof =
+      Boolean(selectedRestaurant?.billImageUrl) ||
+      Boolean(selectedRestaurant?.deliveryState?.billImageUrl) ||
+      Boolean(billImageUploaded)
+
+
+
     const isCustomerLeg =
 
 
@@ -18935,7 +18955,8 @@ export default function DeliveryHome() {
       deliveryStateStatus === 'order_confirmed' ||
 
 
-      deliveryStateStatus === 'en_route_to_delivery'
+      deliveryStateStatus === 'en_route_to_delivery' ||
+      hasBillProof
 
 
 
@@ -18972,6 +18993,15 @@ export default function DeliveryHome() {
 
 
     selectedRestaurant?.deliveryState?.status,
+
+
+    selectedRestaurant?.billImageUrl,
+
+
+    selectedRestaurant?.deliveryState?.billImageUrl,
+
+
+    billImageUploaded,
 
 
     navigationMode
@@ -19038,8 +19068,13 @@ export default function DeliveryHome() {
       deliveryPhase === 'completed' ||
       deliveryStateStatus === 'delivered';
 
+    const hasBillProof =
+      Boolean(selectedRestaurant?.billImageUrl) ||
+      Boolean(selectedRestaurant?.deliveryState?.billImageUrl) ||
+      Boolean(billImageUploaded);
+
     const shouldShowCustomerMarker =
-      navigationMode === 'customer' &&
+      (navigationMode === 'customer' || hasBillProof) &&
       hasCustomerCoords &&
       !isDeliveredOrCompleted;
 
@@ -19185,7 +19220,16 @@ export default function DeliveryHome() {
     selectedRestaurant?.deliveryState?.currentPhase,
 
 
-    selectedRestaurant?.deliveryState?.status
+    selectedRestaurant?.deliveryState?.status,
+
+
+    selectedRestaurant?.billImageUrl,
+
+
+    selectedRestaurant?.deliveryState?.billImageUrl,
+
+
+    billImageUploaded
 
 
   ])
@@ -22312,6 +22356,11 @@ export default function DeliveryHome() {
 
       !(Number(selectedRestaurant.customerLat) === 0 && Number(selectedRestaurant.customerLng) === 0);
 
+    const hasBillProof =
+      Boolean(selectedRestaurant?.billImageUrl) ||
+      Boolean(selectedRestaurant?.deliveryState?.billImageUrl) ||
+      Boolean(billImageUploaded);
+
 
     // In delivery phase, only keep directions if they point to the customer.
 
@@ -23085,6 +23134,44 @@ export default function DeliveryHome() {
 
 
     const order = orderReady.order || orderReady
+    const incomingOrderIds = [
+      orderReady?.orderId,
+      order?.orderId,
+      order?._id,
+      orderReady?.orderMongoId,
+      orderReady?.mongoId,
+    ]
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+
+    let persistedActiveOrderId = null
+    try {
+      const rawActiveOrder = localStorage.getItem('deliveryActiveOrder')
+      if (rawActiveOrder) {
+        const parsedActiveOrder = JSON.parse(rawActiveOrder)
+        persistedActiveOrderId = String(
+          parsedActiveOrder?.orderId ||
+          parsedActiveOrder?.restaurantInfo?.orderId ||
+          parsedActiveOrder?.restaurantInfo?.id ||
+          ""
+        ).trim() || null
+      }
+    } catch {
+      persistedActiveOrderId = null
+    }
+
+    const currentActiveOrderId = String(
+      selectedRestaurant?.orderId ||
+      selectedRestaurant?.id ||
+      persistedActiveOrderId ||
+      ""
+    ).trim()
+
+    // Ignore late order_ready events for orders that are not the rider's current active order.
+    if (!currentActiveOrderId || (incomingOrderIds.length > 0 && !incomingOrderIds.includes(currentActiveOrderId))) {
+      clearOrderReady()
+      return
+    }
 
 
 
@@ -24606,9 +24693,10 @@ export default function DeliveryHome() {
 
       !(Number(selectedRestaurant.customerLat) === 0 && Number(selectedRestaurant.customerLng) === 0);
 
-
-
-
+    const hasBillProof =
+      Boolean(selectedRestaurant?.billImageUrl) ||
+      Boolean(selectedRestaurant?.deliveryState?.billImageUrl) ||
+      Boolean(billImageUploaded);
 
     // Use live rider location; fallback to last known location if GPS update is delayed
 
@@ -24796,10 +24884,10 @@ export default function DeliveryHome() {
 
 
 
-    // Only switch route if order is picked up and we have customer location
+    // Only switch route when pickup is done, bill proof exists, and customer location is available.
 
 
-    if (isPickedUp && hasCustomerLocation && riderPos && riderPos.length === 2) {
+    if ((isPickedUp || hasBillProof) && hasCustomerLocation && riderPos && riderPos.length === 2) {
 
 
       // Check if we already have a route to customer (avoid recalculating unnecessarily)
@@ -25103,6 +25191,9 @@ export default function DeliveryHome() {
 
 
     selectedRestaurant?.routeToDelivery?.coordinates,
+    selectedRestaurant?.billImageUrl,
+    selectedRestaurant?.deliveryState?.billImageUrl,
+    billImageUploaded,
 
 
     riderLocation,
@@ -25164,6 +25255,11 @@ export default function DeliveryHome() {
 
       deliveryStateStatus === 'en_route_to_delivery'
 
+    const hasBillProof =
+      Boolean(selectedRestaurant?.billImageUrl) ||
+      Boolean(selectedRestaurant?.deliveryState?.billImageUrl) ||
+      Boolean(billImageUploaded)
+
 
     const hasCustomerCoords = selectedRestaurant?.customerLat != null && selectedRestaurant?.customerLng != null &&
 
@@ -25177,7 +25273,7 @@ export default function DeliveryHome() {
 
 
 
-    if (!isOutForDelivery || hasCustomerCoords || !orderId || fetchedOrderDetailsForDropRef.current === orderId) return
+    if ((!isOutForDelivery && !hasBillProof) || hasCustomerCoords || !orderId || fetchedOrderDetailsForDropRef.current === orderId) return
 
 
 
@@ -25228,7 +25324,7 @@ export default function DeliveryHome() {
       })
 
 
-  }, [selectedRestaurant?.orderStatus, selectedRestaurant?.deliveryPhase, selectedRestaurant?.deliveryState?.currentPhase, selectedRestaurant?.deliveryState?.status, selectedRestaurant?.customerLat, selectedRestaurant?.customerLng, selectedRestaurant?.orderId, selectedRestaurant?.id])
+  }, [selectedRestaurant?.orderStatus, selectedRestaurant?.deliveryPhase, selectedRestaurant?.deliveryState?.currentPhase, selectedRestaurant?.deliveryState?.status, selectedRestaurant?.customerLat, selectedRestaurant?.customerLng, selectedRestaurant?.orderId, selectedRestaurant?.id, selectedRestaurant?.billImageUrl, selectedRestaurant?.deliveryState?.billImageUrl, billImageUploaded])
 
 
 
@@ -27011,6 +27107,24 @@ export default function DeliveryHome() {
 
 
         forwardPoints = [{ lat: riderPos.lat, lng: riderPos.lng }, ...trimmedPoints];
+      if (isPickedUpPhase && hasCustomerLocation) {
+        const customerPoint = {
+          lat: Number(selectedRestaurant.customerLat),
+          lng: Number(selectedRestaurant.customerLng)
+        };
+
+        if (Number.isFinite(customerPoint.lat) && Number.isFinite(customerPoint.lng)) {
+          const lastPoint = forwardPoints[forwardPoints.length - 1];
+          const sameAsCustomer =
+            lastPoint &&
+            Math.abs(lastPoint.lat - customerPoint.lat) < 0.00005 &&
+            Math.abs(lastPoint.lng - customerPoint.lng) < 0.00005;
+
+          if (!sameAsCustomer) {
+            forwardPoints = [...forwardPoints, customerPoint];
+          }
+        }
+      }
 
 
       }
@@ -36133,6 +36247,11 @@ export default function DeliveryHome() {
 
 
 }
+
+
+
+
+
 
 
 

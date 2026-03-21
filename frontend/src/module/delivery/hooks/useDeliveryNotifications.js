@@ -350,6 +350,11 @@ export const useDeliveryNotifications = (options = {}) => {
       const currentIds = normalizeOrderIds(currentOrder);
       return currentIds.some((id) => suppressedOrderIdsRef.current.has(id)) ? null : currentOrder;
     });
+    setOrderReady((currentOrder) => {
+      if (!currentOrder) return currentOrder;
+      const currentIds = normalizeOrderIds(currentOrder);
+      return currentIds.some((id) => suppressedOrderIdsRef.current.has(id)) ? null : currentOrder;
+    });
   }, [normalizeOrderIds]);
 
   const shouldIgnoreOrderNotification = useCallback((orderData = {}) => {
@@ -718,6 +723,9 @@ export const useDeliveryNotifications = (options = {}) => {
       if (!canReceiveOrderAlerts()) {
         return;
       }
+      if (shouldIgnoreOrderNotification(orderData)) {
+        return;
+      }
       setOrderReady(orderData);
       playNotificationSound();
       if (enableBrowserNotificationRef.current && document.hidden) {
@@ -732,6 +740,15 @@ export const useDeliveryNotifications = (options = {}) => {
     socketRef.current.on('order_unavailable', (payload) => {
       suppressOrderNotifications(payload?.orderId, payload?.orderMongoId, payload?.mongoId);
       setNewOrder((currentOrder) => {
+        if (!currentOrder) return currentOrder;
+        const currentOrderId = currentOrder.orderId || currentOrder.orderMongoId || currentOrder.mongoId;
+        const unavailableOrderId = payload?.orderId || payload?.orderMongoId;
+        if (String(currentOrderId) === String(unavailableOrderId)) {
+          return null;
+        }
+        return currentOrder;
+      });
+      setOrderReady((currentOrder) => {
         if (!currentOrder) return currentOrder;
         const currentOrderId = currentOrder.orderId || currentOrder.orderMongoId || currentOrder.mongoId;
         const unavailableOrderId = payload?.orderId || payload?.orderMongoId;

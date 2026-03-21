@@ -28,6 +28,11 @@ const normalizeVariantKey = (value) =>
     .replace(/\s+/g, "-")
     .replace(/[^a-z0-9-]/g, "");
 
+const resolveInStock = (stockQuantity, inStock) => {
+  const normalizedStock = Number.isFinite(Number(stockQuantity)) ? Math.max(0, Number(stockQuantity)) : 0;
+  return normalizedStock > 0 ? inStock !== false : false;
+};
+
 const normalizeVariants = (variants = []) =>
   Array.isArray(variants)
     ? variants
@@ -35,6 +40,7 @@ const normalizeVariants = (variants = []) =>
           const name = String(variant?.name || "").trim();
           const price = Number(variant?.sellingPrice ?? variant?.price ?? 0);
           const mrp = Number(variant?.mrp ?? price);
+          const stockQuantity = Number.isFinite(Number(variant?.stockQuantity)) ? Math.max(0, Number(variant?.stockQuantity)) : 0;
           if (!name || !Number.isFinite(price)) {
             return null;
           }
@@ -46,7 +52,8 @@ const normalizeVariants = (variants = []) =>
             name,
             price,
             mrp,
-            inStock: variant?.inStock !== false,
+            stockQuantity,
+            inStock: resolveInStock(stockQuantity, variant?.inStock),
             isDefault: variant?.isDefault === true,
           };
         })
@@ -63,6 +70,9 @@ const normalizeProduct = (item = {}, fallbackId = "") => {
   const id = item?.id || item?._id || fallbackId;
   const variants = normalizeVariants(item?.variants);
   const defaultVariant = variants.find((variant) => variant.isDefault) || variants[0] || null;
+  const normalizedStockQuantity = Number.isFinite(Number(defaultVariant?.stockQuantity ?? item?.stockQuantity))
+    ? Math.max(0, Number(defaultVariant?.stockQuantity ?? item?.stockQuantity))
+    : 0;
   const price = Number(defaultVariant?.price ?? item?.price ?? item?.sellingPrice ?? 0);
   const mrp = Number(defaultVariant?.mrp ?? item?.mrp ?? price);
   const discountPercent = mrp > price && mrp > 0 ? Math.max(1, Math.round(((mrp - price) / mrp) * 100)) : 0;
@@ -124,7 +134,8 @@ const normalizeProduct = (item = {}, fallbackId = "") => {
       item?.storeId?.location ||
       item?.restaurantLocation ||
       null,
-    stockQuantity: item?.stockQuantity,
+    stockQuantity: normalizedStockQuantity,
+    inStock: resolveInStock(normalizedStockQuantity, defaultVariant?.inStock ?? item?.inStock),
   };
 };
 
@@ -185,6 +196,9 @@ export default function FoodDetailPage() {
   const activeCartItemId = String(groceryCartItem?.id || cartItemId || "").trim();
   const isAddedToCart = Boolean(groceryCartItem);
   const currentQuantity = Number(groceryCartItem?.quantity || 0);
+  const selectedVariantInStock = selectedVariant ? resolveInStock(selectedVariant?.stockQuantity, selectedVariant?.inStock) : null;
+  const productInStock = resolveInStock(product?.stockQuantity, product?.inStock);
+  const isCurrentProductOutOfStock = selectedVariant ? !selectedVariantInStock : !productInStock;
 
   useEffect(() => {
     const onScroll = () => setShowStickyHeader(window.scrollY > 260);
@@ -202,11 +216,7 @@ export default function FoodDetailPage() {
       setIsDetailsOpen(false);
 
       if (location.state?.item) {
-        const normalizedStateProduct = normalizeProduct(location.state.item, id);
         setProduct(normalizeProduct(location.state.item, id));
-        if (normalizedStateProduct.description) {
-          return;
-        }
       }
 
       if (!isValidObjectId(id)) {
@@ -318,6 +328,22 @@ export default function FoodDetailPage() {
       toast.error("Store information missing for this product.");
       return;
     }
+    if (itemToWeight) {
+      const itemDefaultVariant =
+        Array.isArray(itemToWeight?.variants) && itemToWeight.variants.length > 0
+          ? itemToWeight.variants.find((variant) => variant.key === itemToWeight.defaultVariantKey) || itemToWeight.variants[0]
+          : null;
+      const itemInStock = itemDefaultVariant
+        ? resolveInStock(itemDefaultVariant?.stockQuantity, itemDefaultVariant?.inStock)
+        : resolveInStock(itemToWeight?.stockQuantity, itemToWeight?.inStock);
+      if (!itemInStock) {
+        toast.error("This item is out of stock");
+        return;
+      }
+    } else if (isCurrentProductOutOfStock) {
+      toast.error("This item is out of stock");
+      return;
+    }
 
     const resolvedProductId = String(targetProduct.id || id || "").trim();
     const resolvedVariantLabel =
@@ -375,6 +401,7 @@ export default function FoodDetailPage() {
 
   const handleIncreaseQuantity = (e) => {
     if (e) e.stopPropagation();
+    if (isCurrentProductOutOfStock) return;
     if (!isAddedToCart) {
       handleAddToCart(null, e);
       return;
@@ -469,6 +496,7 @@ export default function FoodDetailPage() {
               <button
                 type="button"
                 onClick={handleIncreaseQuantity}
+                disabled={isCurrentProductOutOfStock}
                 className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center"
               >
                 <Plus size={14} />
@@ -477,9 +505,14 @@ export default function FoodDetailPage() {
           ) : (
             <button
               onClick={(e) => handleAddToCart(null, e)}
-              className="absolute bottom-4 right-4 text-xs font-black px-6 py-2 rounded-md shadow-sm transition-colors z-20 border bg-white dark:bg-[#0f172a] border-[#facd01] dark:border-amber-500/60 text-slate-900 dark:text-slate-100 hover:bg-[#facd01] md:hidden"
+              disabled={isCurrentProductOutOfStock}
+              className={`absolute bottom-4 right-4 text-xs font-black px-6 py-2 rounded-md shadow-sm transition-colors z-20 border md:hidden ${
+                isCurrentProductOutOfStock
+                  ? "bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-300 cursor-not-allowed"
+                  : "bg-white dark:bg-[#0f172a] border-[#facd01] dark:border-amber-500/60 text-slate-900 dark:text-slate-100 hover:bg-[#facd01]"
+              }`}
             >
-              ADD
+              {isCurrentProductOutOfStock ? "OUT OF STOCK" : "ADD"}
             </button>
           )}
         </div>
@@ -510,6 +543,7 @@ export default function FoodDetailPage() {
                 <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
                   {product.variants.map((variant) => {
                     const isSelected = selectedVariant?.key === variant.key;
+                    const isVariantOutOfStock = !resolveInStock(variant?.stockQuantity, variant?.inStock);
                     const variantDiscount =
                       variant.mrp > variant.price && variant.mrp > 0
                         ? Math.max(1, Math.round(((variant.mrp - variant.price) / variant.mrp) * 100))
@@ -520,6 +554,9 @@ export default function FoodDetailPage() {
                         type="button"
                         onClick={() => setSelectedVariantKey(variant.key)}
                         className={`min-w-[112px] rounded-2xl border px-3 py-2.5 text-left transition-all ${
+                          isVariantOutOfStock
+                            ? "opacity-55 border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-[#0b1220] text-slate-500 dark:text-slate-400"
+                            :
                           isSelected
                             ? "border-emerald-500 dark:border-emerald-400 bg-emerald-50 dark:bg-emerald-900/30 shadow-sm"
                             : "border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0b1220] text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600"
@@ -538,6 +575,9 @@ export default function FoodDetailPage() {
                         )}
                         {variantDiscount > 0 && (
                           <div className="mt-1 text-[10px] font-bold text-blue-600 dark:text-blue-300">{variantDiscount}% OFF</div>
+                        )}
+                        {isVariantOutOfStock && (
+                          <div className="mt-1 text-[10px] font-bold text-rose-600 dark:text-rose-300">Out of stock</div>
                         )}
                       </button>
                     );
@@ -573,7 +613,8 @@ export default function FoodDetailPage() {
                   <button
                     type="button"
                     onClick={handleIncreaseQuantity}
-                    className="w-8 h-8 rounded-full bg-white text-emerald-700 flex items-center justify-center hover:scale-105 transition-transform"
+                    disabled={isCurrentProductOutOfStock}
+                    className="w-8 h-8 rounded-full bg-white text-emerald-700 flex items-center justify-center hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Plus size={16} strokeWidth={3} />
                   </button>
@@ -581,9 +622,14 @@ export default function FoodDetailPage() {
               ) : (
                 <button
                   onClick={(e) => handleAddToCart(null, e)}
-                  className="h-12 w-40 rounded-xl bg-slate-800 text-white font-[800] text-base shadow-md hover:bg-slate-700 transition-colors"
+                  disabled={isCurrentProductOutOfStock}
+                  className={`h-12 w-40 rounded-xl font-[800] text-base shadow-md transition-colors ${
+                    isCurrentProductOutOfStock
+                      ? "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-300 cursor-not-allowed"
+                      : "bg-slate-800 text-white hover:bg-slate-700"
+                  }`}
                 >
-                  ADD TO CART
+                  {isCurrentProductOutOfStock ? "OUT OF STOCK" : "ADD TO CART"}
                 </button>
               )}
             </div>
@@ -628,6 +674,9 @@ export default function FoodDetailPage() {
               const itemWeight = itemDefaultVariant?.name || item.weight;
               const itemPrice = Number(itemDefaultVariant?.price ?? item.price ?? 0);
               const itemMrp = Number(itemDefaultVariant?.mrp ?? item.mrp ?? itemPrice);
+              const itemOutOfStock = itemDefaultVariant
+                ? !resolveInStock(itemDefaultVariant?.stockQuantity, itemDefaultVariant?.inStock)
+                : !resolveInStock(item?.stockQuantity, item?.inStock);
               const discountVal = itemMrp > itemPrice ? Math.round(((itemMrp - itemPrice) / itemMrp) * 100) : 0;
               item.weight = itemWeight;
               item.price = itemPrice;
@@ -671,9 +720,11 @@ export default function FoodDetailPage() {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              if (itemOutOfStock) return;
                               updateQuantityByPlatform(itemCartId, itemQty + 1, "mogrocery");
                             }}
-                            className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center active:scale-90 transition-transform"
+                            disabled={itemOutOfStock}
+                            className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center active:scale-90 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <Plus size={12} strokeWidth={3} />
                           </button>
@@ -681,9 +732,14 @@ export default function FoodDetailPage() {
                       ) : (
                         <button
                           onClick={(e) => handleAddToCart(item, e)}
-                          className="bg-white dark:bg-[#0b1220] border border-[#facd01] dark:border-amber-500/60 text-slate-900 dark:text-slate-100 text-[10px] font-black px-5 py-1.5 rounded-full shadow-sm hover:bg-[#facd01] transition-all active:scale-95"
+                          disabled={itemOutOfStock}
+                          className={`text-[10px] font-black px-5 py-1.5 rounded-full shadow-sm transition-all ${
+                            itemOutOfStock
+                              ? "bg-slate-200 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-300 cursor-not-allowed"
+                              : "bg-white dark:bg-[#0b1220] border border-[#facd01] dark:border-amber-500/60 text-slate-900 dark:text-slate-100 hover:bg-[#facd01] active:scale-95"
+                          }`}
                         >
-                          ADD
+                          {itemOutOfStock ? "OUT" : "ADD"}
                         </button>
                       )}
                     </div>

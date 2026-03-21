@@ -152,9 +152,23 @@ export default function Cart() {
   // Get restaurant ID from cart or restaurant data
   // Priority: restaurantData > cart[0].restaurantId
   // DO NOT use cart[0].restaurant as slug fallback - it creates wrong slugs
-  const restaurantId = cart.length > 0
-    ? (restaurantData?._id || restaurantData?.restaurantId || cart[0]?.restaurantId || null)
-    : null
+  const restaurantId = cart.length > 0
+
+    ? (restaurantData?._id || restaurantData?.restaurantId || cart[0]?.restaurantId || null)
+
+    : null
+
+  const isMongoObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || "").trim())
+
+  const canonicalRestaurantMongoId = (() => {
+    const fromRestaurantData = restaurantData?._id || restaurantData?.id
+    if (isMongoObjectId(fromRestaurantData)) return String(fromRestaurantData)
+
+    const fromCart = cart[0]?.restaurantId
+    if (isMongoObjectId(fromCart)) return String(fromCart)
+
+    return null
+  })()
 
   // Stable restaurant ID for addons fetch (memoized to prevent dependency array issues)
   // Prefer restaurantData IDs (more reliable) over slug from cart
@@ -220,9 +234,13 @@ export default function Cart() {
       if (cart[0]?.restaurantId) {
         try {
           const cartRestaurantId = cart[0].restaurantId;
-          const cartRestaurantName = cart[0].restaurant;
-
-          console.log("🔄 Fetching restaurant data by restaurantId from cart:", cartRestaurantId)
+          const cartRestaurantName = cart[0].restaurant;
+
+          if (!isMongoObjectId(cartRestaurantId)) {
+            console.log("Skipping direct /restaurant/:id lookup for non-ObjectId cart restaurantId:", cartRestaurantId)
+          } else {
+
+          console.log("Fetching restaurant data by restaurantId from cart:", cartRestaurantId)
           const response = await restaurantAPI.getRestaurantById(cartRestaurantId)
           const data = response?.data?.data?.restaurant || response?.data?.restaurant
 
@@ -271,10 +289,11 @@ export default function Cart() {
               cartRestaurantId: cartRestaurantId,
               cartRestaurantName: cartRestaurantName
             })
-            setRestaurantData(data)
+            setRestaurantData({ ...data, _id: data?._id || data?.id || null })
             setLoadingRestaurant(false)
             return
           }
+          }
         } catch (error) {
           console.warn("⚠️ Failed to fetch by cart restaurantId, trying fallback...", error)
         }
@@ -326,7 +345,7 @@ export default function Cart() {
               slug: matchingRestaurant.slug,
               cartRestaurantName: cart[0]?.restaurant
             })
-            setRestaurantData(matchingRestaurant)
+            setRestaurantData({ ...matchingRestaurant, _id: matchingRestaurant?._id || matchingRestaurant?.id || null })
             setLoadingRestaurant(false)
             return
           } else {
@@ -457,7 +476,7 @@ export default function Cart() {
   // Fetch coupons for items in cart
   useEffect(() => {
     const fetchCouponsForCartItems = async () => {
-      if (cart.length === 0 || !restaurantId) {
+      if (cart.length === 0 || !canonicalRestaurantMongoId) {
         setAvailableCoupons([])
         return
       }
@@ -477,7 +496,7 @@ export default function Cart() {
 
         try {
           console.log(`[CART-COUPONS] Fetching coupons for itemId: ${cartItem.id}, name: ${cartItem.name}`)
-          const response = await restaurantAPI.getCouponsByItemIdPublic(restaurantId, cartItem.id)
+          const response = await restaurantAPI.getCouponsByItemIdPublic(canonicalRestaurantMongoId, cartItem.id)
 
           if (response?.data?.success && response?.data?.data?.coupons) {
             const coupons = response.data.data.coupons
@@ -513,12 +532,12 @@ export default function Cart() {
     }
 
     fetchCouponsForCartItems()
-  }, [cart, restaurantId])
+  }, [cart, canonicalRestaurantMongoId])
 
   // Calculate pricing from backend whenever cart, address, or coupon changes
   useEffect(() => {
     const calculatePricing = async () => {
-      if (cart.length === 0 || !defaultAddress) {
+      if (cart.length === 0 || !defaultAddress || !canonicalRestaurantMongoId) {
         setPricing(null)
         return
       }
@@ -537,7 +556,7 @@ export default function Cart() {
 
         const response = await orderAPI.calculateOrder({
           items,
-          restaurantId: restaurantData?._id || restaurantData?.restaurantId || restaurantId || null,
+          restaurantId: canonicalRestaurantMongoId || null,
           deliveryAddress: defaultAddress,
           couponCode: appliedCoupon?.code || couponCode || null,
           deliveryFleet: deliveryFleet || 'standard',
@@ -568,7 +587,7 @@ export default function Cart() {
     }
 
     calculatePricing()
-  }, [cart, defaultAddress, appliedCoupon, couponCode, deliveryFleet, restaurantId])
+  }, [cart, defaultAddress, appliedCoupon, couponCode, deliveryFleet, canonicalRestaurantMongoId])
 
   // Fetch wallet balance
   useEffect(() => {
@@ -703,7 +722,7 @@ export default function Cart() {
 
           const response = await orderAPI.calculateOrder({
             items,
-            restaurantId: restaurantData?._id || restaurantData?.restaurantId || restaurantId || null,
+            restaurantId: canonicalRestaurantMongoId || null,
             deliveryAddress: defaultAddress,
             couponCode: coupon.code,
             deliveryFleet: deliveryFleet || 'standard',
@@ -740,7 +759,7 @@ export default function Cart() {
 
         const response = await orderAPI.calculateOrder({
           items,
-          restaurantId: restaurantData?._id || restaurantData?.restaurantId || restaurantId || null,
+          restaurantId: canonicalRestaurantMongoId || null,
           deliveryAddress: defaultAddress,
           couponCode: null,
           deliveryFleet: deliveryFleet || 'standard',
@@ -818,7 +837,7 @@ export default function Cart() {
 
       // CRITICAL: Validate restaurant ID before placing order
       // Ensure we're using the correct restaurant from restaurantData (most reliable)
-      const finalRestaurantId = restaurantData?._id || restaurantData?.restaurantId || null;
+      const finalRestaurantId = canonicalRestaurantMongoId || null;
       const finalRestaurantName = restaurantData?.name || null;
 
       if (!finalRestaurantId) {
@@ -2189,3 +2208,11 @@ export default function Cart() {
     </div>
   )
 }
+
+
+
+
+
+
+
+

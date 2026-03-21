@@ -77,6 +77,42 @@ const formatOrderStatusLabel = (status) => {
   }
 }
 
+const resolveDeliveryAssignment = (order = {}) => {
+  const explicitDeliveryPartnerId =
+    order?.deliveryPartnerId?._id ||
+    order?.deliveryPartnerId ||
+    order?.assignmentInfo?.acceptedBy ||
+    order?.assignmentInfo?.deliveryPartnerId ||
+    order?.deliveryState?.acceptedBy ||
+    order?.deliveryState?.deliveryPartnerId ||
+    order?.deliveryState?.partnerId ||
+    null
+
+  const deliveryStateStatus = String(order?.deliveryState?.status || "").toLowerCase()
+  const deliveryPhase = String(order?.deliveryState?.currentPhase || "").toLowerCase()
+  const notificationPhase = String(order?.assignmentInfo?.notificationPhase || "").toLowerCase()
+
+  const hasAssignedStateSignal =
+    notificationPhase === "accepted" ||
+    deliveryStateStatus === "accepted" ||
+    deliveryStateStatus === "reached_pickup" ||
+    deliveryStateStatus === "order_confirmed" ||
+    deliveryStateStatus === "en_route_to_delivery" ||
+    deliveryStateStatus === "reached_drop" ||
+    deliveryStateStatus === "delivered" ||
+    deliveryPhase === "en_route_to_pickup" ||
+    deliveryPhase === "at_pickup" ||
+    deliveryPhase === "en_route_to_delivery" ||
+    deliveryPhase === "at_delivery" ||
+    deliveryPhase === "picked_up" ||
+    deliveryPhase === "completed"
+
+  return {
+    deliveryPartnerId: explicitDeliveryPartnerId ? String(explicitDeliveryPartnerId) : null,
+    hasDeliveryAssignment: Boolean(explicitDeliveryPartnerId) || hasAssignedStateSignal,
+  }
+}
+
 // Completed Orders List Component
 function NewOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 0 }) {
   const [orders, setOrders] = useState([])
@@ -1334,13 +1370,14 @@ export default function OrdersMain() {
 
   // Countdown timer
   useEffect(() => {
-    if (showNewOrderPopup && countdown > 0) {
-      const timer = setInterval(() => {
-        setCountdown(prev => prev - 1)
-      }, 1000)
-      return () => clearInterval(timer)
-    }
-  }, [showNewOrderPopup, countdown])
+    if (!showNewOrderPopup) return undefined
+
+    const timer = setInterval(() => {
+      setCountdown((prev) => (prev > 0 ? prev - 1 : 0))
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [showNewOrderPopup])
 
   // Format countdown time
   const formatTime = (seconds) => {
@@ -2846,7 +2883,7 @@ export default function OrdersMain() {
                 <span>Payment: <span className="font-medium text-black">Paid online</span></span>
               </div>
 
-              {String(selectedOrder.status || "").toLowerCase() === "preparing" && !selectedOrder.deliveryPartnerId && (
+              {["preparing", "ready"].includes(String(selectedOrder.status || "").toLowerCase()) && !(selectedOrder.deliveryPartnerId || selectedOrder.hasDeliveryAssignment) && (
                 <div className="mb-3">
                   <ResendNotificationButton orderAPI={orderAPI}
                     orderId={selectedOrder.orderId}
@@ -2936,6 +2973,7 @@ function OrderCard({
   photoUrl,
   photoAlt,
   deliveryPartnerId,
+  hasDeliveryAssignment,
   onSelect,
   onCancel,
   onMarkReady,
@@ -2944,6 +2982,7 @@ function OrderCard({
 }) {
   const normalizedStatus = String(status || "").toLowerCase()
   const isReady = normalizedStatus === "ready"
+  const isDeliveryAssigned = Boolean(deliveryPartnerId || hasDeliveryAssignment)
 
   return (
     <div className="w-full bg-white rounded-2xl p-4 mb-3 border border-gray-200 hover:border-gray-400 transition-colors relative">
@@ -2974,6 +3013,7 @@ function OrderCard({
             eta,
             itemsSummary,
             deliveryPartnerId,
+            hasDeliveryAssignment,
           })
         }
         className={`w-full text-left flex gap-3 items-stretch cursor-pointer ${normalizedStatus === "preparing" ? "pr-8" : ""}`}
@@ -3041,18 +3081,18 @@ function OrderCard({
                 {type}
                 {tableOrToken ? ` ΓÇó ${tableOrToken}` : ""}
               </p>
-              {/* Delivery Assignment Status - Only show for preparing orders */}
-              {normalizedStatus === 'preparing' && (
+              {/* Delivery Assignment Status - show for preparing and ready orders */}
+              {['preparing', 'ready'].includes(normalizedStatus) && (
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${deliveryPartnerId
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${isDeliveryAssigned
                     ? 'bg-green-100 text-green-700 border border-green-300'
                     : 'bg-orange-100 text-orange-700 border border-orange-300'
                     }`}>
-                    <span className={`h-1.5 w-1.5 rounded-full ${deliveryPartnerId ? 'bg-green-500' : 'bg-orange-500'
+                    <span className={`h-1.5 w-1.5 rounded-full ${isDeliveryAssigned ? 'bg-green-500' : 'bg-orange-500'
                       }`} />
-                    {deliveryPartnerId ? 'Assigned' : 'Not Assigned'}
+                    {isDeliveryAssigned ? 'Assigned' : 'Not Assigned'}
                   </span>
-                  {!deliveryPartnerId && (
+                  {!isDeliveryAssigned && (
                     <ResendNotificationButton orderAPI={orderAPI} orderId={orderId} mongoId={mongoId} />
                   )}
                 </div>
@@ -3144,6 +3184,7 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "", 
             const preparingTimestamp = order.tracking?.preparing?.timestamp
               ? new Date(order.tracking.preparing.timestamp)
               : new Date(order.createdAt) // Fallback to createdAt if preparing timestamp not available
+            const assignment = resolveDeliveryAssignment(order)
 
             return {
               orderId: order.orderId || order._id,
@@ -3158,7 +3199,8 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "", 
               itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
               photoUrl: order.items?.[0]?.image || null,
               photoAlt: order.items?.[0]?.name || 'Order',
-              deliveryPartnerId: order.deliveryPartnerId || null // Track if delivery partner is assigned
+              deliveryPartnerId: assignment.deliveryPartnerId,
+              hasDeliveryAssignment: assignment.hasDeliveryAssignment,
             }
           })
 
@@ -3369,6 +3411,7 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "", 
                 photoUrl={order.photoUrl}
                 photoAlt={order.photoAlt}
                 deliveryPartnerId={order.deliveryPartnerId}
+                hasDeliveryAssignment={order.hasDeliveryAssignment}
                 onSelect={onSelectOrder}
                 onCancel={onCancel}
                 onMarkReady={handleMarkReady}
@@ -3413,7 +3456,9 @@ function ReadyOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 
             order => order.status === 'ready'
           )
 
-          const transformedOrders = readyOrders.map(order => ({
+          const transformedOrders = readyOrders.map(order => {
+            const assignment = resolveDeliveryAssignment(order)
+            return ({
             orderId: order.orderId || order._id,
             mongoId: order._id,
             status: String(order.status || 'ready').toLowerCase(),
@@ -3424,8 +3469,11 @@ function ReadyOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 
             eta: null, // Don't show ETA for ready orders
             itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
             photoUrl: order.items?.[0]?.image || null,
-            photoAlt: order.items?.[0]?.name || 'Order'
-          }))
+            photoAlt: order.items?.[0]?.name || 'Order',
+            deliveryPartnerId: assignment.deliveryPartnerId,
+            hasDeliveryAssignment: assignment.hasDeliveryAssignment,
+          })
+          })
 
           if (isMounted) {
             setOrders(transformedOrders)

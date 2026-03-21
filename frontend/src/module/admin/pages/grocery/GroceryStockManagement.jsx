@@ -62,9 +62,21 @@ export default function GroceryStockManagement() {
     setEditedRows((prev) => ({
       ...prev,
       [productId]: {
-        stockQuantity: Number(prev[productId]?.stockQuantity || 0),
-        inStock: Boolean(prev[productId]?.inStock),
-        [key]: value,
+        ...(() => {
+          const currentStock = Number(prev[productId]?.stockQuantity || 0)
+          const currentInStock = Boolean(prev[productId]?.inStock)
+          if (key === "stockQuantity") {
+            const normalizedStock = Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0
+            return {
+              stockQuantity: normalizedStock,
+              inStock: normalizedStock > 0 ? currentInStock : false,
+            }
+          }
+          return {
+            stockQuantity: currentStock,
+            inStock: value,
+          }
+        })(),
       },
     }))
   }
@@ -76,21 +88,29 @@ export default function GroceryStockManagement() {
     const stockQuantity = Number.isFinite(Number(edit.stockQuantity))
       ? Math.max(0, Number(edit.stockQuantity))
       : 0
+    const effectiveInStock = stockQuantity > 0 ? Boolean(edit.inStock) : false
 
     try {
       setSavingProductId(productId)
       await adminAPI.updateGroceryProduct(productId, {
         stockQuantity,
-        inStock: Boolean(edit.inStock),
+        inStock: effectiveInStock,
       })
 
       setProducts((prev) =>
         prev.map((product) =>
           String(product._id) === String(productId)
-            ? { ...product, stockQuantity, inStock: Boolean(edit.inStock) }
+            ? { ...product, stockQuantity, inStock: effectiveInStock }
             : product
         )
       )
+      setEditedRows((prev) => ({
+        ...prev,
+        [productId]: {
+          stockQuantity,
+          inStock: effectiveInStock,
+        },
+      }))
       toast.success("Stock updated")
     } catch (error) {
       console.error("Failed to update stock:", error)
@@ -190,6 +210,7 @@ export default function GroceryStockManagement() {
                         <select
                           value={rowEdit.inStock ? "yes" : "no"}
                           onChange={(e) => setRowField(productId, "inStock", e.target.value === "yes")}
+                          disabled={Number(rowEdit.stockQuantity || 0) <= 0}
                           className="px-2 py-1.5 border border-slate-300 rounded-md text-sm"
                         >
                           <option value="yes">In Stock</option>
