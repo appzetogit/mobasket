@@ -103,6 +103,7 @@ const CITY_PLACEHOLDERS = new Set([
 
 const INITIAL_TOP_BRAND_RENDER_COUNT = 8;
 const INITIAL_RESTAURANT_RENDER_COUNT = 6;
+const EARLY_RESTAURANT_PREFETCH_COUNT = 16;
 const HOME_RESTAURANTS_CACHE_TTL_MS = 3 * 60 * 1000;
 const HOME_RESTAURANTS_CACHE_VERSION = "v1";
 
@@ -583,13 +584,42 @@ export default function Home() {
 
     if (!slugOrId) return;
 
-    prefetchRestaurantForRoute({
+    return prefetchRestaurantForRoute({
       slug: slugOrId,
       restaurantSummary,
     }).catch(() => {
       // Ignore prefetch failures and allow normal navigation flow.
+      return null;
     });
   }, []);
+
+  const navigateWithPriorityPrefetch = useCallback(
+    async (event, restaurantOrSlug, targetPath) => {
+      if (!targetPath) return;
+      if (
+        event &&
+        (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button === 1)
+      ) {
+        return;
+      }
+
+      event?.preventDefault?.();
+
+      try {
+        const prefetchTask = prefetchRestaurant(restaurantOrSlug);
+        if (prefetchTask && typeof prefetchTask.then === "function") {
+          await Promise.race([
+            prefetchTask,
+            new Promise((resolve) => setTimeout(resolve, 1400)),
+          ]);
+        }
+      } catch {
+      }
+
+      navigate(targetPath);
+    },
+    [navigate, prefetchRestaurant],
+  );
 
   const isLikelyImageUrl = (value) => {
     const src = String(value || "").trim();
@@ -2052,6 +2082,81 @@ export default function Home() {
 
   useEffect(() => {
     if (loadingRestaurants) return undefined;
+    if (!Array.isArray(restaurantsData) || restaurantsData.length === 0) return undefined;
+
+    const toPrefetch = [];
+    const seen = new Set();
+
+    for (const restaurant of restaurantsData) {
+      const key = String(
+        restaurant?.slug ||
+          restaurant?.restaurantId ||
+          restaurant?._id ||
+          restaurant?.id ||
+          "",
+      ).trim();
+
+      if (!key || seen.has(key) || homepageMenuPrefetchStartedRef.current.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      toPrefetch.push({ key, restaurant });
+      if (toPrefetch.length >= EARLY_RESTAURANT_PREFETCH_COUNT) break;
+    }
+
+    if (toPrefetch.length === 0) return undefined;
+
+    let cancelled = false;
+    let timerId;
+
+    const runPrefetch = async () => {
+      const immediateChunk = toPrefetch.slice(0, 4);
+      const remaining = toPrefetch.slice(4);
+
+      if (immediateChunk.length > 0) {
+        await Promise.allSettled(
+          immediateChunk.map(async ({ key, restaurant }) => {
+            homepageMenuPrefetchStartedRef.current.add(key);
+            await prefetchRestaurantForRoute({
+              slug: key,
+              restaurantSummary: restaurant,
+            });
+          }),
+        );
+      }
+
+      const chunkSize = 2;
+      for (let i = 0; i < remaining.length; i += chunkSize) {
+        if (cancelled) break;
+        const chunk = remaining.slice(i, i + chunkSize);
+        await Promise.allSettled(
+          chunk.map(async ({ key, restaurant }) => {
+            homepageMenuPrefetchStartedRef.current.add(key);
+            await prefetchRestaurantForRoute({
+              slug: key,
+              restaurantSummary: restaurant,
+            });
+          }),
+        );
+        if (!cancelled) {
+          await new Promise((resolve) => setTimeout(resolve, 80));
+        }
+      }
+    };
+
+    timerId = setTimeout(() => {
+      runPrefetch().catch(() => {});
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      if (timerId) clearTimeout(timerId);
+    };
+  }, [loadingRestaurants, restaurantsData]);
+
+  useEffect(() => {
+    if (loadingRestaurants) return undefined;
 
     const toPrefetch = [];
     const seen = new Set();
@@ -2473,7 +2578,7 @@ export default function Home() {
                             });
                           }
                         }}
-                        onClick={() => {
+                        onClick={(e) => {
                           if (!hasLinkedRestaurants) return;
                           const firstRestaurant = linkedRestaurants[0];
                           const restaurantSlug =
@@ -2486,7 +2591,14 @@ export default function Home() {
                             ...firstRestaurant,
                             slug: restaurantSlug,
                           });
-                          navigate(`/restaurants/${restaurantSlug}`);
+                          navigateWithPriorityPrefetch(
+                            e,
+                            {
+                              ...firstRestaurant,
+                              slug: restaurantSlug,
+                            },
+                            `/restaurants/${restaurantSlug}`,
+                          );
                         }}
                         style={{
                           cursor: hasLinkedRestaurants ? "pointer" : "default",
@@ -2764,6 +2876,13 @@ export default function Home() {
                       onMouseEnter={() => prefetchRestaurant(restaurant)}
                       onFocus={() => prefetchRestaurant(restaurant)}
                       onTouchStart={() => prefetchRestaurant(restaurant)}
+                      onClick={(e) =>
+                        navigateWithPriorityPrefetch(
+                          e,
+                          restaurant,
+                          `/restaurants/${restaurant.slug || restaurant.id}`,
+                        )
+                      }
                     >
                       <div className="flex flex-col items-center gap-2 w-[74px] sm:w-[92px] md:w-[104px]">
                         <div className="relative w-14 h-14 sm:w-[72px] sm:h-[72px] md:w-20 md:h-20 rounded-full overflow-hidden shadow-sm transition-all border border-gray-100 dark:border-gray-800 bg-white">
@@ -3079,10 +3198,13 @@ export default function Home() {
                         <button
                           type="button"
                           className="w-full text-left"
-                          onClick={() => {
+                          onClick={(e) => {
                             if (restaurant?.slug) {
-                              prefetchRestaurant(restaurant);
-                              navigate(`/user/restaurants/${restaurant.slug}`);
+                              navigateWithPriorityPrefetch(
+                                e,
+                                restaurant,
+                                `/user/restaurants/${restaurant.slug}`,
+                              );
                             }
                           }}
                         >
@@ -3293,6 +3415,13 @@ export default function Home() {
                         onMouseEnter={() => prefetchRestaurant(restaurant)}
                         onFocus={() => prefetchRestaurant(restaurant)}
                         onTouchStart={() => prefetchRestaurant(restaurant)}
+                        onClick={(e) =>
+                          navigateWithPriorityPrefetch(
+                            e,
+                            restaurant,
+                            `/user/restaurants/${restaurantSlug}`,
+                          )
+                        }
                       >
                         <Card
                           className={`overflow-hidden gap-0 cursor-pointer border border-gray-100 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] transition-all duration-300 py-0 rounded-[24px] flex flex-col h-full w-full relative shadow-sm hover:shadow-md ${isOutOfService ? "grayscale opacity-75" : ""
