@@ -133,8 +133,19 @@ export async function getRazorpayCredentials() {
     (await getEnvVar('RAZORPAY_SECRET_KEY', '', { forceRefresh: true })) ||
     (await getEnvVar('RAZORPAY_KEY_SECRET', '', { forceRefresh: true }));
 
-  const apiKey = normalizeCredential(apiKeyRaw);
-  const secretKey = normalizeCredential(secretKeyRaw);
+  // Fallback to process.env so payment flow remains functional even if
+  // DB-backed env document is temporarily unavailable on a worker.
+  const processEnvApiKey =
+    process.env.RAZORPAY_API_KEY ||
+    process.env.RAZORPAY_KEY_ID ||
+    '';
+  const processEnvSecretKey =
+    process.env.RAZORPAY_SECRET_KEY ||
+    process.env.RAZORPAY_KEY_SECRET ||
+    '';
+
+  const apiKey = normalizeCredential(apiKeyRaw || processEnvApiKey);
+  const secretKey = normalizeCredential(secretKeyRaw || processEnvSecretKey);
 
   // Common admin-entry mistake: API key/secret entered in opposite fields.
   // Razorpay key id typically starts with "rzp_".

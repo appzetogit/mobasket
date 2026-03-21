@@ -2929,6 +2929,7 @@ export default function DeliveryHome() {
 
   const [rejectReason, setRejectReason] = useState("")
   const [isRejectingOrder, setIsRejectingOrder] = useState(false)
+  const rejectingOrderIdsRef = useRef(new Set())
 
 
   const alertAudioRef = useRef(null)
@@ -2964,20 +2965,10 @@ export default function DeliveryHome() {
 
 
   const popupOrderId =
-
-
-    selectedRestaurant?.orderId ||
-
-
-    selectedRestaurant?.id ||
-
-
     newOrder?.orderMongoId ||
-
-
     newOrder?.orderId ||
-
-
+    selectedRestaurant?.orderId ||
+    selectedRestaurant?.id ||
     null
 
 
@@ -3027,6 +3018,7 @@ export default function DeliveryHome() {
 
 
   const [customerReviewText, setCustomerReviewText] = useState("")
+  const [isCompletingDelivery, setIsCompletingDelivery] = useState(false)
 
 
   const [orderEarnings, setOrderEarnings] = useState(0) // Store earnings from completed order
@@ -6083,19 +6075,26 @@ export default function DeliveryHome() {
 
   const handleRejectOrder = (overrideReason = "") => {
     const rejectOrder = async () => {
+      // Deny must target the active "new order" notification only.
+      // Never fallback to accepted/active order state, otherwise backend returns
+      // "already accepted by you".
       const orderId = newOrder?.orderMongoId ||
         newOrder?.orderId ||
-        popupOrderId ||
-        selectedRestaurant?.id ||
-        selectedRestaurant?.orderId
+        null
 
       if (!orderId) {
-        toast.error('Order ID not found for deny action.')
+        setShowRejectPopup(false)
+        setShowNewOrderPopup(false)
+        toast.error('This order is no longer available to deny.')
+        return
+      }
+      if (rejectingOrderIdsRef.current.has(String(orderId))) {
         return
       }
 
       try {
         const reasonToSend = (overrideReason || rejectReason || "Too far from current location").trim()
+        rejectingOrderIdsRef.current.add(String(orderId))
         setIsRejectingOrder(true)
         await deliveryAPI.rejectOrder(orderId, reasonToSend)
         markOrderAsUnavailable(orderId, newOrder?.orderMongoId, newOrder?.orderId, selectedRestaurant?.orderId)
@@ -6115,9 +6114,28 @@ export default function DeliveryHome() {
         setCountdownSeconds(300)
         toast.success("Order denied")
       } catch (error) {
-        const message = error?.response?.data?.message || "Failed to deny order. Please try again."
-        toast.error(message)
+        const message = String(error?.response?.data?.message || "").toLowerCase()
+        if (
+          message.includes("already accepted by you") ||
+          message.includes("already assigned to another delivery partner") ||
+          message.includes("not available for you") ||
+          message.includes("already denied")
+        ) {
+          // Treat stale deny as resolved UI state; don't keep popup stuck.
+          markOrderAsUnavailable(orderId, newOrder?.orderMongoId, newOrder?.orderId, selectedRestaurant?.orderId)
+          clearNewOrder()
+          setShowRejectPopup(false)
+          setShowNewOrderPopup(false)
+          setIsNewOrderPopupMinimized(false)
+          setNewOrderDragY(0)
+          setRejectReason("")
+          toast.success("Order updated")
+          return
+        }
+        const fallback = error?.response?.data?.message || "Failed to deny order. Please try again."
+        toast.error(fallback)
       } finally {
+        rejectingOrderIdsRef.current.delete(String(orderId))
         setIsRejectingOrder(false)
       }
     }
@@ -35501,6 +35519,9 @@ export default function DeliveryHome() {
 
 
               onClick={async () => {
+                if (isCompletingDelivery) {
+                  return
+                }
 
 
                 // Get order ID - use MongoDB _id for API call
@@ -35528,6 +35549,7 @@ export default function DeliveryHome() {
 
 
                 if (orderIdForApi) {
+                  setIsCompletingDelivery(true)
 
 
                   try {
@@ -35680,6 +35702,8 @@ export default function DeliveryHome() {
                     setShowPaymentPage(true)
 
 
+                  } finally {
+                    setIsCompletingDelivery(false)
                   }
 
 
@@ -35693,6 +35717,7 @@ export default function DeliveryHome() {
 
 
                   setShowPaymentPage(true)
+                  setIsCompletingDelivery(false)
 
 
                 }
@@ -35701,13 +35726,14 @@ export default function DeliveryHome() {
               }}
 
 
-              className="w-full bg-green-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-green-700 transition-colors shadow-lg"
+              disabled={isCompletingDelivery}
+              className="w-full bg-green-600 text-white py-4 rounded-xl font-semibold text-lg hover:bg-green-700 transition-colors shadow-lg disabled:opacity-60 disabled:cursor-not-allowed"
 
 
             >
 
 
-              Submit Review
+              {isCompletingDelivery ? "Submitting..." : "Submit Review"}
 
 
             </button>
