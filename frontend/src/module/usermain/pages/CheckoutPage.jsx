@@ -109,6 +109,8 @@ export default function CheckoutPage() {
   const placesServiceRef = useRef(null);
   const suggestionsDebounceRef = useRef(null);
   const pricingPreviewSignatureRef = useRef(null);
+  const pricingPreviewCacheRef = useRef({ signature: null, pricing: null });
+  const recipientZoneCheckCacheRef = useRef({ key: null, inService: null });
 
   const deliveryType =
     location.state?.deliveryType === "scheduled" ? "scheduled" : "now";
@@ -429,6 +431,61 @@ export default function CheckoutPage() {
       .filter(Boolean)
       .join(", ");
 
+  const hasValidAddressCoordinates = useCallback((address) => {
+    const lng = Number(address?.location?.coordinates?.[0]);
+    const lat = Number(address?.location?.coordinates?.[1]);
+    if (
+      Number.isFinite(lat) &&
+      Number.isFinite(lng) &&
+      !(lat === 0 && lng === 0)
+    ) {
+      return true;
+    }
+
+    const flatLat = Number(address?.latitude);
+    const flatLng = Number(address?.longitude);
+    return (
+      Number.isFinite(flatLat) &&
+      Number.isFinite(flatLng) &&
+      !(flatLat === 0 && flatLng === 0)
+    );
+  }, []);
+
+  const pricingDeliveryAddress = useMemo(() => {
+    if (!orderingForSomeoneElse) return selectedAddress || undefined;
+
+    const lat = Number(recipientDetails?.latitude);
+    const lng = Number(recipientDetails?.longitude);
+    const hasCoords = Number.isFinite(lat) && Number.isFinite(lng);
+
+    const street = String(recipientDetails?.street || "").trim();
+    const city = String(recipientDetails?.city || "").trim();
+    const state = String(recipientDetails?.state || "").trim();
+    const zipCode = String(recipientDetails?.zipCode || "").trim();
+
+    if (!street && !city && !state && !zipCode && !hasCoords) return undefined;
+
+    return {
+      label: "Recipient",
+      street,
+      additionalDetails: String(recipientDetails?.additionalDetails || "").trim(),
+      city,
+      state,
+      zipCode,
+      formattedAddress:
+        String(recipientDetails?.formattedAddress || "").trim() ||
+        [street, city, state, zipCode].filter(Boolean).join(", "),
+      latitude: hasCoords ? lat : undefined,
+      longitude: hasCoords ? lng : undefined,
+      location: hasCoords
+        ? {
+            type: "Point",
+            coordinates: [lng, lat],
+          }
+        : undefined,
+    };
+  }, [orderingForSomeoneElse, recipientDetails, selectedAddress]);
+
   const handleSaveNewAddress = async () => {
     const lat = Number(newAddress.latitude);
     const lng = Number(newAddress.longitude);
@@ -713,7 +770,7 @@ export default function CheckoutPage() {
         const signatureBeforeGeocoding = buildPricingPreviewSignature({
           items: previewItems,
           restaurantId,
-          address: selectedAddress || undefined,
+          address: pricingDeliveryAddress,
           couponCode: appliedCouponCode || undefined,
         });
         if (pricingPreviewSignatureRef.current === signatureBeforeGeocoding) {
@@ -725,14 +782,16 @@ export default function CheckoutPage() {
         // Ensure delivery address has valid coordinates so that
         // pricing preview matches the final order calculation
         // (zone-based free delivery, etc.).
-        let addressForPricing = selectedAddress || undefined;
+        let addressForPricing = pricingDeliveryAddress;
         if (addressForPricing) {
           try {
-            const apiKey = await getGoogleMapsApiKey();
-            if (apiKey) {
-              const geocoded = await ensureAddressCoordinates(addressForPricing, apiKey);
-              if (geocoded) {
-                addressForPricing = geocoded;
+            if (!hasValidAddressCoordinates(addressForPricing)) {
+              const apiKey = await getGoogleMapsApiKey();
+              if (apiKey) {
+                const geocoded = await ensureAddressCoordinates(addressForPricing, apiKey);
+                if (geocoded) {
+                  addressForPricing = geocoded;
+                }
               }
             }
           } catch (geoError) {
@@ -754,6 +813,10 @@ export default function CheckoutPage() {
         // Update signature only after a successful response so
         // future renders with the same inputs skip the API call.
         pricingPreviewSignatureRef.current = signatureBeforeGeocoding;
+        pricingPreviewCacheRef.current = {
+          signature: signatureBeforeGeocoding,
+          pricing,
+        };
         setCalculatedPricing(pricing);
       } catch (error) {
         console.error("Failed to calculate pricing preview:", error);
@@ -764,7 +827,13 @@ export default function CheckoutPage() {
     };
 
     fetchPricingPreview();
-  }, [appliedCouponCode, foodItems, restaurantId, selectedAddress]);
+  }, [
+    appliedCouponCode,
+    foodItems,
+    restaurantId,
+    pricingDeliveryAddress,
+    hasValidAddressCoordinates,
+  ]);
 
   const getRangeBasedDeliveryFee = (subtotal, ranges = [], fallback = 25) => {
     if (!Array.isArray(ranges) || ranges.length === 0) return Number(fallback || 0);
@@ -880,6 +949,8 @@ export default function CheckoutPage() {
         address.city || "",
         address.state || "",
         address.zipCode || "",
+        String(address.latitude ?? ""),
+        String(address.longitude ?? ""),
         Array.isArray(address.location?.coordinates)
           ? String(address.location.coordinates[0] || "")
           : "",
@@ -939,7 +1010,7 @@ export default function CheckoutPage() {
       const response = await orderAPI.calculateOrder({
         items,
         restaurantId,
-        deliveryAddress: selectedAddress || undefined,
+        deliveryAddress: pricingDeliveryAddress,
         couponCode: normalizedCode,
         deliveryFleet: "standard",
         platform: "mofood",
@@ -1171,9 +1242,22 @@ export default function CheckoutPage() {
           throw new Error("Please set recipient location pin before placing order.");
         }
 
-        const zoneCheckResponse = await zoneAPI.detectAllZones(lat, lng, "mofood");
-        const zoneCheck = zoneCheckResponse?.data?.data;
-        if (!zoneCheckResponse?.data?.success || zoneCheck?.status !== "IN_SERVICE") {
+        const zoneKey = `${lat.toFixed(5)}:${lng.toFixed(5)}`;
+        let inService =
+          recipientZoneCheckCacheRef.current?.key === zoneKey
+            ? recipientZoneCheckCacheRef.current?.inService
+            : null;
+
+        if (inService == null) {
+          const zoneCheckResponse = await zoneAPI.detectAllZones(lat, lng, "mofood");
+          const zoneCheck = zoneCheckResponse?.data?.data;
+          inService = Boolean(
+            zoneCheckResponse?.data?.success && zoneCheck?.status === "IN_SERVICE",
+          );
+          recipientZoneCheckCacheRef.current = { key: zoneKey, inService };
+        }
+
+        if (!inService) {
           throw new Error("Recipient address is outside active delivery zones.");
         }
 
@@ -1192,16 +1276,7 @@ export default function CheckoutPage() {
         };
       }
 
-      const hasValidCoordinates =
-        (addressForOrder?.location?.coordinates &&
-          Number.isFinite(addressForOrder.location.coordinates[1]) &&
-          Number.isFinite(addressForOrder.location.coordinates[0]) &&
-          !(addressForOrder.location.coordinates[0] === 0 && addressForOrder.location.coordinates[1] === 0)) ||
-        (Number.isFinite(addressForOrder?.latitude) &&
-          Number.isFinite(addressForOrder?.longitude) &&
-          !(addressForOrder.latitude === 0 && addressForOrder.longitude === 0));
-
-      if (!hasValidCoordinates) {
+      if (!hasValidAddressCoordinates(addressForOrder)) {
         const geocodedAddress = await ensureAddressCoordinates(addressForOrder, apiKey);
         if (geocodedAddress?.latitude && geocodedAddress?.longitude) {
           addressForOrder = geocodedAddress;
@@ -1225,21 +1300,37 @@ export default function CheckoutPage() {
         }
       }
 
-      const pricingResponse = await orderAPI.calculateOrder({
+      const previewSignature = buildPricingPreviewSignature({
         items,
         restaurantId,
-        deliveryAddress: addressForOrder,
+        address: addressForOrder,
         couponCode: appliedCouponCode || undefined,
-        deliveryFleet: "standard",
-        platform: "mofood",
       });
-      const calculatedPricing = pricingResponse?.data?.data?.pricing;
-      if (!calculatedPricing?.total) {
+      let resolvedPricing =
+        pricingPreviewCacheRef.current?.signature === previewSignature
+          ? pricingPreviewCacheRef.current?.pricing
+          : null;
+
+      if (!resolvedPricing) {
+        const pricingResponse = await orderAPI.calculateOrder({
+          items,
+          restaurantId,
+          deliveryAddress: addressForOrder,
+          couponCode: appliedCouponCode || undefined,
+          deliveryFleet: "standard",
+          platform: "mofood",
+        });
+        resolvedPricing = pricingResponse?.data?.data?.pricing;
+      }
+      if (!resolvedPricing?.total) {
         throw new Error("Failed to calculate order pricing.");
       }
 
       // Double-check coordinates before creating order
-      const finalAddress = await ensureAddressCoordinates(addressForOrder, apiKey);
+      let finalAddress = addressForOrder;
+      if (!hasValidAddressCoordinates(finalAddress)) {
+        finalAddress = await ensureAddressCoordinates(addressForOrder, apiKey);
+      }
 
       const backendPaymentMethod =
         paymentMethod === "cash"
@@ -1255,7 +1346,7 @@ export default function CheckoutPage() {
         address: finalAddress,
         restaurantId,
         restaurantName,
-        pricing: calculatedPricing,
+        pricing: resolvedPricing,
         deliveryFleet: "standard",
         note: orderingForSomeoneElse
           ? `[MoFood] Order for recipient: ${String(recipientDetails?.name || "").trim()} (${String(
@@ -1280,7 +1371,7 @@ export default function CheckoutPage() {
         setPostOrderRedirecting(true);
         clearCart("mofood");
         if (backendPaymentMethod === "wallet") {
-          setWalletBalance((prev) => Math.max(0, prev - Number(calculatedPricing?.total || 0)));
+          setWalletBalance((prev) => Math.max(0, prev - Number(resolvedPricing?.total || 0)));
         }
         toast.success("Order placed successfully.");
         if (orderIdentifier) {

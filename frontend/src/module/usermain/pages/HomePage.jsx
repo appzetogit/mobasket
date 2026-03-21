@@ -27,6 +27,114 @@ import {
 import { Button } from "@/components/ui/button";
 import { API_BASE_URL } from "@/lib/api/config";
 
+const HOME_CACHE_VERSION = "v1";
+const ZONE_CACHE_TTL_MS = 5 * 60 * 1000;
+const RESTAURANT_CACHE_TTL_MS = 3 * 60 * 1000;
+
+const PLACEHOLDER_TEXTS = [
+  "Are you hungry !!",
+  "Search for delicious food...",
+  "What would you like to eat?",
+  "Find your favorite restaurant",
+  "Craving something special?",
+  "Discover amazing dishes",
+  "Order your favorite meal",
+  "Explore new flavors",
+  "Find the best deals",
+  "What's cooking today?",
+  "Search restaurants nearby",
+  "Hungry? We've got you!",
+];
+
+const CAROUSEL_SLIDES = [
+  {
+    id: 1,
+    title: "Biryani That Will Change Your Mind",
+    image:
+      "https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=1200&h=600&fit=crop",
+    discount: "14% OFF",
+    rating: "5/5",
+  },
+  {
+    id: 2,
+    title: "Delicious Pizza",
+    image:
+      "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=1200&h=600&fit=crop",
+    discount: "20% OFF",
+    rating: "4.8/5",
+  },
+  {
+    id: 3,
+    title: "Fresh Burgers",
+    image:
+      "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=1200&h=600&fit=crop",
+    discount: "15% OFF",
+    rating: "4.9/5",
+  },
+  {
+    id: 4,
+    title: "Tasty Pasta",
+    image:
+      "https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=1200&h=600&fit=crop",
+    discount: "10% OFF",
+    rating: "4.7/5",
+  },
+  {
+    id: 5,
+    title: "Sushi Delight",
+    image:
+      "https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?w=1200&h=600&fit=crop",
+    discount: "12% OFF",
+    rating: "4.6/5",
+  },
+];
+
+const readSessionCache = (key, ttlMs) => {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.timestamp || !parsed?.data) return null;
+    if (Date.now() - Number(parsed.timestamp) > ttlMs) return null;
+    return parsed.data;
+  } catch {
+    return null;
+  }
+};
+
+const writeSessionCache = (key, data) => {
+  try {
+    sessionStorage.setItem(
+      key,
+      JSON.stringify({
+        timestamp: Date.now(),
+        data,
+      }),
+    );
+  } catch {
+    // Ignore cache write failures.
+  }
+};
+
+const normalizeIdList = (values = []) =>
+  Array.from(
+    new Set(
+      (Array.isArray(values) ? values : [])
+        .map((value) => String(value || "").trim())
+        .filter(Boolean),
+    ),
+  );
+
+const haveSameIds = (left = [], right = []) => {
+  const a = normalizeIdList(left).sort();
+  const b = normalizeIdList(right).sort();
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+};
+
 export default function HomePage() {
   const navigate = useNavigate();
   const { location, loading: locationLoading } = useLocation();
@@ -49,6 +157,8 @@ export default function HomePage() {
     const saved = localStorage.getItem("wishlist");
     return saved ? JSON.parse(saved) : [];
   });
+  const zoneRequestVersionRef = useRef(0);
+  const restaurantsRequestVersionRef = useRef(0);
 
   const extractAddressCoordinates = (address) => {
     if (!address) return null;
@@ -353,28 +463,54 @@ export default function HomePage() {
     const resolveMatchingZones = async () => {
       const latitude = Number(effectiveLocation?.latitude);
       const longitude = Number(effectiveLocation?.longitude);
+      const fallbackZoneIds = zoneId ? [zoneId] : [];
+      const requestVersion = zoneRequestVersionRef.current + 1;
+      zoneRequestVersionRef.current = requestVersion;
 
       if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-        setMatchingZoneIds(zoneId ? [zoneId] : []);
+        setMatchingZoneIds((prev) =>
+          haveSameIds(prev, fallbackZoneIds) ? prev : fallbackZoneIds,
+        );
+        return;
+      }
+
+      const roundedLat = Number(latitude.toFixed(4));
+      const roundedLng = Number(longitude.toFixed(4));
+      const cacheKey = `home:zones:${HOME_CACHE_VERSION}:mofood:${roundedLat}:${roundedLng}`;
+      const cachedZoneIds = normalizeIdList(readSessionCache(cacheKey, ZONE_CACHE_TTL_MS));
+      if (cachedZoneIds.length > 0) {
+        setMatchingZoneIds((prev) =>
+          haveSameIds(prev, cachedZoneIds) ? prev : cachedZoneIds,
+        );
         return;
       }
 
       try {
         const response = await zoneAPI.detectAllZones(latitude, longitude, "mofood");
-        const matchedZoneIds = (
+        if (zoneRequestVersionRef.current !== requestVersion) return;
+
+        const matchedZoneIds = normalizeIdList(
           Array.isArray(response?.data?.data?.zoneIds)
             ? response.data.data.zoneIds.map((value) => String(value || "").trim())
-            : []
-        ).filter(Boolean);
+            : [],
+        );
 
         if (matchedZoneIds.length > 0) {
-          setMatchingZoneIds(Array.from(new Set(matchedZoneIds)));
+          writeSessionCache(cacheKey, matchedZoneIds);
+          setMatchingZoneIds((prev) =>
+            haveSameIds(prev, matchedZoneIds) ? prev : matchedZoneIds,
+          );
           return;
         }
 
-        setMatchingZoneIds(zoneId ? [zoneId] : []);
+        setMatchingZoneIds((prev) =>
+          haveSameIds(prev, fallbackZoneIds) ? prev : fallbackZoneIds,
+        );
       } catch {
-        setMatchingZoneIds(zoneId ? [zoneId] : []);
+        if (zoneRequestVersionRef.current !== requestVersion) return;
+        setMatchingZoneIds((prev) =>
+          haveSameIds(prev, fallbackZoneIds) ? prev : fallbackZoneIds,
+        );
       }
     };
 
@@ -568,88 +704,28 @@ export default function HomePage() {
     toast.success(message);
   };
 
-  // Engaging placeholder texts that rotate
-  const placeholderTexts = [
-    "Are you hungry !!",
-    "Search for delicious food...",
-    "What would you like to eat?",
-    "Find your favorite restaurant",
-    "Craving something special?",
-    "Discover amazing dishes",
-    "Order your favorite meal",
-    "Explore new flavors",
-    "Find the best deals",
-    "What's cooking today?",
-    "Search restaurants nearby",
-    "Hungry? We've got you!",
-  ];
-
-  // Carousel slides data
-  const carouselSlides = [
-    {
-      id: 1,
-      title: "Biryani That Will Change Your Mind",
-      image:
-        "https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=1200&h=600&fit=crop",
-      discount: "14% OFF",
-      rating: "5/5",
-    },
-    {
-      id: 2,
-      title: "Delicious Pizza",
-      image:
-        "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=1200&h=600&fit=crop",
-      discount: "20% OFF",
-      rating: "4.8/5",
-    },
-    {
-      id: 3,
-      title: "Fresh Burgers",
-      image:
-        "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=1200&h=600&fit=crop",
-      discount: "15% OFF",
-      rating: "4.9/5",
-    },
-    {
-      id: 4,
-      title: "Tasty Pasta",
-      image:
-        "https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=1200&h=600&fit=crop",
-      discount: "10% OFF",
-      rating: "4.7/5",
-    },
-    {
-      id: 5,
-      title: "Sushi Delight",
-      image:
-        "https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?w=1200&h=600&fit=crop",
-      discount: "12% OFF",
-      rating: "4.6/5",
-    },
-  ];
-
   // Auto-slide effect
   useEffect(() => {
     // Auto-slide carousel
     const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % carouselSlides.length);
+      setCurrentSlide((prev) => (prev + 1) % CAROUSEL_SLIDES.length);
     }, 4000); // Change slide every 4 seconds
 
     return () => {
       clearInterval(interval);
     };
-  }, [carouselSlides.length]);
+  }, []);
 
   // Rotate placeholder text
   useEffect(() => {
     const placeholderInterval = setInterval(() => {
       setCurrentPlaceholderIndex(
-        (prev) => (prev + 1) % placeholderTexts.length,
+        (prev) => (prev + 1) % PLACEHOLDER_TEXTS.length,
       );
     }, 2000); // Change placeholder every 2 seconds
 
     return () => clearInterval(placeholderInterval);
-  }, [placeholderTexts.length]);
+  }, []);
 
   // Save wishlist to localStorage whenever it changes
   useEffect(() => {
@@ -850,36 +926,53 @@ export default function HomePage() {
 
   useEffect(() => {
     const fetchPopularRestaurants = async () => {
-      try {
-        setRestaurantsLoading(true);
+      const requestVersion = restaurantsRequestVersionRef.current + 1;
+      restaurantsRequestVersionRef.current = requestVersion;
 
+      try {
         const city = effectiveLocation?.city;
         const normalizedCurrentCity = normalizeCity(city);
         if ((!city || city === "Current Location") && matchingZoneIds.length === 0) {
-          setPopularRestaurants([]);
+          setPopularRestaurants((prev) => (prev.length === 0 ? prev : []));
+          setRestaurantsLoading(false);
           return;
         }
 
-        const zoneIdsToQuery = matchingZoneIds.length > 0 ? matchingZoneIds : zoneId ? [zoneId] : [];
+        const zoneIdsToQuery = normalizeIdList(
+          matchingZoneIds.length > 0 ? matchingZoneIds : zoneId ? [zoneId] : [],
+        );
+        const cacheKey = `home:restaurants:${HOME_CACHE_VERSION}:${normalizedCurrentCity || "no-city"}:${zoneIdsToQuery.join(",")}`;
+        const cachedRestaurants = readSessionCache(cacheKey, RESTAURANT_CACHE_TTL_MS);
+        if (Array.isArray(cachedRestaurants) && cachedRestaurants.length > 0) {
+          setPopularRestaurants(cachedRestaurants);
+          setRestaurantsLoading(false);
+          return;
+        }
+
+        setRestaurantsLoading(true);
 
         const responses = zoneIdsToQuery.length > 0
           ? await Promise.all(
             zoneIdsToQuery.map((currentZoneId) =>
               restaurantAPI.getRestaurants({
                 platform: "mofood",
-                limit: 50,
+                limit: 24,
                 zoneId: currentZoneId,
                 onlyZone: "true",
+                lite: "true",
               }),
             ),
           )
           : [
             await restaurantAPI.getRestaurants({
               platform: "mofood",
-              limit: 50,
+              limit: 24,
+              lite: "true",
               ...(city && city !== "Current Location" ? { city } : {}),
             }),
           ];
+
+        if (restaurantsRequestVersionRef.current !== requestVersion) return;
 
         const rawRestaurants = responses.flatMap((response) =>
           Array.isArray(response?.data?.data?.restaurants) ? response.data.data.restaurants : [],
@@ -955,11 +1048,15 @@ export default function HomePage() {
           };
         });
 
+        writeSessionCache(cacheKey, transformedRestaurants);
         setPopularRestaurants(transformedRestaurants);
       } catch {
-        setPopularRestaurants([]);
+        if (restaurantsRequestVersionRef.current !== requestVersion) return;
+        setPopularRestaurants((prev) => (prev.length === 0 ? prev : []));
       } finally {
-        setRestaurantsLoading(false);
+        if (restaurantsRequestVersionRef.current === requestVersion) {
+          setRestaurantsLoading(false);
+        }
       }
     };
 
@@ -1025,7 +1122,7 @@ export default function HomePage() {
           <Search className="w-5 h-5 text-gray-400" />
           <input
             type="text"
-            placeholder={placeholderTexts[currentPlaceholderIndex]}
+            placeholder={PLACEHOLDER_TEXTS[currentPlaceholderIndex]}
             className="flex-1 outline-none text-sm text-gray-700 placeholder-gray-400 transition-all duration-300"
           />
 {/* <button className="p-1">
@@ -1045,7 +1142,7 @@ export default function HomePage() {
       <div className="px-4 mb-6">
         <div
           className="relative rounded-xl overflow-hidden h-36 md:h-48 cursor-pointer"
-          onClick={() => navigate(`/food/${carouselSlides[currentSlide].id}`)}
+          onClick={() => navigate(`/food/${CAROUSEL_SLIDES[currentSlide].id}`)}
         >
           <AnimatePresence mode="wait">
             <motion.div
@@ -1061,9 +1158,11 @@ export default function HomePage() {
             >
               {/* Full Banner Image */}
               <img
-                src={carouselSlides[currentSlide].image}
-                alt={carouselSlides[currentSlide].title}
+                src={CAROUSEL_SLIDES[currentSlide].image}
+                alt={CAROUSEL_SLIDES[currentSlide].title}
                 className="w-full h-full object-cover"
+                fetchPriority="high"
+                decoding="async"
                 onError={(e) => {
                   e.target.src = `https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=1200&h=600&fit=crop`;
                 }}
@@ -1081,7 +1180,7 @@ export default function HomePage() {
                     transition={{ delay: 0.2, duration: 0.5 }}
                     className="text-white text-base md:text-xl font-bold mb-2 md:mb-3"
                   >
-                    {carouselSlides[currentSlide].title}
+                    {CAROUSEL_SLIDES[currentSlide].title}
                   </motion.h2>
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -1092,9 +1191,9 @@ export default function HomePage() {
                     <Button className="bg-transparent border-2 border-[#ff8100] text-white hover:bg-[#ff8100] rounded-full px-3 md:px-5 py-1.5 md:py-2 text-xs md:text-sm font-semibold transition-colors">
                       Order Now
                     </Button>
-                    {carouselSlides[currentSlide].rating && (
+                    {CAROUSEL_SLIDES[currentSlide].rating && (
                       <span className="text-white text-xs md:text-sm font-semibold bg-white/20 backdrop-blur-sm px-2 md:px-3 py-1 md:py-1.5 rounded-full">
-                        {carouselSlides[currentSlide].rating}
+                        {CAROUSEL_SLIDES[currentSlide].rating}
                       </span>
                     )}
                   </motion.div>
@@ -1108,14 +1207,14 @@ export default function HomePage() {
                 transition={{ delay: 0.4, type: "spring", stiffness: 200 }}
                 className="absolute bottom-2 md:bottom-4 right-2 md:right-4 bg-[#ff8100] text-white rounded-full px-2 md:px-3 py-1 md:py-1.5 text-[10px] md:text-xs font-bold shadow-lg"
               >
-                {carouselSlides[currentSlide].discount}
+                {CAROUSEL_SLIDES[currentSlide].discount}
               </motion.div>
             </motion.div>
           </AnimatePresence>
 
           {/* Carousel Indicators */}
           <div className="absolute bottom-2 md:bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-2 z-20">
-            {carouselSlides.map((_, index) => (
+            {CAROUSEL_SLIDES.map((_, index) => (
               <button
                 key={index}
                 onClick={() => setCurrentSlide(index)}
@@ -1155,6 +1254,8 @@ export default function HomePage() {
                   src={item.image}
                   alt={item.name}
                   className="w-full h-32 object-cover rounded-t-xl"
+                  loading="lazy"
+                  decoding="async"
                   onError={(e) => {
                     e.target.src = `https://images.unsplash.com/photo-1513104890138-7c749659a591?w=400&h=400&fit=crop`;
                   }}

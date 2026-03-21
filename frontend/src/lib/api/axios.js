@@ -985,6 +985,11 @@ apiClient.interceptors.response.use(
       const currentPath = window.location.pathname;
       const currentModule = getModuleFromPath(currentPath);
       const requestModule = getModuleFromRequestUrl(originalRequest.url, currentModule);
+      const { refreshTokenKey } = getTokenMetaForModule(requestModule);
+      const moduleRefreshToken =
+        typeof localStorage !== "undefined"
+          ? localStorage.getItem(refreshTokenKey)
+          : null;
       const isStoreAuthPage = /^\/store\/(login|signup|otp)$/.test(currentPath);
       const isRestaurantAuthPage = /^\/restaurant\/(login|signup|signup-email|otp|forgot-password|welcome)$/.test(currentPath) || /^\/restaurant\/auth\/(sign-in|google-callback)$/.test(currentPath);
       const isDeliveryAuthPage = /^\/delivery\/(signin|signup|otp|welcome)/.test(currentPath);
@@ -1002,6 +1007,13 @@ apiClient.interceptors.response.use(
         (currentPath.startsWith("/admin") && isAdminAuthPage && !hasAdminToken) ||
         (currentModule === "user" && isUserAuthPage && !hasUserToken);
       if (onAuthPageWithoutToken) {
+        return Promise.reject(error);
+      }
+
+      // If there is no refresh token for the failing module, do not attempt refresh
+      // and do not force-clear session. This avoids false logout loops on transient
+      // or endpoint-specific 401s after OTP login when backend hasn't issued refresh.
+      if (!moduleRefreshToken) {
         return Promise.reject(error);
       }
 

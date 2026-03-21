@@ -103,6 +103,8 @@ const CITY_PLACEHOLDERS = new Set([
 
 const INITIAL_TOP_BRAND_RENDER_COUNT = 8;
 const INITIAL_RESTAURANT_RENDER_COUNT = 6;
+const HOME_RESTAURANTS_CACHE_TTL_MS = 3 * 60 * 1000;
+const HOME_RESTAURANTS_CACHE_VERSION = "v1";
 
 const isUsableCityValue = (value) => {
   const normalized = normalizeCityName(value);
@@ -261,6 +263,64 @@ const collectSearchableItems = (restaurant = {}) => {
   }
 
   return Array.from(names);
+};
+
+const getSelectedSavedAddressCity = () => {
+  if (typeof window === "undefined") return "";
+  try {
+    const addresses = JSON.parse(localStorage.getItem("userAddresses") || "[]");
+    if (!Array.isArray(addresses) || addresses.length === 0) return "";
+
+    const selectedAddressId = String(localStorage.getItem("userSelectedAddressId") || "").trim();
+    const selectedAddress =
+      (selectedAddressId
+        ? addresses.find((address) => {
+            const addressId = String(address?.id || address?._id || "").trim();
+            return Boolean(addressId) && addressId === selectedAddressId;
+          })
+        : null) ||
+      addresses.find((address) => address?.isDefault) ||
+      addresses[0];
+
+    if (!selectedAddress || typeof selectedAddress !== "object") return "";
+
+    const directCity = selectedAddress.city || selectedAddress.location?.city || "";
+    if (isUsableCityValue(directCity)) return String(directCity).trim();
+
+    const fromAddress =
+      extractCityFromAddressText(selectedAddress.formattedAddress) ||
+      extractCityFromAddressText(selectedAddress.address);
+    return isUsableCityValue(fromAddress) ? String(fromAddress).trim() : "";
+  } catch {
+    return "";
+  }
+};
+
+const readHomeSessionCache = (key, ttlMs) => {
+  try {
+    const raw = sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.timestamp || !("data" in parsed)) return null;
+    if (Date.now() - Number(parsed.timestamp) > ttlMs) return null;
+    return parsed.data;
+  } catch {
+    return null;
+  }
+};
+
+const writeHomeSessionCache = (key, data) => {
+  try {
+    sessionStorage.setItem(
+      key,
+      JSON.stringify({
+        timestamp: Date.now(),
+        data,
+      }),
+    );
+  } catch {
+    // Ignore cache write errors.
+  }
 };
 
 // Restaurant Image Carousel Component
@@ -505,6 +565,7 @@ export default function Home() {
   const [showDeferredSections, setShowDeferredSections] = useState(false);
   const [renderAllRestaurants, setRenderAllRestaurants] = useState(false);
   const isHandlingSwitchOff = useRef(false);
+  const restaurantsRequestRef = useRef(0);
   const backendAssetBaseUrl = API_BASE_URL.replace(/\/api\/?$/, "");
   const prefetchRestaurant = useCallback((restaurantOrSlug) => {
     const restaurantSummary =
@@ -1100,6 +1161,31 @@ export default function Home() {
   const stateName = location?.state || "Location";
   const effectiveHomeZoneId =
     selectedHomeZoneId && selectedHomeZoneId !== "auto" ? selectedHomeZoneId : zoneId;
+  const hasManualZoneSelection =
+    Boolean(selectedHomeZoneId) && selectedHomeZoneId !== "auto";
+
+  useEffect(() => {
+    const handleUserLocationChanged = () => {
+      if (selectedHomeZoneId === "auto") return;
+      let source = "";
+      try {
+        source = String(localStorage.getItem("userLocationSource") || "")
+          .trim()
+          .toLowerCase();
+      } catch {
+        source = "";
+      }
+
+      if (source === "saved" || source === "current") {
+        setSelectedHomeZoneId("auto");
+      }
+    };
+
+    window.addEventListener("userLocationChanged", handleUserLocationChanged);
+    return () => {
+      window.removeEventListener("userLocationChanged", handleUserLocationChanged);
+    };
+  }, [selectedHomeZoneId]);
 
   useEffect(() => {
     const fetchActiveZones = async () => {
@@ -1187,6 +1273,9 @@ export default function Home() {
   // Fetch restaurants from API with filters
   const fetchRestaurants = useCallback(
     async (filters = {}) => {
+      const requestId = restaurantsRequestRef.current + 1;
+      restaurantsRequestRef.current = requestId;
+
       try {
         setLoadingRestaurants(true);
 
@@ -1251,28 +1340,107 @@ export default function Home() {
           params.trusted = "true";
         }
 
-        // Home page is MoFood-only.
-        params.platform = "mofood";
+        // Home page is rendered as MoFood-only in frontend filtering.
+        params.limit = 30;
+        params.lite = "true";
         // When zone is selected (or auto-detected), fetch by zone only and ignore saved-location city.
         const hasResolvedZone = Boolean(effectiveHomeZoneId);
+        let locationSource = "";
+        try {
+          locationSource = String(localStorage.getItem("userLocationSource") || "")
+            .trim()
+            .toLowerCase();
+        } catch {
+          locationSource = "";
+        }
+        const useSavedAddressCityMode =
+          !hasManualZoneSelection && locationSource === "saved";
+        const allowCrossModeFallbacks = !hasManualZoneSelection && !useSavedAddressCityMode;
+        let didQueryByZone = false;
         let normalizedUserCity = "";
-        if (hasResolvedZone) {
+        if (hasResolvedZone && !useSavedAddressCityMode) {
           params.zoneId = effectiveHomeZoneId;
           params.onlyZone = "true";
+          didQueryByZone = true;
         } else {
-          // Fallback for no zone: keep city-based scope.
-          const resolvedUserCity = resolveUserCity(location);
+          // Saved-address mode should use selected saved-address city first.
+          const resolvedUserCity = useSavedAddressCityMode
+            ? getSelectedSavedAddressCity() || resolveUserCity(location)
+            : resolveUserCity(location);
           normalizedUserCity = normalizeCityName(resolvedUserCity);
-          if (!normalizedUserCity) {
-            setRestaurantsData([]);
-            setLoadingRestaurants(false);
-            return;
+          if (normalizedUserCity) {
+            params.city = resolvedUserCity;
           }
-          params.city = resolvedUserCity;
         }
 
-        const response = await restaurantAPI.getRestaurants(params);
-        const restaurantsArrayRaw = response?.data?.data?.restaurants || [];
+        const cacheParams = Object.entries(params)
+          .filter(([, value]) => value !== undefined && value !== null && value !== "")
+          .sort(([a], [b]) => a.localeCompare(b));
+        const cacheKey = `home:restaurants:${HOME_RESTAURANTS_CACHE_VERSION}:${JSON.stringify(cacheParams)}`;
+        const cachedRestaurants = readHomeSessionCache(cacheKey, HOME_RESTAURANTS_CACHE_TTL_MS);
+        if (Array.isArray(cachedRestaurants)) {
+          if (restaurantsRequestRef.current !== requestId) return;
+          setRestaurantsData(cachedRestaurants);
+          setLoadingRestaurants(false);
+          return;
+        }
+
+        let response = await restaurantAPI.getRestaurants(params);
+        if (restaurantsRequestRef.current !== requestId) return;
+        let restaurantsArrayRaw = response?.data?.data?.restaurants || [];
+
+        const shouldRetryWithoutCity =
+          !hasResolvedZone &&
+          allowCrossModeFallbacks &&
+          Boolean(params.city) &&
+          Boolean(normalizedUserCity) &&
+          Array.isArray(restaurantsArrayRaw) &&
+          restaurantsArrayRaw.length === 0;
+
+        const shouldRetryWithoutZone =
+          didQueryByZone &&
+          allowCrossModeFallbacks &&
+          Array.isArray(restaurantsArrayRaw) &&
+          restaurantsArrayRaw.length === 0;
+
+        if (shouldRetryWithoutZone) {
+          const fallbackParams = { ...params };
+          delete fallbackParams.zoneId;
+          delete fallbackParams.onlyZone;
+
+          const resolvedUserCity = resolveUserCity(location);
+          const normalizedFallbackCity = normalizeCityName(resolvedUserCity);
+          if (normalizedFallbackCity) {
+            fallbackParams.city = resolvedUserCity;
+          } else {
+            delete fallbackParams.city;
+          }
+
+          response = await restaurantAPI.getRestaurants(fallbackParams);
+          if (restaurantsRequestRef.current !== requestId) return;
+          restaurantsArrayRaw = response?.data?.data?.restaurants || [];
+        } else if (shouldRetryWithoutCity) {
+          const fallbackParams = { ...params };
+          delete fallbackParams.city;
+          response = await restaurantAPI.getRestaurants(fallbackParams);
+          if (restaurantsRequestRef.current !== requestId) return;
+          restaurantsArrayRaw = response?.data?.data?.restaurants || [];
+        }
+
+        const shouldRetryWithoutLocationFilters =
+          allowCrossModeFallbacks &&
+          Array.isArray(restaurantsArrayRaw) &&
+          restaurantsArrayRaw.length === 0;
+
+        if (shouldRetryWithoutLocationFilters) {
+          const fallbackParams = {
+            limit: params.limit,
+            lite: params.lite,
+          };
+          response = await restaurantAPI.getRestaurants(fallbackParams);
+          if (restaurantsRequestRef.current !== requestId) return;
+          restaurantsArrayRaw = response?.data?.data?.restaurants || [];
+        }
 
         if (
           response.data &&
@@ -1283,12 +1451,15 @@ export default function Home() {
           const restaurantsArray = (restaurantsArrayRaw || []).filter((restaurant) => {
             const platform = String(restaurant?.platform || "").toLowerCase();
             if (platform && platform !== "mofood") return false;
-            if (hasResolvedZone) return true;
-            return matchesRestaurantCity(restaurant, normalizedUserCity);
+            return true;
           });
 
           if (restaurantsArray.length === 0) {
-            console.warn("No restaurants found in API response");
+            if (hasManualZoneSelection && hasResolvedZone) {
+              console.warn(`No restaurants found for selected zone: ${effectiveHomeZoneId}`);
+            } else {
+              console.warn("No restaurants found in API response after all fallbacks");
+            }
             setRestaurantsData([]);
             setLoadingRestaurants(false);
             return;
@@ -1453,22 +1624,33 @@ export default function Home() {
               return aDistance - bDistance;
             });
           }
+          writeHomeSessionCache(cacheKey, transformedRestaurants);
           setRestaurantsData(transformedRestaurants);
         } else {
           console.warn("Invalid API response structure:", response.data);
           setRestaurantsData([]);
         }
       } catch (error) {
+        if (restaurantsRequestRef.current !== requestId) return;
         console.error("Error fetching restaurants:", error);
         console.error("Error details:", error.response?.data || error.message);
         // Don't set hardcoded data here - let the useMemo fallback handle it
         // This way, if API succeeds later, it will show the real data
         setRestaurantsData([]);
       } finally {
-        setLoadingRestaurants(false);
+        if (restaurantsRequestRef.current === requestId) {
+          setLoadingRestaurants(false);
+        }
       }
     },
-    [effectiveHomeZoneId, location?.city, zoneLoading],
+    [
+      effectiveHomeZoneId,
+      hasManualZoneSelection,
+      location?.city,
+      location?.latitude,
+      location?.longitude,
+      zoneLoading,
+    ],
   );
 
   // Fetch restaurants when appliedFilters change

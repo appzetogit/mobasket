@@ -469,7 +469,40 @@ export default function RestaurantDetails() {
       setLoadingDeferredContent(true);
 
       try {
-        const menuResponse = await restaurantAPI.getMenuByRestaurantId(restaurantIdForMenu);
+        const normalizeLookupId = (value) => String(value || "").trim();
+        const menuLookupIds = Array.from(
+          new Set(
+            [
+              restaurantIdForMenu,
+              transformedRestaurant?.id,
+              transformedRestaurant?.restaurantId,
+              transformedRestaurant?.mongoId,
+              transformedRestaurant?.slug,
+              slug,
+            ]
+              .map(normalizeLookupId)
+              .filter(Boolean),
+          ),
+        );
+
+        let menuResponse = null;
+        for (const lookupId of menuLookupIds) {
+          try {
+            const candidateResponse = await restaurantAPI.getMenuByRestaurantId(lookupId);
+            if (candidateResponse?.data?.success && candidateResponse?.data?.data?.menu) {
+              menuResponse = candidateResponse;
+              break;
+            }
+          } catch (lookupError) {
+            if (lookupError?.response?.status !== 404) {
+              throw lookupError;
+            }
+          }
+        }
+
+        if (!menuResponse) {
+          throw Object.assign(new Error("Menu not found"), { response: { status: 404 } });
+        }
         if (isCancelled()) return;
 
         if (
@@ -685,7 +718,7 @@ export default function RestaurantDetails() {
         }
       }
     },
-    [],
+    [slug],
   );
 
 
@@ -819,37 +852,20 @@ export default function RestaurantDetails() {
 
 
 
-      // Prevent re-fetching if we've already fetched for this slug and zoneId hasn't changed meaningfully
-
-      // Only re-fetch if slug changed or if we're waiting for zoneId and it just became available
-
       if (
-
         fetchedRestaurantRef.current &&
-
         restaurant &&
-
         restaurant.slug === slug
-
       ) {
-
-        // Only re-fetch if zoneId changed from null to a value (zone just detected)
-
-        if (zoneId && !loadingZone) {
-
-          // Zone is available, but we already have restaurant data - don't re-fetch
-
-          return;
-
-        }
-
+        return;
       }
 
 
 
       try {
 
-        setLoadingRestaurant(true);
+        // Keep rendered content visible on retry fetches.
+        setLoadingRestaurant(!fetchedRestaurantRef.current && !restaurant);
         setLoadingDeferredContent(false);
 
         setRestaurantError(null);
@@ -1352,6 +1368,10 @@ export default function RestaurantDetails() {
 
               apiRestaurant?.restaurantId ||
 
+              null,
+            mongoId:
+              actualRestaurant?._id ||
+              apiRestaurant?._id ||
               null,
 
             name:
