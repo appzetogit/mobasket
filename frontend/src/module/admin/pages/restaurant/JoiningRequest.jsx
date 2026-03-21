@@ -1,6 +1,6 @@
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useRef, useCallback } from "react"
 import { 
-  Search, Filter, Eye, Check, X, UtensilsCrossed, Loader2, FileText, Image as ImageIcon, ExternalLink, CreditCard, Calendar, Star, Building2, User, Phone, Mail, MapPin, Clock } from "lucide-react"
+  Search, Filter, Eye, Check, X, UtensilsCrossed, Loader2, FileText, Image as ImageIcon, ExternalLink, CreditCard, Calendar, Star, Building2, User, Phone, Mail, MapPin, Clock, RefreshCw } from "lucide-react"
 import { adminAPI, restaurantAPI } from "../../../../lib/api"
 import { buildImageFallback } from "@/lib/utils/imageFallback"
 
@@ -25,61 +25,110 @@ export default function JoiningRequest() {
     dateFrom: "",
     dateTo: ""
   })
+  const latestRequestRef = useRef(0)
 
-  // Fetch restaurant join requests
-  useEffect(() => {
-    fetchRequests()
-  }, [activeTab])
+  const fetchRequests = useCallback(async (options = {}) => {
+    const {
+      statusOverride,
+      searchOverride,
+      silent = false,
+    } = options
 
-  // Debounced search effect
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchRequests()
-    }, 500) // Wait 500ms after user stops typing
+    const status = statusOverride || (activeTab === "pending" ? "pending" : "rejected")
+    const searchValue = typeof searchOverride === "string" ? searchOverride : searchQuery
+    const requestId = latestRequestRef.current + 1
+    latestRequestRef.current = requestId
 
-    return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchQuery])
-
-  const fetchRequests = async () => {
     try {
-      setLoading(true)
+      if (!silent) setLoading(true)
       setError(null)
 
-      const status = activeTab === "pending" ? "pending" : "rejected"
       const response = await adminAPI.getRestaurantJoinRequests({
         status,
-        search: searchQuery || undefined,
+        search: searchValue || undefined,
         page: 1,
-        limit: 100
+        limit: 100,
+        _ts: Date.now(),
       })
+      if (requestId !== latestRequestRef.current) return
 
       if (response.data && response.data.success && response.data.data) {
         const requests = response.data.data.requests || []
-        if (activeTab === "pending") {
+        if (status === "pending") {
           setPendingRequests(requests)
         } else {
           setRejectedRequests(requests)
         }
       } else {
-        if (activeTab === "pending") {
+        if (status === "pending") {
           setPendingRequests([])
         } else {
           setRejectedRequests([])
         }
       }
     } catch (err) {
+      if (requestId !== latestRequestRef.current) return
       console.error("Error fetching restaurant requests:", err)
       setError(err.message || "Failed to fetch restaurant requests")
-      if (activeTab === "pending") {
+      if (status === "pending") {
         setPendingRequests([])
       } else {
         setRejectedRequests([])
       }
     } finally {
-      setLoading(false)
+      if (requestId === latestRequestRef.current && !silent) {
+        setLoading(false)
+      }
     }
-  }
+  }, [activeTab, searchQuery])
+
+  // Fetch on tab switch
+  useEffect(() => {
+    fetchRequests({
+      statusOverride: activeTab === "pending" ? "pending" : "rejected",
+      searchOverride: searchQuery,
+      silent: false,
+    })
+  }, [activeTab, fetchRequests])
+
+  // Debounced search fetch
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchRequests({
+        statusOverride: activeTab === "pending" ? "pending" : "rejected",
+        searchOverride: searchQuery,
+        silent: false,
+      })
+    }, 450)
+
+    return () => clearTimeout(timer)
+  }, [activeTab, searchQuery, fetchRequests])
+
+  // Keep list fresh: poll + focus/visibility refresh
+  useEffect(() => {
+    const refresh = () => {
+      fetchRequests({
+        statusOverride: activeTab === "pending" ? "pending" : "rejected",
+        searchOverride: searchQuery,
+        silent: true,
+      })
+    }
+
+    const intervalId = window.setInterval(refresh, 15000)
+    const onFocus = () => refresh()
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") refresh()
+    }
+
+    window.addEventListener("focus", onFocus)
+    document.addEventListener("visibilitychange", onVisibility)
+
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener("focus", onFocus)
+      document.removeEventListener("visibilitychange", onVisibility)
+    }
+  }, [activeTab, searchQuery, fetchRequests])
 
   const currentRequests = activeTab === "pending" ? pendingRequests : rejectedRequests
 
@@ -319,6 +368,18 @@ export default function JoiningRequest() {
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => fetchRequests({
+                  statusOverride: activeTab === "pending" ? "pending" : "rejected",
+                  searchOverride: searchQuery,
+                  silent: false,
+                })}
+                disabled={loading || processing}
+                className="px-4 py-2.5 text-sm font-medium rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 transition-all flex items-center gap-2 disabled:opacity-60"
+              >
+                <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+                Refresh
+              </button>
               <button 
                 onClick={() => setShowFilterDialog(true)}
                 className={`px-4 py-2.5 text-sm font-medium rounded-lg border transition-all flex items-center gap-2 ${

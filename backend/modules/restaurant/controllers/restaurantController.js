@@ -187,6 +187,62 @@ function buildRequestedCityMongoCondition(requestedCity) {
   };
 }
 
+const RESTAURANT_LIST_LITE_SELECT = [
+  'restaurantId',
+  'slug',
+  'name',
+  'platform',
+  'profileImage',
+  'coverImages',
+  'menuImages',
+  'cuisines',
+  'location',
+  'rating',
+  'totalRatings',
+  'estimatedDeliveryTime',
+  'distance',
+  'priceRange',
+  'offer',
+  'featuredDish',
+  'featuredPrice',
+  'zoneId',
+  'isActive',
+  'isAcceptingOrders',
+].join(' ');
+
+const isInlineDataUri = (value = '') =>
+  typeof value === 'string' && value.trim().toLowerCase().startsWith('data:');
+
+const sanitizeImageValue = (value) => {
+  if (!value) return value;
+  if (typeof value === 'string') return isInlineDataUri(value) ? '' : value;
+  if (Array.isArray(value)) return value.map(sanitizeImageValue).filter(Boolean);
+  if (typeof value === 'object') {
+    const next = { ...value };
+    ['url', 'image', 'imageUrl', 'secure_url', 'src'].forEach((key) => {
+      if (typeof next[key] === 'string' && isInlineDataUri(next[key])) {
+        next[key] = '';
+      }
+    });
+    return next;
+  }
+  return value;
+};
+
+const sanitizeRestaurantListEntry = (restaurant = {}) => ({
+  ...restaurant,
+  profileImage: sanitizeImageValue(restaurant.profileImage),
+  coverImages: Array.isArray(restaurant.coverImages)
+    ? restaurant.coverImages.map(sanitizeImageValue).filter(Boolean)
+    : [],
+  menuImages: Array.isArray(restaurant.menuImages)
+    ? restaurant.menuImages.map(sanitizeImageValue).filter(Boolean)
+    : [],
+  logo: sanitizeImageValue(restaurant.logo),
+  image: sanitizeImageValue(restaurant.image),
+  storeImage: sanitizeImageValue(restaurant.storeImage),
+});
+
 function getActiveZoneQueryByPlatform(platform = 'mofood') {
   return platform === 'mogrocery'
     ? { isActive: true, platform: 'mogrocery' }
@@ -211,6 +267,10 @@ export const getRestaurants = async (req, res) => {
       zoneId // User's zone ID (optional - used only for validation/metadata)
     } = req.query;
     const requestedPlatform = normalizePlatformFilter(platform);
+    const liteResponse = String(req.query?.lite || '').toLowerCase() === 'true';
+    const projection = liteResponse
+      ? RESTAURANT_LIST_LITE_SELECT
+      : '-owner -createdAt -updatedAt -password';
 
     // Optional: Zone lookup - if zoneId is provided, validate and enforce same-zone listing.
     let userZone = null;
@@ -398,14 +458,14 @@ export const getRestaurants = async (req, res) => {
       }
 
       restaurants = await GroceryStore.find(groceryQuery)
-        .select('-owner -createdAt -updatedAt -password')
+        .select(projection)
         .sort(sortObj)
         .limit(parseInt(limit))
         .skip(parseInt(offset))
         .lean();
     } else {
       restaurants = await Restaurant.find(query)
-        .select('-owner -createdAt -updatedAt -password')
+        .select(projection)
         .sort(sortObj)
         .limit(parseInt(limit))
         .skip(parseInt(offset))
@@ -480,6 +540,10 @@ export const getRestaurants = async (req, res) => {
         const distMatch = r.distance.match(/(\d+\.?\d*)/);
         return distMatch && parseFloat(distMatch[1]) <= maxDist;
       });
+    }
+
+    if (liteResponse) {
+      restaurants = restaurants.map(sanitizeRestaurantListEntry);
     }
 
     // Get total count (before filtering by string fields)
@@ -1096,6 +1160,7 @@ export const deleteRestaurantAccount = asyncHandler(async (req, res) => {
 export const getRestaurantsWithDishesUnder250 = async (req, res) => {
   try {
     const { zoneId } = req.query; // User's zone ID (optional - if provided, filters by zone)
+    const maxRestaurants = Math.max(0, Number(req.query?.maxRestaurants) || 0);
 
     // Optional: Zone-based filtering - if zoneId is provided, validate and filter by zone
     let userZone = null;
@@ -1215,10 +1280,16 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
     const activeZones = await Zone.find(getActiveZoneQueryByPlatform('mofood')).lean();
 
     // Get all active restaurants
-    let restaurants = await Restaurant.find({ isActive: true })
+    let restaurantsQuery = Restaurant.find({ isActive: true })
       .select('-owner -createdAt -updatedAt')
-      .lean()
-      .limit(100); // Limit to first 100 restaurants for performance
+      .lean();
+
+    // Optional safety cap from query param; by default we return all eligible restaurants.
+    if (maxRestaurants > 0) {
+      restaurantsQuery = restaurantsQuery.limit(maxRestaurants);
+    }
+
+    let restaurants = await restaurantsQuery;
 
     restaurants = restaurants.filter((restaurant) => {
       const restaurantZoneIds = getNormalizedEntityZoneIds(restaurant, activeZones);

@@ -33,6 +33,41 @@ const normalizeImagesArray = (images, fallbackImage = '') => {
   return fallback ? [fallback] : [];
 };
 
+const isInlineDataUri = (value = '') => (
+  typeof value === 'string' &&
+  value.trim().toLowerCase().startsWith('data:')
+);
+
+const sanitizePublicImage = (value = '') => {
+  const normalized = normalizeImageUrl(value);
+  return isInlineDataUri(normalized) ? '' : normalized;
+};
+
+const sanitizePublicImages = (images = []) => {
+  if (!Array.isArray(images)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      images
+        .map((img) => sanitizePublicImage(img))
+        .filter(Boolean)
+    )
+  );
+};
+
+const sanitizeMenuItemForPublic = (item = {}) => {
+  const safeImages = sanitizePublicImages(item.images);
+  const safeImage = sanitizePublicImage(item.image) || safeImages[0] || '';
+
+  return {
+    ...item,
+    image: safeImage,
+    images: safeImages,
+  };
+};
+
 // Get menu for a restaurant
 export const getMenu = asyncHandler(async (req, res) => {
   // Restaurant is attached by authenticate middleware
@@ -620,11 +655,145 @@ export const getMenuByRestaurantId = async (req, res) => {
       return errorResponse(res, 404, 'Restaurant not found');
     }
 
-    // Find menu
-    const menu = await Menu.findOne({
-      restaurant: restaurant._id,
-      isActive: true,
-    }).lean();
+    // Find menu and strip inline data-uri images at DB level to avoid huge payload transfer
+    const menuResult = await Menu.aggregate([
+      {
+        $match: {
+          restaurant: restaurant._id,
+          isActive: true,
+        },
+      },
+      {
+        $project: {
+          isActive: 1,
+          sections: {
+            $map: {
+              input: { $ifNull: ['$sections', []] },
+              as: 'section',
+              in: {
+                $mergeObjects: [
+                  '$$section',
+                  {
+                    items: {
+                      $map: {
+                        input: { $ifNull: ['$$section.items', []] },
+                        as: 'item',
+                        in: {
+                          $mergeObjects: [
+                            '$$item',
+                            {
+                              image: {
+                                $let: {
+                                  vars: { img: { $ifNull: ['$$item.image', ''] } },
+                                  in: {
+                                    $cond: [
+                                      {
+                                        $regexMatch: {
+                                          input: '$$img',
+                                          regex: '^data:',
+                                          options: 'i',
+                                        },
+                                      },
+                                      '',
+                                      '$$img',
+                                    ],
+                                  },
+                                },
+                              },
+                              images: {
+                                $filter: {
+                                  input: { $ifNull: ['$$item.images', []] },
+                                  as: 'img',
+                                  cond: {
+                                    $not: [
+                                      {
+                                        $regexMatch: {
+                                          input: { $ifNull: ['$$img', ''] },
+                                          regex: '^data:',
+                                          options: 'i',
+                                        },
+                                      },
+                                    ],
+                                  },
+                                },
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    },
+                    subsections: {
+                      $map: {
+                        input: { $ifNull: ['$$section.subsections', []] },
+                        as: 'subsection',
+                        in: {
+                          $mergeObjects: [
+                            '$$subsection',
+                            {
+                              items: {
+                                $map: {
+                                  input: { $ifNull: ['$$subsection.items', []] },
+                                  as: 'item',
+                                  in: {
+                                    $mergeObjects: [
+                                      '$$item',
+                                      {
+                                        image: {
+                                          $let: {
+                                            vars: { img: { $ifNull: ['$$item.image', ''] } },
+                                            in: {
+                                              $cond: [
+                                                {
+                                                  $regexMatch: {
+                                                    input: '$$img',
+                                                    regex: '^data:',
+                                                    options: 'i',
+                                                  },
+                                                },
+                                                '',
+                                                '$$img',
+                                              ],
+                                            },
+                                          },
+                                        },
+                                        images: {
+                                          $filter: {
+                                            input: { $ifNull: ['$$item.images', []] },
+                                            as: 'img',
+                                            cond: {
+                                              $not: [
+                                                {
+                                                  $regexMatch: {
+                                                    input: { $ifNull: ['$$img', ''] },
+                                                    regex: '^data:',
+                                                    options: 'i',
+                                                  },
+                                                },
+                                              ],
+                                            },
+                                          },
+                                        },
+                                      },
+                                    ],
+                                  },
+                                },
+                              },
+                            },
+                          ],
+                        },
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+      { $limit: 1 },
+    ]);
+
+    const menu = menuResult[0] || null;
 
     if (!menu) {
       // Return empty menu if not found
@@ -635,9 +804,6 @@ export const getMenuByRestaurantId = async (req, res) => {
         },
       });
     }
-    console.log('[USER MENU] Processing menu for restaurant:', restaurant._id);
-    console.log('[USER MENU] Total sections:', menu.sections?.length || 0);
-
     // Filter menu for user side: only show enabled sections and available items
     const filteredSections = (menu.sections || [])
       .filter(section => {
@@ -651,20 +817,8 @@ export const getMenuByRestaurantId = async (req, res) => {
         const availableItems = (section.items || []).filter(item => {
           const isAvailable = item.isAvailable !== false;
           const isApproved = item.approvalStatus === 'approved' || !item.approvalStatus; // Include approved or legacy items without approvalStatus
-          const shouldShow = isAvailable && isApproved;
-
-          // Debug logging for filtered items
-          if (!shouldShow) {
-            console.log(`[USER MENU] Filtering out item "${item.name}": isAvailable=${item.isAvailable}, approvalStatus=${item.approvalStatus}`);
-          }
-
-          // Debug logging for preparationTime - log ALL items to see what's in the data
-          if (shouldShow) {
-            console.log(`[USER MENU] Item "${item.name}": preparationTime="${item.preparationTime}" (type: ${typeof item.preparationTime}, exists: ${item.hasOwnProperty('preparationTime')})`);
-          }
-
-          return shouldShow;
-        });
+          return isAvailable && isApproved;
+        }).map(sanitizeMenuItemForPublic);
 
         // Filter subsections and their items
         const availableSubsections = (section.subsections || [])
@@ -672,20 +826,8 @@ export const getMenuByRestaurantId = async (req, res) => {
             const availableSubsectionItems = (subsection.items || []).filter(item => {
               const isAvailable = item.isAvailable !== false;
               const isApproved = item.approvalStatus === 'approved' || !item.approvalStatus; // Include approved or legacy items without approvalStatus
-              const shouldShow = isAvailable && isApproved;
-
-              // Debug logging for filtered items
-              if (!shouldShow) {
-                console.log(`[USER MENU] Filtering out subsection item "${item.name}": isAvailable=${item.isAvailable}, approvalStatus=${item.approvalStatus}`);
-              }
-
-              // Debug logging for preparationTime - log ALL items to see what's in the data
-              if (shouldShow) {
-                console.log(`[USER MENU] Subsection item "${item.name}": preparationTime="${item.preparationTime}" (type: ${typeof item.preparationTime}, exists: ${item.hasOwnProperty('preparationTime')})`);
-              }
-
-              return shouldShow;
-            });
+              return isAvailable && isApproved;
+            }).map(sanitizeMenuItemForPublic);
             // Only include subsection if it has available items
             if (availableSubsectionItems.length > 0) {
               return {

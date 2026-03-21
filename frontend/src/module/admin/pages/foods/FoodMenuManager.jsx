@@ -64,6 +64,10 @@ function MenuImage({ src, alt, className, fallback }) {
   );
 }
 
+function getSectionKey(section = {}, index = 0) {
+  return String(section?.id || section?.name || `section-${index}`);
+}
+
 export default function FoodMenuManager() {
   const [restaurants, setRestaurants] = useState([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = useState("");
@@ -77,6 +81,7 @@ export default function FoodMenuManager() {
   const [editForm, setEditForm] = useState({ name: "", image: "" });
   const [editSaving, setEditSaving] = useState(false);
   const [imagePreview, setImagePreview] = useState("");
+  const [selectedSectionViewKey, setSelectedSectionViewKey] = useState("");
 
   const [form, setForm] = useState({
     sectionId: "",
@@ -128,6 +133,7 @@ export default function FoodMenuManager() {
     const fetchMenu = async () => {
       if (!selectedRestaurantId) {
         setMenu({ sections: [] });
+        setSelectedSectionViewKey("");
         return;
       }
       try {
@@ -144,6 +150,21 @@ export default function FoodMenuManager() {
 
     fetchMenu();
   }, [selectedRestaurantId]);
+
+  useEffect(() => {
+    const sections = Array.isArray(menu.sections) ? menu.sections : [];
+    if (sections.length === 0) {
+      setSelectedSectionViewKey("");
+      return;
+    }
+
+    const hasSelected = sections.some(
+      (section, index) => getSectionKey(section, index) === selectedSectionViewKey,
+    );
+    if (!hasSelected) {
+      setSelectedSectionViewKey(getSectionKey(sections[0], 0));
+    }
+  }, [menu.sections, selectedSectionViewKey]);
 
   useEffect(() => {
     const fetchAddons = async () => {
@@ -182,6 +203,14 @@ export default function FoodMenuManager() {
     () => getEntityImage(selectedRestaurant),
     [selectedRestaurant],
   );
+
+  const visibleSections = useMemo(() => {
+    const sections = Array.isArray(menu.sections) ? menu.sections : [];
+    if (!selectedSectionViewKey) return sections;
+    return sections.filter(
+      (section, index) => getSectionKey(section, index) === selectedSectionViewKey,
+    );
+  }, [menu.sections, selectedSectionViewKey]);
 
   const resetForm = () => {
     setForm((prev) => ({
@@ -389,7 +418,13 @@ export default function FoodMenuManager() {
           <form onSubmit={handleAddItem} className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <select
               value={form.sectionId}
-              onChange={(event) => setForm((prev) => ({ ...prev, sectionId: event.target.value }))}
+              onChange={(event) => {
+                const nextSectionId = event.target.value;
+                setForm((prev) => ({ ...prev, sectionId: nextSectionId }));
+                if (nextSectionId) {
+                  setSelectedSectionViewKey(String(nextSectionId));
+                }
+              }}
               className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
             >
               <option value="">New Section</option>
@@ -465,9 +500,30 @@ export default function FoodMenuManager() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">
-          {selectedRestaurant?.name ? `${selectedRestaurant.name} Menu` : "Menu Items"}
-        </h2>
+        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <h2 className="text-lg font-semibold text-slate-900">
+            {selectedRestaurant?.name ? `${selectedRestaurant.name} Menu` : "Menu Items"}
+          </h2>
+          {selectedRestaurantId && (menu.sections || []).length > 0 ? (
+            <div className="w-full md:w-72">
+              <label className="mb-1 block text-xs font-medium text-slate-600">Category</label>
+              <select
+                value={selectedSectionViewKey}
+                onChange={(event) => setSelectedSectionViewKey(event.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              >
+                {(menu.sections || []).map((section, index) => {
+                  const sectionKey = getSectionKey(section, index);
+                  return (
+                    <option key={sectionKey} value={sectionKey}>
+                      {section?.name || "Unnamed Section"}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+          ) : null}
+        </div>
 
         {loadingMenu ? (
           <div className="py-16 flex items-center justify-center">
@@ -479,15 +535,15 @@ export default function FoodMenuManager() {
           <p className="text-sm text-slate-500">No menu sections yet.</p>
         ) : (
           <div className="space-y-5">
-            {menu.sections.map((section) => (
+            {visibleSections.map((section, sectionIndex) => (
               <div key={section.id || section.name} className="border border-slate-200 rounded-lg overflow-hidden">
                 <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200">
                   <h3 className="text-sm font-semibold text-slate-800">{section.name || "Unnamed Section"}</h3>
                 </div>
                 <div className="divide-y divide-slate-100">
                   {(section.items || []).map(renderItemRow)}
-                  {(section.subsections || []).map((subsection) => (
-                    <div key={subsection.id} className="px-4 py-2.5 bg-slate-50/40">
+                  {(section.subsections || []).map((subsection, subsectionIndex) => (
+                    <div key={subsection.id || `${sectionIndex}-${subsectionIndex}`} className="px-4 py-2.5 bg-slate-50/40">
                       <p className="text-xs font-semibold text-slate-600 mb-2">{subsection.name}</p>
                       <div className="space-y-1">
                         {(subsection.items || []).map(renderItemRow)}

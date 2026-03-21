@@ -785,15 +785,24 @@ export const login = asyncHandler(async (req, res) => {
   if (fcmPatch.fcmTokenMobile) {
     restaurant.fcmTokenMobile = fcmPatch.fcmTokenMobile;
   }
-  if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile) {
+  if (restaurant.isAcceptingOrders !== true) {
+    restaurant.isAcceptingOrders = true;
+  }
+  if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile || restaurant.isModified('isAcceptingOrders')) {
     await restaurant.save();
   }
 
-  // Generate tokens (email may be null for phone signups)
-  const tokens = jwtService.generateTokens({
-    userId: restaurant._id.toString(),
-    role: 'restaurant',
-    email: restaurant.email || restaurant.phone || restaurant.restaurantId
+    // Logged-in restaurants should appear online in user listings.
+    if (restaurant.isActive && restaurant.isAcceptingOrders !== true) {
+      restaurant.isAcceptingOrders = true;
+      await restaurant.save();
+    }
+
+    // Generate tokens (email may be null for phone signups)
+    const tokens = jwtService.generateTokens({
+      userId: restaurant._id.toString(),
+      role: 'restaurant',
+      email: restaurant.email || restaurant.phone || restaurant.restaurantId
   });
 
   // Set refresh token in httpOnly cookie
@@ -895,6 +904,11 @@ export const refreshToken = asyncHandler(async (req, res) => {
     // Allow inactive restaurants to refresh tokens - they need access to complete onboarding
     // The middleware will handle blocking inactive restaurants from accessing restricted routes
 
+    if (restaurant.isActive && restaurant.isAcceptingOrders !== true) {
+      restaurant.isAcceptingOrders = true;
+      await restaurant.save();
+    }
+
     // Generate new access token
     const accessToken = jwtService.generateAccessToken({
       userId: restaurant._id.toString(),
@@ -915,6 +929,11 @@ export const refreshToken = asyncHandler(async (req, res) => {
  * POST /api/restaurant/auth/logout
  */
 export const logout = asyncHandler(async (req, res) => {
+  if (req.restaurant) {
+    req.restaurant.isAcceptingOrders = false;
+    await req.restaurant.save();
+  }
+
   // Clear refresh token cookie
   res.clearCookie('refreshToken', {
     httpOnly: true,
@@ -1227,7 +1246,10 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     if (fcmPatch.fcmTokenMobile) {
       restaurant.fcmTokenMobile = fcmPatch.fcmTokenMobile;
     }
-    if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile) {
+    if (restaurant.isAcceptingOrders !== true) {
+      restaurant.isAcceptingOrders = true;
+    }
+    if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile || restaurant.isModified('isAcceptingOrders')) {
       await restaurant.save();
     }
 

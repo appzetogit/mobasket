@@ -193,9 +193,12 @@ export default function PageNavbar({
     let storedLocation = null;
     let storedAddresses = [];
     let defaultSavedAddress = null;
+    let selectedSavedAddress = null;
     let source = "";
+    let selectedAddressId = "";
     try {
       source = normalizeText(localStorage.getItem("userLocationSource")).toLowerCase();
+      selectedAddressId = normalizeText(localStorage.getItem("userSelectedAddressId"));
       const raw = localStorage.getItem("userLocation");
       storedLocation = raw ? JSON.parse(raw) : null;
       const rawAddresses = localStorage.getItem("userAddresses");
@@ -203,6 +206,21 @@ export default function PageNavbar({
     } catch {
       storedLocation = null;
       storedAddresses = [];
+    }
+
+    const allCandidateAddresses =
+      Array.isArray(addresses) && addresses.length > 0
+        ? addresses
+        : Array.isArray(storedAddresses)
+          ? storedAddresses
+          : [];
+
+    if (selectedAddressId && allCandidateAddresses.length > 0) {
+      selectedSavedAddress =
+        allCandidateAddresses.find((addr) => {
+          const addrId = normalizeText(addr?.id || addr?._id);
+          return Boolean(addrId) && addrId === selectedAddressId;
+        }) || null;
     }
 
     if (Array.isArray(addresses) && addresses.length > 0) {
@@ -218,20 +236,49 @@ export default function PageNavbar({
         storedAddresses.find((addr) => addr?.isDefault === true || addr?.default === true) || storedAddresses[0] || null;
     }
 
-    // Respect explicit user selection first (saved/current), then fall back.
-    const explicitlySelectedLocation =
-      (source === "saved" || source === "current") && storedLocation
-        ? storedLocation
-        : null;
-    const preferredLocation =
-      explicitlySelectedLocation ||
-      location ||
-      defaultSavedAddress ||
-      storedLocation ||
-      {};
+    // Respect explicit source strictly to avoid mixing saved/current datasets.
+    // saved: selected saved address > stored selected location > default saved address.
+    // current: stored current location > live hook location.
+    const chooseBySource = () => {
+      if (source === "saved") {
+        if (storedLocation && typeof storedLocation === "object") return storedLocation;
+        if (selectedSavedAddress && typeof selectedSavedAddress === "object") return selectedSavedAddress;
+        if (defaultSavedAddress && typeof defaultSavedAddress === "object") return defaultSavedAddress;
+        return {};
+      }
+
+      if (source === "current") {
+        if (storedLocation && typeof storedLocation === "object") return storedLocation;
+        if (location && typeof location === "object") return location;
+        return {};
+      }
+
+      return (
+        (location && typeof location === "object" && location) ||
+        (selectedSavedAddress && typeof selectedSavedAddress === "object" && selectedSavedAddress) ||
+        (storedLocation && typeof storedLocation === "object" && storedLocation) ||
+        (defaultSavedAddress && typeof defaultSavedAddress === "object" && defaultSavedAddress) ||
+        {}
+      );
+    };
+
+    const preferredLocation = chooseBySource();
     const mainLocation = extractMain(preferredLocation);
 
-    const subParts = [normalizeText(preferredLocation?.city), normalizeText(preferredLocation?.state)].filter(Boolean);
+    const fallbackCityStateFromFormatted = (() => {
+      const formatted = normalizeText(preferredLocation?.formattedAddress);
+      if (!formatted || isCoordinates(formatted)) return { city: "", state: "" };
+      const parts = formatted.split(",").map((part) => normalizeText(part)).filter(Boolean);
+      if (parts.length < 2) return { city: "", state: "" };
+      const city = parts.length >= 3 ? parts[parts.length - 3] : "";
+      const state = parts.length >= 2 ? parts[parts.length - 2] : "";
+      return { city, state };
+    })();
+
+    const subParts = [
+      normalizeText(preferredLocation?.city) || fallbackCityStateFromFormatted.city,
+      normalizeText(preferredLocation?.state) || fallbackCityStateFromFormatted.state,
+    ].filter(Boolean);
     const subLocation = subParts.join(", ");
 
     return {

@@ -95,7 +95,7 @@ router.post('/firebase/google-login', validate(firebaseGoogleLoginSchema), fireb
 
 // Protected routes
 router.post('/refresh-token', refreshToken);
-router.post('/logout', logout);
+router.post('/logout', authenticate, logout);
 router.get('/me', authenticate, getCurrentStore);
 router.post('/reverify', authenticate, reverifyGroceryStore);
 router.post('/fcm-token', authenticate, validate(updateFcmTokenSchema), updateFcmToken);

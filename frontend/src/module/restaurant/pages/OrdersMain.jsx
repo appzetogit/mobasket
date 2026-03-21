@@ -54,17 +54,6 @@ const DEFAULT_FILTER_COUNTS = {
   cancelled: 0,
 }
 
-const isYetToBeDeliveredStatus = (status) => {
-  const normalizedStatus = String(status || "").trim().toLowerCase()
-  return ![
-    "delivered",
-    "completed",
-    "cancelled",
-    "rejected",
-    "refunded",
-  ].includes(normalizedStatus)
-}
-
 const formatOrderStatusLabel = (status) => {
   const normalizedStatus = String(status || "").trim().toLowerCase()
 
@@ -86,6 +75,143 @@ const formatOrderStatusLabel = (status) => {
     default:
       return String(status || "").trim() || "Unknown"
   }
+}
+
+// Completed Orders List Component
+function NewOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 0 }) {
+  const [orders, setOrders] = useState([])
+  const [loading, setLoading] = useState(true)
+
+  const filteredOrders = useMemo(() => {
+    if (!searchQuery) return orders
+    const query = searchQuery.toLowerCase().trim()
+    return orders.filter((order) => String(order.orderId || "").toLowerCase().includes(query))
+  }, [orders, searchQuery])
+
+  useEffect(() => {
+    let isMounted = true
+    let intervalId = null
+
+    const fetchOrders = async () => {
+      try {
+        const response = await orderAPI.getOrders()
+        if (!isMounted) return
+
+        if (response.data?.success && Array.isArray(response.data.data?.orders)) {
+          const newOrders = response.data.data.orders.filter((order) => {
+            const normalizedStatus = String(order?.status || "").trim().toLowerCase()
+            return normalizedStatus === "confirmed"
+          })
+
+          const transformedOrders = newOrders.map((order) => ({
+            orderId: order.orderId || order._id,
+            mongoId: order._id,
+            status: order.status || "confirmed",
+            customerName: order.userId?.name || "Customer",
+            type: order.deliveryFleet === "standard" ? "Home Delivery" : "Express Delivery",
+            tableOrToken: null,
+            timePlaced: new Date(order.createdAt).toLocaleTimeString("en-US", {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+            createdAt: order.createdAt,
+            itemsSummary: order.items?.map((item) => `${item.quantity}x ${item.name}`).join(", ") || "No items",
+            amount: Number(order.pricing?.total || order.total || 0),
+          }))
+
+          transformedOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+          setOrders(transformedOrders)
+        } else {
+          setOrders([])
+        }
+      } catch (error) {
+        if (!isMounted) return
+        if (error?.response?.status !== 401) {
+          console.error("Error fetching new orders:", error)
+        }
+        setOrders([])
+      } finally {
+        if (isMounted) setLoading(false)
+      }
+    }
+
+    fetchOrders()
+    intervalId = setInterval(() => {
+      if (isMounted && !(typeof document !== "undefined" && document.hidden)) {
+        fetchOrders()
+      }
+    }, 10000)
+
+    return () => {
+      isMounted = false
+      if (intervalId) clearInterval(intervalId)
+    }
+  }, [orderAPI, refreshTick])
+
+  if (loading) {
+    return (
+      <div className="pt-4 pb-6">
+        <div className="flex items-baseline justify-between mb-3">
+          <h2 className="text-base font-semibold text-black">New orders</h2>
+          <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+        </div>
+        <div className="text-center py-8 text-gray-500 text-sm">Loading...</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="pt-4 pb-6">
+      <div className="flex items-baseline justify-between mb-3">
+        <h2 className="text-base font-semibold text-black">New orders</h2>
+        <span className="text-xs text-gray-500">{filteredOrders.length} total</span>
+      </div>
+      {filteredOrders.length === 0 ? (
+        <div className="text-center py-8 text-gray-500 text-sm">
+          {searchQuery ? "No orders match this ID" : "No new orders yet"}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {filteredOrders.map((order) => (
+            <button
+              key={order.orderId || order.mongoId}
+              type="button"
+              onClick={() =>
+                onSelectOrder?.({
+                  orderId: order.orderId,
+                  mongoId: order.mongoId,
+                  status: "New",
+                  customerName: order.customerName,
+                  type: order.type,
+                  tableOrToken: order.tableOrToken,
+                  timePlaced: order.timePlaced,
+                  itemsSummary: order.itemsSummary,
+                  amount: order.amount,
+                })
+              }
+              className="w-full bg-white rounded-2xl p-4 border border-gray-200 text-left hover:shadow-sm transition-shadow"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-black truncate">Order #{order.orderId}</p>
+                  <p className="text-[11px] text-gray-500 mt-1">{order.customerName}</p>
+                </div>
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-medium border border-amber-500 text-amber-600 shrink-0">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  New
+                </span>
+              </div>
+              <p className="text-xs text-gray-600 mt-2 line-clamp-1">{order.itemsSummary}</p>
+              <div className="mt-2 flex items-center justify-between">
+                <p className="text-[11px] text-gray-500">{order.type}</p>
+                <p className="text-xs font-medium text-black">Rs {order.amount.toFixed(2)}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 // Completed Orders List Component
@@ -788,7 +914,7 @@ export default function OrdersMain() {
 
       rawOrders.forEach((order) => {
         const normalizedStatus = String(order?.status || "").trim().toLowerCase()
-        if (isYetToBeDeliveredStatus(normalizedStatus)) {
+        if (normalizedStatus === "confirmed") {
           counts.all += 1
         }
 
@@ -1897,14 +2023,7 @@ export default function OrdersMain() {
 
     switch (activeFilter) {
       case "all":
-        return (
-          <>
-            <PreparingOrders onSelectOrder={handleSelectOrder} onCancel={handleCancelClick} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
-            <ReadyOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
-            <OutForDeliveryOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
-            <ScheduledOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
-          </>
-        )
+        return <NewOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
       case "preparing":
         return <PreparingOrders onSelectOrder={handleSelectOrder} onCancel={handleCancelClick} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
       case "ready":

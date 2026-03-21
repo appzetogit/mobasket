@@ -459,8 +459,11 @@ export const restaurantAPI = {
   addItemToSubsection: (sectionId, subsectionId, item) => {
     return apiClient.post(`${API_ENDPOINTS.RESTAURANT.MENU}/subsection/item`, { sectionId, subsectionId, item });
   },
-  getMenuByRestaurantId: (restaurantId) => {
-    return apiClient.get(API_ENDPOINTS.RESTAURANT.MENU_BY_RESTAURANT_ID.replace(':id', restaurantId));
+  getMenuByRestaurantId: (restaurantId, config = {}) => {
+    return apiClient.get(
+      API_ENDPOINTS.RESTAURANT.MENU_BY_RESTAURANT_ID.replace(':id', restaurantId),
+      config,
+    );
   },
 
   // Get orders
@@ -538,14 +541,14 @@ export const restaurantAPI = {
   },
 
   // Get restaurants with dishes under ₹250
-  getRestaurantsUnder250: (zoneId) => {
+  getRestaurantsUnder250: (zoneId, config = {}) => {
     const params = zoneId ? { zoneId } : {};
-    return apiClient.get(API_ENDPOINTS.RESTAURANT.UNDER_250, { params });
+    return apiClient.get(API_ENDPOINTS.RESTAURANT.UNDER_250, { ...config, params });
   },
 
   // Get restaurant by ID or slug
-  getRestaurantById: (id) => {
-    return apiClient.get(API_ENDPOINTS.RESTAURANT.BY_ID.replace(':id', id));
+  getRestaurantById: (id, config = {}) => {
+    return apiClient.get(API_ENDPOINTS.RESTAURANT.BY_ID.replace(':id', id), config);
   },
   // Get coupons for item (public - for user cart)
   getCouponsByItemIdPublic: (restaurantId, itemId) => {
@@ -604,8 +607,11 @@ export const restaurantAPI = {
     });
   },
 
-  getMenuByRestaurantId: (restaurantId) => {
-    return apiClient.get(API_ENDPOINTS.RESTAURANT.MENU_BY_RESTAURANT_ID.replace(':id', restaurantId));
+  getMenuByRestaurantId: (restaurantId, config = {}) => {
+    return apiClient.get(
+      API_ENDPOINTS.RESTAURANT.MENU_BY_RESTAURANT_ID.replace(':id', restaurantId),
+      config,
+    );
   },
 
   // Menu item scheduling operations
