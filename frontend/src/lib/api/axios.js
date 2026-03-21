@@ -977,6 +977,17 @@ apiClient.interceptors.response.use(
       durationMs,
     });
 
+    // Ignore canceled/aborted requests (e.g., route changes, manual aborts, timeout abort signals).
+    // These are expected control-flow events and should not surface as user-facing errors.
+    if (
+      error?.code === "ERR_CANCELED" ||
+      error?.name === "CanceledError" ||
+      (typeof error?.message === "string" &&
+        error.message.toLowerCase().includes("canceled"))
+    ) {
+      return Promise.reject(error);
+    }
+
     const requestUrl = String(originalRequest.url || "");
     const isRefreshRequest = requestUrl.includes("/refresh-token");
 
@@ -992,7 +1003,7 @@ apiClient.interceptors.response.use(
           : null;
       const isStoreAuthPage = /^\/store\/(login|signup|otp)$/.test(currentPath);
       const isRestaurantAuthPage = /^\/restaurant\/(login|signup|signup-email|otp|forgot-password|welcome)$/.test(currentPath) || /^\/restaurant\/auth\/(sign-in|google-callback)$/.test(currentPath);
-      const isDeliveryAuthPage = /^\/delivery\/(signin|signup|otp|welcome)/.test(currentPath);
+      const isDeliveryAuthPage = /^\/delivery\/(sign-in|signin|signup|otp|welcome)/.test(currentPath);
       const isAdminAuthPage = /^\/admin\/(login|forgot-password)$/.test(currentPath);
       const isUserAuthPage = /^\/(?:user\/auth\/|auth\/(?:sign-in|otp|callback))/.test(currentPath);
       const hasStoreToken = typeof localStorage !== "undefined" && (localStorage.getItem("grocery-store_accessToken") || localStorage.getItem("grocery-store_refreshToken"));

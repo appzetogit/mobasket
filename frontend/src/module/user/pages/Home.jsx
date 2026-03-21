@@ -106,6 +106,7 @@ const INITIAL_RESTAURANT_RENDER_COUNT = 6;
 const EARLY_RESTAURANT_PREFETCH_COUNT = 16;
 const HOME_RESTAURANTS_CACHE_TTL_MS = 3 * 60 * 1000;
 const HOME_RESTAURANTS_CACHE_VERSION = "v1";
+const HOME_ZONE_SELECTION_STORAGE_KEY = "user.home.selectedZoneId.v1";
 
 const isUsableCityValue = (value) => {
   const normalized = normalizeCityName(value);
@@ -264,6 +265,18 @@ const collectSearchableItems = (restaurant = {}) => {
   }
 
   return Array.from(names);
+};
+
+const getInitialHomeZoneSelection = () => {
+  if (typeof window === "undefined") return "auto";
+  try {
+    const stored = String(localStorage.getItem(HOME_ZONE_SELECTION_STORAGE_KEY) || "")
+      .trim();
+    if (!stored) return "auto";
+    return stored;
+  } catch {
+    return "auto";
+  }
 };
 
 const getSelectedSavedAddressCity = () => {
@@ -1177,7 +1190,7 @@ export default function Home() {
     loading: zoneLoading,
   } = useZone(location);
   const [availableZones, setAvailableZones] = useState([]);
-  const [selectedHomeZoneId, setSelectedHomeZoneId] = useState("auto");
+  const [selectedHomeZoneId, setSelectedHomeZoneId] = useState(getInitialHomeZoneSelection);
   const [showToast, setShowToast] = useState(false);
   const [showManageCollections, setShowManageCollections] = useState(false);
   const [selectedRestaurantSlug, setSelectedRestaurantSlug] = useState(null);
@@ -1216,6 +1229,15 @@ export default function Home() {
     return () => {
       window.removeEventListener("userLocationChanged", handleUserLocationChanged);
     };
+  }, [selectedHomeZoneId]);
+
+  useEffect(() => {
+    try {
+      const value = String(selectedHomeZoneId || "auto").trim() || "auto";
+      localStorage.setItem(HOME_ZONE_SELECTION_STORAGE_KEY, value);
+    } catch {
+      // Ignore storage failures.
+    }
   }, [selectedHomeZoneId]);
 
   useEffect(() => {

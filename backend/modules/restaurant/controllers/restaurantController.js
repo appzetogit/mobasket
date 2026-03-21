@@ -1160,6 +1160,7 @@ export const deleteRestaurantAccount = asyncHandler(async (req, res) => {
 export const getRestaurantsWithDishesUnder250 = async (req, res) => {
   try {
     const { zoneId } = req.query; // User's zone ID (optional - if provided, filters by zone)
+    const maxRestaurants = Math.max(0, Number(req.query?.maxRestaurants) || 0);
 
     // Optional: Zone-based filtering - if zoneId is provided, validate and filter by zone
     let userZone = null;
@@ -1279,10 +1280,16 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
     const activeZones = await Zone.find(getActiveZoneQueryByPlatform('mofood')).lean();
 
     // Get all active restaurants
-    let restaurants = await Restaurant.find({ isActive: true })
+    let restaurantsQuery = Restaurant.find({ isActive: true })
       .select('-owner -createdAt -updatedAt')
-      .lean()
-      .limit(100); // Limit to first 100 restaurants for performance
+      .lean();
+
+    // Optional safety cap from query param; by default we return all eligible restaurants.
+    if (maxRestaurants > 0) {
+      restaurantsQuery = restaurantsQuery.limit(maxRestaurants);
+    }
+
+    let restaurants = await restaurantsQuery;
 
     restaurants = restaurants.filter((restaurant) => {
       const restaurantZoneIds = getNormalizedEntityZoneIds(restaurant, activeZones);

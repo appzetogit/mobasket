@@ -541,9 +541,9 @@ export const restaurantAPI = {
   },
 
   // Get restaurants with dishes under ₹250
-  getRestaurantsUnder250: (zoneId) => {
+  getRestaurantsUnder250: (zoneId, config = {}) => {
     const params = zoneId ? { zoneId } : {};
-    return apiClient.get(API_ENDPOINTS.RESTAURANT.UNDER_250, { params });
+    return apiClient.get(API_ENDPOINTS.RESTAURANT.UNDER_250, { ...config, params });
   },
 
   // Get restaurant by ID or slug

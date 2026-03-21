@@ -47,6 +47,7 @@ export default function Under250() {
   const [loadingCategories, setLoadingCategories] = useState(true)
   const [under250Restaurants, setUnder250Restaurants] = useState([])
   const [loadingRestaurants, setLoadingRestaurants] = useState(true)
+  const under250RequestRef = useRef(0)
 
   const sortOptions = [
     { id: null, label: 'Relevance' },
@@ -235,22 +236,47 @@ export default function Under250() {
 
   // Fetch restaurants with dishes under ₹250 from backend
   useEffect(() => {
+    const abortController = new AbortController()
+    const requestTimeoutMs = 12000
+
     const fetchRestaurantsUnder250 = async () => {
+      const requestId = under250RequestRef.current + 1
+      under250RequestRef.current = requestId
+      const timeoutId = window.setTimeout(() => {
+        try {
+          abortController.abort("under-250-request-timeout")
+        } catch {
+          // Ignore abort errors.
+        }
+      }, requestTimeoutMs)
       try {
         setLoadingRestaurants(true)
-        if (!zoneId) {
-          setUnder250Restaurants([])
-          return
+        // Primary: zone-aware fetch (when zone exists)
+        // Fallback: no-zone fetch to avoid blank page when zone detection is delayed/missing.
+        let response = await restaurantAPI.getRestaurantsUnder250(zoneId || undefined, {
+          signal: abortController.signal,
+        })
+        let restaurants = response?.data?.data?.restaurants
+
+        if (zoneId && (!Array.isArray(restaurants) || restaurants.length === 0)) {
+          response = await restaurantAPI.getRestaurantsUnder250(undefined, {
+            signal: abortController.signal,
+          })
+          restaurants = response?.data?.data?.restaurants
         }
 
-        const response = await restaurantAPI.getRestaurantsUnder250(zoneId)
-
-        const restaurants = response?.data?.data?.restaurants
+        if (under250RequestRef.current !== requestId) return
         setUnder250Restaurants(Array.isArray(restaurants) ? restaurants : [])
       } catch (error) {
-        console.error('Error fetching restaurants under 250:', error)
+        const isAbort = error?.name === "CanceledError" || error?.code === "ERR_CANCELED"
+        if (!isAbort) {
+          console.error('Error fetching restaurants under 250:', error)
+        }
+        if (under250RequestRef.current !== requestId) return
         setUnder250Restaurants([])
       } finally {
+        window.clearTimeout(timeoutId)
+        if (under250RequestRef.current !== requestId) return
         setLoadingRestaurants(false)
       }
     }
@@ -263,6 +289,13 @@ export default function Under250() {
     }
 
     fetchRestaurantsUnder250()
+    return () => {
+      try {
+        abortController.abort("under-250-effect-cleanup")
+      } catch {
+        // Ignore abort errors.
+      }
+    }
   }, [zoneId, zoneLoading, isOutOfService, isRestaurantAvailable])
 
   // Fetch categories from admin API
@@ -661,7 +694,7 @@ export default function Under250() {
           <div className="flex justify-center items-center py-12">
             <div className="text-gray-500 dark:text-gray-400">
               {under250Restaurants.length === 0
-                ? "No restaurants with dishes under ₹250 found."
+                ? "No restaurants found."
                 : "No restaurants match the selected filters."}
             </div>
           </div>

@@ -15,12 +15,14 @@ const logger = winston.createLogger({
 
 // Initialize Razorpay instance
 let razorpayInstance = null;
+let razorpayInstanceKeyId = '';
+let razorpayInstanceKeySecret = '';
 
-const initializeRazorpay = async () => {
+const initializeRazorpay = async (credentialsOverride = null) => {
   try {
-    const credentials = await getRazorpayCredentials();
-    const keyId = credentials.keyId;
-    const keySecret = credentials.keySecret;
+    const credentials = credentialsOverride || (await getRazorpayCredentials());
+    const keyId = String(credentials?.keyId || '').trim();
+    const keySecret = String(credentials?.keySecret || '').trim();
 
     logger.info('Razorpay credentials check:', {
       hasKeyId: !!keyId,
@@ -34,6 +36,9 @@ const initializeRazorpay = async () => {
         keyId: keyId ? 'present' : 'missing',
         keySecret: keySecret ? 'present' : 'missing'
       });
+      razorpayInstance = null;
+      razorpayInstanceKeyId = '';
+      razorpayInstanceKeySecret = '';
       return null;
     }
 
@@ -42,6 +47,8 @@ const initializeRazorpay = async () => {
         key_id: keyId,
         key_secret: keySecret
       });
+      razorpayInstanceKeyId = keyId;
+      razorpayInstanceKeySecret = keySecret;
       logger.info('Razorpay initialized successfully');
       return razorpayInstance;
     } catch (error) {
@@ -49,6 +56,9 @@ const initializeRazorpay = async () => {
         error: error.message,
         stack: error.stack
       });
+      razorpayInstance = null;
+      razorpayInstanceKeyId = '';
+      razorpayInstanceKeySecret = '';
       return null;
     }
   } catch (error) {
@@ -56,14 +66,35 @@ const initializeRazorpay = async () => {
       error: error.message,
       stack: error.stack
     });
+    razorpayInstance = null;
+    razorpayInstanceKeyId = '';
+    razorpayInstanceKeySecret = '';
     return null;
   }
 };
 
 // Get Razorpay instance
 const getRazorpayInstance = async () => {
-  if (!razorpayInstance) {
-    return await initializeRazorpay();
+  const credentials = await getRazorpayCredentials();
+  const keyId = String(credentials?.keyId || '').trim();
+  const keySecret = String(credentials?.keySecret || '').trim();
+
+  if (!keyId || !keySecret) {
+    logger.warn('Razorpay credentials not found while fetching instance.');
+    razorpayInstance = null;
+    razorpayInstanceKeyId = '';
+    razorpayInstanceKeySecret = '';
+    return null;
+  }
+
+  const credentialsChanged =
+    keyId !== razorpayInstanceKeyId || keySecret !== razorpayInstanceKeySecret;
+
+  if (!razorpayInstance || credentialsChanged) {
+    if (credentialsChanged && razorpayInstance) {
+      logger.info('Razorpay credentials changed. Reinitializing Razorpay client instance.');
+    }
+    return await initializeRazorpay({ keyId, keySecret });
   }
   return razorpayInstance;
 };
@@ -123,14 +154,33 @@ const createOrder = async (options) => {
       stack: error.stack
     });
     
-    // Return more descriptive error message
+    const razorpayDescription =
+      String(
+        error?.error?.description ||
+        error?.description ||
+        error?.message ||
+        '',
+      ).trim();
+    const normalizedDescription = razorpayDescription.toLowerCase();
+    const statusCode = Number(error?.statusCode || 0);
+    const isAuthFailure =
+      statusCode === 401 ||
+      normalizedDescription.includes('authentication failed') ||
+      normalizedDescription.includes('api key provided is invalid') ||
+      normalizedDescription.includes('key id provided does not exist') ||
+      normalizedDescription.includes('invalid api key');
+
+    // Return more descriptive, app-safe error message
     let errorMessage = 'Failed to create payment order';
-    if (error.error && error.error.description) {
-      errorMessage = error.error.description;
-    } else if (error.message) {
-      errorMessage = error.message;
+    if (isAuthFailure) {
+      errorMessage =
+        'Payment gateway authentication failed. Please reconfigure Razorpay keys in admin settings.';
+    } else if (error?.error?.description) {
+      errorMessage = String(error.error.description);
+    } else if (error?.message) {
+      errorMessage = String(error.message);
     }
-    
+
     throw new Error(errorMessage);
   }
 };
