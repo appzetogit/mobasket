@@ -417,7 +417,9 @@ const notifyNextClosestDeliveryPartner = async (orderId, additionalExcludedIds =
   const { findNearestDeliveryBoy } = await import('../../order/services/deliveryAssignmentService.js');
   const { notifyDeliveryBoyNewOrder } = await import('../../order/services/deliveryNotificationService.js');
 
-  for (let attempt = 0; attempt < 5; attempt += 1) {
+  // Try a deeper fallback chain so reject can move through many partners
+  // (not just a few) before giving up.
+  for (let attempt = 0; attempt < 25; attempt += 1) {
     const nearest = await findNearestDeliveryBoy(
       coords.lat,
       coords.lng,
@@ -1526,10 +1528,15 @@ export const rejectOrder = asyncHandler(async (req, res) => {
       }
     );
 
+    let rerouteResult = { success: false };
     try {
-      const rerouteResult = await notifyNextClosestDeliveryPartner(order._id, [deliveryIdString]);
+      rerouteResult = await notifyNextClosestDeliveryPartner(order._id, [deliveryIdString]);
       if (rerouteResult.success) {
         logger.info(`Order ${order.orderId} rerouted to next closest delivery partner ${rerouteResult.deliveryPartnerId}`);
+      } else {
+        logger.info(
+          `Order ${order.orderId} deny processed but reroute did not find immediate candidate: ${rerouteResult.reason || 'unknown'}`
+        );
       }
     } catch (rerouteError) {
       logger.warn(`Failed to reroute order ${order.orderId}: ${rerouteError.message}`);
@@ -1554,6 +1561,9 @@ export const rejectOrder = asyncHandler(async (req, res) => {
     return successResponse(res, 200, 'Order denied successfully', {
       orderId: order.orderId,
       orderMongoId: order._id,
+      rerouted: Boolean(rerouteResult?.success),
+      nextDeliveryPartnerId: rerouteResult?.deliveryPartnerId || null,
+      rerouteReason: rerouteResult?.reason || null,
     });
   } catch (error) {
     logger.error(`Error rejecting order: ${error.message}`);

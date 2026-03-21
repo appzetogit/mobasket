@@ -6083,11 +6083,11 @@ export default function DeliveryHome() {
 
   const handleRejectOrder = (overrideReason = "") => {
     const rejectOrder = async () => {
-      const orderId = selectedRestaurant?.id ||
-        selectedRestaurant?.orderId ||
-        newOrder?.orderMongoId ||
+      const orderId = newOrder?.orderMongoId ||
         newOrder?.orderId ||
-        popupOrderId
+        popupOrderId ||
+        selectedRestaurant?.id ||
+        selectedRestaurant?.orderId
 
       if (!orderId) {
         toast.error('Order ID not found for deny action.')
@@ -6100,9 +6100,14 @@ export default function DeliveryHome() {
         await deliveryAPI.rejectOrder(orderId, reasonToSend)
         markOrderAsUnavailable(orderId, newOrder?.orderMongoId, newOrder?.orderId, selectedRestaurant?.orderId)
         clearNewOrder()
+        localStorage.removeItem('deliveryActiveOrder')
+        localStorage.removeItem('activeOrder')
         stopNewOrderAlertSound("order rejected")
         setShowRejectPopup(false)
         setShowNewOrderPopup(false)
+        setShowreachedPickupPopup(false)
+        setShowOrderIdConfirmationPopup(false)
+        setShowReachedDropPopup(false)
         setSelectedRestaurant(null)
         setIsNewOrderPopupMinimized(false)
         setNewOrderDragY(0)
@@ -14486,7 +14491,15 @@ export default function DeliveryHome() {
     const text = String(distanceValue).trim()
     if (!text) return null
     const lower = text.toLowerCase()
-    if (lower === "0 km" || lower === "calculating..." || lower === "distance not available") {
+    if (
+      lower === "0 km" ||
+      lower === "calculating..." ||
+      lower === "distance not available" ||
+      lower === "pending" ||
+      lower === "n/a" ||
+      lower === "na" ||
+      lower === "--"
+    ) {
       return null
     }
     return text
@@ -25155,7 +25168,7 @@ export default function DeliveryHome() {
     fetchedOrderDetailsForDropRef.current = orderId
 
 
-    deliveryAPI.getOrderDetails(orderId)
+    deliveryAPI.getOrderDetails(orderId, { suppressErrorToast: true })
 
 
       .then(res => {

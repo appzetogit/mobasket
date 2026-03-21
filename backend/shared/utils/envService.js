@@ -27,9 +27,10 @@ let lastDbNotReadyLogAt = 0;
  * @param {string} defaultValue - Default value if not found
  * @returns {Promise<string>} Environment variable value (decrypted)
  */
-export async function getEnvVar(key, defaultValue = '') {
+export async function getEnvVar(key, defaultValue = '', options = {}) {
   try {
-    const envVars = await getAllEnvVars();
+    const { forceRefresh = false } = options || {};
+    const envVars = await getAllEnvVars({ forceRefresh });
     let value = envVars[key] || defaultValue;
     
     // Decrypt if encrypted (for direct access, toEnvObject already decrypts, but this is a safety check)
@@ -54,11 +55,12 @@ export async function getEnvVar(key, defaultValue = '') {
  * Uses caching to reduce database queries
  * @returns {Promise<Object>} Object containing all environment variables
  */
-export async function getAllEnvVars() {
+export async function getAllEnvVars(options = {}) {
   try {
+    const { forceRefresh = false } = options || {};
     // Check cache
     const now = Date.now();
-    if (envCache && cacheTimestamp && (now - cacheTimestamp) < CACHE_DURATION) {
+    if (!forceRefresh && envCache && cacheTimestamp && (now - cacheTimestamp) < CACHE_DURATION) {
       return envCache;
     }
 
@@ -103,8 +105,28 @@ export function clearEnvCache() {
  * @returns {Promise<Object>} { keyId, keySecret }
  */
 export async function getRazorpayCredentials() {
-  const apiKey = await getEnvVar('RAZORPAY_API_KEY');
-  const secretKey = await getEnvVar('RAZORPAY_SECRET_KEY');
+  const normalizeCredential = (value) => {
+    let cleaned = String(value || '').trim();
+    if (
+      (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+      (cleaned.startsWith("'") && cleaned.endsWith("'"))
+    ) {
+      cleaned = cleaned.slice(1, -1).trim();
+    }
+    return cleaned;
+  };
+
+  // Force-refresh Razorpay keys from DB to avoid stale per-instance cache
+  // in multi-server deployments right after admin ENV updates.
+  const apiKeyRaw =
+    (await getEnvVar('RAZORPAY_API_KEY', '', { forceRefresh: true })) ||
+    (await getEnvVar('RAZORPAY_KEY_ID', '', { forceRefresh: true }));
+  const secretKeyRaw =
+    (await getEnvVar('RAZORPAY_SECRET_KEY', '', { forceRefresh: true })) ||
+    (await getEnvVar('RAZORPAY_KEY_SECRET', '', { forceRefresh: true }));
+
+  const apiKey = normalizeCredential(apiKeyRaw);
+  const secretKey = normalizeCredential(secretKeyRaw);
 
   return {
     keyId: apiKey || '',

@@ -1097,8 +1097,8 @@ export const deliveryAPI = {
   getOrders: (params = {}) => {
     return apiClient.get(API_ENDPOINTS.DELIVERY.ORDERS, { params });
   },
-  getOrderDetails: (orderId) => {
-    return apiClient.get(API_ENDPOINTS.DELIVERY.ORDER_BY_ID.replace(':orderId', orderId));
+  getOrderDetails: (orderId, config = {}) => {
+    return apiClient.get(API_ENDPOINTS.DELIVERY.ORDER_BY_ID.replace(':orderId', orderId), config);
   },
   acceptOrder: (orderId, currentLocation = {}) => {
     const payload = {};

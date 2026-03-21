@@ -968,6 +968,7 @@ apiClient.interceptors.response.use(
   },
   async (error) => {
     const originalRequest = error.config || {};
+    const suppressErrorToast = originalRequest?.suppressErrorToast === true;
     const startedAt = Number(originalRequest?.__requestStartedAt || 0);
     const endedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
     const durationMs = startedAt > 0 ? endedAt - startedAt : 0;
@@ -1317,6 +1318,9 @@ apiClient.interceptors.response.use(
 
     // Handle 404 errors (route not found)
     if (error.response?.status === 404) {
+      if (suppressErrorToast) {
+        return Promise.reject(error);
+      }
       if (import.meta.env.DEV) {
         const url = error.config?.url || "unknown";
         const responseMessage = String(
@@ -1394,7 +1398,7 @@ apiClient.interceptors.response.use(
     }
 
     // Show error toast in development mode only
-    if (import.meta.env.DEV) {
+    if (import.meta.env.DEV && !suppressErrorToast) {
       // Extract error messages from various possible locations
       const errorData = error.response?.data;
 
