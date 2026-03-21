@@ -316,7 +316,7 @@ export default function RestaurantDetails() {
 
   const [expandedAddButtons, setExpandedAddButtons] = useState(new Set());
 
-  const [expandedSections, setExpandedSections] = useState(new Set([0])); // Default: Recommended section is expanded
+  const [expandedSections, setExpandedSections] = useState(new Set());
   const [visibleSectionCount, setVisibleSectionCount] = useState(1);
   const MENU_ITEMS_RENDER_BATCH = 12;
   const [visibleDirectItemsBySection, setVisibleDirectItemsBySection] = useState({});
@@ -590,8 +590,7 @@ export default function RestaurantDetails() {
               : prev,
           );
 
-          const defaultExpandedSections = new Set([0]);
-          setExpandedSections(defaultExpandedSections);
+          setExpandedSections(new Set());
 
           // Resolve menu-loading state immediately from menu API result.
           // Do not block empty-state UI on slower personalization/inventory calls.
@@ -1751,7 +1750,7 @@ export default function RestaurantDetails() {
               : transformedRestaurant,
           );
           if (initialMenuSections.length > 0) {
-            setExpandedSections(new Set([0]));
+            setExpandedSections(new Set());
           }
 
           fetchedRestaurantRef.current = true; // Mark as fetched
@@ -3594,6 +3593,7 @@ export default function RestaurantDetails() {
 
   useEffect(() => {
     progressiveSectionsInitializedForSlugRef.current = "";
+    setExpandedSections(new Set());
     setVisibleSectionCount(1);
     setVisibleDirectItemsBySection({});
     setVisibleSubsectionItemsBySection({});
