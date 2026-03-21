@@ -3,10 +3,7 @@ export const isFlutterWebViewBridgeAvailable = () => {
     return false
   }
 
-  return Boolean(
-    window.flutter_inappwebview &&
-    typeof window.flutter_inappwebview.callHandler === "function"
-  )
+  return Boolean(window.flutter_inappwebview)
 }
 
 export const isFlutterSignInCancelled = (error) => {
@@ -27,9 +24,14 @@ export const signInWithFlutterNativeGoogle = async (auth) => {
     return null
   }
 
+  const callHandler = window?.flutter_inappwebview?.callHandler
+  if (typeof callHandler !== "function") {
+    return null
+  }
+
   let nativeResult = null
   try {
-    nativeResult = await window.flutter_inappwebview.callHandler("nativeGoogleSignIn")
+    nativeResult = await callHandler("nativeGoogleSignIn")
   } catch (error) {
     const message = String(error?.message || error || "").toLowerCase()
     const unsupportedHandler =
@@ -50,6 +52,18 @@ export const signInWithFlutterNativeGoogle = async (auth) => {
   }
 
   if (!nativeResult?.success) {
+    const resultMessage = String(nativeResult?.message || nativeResult?.error || "").toLowerCase()
+    const looksCancelled =
+      nativeResult?.cancelled === true ||
+      nativeResult?.canceled === true ||
+      resultMessage.includes("cancel")
+
+    // If native layer reports a non-success state without explicit cancellation,
+    // allow caller to continue with web redirect fallback.
+    if (!looksCancelled) {
+      return null
+    }
+
     const cancelledError = new Error("Google sign-in was cancelled.")
     cancelledError.code = "FLUTTER_SIGN_IN_CANCELLED"
     throw cancelledError
