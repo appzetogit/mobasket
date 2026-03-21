@@ -69,6 +69,7 @@ import offerImage from "@/assets/offerimage.png";
 import api, { restaurantAPI, zoneAPI } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api/config";
 import OptimizedImage from "@/components/OptimizedImage";
+import { prefetchRestaurantForRoute } from "../utils/restaurantPrefetch";
 // Explore More Icons
 import exploreOffers from "@/assets/explore more icons/offers.png";
 import exploreGourmet from "@/assets/explore more icons/gourmet.png";
@@ -502,6 +503,28 @@ export default function Home() {
   const [renderAllRestaurants, setRenderAllRestaurants] = useState(false);
   const isHandlingSwitchOff = useRef(false);
   const backendAssetBaseUrl = API_BASE_URL.replace(/\/api\/?$/, "");
+  const prefetchRestaurant = useCallback((restaurantOrSlug) => {
+    const restaurantSummary =
+      restaurantOrSlug && typeof restaurantOrSlug === "object"
+        ? restaurantOrSlug
+        : null;
+    const slugOrId =
+      typeof restaurantOrSlug === "string"
+        ? restaurantOrSlug
+        : restaurantSummary?.slug ||
+          restaurantSummary?.restaurantId ||
+          restaurantSummary?._id ||
+          restaurantSummary?.id;
+
+    if (!slugOrId) return;
+
+    prefetchRestaurantForRoute({
+      slug: slugOrId,
+      restaurantSummary,
+    }).catch(() => {
+      // Ignore prefetch failures and allow normal navigation flow.
+    });
+  }, []);
 
   const isLikelyImageUrl = (value) => {
     const src = String(value || "").trim();
@@ -2119,13 +2142,48 @@ export default function Home() {
                     >
                       <div
                         className="w-full h-full relative"
+                        onMouseEnter={() => {
+                          if (!hasLinkedRestaurants) return;
+                          const firstRestaurant = linkedRestaurants[0];
+                          const restaurantSlug =
+                            firstRestaurant?.slug ||
+                            firstRestaurant?.restaurantId ||
+                            firstRestaurant?._id ||
+                            firstRestaurant?.id;
+                          if (restaurantSlug) {
+                            prefetchRestaurant({
+                              ...firstRestaurant,
+                              slug: restaurantSlug,
+                            });
+                          }
+                        }}
+                        onTouchStart={() => {
+                          if (!hasLinkedRestaurants) return;
+                          const firstRestaurant = linkedRestaurants[0];
+                          const restaurantSlug =
+                            firstRestaurant?.slug ||
+                            firstRestaurant?.restaurantId ||
+                            firstRestaurant?._id ||
+                            firstRestaurant?.id;
+                          if (restaurantSlug) {
+                            prefetchRestaurant({
+                              ...firstRestaurant,
+                              slug: restaurantSlug,
+                            });
+                          }
+                        }}
                         onClick={() => {
                           if (hasLinkedRestaurants) {
                             const firstRestaurant = linkedRestaurants[0];
                             const restaurantSlug =
                               firstRestaurant.slug ||
                               firstRestaurant.restaurantId ||
-                              firstRestaurant._id;
+                              firstRestaurant._id ||
+                              firstRestaurant.id;
+                            prefetchRestaurant({
+                              ...firstRestaurant,
+                              slug: restaurantSlug,
+                            });
                             navigate(`/restaurants/${restaurantSlug}`);
                           }
                         }}
@@ -2402,6 +2460,9 @@ export default function Home() {
                   >
                     <Link
                       to={`/restaurants/${restaurant.slug || restaurant.id}`}
+                      onMouseEnter={() => prefetchRestaurant(restaurant)}
+                      onFocus={() => prefetchRestaurant(restaurant)}
+                      onTouchStart={() => prefetchRestaurant(restaurant)}
                     >
                       <div className="flex flex-col items-center gap-2 w-[74px] sm:w-[92px] md:w-[104px]">
                         <div className="relative w-14 h-14 sm:w-[72px] sm:h-[72px] md:w-20 md:h-20 rounded-full overflow-hidden shadow-sm transition-all border border-gray-100 dark:border-gray-800 bg-white">
@@ -2719,6 +2780,7 @@ export default function Home() {
                           className="w-full text-left"
                           onClick={() => {
                             if (restaurant?.slug) {
+                              prefetchRestaurant(restaurant);
                               navigate(`/user/restaurants/${restaurant.slug}`);
                             }
                           }}
@@ -2927,6 +2989,9 @@ export default function Home() {
                       <Link
                         to={`/user/restaurants/${restaurantSlug}`}
                         className="h-full flex"
+                        onMouseEnter={() => prefetchRestaurant(restaurant)}
+                        onFocus={() => prefetchRestaurant(restaurant)}
+                        onTouchStart={() => prefetchRestaurant(restaurant)}
                       >
                         <Card
                           className={`overflow-hidden gap-0 cursor-pointer border border-gray-100 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] transition-all duration-300 py-0 rounded-[24px] flex flex-col h-full w-full relative shadow-sm hover:shadow-md ${isOutOfService ? "grayscale opacity-75" : ""
