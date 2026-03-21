@@ -21,6 +21,34 @@ import api from "@/lib/api"
 import { restaurantAPI, uploadAPI } from "@/lib/api"
 import { toast } from "sonner"
 
+const normalizeImageUrl = (value) => {
+  if (typeof value === "string") {
+    const trimmed = value.trim()
+    return trimmed || ""
+  }
+
+  if (value && typeof value === "object") {
+    return normalizeImageUrl(
+      value.url || value.image || value.imageUrl || value.secure_url || ""
+    )
+  }
+
+  return ""
+}
+
+const normalizeImageList = (imagesValue, fallbackImage) => {
+  const normalizedFromArray = Array.isArray(imagesValue)
+    ? imagesValue.map((img) => normalizeImageUrl(img)).filter(Boolean)
+    : []
+
+  if (normalizedFromArray.length > 0) {
+    return normalizedFromArray
+  }
+
+  const fallback = normalizeImageUrl(fallbackImage)
+  return fallback ? [fallback] : []
+}
+
 export default function ItemDetailsPage() {
   const navigate = useNavigate()
   const { id } = useParams()
@@ -102,8 +130,7 @@ export default function ItemDetailsPage() {
         setIsRecommended(item.isRecommended || false)
         setIsInStock(item.isAvailable !== false)
         setSelectedTags(item.tags || [])
-        const initialImages =
-          item.images && item.images.length > 0 ? item.images : (item.image ? [item.image] : []);
+        const initialImages = normalizeImageList(item.images, item.image)
         setImages(initialImages.length > 0 ? [initialImages[0]] : [])
         setCurrentImageIndex(0)
 
@@ -196,10 +223,7 @@ export default function ItemDetailsPage() {
             setIsRecommended(foundItem.isRecommended || false)
             setIsInStock(foundItem.isAvailable !== false)
             setSelectedTags(foundItem.tags || [])
-            const initialImages =
-              foundItem.images && foundItem.images.length > 0
-                ? foundItem.images
-                : (foundItem.image ? [foundItem.image] : []);
+            const initialImages = normalizeImageList(foundItem.images, foundItem.image)
             setImages(initialImages.length > 0 ? [initialImages[0]] : [])
             setCurrentImageIndex(0)
 
@@ -601,11 +625,12 @@ export default function ItemDetailsPage() {
       const uploadedImageUrls = []
 
       // Separate existing URLs (already uploaded) from new files (blob URLs)
-      const existingImageUrls = images.filter(img =>
-        typeof img === 'string' &&
-        (img.startsWith('http://') || img.startsWith('https://')) &&
-        !img.startsWith('blob:')
-      )
+      const existingImageUrls = images
+        .map((img) => normalizeImageUrl(img))
+        .filter((img) =>
+          (img.startsWith("http://") || img.startsWith("https://")) &&
+          !img.startsWith("blob:")
+        )
 
       console.log('Images state:', images)
       console.log('Existing image URLs (already uploaded):', existingImageUrls)

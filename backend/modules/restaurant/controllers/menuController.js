@@ -5,6 +5,34 @@ import { successResponse, errorResponse } from '../../../shared/utils/response.j
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 import mongoose from 'mongoose';
 
+const normalizeImageUrl = (value) => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed || '';
+  }
+
+  if (value && typeof value === 'object') {
+    return normalizeImageUrl(
+      value.url || value.image || value.imageUrl || value.secure_url || ''
+    );
+  }
+
+  return '';
+};
+
+const normalizeImagesArray = (images, fallbackImage = '') => {
+  const normalizedFromArray = Array.isArray(images)
+    ? images.map((img) => normalizeImageUrl(img)).filter(Boolean)
+    : [];
+
+  if (normalizedFromArray.length > 0) {
+    return normalizedFromArray;
+  }
+
+  const fallback = normalizeImageUrl(fallbackImage);
+  return fallback ? [fallback] : [];
+};
+
 // Get menu for a restaurant
 export const getMenu = asyncHandler(async (req, res) => {
   // Restaurant is attached by authenticate middleware
@@ -89,12 +117,16 @@ export const updateMenu = asyncHandler(async (req, res) => {
       items: Array.isArray(section.items) ? section.items.map(item => {
         // CRITICAL: Find existing item to preserve approval status fields
         const existingItem = existingSection?.items?.find(i => String(i.id) === String(item.id));
+        const existingImages = normalizeImagesArray(existingItem?.images, existingItem?.image);
+        const incomingImages = normalizeImagesArray(item.images, item.image);
+        const finalImages = incomingImages.length > 0 ? incomingImages : existingImages;
+        const normalizedImage = normalizeImageUrl(item.image) || finalImages[0] || '';
 
         return {
           id: String(item.id || Date.now() + Math.random()),
           name: item.name || "Unnamed Item",
           nameArabic: item.nameArabic || "",
-          image: item.image || "",
+          image: normalizedImage,
           category: item.category || section.name,
           rating: item.rating ?? 0.0,
           reviews: item.reviews ?? 0,
@@ -135,28 +167,13 @@ export const updateMenu = asyncHandler(async (req, res) => {
             console.log(`  - item.images value:`, item.images);
             console.log(`  - item.image value:`, item.image);
             console.log(`  - item.photoCount:`, item.photoCount);
-
-            if (Array.isArray(item.images)) {
-              const filteredImages = item.images.filter(img => {
-                const isValid = img && typeof img === 'string' && img.trim() !== '';
-                if (!isValid) {
-                  console.log(`  - Filtering out invalid image:`, img);
-                }
-                return isValid;
-              });
-              console.log(`  - Input images: ${item.images.length}, Filtered images: ${filteredImages.length}`);
-              console.log(`  - Final images array:`, filteredImages);
-              if (filteredImages.length !== item.images.length) {
-                console.warn(`  - WARNING: Some images were filtered out! Original: ${item.images.length}, Filtered: ${filteredImages.length}`);
-              }
-              return filteredImages;
-            } else if (item.image && typeof item.image === 'string' && item.image.trim() !== '') {
-              console.log(`  - No images array, using single image field:`, item.image);
-              return [item.image];
-            } else {
-              console.log(`  - No images found, returning empty array`);
-              return [];
+            console.log(`  - Existing images count:`, existingImages.length);
+            console.log(`  - Incoming images count:`, incomingImages.length);
+            console.log(`  - Final images array:`, finalImages);
+            if (incomingImages.length === 0 && existingImages.length > 0) {
+              console.log(`  - Preserving existing images because incoming payload had no valid URLs`);
             }
+            return finalImages;
           })(),
           // CRITICAL: Preserve approval status fields from existing item
           // Restaurant should NOT be able to overwrite these fields
@@ -178,12 +195,16 @@ export const updateMenu = asyncHandler(async (req, res) => {
           items: Array.isArray(subsection.items) ? subsection.items.map(item => {
             // CRITICAL: Find existing item to preserve approval status fields
             const existingItem = existingSubsection?.items?.find(i => String(i.id) === String(item.id));
+            const existingImages = normalizeImagesArray(existingItem?.images, existingItem?.image);
+            const incomingImages = normalizeImagesArray(item.images, item.image);
+            const finalImages = incomingImages.length > 0 ? incomingImages : existingImages;
+            const normalizedImage = normalizeImageUrl(item.image) || finalImages[0] || '';
 
             return {
               id: String(item.id || Date.now() + Math.random()),
               name: item.name || "Unnamed Item",
               nameArabic: item.nameArabic || "",
-              image: item.image || "",
+              image: normalizedImage,
               category: item.category || section.name,
               rating: item.rating ?? 0.0,
               reviews: item.reviews ?? 0,
@@ -218,18 +239,11 @@ export const updateMenu = asyncHandler(async (req, res) => {
               gst: item.gst ?? 0,
               preparationTime: existingItem?.preparationTime || item.preparationTime || "",
               images: (() => {
-                // Ensure images array is properly handled
-                if (Array.isArray(item.images) && item.images.length > 0) {
-                  const filteredImages = item.images.filter(img => img && typeof img === 'string' && img.trim() !== '');
-                  console.log(`[NORMALIZE] Subsection Item "${item.name}": Processing ${item.images.length} images, filtered to ${filteredImages.length} valid images`);
-                  return filteredImages;
-                } else if (item.image && item.image.trim() !== '') {
-                  console.log(`[NORMALIZE] Subsection Item "${item.name}": No images array, using single image field`);
-                  return [item.image];
-                } else {
-                  console.log(`[NORMALIZE] Subsection Item "${item.name}": No images found, returning empty array`);
-                  return [];
+                console.log(`[NORMALIZE] Subsection Item "${item.name}": Existing=${existingImages.length}, Incoming=${incomingImages.length}, Final=${finalImages.length}`);
+                if (incomingImages.length === 0 && existingImages.length > 0) {
+                  console.log(`[NORMALIZE] Subsection Item "${item.name}": Preserving existing images`);
                 }
+                return finalImages;
               })(),
               // CRITICAL: Preserve approval status fields from existing item
               // Restaurant should NOT be able to overwrite these fields
@@ -389,12 +403,14 @@ export const addItemToSection = asyncHandler(async (req, res) => {
     return errorResponse(res, 404, 'Section not found');
   }
 
+  const normalizedImages = normalizeImagesArray(item.images, item.image);
+
   // Normalize item data
   const newItem = {
     id: String(item.id || Date.now() + Math.random()),
     name: item.name.trim(),
     nameArabic: item.nameArabic || "",
-    image: item.image || "",
+    image: normalizedImages[0] || "",
     category: item.category || section.name,
     rating: item.rating ?? 0.0,
     reviews: item.reviews ?? 0,
@@ -427,9 +443,7 @@ export const addItemToSection = asyncHandler(async (req, res) => {
     itemSizeQuantity: item.itemSizeQuantity || "",
     itemSizeUnit: item.itemSizeUnit || "piece",
     gst: item.gst ?? 0,
-    images: Array.isArray(item.images) && item.images.length > 0
-      ? item.images.filter(img => img && typeof img === 'string' && img.trim() !== '')
-      : (item.image && item.image.trim() !== '' ? [item.image] : []),
+    images: normalizedImages,
     preparationTime: item.preparationTime || "",
     approvalStatus: 'pending', // New items require admin approval
     requestedAt: new Date(),
@@ -533,12 +547,14 @@ export const addItemToSubsection = asyncHandler(async (req, res) => {
     return errorResponse(res, 404, 'Subsection not found');
   }
 
+  const normalizedImages = normalizeImagesArray(item.images, item.image);
+
   // Normalize item data
   const newItem = {
     id: String(item.id || Date.now() + Math.random()),
     name: item.name.trim(),
     nameArabic: item.nameArabic || "",
-    image: item.image || "",
+    image: normalizedImages[0] || "",
     category: item.category || section.name,
     rating: item.rating ?? 0.0,
     reviews: item.reviews ?? 0,
@@ -565,9 +581,7 @@ export const addItemToSubsection = asyncHandler(async (req, res) => {
     allergies: Array.isArray(item.allergies) ? item.allergies : [],
     photoCount: item.photoCount ?? 1,
     gst: item.gst ?? 0,
-    images: Array.isArray(item.images) && item.images.length > 0
-      ? item.images.filter(img => img && typeof img === 'string' && img.trim() !== '')
-      : (item.image && item.image.trim() !== '' ? [item.image] : []),
+    images: normalizedImages,
     preparationTime: item.preparationTime || "",
     approvalStatus: 'pending', // New items require admin approval
     requestedAt: new Date(),
@@ -735,9 +749,7 @@ export const addAddon = asyncHandler(async (req, res) => {
   }
 
   // Normalize images array
-  const normalizedImages = Array.isArray(images) && images.length > 0
-    ? images.filter(img => img && typeof img === 'string' && img.trim() !== '')
-    : (image && image.trim() !== '' ? [image] : []);
+  const normalizedImages = normalizeImagesArray(images, image);
 
   // Create new add-on
   const newAddon = {
@@ -929,9 +941,7 @@ export const updateAddon = asyncHandler(async (req, res) => {
   }
 
   // Normalize images array
-  const normalizedImages = Array.isArray(images) && images.length > 0
-    ? images.filter(img => img && typeof img === 'string' && img.trim() !== '')
-    : (image && image.trim() !== '' ? [image] : []);
+  const normalizedImages = normalizeImagesArray(images, image);
 
   // Update add-on (preserve approval status if already approved/rejected)
   addon.name = name.trim();

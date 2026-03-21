@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 import { createPortal } from "react-dom";
 
@@ -12,7 +12,6 @@ import { API_BASE_URL } from "@/lib/api/config";
 
 import { toast } from "sonner";
 
-import { Loader2 } from "lucide-react";
 
 import { useLocation as useUserLocation } from "../../hooks/useLocation";
 
@@ -87,6 +86,7 @@ import AddToCartAnimation from "../../components/AddToCartAnimation";
 import { getCompanyNameAsync } from "@/lib/utils/businessSettings";
 
 import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
+import { getPrefetchedRestaurantForRoute } from "../../utils/restaurantPrefetch";
 
 import {
 
@@ -181,6 +181,46 @@ const findRestaurantByFlexibleSlug = (restaurants = [], rawSlug = "") => {
   return bestScore <= 2 ? best : null;
 };
 
+function MenuContentSkeleton() {
+  const skeletonSections = [0, 1, 2];
+  const skeletonItems = [0, 1, 2];
+
+  return (
+    <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-6 sm:py-8 md:py-10 lg:py-12 space-y-6 md:space-y-8 lg:space-y-10">
+      <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
+        {[0, 1, 2, 3].map((chip) => (
+          <div
+            key={`skeleton-chip-${chip}`}
+            className="h-8 w-24 rounded-full bg-gray-200 animate-pulse shrink-0"
+          />
+        ))}
+      </div>
+
+      {skeletonSections.map((section) => (
+        <div
+          key={`skeleton-section-${section}`}
+          className="space-y-4 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm"
+        >
+          <div className="h-6 w-40 rounded-md bg-gray-200 animate-pulse" />
+          {skeletonItems.map((item) => (
+            <div
+              key={`skeleton-item-${section}-${item}`}
+              className="flex items-start justify-between gap-4 border-t border-gray-100 pt-4 first:border-t-0 first:pt-0"
+            >
+              <div className="flex-1 space-y-2">
+                <div className="h-4 w-3/4 rounded bg-gray-200 animate-pulse" />
+                <div className="h-4 w-1/3 rounded bg-gray-200 animate-pulse" />
+                <div className="h-3 w-full rounded bg-gray-100 animate-pulse" />
+              </div>
+              <div className="h-20 w-24 rounded-xl bg-gray-200 animate-pulse shrink-0" />
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 
 
 export default function RestaurantDetails() {
@@ -274,6 +314,8 @@ export default function RestaurantDetails() {
   const [expandedAddButtons, setExpandedAddButtons] = useState(new Set());
 
   const [expandedSections, setExpandedSections] = useState(new Set([0])); // Default: Recommended section is expanded
+  const [visibleSectionCount, setVisibleSectionCount] = useState(1);
+  const progressiveSectionsInitializedForSlugRef = useRef("");
 
   const [filters, setFilters] = useState({
 
@@ -447,7 +489,7 @@ export default function RestaurantDetails() {
               : prev,
           );
 
-          const defaultExpandedSections = new Set([0, 1, 2]);
+          const defaultExpandedSections = new Set([0]);
           setExpandedSections(defaultExpandedSections);
 
           window.setTimeout(async () => {
@@ -769,6 +811,7 @@ export default function RestaurantDetails() {
   // Fetch restaurant data from API
 
   useEffect(() => {
+    const cancelledRef = { current: false };
 
     const fetchRestaurant = async () => {
 
@@ -807,6 +850,7 @@ export default function RestaurantDetails() {
       try {
 
         setLoadingRestaurant(true);
+        setLoadingDeferredContent(false);
 
         setRestaurantError(null);
 
@@ -814,7 +858,14 @@ export default function RestaurantDetails() {
 
         let response = null;
 
-        let apiRestaurant = null;
+        const prefetchedPayload = getPrefetchedRestaurantForRoute(slug);
+        const prefetchedMenuSections = Array.isArray(prefetchedPayload?.menuSections)
+          ? prefetchedPayload.menuSections
+          : [];
+        let apiRestaurant = prefetchedPayload?.restaurantData || null;
+        if (apiRestaurant) {
+          response = { data: { success: true, data: apiRestaurant } };
+        }
 
         if (shouldPreferRestaurantApi(slug)) {
 
@@ -1588,7 +1639,18 @@ export default function RestaurantDetails() {
 
 
 
-          setRestaurant(transformedRestaurant);
+          const initialMenuSections = prefetchedMenuSections;
+          setRestaurant(
+            initialMenuSections.length > 0
+              ? {
+                  ...transformedRestaurant,
+                  menuSections: initialMenuSections,
+                }
+              : transformedRestaurant,
+          );
+          if (initialMenuSections.length > 0) {
+            setExpandedSections(new Set([0]));
+          }
 
           fetchedRestaurantRef.current = true; // Mark as fetched
           setLoadingRestaurant(false);
@@ -1596,529 +1658,56 @@ export default function RestaurantDetails() {
 
 
 
-          // Fetch menu and inventory for this restaurant
-
-          // If no restaurant ID, try to find matching restaurant by name
-
+          // Fetch menu and inventory in deferred background path.
+          // If no restaurant ID, try to find matching restaurant by name first.
           let restaurantIdForMenu = transformedRestaurant.id;
 
-
-
           if (!restaurantIdForMenu) {
-
-
             try {
-
-              // CRITICAL: Only search if zoneId is available (zoneId is required by backend)
-
               if (!zoneId) {
-
-
-                // Continue without menu - restaurant details are still available
-
+                setLoadingDeferredContent(false);
                 return;
-
               }
 
-
-
-              // Include zoneId for zone-based filtering
-
-              const searchParams = { limit: 100, zoneId: zoneId };
-
-              const searchResponse =
-
-                await restaurantAPI.getRestaurants(searchParams);
-
+              const searchParams = { limit: 100, zoneId };
+              const searchResponse = await restaurantAPI.getRestaurants(searchParams);
               const restaurants =
-
-                searchResponse?.data?.data?.restaurants ||
-
-                searchResponse?.data?.data ||
-
-                [];
-
-
-
-              // Try to find by exact name match
+                searchResponse?.data?.data?.restaurants || searchResponse?.data?.data || [];
 
               const matchingRestaurant = restaurants.find(
-
                 (r) =>
-
                   r.name?.toLowerCase().trim() ===
-
                   transformedRestaurant.name?.toLowerCase().trim(),
-
               );
 
-
-
               if (matchingRestaurant) {
-
                 restaurantIdForMenu =
-
                   matchingRestaurant._id ||
-
                   matchingRestaurant.restaurantId ||
-
                   matchingRestaurant.id;
 
-
-
-
-                // Update the restaurant ID in state
-
-                setRestaurant((prev) => ({
-
-                  ...prev,
-
-                  id: restaurantIdForMenu,
-
-                  restaurantId: restaurantIdForMenu,
-
-                }));
-
-              } else {
-
+                setRestaurant((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        id: restaurantIdForMenu,
+                        restaurantId: restaurantIdForMenu,
+                      }
+                    : prev,
+                );
               }
-
             } catch (searchError) {
-
               console.error("❌ Error searching for restaurant:", searchError);
-
             }
-
           }
-
-
 
           if (restaurantIdForMenu) {
-
-            try {
-
-
-              const menuResponse =
-
-                await restaurantAPI.getMenuByRestaurantId(restaurantIdForMenu);
-
-              if (
-
-                menuResponse.data &&
-
-                menuResponse.data.success &&
-
-                menuResponse.data.data &&
-
-                menuResponse.data.data.menu
-
-              ) {
-
-                const menuSections = menuResponse.data.data.menu.sections || [];
-
-
-
-                const normalizeText = (value) =>
-
-                  String(value || "")
-
-                    .toLowerCase()
-
-                    .replace(/[^a-z0-9]+/g, " ")
-
-                    .trim();
-
-                const normalizeId = (value) =>
-
-                  String(value || "").trim().toLowerCase();
-
-
-
-                const availableMenuItems = [];
-
-                menuSections.forEach((section) => {
-
-                  if (Array.isArray(section.items)) {
-
-                    section.items.forEach((item) => {
-
-                      if (item?.isAvailable !== false) {
-
-                        availableMenuItems.push(item);
-
-                      }
-
-                    });
-
-                  }
-
-                  if (Array.isArray(section.subsections)) {
-
-                    section.subsections.forEach((subsection) => {
-
-                      if (Array.isArray(subsection.items)) {
-
-                        subsection.items.forEach((item) => {
-
-                          if (item?.isAvailable !== false) {
-
-                            availableMenuItems.push(item);
-
-                          }
-
-                        });
-
-                      }
-
-                    });
-
-                  }
-
-                });
-
-
-
-                const itemById = new Map();
-
-                const itemByName = new Map();
-
-                availableMenuItems.forEach((item) => {
-
-                  const itemId = normalizeId(item?.id || item?._id);
-
-                  const itemName = normalizeText(item?.name);
-
-                  if (itemId && !itemById.has(itemId)) itemById.set(itemId, item);
-
-                  if (itemName && !itemByName.has(itemName)) itemByName.set(itemName, item);
-
-                });
-
-
-
-                let personalizedRecommendedItems = [];
-
-                try {
-
-                  const ordersResponse = await orderAPI.getOrders({ limit: 200, page: 1 });
-
-                  const ordersData =
-
-                    ordersResponse?.data?.data?.orders ||
-
-                    ordersResponse?.data?.orders ||
-
-                    (Array.isArray(ordersResponse?.data?.data)
-
-                      ? ordersResponse.data.data
-
-                      : []);
-
-
-
-                  const targetRestaurantId = normalizeId(restaurantIdForMenu);
-
-                  const targetRestaurantName = normalizeText(transformedRestaurant?.name);
-
-
-
-                  const itemScore = new Map();
-
-                  const addScore = (key, item) => {
-
-                    if (!key || !item) return;
-
-                    const current = itemScore.get(key) || { item, score: 0 };
-
-                    current.score += 1;
-
-                    itemScore.set(key, current);
-
-                  };
-
-
-
-                  ordersData
-
-                    .filter((order) => {
-
-                      const orderRestaurantId = normalizeId(
-
-                        order?.restaurantId?._id || order?.restaurantId || order?.restaurant || order?.restaurantName
-
-                      );
-
-                      const orderRestaurantName = normalizeText(
-
-                        order?.restaurantId?.name || order?.restaurant || order?.restaurantName
-
-                      );
-
-                      return (
-
-                        (targetRestaurantId && orderRestaurantId === targetRestaurantId) ||
-
-                        (targetRestaurantName && orderRestaurantName === targetRestaurantName)
-
-                      );
-
-                    })
-
-                    .forEach((order) => {
-
-                      const orderItems = Array.isArray(order?.items) ? order.items : [];
-
-                      orderItems.forEach((orderedItem) => {
-
-                        const orderedIds = [
-
-                          orderedItem?.itemId,
-
-                          orderedItem?.menuItemId,
-
-                          orderedItem?._id,
-
-                          orderedItem?.id,
-
-                        ]
-
-                          .map(normalizeId)
-
-                          .filter(Boolean);
-
-                        const orderedName = normalizeText(
-
-                          orderedItem?.name || orderedItem?.foodName
-
-                        );
-
-
-
-                        let matched = false;
-
-                        for (const orderedId of orderedIds) {
-
-                          if (itemById.has(orderedId)) {
-
-                            addScore(orderedId, itemById.get(orderedId));
-
-                            matched = true;
-
-                            break;
-
-                          }
-
-                        }
-
-                        if (!matched && orderedName && itemByName.has(orderedName)) {
-
-                          addScore(`name:${orderedName}`, itemByName.get(orderedName));
-
-                        }
-
-                      });
-
-                    });
-
-
-
-                  personalizedRecommendedItems = Array.from(itemScore.values())
-
-                    .sort((a, b) => b.score - a.score)
-
-                    .map((entry) => entry.item);
-
-                } catch (ordersError) {
-
-
-                }
-
-
-
-                // Debug log to check preparationTime in menu sections
-
-
-
-
-                const finalMenuSections =
-
-                  personalizedRecommendedItems.length > 0
-
-                    ? [
-
-                      {
-
-                        name: "Recommended for you",
-
-                        isPersonalizedRecommended: true,
-
-                        items: personalizedRecommendedItems,
-
-                        subsections: [],
-
-                      },
-
-                      ...menuSections,
-
-                    ]
-
-                    : menuSections;
-
-
-
-                setRestaurant((prev) => ({
-
-                  ...prev,
-
-                  menuSections: finalMenuSections,
-
-                }));
-
-
-
-                // Set first 3 sections (Recommended, Starters, Main Course) as expanded by default
-
-                const defaultExpandedSections = new Set([0, 1, 2]); // Index 0, 1, 2
-
-                setExpandedSections(defaultExpandedSections);
-
-
-
-
-              }
-
-            } catch (menuError) {
-
-              if (menuError.response && menuError.response.status === 404) {
-
-
-              } else {
-
-                console.error("❌ Error fetching menu:", menuError);
-
-              }
-
-            }
-
-
-
-            try {
-
-
-              const inventoryResponse =
-
-                await restaurantAPI.getInventoryByRestaurantId(
-
-                  restaurantIdForMenu,
-
-                );
-
-              if (
-
-                inventoryResponse.data &&
-
-                inventoryResponse.data.success &&
-
-                inventoryResponse.data.data &&
-
-                inventoryResponse.data.data.inventory
-
-              ) {
-
-                const inventoryCategories =
-
-                  inventoryResponse.data.data.inventory.categories || [];
-
-
-
-                // Normalize inventory categories to ensure proper structure
-
-                const normalizedInventory = inventoryCategories.map(
-
-                  (category, index) => ({
-
-                    id: category.id || `category-${index}`,
-
-                    name: category.name || "Unnamed Category",
-
-                    description: category.description || "",
-
-                    itemCount:
-
-                      category.itemCount ?? (category.items?.length || 0),
-
-                    inStock:
-
-                      category.inStock !== undefined ? category.inStock : true,
-
-                    items: Array.isArray(category.items)
-
-                      ? category.items.map((item) => ({
-
-                        id: String(item.id || Date.now() + Math.random()),
-
-                        name: item.name || "Unnamed Item",
-
-                        inStock:
-
-                          item.inStock !== undefined ? item.inStock : true,
-
-                        isVeg: item.isVeg !== undefined ? item.isVeg : true,
-
-                        stockQuantity: item.stockQuantity || "Unlimited",
-
-                        unit: item.unit || "piece",
-
-                        expiryDate: item.expiryDate || null,
-
-                        lastRestocked: item.lastRestocked || null,
-
-                      }))
-
-                      : [],
-
-                    order:
-
-                      category.order !== undefined ? category.order : index,
-
-                  }),
-
-                );
-
-
-
-                setRestaurant((prev) => ({
-
-                  ...prev,
-
-                  inventory: normalizedInventory,
-
-                }));
-
-
-              }
-
-            } catch (inventoryError) {
-
-              if (
-
-                inventoryError.response &&
-
-                inventoryError.response.status === 404
-
-              ) {
-
-
-              } else {
-
-                console.error("❌ Error fetching inventory:", inventoryError);
-
-              }
-
-            }
-
+            _hydrateRestaurantDeferredData(restaurantIdForMenu, transformedRestaurant, {
+              cancelledRef,
+            });
+          } else {
+            setLoadingDeferredContent(false);
           }
-
         } else {
 
           console.error("❌ No restaurant data found in API response");
@@ -2134,6 +1723,7 @@ export default function RestaurantDetails() {
         }
 
       } catch (error) {
+        setLoadingDeferredContent(false);
 
         // Check if it's a network error (backend not running)
 
@@ -2181,6 +1771,7 @@ export default function RestaurantDetails() {
           setRestaurantError("Restaurant not found");
 
           setRestaurant(null);
+          setLoadingDeferredContent(false);
 
         } else {
 
@@ -2191,13 +1782,13 @@ export default function RestaurantDetails() {
           setRestaurantError(error.message || "Failed to load restaurant");
 
           setRestaurant(null);
+          setLoadingDeferredContent(false);
 
         }
 
       } finally {
 
         setLoadingRestaurant(false);
-        setLoadingDeferredContent(false);
 
       }
 
@@ -2215,11 +1806,9 @@ export default function RestaurantDetails() {
 
 
 
-    // Wait for zone to load before fetching (if zone-based search might be needed)
-
-    // But don't block if we're fetching by direct ID
-
-    if (loadingZone) {
+    // Wait for zone only when slug resolution may require zone-scoped search.
+    // Direct IDs/slugs (e.g. restaurant-9517, rest-*, mongo IDs) should fetch immediately.
+    if (loadingZone && !shouldPreferRestaurantApi(slug)) {
 
 
       return;
@@ -2230,7 +1819,11 @@ export default function RestaurantDetails() {
 
     fetchRestaurant();
 
-  }, [slug, zoneId, loadingZone, restaurant?.slug]);
+    return () => {
+      cancelledRef.current = true;
+    };
+
+  }, [slug, zoneId, loadingZone, restaurant?.slug, _hydrateRestaurantDeferredData]);
 
 
 
@@ -3888,72 +3481,93 @@ export default function RestaurantDetails() {
 
 
 
-  const filteredSections = getFilteredSections();
+  const filteredSections = useMemo(() => getFilteredSections(), [
+    restaurant?.menuSections,
+    searchQuery,
+    showOnlyUnder250,
+    vegMode,
+    filters.sortBy,
+    filters.vegNonVeg,
+  ]);
 
-  const visibleMenuCategories = filteredSections.map(
+  useEffect(() => {
+    progressiveSectionsInitializedForSlugRef.current = "";
+    setVisibleSectionCount(1);
+  }, [normalizedSlug]);
 
-    ({ section, originalIndex }) => {
+  useEffect(() => {
+    const menuSectionCount = Array.isArray(restaurant?.menuSections)
+      ? restaurant.menuSections.length
+      : 0;
 
-      let sectionTitle = "Unnamed Section";
+    if (menuSectionCount === 0) {
+      setVisibleSectionCount(0);
+      return;
+    }
 
-      if (section?.isPersonalizedRecommended) {
+    if (progressiveSectionsInitializedForSlugRef.current === normalizedSlug) {
+      setVisibleSectionCount((prev) => Math.max(prev, menuSectionCount));
+      return;
+    }
 
-        sectionTitle = "Recommended for you";
+    progressiveSectionsInitializedForSlugRef.current = normalizedSlug;
+    setVisibleSectionCount(1);
 
-      } else if (
+    if (menuSectionCount <= 1) return;
 
-        section?.name &&
+    const intervalId = window.setInterval(() => {
+      setVisibleSectionCount((prev) => {
+        if (prev >= menuSectionCount) {
+          window.clearInterval(intervalId);
+          return prev;
+        }
+        return Math.min(menuSectionCount, prev + 2);
+      });
+    }, 120);
 
-        typeof section.name === "string" &&
+    return () => window.clearInterval(intervalId);
+  }, [restaurant?.menuSections, normalizedSlug]);
 
-        section.name.trim()
+  const hasActiveSearchQuery = Boolean(searchQuery.trim());
+  const renderedSections = useMemo(() => {
+    if (hasActiveSearchQuery) return filteredSections;
+    return filteredSections.slice(0, Math.max(1, visibleSectionCount));
+  }, [filteredSections, hasActiveSearchQuery, visibleSectionCount]);
 
-      ) {
+  const visibleMenuCategories = useMemo(
+    () =>
+      renderedSections.map(({ section, originalIndex }) => {
+        let sectionTitle = "Unnamed Section";
+        if (section?.isPersonalizedRecommended) {
+          sectionTitle = "Recommended for you";
+        } else if (
+          section?.name &&
+          typeof section.name === "string" &&
+          section.name.trim()
+        ) {
+          sectionTitle = section.name.trim();
+        } else if (
+          section?.title &&
+          typeof section.title === "string" &&
+          section.title.trim()
+        ) {
+          sectionTitle = section.title.trim();
+        }
 
-        sectionTitle = section.name.trim();
+        const itemCount = section?.items?.length || 0;
+        const subsectionCount =
+          section?.subsections?.reduce(
+            (sum, sub) => sum + (sub?.items?.length || 0),
+            0,
+          ) || 0;
 
-      } else if (
-
-        section?.title &&
-
-        typeof section.title === "string" &&
-
-        section.title.trim()
-
-      ) {
-
-        sectionTitle = section.title.trim();
-
-      }
-
-
-
-      const itemCount = section?.items?.length || 0;
-
-      const subsectionCount =
-
-        section?.subsections?.reduce(
-
-          (sum, sub) => sum + (sub?.items?.length || 0),
-
-          0,
-
-        ) || 0;
-
-
-
-      return {
-
-        name: sectionTitle,
-
-        count: itemCount + subsectionCount,
-
-        sectionIndex: originalIndex,
-
-      };
-
-    },
-
+        return {
+          name: sectionTitle,
+          count: itemCount + subsectionCount,
+          sectionIndex: originalIndex,
+        };
+      }),
+    [renderedSections],
   );
 
 
@@ -4028,16 +3642,12 @@ export default function RestaurantDetails() {
 
       <AnimatedPage>
 
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-
-          <div className="flex flex-col items-center gap-4">
-
-            <Loader2 className="h-8 w-8 text-green-600 animate-spin" />
-
-            <span className="text-sm text-gray-600">Loading restaurant...</span>
-
+        <div className="min-h-screen bg-gray-50">
+          <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 pt-6">
+            <div className="h-8 w-56 rounded-md bg-gray-200 animate-pulse mb-3" />
+            <div className="h-4 w-40 rounded bg-gray-100 animate-pulse" />
           </div>
-
+          <MenuContentSkeleton />
         </div>
 
       </AnimatedPage>
@@ -4547,14 +4157,7 @@ export default function RestaurantDetails() {
 
       {loadingDeferredContent &&
         (!restaurant?.menuSections || restaurant.menuSections.length === 0) && (
-          <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4">
-            <div className="rounded-2xl border border-gray-200 bg-white px-4 py-5 shadow-sm">
-              <div className="flex items-center gap-3 text-sm text-gray-600">
-                <Loader2 className="h-4 w-4 animate-spin text-green-600" />
-                <span>Loading menu and restaurant details...</span>
-              </div>
-            </div>
-          </div>
+          <MenuContentSkeleton />
         )}
 
       {restaurant?.menuSections &&
@@ -4565,7 +4168,7 @@ export default function RestaurantDetails() {
 
           <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-6 sm:py-8 md:py-10 lg:py-12 space-y-6 md:space-y-8 lg:space-y-10">
 
-            {filteredSections.map(
+            {renderedSections.map(
 
               ({ section, originalIndex }, sectionIndex) => {
 
@@ -4617,11 +4220,9 @@ export default function RestaurantDetails() {
 
                 const shouldShowSectionItems = isExpanded || hasSearchQuery;
 
-                const filteredDirectItems = sortMenuItems(
-
-                  filterMenuItems(section?.items || []),
-
-                );
+                const filteredDirectItems = shouldShowSectionItems
+                  ? sortMenuItems(filterMenuItems(section?.items || []))
+                  : [];
 
 
 
@@ -5075,6 +4676,8 @@ export default function RestaurantDetails() {
                                             src={img}
 
                                             alt={`${item.name} ${idx + 1}`}
+                                            loading="lazy"
+                                            decoding="async"
 
                                             className="w-full h-full object-cover"
 
@@ -5099,6 +4702,8 @@ export default function RestaurantDetails() {
                                         src={itemImages[0]}
 
                                         alt={item.name}
+                                        loading="lazy"
+                                        decoding="async"
 
                                         className="w-full h-full object-cover rounded-2xl shadow-sm"
 
@@ -5744,6 +5349,8 @@ export default function RestaurantDetails() {
                                                             src={img}
 
                                                             alt={`${item.name} ${idx + 1}`}
+                                                            loading="lazy"
+                                                            decoding="async"
 
                                                             className="w-full h-full object-cover"
 
@@ -5768,6 +5375,8 @@ export default function RestaurantDetails() {
                                                         src={itemImages[0]}
 
                                                         alt={item.name}
+                                                        loading="lazy"
+                                                        decoding="async"
 
                                                         className="w-full h-full object-cover rounded-2xl shadow-sm"
 
@@ -8674,5 +8283,6 @@ export default function RestaurantDetails() {
   );
 
 }
+
 
 

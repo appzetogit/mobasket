@@ -7,6 +7,14 @@ import mongoose from 'mongoose';
 const generateId = (prefix = 'id') =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+const normalizeImageUrl = (value) => {
+  if (typeof value === 'string') return value.trim();
+  if (value && typeof value === 'object') {
+    return normalizeImageUrl(value.url || value.image || value.imageUrl || value.secure_url || '');
+  }
+  return '';
+};
+
 const findRestaurantByIdentifier = async (restaurantId) => {
   if (!restaurantId) return null;
 
@@ -24,7 +32,7 @@ const extractNonEmptyImages = (value) => {
     .map((entry) => {
       if (typeof entry === 'string') return entry.trim();
       if (entry && typeof entry === 'object') {
-        return String(entry.url || entry.image || entry.imageUrl || '').trim();
+        return normalizeImageUrl(entry.url || entry.image || entry.imageUrl || entry.secure_url || '');
       }
       return '';
     })
@@ -132,11 +140,17 @@ export const addRestaurantMenuItemByAdmin = asyncHandler(async (req, res) => {
     targetSection = menu.sections[menu.sections.length - 1];
   }
 
+  const normalizedImages = extractNonEmptyImages(item.images);
+  const normalizedImage =
+    normalizeImageUrl(item.image) ||
+    normalizedImages[0] ||
+    '';
+
   const newItem = {
     id: generateId('item'),
     name: String(item.name).trim(),
     nameArabic: item.nameArabic || '',
-    image: item.image || '',
+    image: normalizedImage,
     category: item.category || targetSection.name,
     rating: Number(item.rating || 0),
     reviews: Number(item.reviews || 0),
@@ -163,7 +177,7 @@ export const addRestaurantMenuItemByAdmin = asyncHandler(async (req, res) => {
     itemSizeQuantity: item.itemSizeQuantity || '',
     itemSizeUnit: item.itemSizeUnit || 'piece',
     gst: Number(item.gst || 0),
-    images: Array.isArray(item.images) ? item.images.filter(Boolean) : (item.image ? [item.image] : []),
+    images: normalizedImages.length > 0 ? normalizedImages : (normalizedImage ? [normalizedImage] : []),
     preparationTime: item.preparationTime || '',
     approvalStatus: 'approved',
     requestedAt: new Date(),
@@ -252,9 +266,9 @@ export const updateRestaurantMenuItemByAdmin = asyncHandler(async (req, res) => 
 
   const nextImages = extractNonEmptyImages(item.images);
   const nextImage =
-    String(item.image || '').trim() ||
+    normalizeImageUrl(item.image) ||
     nextImages[0] ||
-    String(found.item.image || '').trim() ||
+    normalizeImageUrl(found.item.image) ||
     '';
 
   found.item.name = String(item.name).trim();

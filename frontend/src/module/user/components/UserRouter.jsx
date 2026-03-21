@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AuthRedirect from "@/components/AuthRedirect";
@@ -63,7 +63,8 @@ const CategoryFoodsPage = lazy(() => import("@/module/usermain/pages/CategoryFoo
 const WishlistPage = lazy(() => import("@/module/usermain/pages/WishlistPage"));
 const FoodDetailPage = lazy(() => import("@/module/usermain/pages/FoodDetailPage"));
 const WelcomeSelectionPage = lazy(() => import("@/module/user/pages/WelcomeSelectionPage"));
-const RestaurantDetails = lazy(() => import("../pages/restaurants/RestaurantDetails"));
+const loadRestaurantDetails = () => import("../pages/restaurants/RestaurantDetails");
+const RestaurantDetails = lazy(() => loadRestaurantDetails());
 
 function RouteLoader({ label = "Loading..." }) {
   return (
@@ -77,6 +78,24 @@ function RouteLoader({ label = "Loading..." }) {
 }
 
 export default function UserRouter() {
+  useEffect(() => {
+    const preload = () => {
+      loadRestaurantDetails().catch(() => {
+        // Ignore preload failures and let route-level lazy loading handle it.
+      });
+    };
+
+    if (typeof window === "undefined") return;
+
+    if ("requestIdleCallback" in window) {
+      const idleHandle = window.requestIdleCallback(preload, { timeout: 1500 });
+      return () => window.cancelIdleCallback?.(idleHandle);
+    }
+
+    const timeoutHandle = window.setTimeout(preload, 400);
+    return () => window.clearTimeout(timeoutHandle);
+  }, []);
+
   return (
     <Suspense fallback={<RouteLoader />}>
       <Routes>
