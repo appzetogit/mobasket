@@ -124,6 +124,49 @@ export async function getRazorpayCredentials() {
     return cleaned;
   };
 
+  const looksLikeApiKey = (value) => /^rzp_/i.test(String(value || '').trim());
+  const normalizePair = (rawKeyId, rawKeySecret) => {
+    const first = normalizeCredential(rawKeyId);
+    const second = normalizeCredential(rawKeySecret);
+    const keyId = looksLikeApiKey(first) || !looksLikeApiKey(second) ? first : second;
+    const keySecret = keyId === first ? second : first;
+    return {
+      keyId: keyId || '',
+      keySecret: keySecret || ''
+    };
+  };
+
+  const findRazorpayPairFromDbDocs = async () => {
+    try {
+      if (mongoose.connection.readyState !== 1) return null;
+
+      const docs = await EnvironmentVariable.find({})
+        .sort({ lastUpdatedAt: -1, updatedAt: -1, createdAt: -1 })
+        .limit(10)
+        .lean();
+
+      for (const doc of docs) {
+        const decryptIfNeeded = (value) => {
+          const raw = String(value || '');
+          if (!raw) return '';
+          if (!isEncrypted(raw)) return raw;
+          return decrypt(raw);
+        };
+        const candidate = normalizePair(
+          decryptIfNeeded(doc?.RAZORPAY_API_KEY),
+          decryptIfNeeded(doc?.RAZORPAY_SECRET_KEY),
+        );
+        if (candidate.keyId && candidate.keySecret) {
+          return candidate;
+        }
+      }
+      return null;
+    } catch (error) {
+      logger.warn(`Error while scanning Razorpay credentials across env docs: ${error.message}`);
+      return null;
+    }
+  };
+
   // Force-refresh Razorpay keys from DB to avoid stale per-instance cache
   // in multi-server deployments right after admin ENV updates.
   const apiKeyRaw =
@@ -143,19 +186,25 @@ export async function getRazorpayCredentials() {
     process.env.RAZORPAY_SECRET_KEY ||
     process.env.RAZORPAY_KEY_SECRET ||
     '';
+  let selected = normalizePair(apiKeyRaw, secretKeyRaw);
 
-  const apiKey = normalizeCredential(apiKeyRaw || processEnvApiKey);
-  const secretKey = normalizeCredential(secretKeyRaw || processEnvSecretKey);
+  // If singleton lookup returned empty/missing pair (e.g., stale blank latest doc),
+  // scan recent env docs and pick the first valid non-empty pair.
+  if (!selected.keyId || !selected.keySecret) {
+    const fromDbDocs = await findRazorpayPairFromDbDocs();
+    if (fromDbDocs?.keyId && fromDbDocs?.keySecret) {
+      selected = fromDbDocs;
+    }
+  }
 
-  // Common admin-entry mistake: API key/secret entered in opposite fields.
-  // Razorpay key id typically starts with "rzp_".
-  const looksLikeApiKey = (value) => /^rzp_/i.test(String(value || '').trim());
-  const keyId = looksLikeApiKey(apiKey) || !looksLikeApiKey(secretKey) ? apiKey : secretKey;
-  const keySecret = keyId === apiKey ? secretKey : apiKey;
+  // Final fallback for resilience if DB-backed env is unavailable.
+  if (!selected.keyId || !selected.keySecret) {
+    selected = normalizePair(processEnvApiKey, processEnvSecretKey);
+  }
 
   return {
-    keyId: keyId || '',
-    keySecret: keySecret || ''
+    keyId: selected.keyId || '',
+    keySecret: selected.keySecret || ''
   };
 }
 
