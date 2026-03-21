@@ -236,13 +236,33 @@ export default function PageNavbar({
         storedAddresses.find((addr) => addr?.isDefault === true || addr?.default === true) || storedAddresses[0] || null;
     }
 
-    // Respect explicit user source strictly to avoid mixing saved/current data.
-    const preferredLocation =
-      source === "saved"
-        ? selectedSavedAddress || defaultSavedAddress || storedLocation || location || {}
-        : source === "current"
-          ? storedLocation || location || {}
-          : location || selectedSavedAddress || defaultSavedAddress || storedLocation || {};
+    // Respect explicit source strictly to avoid mixing saved/current datasets.
+    // saved: selected saved address > stored selected location > default saved address.
+    // current: stored current location > live hook location.
+    const chooseBySource = () => {
+      if (source === "saved") {
+        if (selectedSavedAddress && typeof selectedSavedAddress === "object") return selectedSavedAddress;
+        if (storedLocation && typeof storedLocation === "object") return storedLocation;
+        if (defaultSavedAddress && typeof defaultSavedAddress === "object") return defaultSavedAddress;
+        return {};
+      }
+
+      if (source === "current") {
+        if (storedLocation && typeof storedLocation === "object") return storedLocation;
+        if (location && typeof location === "object") return location;
+        return {};
+      }
+
+      return (
+        (location && typeof location === "object" && location) ||
+        (selectedSavedAddress && typeof selectedSavedAddress === "object" && selectedSavedAddress) ||
+        (storedLocation && typeof storedLocation === "object" && storedLocation) ||
+        (defaultSavedAddress && typeof defaultSavedAddress === "object" && defaultSavedAddress) ||
+        {}
+      );
+    };
+
+    const preferredLocation = chooseBySource();
     const mainLocation = extractMain(preferredLocation);
 
     const fallbackCityStateFromFormatted = (() => {
