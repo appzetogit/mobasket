@@ -73,6 +73,31 @@ export const getPrefetchedRestaurantForRoute = (slug) => {
   return null;
 };
 
+export const awaitPrefetchedRestaurantForRoute = async (slug, { maxWaitMs = 700 } = {}) => {
+  const key = normalizeKey(slug);
+  if (!key) return null;
+
+  const cached = getPrefetchedRestaurantForRoute(key);
+  if (cached) return cached;
+
+  const inFlight = inFlightRequests.get(key);
+  if (!inFlight) return null;
+
+  const timeoutMs = Number.isFinite(maxWaitMs) ? Math.max(0, Number(maxWaitMs)) : 700;
+  if (timeoutMs === 0) {
+    try {
+      return await inFlight;
+    } catch {
+      return null;
+    }
+  }
+
+  return Promise.race([
+    inFlight.catch(() => null),
+    new Promise((resolve) => setTimeout(() => resolve(null), timeoutMs)),
+  ]);
+};
+
 export const prefetchRestaurantForRoute = async ({ slug, restaurantSummary } = {}) => {
   const normalizedSlug = normalizeKey(
     slug || restaurantSummary?.slug || restaurantSummary?.restaurantId || restaurantSummary?._id || restaurantSummary?.id,

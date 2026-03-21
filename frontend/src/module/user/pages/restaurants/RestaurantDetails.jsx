@@ -86,7 +86,10 @@ import AddToCartAnimation from "../../components/AddToCartAnimation";
 import { getCompanyNameAsync } from "@/lib/utils/businessSettings";
 
 import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
-import { getPrefetchedRestaurantForRoute } from "../../utils/restaurantPrefetch";
+import {
+  awaitPrefetchedRestaurantForRoute,
+  getPrefetchedRestaurantForRoute,
+} from "../../utils/restaurantPrefetch";
 
 import {
 
@@ -315,6 +318,9 @@ export default function RestaurantDetails() {
 
   const [expandedSections, setExpandedSections] = useState(new Set([0])); // Default: Recommended section is expanded
   const [visibleSectionCount, setVisibleSectionCount] = useState(1);
+  const MENU_ITEMS_RENDER_BATCH = 12;
+  const [visibleDirectItemsBySection, setVisibleDirectItemsBySection] = useState({});
+  const [visibleSubsectionItemsBySection, setVisibleSubsectionItemsBySection] = useState({});
   const progressiveSectionsInitializedForSlugRef = useRef("");
 
   const [filters, setFilters] = useState({
@@ -946,7 +952,10 @@ export default function RestaurantDetails() {
         let response = null;
         let attemptedDirectLookup = false;
 
-        const prefetchedPayload = getPrefetchedRestaurantForRoute(slug);
+        let prefetchedPayload = getPrefetchedRestaurantForRoute(slug);
+        if (!prefetchedPayload) {
+          prefetchedPayload = await awaitPrefetchedRestaurantForRoute(slug, { maxWaitMs: 700 });
+        }
         const prefetchedMenuSections = Array.isArray(prefetchedPayload?.menuSections)
           ? prefetchedPayload.menuSections
           : [];
@@ -3586,6 +3595,8 @@ export default function RestaurantDetails() {
   useEffect(() => {
     progressiveSectionsInitializedForSlugRef.current = "";
     setVisibleSectionCount(1);
+    setVisibleDirectItemsBySection({});
+    setVisibleSubsectionItemsBySection({});
   }, [normalizedSlug]);
 
   useEffect(() => {
@@ -4351,6 +4362,13 @@ export default function RestaurantDetails() {
                 const filteredDirectItems = shouldShowSectionItems
                   ? sortMenuItems(filterMenuItems(section?.items || []))
                   : [];
+                const directItemsVisibleCount =
+                  visibleDirectItemsBySection[originalIndex] || MENU_ITEMS_RENDER_BATCH;
+                const visibleDirectItems = hasSearchQuery
+                  ? filteredDirectItems
+                  : filteredDirectItems.slice(0, directItemsVisibleCount);
+                const hasMoreDirectItems =
+                  !hasSearchQuery && filteredDirectItems.length > visibleDirectItems.length;
 
 
 
@@ -4534,7 +4552,7 @@ export default function RestaurantDetails() {
 
                       <div className="grid grid-cols-1 md:grid-cols-3 md:gap-6 md:py-2">
 
-                        {filteredDirectItems.map((item) => {
+                        {visibleDirectItems.map((item) => {
 
                           const quantity = quantities[item.id || item._id] || 0;
 
@@ -5043,6 +5061,27 @@ export default function RestaurantDetails() {
 
                         })}
 
+                        {hasMoreDirectItems && (
+                          <div className="md:col-span-3 flex justify-center pt-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="rounded-full"
+                              onClick={() =>
+                                setVisibleDirectItemsBySection((prev) => ({
+                                  ...prev,
+                                  [originalIndex]:
+                                    (prev[originalIndex] || MENU_ITEMS_RENDER_BATCH) +
+                                    MENU_ITEMS_RENDER_BATCH,
+                                }))
+                              }
+                            >
+                              Show more items
+                            </Button>
+                          </div>
+                        )}
+
                       </div>
 
                     )}
@@ -5102,6 +5141,15 @@ export default function RestaurantDetails() {
                                 filterMenuItems(subsection?.items || []),
 
                               );
+                              const subsectionVisibleCount =
+                                visibleSubsectionItemsBySection[subsectionKey] ||
+                                MENU_ITEMS_RENDER_BATCH;
+                              const visibleSubsectionItems = hasSearchQuery
+                                ? filteredSubsectionItems
+                                : filteredSubsectionItems.slice(0, subsectionVisibleCount);
+                              const hasMoreSubsectionItems =
+                                !hasSearchQuery &&
+                                filteredSubsectionItems.length > visibleSubsectionItems.length;
 
                               const shouldShowSubsectionItems =
 
@@ -5191,7 +5239,7 @@ export default function RestaurantDetails() {
 
                                       <div className="space-y-0">
 
-                                        {filteredSubsectionItems.map((item) => {
+                                        {visibleSubsectionItems.map((item) => {
 
                                           const quantity =
 
@@ -5777,6 +5825,27 @@ export default function RestaurantDetails() {
                                           );
 
                                         })}
+
+                                        {hasMoreSubsectionItems && (
+                                          <div className="flex justify-center pt-3">
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              size="sm"
+                                              className="rounded-full"
+                                              onClick={() =>
+                                                setVisibleSubsectionItemsBySection((prev) => ({
+                                                  ...prev,
+                                                  [subsectionKey]:
+                                                    (prev[subsectionKey] || MENU_ITEMS_RENDER_BATCH) +
+                                                    MENU_ITEMS_RENDER_BATCH,
+                                                }))
+                                              }
+                                            >
+                                              Show more items
+                                            </Button>
+                                          </div>
+                                        )}
 
                                       </div>
 
