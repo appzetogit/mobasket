@@ -311,8 +311,15 @@ export default function GroceryStoreLogin() {
       }
 
       let result = null
-      if (isFlutterWebViewBridgeAvailable()) {
+      const isFlutterBridge = isFlutterWebViewBridgeAvailable()
+      if (isFlutterBridge) {
         result = await signInWithFlutterNativeGoogle(firebaseAuth)
+        if (!result) {
+          const { signInWithRedirect } = await import("firebase/auth")
+          googleProvider.setCustomParameters({ prompt: "select_account" })
+          await signInWithRedirect(firebaseAuth, googleProvider)
+          return
+        }
       }
 
       if (!result) {

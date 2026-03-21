@@ -503,12 +503,20 @@ export default function SignIn() {
         throw new Error("Firebase Auth is not initialized. Please check your Firebase configuration.")
       }
 
-      if (isFlutterWebViewBridgeAvailable()) {
+      const isFlutterBridge = isFlutterWebViewBridgeAvailable()
+      if (isFlutterBridge) {
         const flutterResult = await signInWithFlutterNativeGoogle(auth)
         if (flutterResult?.user) {
           await processSignedInUser(flutterResult.user, "flutter-native-google")
           return
         }
+
+        // In WebView, popup flow often fails with false "cancelled" errors.
+        // If native handler is unavailable, use redirect flow directly.
+        const { signInWithRedirect } = await import("firebase/auth")
+        googleProvider.setCustomParameters({ prompt: "select_account" })
+        await signInWithRedirect(auth, googleProvider)
+        return
       }
 
       const { signInWithPopup, signInWithRedirect } = await import("firebase/auth")
