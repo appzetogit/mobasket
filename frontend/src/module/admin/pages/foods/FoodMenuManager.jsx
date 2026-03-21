@@ -64,18 +64,17 @@ function MenuImage({ src, alt, className, fallback }) {
   );
 }
 
-function getSectionKey(section = {}, index = 0) {
-  return String(section?.id || section?.name || `section-${index}`);
-}
-
 export default function FoodMenuManager() {
   const [restaurants, setRestaurants] = useState([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = useState("");
+  const [categories, setCategories] = useState([]);
   const [menu, setMenu] = useState({ sections: [] });
   const [addons, setAddons] = useState([]);
   const [loadingRestaurants, setLoadingRestaurants] = useState(true);
+  const [loadingCategories, setLoadingCategories] = useState(false);
   const [loadingMenu, setLoadingMenu] = useState(false);
   const [loadingAddons, setLoadingAddons] = useState(false);
+  const [addonsRequested, setAddonsRequested] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [editForm, setEditForm] = useState({ name: "", image: "" });
@@ -121,54 +120,110 @@ export default function FoodMenuManager() {
     fetchRestaurants();
   }, []);
 
-  const refreshMenu = async (restaurantId) => {
-    const response = await adminAPI.getRestaurantMenu(restaurantId);
+  const refreshCategories = async (restaurantId) => {
+    const response = await adminAPI.getRestaurantMenuCategories(restaurantId);
+    const rows = response?.data?.data?.categories || response?.data?.categories || [];
+    setCategories(Array.isArray(rows) ? rows : []);
+  };
+
+  const refreshMenuForSection = async (restaurantId, sectionKey) => {
+    if (!restaurantId || !sectionKey) {
+      setMenu({ sections: [] });
+      return;
+    }
+
+    const matchedCategory = categories.find(
+      (category) => String(category?.id || category?.key || "") === String(sectionKey),
+    );
+    const sectionId = String(matchedCategory?.id || "");
+    const fallbackSectionKey = String(matchedCategory?.key || sectionKey || "");
+
+    const response = await adminAPI.getRestaurantMenu(restaurantId, {
+      sectionId: sectionId || undefined,
+      sectionKey: sectionId ? undefined : fallbackSectionKey,
+      includeImages: true,
+    });
     const menuData = response?.data?.data?.menu || response?.data?.menu || { sections: [] };
     setMenu({
       sections: Array.isArray(menuData.sections) ? menuData.sections : [],
     });
   };
 
+  const refreshCurrentMenuState = async (restaurantId) => {
+    await refreshCategories(restaurantId);
+    if (selectedSectionViewKey) {
+      await refreshMenuForSection(restaurantId, selectedSectionViewKey);
+    } else {
+      setMenu({ sections: [] });
+    }
+  };
+
   useEffect(() => {
-    const fetchMenu = async () => {
+    const fetchCategories = async () => {
       if (!selectedRestaurantId) {
+        setCategories([]);
         setMenu({ sections: [] });
         setSelectedSectionViewKey("");
         return;
       }
       try {
-        setLoadingMenu(true);
-        await refreshMenu(selectedRestaurantId);
+        setLoadingCategories(true);
+        setMenu({ sections: [] });
+        await refreshCategories(selectedRestaurantId);
       } catch (error) {
-        console.error("Failed to load menu:", error);
-        toast.error("Failed to load restaurant menu");
+        console.error("Failed to load menu categories:", error);
+        toast.error("Failed to load restaurant categories");
+        setCategories([]);
+        setMenu({ sections: [] });
+      } finally {
+        setLoadingCategories(false);
+      }
+    };
+
+    fetchCategories();
+  }, [selectedRestaurantId]);
+
+  useEffect(() => {
+    const fetchSectionMenu = async () => {
+      if (!selectedRestaurantId || !selectedSectionViewKey) {
+        setMenu({ sections: [] });
+        return;
+      }
+
+      try {
+        setLoadingMenu(true);
+        await refreshMenuForSection(selectedRestaurantId, selectedSectionViewKey);
+      } catch (error) {
+        console.error("Failed to load section menu:", error);
+        toast.error("Failed to load category foods");
         setMenu({ sections: [] });
       } finally {
         setLoadingMenu(false);
       }
     };
 
-    fetchMenu();
-  }, [selectedRestaurantId]);
+    fetchSectionMenu();
+  }, [selectedRestaurantId, selectedSectionViewKey]);
 
   useEffect(() => {
-    const sections = Array.isArray(menu.sections) ? menu.sections : [];
-    if (sections.length === 0) {
+    if (!selectedRestaurantId) {
       setSelectedSectionViewKey("");
       return;
     }
 
-    const hasSelected = sections.some(
-      (section, index) => getSectionKey(section, index) === selectedSectionViewKey,
+    if (!selectedSectionViewKey) return;
+    const hasSelected = (categories || []).some(
+      (category) =>
+        String(category?.id || category?.key || "") === String(selectedSectionViewKey),
     );
     if (!hasSelected) {
-      setSelectedSectionViewKey(getSectionKey(sections[0], 0));
+      setSelectedSectionViewKey("");
     }
-  }, [menu.sections, selectedSectionViewKey]);
+  }, [categories, selectedRestaurantId, selectedSectionViewKey]);
 
   useEffect(() => {
     const fetchAddons = async () => {
-      if (!selectedRestaurantId) {
+      if (!selectedRestaurantId || !addonsRequested) {
         setAddons([]);
         return;
       }
@@ -188,7 +243,7 @@ export default function FoodMenuManager() {
     };
 
     fetchAddons();
-  }, [selectedRestaurantId]);
+  }, [selectedRestaurantId, addonsRequested]);
 
   const selectedRestaurant = useMemo(
     () =>
@@ -205,11 +260,8 @@ export default function FoodMenuManager() {
   );
 
   const visibleSections = useMemo(() => {
-    const sections = Array.isArray(menu.sections) ? menu.sections : [];
-    if (!selectedSectionViewKey) return sections;
-    return sections.filter(
-      (section, index) => getSectionKey(section, index) === selectedSectionViewKey,
-    );
+    if (!selectedSectionViewKey) return [];
+    return Array.isArray(menu.sections) ? menu.sections : [];
   }, [menu.sections, selectedSectionViewKey]);
 
   const resetForm = () => {
@@ -262,7 +314,7 @@ export default function FoodMenuManager() {
       await adminAPI.addRestaurantMenuItem(selectedRestaurantId, payload);
       toast.success("Menu item added");
       resetForm();
-      await refreshMenu(selectedRestaurantId);
+      await refreshCurrentMenuState(selectedRestaurantId);
     } catch (error) {
       console.error("Failed to add menu item:", error);
       toast.error(error?.response?.data?.message || "Failed to add menu item");
@@ -322,7 +374,7 @@ export default function FoodMenuManager() {
           images: String(editForm.image || "").trim() ? [String(editForm.image || "").trim()] : [],
         },
       });
-      await refreshMenu(selectedRestaurantId);
+      await refreshCurrentMenuState(selectedRestaurantId);
       toast.success("Dish updated successfully");
       setEditingItem(null);
       setImagePreview("");
@@ -377,6 +429,8 @@ export default function FoodMenuManager() {
               value={selectedRestaurantId}
               onChange={(event) => {
                 setSelectedRestaurantId(event.target.value);
+                setSelectedSectionViewKey("");
+                setAddonsRequested(false);
                 setForm((prev) => ({ ...prev, sectionId: "" }));
               }}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
@@ -413,6 +467,36 @@ export default function FoodMenuManager() {
                 </div>
               </div>
             ) : null}
+
+            {selectedRestaurantId ? (
+              <div className="mt-3">
+                <label className="mb-1 block text-xs font-medium text-slate-600">
+                  Select Category To Load Foods
+                </label>
+                <select
+                  value={selectedSectionViewKey}
+                  onChange={(event) => setSelectedSectionViewKey(event.target.value)}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  disabled={loadingCategories || categories.length === 0}
+                >
+                  <option value="">
+                    {loadingCategories
+                      ? "Loading categories..."
+                      : categories.length > 0
+                        ? "Choose category"
+                        : "No categories found"}
+                  </option>
+                  {categories.map((category) => {
+                    const sectionKey = String(category?.id || category?.key || "");
+                    return (
+                      <option key={sectionKey} value={sectionKey}>
+                        {category?.name || "Unnamed Section"}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            ) : null}
           </div>
 
           <form onSubmit={handleAddItem} className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -422,15 +506,19 @@ export default function FoodMenuManager() {
                 const nextSectionId = event.target.value;
                 setForm((prev) => ({ ...prev, sectionId: nextSectionId }));
                 if (nextSectionId) {
-                  setSelectedSectionViewKey(String(nextSectionId));
+                  const matchedCategory = categories.find(
+                    (category) =>
+                      String(category?.id || category?.key || "") === String(nextSectionId),
+                  );
+                  setSelectedSectionViewKey(String(matchedCategory?.id || matchedCategory?.key || ""));
                 }
               }}
               className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
             >
               <option value="">New Section</option>
-              {(menu.sections || []).map((section) => (
-                <option key={section.id} value={section.id}>
-                  {section.name}
+              {categories.map((category) => (
+                <option key={String(category?.id || category?.key)} value={String(category?.id || "")}>
+                  {category?.name || "Unnamed Section"}
                 </option>
               ))}
             </select>
@@ -504,25 +592,6 @@ export default function FoodMenuManager() {
           <h2 className="text-lg font-semibold text-slate-900">
             {selectedRestaurant?.name ? `${selectedRestaurant.name} Menu` : "Menu Items"}
           </h2>
-          {selectedRestaurantId && (menu.sections || []).length > 0 ? (
-            <div className="w-full md:w-72">
-              <label className="mb-1 block text-xs font-medium text-slate-600">Category</label>
-              <select
-                value={selectedSectionViewKey}
-                onChange={(event) => setSelectedSectionViewKey(event.target.value)}
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-              >
-                {(menu.sections || []).map((section, index) => {
-                  const sectionKey = getSectionKey(section, index);
-                  return (
-                    <option key={sectionKey} value={sectionKey}>
-                      {section?.name || "Unnamed Section"}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-          ) : null}
         </div>
 
         {loadingMenu ? (
@@ -531,8 +600,12 @@ export default function FoodMenuManager() {
           </div>
         ) : !selectedRestaurantId ? (
           <p className="text-sm text-slate-500">Select a restaurant to view menu.</p>
-        ) : menu.sections.length === 0 ? (
+        ) : loadingCategories ? (
+          <p className="text-sm text-slate-500">Loading categories...</p>
+        ) : categories.length === 0 ? (
           <p className="text-sm text-slate-500">No menu sections yet.</p>
+        ) : !selectedSectionViewKey ? (
+          <p className="text-sm text-slate-500">Select a category to load foods.</p>
         ) : (
           <div className="space-y-5">
             {visibleSections.map((section, sectionIndex) => (
@@ -558,9 +631,20 @@ export default function FoodMenuManager() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mt-6">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">
-          {selectedRestaurant?.name ? `${selectedRestaurant.name} Add-ons` : "Add-ons"}
-        </h2>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-slate-900">
+            {selectedRestaurant?.name ? `${selectedRestaurant.name} Add-ons` : "Add-ons"}
+          </h2>
+          {selectedRestaurantId ? (
+            <button
+              type="button"
+              onClick={() => setAddonsRequested(true)}
+              className="inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              {addonsRequested ? "Refresh Add-ons" : "Load Add-ons"}
+            </button>
+          ) : null}
+        </div>
 
         {loadingAddons ? (
           <div className="py-16 flex items-center justify-center">
@@ -568,6 +652,8 @@ export default function FoodMenuManager() {
           </div>
         ) : !selectedRestaurantId ? (
           <p className="text-sm text-slate-500">Select a restaurant to view add-ons.</p>
+        ) : !addonsRequested ? (
+          <p className="text-sm text-slate-500">Click "Load Add-ons" to fetch add-ons.</p>
         ) : addons.length === 0 ? (
           <p className="text-sm text-slate-500">No add-ons found for this restaurant.</p>
         ) : (
