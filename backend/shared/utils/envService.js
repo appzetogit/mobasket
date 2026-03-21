@@ -107,6 +107,14 @@ export function clearEnvCache() {
 export async function getRazorpayCredentials() {
   const normalizeCredential = (value) => {
     let cleaned = String(value || '').trim();
+    // Allow pasting in .env style, e.g. RAZORPAY_API_KEY=rzp_test_xxx
+    const eqIndex = cleaned.indexOf('=');
+    if (eqIndex > 0) {
+      const maybeKey = cleaned.slice(0, eqIndex).trim().toUpperCase();
+      if (maybeKey.includes('RAZORPAY')) {
+        cleaned = cleaned.slice(eqIndex + 1).trim();
+      }
+    }
     if (
       (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
       (cleaned.startsWith("'") && cleaned.endsWith("'"))
@@ -128,9 +136,15 @@ export async function getRazorpayCredentials() {
   const apiKey = normalizeCredential(apiKeyRaw);
   const secretKey = normalizeCredential(secretKeyRaw);
 
+  // Common admin-entry mistake: API key/secret entered in opposite fields.
+  // Razorpay key id typically starts with "rzp_".
+  const looksLikeApiKey = (value) => /^rzp_/i.test(String(value || '').trim());
+  const keyId = looksLikeApiKey(apiKey) || !looksLikeApiKey(secretKey) ? apiKey : secretKey;
+  const keySecret = keyId === apiKey ? secretKey : apiKey;
+
   return {
-    keyId: apiKey || '',
-    keySecret: secretKey || ''
+    keyId: keyId || '',
+    keySecret: keySecret || ''
   };
 }
 
