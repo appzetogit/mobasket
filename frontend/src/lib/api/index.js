@@ -459,8 +459,11 @@ export const restaurantAPI = {
   addItemToSubsection: (sectionId, subsectionId, item) => {
     return apiClient.post(`${API_ENDPOINTS.RESTAURANT.MENU}/subsection/item`, { sectionId, subsectionId, item });
   },
-  getMenuByRestaurantId: (restaurantId) => {
-    return apiClient.get(API_ENDPOINTS.RESTAURANT.MENU_BY_RESTAURANT_ID.replace(':id', restaurantId));
+  getMenuByRestaurantId: (restaurantId, config = {}) => {
+    return apiClient.get(
+      API_ENDPOINTS.RESTAURANT.MENU_BY_RESTAURANT_ID.replace(':id', restaurantId),
+      config,
+    );
   },
 
   // Get orders
@@ -604,8 +607,11 @@ export const restaurantAPI = {
     });
   },
 
-  getMenuByRestaurantId: (restaurantId) => {
-    return apiClient.get(API_ENDPOINTS.RESTAURANT.MENU_BY_RESTAURANT_ID.replace(':id', restaurantId));
+  getMenuByRestaurantId: (restaurantId, config = {}) => {
+    return apiClient.get(
+      API_ENDPOINTS.RESTAURANT.MENU_BY_RESTAURANT_ID.replace(':id', restaurantId),
+      config,
+    );
   },
 
   // Menu item scheduling operations

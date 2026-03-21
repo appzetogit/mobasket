@@ -477,31 +477,93 @@ export default function RestaurantDetails() {
               transformedRestaurant?.id,
               transformedRestaurant?.restaurantId,
               transformedRestaurant?.mongoId,
-              transformedRestaurant?.slug,
-              slug,
             ]
               .map(normalizeLookupId)
               .filter(Boolean),
           ),
-        );
+        ).slice(0, 2);
+
+        const fetchMenuWithTimeout = async (timeoutMs) => {
+          const notFoundError = () =>
+            Object.assign(new Error("Menu not found"), {
+              response: { status: 404 },
+              __menuNotFound: true,
+            });
+
+          const controllers = menuLookupIds.map(() => new AbortController());
+          const lookupPromises = menuLookupIds.map((lookupId, index) =>
+            (async () => {
+              try {
+                const candidateResponse = await restaurantAPI.getMenuByRestaurantId(lookupId, {
+                  timeout: timeoutMs,
+                  signal: controllers[index].signal,
+                });
+                if (candidateResponse?.data?.success && candidateResponse?.data?.data?.menu) {
+                  return candidateResponse;
+                }
+                throw notFoundError();
+              } catch (lookupError) {
+                if (lookupError?.response?.status === 404) throw notFoundError();
+                throw lookupError;
+              }
+            })(),
+          );
+
+          try {
+            const resolvedMenu = await Promise.any(lookupPromises);
+            controllers.forEach((controller) => controller.abort());
+            return resolvedMenu;
+          } catch (aggregateError) {
+            const possibleErrors = Array.isArray(aggregateError?.errors)
+              ? aggregateError.errors
+              : [aggregateError];
+            const realError = possibleErrors.find(
+              (err) => err && !err.__menuNotFound && err?.code !== "ERR_CANCELED",
+            );
+            if (realError) throw realError;
+            throw notFoundError();
+          }
+        };
 
         let menuResponse = null;
-        for (const lookupId of menuLookupIds) {
-          try {
-            const candidateResponse = await restaurantAPI.getMenuByRestaurantId(lookupId);
-            if (candidateResponse?.data?.success && candidateResponse?.data?.data?.menu) {
-              menuResponse = candidateResponse;
-              break;
-            }
-          } catch (lookupError) {
-            if (lookupError?.response?.status !== 404) {
-              throw lookupError;
-            }
+        try {
+          menuResponse = await fetchMenuWithTimeout(3500);
+        } catch (fastMenuLookupError) {
+          if (fastMenuLookupError?.response?.status !== 404) {
+            throw fastMenuLookupError;
           }
-        }
 
-        if (!menuResponse) {
-          throw Object.assign(new Error("Menu not found"), { response: { status: 404 } });
+          if (!isCancelled()) {
+            setRestaurant((prev) =>
+              prev
+                ? {
+                  ...prev,
+                  menuSections: [],
+                }
+                : prev,
+            );
+            setLoadingDeferredContent(false);
+          }
+
+          window.setTimeout(async () => {
+            try {
+              if (isCancelled()) return;
+              const slowMenuResponse = await fetchMenuWithTimeout(12000);
+              if (isCancelled()) return;
+              const recoveredSections = slowMenuResponse?.data?.data?.menu?.sections || [];
+              setRestaurant((prev) =>
+                prev
+                  ? {
+                    ...prev,
+                    menuSections: recoveredSections,
+                  }
+                  : prev,
+              );
+            } catch {
+            }
+          }, 0);
+
+          throw fastMenuLookupError;
         }
         if (isCancelled()) return;
 
@@ -524,6 +586,12 @@ export default function RestaurantDetails() {
 
           const defaultExpandedSections = new Set([0]);
           setExpandedSections(defaultExpandedSections);
+
+          // Resolve menu-loading state immediately from menu API result.
+          // Do not block empty-state UI on slower personalization/inventory calls.
+          if (!isCancelled()) {
+            setLoadingDeferredContent(false);
+          }
 
           window.setTimeout(async () => {
             try {
@@ -557,6 +625,9 @@ export default function RestaurantDetails() {
                   });
                 }
               });
+
+              // Skip personalization fetch if there are no available menu items.
+              if (availableMenuItems.length === 0) return;
 
               const itemById = new Map();
               const itemByName = new Map();
@@ -660,14 +731,18 @@ export default function RestaurantDetails() {
           }, 0);
         }
       } catch (menuError) {
-        if (menuError.response && menuError.response.status === 404) {
-        } else {
+        if (menuError?.response?.status !== 404) {
           console.error("❌ Error fetching menu:", menuError);
+        }
+        if (!isCancelled()) {
+          setLoadingDeferredContent(false);
         }
       }
 
       try {
-        const inventoryResponse = await restaurantAPI.getInventoryByRestaurantId(restaurantIdForMenu);
+        const inventoryResponse = await restaurantAPI.getInventoryByRestaurantId(restaurantIdForMenu, {
+          timeout: 7000,
+        });
         if (isCancelled()) return;
 
         if (
@@ -711,10 +786,6 @@ export default function RestaurantDetails() {
       } catch (inventoryError) {
         if (inventoryError.response && inventoryError.response.status !== 404) {
           console.error("❌ Error fetching inventory:", inventoryError);
-        }
-      } finally {
-        if (!isCancelled()) {
-          setLoadingDeferredContent(false);
         }
       }
     },
@@ -873,6 +944,7 @@ export default function RestaurantDetails() {
 
 
         let response = null;
+        let attemptedDirectLookup = false;
 
         const prefetchedPayload = getPrefetchedRestaurantForRoute(slug);
         const prefetchedMenuSections = Array.isArray(prefetchedPayload?.menuSections)
@@ -886,6 +958,7 @@ export default function RestaurantDetails() {
         if (shouldPreferRestaurantApi(slug)) {
 
           try {
+            attemptedDirectLookup = true;
 
             response = await restaurantAPI.getRestaurantById(slug);
 
@@ -906,7 +979,7 @@ export default function RestaurantDetails() {
           }
 
         }
-        if (!apiRestaurant) {
+        if (!apiRestaurant && !attemptedDirectLookup) {
           try {
             // Primary lookup by id/slug from restaurant APIs.
             response = await restaurantAPI.getRestaurantById(slug);
@@ -3576,6 +3649,7 @@ export default function RestaurantDetails() {
     if (hasActiveSearchQuery) return filteredSections;
     return filteredSections.slice(0, Math.max(1, visibleSectionCount));
   }, [filteredSections, hasActiveSearchQuery, visibleSectionCount]);
+  const hasRenderableMenuSections = renderedSections.length > 0;
 
   const visibleMenuCategories = useMemo(
     () =>
@@ -4140,7 +4214,7 @@ export default function RestaurantDetails() {
 
         </div>
 
-        {visibleMenuCategories.length > 0 && (
+        {visibleMenuCategories.length > 1 && (
 
           <div className="-mx-4 px-4 pt-3 overflow-x-auto scrollbar-hide">
 
@@ -4203,20 +4277,22 @@ export default function RestaurantDetails() {
           <MenuContentSkeleton />
         )}
 
-      {!loadingDeferredContent && !hasAnyMenuItems && (
+      {!loadingDeferredContent && (!hasAnyMenuItems || !hasRenderableMenuSections) && (
         <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-8">
           <div className="rounded-2xl border border-gray-200 bg-white p-6 text-center dark:border-gray-800 dark:bg-[#111827]">
             <h3 className="text-base font-semibold text-gray-900 dark:text-white">
-              No items available
+              {hasAnyMenuItems ? "No matching items" : "No items available"}
             </h3>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
-              This restaurant has not added menu items yet.
+              {hasAnyMenuItems
+                ? "Try changing filters or search to see available menu items."
+                : "This restaurant has not added menu items yet."}
             </p>
           </div>
         </div>
       )}
 
-      {hasAnyMenuSections && hasAnyMenuItems && (
+      {hasAnyMenuSections && hasAnyMenuItems && hasRenderableMenuSections && (
 
           <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-6 sm:py-8 md:py-10 lg:py-12 space-y-6 md:space-y-8 lg:space-y-10">
 
