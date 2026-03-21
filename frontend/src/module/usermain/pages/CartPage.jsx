@@ -117,10 +117,10 @@ export default function CartPage() {
       }
 
       try {
-        const [restaurantResponse, outletTimingsResponse] = await Promise.all([
-          restaurantAPI.getRestaurantById(String(restaurantId)),
-          api.get(`/restaurant/${String(restaurantId)}/outlet-timings`),
-        ]);
+        const restaurantResponse = await restaurantAPI.getRestaurantById(String(restaurantId));
+        const outletTimingsResponse = await api
+          .get(`/restaurant/${String(restaurantId)}/outlet-timings`)
+          .catch(() => null);
 
         const restaurant =
           restaurantResponse?.data?.data?.restaurant ||
@@ -147,9 +147,11 @@ export default function CartPage() {
         setRestaurantAvailability(availability);
       } catch {
         setRestaurantSchedule(null);
+        // Avoid hard-blocking checkout on transient availability verification failures.
+        // Final availability validation still happens during order placement in backend.
         setRestaurantAvailability({
-          isAvailable: false,
-          reason: "Unable to verify restaurant availability right now.",
+          isAvailable: true,
+          reason: "",
         });
       }
     };
