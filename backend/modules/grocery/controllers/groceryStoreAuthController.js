@@ -211,9 +211,17 @@ export const verifyOTP = asyncHandler(async (req, res) => {
 
       if (fcmPatch.fcmTokenWeb) store.fcmTokenWeb = fcmPatch.fcmTokenWeb;
       if (fcmPatch.fcmTokenMobile) store.fcmTokenMobile = fcmPatch.fcmTokenMobile;
-      if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile) {
+      if (store.isActive && store.isAcceptingOrders !== true) {
+        store.isAcceptingOrders = true;
+      }
+      if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile || store.isModified('isAcceptingOrders')) {
         await store.save();
       }
+    }
+
+    if (store.isActive && store.isAcceptingOrders !== true) {
+      store.isAcceptingOrders = true;
+      await store.save();
     }
 
     const tokens = jwtService.generateTokens({
@@ -346,7 +354,10 @@ export const login = asyncHandler(async (req, res) => {
 
     if (fcmPatch.fcmTokenWeb) store.fcmTokenWeb = fcmPatch.fcmTokenWeb;
     if (fcmPatch.fcmTokenMobile) store.fcmTokenMobile = fcmPatch.fcmTokenMobile;
-    if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile) {
+    if (store.isActive && store.isAcceptingOrders !== true) {
+      store.isAcceptingOrders = true;
+    }
+    if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile || store.isModified('isAcceptingOrders')) {
       await store.save();
     }
 
@@ -411,7 +422,10 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
 
     if (fcmPatch.fcmTokenWeb) store.fcmTokenWeb = fcmPatch.fcmTokenWeb;
     if (fcmPatch.fcmTokenMobile) store.fcmTokenMobile = fcmPatch.fcmTokenMobile;
-    if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile) {
+    if (store.isActive && store.isAcceptingOrders !== true) {
+      store.isAcceptingOrders = true;
+    }
+    if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile || store.isModified('isAcceptingOrders')) {
       await store.save();
     }
 
@@ -467,6 +481,11 @@ export const refreshToken = asyncHandler(async (req, res) => {
       return errorResponse(res, 401, 'Invalid refresh token');
     }
 
+    if (store.isActive && store.isAcceptingOrders !== true) {
+      store.isAcceptingOrders = true;
+      await store.save();
+    }
+
     const tokens = jwtService.generateTokens({
       userId: store._id.toString(),
       role: 'restaurant', // JWT role so upload/media and other shared routes accept store token
@@ -490,6 +509,11 @@ export const refreshToken = asyncHandler(async (req, res) => {
 });
 
 export const logout = asyncHandler(async (req, res) => {
+  if (req.store) {
+    req.store.isAcceptingOrders = false;
+    await req.store.save();
+  }
+
   res.clearCookie('refreshToken');
   return successResponse(res, 200, 'Logged out successfully');
 });
