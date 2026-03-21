@@ -391,12 +391,13 @@ const resolveStoreCoordinatesForOrder = async (order) => {
   return { lat: Number(lat), lng: Number(lng), storeId };
 };
 
-const notifyNextClosestForScheduledReadyOrder = async (orderId, additionalExcludedIds = []) => {
+const notifyNextClosestDeliveryPartner = async (orderId, additionalExcludedIds = []) => {
   const latestOrder = await Order.findById(orderId).lean();
   if (!latestOrder) return { success: false, reason: 'order_not_found' };
   if (latestOrder.deliveryPartnerId) return { success: false, reason: 'already_assigned' };
-  if (String(latestOrder.status || '').toLowerCase() !== 'ready') return { success: false, reason: 'not_ready' };
-  if (!latestOrder?.scheduledDelivery?.isScheduled) return { success: false, reason: 'not_scheduled' };
+  if (!['preparing', 'ready'].includes(String(latestOrder.status || '').toLowerCase())) {
+    return { success: false, reason: 'not_assignable_status' };
+  }
 
   const coords = await resolveStoreCoordinatesForOrder(latestOrder);
   if (!coords) return { success: false, reason: 'missing_store_coordinates' };
@@ -440,13 +441,14 @@ const notifyNextClosestForScheduledReadyOrder = async (orderId, additionalExclud
       return { success: false, reason: 'order_not_found_for_notify' };
     }
 
+    const nextPhase = String(latestOrder.status || '').toLowerCase() === 'ready' ? 'priority' : 'expanded';
     await Order.findByIdAndUpdate(orderId, {
       $set: {
         'assignmentInfo.priorityDeliveryPartnerIds': [candidateId],
         'assignmentInfo.expandedDeliveryPartnerIds': [],
-        'assignmentInfo.notificationPhase': 'priority',
+        'assignmentInfo.notificationPhase': nextPhase,
         'assignmentInfo.priorityNotifiedAt': new Date(),
-        'assignmentInfo.assignedBy': 'scheduled_ready_next_closest',
+        'assignmentInfo.assignedBy': 'next_closest_after_reject',
       }
     });
 
@@ -1525,12 +1527,12 @@ export const rejectOrder = asyncHandler(async (req, res) => {
     );
 
     try {
-      const rerouteResult = await notifyNextClosestForScheduledReadyOrder(order._id, [deliveryIdString]);
+      const rerouteResult = await notifyNextClosestDeliveryPartner(order._id, [deliveryIdString]);
       if (rerouteResult.success) {
-        logger.info(`Scheduled ready order ${order.orderId} rerouted to next closest delivery partner ${rerouteResult.deliveryPartnerId}`);
+        logger.info(`Order ${order.orderId} rerouted to next closest delivery partner ${rerouteResult.deliveryPartnerId}`);
       }
     } catch (rerouteError) {
-      logger.warn(`Failed to reroute scheduled ready order ${order.orderId}: ${rerouteError.message}`);
+      logger.warn(`Failed to reroute order ${order.orderId}: ${rerouteError.message}`);
     }
 
     try {
