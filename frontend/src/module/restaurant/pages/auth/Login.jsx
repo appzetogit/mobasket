@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react"
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import { Mail, Phone } from "lucide-react"
 import { setAuthData, isModuleAuthenticated } from "@/lib/utils/auth"
@@ -46,6 +46,8 @@ export default function RestaurantLogin() {
     content: "",
     fallbackUrl: "",
   })
+
+  const googleAuthHandledRef = useRef(false)
 
   // If already authenticated, skip the login page and go to correct step
   useEffect(() => {
@@ -378,6 +380,76 @@ export default function RestaurantLogin() {
     }
   }
 
+
+  const processGoogleAuthenticatedUser = useCallback(async (user) => {
+    if (!user || googleAuthHandledRef.current) return
+
+    googleAuthHandledRef.current = true
+    setApiError("")
+    setIsSending(true)
+
+    try {
+      const idToken = await user.getIdToken()
+      const response = await restaurantAPI.firebaseGoogleLogin(idToken)
+      const data = response?.data?.data || {}
+
+      const accessToken = data.accessToken
+      const restaurant = data.restaurant
+      const refreshToken = data.refreshToken
+
+      if (!accessToken || !restaurant) {
+        throw new Error("Invalid response from server")
+      }
+
+      setAuthData("restaurant", accessToken, restaurant, refreshToken)
+      window.dispatchEvent(new Event("restaurantAuthChanged"))
+      await redirectRestaurantAfterAuth(navigate, { replace: true })
+    } catch (error) {
+      googleAuthHandledRef.current = false
+      const message =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        "Failed to login with Google. Please try again."
+      setApiError(message)
+      setIsSending(false)
+    }
+  }, [navigate])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const handleRedirectGoogleLogin = async () => {
+      const authReady = ensureFirebaseAuthInitialized()
+      if (!authReady || !firebaseAuth) return
+
+      try {
+        if (firebaseAuth.currentUser && !cancelled) {
+          await processGoogleAuthenticatedUser(firebaseAuth.currentUser)
+          return
+        }
+
+        const { getRedirectResult } = await import("firebase/auth")
+        const redirectResult = await getRedirectResult(firebaseAuth)
+
+        if (redirectResult?.user && !cancelled) {
+          await processGoogleAuthenticatedUser(redirectResult.user)
+        }
+      } catch {
+        // Ignore when there is no redirect flow pending
+      } finally {
+        if (!googleAuthHandledRef.current && !cancelled) {
+          setIsSending(false)
+        }
+      }
+    }
+
+    handleRedirectGoogleLogin()
+
+    return () => {
+      cancelled = true
+    }
+  }, [processGoogleAuthenticatedUser])
   const handlePhoneChange = (e) => {
     // Only allow digits
     const value = e.target.value.replace(/\D/g, "")
@@ -691,6 +763,14 @@ export default function RestaurantLogin() {
     </div>
   )
 }
+
+
+
+
+
+
+
+
 
 
 

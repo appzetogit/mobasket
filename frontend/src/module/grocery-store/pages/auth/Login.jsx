@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { Mail, ChevronDown, Phone } from "lucide-react"
 import { setAuthData } from "@/lib/utils/auth"
@@ -23,26 +23,26 @@ import { redirectGroceryStoreAfterAuth } from "../../utils/onboardingUtils"
 
 // Common country codes
 const countryCodes = [
-  { code: "+1", country: "US/CA", flag: "🇺🇸" },
-  { code: "+44", country: "UK", flag: "🇬🇧" },
-  { code: "+91", country: "IN", flag: "🇮🇳" },
-  { code: "+86", country: "CN", flag: "🇨🇳" },
-  { code: "+81", country: "JP", flag: "🇯🇵" },
-  { code: "+49", country: "DE", flag: "🇩🇪" },
-  { code: "+33", country: "FR", flag: "🇫🇷" },
-  { code: "+39", country: "IT", flag: "🇮🇹" },
-  { code: "+34", country: "ES", flag: "🇪🇸" },
-  { code: "+61", country: "AU", flag: "🇦🇺" },
-  { code: "+7", country: "RU", flag: "🇷🇺" },
-  { code: "+55", country: "BR", flag: "🇧🇷" },
-  { code: "+52", country: "MX", flag: "🇲🇽" },
-  { code: "+82", country: "KR", flag: "🇰🇷" },
-  { code: "+65", country: "SG", flag: "🇸🇬" },
-  { code: "+971", country: "AE", flag: "🇦🇪" },
-  { code: "+966", country: "SA", flag: "🇸🇦" },
-  { code: "+27", country: "ZA", flag: "🇿🇦" },
-  { code: "+31", country: "NL", flag: "🇳🇱" },
-  { code: "+46", country: "SE", flag: "🇸🇪" },
+  { code: "+1", country: "US/CA", flag: "ðŸ‡ºðŸ‡¸" },
+  { code: "+44", country: "UK", flag: "ðŸ‡¬ðŸ‡§" },
+  { code: "+91", country: "IN", flag: "ðŸ‡®ðŸ‡³" },
+  { code: "+86", country: "CN", flag: "ðŸ‡¨ðŸ‡³" },
+  { code: "+81", country: "JP", flag: "ðŸ‡¯ðŸ‡µ" },
+  { code: "+49", country: "DE", flag: "ðŸ‡©ðŸ‡ª" },
+  { code: "+33", country: "FR", flag: "ðŸ‡«ðŸ‡·" },
+  { code: "+39", country: "IT", flag: "ðŸ‡®ðŸ‡¹" },
+  { code: "+34", country: "ES", flag: "ðŸ‡ªðŸ‡¸" },
+  { code: "+61", country: "AU", flag: "ðŸ‡¦ðŸ‡º" },
+  { code: "+7", country: "RU", flag: "ðŸ‡·ðŸ‡º" },
+  { code: "+55", country: "BR", flag: "ðŸ‡§ðŸ‡·" },
+  { code: "+52", country: "MX", flag: "ðŸ‡²ðŸ‡½" },
+  { code: "+82", country: "KR", flag: "ðŸ‡°ðŸ‡·" },
+  { code: "+65", country: "SG", flag: "ðŸ‡¸ðŸ‡¬" },
+  { code: "+971", country: "AE", flag: "ðŸ‡¦ðŸ‡ª" },
+  { code: "+966", country: "SA", flag: "ðŸ‡¸ðŸ‡¦" },
+  { code: "+27", country: "ZA", flag: "ðŸ‡¿ðŸ‡¦" },
+  { code: "+31", country: "NL", flag: "ðŸ‡³ðŸ‡±" },
+  { code: "+46", country: "SE", flag: "ðŸ‡¸ðŸ‡ª" },
 ]
 
 export default function GroceryStoreLogin() {
@@ -77,6 +77,8 @@ export default function GroceryStoreLogin() {
     content: "",
     fallbackUrl: "",
   })
+
+  const googleAuthHandledRef = useRef(false)
 
   useEffect(() => {
     if (isModuleAuthenticated("grocery-store")) {
@@ -382,6 +384,78 @@ export default function GroceryStoreLogin() {
     }
   }
 
+
+  const processGoogleAuthenticatedUser = useCallback(async (user) => {
+    if (!user || googleAuthHandledRef.current) return
+
+    googleAuthHandledRef.current = true
+    setApiError("")
+    setIsSending(true)
+
+    try {
+      const idToken = await user.getIdToken()
+      const response = await groceryStoreAPI.firebaseGoogleLogin(idToken)
+      const data = response?.data?.data || {}
+
+      const accessToken = data.accessToken
+      const store = data.store || data.groceryStore
+      const refreshToken = data.refreshToken
+
+      if (!accessToken || !store) {
+        throw new Error("Invalid response from server")
+      }
+
+      setAuthData("grocery-store", accessToken, store, refreshToken)
+      window.dispatchEvent(new Event("groceryStoreAuthChanged"))
+
+      const from = location.state?.from?.pathname || location.state?.from || null
+      await redirectGroceryStoreAfterAuth(navigate, { replace: true, redirectTo: from })
+    } catch (error) {
+      googleAuthHandledRef.current = false
+      const message =
+        error?.response?.data?.message ||
+        error?.response?.data?.error ||
+        error?.message ||
+        "Failed to login with Google. Please try again."
+      setApiError(message)
+      setIsSending(false)
+    }
+  }, [navigate, location.state])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const handleRedirectGoogleLogin = async () => {
+      const authReady = ensureFirebaseAuthInitialized()
+      if (!authReady || !firebaseAuth) return
+
+      try {
+        if (firebaseAuth.currentUser && !cancelled) {
+          await processGoogleAuthenticatedUser(firebaseAuth.currentUser)
+          return
+        }
+
+        const { getRedirectResult } = await import("firebase/auth")
+        const redirectResult = await getRedirectResult(firebaseAuth)
+
+        if (redirectResult?.user && !cancelled) {
+          await processGoogleAuthenticatedUser(redirectResult.user)
+        }
+      } catch {
+        // Ignore when there is no redirect flow pending
+      } finally {
+        if (!googleAuthHandledRef.current && !cancelled) {
+          setIsSending(false)
+        }
+      }
+    }
+
+    handleRedirectGoogleLogin()
+
+    return () => {
+      cancelled = true
+    }
+  }, [processGoogleAuthenticatedUser])
   const handlePhoneChange = (e) => {
     const rawDigits = e.target.value.replace(/\D/g, "")
     const maxLength = formData.countryCode === "+91" ? 10 : 15
@@ -499,7 +573,7 @@ export default function GroceryStoreLogin() {
 
         <div className="">
           <span className="text-gray-600 font-light text-sm tracking-wide block text-center">
-            — grocery store partner —
+            â€” grocery store partner â€”
           </span>
         </div>
       </div>
@@ -678,9 +752,9 @@ export default function GroceryStoreLogin() {
           </p>
           <div className="text-xs text-center text-gray-600 mt-1 flex justify-center gap-2 flex-wrap">
             {renderPolicyLink("Terms of Service", "terms")}
-            <span>•</span>
+            <span>â€¢</span>
             {renderPolicyLink("Privacy Policy", "privacy")}
-            <span>•</span>
+            <span>â€¢</span>
             {renderPolicyLink("Code of Conduct", "content")}
           </div>
         </div>
@@ -696,3 +770,8 @@ export default function GroceryStoreLogin() {
     </div>
   )
 }
+
+
+
+
+
