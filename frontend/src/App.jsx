@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AuthRedirect from "@/components/AuthRedirect";
+import ScrollToTop from "@/components/ScrollToTop";
 import RestaurantOrderSoundListener from "@/module/restaurant/components/RestaurantOrderSoundListener";
 import DeliveryOrderSoundListener from "@/module/delivery/components/DeliveryOrderSoundListener";
 import WelcomeSelectionPage from "@/module/user/pages/WelcomeSelectionPage";
@@ -189,6 +190,7 @@ export default function App() {
 
   return (
     <>
+      <ScrollToTop />
       <RestaurantOrderSoundListener />
       <DeliveryOrderSoundListener />
       <Suspense fallback={<RouteLoader />}>

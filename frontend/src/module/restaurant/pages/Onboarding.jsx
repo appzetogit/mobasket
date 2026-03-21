@@ -352,7 +352,11 @@ export default function RestaurantOnboarding() {
   // Also scroll to top whenever step changes
   useEffect(() => {
     localStorage.setItem("restaurant_onboarding_current_step", String(step))
-    window.scrollTo({ top: 0, behavior: "instant" })
+    // Use setTimeout to ensure the DOM has updated before scrolling to the top
+    const timer = setTimeout(() => {
+      window.scrollTo(0, 0)
+    }, 50)
+    return () => clearTimeout(timer)
   }, [step])
 
   const clearLocalDrafts = () => {
@@ -2178,7 +2182,13 @@ export default function RestaurantOnboarding() {
               </button>
               <button
                 type="button"
-                onClick={() => openBrowserGalleryInput((f) => onFileChange(f))}
+                onClick={() => openBrowserGalleryInput((f) => {
+                  if (f && !isAllowedImageFile(f)) {
+                    toast.error("Please choose a JPG, PNG, or WEBP image")
+                    return
+                  }
+                  onFileChange(f)
+                })}
                 className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-gray-300 text-xs font-medium cursor-pointer hover:bg-gray-50"
               >
                 <ImageIcon className="w-4 h-4" />
@@ -2192,7 +2202,13 @@ export default function RestaurantOnboarding() {
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0] || null
-                if (f) onFileChange(f)
+                if (f) {
+                  if (!isAllowedImageFile(f)) {
+                    toast.error("Please choose a JPG, PNG, or WEBP image")
+                  } else {
+                    onFileChange(f)
+                  }
+                }
                 e.target.value = ''
               }}
             />
@@ -2267,9 +2283,13 @@ export default function RestaurantOnboarding() {
             <div className="space-y-3">
               <Input
                 value={step3.gstNumber || ""}
-                onChange={(e) => setStep3({ ...step3, gstNumber: e.target.value })}
+                onChange={(e) => {
+                  const val = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 15)
+                  setStep3({ ...step3, gstNumber: val })
+                }}
                 className="bg-white text-sm"
                 placeholder="GST number"
+                maxLength={15}
               />
               <Input
                 value={step3.gstLegalName || ""}
@@ -2367,11 +2387,12 @@ export default function RestaurantOnboarding() {
                 value={step3.accountNumber || ""}
                 onChange={(e) => {
                   // Digits only
-                  const val = e.target.value.replace(/\D/g, "")
+                  const val = e.target.value.replace(/\D/g, "").slice(0, 18)
                   setStep3({ ...step3, accountNumber: val })
                 }}
                 className="bg-white text-sm"
                 placeholder="Account number"
+                maxLength={18}
               />
             </div>
             <div>
@@ -2380,11 +2401,12 @@ export default function RestaurantOnboarding() {
                 inputMode="numeric"
                 value={step3.confirmAccountNumber || ""}
                 onChange={(e) => {
-                  const val = e.target.value.replace(/\D/g, "")
+                  const val = e.target.value.replace(/\D/g, "").slice(0, 18)
                   setStep3({ ...step3, confirmAccountNumber: val })
                 }}
                 className="bg-white text-sm"
                 placeholder="Confirm account number"
+                maxLength={18}
               />
             </div>
           </div>
