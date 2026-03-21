@@ -712,10 +712,10 @@ export default function CheckoutPage() {
       }
 
       try {
-        const [restaurantResponse, outletTimingsResponse] = await Promise.all([
-          restaurantAPI.getRestaurantById(String(restaurantId)),
-          api.get(`/restaurant/${String(restaurantId)}/outlet-timings`),
-        ]);
+        const restaurantResponse = await restaurantAPI.getRestaurantById(String(restaurantId));
+        const outletTimingsResponse = await api
+          .get(`/restaurant/${String(restaurantId)}/outlet-timings`)
+          .catch(() => null);
 
         const restaurant =
           restaurantResponse?.data?.data?.restaurant ||
@@ -736,9 +736,11 @@ export default function CheckoutPage() {
           }),
         );
       } catch {
+        // Don't block checkout on transient verification API failures.
+        // Backend order creation still enforces final availability checks.
         setRestaurantAvailability({
-          isAvailable: false,
-          reason: "Unable to verify restaurant availability right now.",
+          isAvailable: true,
+          reason: "",
         });
       }
     };
