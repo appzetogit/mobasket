@@ -521,11 +521,11 @@ export default function SignIn() {
           return
         }
 
-        // In WebView, popup flow often fails with false "cancelled" errors.
-        // If native handler is unavailable, use redirect flow directly.
-        const { signInWithRedirect } = await import("firebase/auth")
-        await signInWithRedirect(auth, googleProvider)
-        return
+        // In Flutter WebView, redirect/popup can open a Google email page and break UX.
+        // Require native handler success instead of falling back to web OAuth screens.
+        throw new Error(
+          "Google Sign-In is not available in this app build. Please update the app to continue with Google."
+        )
       }
 
       const { signInWithPopup, signInWithRedirect } = await import("firebase/auth")
