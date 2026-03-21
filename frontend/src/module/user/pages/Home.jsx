@@ -1365,7 +1365,7 @@ export default function Home() {
         } else {
           // Saved-address mode should use selected saved-address city first.
           const resolvedUserCity = useSavedAddressCityMode
-            ? getSelectedSavedAddressCity() || resolveUserCity(location)
+            ? resolveUserCity(location) || getSelectedSavedAddressCity()
             : resolveUserCity(location);
           normalizedUserCity = normalizeCityName(resolvedUserCity);
           if (normalizedUserCity) {

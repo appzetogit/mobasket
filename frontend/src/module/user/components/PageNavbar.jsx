@@ -241,8 +241,8 @@ export default function PageNavbar({
     // current: stored current location > live hook location.
     const chooseBySource = () => {
       if (source === "saved") {
-        if (selectedSavedAddress && typeof selectedSavedAddress === "object") return selectedSavedAddress;
         if (storedLocation && typeof storedLocation === "object") return storedLocation;
+        if (selectedSavedAddress && typeof selectedSavedAddress === "object") return selectedSavedAddress;
         if (defaultSavedAddress && typeof defaultSavedAddress === "object") return defaultSavedAddress;
         return {};
       }

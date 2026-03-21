@@ -3516,6 +3516,16 @@ export default function RestaurantDetails() {
   }, [normalizedSlug]);
 
   useEffect(() => {
+    if (!loadingDeferredContent) return undefined;
+
+    const timeoutId = window.setTimeout(() => {
+      setLoadingDeferredContent(false);
+    }, 12000);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [loadingDeferredContent, normalizedSlug]);
+
+  useEffect(() => {
     const menuSectionCount = Array.isArray(restaurant?.menuSections)
       ? restaurant.menuSections.length
       : 0;
@@ -3549,6 +3559,19 @@ export default function RestaurantDetails() {
   }, [restaurant?.menuSections, normalizedSlug]);
 
   const hasActiveSearchQuery = Boolean(searchQuery.trim());
+  const hasAnyMenuSections =
+    Array.isArray(restaurant?.menuSections) && restaurant.menuSections.length > 0;
+  const hasAnyMenuItems = useMemo(() => {
+    if (!hasAnyMenuSections) return false;
+
+    return restaurant.menuSections.some((section) => {
+      if (Array.isArray(section?.items) && section.items.length > 0) return true;
+      if (!Array.isArray(section?.subsections)) return false;
+      return section.subsections.some(
+        (subsection) => Array.isArray(subsection?.items) && subsection.items.length > 0,
+      );
+    });
+  }, [hasAnyMenuSections, restaurant?.menuSections]);
   const renderedSections = useMemo(() => {
     if (hasActiveSearchQuery) return filteredSections;
     return filteredSections.slice(0, Math.max(1, visibleSectionCount));
@@ -4176,15 +4199,24 @@ export default function RestaurantDetails() {
       {/* Menu Items Section */}
 
       {loadingDeferredContent &&
-        (!restaurant?.menuSections || restaurant.menuSections.length === 0) && (
+        !hasAnyMenuItems && (
           <MenuContentSkeleton />
         )}
 
-      {restaurant?.menuSections &&
+      {!loadingDeferredContent && !hasAnyMenuItems && (
+        <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-8">
+          <div className="rounded-2xl border border-gray-200 bg-white p-6 text-center dark:border-gray-800 dark:bg-[#111827]">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+              No items available
+            </h3>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-300">
+              This restaurant has not added menu items yet.
+            </p>
+          </div>
+        </div>
+      )}
 
-        Array.isArray(restaurant.menuSections) &&
-
-        restaurant.menuSections.length > 0 && (
+      {hasAnyMenuSections && hasAnyMenuItems && (
 
           <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-6 sm:py-8 md:py-10 lg:py-12 space-y-6 md:space-y-8 lg:space-y-10">
 
