@@ -310,13 +310,21 @@ export default function GroceryStoreLogin() {
         throw new Error("Firebase Auth is not configured. Please verify Firebase settings in Admin > Env Setup.")
       }
 
+      const typedEmail = String(formData?.email || "").trim()
+      const providerParams = {}
+      if (typedEmail) {
+        providerParams.login_hint = typedEmail
+      } else if (!isFlutterWebViewBridgeAvailable()) {
+        providerParams.prompt = "select_account"
+      }
+      googleProvider.setCustomParameters(providerParams)
+
       let result = null
       const isFlutterBridge = isFlutterWebViewBridgeAvailable()
       if (isFlutterBridge) {
         result = await signInWithFlutterNativeGoogle(firebaseAuth)
         if (!result) {
           const { signInWithRedirect } = await import("firebase/auth")
-          googleProvider.setCustomParameters({ prompt: "select_account" })
           await signInWithRedirect(firebaseAuth, googleProvider)
           return
         }

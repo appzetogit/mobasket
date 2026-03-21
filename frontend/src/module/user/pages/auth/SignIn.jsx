@@ -503,6 +503,16 @@ export default function SignIn() {
         throw new Error("Firebase Auth is not initialized. Please check your Firebase configuration.")
       }
 
+      const typedEmail = String(formData?.email || "").trim()
+      const providerParams = {}
+      if (typedEmail) {
+        providerParams.login_hint = typedEmail
+      } else if (!isFlutterWebViewBridgeAvailable()) {
+        // Keep account chooser in regular browsers, but avoid forcing it in WebView.
+        providerParams.prompt = "select_account"
+      }
+      googleProvider.setCustomParameters(providerParams)
+
       const isFlutterBridge = isFlutterWebViewBridgeAvailable()
       if (isFlutterBridge) {
         const flutterResult = await signInWithFlutterNativeGoogle(auth)
@@ -514,7 +524,6 @@ export default function SignIn() {
         // In WebView, popup flow often fails with false "cancelled" errors.
         // If native handler is unavailable, use redirect flow directly.
         const { signInWithRedirect } = await import("firebase/auth")
-        googleProvider.setCustomParameters({ prompt: "select_account" })
         await signInWithRedirect(auth, googleProvider)
         return
       }
@@ -522,7 +531,6 @@ export default function SignIn() {
       const { signInWithPopup, signInWithRedirect } = await import("firebase/auth")
 
       try {
-        googleProvider.setCustomParameters({ prompt: "select_account" })
         const popupResult = await signInWithPopup(auth, googleProvider)
         if (popupResult?.user) {
           await processSignedInUser(popupResult.user, "google-popup")
