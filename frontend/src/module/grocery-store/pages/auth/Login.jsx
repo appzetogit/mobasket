@@ -14,6 +14,7 @@ import { groceryStoreAPI } from "@/lib/api"
 import api from "@/lib/api"
 import { API_ENDPOINTS } from "@/lib/api/config"
 import { firebaseAuth, googleProvider, ensureFirebaseAuthInitialized } from "@/lib/firebase"
+import { isFlutterWebViewBridgeAvailable, signInWithFlutterNativeGoogle } from "@/lib/utils/flutterGoogleSignIn"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 import { loadBusinessSettings } from "@/lib/utils/businessSettings"
 import { isModuleAuthenticated } from "@/lib/utils/auth"
@@ -309,8 +310,31 @@ export default function GroceryStoreLogin() {
         throw new Error("Firebase Auth is not configured. Please verify Firebase settings in Admin > Env Setup.")
       }
 
-      const { signInWithPopup } = await import("firebase/auth")
-      const result = await signInWithPopup(firebaseAuth, googleProvider)
+      let result = null
+      if (isFlutterWebViewBridgeAvailable()) {
+        result = await signInWithFlutterNativeGoogle(firebaseAuth)
+      }
+
+      if (!result) {
+        const { signInWithPopup, signInWithRedirect } = await import("firebase/auth")
+        try {
+          result = await signInWithPopup(firebaseAuth, googleProvider)
+        } catch (popupError) {
+          const popupCode = popupError?.code || ""
+          const shouldFallbackToRedirect =
+            popupCode === "auth/popup-blocked" ||
+            popupCode === "auth/cancelled-popup-request" ||
+            popupCode === "auth/operation-not-supported-in-this-environment"
+
+          if (!shouldFallbackToRedirect) {
+            throw popupError
+          }
+
+          await signInWithRedirect(firebaseAuth, googleProvider)
+          return
+        }
+      }
+
       const user = result.user
       const idToken = await user.getIdToken()
 

@@ -7,6 +7,7 @@ import { restaurantAPI } from "@/lib/api"
 import api from "@/lib/api"
 import { API_ENDPOINTS } from "@/lib/api/config"
 import { firebaseAuth, googleProvider, ensureFirebaseAuthInitialized } from "@/lib/firebase"
+import { isFlutterWebViewBridgeAvailable, signInWithFlutterNativeGoogle } from "@/lib/utils/flutterGoogleSignIn"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 import { loadBusinessSettings } from "@/lib/utils/businessSettings"
 import PolicyModal from "@/components/legal/PolicyModal"
@@ -300,10 +301,31 @@ export default function RestaurantLogin() {
         throw new Error("Firebase Auth is not configured. Please verify Firebase settings in Admin > Env Setup.")
       }
 
-      const { signInWithPopup } = await import("firebase/auth")
+      let result = null
+      if (isFlutterWebViewBridgeAvailable()) {
+        result = await signInWithFlutterNativeGoogle(firebaseAuth)
+      }
 
-      // Sign in with Google using Firebase Auth
-      const result = await signInWithPopup(firebaseAuth, googleProvider)
+      if (!result) {
+        const { signInWithPopup, signInWithRedirect } = await import("firebase/auth")
+        try {
+          result = await signInWithPopup(firebaseAuth, googleProvider)
+        } catch (popupError) {
+          const popupCode = popupError?.code || ""
+          const shouldFallbackToRedirect =
+            popupCode === "auth/popup-blocked" ||
+            popupCode === "auth/cancelled-popup-request" ||
+            popupCode === "auth/operation-not-supported-in-this-environment"
+
+          if (!shouldFallbackToRedirect) {
+            throw popupError
+          }
+
+          await signInWithRedirect(firebaseAuth, googleProvider)
+          return
+        }
+      }
+
       const user = result.user
 
       // Get Firebase ID token

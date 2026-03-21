@@ -15,6 +15,7 @@ import {
 import api, { authAPI } from "@/lib/api"
 import { API_ENDPOINTS } from "@/lib/api/config"
 import { firebaseAuth, googleProvider, ensureFirebaseAuthInitialized } from "@/lib/firebase"
+import { isFlutterSignInCancelled, isFlutterWebViewBridgeAvailable, signInWithFlutterNativeGoogle } from "@/lib/utils/flutterGoogleSignIn"
 import { setAuthData } from "@/lib/utils/auth"
 import { loadBusinessSettings } from "@/lib/utils/businessSettings"
 import loginBanner from "@/assets/loginbanner.png"
@@ -502,6 +503,14 @@ export default function SignIn() {
         throw new Error("Firebase Auth is not initialized. Please check your Firebase configuration.")
       }
 
+      if (isFlutterWebViewBridgeAvailable()) {
+        const flutterResult = await signInWithFlutterNativeGoogle(auth)
+        if (flutterResult?.user) {
+          await processSignedInUser(flutterResult.user, "flutter-native-google")
+          return
+        }
+      }
+
       const { signInWithPopup, signInWithRedirect } = await import("firebase/auth")
 
       try {
@@ -548,6 +557,8 @@ export default function SignIn() {
         message = "Sign-in was cancelled. Please try again."
       } else if (errorCode === "auth/network-request-failed") {
         message = "Network error. Please check your connection and try again."
+      } else if (isFlutterSignInCancelled(error)) {
+        message = "Sign-in was cancelled. Please try again."
       } else if (errorMessage) {
         message = errorMessage
       } else if (error?.response?.data?.message) {
