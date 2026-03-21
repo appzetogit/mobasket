@@ -341,7 +341,7 @@ export default function Profile() {
           : await new Loader({
             apiKey,
             version: "weekly",
-            libraries: ["places"],
+            libraries: ["places", "geocoding"],
           }).load();
         if (!isMounted) return;
 

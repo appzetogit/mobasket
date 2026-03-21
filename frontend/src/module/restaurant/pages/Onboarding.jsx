@@ -203,7 +203,18 @@ export default function RestaurantOnboarding() {
   const requestedStepParam = searchParams.get("step")
   const isFreshStepOne = requestedStepParam === "1"
   const cachedPendingRedirectPath = getCachedRestaurantRedirectPath()
-  const [step, setStep] = useState(1)
+  const [step, setStep] = useState(() => {
+    // Always try to restore saved step from localStorage on refresh.
+    // isFreshStepOne only means the link came with ?step=1, but the URL
+    // never changes as user progresses, so we cannot rely on it to decide
+    // whether to skip the saved step. We ONLY skip if there is no saved
+    // step at all (i.e. genuinely new session with no draft).
+    try {
+      const saved = localStorage.getItem("restaurant_onboarding_current_step")
+      if (saved) return Math.min(4, Math.max(1, Number(saved)))
+    } catch (_) {}
+    return 1
+  })
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState("")
@@ -276,19 +287,113 @@ export default function RestaurantOnboarding() {
     offer: "",
   })
 
+  const [step1Errors, setStep1Errors] = useState({})
+  const [step1Touched, setStep1Touched] = useState({})
+
+  // Load existing drafts from localStorage on mount
+  useEffect(() => {
+    try {
+      const s1 = localStorage.getItem("restaurant_onboarding_step1_draft")
+      if (s1) {
+        const p1 = JSON.parse(s1)
+        setStep1(prev => ({
+          ...prev,
+          ...p1,
+          location: { ...prev.location, ...(p1.location || {}) }
+        }))
+        if (p1.location?.formattedAddress || p1.location?.address) {
+          setLocationSearch(p1.location.formattedAddress || p1.location.address)
+        }
+      }
+
+      const s2 = localStorage.getItem("restaurant_onboarding_step2_draft")
+      if (s2) {
+        const p2 = JSON.parse(s2)
+        // Filter out any stale File references which can't be stored in localStorage
+        setStep2(prev => ({ ...prev, ...p2, menuImages: (p2.menuImages || []).filter(img => !(img instanceof File)) }))
+      }
+
+      const s3 = localStorage.getItem("restaurant_onboarding_step3_draft")
+      if (s3) {
+        const p3 = JSON.parse(s3)
+        setStep3(prev => ({ ...prev, ...p3 }))
+      }
+
+      const s4 = localStorage.getItem("restaurant_onboarding_step4_draft")
+      if (s4) {
+        const p4 = JSON.parse(s4)
+        setStep4(prev => ({ ...prev, ...p4 }))
+      }
+    } catch (e) {
+      console.error("Failed to restore onboarding drafts:", e)
+    }
+  }, [])
+
+  // Save drafts to localStorage whenever states change
+  useEffect(() => {
+    if (step1.restaurantName || step1.ownerName || step1.location?.area) {
+      localStorage.setItem("restaurant_onboarding_step1_draft", JSON.stringify(step1))
+    }
+  }, [step1])
+
+  useEffect(() => {
+    localStorage.setItem("restaurant_onboarding_step2_draft", JSON.stringify(step2))
+  }, [step2])
+
+  useEffect(() => {
+    localStorage.setItem("restaurant_onboarding_step3_draft", JSON.stringify(step3))
+  }, [step3])
+
+  useEffect(() => {
+    localStorage.setItem("restaurant_onboarding_step4_draft", JSON.stringify(step4))
+  }, [step4])
+
+  // Persist current step so refresh restores the same step
+  // Also scroll to top whenever step changes
+  useEffect(() => {
+    localStorage.setItem("restaurant_onboarding_current_step", String(step))
+    window.scrollTo({ top: 0, behavior: "instant" })
+  }, [step])
+
+  const clearLocalDrafts = () => {
+    localStorage.removeItem("restaurant_onboarding_step1_draft")
+    localStorage.removeItem("restaurant_onboarding_step2_draft")
+    localStorage.removeItem("restaurant_onboarding_step3_draft")
+    localStorage.removeItem("restaurant_onboarding_step4_draft")
+    localStorage.removeItem("restaurant_onboarding_current_step")
+  }
+
+  const handleStep1Change = (field, val) => {
+    setStep1((prev) => ({ ...prev, [field]: val }))
+    if (step1Errors[field]) setStep1Errors((prev) => ({ ...prev, [field]: "" }))
+  }
+
+  const handleStep1Blur = (field) => {
+    setStep1Touched((prev) => ({ ...prev, [field]: true }))
+  }
+
+  const handleStep1LocationChange = (field, val) => {
+    updateStep1Location((prev) => ({ ...prev, [field]: val }))
+    if (step1Errors[field]) setStep1Errors((prev) => ({ ...prev, [field]: "" }))
+  }
+
   const normalizePhoneDigits = (value) => String(value || "").replace(/\D/g, "")
   const normalizeEmailValue = (value) => String(value || "").trim().toLowerCase()
 
   const getAuthenticatedRestaurantEmail = (restaurant) => {
+    if (restaurant?.signupMethod === 'phone') return ""
+
     const directEmail = normalizeEmailValue(restaurant?.email || restaurant?.googleEmail)
-    if (directEmail) return directEmail
+    if (directEmail && !/@restaurant\.mobasket\.com$/i.test(directEmail)) return directEmail
 
     const ownerEmail = normalizeEmailValue(restaurant?.ownerEmail)
     return /@restaurant\.mobasket\.com$/i.test(ownerEmail) ? "" : ownerEmail
   }
 
-  const getAuthenticatedRestaurantPhone = (restaurant) =>
-    normalizePhoneDigits(restaurant?.phone || restaurant?.ownerPhone || restaurant?.primaryContactNumber)
+  const getAuthenticatedRestaurantPhone = (restaurant) => {
+    if (restaurant?.signupMethod === 'email') return ""
+    return normalizePhoneDigits(restaurant?.phone || restaurant?.ownerPhone || restaurant?.primaryContactNumber)
+  }
 
   const applyAuthenticatedRestaurantPrefill = (restaurant) => {
     if (!restaurant || typeof restaurant !== "object") return
@@ -687,10 +792,10 @@ export default function RestaurantOnboarding() {
             setStep1(() => ({
               restaurantName: data.step1.restaurantName || "",
               ownerName: data.step1.ownerName || "",
-              ownerEmail: data.step1.ownerEmail || getAuthenticatedRestaurantEmail(currentRestaurant) || "",
-              ownerPhone: data.step1.ownerPhone || getAuthenticatedRestaurantPhone(currentRestaurant) || "",
+              ownerEmail: (data.completedSteps > 0 && data.step1.ownerEmail && !/@restaurant\.mobasket\.com$/i.test(data.step1.ownerEmail) ? data.step1.ownerEmail : "") || getAuthenticatedRestaurantEmail(currentRestaurant) || "",
+              ownerPhone: (data.completedSteps > 0 && data.step1.ownerPhone ? data.step1.ownerPhone : "") || getAuthenticatedRestaurantPhone(currentRestaurant) || "",
               primaryContactNumber:
-                data.step1.primaryContactNumber || getAuthenticatedRestaurantPhone(currentRestaurant) || "",
+                (data.completedSteps > 0 && data.step1.primaryContactNumber ? data.step1.primaryContactNumber : "") || getAuthenticatedRestaurantPhone(currentRestaurant) || "",
               location: {
                 addressLine1: data.step1.location?.addressLine1 || "",
                 addressLine2: data.step1.location?.addressLine2 || "",
@@ -1060,42 +1165,72 @@ export default function RestaurantOnboarding() {
 
   // Validation functions for each step
   const validateStep1 = () => {
-    const errors = []
+    const errorList = []
+    const newErrors = {}
 
     if (!step1.restaurantName?.trim()) {
-      errors.push("Restaurant name is required")
+      errorList.push("Restaurant name is required")
+      newErrors.restaurantName = "Restaurant name is required"
     }
     if (!step1.ownerName?.trim()) {
-      errors.push("Owner name is required")
+      errorList.push("Owner name is required")
+      newErrors.ownerName = "Owner name is required"
     } else if (!/^[A-Za-z\s-]+$/.test(step1.ownerName.trim())) {
-      errors.push("Full name should contain only letters and spaces")
+      errorList.push("Full name should contain only letters and spaces")
+      newErrors.ownerName = "Full name should contain only letters and spaces"
     }
     if (!step1.ownerEmail?.trim()) {
-      errors.push("Owner email is required")
+      errorList.push("Owner email is required")
+      newErrors.ownerEmail = "Owner email is required"
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(step1.ownerEmail)) {
-      errors.push("Please enter a valid email address")
+      errorList.push("Please enter a valid email address")
+      newErrors.ownerEmail = "Please enter a valid email address"
     }
     if (!step1.ownerPhone?.trim()) {
-      errors.push("Owner phone number is required")
-    } else if (!/^\d{7,15}$/.test(step1.ownerPhone.trim())) {
-      errors.push("Phone number must be 7-15 digits only")
+      errorList.push("Owner phone number is required")
+      newErrors.ownerPhone = "Owner phone number is required"
+    } else if (!/^\d{10}$/.test(step1.ownerPhone.trim())) {
+      errorList.push("Phone number must be exactly 10 digits")
+      newErrors.ownerPhone = "Phone number must be exactly 10 digits"
     }
     if (!step1.primaryContactNumber?.trim()) {
-      errors.push("Primary contact number is required")
-    } else if (!/^\d{7,15}$/.test(step1.primaryContactNumber.trim())) {
-      errors.push("Primary contact number must be 7-15 digits only")
+      errorList.push("Primary contact number is required")
+      newErrors.primaryContactNumber = "Primary contact number is required"
+    } else if (!/^\d{10}$/.test(step1.primaryContactNumber.trim())) {
+      errorList.push("Primary contact number must be exactly 10 digits")
+      newErrors.primaryContactNumber = "Primary contact number must be exactly 10 digits"
     }
     if (!step1.location?.area?.trim()) {
-      errors.push("Area/Sector/Locality is required")
+      errorList.push("Area/Sector/Locality is required")
+      newErrors.area = "Area/Sector/Locality is required"
     }
     if (!step1.location?.city?.trim()) {
-      errors.push("City is required")
+      errorList.push("City is required")
+      newErrors.city = "City is required"
+    }
+    if (step1.location?.zipCode?.trim() && !/^\d{6}$/.test(step1.location.zipCode.trim())) {
+      errorList.push("ZIP code must be exactly 6 digits")
+      newErrors.zipCode = "ZIP code must be exactly 6 digits"
     }
     if (!Number.isFinite(Number(step1.location?.latitude)) || !Number.isFinite(Number(step1.location?.longitude))) {
-      errors.push("Please pinpoint the restaurant location on the map")
+      errorList.push("Please pinpoint the restaurant location on the map")
     }
 
-    return errors
+    setStep1Errors(newErrors)
+    if (errorList.length > 0) {
+      setStep1Touched({
+        restaurantName: true,
+        ownerName: true,
+        ownerEmail: true,
+        ownerPhone: true,
+        primaryContactNumber: true,
+        area: true,
+        city: true,
+        zipCode: true
+      })
+    }
+
+    return errorList
   }
 
   const validateStep2 = () => {
@@ -1362,6 +1497,9 @@ export default function RestaurantOnboarding() {
         const response = await api.put("/restaurant/onboarding", payload)
         console.log('Step4 completed, response:', response?.data)
 
+        // Clear local storage drafts upon successful completion
+        clearLocalDrafts()
+
         // Verify response is successful
         if (!response || !response.data) {
           throw new Error('Invalid response from server')
@@ -1425,10 +1563,14 @@ export default function RestaurantOnboarding() {
             <Label className="text-xs text-gray-700">Restaurant name*</Label>
             <Input
               value={step1.restaurantName || ""}
-              onChange={(e) => setStep1({ ...step1, restaurantName: e.target.value })}
-              className="mt-1 bg-white text-sm text-black placeholder-black"
+              onChange={(e) => handleStep1Change("restaurantName", e.target.value)}
+              onBlur={() => handleStep1Blur("restaurantName")}
+              className={`mt-1 bg-white text-sm text-black placeholder-black ${step1Errors.restaurantName && step1Touched.restaurantName ? "border-red-500 focus-visible:ring-red-500" : "border-gray-300"}`}
               placeholder="Customers will see this name"
             />
+            {step1Errors.restaurantName && step1Touched.restaurantName && (
+              <p className="text-red-500 text-[11px] mt-1">{step1Errors.restaurantName}</p>
+            )}
           </div>
         </div>
       </section>
@@ -1445,35 +1587,48 @@ export default function RestaurantOnboarding() {
               value={step1.ownerName || ""}
               onChange={(e) => {
                 const val = e.target.value.replace(/[^A-Za-z\s-]/g, "")
-                setStep1({ ...step1, ownerName: val })
+                handleStep1Change("ownerName", val)
               }}
-              className="mt-1 bg-white text-sm text-black placeholder-black"
+              onBlur={() => handleStep1Blur("ownerName")}
+              className={`mt-1 bg-white text-sm text-black placeholder-black ${step1Errors.ownerName && step1Touched.ownerName ? "border-red-500 focus-visible:ring-red-500" : "border-gray-300"}`}
               placeholder="Owner full name"
             />
+            {step1Errors.ownerName && step1Touched.ownerName && (
+              <p className="text-red-500 text-[11px] mt-1">{step1Errors.ownerName}</p>
+            )}
           </div>
           <div>
             <Label className="text-xs text-gray-700">Email address*</Label>
             <Input
               type="email"
               value={step1.ownerEmail || ""}
-              onChange={(e) => setStep1({ ...step1, ownerEmail: e.target.value })}
-              className="mt-1 bg-white text-sm text-black placeholder-black"
+              onChange={(e) => handleStep1Change("ownerEmail", e.target.value)}
+              onBlur={() => handleStep1Blur("ownerEmail")}
+              className={`mt-1 bg-white text-sm text-black placeholder-black ${step1Errors.ownerEmail && step1Touched.ownerEmail ? "border-red-500 focus-visible:ring-red-500" : "border-gray-300"}`}
               placeholder="owner@example.com"
             />
+            {step1Errors.ownerEmail && step1Touched.ownerEmail && (
+              <p className="text-red-500 text-[11px] mt-1">{step1Errors.ownerEmail}</p>
+            )}
           </div>
           <div>
             <Label className="text-xs text-gray-700">Phone number*</Label>
             <Input
               type="tel"
               inputMode="numeric"
+              maxLength={10}
               value={step1.ownerPhone || ""}
               onChange={(e) => {
-                const val = e.target.value.replace(/\D/g, "")
-                setStep1({ ...step1, ownerPhone: val })
+                const val = e.target.value.replace(/\D/g, "").slice(0, 10)
+                handleStep1Change("ownerPhone", val)
               }}
-              className="mt-1 bg-white text-sm text-black placeholder-black"
+              onBlur={() => handleStep1Blur("ownerPhone")}
+              className={`mt-1 bg-white text-sm text-black placeholder-black ${step1Errors.ownerPhone && step1Touched.ownerPhone ? "border-red-500 focus-visible:ring-red-500" : "border-gray-300"}`}
               placeholder="9876543210"
             />
+            {step1Errors.ownerPhone && step1Touched.ownerPhone && (
+              <p className="text-red-500 text-[11px] mt-1">{step1Errors.ownerPhone}</p>
+            )}
           </div>
         </div>
       </section>
@@ -1485,14 +1640,19 @@ export default function RestaurantOnboarding() {
           <Input
             type="tel"
             inputMode="numeric"
+            maxLength={10}
             value={step1.primaryContactNumber || ""}
             onChange={(e) => {
-              const val = e.target.value.replace(/\D/g, "")
-              setStep1({ ...step1, primaryContactNumber: val })
+              const val = e.target.value.replace(/\D/g, "").slice(0, 10)
+              handleStep1Change("primaryContactNumber", val)
             }}
-            className="mt-1 bg-white text-sm text-black placeholder-black"
+            onBlur={() => handleStep1Blur("primaryContactNumber")}
+            className={`mt-1 bg-white text-sm text-black placeholder-black ${step1Errors.primaryContactNumber && step1Touched.primaryContactNumber ? "border-red-500 focus-visible:ring-red-500" : "border-gray-300"}`}
             placeholder="Restaurant's primary contact number"
           />
+          {step1Errors.primaryContactNumber && step1Touched.primaryContactNumber && (
+            <p className="text-red-500 text-[11px] mt-1">{step1Errors.primaryContactNumber}</p>
+          )}
           <p className="text-[11px] text-gray-500 mt-1">
             Customers, delivery partners and {companyName} may call on this number for order support.
           </p>
@@ -1502,26 +1662,41 @@ export default function RestaurantOnboarding() {
             <Label className="text-xs text-gray-700">Area / Sector / Locality*</Label>
             <Input
               value={step1.location?.area || ""}
-              onChange={(e) => updateStep1Location((prev) => ({ ...prev, area: e.target.value }))}
-              className="mt-1 bg-white text-sm"
+              onChange={(e) => handleStep1LocationChange("area", e.target.value)}
+              onBlur={() => handleStep1Blur("area")}
+              className={`mt-1 bg-white text-sm ${step1Errors.area && step1Touched.area ? "border-red-500 focus-visible:ring-red-500" : "border-gray-300"}`}
               placeholder="Area / Sector / Locality"
             />
+            {step1Errors.area && step1Touched.area && (
+              <p className="text-red-500 text-[11px] mt-1">{step1Errors.area}</p>
+            )}
           </div>
           <div>
             <Label className="text-xs text-gray-700">City*</Label>
             <Input
               value={step1.location?.city || ""}
-              onChange={(e) => updateStep1Location((prev) => ({ ...prev, city: e.target.value }))}
-              className="mt-1 bg-white text-sm"
+              onChange={(e) => {
+                const val = e.target.value.replace(/[^A-Za-z\s]/g, "")
+                handleStep1LocationChange("city", val)
+              }}
+              onBlur={() => handleStep1Blur("city")}
+              className={`mt-1 bg-white text-sm ${step1Errors.city && step1Touched.city ? "border-red-500 focus-visible:ring-red-500" : "border-gray-300"}`}
               placeholder="City"
             />
+            {step1Errors.city && step1Touched.city && (
+              <p className="text-red-500 text-[11px] mt-1">{step1Errors.city}</p>
+            )}
           </div>
           <div>
             <Label className="text-xs text-gray-700">State</Label>
             <Input
               value={step1.location?.state || ""}
-              onChange={(e) => updateStep1Location((prev) => ({ ...prev, state: e.target.value }))}
-              className="mt-1 bg-white text-sm"
+              onChange={(e) => {
+                const val = e.target.value.replace(/[^A-Za-z\s]/g, "")
+                handleStep1LocationChange("state", val)
+              }}
+              onBlur={() => handleStep1Blur("state")}
+              className="mt-1 bg-white text-sm border-gray-300"
               placeholder="State"
             />
           </div>
@@ -1529,8 +1704,9 @@ export default function RestaurantOnboarding() {
             <Label className="text-xs text-gray-700">Address line 1</Label>
             <Input
               value={step1.location?.addressLine1 || ""}
-              onChange={(e) => updateStep1Location((prev) => ({ ...prev, addressLine1: e.target.value }))}
-              className="mt-1 bg-white text-sm"
+              onChange={(e) => handleStep1LocationChange("addressLine1", e.target.value)}
+              onBlur={() => handleStep1Blur("addressLine1")}
+              className="mt-1 bg-white text-sm border-gray-300"
               placeholder="Shop no. / building no."
             />
           </div>
@@ -1538,8 +1714,9 @@ export default function RestaurantOnboarding() {
             <Label className="text-xs text-gray-700">Address line 2</Label>
             <Input
               value={step1.location?.addressLine2 || ""}
-              onChange={(e) => updateStep1Location((prev) => ({ ...prev, addressLine2: e.target.value }))}
-              className="mt-1 bg-white text-sm"
+              onChange={(e) => handleStep1LocationChange("addressLine2", e.target.value)}
+              onBlur={() => handleStep1Blur("addressLine2")}
+              className="mt-1 bg-white text-sm border-gray-300"
               placeholder="Floor / tower"
             />
           </div>
@@ -1547,17 +1724,25 @@ export default function RestaurantOnboarding() {
             <Label className="text-xs text-gray-700">ZIP / postal code</Label>
             <Input
               value={step1.location?.zipCode || ""}
-              onChange={(e) => updateStep1Location((prev) => ({ ...prev, zipCode: e.target.value }))}
-              className="mt-1 bg-white text-sm"
+              onChange={(e) => {
+                const val = e.target.value.replace(/\D/g, "").slice(0, 6)
+                handleStep1LocationChange("zipCode", val)
+              }}
+              onBlur={() => handleStep1Blur("zipCode")}
+              className={`mt-1 bg-white text-sm ${step1Errors.zipCode && step1Touched.zipCode ? "border-red-500 focus-visible:ring-red-500" : "border-gray-300"}`}
               placeholder="Postal code"
             />
+            {step1Errors.zipCode && step1Touched.zipCode && (
+              <p className="text-red-500 text-[11px] mt-1">{step1Errors.zipCode}</p>
+            )}
           </div>
           <div>
             <Label className="text-xs text-gray-700">Nearby landmark</Label>
             <Input
               value={step1.location?.landmark || ""}
-              onChange={(e) => updateStep1Location((prev) => ({ ...prev, landmark: e.target.value }))}
-              className="mt-1 bg-white text-sm"
+              onChange={(e) => handleStep1LocationChange("landmark", e.target.value)}
+              onBlur={() => handleStep1Blur("landmark")}
+              className="mt-1 bg-white text-sm border-gray-300"
               placeholder="Nearby landmark"
             />
           </div>
@@ -2344,7 +2529,13 @@ export default function RestaurantOnboarding() {
             <Button
               variant="ghost"
               disabled={saving}
-              onClick={() => setShowBackPopup(true)}
+              onClick={() => {
+                if (step > 1) {
+                  setStep(step - 1)
+                } else {
+                  setShowBackPopup(true)
+                }
+              }}
               className="text-sm text-gray-700 bg-transparent"
             >
               Back

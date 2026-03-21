@@ -265,7 +265,7 @@ export default function GroceryCheckoutPage() {
         const loader = new Loader({
           apiKey,
           version: "weekly",
-          libraries: ["places"],
+          libraries: ["places", "geocoding"],
         });
         const google = await loader.load();
         if (!isMounted) return;

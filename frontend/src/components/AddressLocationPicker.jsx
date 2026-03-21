@@ -390,7 +390,7 @@ export default function AddressLocationPicker({
         const loader = new Loader({
           apiKey,
           version: "weekly",
-          libraries: ["places"],
+          libraries: ["places", "geocoding"],
         });
 
         const google = await loader.load();

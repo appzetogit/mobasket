@@ -1468,9 +1468,9 @@ export default function RestaurantsList() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleEditRestaurant(selectedRestaurant)}
-                  className="px-3 py-1.5 text-sm font-medium rounded-lg border border-slate-300 hover:bg-slate-50 flex items-center gap-1.5"
+                  className="px-3 py-1.5 text-sm font-medium text-slate-900 bg-white rounded-lg border border-slate-300 hover:bg-slate-50 flex items-center gap-1.5"
                 >
-                  <Settings className="w-4 h-4" />
+                  <Settings className="w-4 h-4 text-slate-700" />
                   Edit
                 </button>
                 <button
