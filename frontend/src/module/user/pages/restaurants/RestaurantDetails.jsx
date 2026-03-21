@@ -190,15 +190,6 @@ function MenuContentSkeleton() {
 
   return (
     <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-6 sm:py-8 md:py-10 lg:py-12 space-y-6 md:space-y-8 lg:space-y-10">
-      <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
-        {[0, 1, 2, 3].map((chip) => (
-          <div
-            key={`skeleton-chip-${chip}`}
-            className="h-8 w-24 rounded-full bg-gray-200 animate-pulse shrink-0"
-          />
-        ))}
-      </div>
-
       {skeletonSections.map((section) => (
         <div
           key={`skeleton-section-${section}`}
@@ -734,6 +725,9 @@ export default function RestaurantDetails() {
             } catch {
             }
           }, 0);
+        } else {
+          // If menu not found, stop showing the loader
+          setLoadingDeferredContent(false);
         }
       } catch (menuError) {
         if (menuError?.response?.status !== 404) {
@@ -1744,9 +1738,9 @@ export default function RestaurantDetails() {
           setRestaurant(
             initialMenuSections.length > 0
               ? {
-                  ...transformedRestaurant,
-                  menuSections: initialMenuSections,
-                }
+                ...transformedRestaurant,
+                menuSections: initialMenuSections,
+              }
               : transformedRestaurant,
           );
           if (initialMenuSections.length > 0) {
@@ -1790,10 +1784,10 @@ export default function RestaurantDetails() {
                 setRestaurant((prev) =>
                   prev
                     ? {
-                        ...prev,
-                        id: restaurantIdForMenu,
-                        restaurantId: restaurantIdForMenu,
-                      }
+                      ...prev,
+                      id: restaurantIdForMenu,
+                      restaurantId: restaurantIdForMenu,
+                    }
                     : prev,
                 );
               }
@@ -4305,715 +4299,597 @@ export default function RestaurantDetails() {
 
       {hasAnyMenuSections && hasAnyMenuItems && hasRenderableMenuSections && (
 
-          <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-6 sm:py-8 md:py-10 lg:py-12 space-y-6 md:space-y-8 lg:space-y-10">
+        <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-6 sm:py-8 md:py-10 lg:py-12 space-y-6 md:space-y-8 lg:space-y-10">
 
-            {renderedSections.map(
+          {renderedSections.map(
 
-              ({ section, originalIndex }, sectionIndex) => {
+            ({ section, originalIndex }, sectionIndex) => {
 
-                const isRecommendedSection =
+              const isRecommendedSection =
 
-                  section?.isPersonalizedRecommended === true;
+                section?.isPersonalizedRecommended === true;
 
-                const hasSearchQuery = Boolean(searchQuery.trim());
+              const hasSearchQuery = Boolean(searchQuery.trim());
 
-                // Handle section name - check for valid non-empty string
+              // Handle section name - check for valid non-empty string
 
-                let sectionTitle = "Unnamed Section";
+              let sectionTitle = "Unnamed Section";
 
-                if (isRecommendedSection) {
+              if (isRecommendedSection) {
 
-                  sectionTitle = "Recommended for you";
+                sectionTitle = "Recommended for you";
 
-                } else if (
+              } else if (
 
-                  section?.name &&
+                section?.name &&
 
-                  typeof section.name === "string" &&
+                typeof section.name === "string" &&
 
-                  section.name.trim()
+                section.name.trim()
 
-                ) {
+              ) {
 
-                  sectionTitle = section.name.trim();
+                sectionTitle = section.name.trim();
 
-                } else if (
+              } else if (
 
-                  section?.title &&
+                section?.title &&
 
-                  typeof section.title === "string" &&
+                typeof section.title === "string" &&
 
-                  section.title.trim()
+                section.title.trim()
 
-                ) {
+              ) {
 
-                  sectionTitle = section.title.trim();
+                sectionTitle = section.title.trim();
 
-                }
+              }
 
-                const sectionId = `menu-section-${originalIndex}`;
-
-
-
-                const isExpanded = expandedSections.has(originalIndex);
-
-                const shouldShowSectionItems = isExpanded || hasSearchQuery;
-
-                const filteredDirectItems = shouldShowSectionItems
-                  ? sortMenuItems(filterMenuItems(section?.items || []))
-                  : [];
-                const directItemsVisibleCount =
-                  visibleDirectItemsBySection[originalIndex] || MENU_ITEMS_RENDER_BATCH;
-                const visibleDirectItems = hasSearchQuery
-                  ? filteredDirectItems
-                  : filteredDirectItems.slice(0, directItemsVisibleCount);
-                const hasMoreDirectItems =
-                  !hasSearchQuery && filteredDirectItems.length > visibleDirectItems.length;
+              const sectionId = `menu-section-${originalIndex}`;
 
 
 
-                return (
+              const isExpanded = expandedSections.has(originalIndex);
 
-                  <div
+              const shouldShowSectionItems = isExpanded || hasSearchQuery;
 
-                    key={sectionIndex}
+              const filteredDirectItems = shouldShowSectionItems
+                ? sortMenuItems(filterMenuItems(section?.items || []))
+                : [];
+              const directItemsVisibleCount =
+                visibleDirectItemsBySection[originalIndex] || MENU_ITEMS_RENDER_BATCH;
+              const visibleDirectItems = hasSearchQuery
+                ? filteredDirectItems
+                : filteredDirectItems.slice(0, directItemsVisibleCount);
+              const hasMoreDirectItems =
+                !hasSearchQuery && filteredDirectItems.length > visibleDirectItems.length;
 
-                    id={sectionId}
 
-                    className="space-y-4 scroll-mt-20"
 
-                  >
+              return (
 
-                    {/* Section Header */}
+                <div
 
-                    {isRecommendedSection && (
+                  key={sectionIndex}
 
-                      <div className="flex items-center justify-between">
+                  id={sectionId}
+
+                  className="space-y-4 scroll-mt-20"
+
+                >
+
+                  {/* Section Header */}
+
+                  {isRecommendedSection && (
+
+                    <div className="flex items-center justify-between">
+
+                      <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+
+                        Recommended for you
+
+                      </h2>
+
+                      <button
+
+                        onClick={(e) => {
+
+                          e.stopPropagation();
+
+                          setExpandedSections((prev) => {
+
+                            const newSet = new Set(prev);
+
+                            if (newSet.has(originalIndex)) {
+
+                              newSet.delete(originalIndex);
+
+                            } else {
+
+                              newSet.add(originalIndex);
+
+                            }
+
+                            return newSet;
+
+                          });
+
+                        }}
+
+                        className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+
+                      >
+
+                        <ChevronDown
+
+                          className={`h-5 w-5 text-gray-600 dark:text-gray-400 transition-transform duration-200 ${isExpanded ? "" : "-rotate-90"
+
+                            }`}
+
+                        />
+
+                      </button>
+
+                    </div>
+
+                  )}
+
+                  {!isRecommendedSection && (
+
+                    <div className="flex items-center justify-between">
+
+                      <div className="space-y-1">
 
                         <h2 className="text-lg font-bold text-gray-900 dark:text-white">
 
-                          Recommended for you
+                          {section?.name &&
+
+                            typeof section.name === "string" &&
+
+                            section.name.trim()
+
+                            ? section.name.trim()
+
+                            : section?.title &&
+
+                              typeof section.title === "string" &&
+
+                              section.title.trim()
+
+                              ? section.title.trim()
+
+                              : "Unnamed Section"}
 
                         </h2>
 
-                        <button
+                        {section.subtitle && (
 
-                          onClick={(e) => {
+                          <button className="text-sm text-blue-600 dark:text-blue-400 underline">
 
-                            e.stopPropagation();
+                            {section.subtitle}
 
-                            setExpandedSections((prev) => {
+                          </button>
 
-                              const newSet = new Set(prev);
+                        )}
 
-                              if (newSet.has(originalIndex)) {
+                      </div>
 
-                                newSet.delete(originalIndex);
+                      <button
 
-                              } else {
+                        onClick={(e) => {
 
-                                newSet.add(originalIndex);
+                          e.stopPropagation();
 
-                              }
+                          setExpandedSections((prev) => {
 
-                              return newSet;
+                            const newSet = new Set(prev);
 
-                            });
+                            if (newSet.has(originalIndex)) {
 
-                          }}
+                              newSet.delete(originalIndex);
 
-                          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                            } else {
 
-                        >
+                              newSet.add(originalIndex);
 
-                          <ChevronDown
+                            }
 
-                            className={`h-5 w-5 text-gray-600 dark:text-gray-400 transition-transform duration-200 ${isExpanded ? "" : "-rotate-90"
+                            return newSet;
 
-                              }`}
+                          });
 
-                          />
+                        }}
 
-                        </button>
+                        className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+
+                      >
+
+                        <ChevronDown
+
+                          className={`h-5 w-5 text-gray-600 dark:text-gray-400 transition-transform duration-200 ${isExpanded ? "" : "-rotate-90"
+
+                            }`}
+
+                        />
+
+                      </button>
+
+                    </div>
+
+                  )}
+
+
+
+                  {/* Direct Items */}
+
+                  {isExpanded &&
+
+                    isRecommendedSection &&
+
+                    section.items &&
+
+                    section.items.length === 0 && (
+
+                      <div className="text-center py-8">
+
+                        <p className="text-gray-500 dark:text-gray-400 text-sm md:text-base">
+
+                          No dish recommended
+
+                        </p>
 
                       </div>
 
                     )}
 
-                    {!isRecommendedSection && (
+                  {shouldShowSectionItems && filteredDirectItems.length > 0 && (
 
-                      <div className="flex items-center justify-between">
+                    <div className="grid grid-cols-1 md:grid-cols-3 md:gap-6 md:py-2">
 
-                        <div className="space-y-1">
+                      {visibleDirectItems.map((item) => {
 
-                          <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                        const quantity = quantities[item.id || item._id] || 0;
 
-                            {section?.name &&
+                        // Determine veg/non-veg based on foodType
 
-                              typeof section.name === "string" &&
+                        const isVeg = getItemDietType(item) === "veg";
 
-                              section.name.trim()
 
-                              ? section.name.trim()
 
-                              : section?.title &&
+                        // Debug: Log preparationTime for troubleshooting
 
-                                typeof section.title === "string" &&
+                        if (item.preparationTime) {
 
-                                section.title.trim()
 
-                                ? section.title.trim()
+                        }
 
-                                : "Unnamed Section"}
 
-                          </h2>
 
-                          {section.subtitle && (
+                        return (
 
-                            <button className="text-sm text-blue-600 dark:text-blue-400 underline">
+                          <div
 
-                              {section.subtitle}
+                            key={item.id}
 
-                            </button>
+                            className={`flex gap-4 p-4 relative cursor-pointer border-b border-gray-100 last:border-none md:last:border md:border md:border-gray-200 dark:md:border-gray-800 md:rounded-2xl`}
 
-                          )}
+                            onClick={() => handleItemClick(item)}
 
-                        </div>
+                          >
 
-                        <button
+                            {/* Left Side - Details */}
 
-                          onClick={(e) => {
+                            <div className="flex-1 min-w-0">
 
-                            e.stopPropagation();
+                              {/* Veg Icon & Spicy Indicator */}
 
-                            setExpandedSections((prev) => {
+                              <div className="flex items-center gap-2 mb-1">
 
-                              const newSet = new Set(prev);
+                                {isVeg ? (
 
-                              if (newSet.has(originalIndex)) {
+                                  <div className="w-4 h-4 border-2 border-green-600 flex items-center justify-center rounded-sm flex-shrink-0">
 
-                                newSet.delete(originalIndex);
+                                    <div className="w-2 h-2 bg-green-600 rounded-full"></div>
 
-                              } else {
+                                  </div>
 
-                                newSet.add(originalIndex);
+                                ) : (
 
-                              }
+                                  <div className="w-4 h-4 border-2 border-orange-600 flex items-center justify-center rounded-sm flex-shrink-0">
 
-                              return newSet;
-
-                            });
-
-                          }}
-
-                          className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
-
-                        >
-
-                          <ChevronDown
-
-                            className={`h-5 w-5 text-gray-600 dark:text-gray-400 transition-transform duration-200 ${isExpanded ? "" : "-rotate-90"
-
-                              }`}
-
-                          />
-
-                        </button>
-
-                      </div>
-
-                    )}
-
-
-
-                    {/* Direct Items */}
-
-                    {isExpanded &&
-
-                      isRecommendedSection &&
-
-                      section.items &&
-
-                      section.items.length === 0 && (
-
-                        <div className="text-center py-8">
-
-                          <p className="text-gray-500 dark:text-gray-400 text-sm md:text-base">
-
-                            No dish recommended
-
-                          </p>
-
-                        </div>
-
-                      )}
-
-                    {shouldShowSectionItems && filteredDirectItems.length > 0 && (
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 md:gap-6 md:py-2">
-
-                        {visibleDirectItems.map((item) => {
-
-                          const quantity = quantities[item.id || item._id] || 0;
-
-                          // Determine veg/non-veg based on foodType
-
-                          const isVeg = getItemDietType(item) === "veg";
-
-
-
-                          // Debug: Log preparationTime for troubleshooting
-
-                          if (item.preparationTime) {
-
-
-                          }
-
-
-
-                          return (
-
-                            <div
-
-                              key={item.id}
-
-                              className={`flex gap-4 p-4 relative cursor-pointer border-b border-gray-100 last:border-none md:last:border md:border md:border-gray-200 dark:md:border-gray-800 md:rounded-2xl`}
-
-                              onClick={() => handleItemClick(item)}
-
-                            >
-
-                              {/* Left Side - Details */}
-
-                              <div className="flex-1 min-w-0">
-
-                                {/* Veg Icon & Spicy Indicator */}
-
-                                <div className="flex items-center gap-2 mb-1">
-
-                                  {isVeg ? (
-
-                                    <div className="w-4 h-4 border-2 border-green-600 flex items-center justify-center rounded-sm flex-shrink-0">
-
-                                      <div className="w-2 h-2 bg-green-600 rounded-full"></div>
-
-                                    </div>
-
-                                  ) : (
-
-                                    <div className="w-4 h-4 border-2 border-orange-600 flex items-center justify-center rounded-sm flex-shrink-0">
-
-                                      <div className="w-2 h-2 bg-orange-600 rounded-full"></div>
-
-                                    </div>
-
-                                  )}
-
-                                  {item.isSpicy && (
-
-                                    <span className="text-red-500">🌶️</span>
-
-                                  )}
-
-                                </div>
-
-
-
-                                <h3 className="font-bold text-gray-800 dark:text-white text-lg leading-tight">
-
-                                  {item.name}
-
-                                </h3>
-
-
-
-                                {/* Highly Reordered Progress Bar - Show if customisable */}
-
-                                {item.customisable && (
-
-                                  <div className="flex items-center gap-2 mt-1">
-
-                                    <div className="h-1.5 w-16 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-
-                                      <div className="h-full bg-green-600 w-3/4"></div>
-
-                                    </div>
-
-                                    <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-
-                                      Highly reordered
-
-                                    </span>
+                                    <div className="w-2 h-2 bg-orange-600 rounded-full"></div>
 
                                   </div>
 
                                 )}
 
+                                {item.isSpicy && (
 
-
-                                <div className="flex items-center gap-3 mt-1">
-
-                                  <p className="font-semibold text-gray-900 dark:text-white">
-
-                                    ₹{Math.round(item.price)}
-
-                                  </p>
-
-                                  {/* Preparation Time - Show if available */}
-
-                                  {item.preparationTime &&
-
-                                    String(item.preparationTime).trim() && (
-
-                                      <div className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
-
-                                        <Clock
-
-                                          size={12}
-
-                                          className="text-gray-500"
-
-                                        />
-
-                                        <span>
-
-                                          {String(
-
-                                            item.preparationTime,
-
-                                          ).trim()}
-
-                                        </span>
-
-                                      </div>
-
-                                    )}
-
-                                </div>
-
-
-
-                                {/* Description - Show if available */}
-
-                                {item.description && (
-
-                                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
-
-                                    {item.description}
-
-                                  </p>
+                                  <span className="text-red-500">🌶️</span>
 
                                 )}
-
-
-
-                                {/* Action Buttons - Bookmark and Share */}
-
-                                <div className="flex gap-4 mt-3">
-
-                                  <button
-
-                                    type="button"
-
-                                    onClick={(e) => {
-
-                                      e.preventDefault();
-
-                                      e.stopPropagation();
-
-                                      handleBookmarkClick(item);
-
-                                    }}
-
-                                    className={`p-1.5 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${isDishFavorite(
-
-                                      item.id,
-
-                                      restaurant?.restaurantId ||
-
-                                      restaurant?._id ||
-
-                                      restaurant?.id,
-
-                                    )
-
-                                      ? "border-red-500 text-red-500 bg-red-50 dark:bg-red-900/20"
-
-                                      : "border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400"
-
-                                      }`}
-
-                                  >
-
-                                    <Bookmark
-
-                                      size={18}
-
-                                      className={
-
-                                        isDishFavorite(
-
-                                          item.id,
-
-                                          restaurant?.restaurantId ||
-
-                                          restaurant?._id ||
-
-                                          restaurant?.id,
-
-                                        )
-
-                                          ? "fill-red-500"
-
-                                          : ""
-
-                                      }
-
-                                    />
-
-                                  </button>
-
-                                  <button
-
-                                    onClick={(e) => {
-
-                                      e.preventDefault();
-
-                                      e.stopPropagation();
-
-                                      handleShareClick(item);
-
-                                    }}
-
-                                    className="p-1.5 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-
-                                  >
-
-                                    <Share2 size={18} />
-
-                                  </button>
-
-                                </div>
 
                               </div>
 
 
 
-                              {/* Right Side - Image and Add Button */}
+                              <h3 className="font-bold text-gray-800 dark:text-white text-lg leading-tight">
 
-                              <div className="relative w-32 h-32 flex-shrink-0">
+                                {item.name}
 
-                                {(() => {
-
-                                  const itemImages = getItemImages(item);
-
-                                  if (itemImages.length > 1) {
-
-                                    return (
-
-                                      <div className="grid grid-cols-2 gap-1 w-full h-full rounded-2xl overflow-hidden shadow-sm bg-white">
-
-                                        {itemImages.slice(0, 2).map((img, idx) => (
-
-                                          <img
-
-                                            key={`${item.id || item._id || item.name}-img-${idx}`}
-
-                                            src={img}
-
-                                            alt={`${item.name} ${idx + 1}`}
-                                            loading="lazy"
-                                            decoding="async"
-
-                                            className="w-full h-full object-cover"
-
-                                          />
-
-                                        ))}
-
-                                      </div>
-
-                                    );
-
-                                  }
+                              </h3>
 
 
 
-                                  if (itemImages.length === 1) {
+                              {/* Highly Reordered Progress Bar - Show if customisable */}
 
-                                    return (
+                              {item.customisable && (
 
-                                      <img
+                                <div className="flex items-center gap-2 mt-1">
 
-                                        src={itemImages[0]}
+                                  <div className="h-1.5 w-16 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
 
-                                        alt={item.name}
-                                        loading="lazy"
-                                        decoding="async"
+                                    <div className="h-full bg-green-600 w-3/4"></div>
 
-                                        className="w-full h-full object-cover rounded-2xl shadow-sm"
+                                  </div>
+
+                                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+
+                                    Highly reordered
+
+                                  </span>
+
+                                </div>
+
+                              )}
+
+
+
+                              <div className="flex items-center gap-3 mt-1">
+
+                                <p className="font-semibold text-gray-900 dark:text-white">
+
+                                  ₹{Math.round(item.price)}
+
+                                </p>
+
+                                {/* Preparation Time - Show if available */}
+
+                                {item.preparationTime &&
+
+                                  String(item.preparationTime).trim() && (
+
+                                    <div className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+
+                                      <Clock
+
+                                        size={12}
+
+                                        className="text-gray-500"
 
                                       />
 
-                                    );
+                                      <span>
 
-                                  }
+                                        {String(
 
+                                          item.preparationTime,
 
-
-                                  return (
-
-                                    <div className="w-full h-full bg-gray-200 dark:bg-gray-700 rounded-2xl flex items-center justify-center">
-
-                                      <span className="text-xs text-gray-400">
-
-                                        No image
+                                        ).trim()}
 
                                       </span>
 
                                     </div>
 
+                                  )}
+
+                              </div>
+
+
+
+                              {/* Description - Show if available */}
+
+                              {item.description && (
+
+                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+
+                                  {item.description}
+
+                                </p>
+
+                              )}
+
+
+
+                              {/* Action Buttons - Bookmark and Share */}
+
+                              <div className="flex gap-4 mt-3">
+
+                                <button
+
+                                  type="button"
+
+                                  onClick={(e) => {
+
+                                    e.preventDefault();
+
+                                    e.stopPropagation();
+
+                                    handleBookmarkClick(item);
+
+                                  }}
+
+                                  className={`p-1.5 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${isDishFavorite(
+
+                                    item.id,
+
+                                    restaurant?.restaurantId ||
+
+                                    restaurant?._id ||
+
+                                    restaurant?.id,
+
+                                  )
+
+                                    ? "border-red-500 text-red-500 bg-red-50 dark:bg-red-900/20"
+
+                                    : "border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400"
+
+                                    }`}
+
+                                >
+
+                                  <Bookmark
+
+                                    size={18}
+
+                                    className={
+
+                                      isDishFavorite(
+
+                                        item.id,
+
+                                        restaurant?.restaurantId ||
+
+                                        restaurant?._id ||
+
+                                        restaurant?.id,
+
+                                      )
+
+                                        ? "fill-red-500"
+
+                                        : ""
+
+                                    }
+
+                                  />
+
+                                </button>
+
+                                <button
+
+                                  onClick={(e) => {
+
+                                    e.preventDefault();
+
+                                    e.stopPropagation();
+
+                                    handleShareClick(item);
+
+                                  }}
+
+                                  className="p-1.5 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+
+                                >
+
+                                  <Share2 size={18} />
+
+                                </button>
+
+                              </div>
+
+                            </div>
+
+
+
+                            {/* Right Side - Image and Add Button */}
+
+                            <div className="relative w-32 h-32 flex-shrink-0">
+
+                              {(() => {
+
+                                const itemImages = getItemImages(item);
+
+                                if (itemImages.length > 1) {
+
+                                  return (
+
+                                    <div className="grid grid-cols-2 gap-1 w-full h-full rounded-2xl overflow-hidden shadow-sm bg-white">
+
+                                      {itemImages.slice(0, 2).map((img, idx) => (
+
+                                        <img
+
+                                          key={`${item.id || item._id || item.name}-img-${idx}`}
+
+                                          src={img}
+
+                                          alt={`${item.name} ${idx + 1}`}
+                                          loading="lazy"
+                                          decoding="async"
+
+                                          className="w-full h-full object-cover"
+
+                                        />
+
+                                      ))}
+
+                                    </div>
+
                                   );
 
-                                })()}
+                                }
 
-                                {quantity > 0 ? (
 
-                                  <motion.div
 
-                                    initial={{ opacity: 0, scale: 0.8 }}
+                                if (itemImages.length === 1) {
 
-                                    animate={{ opacity: 1, scale: 1 }}
+                                  return (
 
-                                    className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-4 py-1.5 rounded-lg shadow-md flex items-center gap-1 ${shouldShowGrayscale
+                                    <img
 
-                                      ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
+                                      src={itemImages[0]}
 
-                                      : "border-green-600 text-green-600 hover:bg-green-50"
+                                      alt={item.name}
+                                      loading="lazy"
+                                      decoding="async"
 
-                                      }`}
+                                      className="w-full h-full object-cover rounded-2xl shadow-sm"
 
-                                  >
+                                    />
 
-                                    <button
+                                  );
 
-                                      onClick={(e) => {
+                                }
 
-                                        e.stopPropagation();
 
-                                        if (!shouldShowGrayscale) {
 
-                                          updateItemQuantity(
+                                return (
 
-                                            item,
+                                  <div className="w-full h-full bg-gray-200 dark:bg-gray-700 rounded-2xl flex items-center justify-center">
 
-                                            Math.max(0, quantity - 1),
+                                    <span className="text-xs text-gray-400">
 
-                                            e,
-
-                                          );
-
-                                        }
-
-                                      }}
-
-                                      disabled={shouldShowGrayscale}
-
-                                      className={
-
-                                        shouldShowGrayscale
-
-                                          ? "text-gray-400 cursor-not-allowed"
-
-                                          : "text-green-600 hover:text-green-700"
-
-                                      }
-
-                                    >
-
-                                      <Minus size={14} />
-
-                                    </button>
-
-                                    <span
-
-                                      className={`mx-2 text-sm ${shouldShowGrayscale ? "text-gray-400" : ""}`}
-
-                                    >
-
-                                      {quantity}
+                                      No image
 
                                     </span>
 
-                                    <button
+                                  </div>
 
-                                      onClick={(e) => {
+                                );
 
-                                        e.stopPropagation();
+                              })()}
 
-                                        if (!shouldShowGrayscale) {
+                              {quantity > 0 ? (
 
-                                          updateItemQuantity(
+                                <motion.div
 
-                                            item,
+                                  initial={{ opacity: 0, scale: 0.8 }}
 
-                                            quantity + 1,
+                                  animate={{ opacity: 1, scale: 1 }}
 
-                                            e,
+                                  className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-4 py-1.5 rounded-lg shadow-md flex items-center gap-1 ${shouldShowGrayscale
 
-                                          );
+                                    ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
 
-                                        }
+                                    : "border-green-600 text-green-600 hover:bg-green-50"
 
-                                      }}
+                                    }`}
 
-                                      disabled={shouldShowGrayscale}
+                                >
 
-                                      className={
-
-                                        shouldShowGrayscale
-
-                                          ? "text-gray-400 cursor-not-allowed"
-
-                                          : "text-green-600 hover:text-green-700"
-
-                                      }
-
-                                    >
-
-                                      <Plus
-
-                                        size={14}
-
-                                        className="stroke-[3px]"
-
-                                      />
-
-                                    </button>
-
-                                  </motion.div>
-
-                                ) : (
-
-                                  <motion.button
-
-                                    layoutId={`add-button-${item.id}`}
-
-                                    initial={{ opacity: 0, scale: 0.9 }}
-
-                                    animate={{ opacity: 1, scale: 1 }}
-
-                                    transition={{
-
-                                      duration: 0.3,
-
-                                      type: "spring",
-
-                                      damping: 20,
-
-                                      stiffness: 300,
-
-                                    }}
+                                  <button
 
                                     onClick={(e) => {
 
@@ -5021,7 +4897,15 @@ export default function RestaurantDetails() {
 
                                       if (!shouldShowGrayscale) {
 
-                                        updateItemQuantity(item, 1, e);
+                                        updateItemQuantity(
+
+                                          item,
+
+                                          Math.max(0, quantity - 1),
+
+                                          e,
+
+                                        );
 
                                       }
 
@@ -5029,17 +4913,67 @@ export default function RestaurantDetails() {
 
                                     disabled={shouldShowGrayscale}
 
-                                    className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-6 py-1.5 rounded-lg shadow-md flex items-center gap-1 transition-colors ${shouldShowGrayscale
+                                    className={
 
-                                      ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
+                                      shouldShowGrayscale
 
-                                      : "border-green-600 text-green-600 hover:bg-green-50"
+                                        ? "text-gray-400 cursor-not-allowed"
 
-                                      }`}
+                                        : "text-green-600 hover:text-green-700"
+
+                                    }
 
                                   >
 
-                                    ADD{" "}
+                                    <Minus size={14} />
+
+                                  </button>
+
+                                  <span
+
+                                    className={`mx-2 text-sm ${shouldShowGrayscale ? "text-gray-400" : ""}`}
+
+                                  >
+
+                                    {quantity}
+
+                                  </span>
+
+                                  <button
+
+                                    onClick={(e) => {
+
+                                      e.stopPropagation();
+
+                                      if (!shouldShowGrayscale) {
+
+                                        updateItemQuantity(
+
+                                          item,
+
+                                          quantity + 1,
+
+                                          e,
+
+                                        );
+
+                                      }
+
+                                    }}
+
+                                    disabled={shouldShowGrayscale}
+
+                                    className={
+
+                                      shouldShowGrayscale
+
+                                        ? "text-gray-400 cursor-not-allowed"
+
+                                        : "text-green-600 hover:text-green-700"
+
+                                    }
+
+                                  >
 
                                     <Plus
 
@@ -5049,720 +4983,628 @@ export default function RestaurantDetails() {
 
                                     />
 
-                                  </motion.button>
+                                  </button>
 
-                                )}
+                                </motion.div>
 
-                              </div>
+                              ) : (
+
+                                <motion.button
+
+                                  layoutId={`add-button-${item.id}`}
+
+                                  initial={{ opacity: 0, scale: 0.9 }}
+
+                                  animate={{ opacity: 1, scale: 1 }}
+
+                                  transition={{
+
+                                    duration: 0.3,
+
+                                    type: "spring",
+
+                                    damping: 20,
+
+                                    stiffness: 300,
+
+                                  }}
+
+                                  onClick={(e) => {
+
+                                    e.stopPropagation();
+
+                                    if (!shouldShowGrayscale) {
+
+                                      updateItemQuantity(item, 1, e);
+
+                                    }
+
+                                  }}
+
+                                  disabled={shouldShowGrayscale}
+
+                                  className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-6 py-1.5 rounded-lg shadow-md flex items-center gap-1 transition-colors ${shouldShowGrayscale
+
+                                    ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
+
+                                    : "border-green-600 text-green-600 hover:bg-green-50"
+
+                                    }`}
+
+                                >
+
+                                  ADD{" "}
+
+                                  <Plus
+
+                                    size={14}
+
+                                    className="stroke-[3px]"
+
+                                  />
+
+                                </motion.button>
+
+                              )}
 
                             </div>
 
-                          );
-
-                        })}
-
-                        {hasMoreDirectItems && (
-                          <div className="md:col-span-3 flex justify-center pt-2">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              className="rounded-full"
-                              onClick={() =>
-                                setVisibleDirectItemsBySection((prev) => ({
-                                  ...prev,
-                                  [originalIndex]:
-                                    (prev[originalIndex] || MENU_ITEMS_RENDER_BATCH) +
-                                    MENU_ITEMS_RENDER_BATCH,
-                                }))
-                              }
-                            >
-                              Show more items
-                            </Button>
                           </div>
-                        )}
 
-                      </div>
+                        );
 
-                    )}
+                      })}
 
+                      {hasMoreDirectItems && (
+                        <div className="md:col-span-3 flex justify-center pt-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full"
+                            onClick={() =>
+                              setVisibleDirectItemsBySection((prev) => ({
+                                ...prev,
+                                [originalIndex]:
+                                  (prev[originalIndex] || MENU_ITEMS_RENDER_BATCH) +
+                                  MENU_ITEMS_RENDER_BATCH,
+                              }))
+                            }
+                          >
+                            Show more items
+                          </Button>
+                        </div>
+                      )}
 
+                    </div>
 
-                    {/* Subsections */}
+                  )}
 
-                    {shouldShowSectionItems &&
 
-                      section.subsections &&
 
-                      section.subsections.length > 0 && (
+                  {/* Subsections */}
 
-                        <div className="space-y-4">
+                  {shouldShowSectionItems &&
 
-                          {section.subsections
+                    section.subsections &&
 
-                            .filter((subsection) => {
+                    section.subsections.length > 0 && (
 
-                              // Filter subsections to only show those with items under ₹250
+                      <div className="space-y-4">
 
-                              if (!showOnlyUnder250) return true;
+                        {section.subsections
 
-                              if (
+                          .filter((subsection) => {
 
-                                !subsection.items ||
+                            // Filter subsections to only show those with items under ₹250
 
-                                subsection.items.length === 0
+                            if (!showOnlyUnder250) return true;
 
-                              )
+                            if (
 
-                                return false;
+                              !subsection.items ||
 
-                              return subsection.items.some((item) => {
+                              subsection.items.length === 0
 
-                                if (item.isAvailable === false) return false;
+                            )
 
-                                const finalPrice = getFinalPrice(item);
+                              return false;
 
-                                return finalPrice <= 250;
+                            return subsection.items.some((item) => {
 
-                              });
+                              if (item.isAvailable === false) return false;
 
-                            })
+                              const finalPrice = getFinalPrice(item);
 
-                            .map((subsection, subIndex) => {
+                              return finalPrice <= 250;
 
-                              const subsectionKey = `${originalIndex}-${subIndex}`;
+                            });
 
-                              const isSubsectionExpanded =
+                          })
 
-                                expandedSections.has(subsectionKey);
+                          .map((subsection, subIndex) => {
 
-                              const filteredSubsectionItems = sortMenuItems(
+                            const subsectionKey = `${originalIndex}-${subIndex}`;
 
-                                filterMenuItems(subsection?.items || []),
+                            const isSubsectionExpanded =
 
-                              );
-                              const subsectionVisibleCount =
-                                visibleSubsectionItemsBySection[subsectionKey] ||
-                                MENU_ITEMS_RENDER_BATCH;
-                              const visibleSubsectionItems = hasSearchQuery
-                                ? filteredSubsectionItems
-                                : filteredSubsectionItems.slice(0, subsectionVisibleCount);
-                              const hasMoreSubsectionItems =
-                                !hasSearchQuery &&
-                                filteredSubsectionItems.length > visibleSubsectionItems.length;
+                              expandedSections.has(subsectionKey);
 
-                              const shouldShowSubsectionItems =
+                            const filteredSubsectionItems = sortMenuItems(
 
-                                isSubsectionExpanded || hasSearchQuery;
+                              filterMenuItems(subsection?.items || []),
 
+                            );
+                            const subsectionVisibleCount =
+                              visibleSubsectionItemsBySection[subsectionKey] ||
+                              MENU_ITEMS_RENDER_BATCH;
+                            const visibleSubsectionItems = hasSearchQuery
+                              ? filteredSubsectionItems
+                              : filteredSubsectionItems.slice(0, subsectionVisibleCount);
+                            const hasMoreSubsectionItems =
+                              !hasSearchQuery &&
+                              filteredSubsectionItems.length > visibleSubsectionItems.length;
 
+                            const shouldShowSubsectionItems =
 
-                              if (filteredSubsectionItems.length === 0) {
+                              isSubsectionExpanded || hasSearchQuery;
 
-                                return null;
 
-                              }
 
+                            if (filteredSubsectionItems.length === 0) {
 
+                              return null;
 
-                              return (
+                            }
 
-                                <div key={subIndex} className="space-y-4">
 
-                                  {/* Subsection Header */}
 
-                                  <div className="flex items-center justify-between">
+                            return (
 
-                                    <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+                              <div key={subIndex} className="space-y-4">
 
-                                      {subsection?.name ||
+                                {/* Subsection Header */}
 
-                                        subsection?.title ||
+                                <div className="flex items-center justify-between">
 
-                                        "Subsection"}
+                                  <h3 className="text-base font-semibold text-gray-900 dark:text-white">
 
-                                    </h3>
+                                    {subsection?.name ||
 
-                                    <button
+                                      subsection?.title ||
 
-                                      onClick={(e) => {
+                                      "Subsection"}
 
-                                        e.stopPropagation();
+                                  </h3>
 
-                                        setExpandedSections((prev) => {
+                                  <button
 
-                                          const newSet = new Set(prev);
+                                    onClick={(e) => {
 
-                                          if (newSet.has(subsectionKey)) {
+                                      e.stopPropagation();
 
-                                            newSet.delete(subsectionKey);
+                                      setExpandedSections((prev) => {
 
-                                          } else {
+                                        const newSet = new Set(prev);
 
-                                            newSet.add(subsectionKey);
+                                        if (newSet.has(subsectionKey)) {
 
-                                          }
+                                          newSet.delete(subsectionKey);
 
-                                          return newSet;
+                                        } else {
 
-                                        });
+                                          newSet.add(subsectionKey);
 
-                                      }}
+                                        }
 
-                                      className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
+                                        return newSet;
 
-                                    >
+                                      });
 
-                                      <ChevronDown
+                                    }}
 
-                                        className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${isSubsectionExpanded
+                                    className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
 
-                                          ? ""
+                                  >
 
-                                          : "-rotate-90"
+                                    <ChevronDown
 
-                                          }`}
+                                      className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform duration-200 ${isSubsectionExpanded
 
-                                      />
+                                        ? ""
 
-                                    </button>
+                                        : "-rotate-90"
 
-                                  </div>
+                                        }`}
 
+                                    />
 
+                                  </button>
 
-                                  {/* Subsection Items */}
+                                </div>
 
-                                  {shouldShowSubsectionItems &&
 
-                                    filteredSubsectionItems.length > 0 && (
 
-                                      <div className="space-y-0">
+                                {/* Subsection Items */}
 
-                                        {visibleSubsectionItems.map((item) => {
+                                {shouldShowSubsectionItems &&
 
-                                          const quantity =
+                                  filteredSubsectionItems.length > 0 && (
 
-                                            quantities[item.id || item._id] || 0;
+                                    <div className="space-y-0">
 
-                                          // Determine veg/non-veg based on foodType
+                                      {visibleSubsectionItems.map((item) => {
 
-                                          const isVeg =
+                                        const quantity =
 
-                                            getItemDietType(item) === "veg";
+                                          quantities[item.id || item._id] || 0;
 
+                                        // Determine veg/non-veg based on foodType
 
+                                        const isVeg =
 
-                                          // Debug: Log preparationTime for troubleshooting
+                                          getItemDietType(item) === "veg";
 
-                                          if (item.preparationTime) {
 
 
-                                          }
+                                        // Debug: Log preparationTime for troubleshooting
 
+                                        if (item.preparationTime) {
 
 
-                                          return (
+                                        }
 
-                                            <div
 
-                                              key={item.id}
 
-                                              className="flex gap-4 p-4 border-b border-gray-100 last:border-none relative cursor-pointer"
+                                        return (
 
-                                              onClick={() =>
+                                          <div
 
-                                                handleItemClick(item)
+                                            key={item.id}
 
-                                              }
+                                            className="flex gap-4 p-4 border-b border-gray-100 last:border-none relative cursor-pointer"
 
-                                            >
+                                            onClick={() =>
 
-                                              {/* Left Side - Details */}
+                                              handleItemClick(item)
 
-                                              <div className="flex-1 min-w-0">
+                                            }
 
-                                                {/* Veg Icon & Spicy Indicator */}
+                                          >
 
-                                                <div className="flex items-center gap-2 mb-1">
+                                            {/* Left Side - Details */}
 
-                                                  {isVeg ? (
+                                            <div className="flex-1 min-w-0">
 
-                                                    <div className="w-4 h-4 border-2 border-green-600 flex items-center justify-center rounded-sm flex-shrink-0">
+                                              {/* Veg Icon & Spicy Indicator */}
 
-                                                      <div className="w-2 h-2 bg-green-600 rounded-full"></div>
+                                              <div className="flex items-center gap-2 mb-1">
 
-                                                    </div>
+                                                {isVeg ? (
 
-                                                  ) : (
+                                                  <div className="w-4 h-4 border-2 border-green-600 flex items-center justify-center rounded-sm flex-shrink-0">
 
-                                                    <div className="w-4 h-4 border-2 border-orange-600 flex items-center justify-center rounded-sm flex-shrink-0">
+                                                    <div className="w-2 h-2 bg-green-600 rounded-full"></div>
 
-                                                      <div className="w-2 h-2 bg-orange-600 rounded-full"></div>
+                                                  </div>
 
-                                                    </div>
+                                                ) : (
 
-                                                  )}
+                                                  <div className="w-4 h-4 border-2 border-orange-600 flex items-center justify-center rounded-sm flex-shrink-0">
 
-                                                  {item.isSpicy && (
-
-                                                    <span className="text-red-500">
-
-                                                      🌶️
-
-                                                    </span>
-
-                                                  )}
-
-                                                </div>
-
-
-
-                                                <h3 className="font-bold text-gray-800 dark:text-white text-lg leading-tight">
-
-                                                  {item.name}
-
-                                                </h3>
-
-
-
-                                                {/* Highly Reordered Progress Bar - Show if customisable */}
-
-                                                {item.customisable && (
-
-                                                  <div className="flex items-center gap-2 mt-1">
-
-                                                    <div className="h-1.5 w-16 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
-
-                                                      <div className="h-full bg-green-600 w-3/4"></div>
-
-                                                    </div>
-
-                                                    <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
-
-                                                      Highly reordered
-
-                                                    </span>
+                                                    <div className="w-2 h-2 bg-orange-600 rounded-full"></div>
 
                                                   </div>
 
                                                 )}
 
+                                                {item.isSpicy && (
 
+                                                  <span className="text-red-500">
 
-                                                <div className="flex items-center gap-3 mt-1">
+                                                    🌶️
 
-                                                  <p className="font-semibold text-gray-900 dark:text-white">
-
-                                                    ₹{Math.round(item.price)}
-
-                                                  </p>
-
-                                                  {/* Preparation Time - Show if available */}
-
-                                                  {item.preparationTime &&
-
-                                                    String(
-
-                                                      item.preparationTime,
-
-                                                    ).trim() && (
-
-                                                      <div className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
-
-                                                        <Clock
-
-                                                          size={12}
-
-                                                          className="text-gray-500"
-
-                                                        />
-
-                                                        <span>
-
-                                                          {String(
-
-                                                            item.preparationTime,
-
-                                                          ).trim()}
-
-                                                        </span>
-
-                                                      </div>
-
-                                                    )}
-
-                                                </div>
-
-
-
-                                                {/* Description - Show if available */}
-
-                                                {item.description && (
-
-                                                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
-
-                                                    {item.description}
-
-                                                  </p>
+                                                  </span>
 
                                                 )}
-
-
-
-                                                {/* Action Buttons - Bookmark and Share */}
-
-                                                <div className="flex gap-4 mt-3">
-
-                                                  <button
-
-                                                    type="button"
-
-                                                    onClick={(e) => {
-
-                                                      e.preventDefault();
-
-                                                      e.stopPropagation();
-
-                                                      handleBookmarkClick(item);
-
-                                                    }}
-
-                                                    className={`p-1.5 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${isDishFavorite(
-
-                                                      item.id,
-
-                                                      restaurant?.restaurantId ||
-
-                                                      restaurant?._id ||
-
-                                                      restaurant?.id,
-
-                                                    )
-
-                                                      ? "border-red-500 text-red-500 bg-red-50 dark:bg-red-900/20"
-
-                                                      : "border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400"
-
-                                                      }`}
-
-                                                  >
-
-                                                    <Bookmark
-
-                                                      size={18}
-
-                                                      className={
-
-                                                        isDishFavorite(
-
-                                                          item.id,
-
-                                                          restaurant?.restaurantId ||
-
-                                                          restaurant?._id ||
-
-                                                          restaurant?.id,
-
-                                                        )
-
-                                                          ? "fill-red-500"
-
-                                                          : ""
-
-                                                      }
-
-                                                    />
-
-                                                  </button>
-
-                                                  <button
-
-                                                    onClick={(e) => {
-
-                                                      e.preventDefault();
-
-                                                      e.stopPropagation();
-
-                                                      handleShareClick(item);
-
-                                                    }}
-
-                                                    className="p-1.5 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-
-                                                  >
-
-                                                    <Share2 size={18} />
-
-                                                  </button>
-
-                                                </div>
 
                                               </div>
 
 
 
-                                              {/* Right Side - Image and Add Button */}
+                                              <h3 className="font-bold text-gray-800 dark:text-white text-lg leading-tight">
 
-                                              <div className="relative w-32 h-32 flex-shrink-0">
+                                                {item.name}
 
-                                                {(() => {
-
-                                                  const itemImages = getItemImages(item);
-
-                                                  if (itemImages.length > 1) {
-
-                                                    return (
-
-                                                      <div className="grid grid-cols-2 gap-1 w-full h-full rounded-2xl overflow-hidden shadow-sm bg-white">
-
-                                                        {itemImages.slice(0, 2).map((img, idx) => (
-
-                                                          <img
-
-                                                            key={`${item.id || item._id || item.name}-sheet-img-${idx}`}
-
-                                                            src={img}
-
-                                                            alt={`${item.name} ${idx + 1}`}
-                                                            loading="lazy"
-                                                            decoding="async"
-
-                                                            className="w-full h-full object-cover"
-
-                                                          />
-
-                                                        ))}
-
-                                                      </div>
-
-                                                    );
-
-                                                  }
+                                              </h3>
 
 
 
-                                                  if (itemImages.length === 1) {
+                                              {/* Highly Reordered Progress Bar - Show if customisable */}
 
-                                                    return (
+                                              {item.customisable && (
 
-                                                      <img
+                                                <div className="flex items-center gap-2 mt-1">
 
-                                                        src={itemImages[0]}
+                                                  <div className="h-1.5 w-16 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
 
-                                                        alt={item.name}
-                                                        loading="lazy"
-                                                        decoding="async"
+                                                    <div className="h-full bg-green-600 w-3/4"></div>
 
-                                                        className="w-full h-full object-cover rounded-2xl shadow-sm"
+                                                  </div>
+
+                                                  <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+
+                                                    Highly reordered
+
+                                                  </span>
+
+                                                </div>
+
+                                              )}
+
+
+
+                                              <div className="flex items-center gap-3 mt-1">
+
+                                                <p className="font-semibold text-gray-900 dark:text-white">
+
+                                                  ₹{Math.round(item.price)}
+
+                                                </p>
+
+                                                {/* Preparation Time - Show if available */}
+
+                                                {item.preparationTime &&
+
+                                                  String(
+
+                                                    item.preparationTime,
+
+                                                  ).trim() && (
+
+                                                    <div className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+
+                                                      <Clock
+
+                                                        size={12}
+
+                                                        className="text-gray-500"
 
                                                       />
 
-                                                    );
+                                                      <span>
 
-                                                  }
+                                                        {String(
 
+                                                          item.preparationTime,
 
-
-                                                  return (
-
-                                                    <div className="w-full h-full bg-gray-200 dark:bg-gray-700 rounded-2xl flex items-center justify-center">
-
-                                                      <span className="text-xs text-gray-400">
-
-                                                        No image
+                                                        ).trim()}
 
                                                       </span>
 
                                                     </div>
 
+                                                  )}
+
+                                              </div>
+
+
+
+                                              {/* Description - Show if available */}
+
+                                              {item.description && (
+
+                                                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
+
+                                                  {item.description}
+
+                                                </p>
+
+                                              )}
+
+
+
+                                              {/* Action Buttons - Bookmark and Share */}
+
+                                              <div className="flex gap-4 mt-3">
+
+                                                <button
+
+                                                  type="button"
+
+                                                  onClick={(e) => {
+
+                                                    e.preventDefault();
+
+                                                    e.stopPropagation();
+
+                                                    handleBookmarkClick(item);
+
+                                                  }}
+
+                                                  className={`p-1.5 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${isDishFavorite(
+
+                                                    item.id,
+
+                                                    restaurant?.restaurantId ||
+
+                                                    restaurant?._id ||
+
+                                                    restaurant?.id,
+
+                                                  )
+
+                                                    ? "border-red-500 text-red-500 bg-red-50 dark:bg-red-900/20"
+
+                                                    : "border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400"
+
+                                                    }`}
+
+                                                >
+
+                                                  <Bookmark
+
+                                                    size={18}
+
+                                                    className={
+
+                                                      isDishFavorite(
+
+                                                        item.id,
+
+                                                        restaurant?.restaurantId ||
+
+                                                        restaurant?._id ||
+
+                                                        restaurant?.id,
+
+                                                      )
+
+                                                        ? "fill-red-500"
+
+                                                        : ""
+
+                                                    }
+
+                                                  />
+
+                                                </button>
+
+                                                <button
+
+                                                  onClick={(e) => {
+
+                                                    e.preventDefault();
+
+                                                    e.stopPropagation();
+
+                                                    handleShareClick(item);
+
+                                                  }}
+
+                                                  className="p-1.5 border border-gray-300 dark:border-gray-700 rounded-lg text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+
+                                                >
+
+                                                  <Share2 size={18} />
+
+                                                </button>
+
+                                              </div>
+
+                                            </div>
+
+
+
+                                            {/* Right Side - Image and Add Button */}
+
+                                            <div className="relative w-32 h-32 flex-shrink-0">
+
+                                              {(() => {
+
+                                                const itemImages = getItemImages(item);
+
+                                                if (itemImages.length > 1) {
+
+                                                  return (
+
+                                                    <div className="grid grid-cols-2 gap-1 w-full h-full rounded-2xl overflow-hidden shadow-sm bg-white">
+
+                                                      {itemImages.slice(0, 2).map((img, idx) => (
+
+                                                        <img
+
+                                                          key={`${item.id || item._id || item.name}-sheet-img-${idx}`}
+
+                                                          src={img}
+
+                                                          alt={`${item.name} ${idx + 1}`}
+                                                          loading="lazy"
+                                                          decoding="async"
+
+                                                          className="w-full h-full object-cover"
+
+                                                        />
+
+                                                      ))}
+
+                                                    </div>
+
                                                   );
 
-                                                })()}
+                                                }
 
-                                                {quantity > 0 ? (
 
-                                                  <motion.div
 
-                                                    initial={{
+                                                if (itemImages.length === 1) {
 
-                                                      opacity: 0,
+                                                  return (
 
-                                                      scale: 0.8,
+                                                    <img
 
-                                                    }}
+                                                      src={itemImages[0]}
 
-                                                    animate={{
+                                                      alt={item.name}
+                                                      loading="lazy"
+                                                      decoding="async"
 
-                                                      opacity: 1,
+                                                      className="w-full h-full object-cover rounded-2xl shadow-sm"
 
-                                                      scale: 1,
+                                                    />
 
-                                                    }}
+                                                  );
 
-                                                    className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-4 py-1.5 rounded-lg shadow-md flex items-center gap-1 ${shouldShowGrayscale
+                                                }
 
-                                                      ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
 
-                                                      : "border-green-600 text-green-600 hover:bg-green-50"
 
-                                                      }`}
+                                                return (
 
-                                                  >
+                                                  <div className="w-full h-full bg-gray-200 dark:bg-gray-700 rounded-2xl flex items-center justify-center">
 
-                                                    <button
+                                                    <span className="text-xs text-gray-400">
 
-                                                      onClick={(e) => {
-
-                                                        e.stopPropagation();
-
-                                                        if (
-
-                                                          !shouldShowGrayscale
-
-                                                        ) {
-
-                                                          updateItemQuantity(
-
-                                                            item,
-
-                                                            Math.max(
-
-                                                              0,
-
-                                                              quantity - 1,
-
-                                                            ),
-
-                                                            e,
-
-                                                          );
-
-                                                        }
-
-                                                      }}
-
-                                                      disabled={
-
-                                                        shouldShowGrayscale
-
-                                                      }
-
-                                                      className={
-
-                                                        shouldShowGrayscale
-
-                                                          ? "text-gray-400 cursor-not-allowed"
-
-                                                          : "text-green-600 hover:text-green-700"
-
-                                                      }
-
-                                                    >
-
-                                                      <Minus size={14} />
-
-                                                    </button>
-
-                                                    <span
-
-                                                      className={`mx-2 text-sm ${shouldShowGrayscale ? "text-gray-400" : ""}`}
-
-                                                    >
-
-                                                      {quantity}
+                                                      No image
 
                                                     </span>
 
-                                                    <button
+                                                  </div>
 
-                                                      onClick={(e) => {
+                                                );
 
-                                                        e.stopPropagation();
+                                              })()}
 
-                                                        if (
+                                              {quantity > 0 ? (
 
-                                                          !shouldShowGrayscale
+                                                <motion.div
 
-                                                        ) {
+                                                  initial={{
 
-                                                          updateItemQuantity(
+                                                    opacity: 0,
 
-                                                            item,
+                                                    scale: 0.8,
 
-                                                            quantity + 1,
+                                                  }}
 
-                                                            e,
+                                                  animate={{
 
-                                                          );
+                                                    opacity: 1,
 
-                                                        }
+                                                    scale: 1,
 
-                                                      }}
+                                                  }}
 
-                                                      disabled={
+                                                  className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-4 py-1.5 rounded-lg shadow-md flex items-center gap-1 ${shouldShowGrayscale
 
-                                                        shouldShowGrayscale
+                                                    ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
 
-                                                      }
+                                                    : "border-green-600 text-green-600 hover:bg-green-50"
 
-                                                      className={
+                                                    }`}
 
-                                                        shouldShowGrayscale
+                                                >
 
-                                                          ? "text-gray-400 cursor-not-allowed"
-
-                                                          : "text-green-600 hover:text-green-700"
-
-                                                      }
-
-                                                    >
-
-                                                      <Plus
-
-                                                        size={14}
-
-                                                        className="stroke-[3px]"
-
-                                                      />
-
-                                                    </button>
-
-                                                  </motion.div>
-
-                                                ) : (
-
-                                                  <motion.button
-
-                                                    layoutId={`add-button-sub-${item.id}`}
-
-                                                    initial={{
-
-                                                      opacity: 0,
-
-                                                      scale: 0.9,
-
-                                                    }}
-
-                                                    animate={{
-
-                                                      opacity: 1,
-
-                                                      scale: 1,
-
-                                                    }}
-
-                                                    transition={{
-
-                                                      duration: 0.3,
-
-                                                      type: "spring",
-
-                                                      damping: 20,
-
-                                                      stiffness: 300,
-
-                                                    }}
+                                                  <button
 
                                                     onClick={(e) => {
 
@@ -5778,7 +5620,13 @@ export default function RestaurantDetails() {
 
                                                           item,
 
-                                                          1,
+                                                          Math.max(
+
+                                                            0,
+
+                                                            quantity - 1,
+
+                                                          ),
 
                                                           e,
 
@@ -5794,17 +5642,75 @@ export default function RestaurantDetails() {
 
                                                     }
 
-                                                    className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-6 py-1.5 rounded-lg shadow-md flex items-center gap-1 transition-colors ${shouldShowGrayscale
+                                                    className={
 
-                                                      ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
+                                                      shouldShowGrayscale
 
-                                                      : "border-green-600 text-green-600 hover:bg-green-50"
+                                                        ? "text-gray-400 cursor-not-allowed"
 
-                                                      }`}
+                                                        : "text-green-600 hover:text-green-700"
+
+                                                    }
 
                                                   >
 
-                                                    ADD{" "}
+                                                    <Minus size={14} />
+
+                                                  </button>
+
+                                                  <span
+
+                                                    className={`mx-2 text-sm ${shouldShowGrayscale ? "text-gray-400" : ""}`}
+
+                                                  >
+
+                                                    {quantity}
+
+                                                  </span>
+
+                                                  <button
+
+                                                    onClick={(e) => {
+
+                                                      e.stopPropagation();
+
+                                                      if (
+
+                                                        !shouldShowGrayscale
+
+                                                      ) {
+
+                                                        updateItemQuantity(
+
+                                                          item,
+
+                                                          quantity + 1,
+
+                                                          e,
+
+                                                        );
+
+                                                      }
+
+                                                    }}
+
+                                                    disabled={
+
+                                                      shouldShowGrayscale
+
+                                                    }
+
+                                                    className={
+
+                                                      shouldShowGrayscale
+
+                                                        ? "text-gray-400 cursor-not-allowed"
+
+                                                        : "text-green-600 hover:text-green-700"
+
+                                                    }
+
+                                                  >
 
                                                     <Plus
 
@@ -5814,64 +5720,152 @@ export default function RestaurantDetails() {
 
                                                     />
 
-                                                  </motion.button>
+                                                  </button>
 
-                                                )}
+                                                </motion.div>
 
-                                              </div>
+                                              ) : (
+
+                                                <motion.button
+
+                                                  layoutId={`add-button-sub-${item.id}`}
+
+                                                  initial={{
+
+                                                    opacity: 0,
+
+                                                    scale: 0.9,
+
+                                                  }}
+
+                                                  animate={{
+
+                                                    opacity: 1,
+
+                                                    scale: 1,
+
+                                                  }}
+
+                                                  transition={{
+
+                                                    duration: 0.3,
+
+                                                    type: "spring",
+
+                                                    damping: 20,
+
+                                                    stiffness: 300,
+
+                                                  }}
+
+                                                  onClick={(e) => {
+
+                                                    e.stopPropagation();
+
+                                                    if (
+
+                                                      !shouldShowGrayscale
+
+                                                    ) {
+
+                                                      updateItemQuantity(
+
+                                                        item,
+
+                                                        1,
+
+                                                        e,
+
+                                                      );
+
+                                                    }
+
+                                                  }}
+
+                                                  disabled={
+
+                                                    shouldShowGrayscale
+
+                                                  }
+
+                                                  className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-6 py-1.5 rounded-lg shadow-md flex items-center gap-1 transition-colors ${shouldShowGrayscale
+
+                                                    ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
+
+                                                    : "border-green-600 text-green-600 hover:bg-green-50"
+
+                                                    }`}
+
+                                                >
+
+                                                  ADD{" "}
+
+                                                  <Plus
+
+                                                    size={14}
+
+                                                    className="stroke-[3px]"
+
+                                                  />
+
+                                                </motion.button>
+
+                                              )}
 
                                             </div>
 
-                                          );
-
-                                        })}
-
-                                        {hasMoreSubsectionItems && (
-                                          <div className="flex justify-center pt-3">
-                                            <Button
-                                              type="button"
-                                              variant="outline"
-                                              size="sm"
-                                              className="rounded-full"
-                                              onClick={() =>
-                                                setVisibleSubsectionItemsBySection((prev) => ({
-                                                  ...prev,
-                                                  [subsectionKey]:
-                                                    (prev[subsectionKey] || MENU_ITEMS_RENDER_BATCH) +
-                                                    MENU_ITEMS_RENDER_BATCH,
-                                                }))
-                                              }
-                                            >
-                                              Show more items
-                                            </Button>
                                           </div>
-                                        )}
 
-                                      </div>
+                                        );
 
-                                    )}
+                                      })}
 
-                                </div>
+                                      {hasMoreSubsectionItems && (
+                                        <div className="flex justify-center pt-3">
+                                          <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="rounded-full"
+                                            onClick={() =>
+                                              setVisibleSubsectionItemsBySection((prev) => ({
+                                                ...prev,
+                                                [subsectionKey]:
+                                                  (prev[subsectionKey] || MENU_ITEMS_RENDER_BATCH) +
+                                                  MENU_ITEMS_RENDER_BATCH,
+                                              }))
+                                            }
+                                          >
+                                            Show more items
+                                          </Button>
+                                        </div>
+                                      )}
 
-                              );
+                                    </div>
 
-                            })}
+                                  )}
 
-                        </div>
+                              </div>
 
-                      )}
+                            );
 
-                  </div>
+                          })}
 
-                );
+                      </div>
 
-              },
+                    )}
 
-            )}
+                </div>
 
-          </div>
+              );
 
-        )}
+            },
+
+          )}
+
+        </div>
+
+      )}
 
 
 
@@ -8373,7 +8367,12 @@ export default function RestaurantDetails() {
 
                       >
 
-                        <Bookmark className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+                        <Bookmark
+                          className={`h-5 w-5 ${isFavorite(restaurant?.slug || slug || "")
+                            ? "text-red-500 fill-red-500"
+                            : "text-gray-700 dark:text-gray-300"
+                            }`}
+                        />
 
                         <span className="text-base text-gray-900 dark:text-white">
 

@@ -101,8 +101,16 @@ const getAuthenticatedStoreEmail = (store) => {
   return /@store\.mobasket\.com$/i.test(ownerEmail) ? "" : ownerEmail
 }
 
+const stripPhonePrefix = (val) => {
+  const raw = normalizePhoneDigits(val)
+  if (raw.length === 12 && (raw.startsWith("91") || raw.startsWith("92"))) {
+    return raw.slice(2)
+  }
+  return raw.slice(0, 10)
+}
+
 const getAuthenticatedStorePhone = (store) =>
-  normalizePhoneDigits(store?.phone || store?.ownerPhone || store?.primaryContactNumber)
+  stripPhonePrefix(store?.phone || store?.ownerPhone || store?.primaryContactNumber)
 
 export default function GroceryStoreOnboarding() {
   const companyName = useCompanyName()
@@ -439,9 +447,9 @@ export default function GroceryStoreOnboarding() {
             storeName: source.storeName || store?.name || "",
             ownerName: source.ownerName || store?.ownerName || "",
             ownerEmail: source.ownerEmail || getAuthenticatedStoreEmail(store) || "",
-            ownerPhone: source.ownerPhone || getAuthenticatedStorePhone(store) || "",
+            ownerPhone: stripPhonePrefix(source.ownerPhone || getAuthenticatedStorePhone(store)),
             primaryContactNumber:
-              source.primaryContactNumber || getAuthenticatedStorePhone(store) || store?.primaryContactNumber || "",
+              stripPhonePrefix(source.primaryContactNumber || getAuthenticatedStorePhone(store) || store?.primaryContactNumber),
             location: {
               addressLine1: source.location?.addressLine1 || store?.location?.addressLine1 || "",
               addressLine2: source.location?.addressLine2 || store?.location?.addressLine2 || "",

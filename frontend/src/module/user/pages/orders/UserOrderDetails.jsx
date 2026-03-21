@@ -161,6 +161,13 @@ export default function UserOrderDetails() {
   const items = Array.isArray(order.items) ? order.items : []
   const pricing = order.pricing || {}
 
+  // Payment status flags
+  const normalizedPaymentMethod = String(order.payment?.method || order.paymentMethod || "Online").trim().toLowerCase()
+  const normalizedPaymentStatus = String(order.payment?.status || '').trim().toLowerCase()
+  const isCashPayment = ['cash', 'cod', 'cash_on_delivery', 'cash on delivery'].includes(normalizedPaymentMethod) || normalizedPaymentMethod.includes('cash') || normalizedPaymentMethod.includes('cod')
+  const isCompleted = ['delivered', 'completed', 'success'].includes(String(order.status || '').toLowerCase())
+  const isRefunded = normalizedPaymentStatus === 'refunded' || normalizedPaymentStatus === 'refund'
+
   const userName = order.userName || ""
   const userPhone = order.userPhone || ""
   const paymentMethod = order.payment?.method || "Online"
@@ -470,7 +477,9 @@ export default function UserOrderDetails() {
               </div>
 
               <div className="border-t border-gray-100 my-2 pt-2 flex justify-between items-center dark:border-white/10">
-                <span className="font-bold text-gray-800 dark:text-gray-100">Paid</span>
+                <span className={`font-bold ${isRefunded ? "text-red-500" : isCashPayment && !isCompleted ? "text-orange-600" : "text-gray-800"} dark:text-gray-100`}>
+                  {isRefunded ? "Refunded" : isCashPayment && !isCompleted ? "To be Paid (Cash)" : "Paid"}
+                </span>
                 <span className="font-bold text-gray-800 dark:text-gray-100">
                   ₹{Number(pricing.total || 0).toFixed(2)}
                 </span>
@@ -529,9 +538,15 @@ export default function UserOrderDetails() {
                 <h4 className="font-semibold text-gray-800 text-sm dark:text-gray-100">
                   Payment method
                 </h4>
-                <p className="text-gray-500 text-xs mt-0.5 dark:text-gray-400">
-                  Paid via: {paymentMethod.toUpperCase()}
-                </p>
+                <div className="text-gray-500 text-xs mt-0.5 dark:text-gray-400">
+                  {isRefunded ? (
+                    <span className="text-red-500 font-bold uppercase">Refunded</span>
+                  ) : (isCashPayment && !isCompleted) ? (
+                    <span className="text-orange-600 font-bold uppercase text-[10px]">Payment not completed (CASH)</span>
+                  ) : (
+                    `Paid via: ${paymentMethod.toUpperCase()}`
+                  )}
+                </div>
               </div>
             </div>
 
@@ -623,5 +638,3 @@ export default function UserOrderDetails() {
     </div>
   )
 }
-
-
