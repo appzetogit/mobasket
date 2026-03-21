@@ -578,14 +578,16 @@ Order again from this restaurant in the ${companyName} app.`
                   normalizedPaymentStatus === 'failure' ||
                   normalizedPaymentStatus === 'payment_failed'
                 )
-              const paymentStatusForDisplay = isCodPayment
-                ? (
-                  ['delivered', 'completed'].includes(String(order.status || '').toLowerCase()) ||
-                  ['paid', 'completed', 'success', 'succeeded', 'captured', 'settled'].includes(normalizedPaymentStatus)
-                    ? 'completed'
-                    : 'pending'
-                )
-                : normalizedPaymentStatus
+              const paymentStatusForDisplay = isCancelled
+                ? 'cancelled'
+                : isCodPayment
+                  ? (
+                    ['delivered', 'completed'].includes(String(order.status || '').toLowerCase()) ||
+                    ['paid', 'completed', 'success', 'succeeded', 'captured', 'settled'].includes(normalizedPaymentStatus)
+                      ? 'completed'
+                      : 'pending'
+                  )
+                  : normalizedPaymentStatus
 
               const isDelivered = ['delivered', 'completed'].includes(String(order.status || '').toLowerCase())
               const isRestaurantCancelled = order.isRestaurantCancelled || order.status === 'restaurant_cancelled'
@@ -784,7 +786,7 @@ Order again from this restaurant in the ${companyName} app.`
                           </span>
                           {paymentStatusForDisplay && (
                             <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-medium ${paymentStatusForDisplay === 'completed' ? 'bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300' :
-                              paymentStatusForDisplay === 'failed' ? 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300' :
+                              paymentStatusForDisplay === 'failed' || paymentStatusForDisplay === 'cancelled' ? 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300' :
                                 paymentStatusForDisplay === 'pending' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-500/15 dark:text-yellow-200' :
                                   'bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-200'
                               }`}>

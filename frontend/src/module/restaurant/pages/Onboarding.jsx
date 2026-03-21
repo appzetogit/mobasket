@@ -299,6 +299,8 @@ export default function RestaurantOnboarding() {
         setStep1(prev => ({
           ...prev,
           ...p1,
+          ownerPhone: stripPhonePrefix(p1.ownerPhone || ""),
+          primaryContactNumber: stripPhonePrefix(p1.primaryContactNumber || ""),
           location: { ...prev.location, ...(p1.location || {}) }
         }))
         if (p1.location?.formattedAddress || p1.location?.address) {
@@ -394,9 +396,22 @@ export default function RestaurantOnboarding() {
     return /@restaurant\.mobasket\.com$/i.test(ownerEmail) ? "" : ownerEmail
   }
 
+  const stripPhonePrefix = (val) => {
+    const raw = normalizePhoneDigits(val)
+    // If it's 12 digits and starts with 91 or 92, definitely strip it
+    if (raw.length === 12 && (raw.startsWith("91") || raw.startsWith("92"))) {
+      return raw.slice(2)
+    }
+    // If it's more than 10 digits, take the last 10
+    if (raw.length > 10) {
+      return raw.slice(-10)
+    }
+    return raw
+  }
+
   const getAuthenticatedRestaurantPhone = (restaurant) => {
     if (restaurant?.signupMethod === 'email') return ""
-    return normalizePhoneDigits(restaurant?.phone || restaurant?.ownerPhone || restaurant?.primaryContactNumber)
+    return stripPhonePrefix(restaurant?.phone || restaurant?.ownerPhone || restaurant?.primaryContactNumber)
   }
 
   const applyAuthenticatedRestaurantPrefill = (restaurant) => {
@@ -797,9 +812,9 @@ export default function RestaurantOnboarding() {
               restaurantName: data.step1.restaurantName || "",
               ownerName: data.step1.ownerName || "",
               ownerEmail: (data.completedSteps > 0 && data.step1.ownerEmail && !/@restaurant\.mobasket\.com$/i.test(data.step1.ownerEmail) ? data.step1.ownerEmail : "") || getAuthenticatedRestaurantEmail(currentRestaurant) || "",
-              ownerPhone: (data.completedSteps > 0 && data.step1.ownerPhone ? data.step1.ownerPhone : "") || getAuthenticatedRestaurantPhone(currentRestaurant) || "",
+              ownerPhone: stripPhonePrefix((data.completedSteps > 0 && data.step1.ownerPhone ? data.step1.ownerPhone : "") || getAuthenticatedRestaurantPhone(currentRestaurant)),
               primaryContactNumber:
-                (data.completedSteps > 0 && data.step1.primaryContactNumber ? data.step1.primaryContactNumber : "") || getAuthenticatedRestaurantPhone(currentRestaurant) || "",
+                stripPhonePrefix((data.completedSteps > 0 && data.step1.primaryContactNumber ? data.step1.primaryContactNumber : "") || getAuthenticatedRestaurantPhone(currentRestaurant)),
               location: {
                 addressLine1: data.step1.location?.addressLine1 || "",
                 addressLine2: data.step1.location?.addressLine2 || "",
@@ -1117,7 +1132,7 @@ export default function RestaurantOnboarding() {
   const openBrowserGalleryInput = (onSuccess) => {
     const input = document.createElement("input")
     input.type = "file"
-    // Leave accept unset on purpose to avoid Android Chrome forcing camera intent.
+    input.accept = "image/jpeg,image/png,image/webp"
     input.multiple = false
     input.style.position = "fixed"
     input.style.left = "-9999px"
@@ -1873,7 +1888,7 @@ export default function RestaurantOnboarding() {
                 </span>
               </div>
             </div>
-            <div className="grid w-full grid-cols-2 sm:grid-cols-3 gap-2">
+            <div className="grid w-full grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -1903,26 +1918,11 @@ export default function RestaurantOnboarding() {
                 <span>Gallery</span>
                 <input
                   type="file"
-                  accept="*/*"
+                  accept="image/jpeg,image/png,image/webp"
                   className="absolute inset-0 opacity-0 cursor-pointer"
                   onChange={handleMenuGalleryFileChange}
                 />
               </label>
-              <button
-                type="button"
-                onClick={() =>
-                  openBrowserGalleryInput((selectedFile) => {
-                    setStep2((prev) => ({
-                      ...prev,
-                      menuImages: [selectedFile],
-                    }))
-                  })
-                }
-                className="col-span-2 sm:col-span-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
-              >
-                <Upload className="w-4 h-4" />
-                <span>Choose Files</span>
-              </button>
             </div>
           </div>
 
@@ -2018,7 +2018,7 @@ export default function RestaurantOnboarding() {
             </div>
 
           </div>
-          <div className="grid w-full grid-cols-2 sm:grid-cols-3 gap-2 mt-2">
+          <div className="grid w-full grid-cols-2 gap-2 mt-2">
             <button
               type="button"
               onClick={() => {
@@ -2048,26 +2048,11 @@ export default function RestaurantOnboarding() {
               <span>Gallery</span>
               <input
                 type="file"
-                accept="*/*"
+                accept="image/jpeg,image/png,image/webp"
                 className="absolute inset-0 opacity-0 cursor-pointer"
                 onChange={handleProfileGalleryFileChange}
               />
             </label>
-            <button
-              type="button"
-              onClick={() =>
-                openBrowserGalleryInput((selectedFile) => {
-                  setStep2((prev) => ({
-                    ...prev,
-                    profileImage: selectedFile,
-                  }))
-                })
-              }
-              className="col-span-2 sm:col-span-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
-            >
-              <Upload className="w-4 h-4" />
-              <span>Choose Files</span>
-            </button>
           </div>
         </div>
       </section>
@@ -2199,6 +2184,7 @@ export default function RestaurantOnboarding() {
               id={cameraInputId}
               type="file"
               accept="image/*"
+              capture="environment"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0] || null

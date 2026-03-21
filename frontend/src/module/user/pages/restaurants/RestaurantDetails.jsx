@@ -187,15 +187,6 @@ function MenuContentSkeleton() {
 
   return (
     <div className="max-w-[1100px] mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-6 sm:py-8 md:py-10 lg:py-12 space-y-6 md:space-y-8 lg:space-y-10">
-      <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide">
-        {[0, 1, 2, 3].map((chip) => (
-          <div
-            key={`skeleton-chip-${chip}`}
-            className="h-8 w-24 rounded-full bg-gray-200 animate-pulse shrink-0"
-          />
-        ))}
-      </div>
-
       {skeletonSections.map((section) => (
         <div
           key={`skeleton-section-${section}`}
@@ -489,6 +480,11 @@ export default function RestaurantDetails() {
               : prev,
           );
 
+          // If the menu is empty, we can stop showing the main menu loading skeleton immediately
+          if (menuSections.length === 0) {
+            setLoadingDeferredContent(false);
+          }
+
           const defaultExpandedSections = new Set([0]);
           setExpandedSections(defaultExpandedSections);
 
@@ -625,8 +621,12 @@ export default function RestaurantDetails() {
             } catch {
             }
           }, 0);
+        } else {
+          // If menu not found, stop showing the loader
+          setLoadingDeferredContent(false);
         }
       } catch (menuError) {
+        setLoadingDeferredContent(false);
         if (menuError.response && menuError.response.status === 404) {
         } else {
           console.error("❌ Error fetching menu:", menuError);
@@ -4159,6 +4159,42 @@ export default function RestaurantDetails() {
         (!restaurant?.menuSections || restaurant.menuSections.length === 0) && (
           <MenuContentSkeleton />
         )}
+
+      {!loadingDeferredContent && (
+        <div className="max-w-[1100px] mx-auto px-4 sm:px-6">
+          {(!restaurant?.menuSections || restaurant.menuSections.length === 0) ? (
+            <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+              <Utensils className="h-16 w-16 text-gray-200 dark:text-gray-800 mb-4" />
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                No dishes available for this restaurant
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 max-w-xs mx-auto">
+                This restaurant hasn&apos;t added any menu items yet. Please check back later!
+              </p>
+            </div>
+          ) : filteredSections.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+              <Search className="h-16 w-16 text-gray-200 dark:text-gray-800 mb-4" />
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                No items found
+              </h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-2 max-w-xs mx-auto">
+                We couldn&apos;t find any dishes matching your current filters or search criteria.
+              </p>
+              <Button
+                variant="link"
+                className="mt-4 text-red-600 font-bold"
+                onClick={() => {
+                  setSearchQuery("");
+                  setFilters({ sortBy: null, vegNonVeg: null });
+                }}
+              >
+                Clear all filters
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      )}
 
       {restaurant?.menuSections &&
 
@@ -8176,7 +8212,12 @@ export default function RestaurantDetails() {
 
                       >
 
-                        <Bookmark className="h-5 w-5 text-gray-700 dark:text-gray-300" />
+                        <Bookmark
+                          className={`h-5 w-5 ${isFavorite(restaurant?.slug || slug || "")
+                            ? "text-red-500 fill-red-500"
+                            : "text-gray-700 dark:text-gray-300"
+                            }`}
+                        />
 
                         <span className="text-base text-gray-900 dark:text-white">
 
