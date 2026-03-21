@@ -51,7 +51,21 @@ export const signInWithFlutterNativeGoogle = async (auth) => {
     return null
   }
 
-  if (!nativeResult?.success) {
+  const resolvedToken =
+    (typeof nativeResult === "string" ? nativeResult : "") ||
+    nativeResult?.idToken ||
+    nativeResult?.id_token ||
+    nativeResult?.googleIdToken ||
+    nativeResult?.token ||
+    ""
+
+  const isExplicitSuccess =
+    nativeResult?.success === true ||
+    nativeResult?.ok === true ||
+    nativeResult?.status === "success"
+
+  // Accept native result if token is present even when success flag shape differs.
+  if (!resolvedToken && !isExplicitSuccess) {
     const resultMessage = String(nativeResult?.message || nativeResult?.error || "").toLowerCase()
     const looksCancelled =
       nativeResult?.cancelled === true ||
@@ -69,7 +83,7 @@ export const signInWithFlutterNativeGoogle = async (auth) => {
     throw cancelledError
   }
 
-  const idToken = nativeResult?.idToken
+  const idToken = resolvedToken
   if (!idToken) {
     throw new Error("Flutter native Google sign-in did not return an ID token.")
   }
