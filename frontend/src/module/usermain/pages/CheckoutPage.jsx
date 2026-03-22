@@ -34,6 +34,8 @@ import {
 import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
 import { ensureAddressCoordinates } from "@/lib/utils/addressGeocoding";
 
+const isMongoObjectId = (value) => /^[a-fA-F0-9]{24}$/.test(String(value || "").trim());
+
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -67,6 +69,7 @@ export default function CheckoutPage() {
     isAvailable: true,
     reason: "",
   });
+  const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [orderingForSomeoneElse, setOrderingForSomeoneElse] = useState(false);
   const [showRecipientMap, setShowRecipientMap] = useState(false);
@@ -713,15 +716,22 @@ export default function CheckoutPage() {
 
       try {
         const restaurantResponse = await restaurantAPI.getRestaurantById(String(restaurantId));
-        const outletTimingsResponse = await api
-          .get(`/restaurant/${String(restaurantId)}/outlet-timings`)
-          .catch(() => null);
 
         const restaurant =
           restaurantResponse?.data?.data?.restaurant ||
           restaurantResponse?.data?.restaurant ||
           restaurantResponse?.data?.data ||
           {};
+
+        const resolvedRestaurantMongoId = String(
+          restaurant?._id || (isMongoObjectId(restaurantId) ? restaurantId : "")
+        ).trim();
+
+        const outletTimingsResponse = resolvedRestaurantMongoId
+          ? await api
+              .get(`/restaurant/${resolvedRestaurantMongoId}/outlet-timings`)
+              .catch(() => null)
+          : null;
 
         const outletTimings =
           outletTimingsResponse?.data?.data?.outletTimings?.timings ||
@@ -746,7 +756,22 @@ export default function CheckoutPage() {
     };
 
     fetchRestaurantAvailability();
-  }, [foodItems.length, restaurantId]);
+  }, [foodItems.length, restaurantId, availabilityRefreshKey]);
+
+  useEffect(() => {
+    const refresh = () => setAvailabilityRefreshKey((prev) => prev + 1);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    const timer = window.setInterval(refresh, 60000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
 
   useEffect(() => {
     const fetchPricingPreview = async () => {

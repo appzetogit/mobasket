@@ -785,18 +785,9 @@ export const login = asyncHandler(async (req, res) => {
   if (fcmPatch.fcmTokenMobile) {
     restaurant.fcmTokenMobile = fcmPatch.fcmTokenMobile;
   }
-  if (restaurant.isAcceptingOrders !== true) {
-    restaurant.isAcceptingOrders = true;
-  }
-  if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile || restaurant.isModified('isAcceptingOrders')) {
+  if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile) {
     await restaurant.save();
   }
-
-    // Logged-in restaurants should appear online in user listings.
-    if (restaurant.isActive && restaurant.isAcceptingOrders !== true) {
-      restaurant.isAcceptingOrders = true;
-      await restaurant.save();
-    }
 
     // Generate tokens (email may be null for phone signups)
     const tokens = jwtService.generateTokens({
@@ -904,11 +895,6 @@ export const refreshToken = asyncHandler(async (req, res) => {
     // Allow inactive restaurants to refresh tokens - they need access to complete onboarding
     // The middleware will handle blocking inactive restaurants from accessing restricted routes
 
-    if (restaurant.isActive && restaurant.isAcceptingOrders !== true) {
-      restaurant.isAcceptingOrders = true;
-      await restaurant.save();
-    }
-
     // Generate new access token
     const accessToken = jwtService.generateAccessToken({
       userId: restaurant._id.toString(),
@@ -1007,9 +993,10 @@ export const getCurrentRestaurant = asyncHandler(async (req, res) => {
     restaurantId: req.restaurant._id,
     isActive: true,
   }).lean();
-  const isAcceptingOrders = outletTimings?.timings
+  const isAcceptingOrdersFromTimings = outletTimings?.timings
     ? isOpenFromOutletTimings(outletTimings.timings)
-    : req.restaurant.isAcceptingOrders;
+    : true;
+  const isAcceptingOrders = Boolean(req.restaurant.isAcceptingOrders !== false) && isAcceptingOrdersFromTimings;
   // Restaurant is attached by authenticate middleware
   return successResponse(res, 200, 'Restaurant retrieved successfully', {
     restaurant: {
@@ -1246,10 +1233,7 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     if (fcmPatch.fcmTokenMobile) {
       restaurant.fcmTokenMobile = fcmPatch.fcmTokenMobile;
     }
-    if (restaurant.isAcceptingOrders !== true) {
-      restaurant.isAcceptingOrders = true;
-    }
-    if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile || restaurant.isModified('isAcceptingOrders')) {
+    if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile) {
       await restaurant.save();
     }
 

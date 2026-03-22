@@ -328,6 +328,26 @@ const extractRestaurantRating = (restaurant = {}) => {
   return 0;
 };
 
+const resolveBooleanLike = (...values) => {
+  for (const value of values) {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") {
+      if (value === 1) return true;
+      if (value === 0) return false;
+    }
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (["true", "1", "yes", "online", "open", "active", "enabled"].includes(normalized)) {
+        return true;
+      }
+      if (["false", "0", "no", "offline", "closed", "inactive", "disabled"].includes(normalized)) {
+        return false;
+      }
+    }
+  }
+  return undefined;
+};
+
 const getInitialHomeZoneSelection = () => {
   if (typeof window === "undefined") return "auto";
   try {
@@ -1533,7 +1553,6 @@ export default function Home() {
           if (restaurantsRequestRef.current !== requestId) return;
           setRestaurantsData(cachedRestaurants);
           setLoadingRestaurants(false);
-          return;
         }
 
         let response = await restaurantAPI.getRestaurants(params);
@@ -1738,8 +1757,16 @@ export default function Home() {
                 slug: restaurant.slug,
                 restaurantId: restaurant.restaurantId,
                 location: restaurant.location, // Store location for distance recalculation
-                isActive: restaurant.isActive !== false, // Default to true if not specified
-                isAcceptingOrders: restaurant.isAcceptingOrders !== false, // Default to true if not specified
+                isActive:
+                  resolveBooleanLike(restaurant.isActive, restaurant.status) !== false,
+                isAcceptingOrders:
+                  resolveBooleanLike(
+                    restaurant.isAcceptingOrders,
+                    restaurant.acceptingOrders,
+                    restaurant.deliveryStatus,
+                    restaurant.isOnline,
+                    restaurant.status,
+                  ) !== false,
                 searchableItems: collectSearchableItems(restaurant),
               };
             },
@@ -1796,6 +1823,25 @@ export default function Home() {
   // Fetch restaurants when appliedFilters change
   useEffect(() => {
     fetchRestaurants(appliedFilters);
+  }, [appliedFilters, fetchRestaurants]);
+
+  useEffect(() => {
+    const refresh = () => {
+      fetchRestaurants(appliedFilters);
+    };
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        refresh();
+      }
+    };
+    const timer = window.setInterval(refresh, 60000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [appliedFilters, fetchRestaurants]);
 
   // Recalculate distances when user location updates
@@ -3439,6 +3485,9 @@ export default function Home() {
                 const restaurantSlug =
                   restaurant.slug ||
                   restaurant.name.toLowerCase().replace(/\s+/g, "-");
+                const isRestaurantAvailable =
+                  restaurant?.isActive !== false &&
+                  restaurant?.isAcceptingOrders !== false;
                 // Direct favorite check - isFavorite is already memoized in context
                 const favorite = isFavorite(restaurantSlug);
 
@@ -3485,7 +3534,7 @@ export default function Home() {
                   >
                     <motion.div
                       className="h-full"
-                      whileHover="hover"
+                      whileHover={isRestaurantAvailable ? "hover" : "rest"}
                       initial="rest"
                       variants={{
                         rest: {
@@ -3515,20 +3564,31 @@ export default function Home() {
                       <Link
                         to={`/user/restaurants/${restaurantSlug}`}
                         className="h-full flex"
-                        onMouseEnter={() => prefetchRestaurant(restaurant)}
-                        onFocus={() => prefetchRestaurant(restaurant)}
-                        onTouchStart={() => prefetchRestaurant(restaurant)}
-                        onClick={(e) =>
+                        onMouseEnter={() => {
+                          if (isRestaurantAvailable) prefetchRestaurant(restaurant);
+                        }}
+                        onFocus={() => {
+                          if (isRestaurantAvailable) prefetchRestaurant(restaurant);
+                        }}
+                        onTouchStart={() => {
+                          if (isRestaurantAvailable) prefetchRestaurant(restaurant);
+                        }}
+                        onClick={(e) => {
+                          if (!isRestaurantAvailable) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            return;
+                          }
                           navigateWithPriorityPrefetch(
                             e,
                             restaurant,
                             `/user/restaurants/${restaurantSlug}`,
-                          )
-                        }
+                          );
+                        }}
                       >
                         <Card
-                          className={`overflow-hidden gap-0 cursor-pointer border border-gray-100 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] transition-all duration-300 py-0 rounded-[24px] flex flex-col h-full w-full relative shadow-sm hover:shadow-md ${isOutOfService ? "grayscale opacity-75" : ""
-                            }`}
+                          className={`overflow-hidden gap-0 border border-gray-100 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] transition-all duration-300 py-0 rounded-[24px] flex flex-col h-full w-full relative shadow-sm hover:shadow-md ${isOutOfService ? "grayscale opacity-75" : ""
+                            } ${!isRestaurantAvailable ? "grayscale opacity-60 pointer-events-none cursor-not-allowed" : "cursor-pointer"}`}
                         >
                           {/* Image Section */}
                           <div className="relative aspect-[16/9] overflow-hidden rounded-t-[24px]">
@@ -3543,6 +3603,11 @@ export default function Home() {
                             {restaurant.isPromoted && (
                               <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white md:text-[8px] text-[7px] px-1.5 py-0.5 rounded flex items-center gap-1 z-10 font-medium uppercase tracking-wider">
                                 Promoted
+                              </div>
+                            )}
+                            {!isRestaurantAvailable && (
+                              <div className="absolute top-2 left-2 bg-gray-800/80 backdrop-blur-md text-white text-[9px] px-2 py-0.5 rounded z-10 font-semibold uppercase tracking-wide">
+                                Offline
                               </div>
                             )}
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import Lenis from "lenis"
 import { ArrowLeft, Settings, ChevronRight } from "lucide-react"
@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch"
 import { Card, CardContent } from "@/components/ui/card"
 import { groceryStoreAPI, restaurantAPI } from "@/lib/api"
 import { parseTimeToMinutes, isOpenFromOutletTimingsMap, normalizeOutletTimingsMap } from "@/lib/utils/outletTimingsStatus"
+import { toast } from "sonner"
 import {
   Dialog,
   DialogContent,
@@ -23,7 +24,6 @@ export default function RestaurantStatus() {
   const navigate = useNavigate()
   const routeLocation = useLocation()
   const isGroceryStore = routeLocation.pathname.startsWith("/store")
-  const baseRoute = isGroceryStore ? "/store" : "/restaurant"
   const outletTimingsStorageKey = isGroceryStore
     ? STORE_OUTLET_TIMINGS_STORAGE_KEY
     : OUTLET_TIMINGS_STORAGE_KEY
@@ -40,7 +40,7 @@ export default function RestaurantStatus() {
   const [showOutsideTimingsDialog, setShowOutsideTimingsDialog] = useState(false)
   const [isDayClosed, setIsDayClosed] = useState(false)
   const [outletTimings, setOutletTimings] = useState(null)
-  const lastSyncedStatusRef = useRef(null)
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false)
 
   // Update current date/time every minute
   useEffect(() => {
@@ -215,63 +215,33 @@ export default function RestaurantStatus() {
     }
   }, [restaurantData, currentDateTime, isGroceryStore, outletTimings])
 
-  // Note: Delivery status is now manually controlled by user via toggle
-  // We don't automatically set it based on timings anymore
-  // The isWithinTimings is only used to show warning messages
-
   // Load delivery status from backend and sync with localStorage
   useEffect(() => {
     const loadDeliveryStatus = async () => {
-      if (!isGroceryStore) {
-        if (typeof isWithinTimings === "boolean") {
-          setDeliveryStatus(isWithinTimings)
-          localStorage.setItem(statusStorageKey, JSON.stringify(isWithinTimings))
-          window.dispatchEvent(new CustomEvent(statusEventName, {
-            detail: { isOnline: isWithinTimings }
-          }))
-
-          if (lastSyncedStatusRef.current !== isWithinTimings) {
-            lastSyncedStatusRef.current = isWithinTimings
-            try {
-              await restaurantAPI.updateDeliveryStatus(isWithinTimings)
-            } catch (apiError) {
-              console.error("Error syncing timing-based delivery status:", apiError)
-            }
-          }
-        }
-        return
-      }
-
       try {
-        // First try to get from backend
         const response = isGroceryStore
           ? await groceryStoreAPI.getCurrentStore()
           : await restaurantAPI.getCurrentRestaurant()
-        const restaurant = isGroceryStore
+        const entity = isGroceryStore
           ? (response?.data?.data?.store || response?.data?.store || response?.data?.data?.restaurant || response?.data?.restaurant)
           : (response?.data?.data?.restaurant || response?.data?.restaurant)
-        if (restaurant?.isAcceptingOrders !== undefined) {
-          setDeliveryStatus(restaurant.isAcceptingOrders)
-          // Sync localStorage with backend
-          localStorage.setItem(statusStorageKey, JSON.stringify(restaurant.isAcceptingOrders))
-          // Dispatch event to update navbar
+
+        if (typeof entity?.isAcceptingOrders === "boolean") {
+          setDeliveryStatus(entity.isAcceptingOrders)
+          localStorage.setItem(statusStorageKey, JSON.stringify(entity.isAcceptingOrders))
           window.dispatchEvent(new CustomEvent(statusEventName, {
-            detail: { isOnline: restaurant.isAcceptingOrders } 
+            detail: { isOnline: entity.isAcceptingOrders }
           }))
         } else {
-          // Fallback to localStorage
           const savedStatus = localStorage.getItem(statusStorageKey)
           if (savedStatus !== null) {
             const status = JSON.parse(savedStatus)
             setDeliveryStatus(status)
-            // Dispatch event to update navbar
             window.dispatchEvent(new CustomEvent(statusEventName, {
               detail: { isOnline: status } 
             }))
           } else {
-            // Default to false if not set
             setDeliveryStatus(false)
-            // Dispatch event to update navbar
             window.dispatchEvent(new CustomEvent(statusEventName, {
               detail: { isOnline: false } 
             }))
@@ -307,54 +277,52 @@ export default function RestaurantStatus() {
     }
 
     loadDeliveryStatus()
-  }, [isGroceryStore, isWithinTimings, statusEventName, statusStorageKey])
+  }, [isGroceryStore, statusEventName, statusStorageKey])
 
   // Handle delivery status change
   const handleDeliveryStatusChange = async (checked) => {
-    if (!isGroceryStore) {
-      navigate(`${baseRoute}/outlet-timings`)
-      return
-    }
-
     // If day is closed in outlet timings, don't allow turning on
     if (checked && isDayClosed) {
       setShowOutletClosedDialog(true)
       return
     }
-    
+
     // If outside scheduled delivery timings, show popup
     if (checked && isWithinTimings === false && !isDayClosed) {
       setShowOutsideTimingsDialog(true)
       return
     }
-    
-    setDeliveryStatus(checked)
+
+    if (isUpdatingStatus) return
+
+    const previousStatus = deliveryStatus
+    setIsUpdatingStatus(true)
     try {
-      // Save to localStorage
-      localStorage.setItem(statusStorageKey, JSON.stringify(checked))
-      
-      // Update backend
-      try {
-        if (isGroceryStore) {
-          await groceryStoreAPI.updateDeliveryStatus(checked)
-        } else {
-          await restaurantAPI.updateDeliveryStatus(checked)
-        }
-        console.log('✅ Delivery status updated in backend:', checked)
-      } catch (apiError) {
-        console.error('Error updating delivery status in backend:', apiError)
-        // Still continue with local update even if backend fails
+      if (isGroceryStore) {
+        await groceryStoreAPI.updateDeliveryStatus(checked)
+      } else {
+        await restaurantAPI.updateDeliveryStatus(checked)
       }
-      
-      // Dispatch custom event for navbar to listen
+
+      setDeliveryStatus(checked)
+      setRestaurantData((prev) => (prev ? { ...prev, isAcceptingOrders: checked } : prev))
+      localStorage.setItem(statusStorageKey, JSON.stringify(checked))
       window.dispatchEvent(new CustomEvent(statusEventName, {
-        detail: { isOnline: checked } 
+        detail: { isOnline: checked }
       }))
+      toast.success(`${EntityLabel} is now ${checked ? "online" : "offline"}.`)
     } catch (error) {
       console.error("Error saving delivery status:", error)
+      setDeliveryStatus(previousStatus)
+      localStorage.setItem(statusStorageKey, JSON.stringify(previousStatus))
+      window.dispatchEvent(new CustomEvent(statusEventName, {
+        detail: { isOnline: previousStatus }
+      }))
+      toast.error(`Failed to update ${entityLabel} status. Please try again.`)
+    } finally {
+      setIsUpdatingStatus(false)
     }
   }
-
   // Handle dialog close and navigate to outlet timings
   const handleGoToOutletTimings = () => {
     setShowOutletClosedDialog(false)
@@ -506,7 +474,7 @@ export default function RestaurantStatus() {
             <Switch
               checked={deliveryStatus}
               onCheckedChange={handleDeliveryStatusChange}
-              disabled={!isGroceryStore}
+              disabled={isUpdatingStatus}
               className="ml-4 data-[state=unchecked]:bg-gray-300 data-[state=checked]:bg-green-600"
             />
           </div>
@@ -625,3 +593,4 @@ export default function RestaurantStatus() {
     </div>
   )
 }
+

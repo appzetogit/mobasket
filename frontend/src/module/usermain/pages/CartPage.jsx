@@ -37,6 +37,7 @@ export default function CartPage() {
     isAvailable: true,
     reason: "",
   });
+  const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
   const [orderEditSession, setOrderEditSession] = useState(() => getOrderEditSession());
   const [editSecondsLeft, setEditSecondsLeft] = useState(() =>
     getOrderEditRemainingSeconds(getOrderEditSession()),
@@ -166,7 +167,22 @@ export default function CartPage() {
     };
 
     fetchRestaurantSchedule();
-  }, [restaurantId]);
+  }, [restaurantId, availabilityRefreshKey]);
+
+  useEffect(() => {
+    const refresh = () => setAvailabilityRefreshKey((prev) => prev + 1);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    const timer = window.setInterval(refresh, 60000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
 
   const handleCheckout = () => {
     if (cartItems.length === 0) {

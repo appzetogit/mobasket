@@ -121,6 +121,36 @@ const shouldPreferRestaurantApi = (value = "") => {
   );
 };
 
+const isMongoObjectId = (value = "") => /^[a-fA-F0-9]{24}$/.test(String(value || "").trim());
+
+const resolveBooleanLike = (...values) => {
+  for (const value of values) {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") {
+      if (value === 1) return true;
+      if (value === 0) return false;
+    }
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+      if (["true", "1", "yes", "online", "open", "active", "enabled"].includes(normalized)) return true;
+      if (["false", "0", "no", "offline", "closed", "inactive", "disabled"].includes(normalized)) return false;
+    }
+  }
+  return undefined;
+};
+
+const resolveIsAcceptingOrders = (restaurant = {}) => {
+  const explicit = resolveBooleanLike(
+    restaurant?.isAcceptingOrders,
+    restaurant?.acceptingOrders,
+    restaurant?.deliveryStatus,
+    restaurant?.isOnline,
+    restaurant?.status,
+  );
+  if (typeof explicit === "boolean") return explicit;
+  return restaurant?.isAcceptingOrders !== false;
+};
+
 const levenshteinDistance = (a = "", b = "") => {
   const left = String(a);
   const right = String(b);
@@ -340,6 +370,7 @@ export default function RestaurantDetails() {
     reason: "",
 
   });
+  const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
 
   const fetchedRestaurantRef = useRef(false); // Track if restaurant has been fetched for current slug
 
@@ -1717,7 +1748,7 @@ export default function RestaurantDetails() {
 
             isActive: actualRestaurant?.isActive !== false, // Default to true if not specified
 
-            isAcceptingOrders: actualRestaurant?.isAcceptingOrders !== false, // Default to true if not specified
+            isAcceptingOrders: resolveIsAcceptingOrders(actualRestaurant || apiRestaurant),
 
           };
 
@@ -1937,8 +1968,11 @@ export default function RestaurantDetails() {
 
 
       const restaurantIdForTiming = restaurant?.id || restaurant?.restaurantId || restaurant?._id;
+      const resolvedRestaurantMongoId = String(
+        restaurant?._id || (isMongoObjectId(restaurantIdForTiming) ? restaurantIdForTiming : ""),
+      ).trim();
 
-      if (!restaurantIdForTiming) {
+      if (!resolvedRestaurantMongoId) {
 
         setRestaurantAvailability(
 
@@ -1962,7 +1996,7 @@ export default function RestaurantDetails() {
 
         const outletTimingsResponse = await fetch(
 
-          `${API_BASE_URL}/restaurant/${String(restaurantIdForTiming)}/outlet-timings`,
+          `${API_BASE_URL}/restaurant/${resolvedRestaurantMongoId}/outlet-timings`,
 
         );
 
@@ -2010,7 +2044,22 @@ export default function RestaurantDetails() {
 
     fetchRestaurantAvailability();
 
-  }, [restaurant]);
+  }, [restaurant, availabilityRefreshKey]);
+
+  useEffect(() => {
+    const refresh = () => setAvailabilityRefreshKey((prev) => prev + 1);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    const timer = window.setInterval(refresh, 60000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
 
 
 
@@ -3951,6 +4000,11 @@ export default function RestaurantDetails() {
         />
 
         <div className="absolute inset-0 bg-gradient-to-b from-white/70 via-transparent to-black/40" />
+        {isRestaurantUnavailable && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 rounded-full bg-gray-900/85 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
+            Offline
+          </div>
+        )}
 
 
 
