@@ -64,6 +64,7 @@ export default function CheckoutPage() {
     freeDeliveryThreshold: 149,
     platformFee: 5,
     gstRate: 5,
+    minimumCodOrderValue: 0,
   });
   const [pendingOnlineOrder, setPendingOnlineOrder] = useState(null);
   const [restaurantAvailability, setRestaurantAvailability] = useState({
@@ -683,6 +684,7 @@ export default function CheckoutPage() {
           ),
           platformFee: Number(settings.platformFee ?? prev.platformFee),
           gstRate: Number(settings.gstRate ?? prev.gstRate),
+          minimumCodOrderValue: Number(settings.minimumCodOrderValue ?? prev.minimumCodOrderValue ?? 0),
         }));
       } catch (error) {
         console.error("Failed to fetch public fee settings:", error);
@@ -940,10 +942,18 @@ export default function CheckoutPage() {
   }, [calculatedPricing, feeSettings, foodItems, selectedAddress, orderingForSomeoneElse, recipientDetails]);
 
   const hasSufficientWalletBalance = walletBalance >= orderSummary.total;
+  const minimumCodOrderValue = Math.max(0, Number(feeSettings.minimumCodOrderValue || 0));
+  const isCodEligible = orderSummary.total >= minimumCodOrderValue;
   const visibleCoupons = showAllCoupons ? availableCoupons : availableCoupons.slice(0, 4);
   const hasRecipientCoordinates =
     Number.isFinite(Number(recipientDetails?.latitude)) &&
     Number.isFinite(Number(recipientDetails?.longitude));
+
+  useEffect(() => {
+    if (paymentMethod === "cash" && !isCodEligible) {
+      setPaymentMethod("card");
+    }
+  }, [paymentMethod, isCodEligible]);
 
   const buildOrderItems = () =>
     foodItems.map((item) => ({
@@ -1242,6 +1252,10 @@ export default function CheckoutPage() {
         toast.error("Insufficient wallet balance. Add money or choose another payment method.");
         return;
       }
+    }
+    if (paymentMethod === "cash" && !isCodEligible) {
+      toast.error(`COD is available on orders of Rs ${minimumCodOrderValue} and above.`);
+      return;
     }
 
     setIsPlacingOrder(true);
@@ -2196,7 +2210,12 @@ export default function CheckoutPage() {
                 </span>
               </button>
               <button
-                onClick={() => setPaymentMethod("cash")}
+                onClick={() => {
+                  if (isCodEligible) {
+                    setPaymentMethod("cash");
+                  }
+                }}
+                disabled={!isCodEligible}
                 className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${paymentMethod === "cash"
                   ? "border-yellow-500 bg-yellow-100 dark:bg-yellow-500/10"
                   : "border-gray-200 bg-white dark:border-white/10 dark:bg-[#0f172a]"
@@ -2211,6 +2230,11 @@ export default function CheckoutPage() {
                   Cash on Delivery
                 </span>
               </button>
+              {!isCodEligible && (
+                <p className="text-xs font-medium text-amber-700">
+                  COD is available on orders of Rs {minimumCodOrderValue} and above.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -2223,7 +2247,8 @@ export default function CheckoutPage() {
           disabled={
             isPlacingOrder ||
             !restaurantAvailability.isAvailable ||
-            (paymentMethod === "wallet" && !walletLoading && !hasSufficientWalletBalance)
+            (paymentMethod === "wallet" && !walletLoading && !hasSufficientWalletBalance) ||
+            (paymentMethod === "cash" && !isCodEligible)
           }
         >
           {isPlacingOrder

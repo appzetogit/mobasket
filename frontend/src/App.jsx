@@ -41,6 +41,26 @@ function UserPathRedirect() {
   return <Navigate to={newPath} replace />;
 }
 
+function shouldSkipPartnerBackgroundSetup(pathname = "") {
+  if (!pathname) return false;
+
+  const isRestaurantPath = pathname.startsWith("/restaurant") && !pathname.startsWith("/restaurants");
+  const isStorePath = pathname.startsWith("/store");
+
+  if (!isRestaurantPath && !isStorePath) return false;
+
+  const isRestaurantTransientPath =
+    /^\/restaurant\/(login|signup|signup-email|otp|forgot-password|welcome|auth\/)/.test(pathname) ||
+    pathname.startsWith("/restaurant/onboarding") ||
+    pathname.startsWith("/restaurant/pending-approval");
+  const isStoreTransientPath =
+    /^\/store\/(login|signup|otp)/.test(pathname) ||
+    pathname.startsWith("/store/onboarding") ||
+    pathname.startsWith("/store/pending-approval");
+
+  return isRestaurantTransientPath || isStoreTransientPath;
+}
+
 export default function App() {
   const location = useLocation();
 
@@ -104,6 +124,7 @@ export default function App() {
     const runSetup = () => {
       if (typeof document !== "undefined" && document.hidden) return;
       if (!hasAnySessionToken()) return;
+      if (shouldSkipPartnerBackgroundSetup(location.pathname)) return;
 
       setupWebPushForCurrentSession(location.pathname).catch((error) => {
         // eslint-disable-next-line no-console

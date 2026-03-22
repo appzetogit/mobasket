@@ -12,6 +12,7 @@ export default function FeeSettings() {
     freeDeliveryThreshold: 149,
     platformFee: 5,
     gstRate: 5,
+    minimumCodOrderValue: 0,
     driverEarningRangeStartKm: 0,
     driverEarningRangeEndKm: 2,
     driverEarningBaseAmount: 20,
@@ -34,6 +35,7 @@ export default function FeeSettings() {
           freeDeliveryThreshold: response.data.data.feeSettings.freeDeliveryThreshold || 149,
           platformFee: response.data.data.feeSettings.platformFee || 5,
           gstRate: response.data.data.feeSettings.gstRate || 5,
+          minimumCodOrderValue: Number(response.data.data.feeSettings.minimumCodOrderValue ?? 0),
           driverEarningRangeStartKm: Number(response.data.data.feeSettings.driverEarningRangeStartKm ?? 0),
           driverEarningRangeEndKm: Number(response.data.data.feeSettings.driverEarningRangeEndKm ?? 2),
           driverEarningBaseAmount: Number(response.data.data.feeSettings.driverEarningBaseAmount ?? 20),
@@ -76,6 +78,7 @@ export default function FeeSettings() {
         freeDeliveryThreshold: Number(feeSettings.freeDeliveryThreshold),
         platformFee: Number(feeSettings.platformFee),
         gstRate: Number(feeSettings.gstRate),
+        minimumCodOrderValue: Number(feeSettings.minimumCodOrderValue || 0),
         driverEarningRangeStartKm: Number(feeSettings.driverEarningRangeStartKm),
         driverEarningRangeEndKm: Number(feeSettings.driverEarningRangeEndKm),
         driverEarningBaseAmount: Number(feeSettings.driverEarningBaseAmount),
@@ -481,6 +484,24 @@ export default function FeeSettings() {
                   />
                   <p className="text-xs text-slate-500">
                     GST percentage applied on order subtotal
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Minimum COD Order Value (Rs)
+                  </label>
+                  <input
+                    type="number"
+                    value={feeSettings.minimumCodOrderValue}
+                    onChange={(e) => setFeeSettings({ ...feeSettings, minimumCodOrderValue: e.target.value })}
+                    min="0"
+                    step="1"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
+                    placeholder="0"
+                  />
+                  <p className="text-xs text-slate-500">
+                    COD will be available only when cart total is greater than or equal to this value.
                   </p>
                 </div>
               </div>

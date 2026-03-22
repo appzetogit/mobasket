@@ -24,6 +24,7 @@ import OutletTimings from '../../restaurant/models/OutletTimings.js';
 import GroceryProduct from '../../grocery/models/GroceryProduct.js';
 import GroceryPlan from '../../grocery/models/GroceryPlan.js';
 import GroceryPlanOffer from '../../grocery/models/GroceryPlanOffer.js';
+import FeeSettings from '../../admin/models/FeeSettings.js';
 import { reduceGroceryStockForOrder, restoreGroceryStockForOrder } from '../services/groceryStockService.js';
 import {
   getDefaultPendingCartEdit,
@@ -93,6 +94,24 @@ const resolveOrderPlatform = async (restaurantId) => {
     restaurant = await GroceryStore.findOne(query).select('platform').lean();
   }
   return normalizePlatform(restaurant?.platform);
+};
+
+const getMinimumCodOrderValueForPlatform = async (platform) => {
+  const normalizedPlatform = platform === 'mogrocery' ? 'mogrocery' : 'mofood';
+  const platformFilter =
+    normalizedPlatform === 'mogrocery'
+      ? { platform: 'mogrocery' }
+      : { $or: [{ platform: 'mofood' }, { platform: { $exists: false } }] };
+
+  const feeSettings = await FeeSettings.findOne({
+    ...platformFilter,
+    isActive: true
+  })
+    .sort({ createdAt: -1 })
+    .select('minimumCodOrderValue')
+    .lean();
+
+  return Math.max(0, Number(feeSettings?.minimumCodOrderValue || 0));
 };
 
 const computeNextAverageRating = (currentAverage = 0, currentCount = 0, newRating = 0) => {
@@ -1492,6 +1511,21 @@ export const createOrder = async (req, res) => {
     // Ensure couponCode is included in pricing
     const persistedCouponCode = pricing?.couponCode || pricing?.appliedCoupon?.code || couponCode || null;
 
+    if (normalizedPaymentMethod === 'cash') {
+      const minimumCodOrderValue = await getMinimumCodOrderValueForPlatform(pricingPlatform);
+      const orderTotal = Math.max(0, Number(pricing?.total || 0));
+      if (orderTotal < minimumCodOrderValue) {
+        return res.status(400).json({
+          success: false,
+          message: `Cash on Delivery is available for orders of Rs ${minimumCodOrderValue} or more`,
+          data: {
+            minimumCodOrderValue,
+            orderTotal
+          }
+        });
+      }
+    }
+
     // Create order in database
     const order = new Order({
       orderId: generatedOrderId,
@@ -2060,6 +2094,20 @@ export const switchOrderToCash = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Order is already paid online and cannot be switched to COD'
+      });
+    }
+
+    const orderPlatformForCod = normalizePlatform(order.restaurantPlatform || (await resolveOrderPlatform(order.restaurantId)));
+    const minimumCodOrderValue = await getMinimumCodOrderValueForPlatform(orderPlatformForCod);
+    const orderTotal = Math.max(0, Number(order.pricing?.total || 0));
+    if (orderTotal < minimumCodOrderValue) {
+      return res.status(400).json({
+        success: false,
+        message: `Cash on Delivery is available for orders of Rs ${minimumCodOrderValue} or more`,
+        data: {
+          minimumCodOrderValue,
+          orderTotal
+        }
       });
     }
 

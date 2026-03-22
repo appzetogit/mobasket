@@ -133,6 +133,7 @@ export default function GroceryCheckoutPage() {
     freeDeliveryThreshold: 149,
     platformFee: 5,
     gstRate: 5,
+    minimumCodOrderValue: 0,
   });
   const [calculatedPricing, setCalculatedPricing] = useState(null);
   const [loadingPricing, setLoadingPricing] = useState(false);
@@ -662,6 +663,7 @@ export default function GroceryCheckoutPage() {
           freeDeliveryThreshold: Number(settings.freeDeliveryThreshold ?? prev.freeDeliveryThreshold),
           platformFee: Number(settings.platformFee ?? prev.platformFee),
           gstRate: Number(settings.gstRate ?? prev.gstRate),
+          minimumCodOrderValue: Number(settings.minimumCodOrderValue ?? prev.minimumCodOrderValue ?? 0),
         }));
       } catch (error) {
         console.error("Failed to fetch grocery fee settings:", error);
@@ -1015,6 +1017,14 @@ export default function GroceryCheckoutPage() {
     .toUpperCase();
   const visibleCoupons = showAllCoupons ? availableCoupons : availableCoupons.slice(0, 4);
   const hasSufficientWalletBalance = walletBalance >= grandTotal;
+  const minimumCodOrderValue = Math.max(0, Number(feeSettings.minimumCodOrderValue || 0));
+  const isCodEligible = grandTotal >= minimumCodOrderValue;
+
+  useEffect(() => {
+    if (paymentMethod === "cash" && !isCodEligible) {
+      setPaymentMethod("card");
+    }
+  }, [paymentMethod, isCodEligible]);
 
   useEffect(() => {
     const fetchWalletBalance = async () => {
@@ -1178,6 +1188,10 @@ export default function GroceryCheckoutPage() {
         toast.error("Insufficient wallet balance. Add money or choose another payment method.");
         return;
       }
+    }
+    if (paymentMethod === "cash" && !isCodEligible) {
+      toast.error(`COD is available on orders of Rs ${minimumCodOrderValue} and above.`);
+      return;
     }
 
     if (!storeAvailability.isAvailable) {
@@ -2104,7 +2118,12 @@ export default function GroceryCheckoutPage() {
               )}
             </button>
             <button
-              onClick={() => setPaymentMethod("cash")}
+              onClick={() => {
+                if (isCodEligible) {
+                  setPaymentMethod("cash");
+                }
+              }}
+              disabled={!isCodEligible}
               className={`w-full flex items-center justify-between p-3 rounded-xl border-2 transition-all ${paymentMethod === "cash"
                 ? "border-[#facd01] bg-yellow-50/50"
                 : "border-gray-100 bg-white"
@@ -2126,6 +2145,11 @@ export default function GroceryCheckoutPage() {
                 <div className="w-4 h-4 rounded-full bg-[#facd01] border-4 border-white shadow-sm ring-1 ring-[#facd01]"></div>
               )}
             </button>
+            {!isCodEligible && (
+              <p className="text-xs font-medium text-amber-700">
+                COD is available on orders of Rs {minimumCodOrderValue} and above.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -2152,7 +2176,8 @@ export default function GroceryCheckoutPage() {
             groceryItems.length === 0 ||
             hasMixedStoreItems ||
             !storeAvailability.isAvailable ||
-            (paymentMethod === "wallet" && !walletLoading && !hasSufficientWalletBalance)
+            (paymentMethod === "wallet" && !walletLoading && !hasSufficientWalletBalance) ||
+            (paymentMethod === "cash" && !isCodEligible)
           }
         >
           {isPlacingOrder

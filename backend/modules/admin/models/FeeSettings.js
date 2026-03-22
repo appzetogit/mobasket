@@ -57,6 +57,12 @@ const feeSettingsSchema = new mongoose.Schema(
       max: 100,
       comment: 'GST rate in percentage (e.g., 5 for 5%)'
     },
+    minimumCodOrderValue: {
+      type: Number,
+      default: 0,
+      min: 0,
+      comment: 'Minimum cart total required to allow Cash on Delivery'
+    },
     driverEarningRangeStartKm: {
       type: Number,
       default: 0,

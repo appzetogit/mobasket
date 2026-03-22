@@ -1081,7 +1081,11 @@ export default function RestaurantOnboarding() {
         const result = await window.flutter_inappwebview.callHandler('openCamera');
         if (result && result.success && result.base64) {
           const base64Data = result.base64;
-          const mimeType = result.mimeType || 'image/jpeg';
+          const mimeType = String(result.mimeType || 'image/jpeg').toLowerCase();
+          if (mimeType && !mimeType.startsWith("image/")) {
+            toast.error("Only image files are allowed", { id: "cameraCapture" });
+            return;
+          }
           const filename = result.fileName || `camera_${Date.now()}.jpg`;
 
           const byteCharacters = atob(base64Data);
@@ -1091,6 +1095,10 @@ export default function RestaurantOnboarding() {
           }
           const byteArray = new Uint8Array(byteNumbers);
           const file = new File([byteArray], filename, { type: mimeType });
+          if (!isAllowedImageFile(file)) {
+            toast.error("Please choose a JPG, PNG, or WEBP image", { id: "cameraCapture" });
+            return;
+          }
 
           onSuccess(file);
           toast.success("Image captured successfully", { id: "cameraCapture" });
@@ -1122,7 +1130,13 @@ export default function RestaurantOnboarding() {
     input.style.display = "none"
     input.onchange = (event) => {
       const file = event.target?.files?.[0] || null
-      if (file) onSuccess(file)
+      if (file) {
+        if (!isAllowedImageFile(file)) {
+          toast.error("Please choose a JPG, PNG, or WEBP image")
+        } else {
+          onSuccess(file)
+        }
+      }
       input.remove()
     }
     document.body.appendChild(input)

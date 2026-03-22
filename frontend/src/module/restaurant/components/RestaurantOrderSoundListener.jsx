@@ -11,6 +11,16 @@ export default function RestaurantOrderSoundListener() {
     const isRestaurantRoute = pathname.startsWith("/restaurant") && !pathname.startsWith("/restaurants");
     if (!isStoreRoute && !isRestaurantRoute) return false;
 
+    const isRestaurantTransientPath =
+      /^\/restaurant\/(login|signup|signup-email|otp|forgot-password|welcome|auth\/)/.test(pathname) ||
+      pathname.startsWith("/restaurant/onboarding") ||
+      pathname.startsWith("/restaurant/pending-approval");
+    const isStoreTransientPath =
+      /^\/store\/(login|signup|otp)/.test(pathname) ||
+      pathname.startsWith("/store/onboarding") ||
+      pathname.startsWith("/store/pending-approval");
+    if (isRestaurantTransientPath || isStoreTransientPath) return false;
+
     try {
       const restaurantToken = localStorage.getItem("restaurant_accessToken");
       const groceryToken = localStorage.getItem("grocery-store_accessToken");

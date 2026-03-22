@@ -125,7 +125,8 @@ export default function Cart() {
     deliveryFee: 25,
     freeDeliveryThreshold: 149,
     platformFee: 5,
-    gstRate: 5,
+    gstRate: 5,
+    minimumCodOrderValue: 0,
   })
 
 
@@ -618,7 +619,8 @@ export default function Cart() {
             deliveryFee: response.data.data.feeSettings.deliveryFee || 25,
             freeDeliveryThreshold: response.data.data.feeSettings.freeDeliveryThreshold || 149,
             platformFee: response.data.data.feeSettings.platformFee || 5,
-            gstRate: response.data.data.feeSettings.gstRate || 5,
+            gstRate: response.data.data.feeSettings.gstRate || 5,
+            minimumCodOrderValue: Number(response.data.data.feeSettings.minimumCodOrderValue || 0),
           })
         }
       } catch (error) {
@@ -636,8 +638,16 @@ export default function Cart() {
   const gstCharges = pricing?.tax || Math.round(subtotal * (feeSettings.gstRate / 100))
   const discount = pricing?.discount || (appliedCoupon ? Math.min(appliedCoupon.discount, subtotal * 0.5) : 0)
   const totalBeforeDiscount = subtotal + deliveryFee + platformFee + gstCharges
-  const total = pricing?.total || (totalBeforeDiscount - discount)
-  const savings = pricing?.savings || (discount + (subtotal > 500 ? 32 : 0))
+  const total = pricing?.total || (totalBeforeDiscount - discount)
+  const minimumCodOrderValue = Math.max(0, Number(feeSettings.minimumCodOrderValue || 0))
+  const isCodEligible = total >= minimumCodOrderValue
+  const savings = pricing?.savings || (discount + (subtotal > 500 ? 32 : 0))
+
+  useEffect(() => {
+    if (selectedPaymentMethod === "cash" && !isCodEligible) {
+      setSelectedPaymentMethod("razorpay")
+    }
+  }, [selectedPaymentMethod, isCodEligible])
 
   // Restaurant name from data or cart
   const restaurantName = restaurantData?.name || cart[0]?.restaurant || "Restaurant"
@@ -1784,16 +1794,24 @@ export default function Cart() {
                   >
                     <option value="razorpay">Razorpay</option>
                     <option value="wallet">Wallet {walletBalance > 0 ? `(₹${walletBalance.toFixed(0)})` : ''}</option>
-                    <option value="cash">COD</option>
+                    <option value="cash" disabled={!isCodEligible}>
+                      {isCodEligible ? "COD" : `COD (Min Rs ${minimumCodOrderValue})`}
+                    </option>
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 dark:text-gray-400" />
                 </div>
               </div>
 
-              <Button
+              {!isCodEligible && (
+                <p className="text-xs text-amber-700 dark:text-amber-300 mb-3">
+                  COD is available on orders of Rs {minimumCodOrderValue} and above.
+                </p>
+              )}
+
+              <Button
                 size="lg"
                 onClick={handlePlaceOrder}
-                disabled={isPlacingOrder || (selectedPaymentMethod === "wallet" && walletBalance < total)}
+                disabled={isPlacingOrder || (selectedPaymentMethod === "wallet" && walletBalance < total) || (selectedPaymentMethod === "cash" && !isCodEligible)}
                 className="w-full bg-green-700 hover:bg-green-800 dark:bg-green-600 dark:hover:bg-green-700 text-white px-6 md:px-10 h-14 md:h-16 rounded-lg md:rounded-xl text-base md:text-lg font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {(selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet") && (
