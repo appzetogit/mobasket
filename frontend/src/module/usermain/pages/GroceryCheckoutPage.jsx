@@ -14,7 +14,6 @@ import {
   ChevronRight,
   AlertCircle,
   Truck,
-  CalendarDays,
   Sparkles,
   Smartphone,
 } from "lucide-react";
@@ -33,6 +32,7 @@ import { useRef } from "react";
 
 const GROCERY_ITEM_FALLBACK_IMAGE =
   "https://images.unsplash.com/photo-1542838132-92c53300491e?w=240&h=240&fit=crop";
+const MAX_SCHEDULE_ADVANCE_DAYS = 2;
 
 const extractAddressCoordinates = (address) => {
   if (!address || typeof address !== "object") return null;
@@ -62,6 +62,14 @@ const extractAddressCoordinates = (address) => {
 
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
   return { latitude, longitude };
+};
+
+const toLocalDateInputValue = (date) => {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
 };
 
 export default function GroceryCheckoutPage() {
@@ -104,6 +112,21 @@ export default function GroceryCheckoutPage() {
   const [deliveryOption, setDeliveryOption] = useState("now");
   const [scheduledDate, setScheduledDate] = useState(new Date());
   const [scheduledTime, setScheduledTime] = useState("");
+  const upcomingScheduleDates = useMemo(
+    () => Array.from({ length: MAX_SCHEDULE_ADVANCE_DAYS + 1 }, (_, index) => {
+      const date = new Date();
+      date.setHours(12, 0, 0, 0);
+      date.setDate(date.getDate() + index);
+      return date;
+    }),
+    [],
+  );
+  const maxScheduledDate = useMemo(() => {
+    const date = new Date();
+    date.setHours(23, 59, 59, 999);
+    date.setDate(date.getDate() + MAX_SCHEDULE_ADVANCE_DAYS);
+    return date;
+  }, []);
   const [feeSettings, setFeeSettings] = useState({
     deliveryFee: 25,
     deliveryFeeRanges: [],
@@ -171,6 +194,22 @@ export default function GroceryCheckoutPage() {
     if (isPlacingOrder || postOrderRedirecting) return;
     navigate("/grocery/cart", { replace: true });
   }, [groceryItems.length, isPlacingOrder, postOrderRedirecting, navigate]);
+
+  useEffect(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const selected = new Date(scheduledDate);
+    selected.setHours(0, 0, 0, 0);
+
+    if (selected.getTime() < today.getTime()) {
+      setScheduledDate(today);
+      return;
+    }
+
+    if (selected.getTime() > maxScheduledDate.getTime()) {
+      setScheduledDate(maxScheduledDate);
+    }
+  }, [maxScheduledDate, scheduledDate]);
 
   const resetNewAddressForm = () => {
     setNewAddress({
@@ -1122,6 +1161,14 @@ export default function GroceryCheckoutPage() {
       toast.error("Please select a delivery time slot.");
       return;
     }
+    if (deliveryOption === "schedule") {
+      const selected = new Date(scheduledDate);
+      selected.setHours(0, 0, 0, 0);
+      if (selected.getTime() > maxScheduledDate.getTime()) {
+        toast.error("Scheduled delivery can be set up to 2 days in advance only.");
+        return;
+      }
+    }
     if (paymentMethod === "wallet") {
       if (walletLoading) {
         toast.info("Checking wallet balance. Please wait.");
@@ -1900,45 +1947,33 @@ export default function GroceryCheckoutPage() {
                     <p className="text-xs font-bold text-gray-500 mb-2">
                       Select Date
                     </p>
-                    <div className="relative">
-                      <button
-                        className="w-full flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 shadow-sm hover:border-[#facd01] transition-colors"
-                        onClick={() => document.getElementById("date-picker").showPicker()}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="bg-yellow-50 p-2 rounded-lg text-yellow-700">
-                            <CalendarDays size={18} />
-                          </div>
-                          <div className="flex flex-col items-start">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Date</span>
-                            <span className="text-sm font-bold text-gray-900">
-                              {scheduledDate.toLocaleDateString("en-US", {
-                                weekday: "long",
-                                month: "short",
-                                day: "numeric",
-                              })}
-                            </span>
-                          </div>
-                        </div>
-                        <ChevronRight size={16} className="text-gray-400" />
-                      </button>
-                      <input
-                        id="date-picker"
-                        type="date"
-                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full z-[-1]"
-                        value={
-                          !isNaN(scheduledDate.getTime())
-                            ? scheduledDate.toISOString().split("T")[0]
-                            : ""
-                        }
-                        min={new Date().toISOString().split("T")[0]}
-                        onChange={(e) => {
-                          const date = new Date(e.target.value);
-                          if (!isNaN(date.getTime())) {
-                            setScheduledDate(date);
-                          }
-                        }}
-                      />
+                    <div className="grid grid-cols-3 gap-2">
+                      {upcomingScheduleDates.map((dateOption) => {
+                        const isActive =
+                          scheduledDate instanceof Date &&
+                          !Number.isNaN(scheduledDate.getTime()) &&
+                          toLocalDateInputValue(scheduledDate) === toLocalDateInputValue(dateOption);
+
+                        return (
+                          <button
+                            key={toLocalDateInputValue(dateOption)}
+                            type="button"
+                            onClick={() => setScheduledDate(dateOption)}
+                            className={`rounded-xl border px-2 py-2 text-left transition-colors ${
+                              isActive
+                                ? "border-[#facd01] bg-yellow-50 text-gray-900"
+                                : "border-gray-200 bg-white text-gray-700 hover:border-[#facd01]"
+                            }`}
+                          >
+                            <p className="text-[9px] font-semibold uppercase tracking-wide text-gray-500">
+                              {dateOption.toLocaleDateString("en-US", { weekday: "short" })}
+                            </p>
+                            <p className="text-[11px] font-bold">
+                              {dateOption.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                            </p>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 

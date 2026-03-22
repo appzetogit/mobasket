@@ -35,6 +35,7 @@ import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
 import { ensureAddressCoordinates } from "@/lib/utils/addressGeocoding";
 
 const isMongoObjectId = (value) => /^[a-fA-F0-9]{24}$/.test(String(value || "").trim());
+const MAX_SCHEDULE_ADVANCE_DAYS = 2;
 
 export default function CheckoutPage() {
   const navigate = useNavigate();
@@ -121,6 +122,12 @@ export default function CheckoutPage() {
     ? new Date(location.state.deliveryDate)
     : null;
   const deliveryTimeSlot = location.state?.deliveryTimeSlot || null;
+  const maxScheduledAt = useMemo(() => {
+    const date = new Date();
+    date.setHours(23, 59, 59, 999);
+    date.setDate(date.getDate() + MAX_SCHEDULE_ADVANCE_DAYS);
+    return date;
+  }, []);
 
   const foodItems = useMemo(
     () => cart.filter((item) => !isGroceryItem(item)),
@@ -1206,6 +1213,10 @@ export default function CheckoutPage() {
       }
       if (scheduledAt.getTime() <= Date.now()) {
         toast.error("Scheduled delivery time must be in the future.");
+        return;
+      }
+      if (scheduledAt.getTime() > maxScheduledAt.getTime()) {
+        toast.error("Scheduled delivery can be set up to 2 days in advance only.");
         return;
       }
     }
