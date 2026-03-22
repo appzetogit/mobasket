@@ -231,6 +231,7 @@ export function CategoryFoodsContent({
   const [selectedStoreId, setSelectedStoreId] = useState(initialStoreId || "all-stores");
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
+  const [zoneStores, setZoneStores] = useState([]);
   const [isCategoriesLoading, setIsCategoriesLoading] = useState(true);
   const [isProductsLoading, setIsProductsLoading] = useState(true);
   const [isLoadingMoreProducts, setIsLoadingMoreProducts] = useState(false);
@@ -260,6 +261,47 @@ export function CategoryFoodsContent({
     }
     localStorage.removeItem("mogrocery:selectedStoreId");
   }, [selectedStoreId]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchZoneStores = async () => {
+      try {
+        const params = {
+          page: 1,
+          limit: 120,
+          ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
+        };
+        const response = await api.get("/grocery/products", { params });
+        const data = Array.isArray(response?.data?.data) ? response.data.data : [];
+        const map = new Map();
+
+        data.forEach((product) => {
+          const storeId = String(
+            product?.storeId?._id || product?.storeId?.id || product?.storeId || ""
+          ).trim();
+          if (!storeId || map.has(storeId)) return;
+
+          map.set(storeId, {
+            id: storeId,
+            name: String(product?.storeId?.name || product?.storeName || "").trim() || "Store",
+          });
+        });
+
+        if (!mounted) return;
+        setZoneStores(Array.from(map.values()));
+      } catch {
+        if (!mounted) return;
+        setZoneStores([]);
+      }
+    };
+
+    fetchZoneStores();
+
+    return () => {
+      mounted = false;
+    };
+  }, [effectiveZoneId]);
 
   useEffect(() => {
     let mounted = true;
@@ -499,46 +541,44 @@ export function CategoryFoodsContent({
   ]);
 
   const sidebarCategories = useMemo(() => {
-    const categoryIdsWithProducts = new Set();
-    const categoryNamesWithProducts = new Set();
-    products.forEach((product) => {
-      const categoryId = String(
-        product?.category?._id || product?.category?.id || product?.category || ""
-      ).trim();
-      if (categoryId) categoryIdsWithProducts.add(categoryId);
-
-      const categoryName = String(product?.category?.name || "").trim().toLowerCase();
-      if (categoryName) categoryNamesWithProducts.add(categoryName);
-    });
-
     const dynamic = categories
-      .filter((category) => {
-        const categoryId = String(category?._id || "").trim();
-        const categorySlug = String(category?.slug || "").trim();
-        const categoryName = String(category?.name || "").trim().toLowerCase();
-        return (
-          (categoryId && categoryIdsWithProducts.has(categoryId)) ||
-          (categorySlug && categoryIdsWithProducts.has(categorySlug)) ||
-          (categoryName && categoryNamesWithProducts.has(categoryName))
-        );
-      })
       .map((category) => ({
-        id: String(category?._id || ""),
+        id: String(category?._id || category?.slug || "").trim(),
         name: category?.name || "Category",
         icon: category?.image || FALLBACK_IMAGE,
       }))
       .filter((category) => category.id);
 
     return [{ id: "all", name: "All", icon: imgBag3D }, ...dynamic];
-  }, [categories, products]);
+  }, [categories]);
+
+  const selectedStoreLabel = useMemo(() => {
+    if (!selectedStoreId || selectedStoreId === "all-stores") return "All Stores";
+
+    const matchedZoneStore = zoneStores.find(
+      (store) => String(store?.id || "") === String(selectedStoreId)
+    );
+    if (matchedZoneStore?.name) return matchedZoneStore.name;
+
+    const matchedProduct = products.find((product) => doesProductMatchStore(product, selectedStoreId));
+    const matchedStoreName = String(
+      matchedProduct?.storeId?.name || matchedProduct?.storeName || ""
+    ).trim();
+
+    return matchedStoreName || "Selected Store";
+  }, [products, selectedStoreId, zoneStores]);
 
   useEffect(() => {
-    if (selectedCategory === "all") return;
-    const exists = sidebarCategories.some(
-      (category) => String(category?.id || "") === String(selectedCategory)
+    if (!selectedStoreId || selectedStoreId === "all-stores") return;
+    if (zoneStores.length === 0) return;
+
+    const existsInZone = zoneStores.some(
+      (store) => String(store?.id || "") === String(selectedStoreId)
     );
-    if (!exists) setSelectedCategory("all");
-  }, [selectedCategory, sidebarCategories]);
+    if (!existsInZone) {
+      setSelectedStoreId("all-stores");
+    }
+  }, [selectedStoreId, zoneStores]);
 
   const handleProductCardClick = (product) => {
     const productId = product?._id || product?.id;
@@ -642,6 +682,15 @@ export function CategoryFoodsContent({
               {sidebarCategories.find((c) => c.id === selectedCategory)?.name || "All Products"}
             </h1>
             <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">{products.length} items</span>
+          </div>
+
+          <div className="ml-auto text-right">
+            <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500">
+              Store
+            </p>
+            <p className="text-xs font-bold text-slate-700 dark:text-slate-200 line-clamp-1 max-w-[140px]">
+              {selectedStoreLabel}
+            </p>
           </div>
 
           {isModal && (
