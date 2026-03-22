@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import mofoods_hero from "@/assets/mofoods_hero.png";
 import mogrocery_hero from "@/assets/mogrocery_hero.png";
 import mocare_hero from "@/assets/mocare_hero.png";
-import mobasket_logo from "@/assets/mobasketlogo.png";
 
 const SelectionCard = ({ title, subtitle, image, icon: Icon, color, onClick, comingSoon, delay }) => {
   return (
@@ -116,7 +115,7 @@ export default function WelcomeSelectionPage() {
           >
             {/* Logo */}
             <motion.img 
-              src={mobasket_logo} 
+              src="/2.png" 
               alt="MoBasket Logo" 
               className="h-16 w-16 md:h-20 md:w-20 object-contain drop-shadow-sm"
               initial={{ scale: 0.8, opacity: 0 }}
@@ -137,8 +136,9 @@ export default function WelcomeSelectionPage() {
             className="text-4xl md:text-6xl font-black text-slate-900 tracking-tighter"
           >
             Welcome to<br/>
-            <span className="text-yellow-300">
-              MoBasket
+            <span>
+              <span className="text-black">Mo</span>
+              <span className="text-[#2f8d2f]">Basket</span>
             </span>
           </motion.h1>
           
