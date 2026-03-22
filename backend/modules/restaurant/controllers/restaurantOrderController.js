@@ -90,6 +90,26 @@ const buildRestaurantIdVariations = (restaurant) => {
   return Array.from(variations);
 };
 
+const parseBooleanQuery = (value, defaultValue = true) => {
+  if (value === undefined || value === null || value === '') return defaultValue;
+  const normalized = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) return false;
+  return defaultValue;
+};
+
+const sanitizeOrderItemsForList = (order) => {
+  if (!order || !Array.isArray(order.items)) return order;
+  return {
+    ...order,
+    items: order.items.map((item) => {
+      if (!item || typeof item !== 'object') return item;
+      const { image, images, ...rest } = item;
+      return rest;
+    })
+  };
+};
+
 /**
  * Get all orders for restaurant
  * GET /api/restaurant/orders
@@ -98,6 +118,7 @@ export const getRestaurantOrders = asyncHandler(async (req, res) => {
   try {
     const restaurant = req.restaurant;
     const { status, page = 1, limit = 50 } = req.query;
+    const includeItemImages = parseBooleanQuery(req.query.includeItemImages, true);
 
     // Get restaurant ID - normalize to string (Order.restaurantId is String type)
     const restaurantIdString = restaurant._id?.toString() ||
@@ -172,15 +193,18 @@ export const getRestaurantOrders = asyncHandler(async (req, res) => {
       .lean();
 
     const total = await Order.countDocuments(query);
+    const normalizedOrders = includeItemImages
+      ? orders
+      : orders.map((order) => sanitizeOrderItemsForList(order));
 
     // Resolve paymentMethod: order.payment.method or Payment collection (COD fallback)
-    const orderIds = orders.map(o => o._id);
+    const orderIds = normalizedOrders.map(o => o._id);
     const codOrderIds = new Set();
     try {
       const codPayments = await Payment.find({ orderId: { $in: orderIds }, method: 'cash' }).select('orderId').lean();
       codPayments.forEach(p => codOrderIds.add(p.orderId?.toString()));
     } catch (e) { /* ignore */ }
-    const ordersWithPaymentMethod = orders.map(o => {
+    const ordersWithPaymentMethod = normalizedOrders.map(o => {
       let paymentMethod = o.payment?.method ?? 'razorpay';
       if (paymentMethod !== 'cash' && codOrderIds.has(o._id?.toString())) paymentMethod = 'cash';
       return { ...o, paymentMethod };
@@ -188,11 +212,11 @@ export const getRestaurantOrders = asyncHandler(async (req, res) => {
 
     // Log detailed order info for debugging
     console.log('✅ Found orders:', {
-      count: orders.length,
+      count: normalizedOrders.length,
       total,
       restaurantId: restaurantIdString,
       queryUsed: JSON.stringify(query),
-      orders: orders.map(o => ({ 
+      orders: normalizedOrders.map(o => ({
         orderId: o.orderId, 
         status: o.status, 
         restaurantId: o.restaurantId,
@@ -202,7 +226,7 @@ export const getRestaurantOrders = asyncHandler(async (req, res) => {
     });
     
     // If no orders found, log a warning with more details
-    if (orders.length === 0 && total === 0) {
+    if (normalizedOrders.length === 0 && total === 0) {
       console.warn('⚠️ No orders found for restaurant:', {
         restaurantId: restaurantIdString,
         restaurant_id: restaurant._id?.toString(),

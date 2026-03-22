@@ -77,6 +77,19 @@ const formatOrderStatusLabel = (status) => {
   }
 }
 
+const getOrderPreviewPhotoUrl = (value) => {
+  const normalized = String(value || "").trim()
+  if (!normalized) return null
+  if (normalized.startsWith("data:image")) return null
+  return normalized
+}
+
+const fetchOrdersLite = (orderAPI, params = {}) =>
+  orderAPI.getOrders({
+    includeItemImages: false,
+    ...params,
+  })
+
 const resolveDeliveryAssignment = (order = {}) => {
   const explicitDeliveryPartnerId =
     order?.deliveryPartnerId?._id ||
@@ -130,7 +143,7 @@ function NewOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 0 
 
     const fetchOrders = async () => {
       try {
-        const response = await orderAPI.getOrders()
+        const response = await fetchOrdersLite(orderAPI, { status: "confirmed" })
         if (!isMounted) return
 
         if (response.data?.success && Array.isArray(response.data.data?.orders)) {
@@ -269,7 +282,7 @@ function CompletedOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTic
 
     const fetchOrders = async () => {
       try {
-        const response = await orderAPI.getOrders()
+        const response = await fetchOrdersLite(orderAPI)
 
         if (!isMounted) return
 
@@ -288,7 +301,7 @@ function CompletedOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTic
             timePlaced: new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
             deliveredAt: order.deliveredAt || order.updatedAt || order.createdAt,
             itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
-            photoUrl: order.items?.[0]?.image || null,
+            photoUrl: getOrderPreviewPhotoUrl(order.items?.[0]?.image),
             photoAlt: order.items?.[0]?.name || 'Order',
             amount: order.pricing?.total || order.total || 0
           }))
@@ -445,7 +458,7 @@ function CompletedOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTic
                       <div className="flex items-baseline gap-1">
                         <span className="text-[11px] text-gray-500">Amount</span>
                         <span className="text-xs font-medium text-black">
-                          ₹{order.amount.toFixed(2)}
+                          â‚¹{order.amount.toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -479,7 +492,7 @@ function CancelledOrders({ onSelectOrder, orderAPI, isGroceryStore = false, sear
 
     const fetchOrders = async () => {
       try {
-        const response = await orderAPI.getOrders()
+        const response = await fetchOrdersLite(orderAPI, { status: "cancelled" })
 
         if (!isMounted) return
 
@@ -501,7 +514,7 @@ function CancelledOrders({ onSelectOrder, orderAPI, isGroceryStore = false, sear
             cancelledBy: order.cancelledBy || 'unknown',
             cancellationReason: order.cancellationReason || 'No reason provided',
             itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
-            photoUrl: order.items?.[0]?.image || null,
+            photoUrl: getOrderPreviewPhotoUrl(order.items?.[0]?.image),
             photoAlt: order.items?.[0]?.name || 'Order',
             amount: order.pricing?.total || order.total || 0
           }))
@@ -673,7 +686,7 @@ function CancelledOrders({ onSelectOrder, orderAPI, isGroceryStore = false, sear
                       <div className="flex items-baseline gap-1">
                         <span className="text-[11px] text-gray-500">Amount</span>
                         <span className="text-xs font-medium text-black">
-                          ₹{order.amount.toFixed(2)}
+                          â‚¹{order.amount.toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -935,7 +948,7 @@ export default function OrdersMain() {
     }
 
     try {
-      const response = await orderAPI.getOrders()
+      const response = await fetchOrdersLite(orderAPI)
       const rawOrders = response?.data?.data?.orders || []
 
       const counts = {
@@ -1097,7 +1110,7 @@ export default function OrdersMain() {
 
     window.addEventListener('restaurantProfileRefresh', handleProfileRefresh)
 
-    // Auto-poll store status every 30 s ΓÇö ONLY for /store (grocery store)
+    // Auto-poll store status every 30 s Î“Ã‡Ã¶ ONLY for /store (grocery store)
     // Restaurant status is fetched once on mount; this interval does NOT affect it
     let statusPollInterval = null
     if (isGroceryStore) {
@@ -1230,7 +1243,7 @@ export default function OrdersMain() {
     if (showNewOrderPopupRef.current) return false
 
     try {
-      const response = await orderAPI.getOrders()
+      const response = await fetchOrdersLite(orderAPI, { status: "confirmed" })
       const rawOrders = response?.data?.data?.orders
       if (!response?.data?.success || !Array.isArray(rawOrders) || rawOrders.length === 0) {
         return false
@@ -1508,7 +1521,7 @@ export default function OrdersMain() {
         error?.code === 'ECONNABORTED' ||
         String(error?.message || '').toLowerCase().includes('timeout')
 
-      console.error('Γ¥î Error accepting order:', error)
+      console.error('Î“Â¥Ã® Error accepting order:', error)
       const errorMessage = isTimeoutError
         ? 'Accept request timed out. Backend may be slow. Please check the order list and retry once.'
         : (
@@ -1729,9 +1742,9 @@ export default function OrdersMain() {
           throw lastError
         }
 
-        console.log('Γ£à Order rejected:', rejectedOrderId || orderIdCandidates[0])
+        console.log('Î“Â£Ã  Order rejected:', rejectedOrderId || orderIdCandidates[0])
       } catch (error) {
-        console.error('Γ¥î Error rejecting order:', error)
+        console.error('Î“Â¥Ã® Error rejecting order:', error)
         alert('Failed to reject order. Please try again.')
         return
       }
@@ -1778,7 +1791,7 @@ export default function OrdersMain() {
       setOrderToCancel(null)
       setCancelReason("")
     } catch (error) {
-      console.error('Γ¥î Error cancelling order:', error)
+      console.error('Î“Â¥Ã® Error cancelling order:', error)
       toast.error(error.response?.data?.message || 'Failed to cancel order')
     }
   }
@@ -1870,8 +1883,8 @@ export default function OrdersMain() {
         const tableData = orderToPrint.items.map(item => [
           item.name || 'Item',
           item.quantity || 1,
-          `₹${(item.price || 0).toFixed(2)}`,
-          `₹${((item.price || 0) * (item.quantity || 1)).toFixed(2)}`
+          `â‚¹${(item.price || 0).toFixed(2)}`,
+          `â‚¹${((item.price || 0) * (item.quantity || 1)).toFixed(2)}`
         ])
 
         autoTable(doc, {
@@ -1895,7 +1908,7 @@ export default function OrdersMain() {
       // Total
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(12)
-      doc.text(`Total: ₹${(orderToPrint.total || 0).toFixed(2)}`, 20, yPos)
+      doc.text(`Total: â‚¹${(orderToPrint.total || 0).toFixed(2)}`, 20, yPos)
 
       // Payment status
       yPos += 10
@@ -1923,7 +1936,7 @@ export default function OrdersMain() {
       if (orderToPrint.sendCutlery) {
         yPos += 15
         doc.setFont('helvetica', 'normal')
-        doc.text('Γ£ô Send cutlery requested', 20, yPos)
+        doc.text('Î“Â£Ã´ Send cutlery requested', 20, yPos)
       }
 
       // Footer
@@ -1941,7 +1954,7 @@ export default function OrdersMain() {
       const fileName = `Order-${orderToPrint.orderId || 'Receipt'}-${Date.now()}.pdf`
       doc.save(fileName)
     } catch (error) {
-      console.error('Γ¥î Error generating PDF:', error)
+      console.error('Î“Â¥Ã® Error generating PDF:', error)
       alert('Failed to generate PDF. Please try again.')
     }
   }
@@ -2438,7 +2451,7 @@ export default function OrdersMain() {
                                       {item.quantity} x {item.name}
                                     </p>
                                     <p className="text-xs text-gray-600 ml-2">
-                                      ₹{item.price * item.quantity}
+                                      â‚¹{item.price * item.quantity}
                                     </p>
                                   </div>
                                 </div>
@@ -2471,7 +2484,7 @@ export default function OrdersMain() {
                       <span className="text-sm font-semibold text-gray-900">Total bill</span>
                     </div>
                     <span className="text-base font-bold text-gray-900">
-                      ₹{(popupOrder || newOrder)?.total || 0}
+                      â‚¹{(popupOrder || newOrder)?.total || 0}
                     </span>
                   </div>
 
@@ -2839,7 +2852,7 @@ export default function OrdersMain() {
                   <p className="text-[11px] text-gray-500 mt-1">
                     {selectedOrder.type}
                     {selectedOrder.tableOrToken
-                      ? ` ΓÇó ${selectedOrder.tableOrToken}`
+                      ? ` Î“Ã‡Ã³ ${selectedOrder.tableOrToken}`
                       : ""}
                   </p>
                 </div>
@@ -3079,7 +3092,7 @@ function OrderCard({
             <div className="flex flex-col gap-1">
               <p className="text-[11px] text-gray-500">
                 {type}
-                {tableOrToken ? ` ΓÇó ${tableOrToken}` : ""}
+                {tableOrToken ? ` Î“Ã‡Ã³ ${tableOrToken}` : ""}
               </p>
               {/* Delivery Assignment Status - show for preparing and ready orders */}
               {['preparing', 'ready'].includes(normalizedStatus) && (
@@ -3151,7 +3164,7 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "", 
     const fetchOrders = async () => {
       try {
         // Fetch all orders and filter for 'preparing' status on frontend
-        const response = await orderAPI.getOrders()
+        const response = await fetchOrdersLite(orderAPI, { status: "preparing" })
 
         if (!isMounted) return
 
@@ -3197,7 +3210,7 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "", 
               initialETA, // Store initial ETA in minutes
               preparingTimestamp, // Store when order started preparing
               itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
-              photoUrl: order.items?.[0]?.image || null,
+              photoUrl: getOrderPreviewPhotoUrl(order.items?.[0]?.image),
               photoAlt: order.items?.[0]?.name || 'Order',
               deliveryPartnerId: assignment.deliveryPartnerId,
               hasDeliveryAssignment: assignment.hasDeliveryAssignment,
@@ -3322,7 +3335,7 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "", 
               if (status === 400 && (msg.includes('cannot be marked as ready') || msg.includes('current status'))) {
                 // Keep in markedReadyOrdersRef so we don't retry; order will disappear on next fetch
               } else {
-                console.error(`Γ¥î Failed to auto-mark order ${order.orderId} as ready:`, error)
+                console.error(`Î“Â¥Ã® Failed to auto-mark order ${order.orderId} as ready:`, error)
                 markedReadyOrdersRef.current.delete(orderKey)
               }
               // Don't show error toast - it will retry on next check (for non-idempotent errors)
@@ -3446,7 +3459,7 @@ function ReadyOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 
     const fetchOrders = async () => {
       try {
         // Fetch all orders and filter for 'ready' status on frontend
-        const response = await orderAPI.getOrders()
+        const response = await fetchOrdersLite(orderAPI, { status: "ready" })
 
         if (!isMounted) return
 
@@ -3468,7 +3481,7 @@ function ReadyOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 
             timePlaced: new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
             eta: null, // Don't show ETA for ready orders
             itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
-            photoUrl: order.items?.[0]?.image || null,
+            photoUrl: getOrderPreviewPhotoUrl(order.items?.[0]?.image),
             photoAlt: order.items?.[0]?.name || 'Order',
             deliveryPartnerId: assignment.deliveryPartnerId,
             hasDeliveryAssignment: assignment.hasDeliveryAssignment,
@@ -3577,7 +3590,7 @@ const OutForDeliveryOrders = ({ onSelectOrder, orderAPI, searchQuery = "", refre
     const fetchOrders = async () => {
       try {
         // Fetch all orders and filter for 'out_for_delivery' status on frontend
-        const response = await orderAPI.getOrders()
+        const response = await fetchOrdersLite(orderAPI, { status: "out_for_delivery" })
 
         if (!isMounted) return
 
@@ -3597,7 +3610,7 @@ const OutForDeliveryOrders = ({ onSelectOrder, orderAPI, searchQuery = "", refre
             timePlaced: new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
             eta: null,
             itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
-            photoUrl: order.items?.[0]?.image || null,
+            photoUrl: getOrderPreviewPhotoUrl(order.items?.[0]?.image),
             photoAlt: order.items?.[0]?.name || 'Order'
           }))
 
@@ -3702,7 +3715,7 @@ function ScheduledOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTic
 
     const fetchOrders = async () => {
       try {
-        const response = await orderAPI.getOrders()
+        const response = await fetchOrdersLite(orderAPI)
 
         if (!isMounted) return
 
@@ -3735,7 +3748,7 @@ function ScheduledOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTic
             scheduledAt: order.scheduledDelivery?.scheduledFor || order.createdAt,
             eta: null,
             itemsSummary: order.items?.map((item) => `${item.quantity}x ${item.name}`).join(", ") || "No items",
-            photoUrl: order.items?.[0]?.image || null,
+            photoUrl: getOrderPreviewPhotoUrl(order.items?.[0]?.image),
             photoAlt: order.items?.[0]?.name || "Order",
           }))
           .sort((a, b) => {
