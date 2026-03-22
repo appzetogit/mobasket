@@ -267,6 +267,67 @@ const collectSearchableItems = (restaurant = {}) => {
   return Array.from(names);
 };
 
+const parseRestaurantRating = (value) => {
+  if (value === null || value === undefined) return null;
+
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return null;
+    if (value < 0 || value > 5) return null;
+    return Number(value.toFixed(1));
+  }
+
+  if (typeof value === "string") {
+    const match = value.match(/(\d+(\.\d+)?)/);
+    if (!match) return null;
+    const numeric = Number(match[1]);
+    if (!Number.isFinite(numeric) || numeric < 0 || numeric > 5) return null;
+    return Number(numeric.toFixed(1));
+  }
+
+  if (typeof value === "object") {
+    const objectCandidates = [
+      value?.average,
+      value?.avg,
+      value?.value,
+      value?.rating,
+      value?.overall,
+      value?.score,
+    ];
+
+    for (const candidate of objectCandidates) {
+      const parsed = parseRestaurantRating(candidate);
+      if (parsed !== null) return parsed;
+    }
+  }
+
+  return null;
+};
+
+const extractRestaurantRating = (restaurant = {}) => {
+  const candidates = [
+    restaurant?.rating,
+    restaurant?.averageRating,
+    restaurant?.avgRating,
+    restaurant?.averageRatings,
+    restaurant?.metrics?.rating,
+    restaurant?.metrics?.averageRating,
+    restaurant?.ratings?.average,
+    restaurant?.ratings?.avg,
+    restaurant?.ratings?.rating,
+    restaurant?.stats?.rating,
+    restaurant?.stats?.averageRating,
+    restaurant?.summary?.rating,
+    restaurant?.review?.rating,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = parseRestaurantRating(candidate);
+    if (parsed !== null) return parsed;
+  }
+
+  return 0;
+};
+
 const getInitialHomeZoneSelection = () => {
   if (typeof window === "undefined") return "auto";
   try {
@@ -1644,18 +1705,7 @@ export default function Home() {
 
               // Keep single image for backward compatibility
               const image = allImages[0] || "";
-              const rawRating =
-                restaurant?.rating ??
-                restaurant?.averageRating ??
-                restaurant?.avgRating ??
-                restaurant?.averageRatings ??
-                restaurant?.metrics?.rating ??
-                0;
-              const numericRating = Number(rawRating);
-              const rating =
-                Number.isFinite(numericRating) && numericRating > 0
-                  ? Number(numericRating.toFixed(1))
-                  : 0;
+              const rating = extractRestaurantRating(restaurant);
 
               return {
                 id: restaurant.restaurantId || restaurant._id,

@@ -21,6 +21,25 @@ import { jsPDF } from "jspdf"
 import autoTable from "jspdf-autotable"
 import { getCompanyNameAsync } from "@/lib/utils/businessSettings"
 
+const toValidRating = (value) => {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric >= 1 && numeric <= 5 ? numeric : 0
+}
+
+const getRestaurantRatingFromOrder = (orderData) => {
+  const restaurantScoped = toValidRating(orderData?.review?.restaurant?.rating)
+  if (restaurantScoped > 0) return restaurantScoped
+
+  // Backward compatibility: use shared review.rating only when no delivery-scoped rating exists.
+  const hasDeliveryScoped = toValidRating(orderData?.review?.delivery?.rating) > 0
+  if (hasDeliveryScoped) return 0
+
+  return toValidRating(orderData?.review?.rating)
+}
+
+const getDeliveryRatingFromOrder = (orderData) =>
+  toValidRating(orderData?.review?.delivery?.rating)
+
 export default function UserOrderDetails() {
   const navigate = useNavigate()
   const { orderId } = useParams()
@@ -51,8 +70,8 @@ export default function UserOrderDetails() {
         }
 
         setOrder(orderData)
-        const existingRestaurantRating = Number(orderData?.review?.restaurant?.rating || orderData?.review?.rating || 0)
-        const existingDeliveryRating = Number(orderData?.review?.delivery?.rating || 0)
+        const existingRestaurantRating = getRestaurantRatingFromOrder(orderData)
+        const existingDeliveryRating = getDeliveryRatingFromOrder(orderData)
         setRestaurantRating(existingRestaurantRating > 0 ? existingRestaurantRating : 0)
         setDeliveryRating(existingDeliveryRating > 0 ? existingDeliveryRating : 0)
         setRestaurantComment(orderData?.review?.restaurant?.comment || orderData?.review?.comment || "")
@@ -174,8 +193,8 @@ export default function UserOrderDetails() {
   const items = Array.isArray(order.items) ? order.items : []
   const pricing = order.pricing || {}
   const isDeliveredOrder = String(order.status || "").toLowerCase() === "delivered"
-  const hasRatedRestaurant = Number(order?.review?.restaurant?.rating || order?.review?.rating || 0) > 0
-  const hasRatedDelivery = Number(order?.review?.delivery?.rating || 0) > 0
+  const hasRatedRestaurant = getRestaurantRatingFromOrder(order) > 0
+  const hasRatedDelivery = getDeliveryRatingFromOrder(order) > 0
   const canRateDelivery = isDeliveredOrder && !!order.deliveryPartnerId
 
   // Payment status flags
@@ -332,8 +351,10 @@ export default function UserOrderDetails() {
   const handleSubmitReview = async () => {
     if (!order) return
 
-    const hasRestaurantReview = restaurantRating > 0
-    const hasDeliveryReview = deliveryRating > 0
+    // Only submit rating blocks that are newly provided in this session.
+    // If already rated earlier, avoid re-sending that field (backend rejects duplicates).
+    const hasRestaurantReview = !hasRatedRestaurant && restaurantRating > 0
+    const hasDeliveryReview = !hasRatedDelivery && deliveryRating > 0
 
     if (!hasRestaurantReview && !hasDeliveryReview) {
       toast.error("Please rate restaurant and/or delivery")
@@ -669,7 +690,7 @@ export default function UserOrderDetails() {
               <div className="space-y-2">
                 <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Restaurant (out of 5)</p>
                 {renderRatingStars(
-                  restaurantRating || Number(order?.review?.restaurant?.rating || order?.review?.rating || 0),
+                  restaurantRating || getRestaurantRatingFromOrder(order),
                   setRestaurantRating,
                   hasRatedRestaurant
                 )}
@@ -688,7 +709,7 @@ export default function UserOrderDetails() {
                 {canRateDelivery ? (
                   <>
                     {renderRatingStars(
-                      deliveryRating || Number(order?.review?.delivery?.rating || 0),
+                      deliveryRating || getDeliveryRatingFromOrder(order),
                       setDeliveryRating,
                       hasRatedDelivery
                     )}

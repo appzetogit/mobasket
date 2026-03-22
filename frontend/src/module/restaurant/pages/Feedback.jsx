@@ -13,6 +13,41 @@ const tabs = [
   { id: "reviews", label: "Reviews" },
 ]
 
+const parseNumericRating = (value) => {
+  const numeric = Number(value)
+  if (!Number.isFinite(numeric) || numeric <= 0) return null
+  return Number(numeric.toFixed(1))
+}
+
+const extractRestaurantReviewRating = (order = {}) => {
+  const reviewData = order?.review && typeof order.review === "object" ? order.review : {}
+  const feedbackData = order?.feedback && typeof order.feedback === "object" ? order.feedback : {}
+
+  const ratingCandidates = [
+    reviewData?.rating,
+    reviewData?.restaurantRating,
+    reviewData?.foodRating,
+    reviewData?.overallRating,
+    feedbackData?.rating,
+    feedbackData?.restaurantRating,
+    feedbackData?.foodRating,
+    feedbackData?.overallRating,
+    order?.restaurantRating,
+    order?.customerRating,
+    order?.userRating,
+    order?.overallRating,
+    order?.reviewRating,
+    order?.rating,
+  ]
+
+  for (const candidate of ratingCandidates) {
+    const parsed = parseNumericRating(candidate)
+    if (parsed !== null) return parsed
+  }
+
+  return null
+}
+
 // Dummy review data
 const _dummyReviews = [
   {
@@ -342,12 +377,7 @@ export default function Feedback() {
               Number.isFinite(Number(order?.deliveryReview?.rating)) ||
               Number.isFinite(Number(order?.deliveryFeedback?.rating))
 
-            const parsedRating = Number(
-              reviewData?.rating ??
-              feedbackData?.rating ??
-              order?.rating
-            )
-            const rating = Number.isFinite(parsedRating) && parsedRating > 0 ? parsedRating : null
+            const rating = extractRestaurantReviewRating(order)
             const reviewText = String(
               reviewData?.comment ||
               reviewData?.text ||
@@ -356,7 +386,8 @@ export default function Feedback() {
               ""
             ).trim()
 
-            if (isDeliverySideFeedback || (!rating && !reviewText)) {
+            // Exclude only true delivery-only feedback entries.
+            if ((isDeliverySideFeedback && !rating && !reviewText) || (!rating && !reviewText)) {
               return null
             }
 
@@ -980,8 +1011,8 @@ export default function Feedback() {
                           {/* Speech bubble tail */}
                           <div className="absolute -top-2 left-4 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[8px] border-b-gray-100"></div>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-700 text-white text-[11px] font-semibold">
-                              {review.rating}★
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${review.rating ? "bg-green-700 text-white" : "bg-gray-200 text-gray-700"}`}>
+                              {review.rating ? `${review.rating}★` : "No rating"}
                             </span>
                             <span className="text-[11px] text-gray-500">
                               {review.date}
@@ -1093,8 +1124,8 @@ export default function Feedback() {
                   {/* Speech bubble tail */}
                   <div className="absolute -top-2 left-4 w-0 h-0 border-l-[8px] border-l-transparent border-r-[8px] border-r-transparent border-b-[8px] border-b-gray-50"></div>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-700 text-white text-[11px] font-semibold">
-                      {selectedReview.rating}★
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${selectedReview.rating ? "bg-green-700 text-white" : "bg-gray-200 text-gray-700"}`}>
+                      {selectedReview.rating ? `${selectedReview.rating}★` : "No rating"}
                     </span>
                     <span className="text-[11px] text-gray-500">
                       {selectedReview.date}
