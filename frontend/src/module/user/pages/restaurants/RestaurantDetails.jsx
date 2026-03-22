@@ -1965,6 +1965,15 @@ export default function RestaurantDetails() {
 
       }
 
+      // Apply immediate availability from restaurant payload
+      // so offline state greys out UI without waiting for timings API.
+      setRestaurantAvailability(
+        evaluateStoreAvailability({
+          store: restaurant,
+          label: "Restaurant",
+        }),
+      );
+
 
 
       const restaurantIdForTiming = restaurant?.id || restaurant?.restaurantId || restaurant?._id;
@@ -1992,13 +2001,18 @@ export default function RestaurantDetails() {
 
 
 
+      const controller = new AbortController();
+      let timeoutId = null;
       try {
+        timeoutId = window.setTimeout(() => controller.abort(), 3500);
 
         const outletTimingsResponse = await fetch(
 
           `${API_BASE_URL}/restaurant/${resolvedRestaurantMongoId}/outlet-timings`,
+          { signal: controller.signal },
 
         );
+        window.clearTimeout(timeoutId);
 
         const timingsJson = await outletTimingsResponse.json();
 
@@ -2036,6 +2050,10 @@ export default function RestaurantDetails() {
 
         );
 
+      } finally {
+        if (timeoutId) {
+          window.clearTimeout(timeoutId);
+        }
       }
 
     };
