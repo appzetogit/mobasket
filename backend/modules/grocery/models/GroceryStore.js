@@ -11,6 +11,20 @@ const withGroceryPlatform = (query = {}) => ({
   platform: GROCERY_PLATFORM
 });
 
+const normalizeRatingStats = (rating, totalRatings) => {
+  const normalizedRating = Number.isFinite(Number(rating))
+    ? Math.max(0, Math.min(5, Number(rating)))
+    : 0;
+  const normalizedTotalRatings = Number.isFinite(Number(totalRatings))
+    ? Math.max(0, Math.floor(Number(totalRatings)))
+    : 0;
+
+  return {
+    rating: normalizedRating,
+    totalRatings: normalizedTotalRatings
+  };
+};
+
 const isPointInZone = (zone, lat, lng) => {
   if (!zone.boundary || !zone.boundary.coordinates || !zone.boundary.coordinates[0]) {
     return false;
@@ -252,6 +266,44 @@ groceryStoreSchema.pre('deleteMany', blockGroceryStoreHardDelete);
 groceryStoreSchema.pre('findOneAndDelete', blockGroceryStoreHardDelete);
 groceryStoreSchema.pre('findByIdAndDelete', blockGroceryStoreHardDelete);
 
+const normalizeStoreRatingInUpdate = function normalizeStoreRatingInUpdate(next) {
+  const update = this.getUpdate ? this.getUpdate() : null;
+  if (!update || typeof update !== 'object') return next();
+
+  const directHasRating = Object.prototype.hasOwnProperty.call(update, 'rating');
+  const directHasTotalRatings = Object.prototype.hasOwnProperty.call(update, 'totalRatings');
+  const setPayload = update.$set && typeof update.$set === 'object' ? update.$set : null;
+  const setHasRating = !!setPayload && Object.prototype.hasOwnProperty.call(setPayload, 'rating');
+  const setHasTotalRatings = !!setPayload && Object.prototype.hasOwnProperty.call(setPayload, 'totalRatings');
+
+  if (!directHasRating && !directHasTotalRatings && !setHasRating && !setHasTotalRatings) {
+    return next();
+  }
+
+  const currentRating = setHasRating ? setPayload.rating : (directHasRating ? update.rating : undefined);
+  const currentTotalRatings = setHasTotalRatings ? setPayload.totalRatings : (directHasTotalRatings ? update.totalRatings : undefined);
+  const normalized = normalizeRatingStats(currentRating, currentTotalRatings);
+
+  const nextSetPayload = {
+    ...(setPayload || {}),
+    rating: normalized.rating,
+    totalRatings: normalized.totalRatings
+  };
+  this.setUpdate({
+    ...update,
+    $set: nextSetPayload
+  });
+
+  if (directHasRating) delete this.getUpdate().rating;
+  if (directHasTotalRatings) delete this.getUpdate().totalRatings;
+
+  return next();
+};
+
+groceryStoreSchema.pre('findOneAndUpdate', normalizeStoreRatingInUpdate);
+groceryStoreSchema.pre('updateOne', normalizeStoreRatingInUpdate);
+groceryStoreSchema.pre('updateMany', normalizeStoreRatingInUpdate);
+
 groceryStoreSchema.pre('save', async function onSave(next) {
   if (!this.restaurantId) {
     const timestamp = Date.now();
@@ -307,6 +359,10 @@ groceryStoreSchema.pre('save', async function onSave(next) {
   if (this.email && !this.ownerEmail) {
     this.ownerEmail = this.email;
   }
+
+  const normalizedRatingStats = normalizeRatingStats(this.rating, this.totalRatings);
+  this.rating = normalizedRatingStats.rating;
+  this.totalRatings = normalizedRatingStats.totalRatings;
 
   // Auto-detect zoneId if coordinates are present and zoneId is missing or location changed
   if ((this.isModified('location') || !this.zoneId) && this.location?.latitude && this.location?.longitude) {

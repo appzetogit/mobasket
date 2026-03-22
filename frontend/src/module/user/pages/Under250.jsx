@@ -552,6 +552,9 @@ export default function Under250() {
 
   // Check if should show grayscale (only when user is out of service)
   const shouldShowGrayscale = isOutOfService
+  const categorySkeletonItems = Array.from({ length: 7 }, (_, index) => index)
+  const restaurantSkeletonSections = Array.from({ length: 2 }, (_, index) => index)
+  const dishSkeletonItems = Array.from({ length: 4 }, (_, index) => index)
 
   return (
 
@@ -574,60 +577,73 @@ export default function Under250() {
               overflowY: "hidden",
             }}
           >
-            {/* All Button */}
-            <div className="flex-shrink-0">
-              <motion.div
-                className="flex flex-col items-center gap-2 w-[62px] sm:w-24 md:w-28"
-                onClick={() => setActiveCategory(null)}
-                whileHover={{ scale: 1.1, y: -4 }}
-                whileTap={{ scale: 0.95 }}
-                transition={{ type: "spring", stiffness: 300, damping: 20 }}
-              >
-                <div className={`w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full overflow-hidden shadow-md transition-all ${activeCategory === null ? 'ring-2 ring-green-600' : ''}`}>
-                  <OptimizedImage
-                    src={offerImage}
-                    alt="All"
-                    className="w-full h-full bg-white rounded-full"
-                    objectFit="cover"
-                    sizes="(max-width: 640px) 62px, (max-width: 768px) 96px, 112px"
-                    placeholder="blur"
-                  />
+            {loadingCategories ? (
+              categorySkeletonItems.map((skeletonIndex) => (
+                <div key={`under250-category-skeleton-${skeletonIndex}`} className="flex-shrink-0 w-[62px] sm:w-24 md:w-28 animate-pulse">
+                  <div className="flex flex-col items-center gap-2">
+                    <div className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full bg-gray-200 dark:bg-gray-800" />
+                    <div className="h-3 sm:h-4 md:h-5 w-12 sm:w-16 md:w-20 rounded bg-gray-200 dark:bg-gray-800" />
+                  </div>
                 </div>
-                <span className="text-xs sm:text-sm md:text-base font-semibold text-gray-800 dark:text-gray-200 text-center pb-1">
-                  All
-                </span>
-              </motion.div>
-            </div>
-            {categories.map((category, index) => {
-              const isActive = activeCategory === category.id
-              return (
-                <div key={category.id || category.slug || `under250-cat-${index}`} className="flex-shrink-0">
+              ))
+            ) : (
+              <>
+                {/* All Button */}
+                <div className="flex-shrink-0">
                   <motion.div
                     className="flex flex-col items-center gap-2 w-[62px] sm:w-24 md:w-28"
-                    onClick={() =>
-                      setActiveCategory((prev) => (prev === category.id ? null : category.id))
-                    }
+                    onClick={() => setActiveCategory(null)}
                     whileHover={{ scale: 1.1, y: -4 }}
                     whileTap={{ scale: 0.95 }}
                     transition={{ type: "spring", stiffness: 300, damping: 20 }}
                   >
-                    <div className={`w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full overflow-hidden shadow-md transition-all ${isActive ? 'ring-2 ring-green-600' : ''}`}>
+                    <div className={`w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full overflow-hidden shadow-md transition-all ${activeCategory === null ? 'ring-2 ring-green-600' : ''}`}>
                       <OptimizedImage
-                        src={category.image}
-                        alt={category.name}
+                        src={offerImage}
+                        alt="All"
                         className="w-full h-full bg-white rounded-full"
                         objectFit="cover"
                         sizes="(max-width: 640px) 62px, (max-width: 768px) 96px, 112px"
                         placeholder="blur"
                       />
                     </div>
-                    <span className={`text-xs sm:text-sm md:text-base font-semibold text-gray-800 dark:text-gray-200 text-center pb-1 ${isActive ? 'border-b-2 border-green-600' : ''}`}>
-                      {category.name.length > 7 ? `${category.name.slice(0, 7)}...` : category.name}
+                    <span className="text-xs sm:text-sm md:text-base font-semibold text-gray-800 dark:text-gray-200 text-center pb-1">
+                      All
                     </span>
                   </motion.div>
                 </div>
-              )
-            })}
+                {categories.map((category, index) => {
+                  const isActive = activeCategory === category.id
+                  return (
+                    <div key={category.id || category.slug || `under250-cat-${index}`} className="flex-shrink-0">
+                      <motion.div
+                        className="flex flex-col items-center gap-2 w-[62px] sm:w-24 md:w-28"
+                        onClick={() =>
+                          setActiveCategory((prev) => (prev === category.id ? null : category.id))
+                        }
+                        whileHover={{ scale: 1.1, y: -4 }}
+                        whileTap={{ scale: 0.95 }}
+                        transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                      >
+                        <div className={`w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full overflow-hidden shadow-md transition-all ${isActive ? 'ring-2 ring-green-600' : ''}`}>
+                          <OptimizedImage
+                            src={category.image}
+                            alt={category.name}
+                            className="w-full h-full bg-white rounded-full"
+                            objectFit="cover"
+                            sizes="(max-width: 640px) 62px, (max-width: 768px) 96px, 112px"
+                            placeholder="blur"
+                          />
+                        </div>
+                        <span className={`text-xs sm:text-sm md:text-base font-semibold text-gray-800 dark:text-gray-200 text-center pb-1 ${isActive ? 'border-b-2 border-green-600' : ''}`}>
+                          {category.name.length > 7 ? `${category.name.slice(0, 7)}...` : category.name}
+                        </span>
+                      </motion.div>
+                    </div>
+                  )
+                })}
+              </>
+            )}
           </div>
         </section>
 
@@ -687,8 +703,33 @@ export default function Under250() {
 
         {/* Restaurant Menu Sections */}
         {loadingRestaurants ? (
-          <div className="flex justify-center items-center py-12">
-            <div className="text-gray-500 dark:text-gray-400">Loading restaurants...</div>
+          <div className="space-y-8 sm:space-y-10 md:space-y-12 py-4">
+            {restaurantSkeletonSections.map((sectionIndex) => (
+              <section key={`under250-restaurant-skeleton-${sectionIndex}`} className="animate-pulse">
+                <div className="flex items-start justify-between mb-4 md:mb-5">
+                  <div className="flex-1">
+                    <div className="h-7 md:h-9 w-44 md:w-64 rounded bg-gray-200 dark:bg-gray-800 mb-2" />
+                    <div className="h-4 md:h-5 w-28 md:w-36 rounded bg-gray-200 dark:bg-gray-800" />
+                  </div>
+                  <div className="w-14 h-8 md:w-20 md:h-10 rounded-full bg-gray-200 dark:bg-gray-800" />
+                </div>
+                <div className="flex md:grid gap-3 sm:gap-4 md:gap-5 lg:gap-6 overflow-x-auto md:overflow-x-visible pb-2 md:pb-0 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {dishSkeletonItems.map((dishIndex) => (
+                    <div
+                      key={`under250-dish-skeleton-${sectionIndex}-${dishIndex}`}
+                      className="flex-shrink-0 w-[200px] sm:w-[220px] md:w-full rounded-lg md:rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] overflow-hidden"
+                    >
+                      <div className="w-full h-32 sm:h-36 md:h-40 lg:h-48 xl:h-52 bg-gray-200 dark:bg-gray-800" />
+                      <div className="p-3 md:p-4 space-y-2">
+                        <div className="h-4 w-3/4 rounded bg-gray-200 dark:bg-gray-800" />
+                        <div className="h-3 w-1/2 rounded bg-gray-200 dark:bg-gray-800" />
+                        <div className="h-8 w-24 rounded bg-gray-200 dark:bg-gray-800 mt-3" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
           </div>
         ) : sortedAndFilteredRestaurants.length === 0 ? (
           <div className="flex justify-center items-center py-12">

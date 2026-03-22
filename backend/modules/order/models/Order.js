@@ -413,6 +413,38 @@ const orderSchema = new mongoose.Schema({
   },
   // Customer Review and Rating
   review: {
+    restaurant: {
+      rating: {
+        type: Number,
+        min: 1,
+        max: 5,
+        sparse: true
+      },
+      comment: {
+        type: String,
+        trim: true,
+        maxlength: 1000
+      },
+      submittedAt: {
+        type: Date
+      }
+    },
+    delivery: {
+      rating: {
+        type: Number,
+        min: 1,
+        max: 5,
+        sparse: true
+      },
+      comment: {
+        type: String,
+        trim: true,
+        maxlength: 1000
+      },
+      submittedAt: {
+        type: Date
+      }
+    },
     rating: {
       type: Number,
       min: 1,

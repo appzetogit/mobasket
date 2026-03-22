@@ -374,9 +374,14 @@ export default function OrdersPage() {
                     </p>
                   </div>
                   <button
-                    onClick={() =>
-                      navigate(`/orders/${order.id || order.mongoId}`)
-                    }
+                    onClick={() => {
+                      const targetOrderId = order.id || order.mongoId;
+                      const targetPath =
+                        order.status === "Delivered"
+                          ? `/orders/${targetOrderId}/details`
+                          : `/orders/${targetOrderId}`;
+                      navigate(targetPath);
+                    }}
                     className="text-[#ff8100] text-[10px] md:text-xs font-semibold ml-2 flex-shrink-0 hover:underline"
                   >
                     View Details

@@ -491,6 +491,43 @@ function RestaurantImageCarousel({
   );
 }
 
+function HeroBannerSkeleton() {
+  return (
+    <div className="absolute inset-0 bg-gray-100 animate-pulse">
+      <div className="mx-4 md:mx-0 my-2 rounded-2xl overflow-hidden h-[calc(100%-16px)] bg-gray-200" />
+    </div>
+  );
+}
+
+function HomeCategoriesSkeleton() {
+  return (
+    <>
+      {[...Array(8)].map((_, index) => (
+        <div
+          key={`home-category-skeleton-${index}`}
+          className="flex-shrink-0 flex flex-col items-center gap-2 w-[62px] sm:w-24 md:w-28 animate-pulse"
+        >
+          <div className="w-14 h-14 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-full bg-gray-200 dark:bg-gray-800" />
+          <div className="h-3 w-12 sm:w-16 rounded bg-gray-200 dark:bg-gray-800" />
+        </div>
+      ))}
+    </>
+  );
+}
+
+function ExploreMoreSkeleton() {
+  return (
+    <>
+      {[...Array(4)].map((_, index) => (
+        <div
+          key={`explore-more-skeleton-${index}`}
+          className="h-[92px] w-[130px] sm:h-[104px] sm:w-[150px] lg:h-[116px] lg:w-[170px] rounded-2xl bg-gray-200 dark:bg-gray-800 animate-pulse flex-shrink-0"
+        />
+      ))}
+    </>
+  );
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -2532,9 +2569,7 @@ export default function Home() {
       <div className="md:px-6 lg:px-8 xl:px-0 w-full lg:max-w-[1100px] mx-auto">
         <div className="relative w-full overflow-hidden aspect-[2.5/1] md:aspect-[2.5/1] lg:aspect-[3/1] xl:aspect-[3.5/1]">
           {loadingBanners ? (
-            <div className="absolute inset-0 bg-gray-100 animate-pulse flex items-center justify-center">
-              <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
-            </div>
+            <HeroBannerSkeleton />
           ) : heroBannerImages.length > 0 ? (
             <div
               className="relative w-full h-full cursor-grab active:cursor-grabbing overflow-hidden"
@@ -2696,9 +2731,7 @@ export default function Home() {
               </div>
             </motion.div>
             {loadingRealCategories ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-              </div>
+              <HomeCategoriesSkeleton />
             ) : topCategories.length > 0 ? (
               <>
                 {/* Show only first 10 categories, filtered by search */}
@@ -3053,9 +3086,7 @@ export default function Home() {
             }}
           >
             {loadingLandingConfig ? (
-              <div className="flex items-center justify-center py-4">
-                <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-              </div>
+              <ExploreMoreSkeleton />
             ) : landingExploreMore.length === 0 ? (
               // Fallback to hardcoded explore more if API returns empty
               [

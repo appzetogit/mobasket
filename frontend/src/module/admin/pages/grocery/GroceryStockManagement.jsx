@@ -1,8 +1,19 @@
-import { useEffect, useMemo, useState } from "react"
+import { Fragment, useEffect, useMemo, useState } from "react"
 import { Loader2, RefreshCw, Save, Search } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
 import { usePlatform } from "../../context/PlatformContext"
+
+const normalizeStockState = (stockQuantity, inStock) => {
+  const normalizedStockQuantity = Number.isFinite(Number(stockQuantity))
+    ? Math.max(0, Number(stockQuantity))
+    : 0
+
+  return {
+    stockQuantity: normalizedStockQuantity,
+    inStock: normalizedStockQuantity > 0 ? Boolean(inStock) : false,
+  }
+}
 
 export default function GroceryStockManagement() {
   const { platform, switchPlatform } = usePlatform()
@@ -29,9 +40,22 @@ export default function GroceryStockManagement() {
       data.forEach((product) => {
         const id = product?._id?.toString()
         if (!id) return
+        const variants = Array.isArray(product?.variants)
+          ? product.variants.map((variant, index) => ({
+              name: variant?.name || "",
+              mrp: Number(variant?.mrp || 0),
+              sellingPrice: Number(variant?.sellingPrice || 0),
+              stockQuantity: Number(variant?.stockQuantity || 0),
+              inStock: Boolean(variant?.inStock),
+              isDefault: variant?.isDefault === true,
+              order: Number.isFinite(Number(variant?.order)) ? Number(variant.order) : index,
+            }))
+          : []
+
         initialEdits[id] = {
           stockQuantity: Number(product.stockQuantity || 0),
           inStock: Boolean(product.inStock),
+          variants,
         }
       })
       setEditedRows(initialEdits)
@@ -54,7 +78,10 @@ export default function GroceryStockManagement() {
     return products.filter((product) => {
       const name = (product?.name || "").toLowerCase()
       const categoryName = (product?.category?.name || "").toLowerCase()
-      return name.includes(query) || categoryName.includes(query)
+      const hasMatchingVariant = Array.isArray(product?.variants)
+        ? product.variants.some((variant) => String(variant?.name || "").toLowerCase().includes(query))
+        : false
+      return name.includes(query) || categoryName.includes(query) || hasMatchingVariant
     })
   }, [products, searchQuery])
 
@@ -65,50 +92,130 @@ export default function GroceryStockManagement() {
         ...(() => {
           const currentStock = Number(prev[productId]?.stockQuantity || 0)
           const currentInStock = Boolean(prev[productId]?.inStock)
+          const currentVariants = Array.isArray(prev[productId]?.variants) ? prev[productId].variants : []
           if (key === "stockQuantity") {
-            const normalizedStock = Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0
+            const normalized = normalizeStockState(value, currentInStock)
             return {
-              stockQuantity: normalizedStock,
-              inStock: normalizedStock > 0 ? currentInStock : false,
+              stockQuantity: normalized.stockQuantity,
+              inStock: normalized.inStock,
+              variants: currentVariants,
             }
           }
           return {
             stockQuantity: currentStock,
             inStock: value,
+            variants: currentVariants,
           }
         })(),
       },
     }))
   }
 
+  const setVariantField = (productId, variantIndex, key, value) => {
+    setEditedRows((prev) => {
+      const currentRow = prev[productId] || {}
+      const currentVariants = Array.isArray(currentRow.variants) ? currentRow.variants : []
+
+      const nextVariants = currentVariants.map((variant, index) => {
+        if (index !== variantIndex) return variant
+
+        if (key === "stockQuantity") {
+          const normalized = normalizeStockState(value, variant?.inStock)
+          return {
+            ...variant,
+            stockQuantity: normalized.stockQuantity,
+            inStock: normalized.inStock,
+          }
+        }
+
+        const normalized = normalizeStockState(variant?.stockQuantity, value)
+        return {
+          ...variant,
+          inStock: normalized.inStock,
+        }
+      })
+
+      return {
+        ...prev,
+        [productId]: {
+          ...currentRow,
+          stockQuantity: Number(currentRow?.stockQuantity || 0),
+          inStock: Boolean(currentRow?.inStock),
+          variants: nextVariants,
+        },
+      }
+    })
+  }
+
   const handleSave = async (productId) => {
     const edit = editedRows[productId]
     if (!edit) return
 
-    const stockQuantity = Number.isFinite(Number(edit.stockQuantity))
-      ? Math.max(0, Number(edit.stockQuantity))
-      : 0
-    const effectiveInStock = stockQuantity > 0 ? Boolean(edit.inStock) : false
+    const hasVariants = Array.isArray(edit.variants) && edit.variants.length > 0
+    const normalizedBaseStock = normalizeStockState(edit.stockQuantity, edit.inStock)
 
     try {
       setSavingProductId(productId)
-      await adminAPI.updateGroceryProduct(productId, {
-        stockQuantity,
-        inStock: effectiveInStock,
-      })
+      let payload = {
+        stockQuantity: normalizedBaseStock.stockQuantity,
+        inStock: normalizedBaseStock.inStock,
+      }
+
+      if (hasVariants) {
+        const normalizedVariants = edit.variants.map((variant, index) => {
+          const normalized = normalizeStockState(variant?.stockQuantity, variant?.inStock)
+          return {
+            name: String(variant?.name || "").trim(),
+            mrp: Number(variant?.mrp || 0),
+            sellingPrice: Number(variant?.sellingPrice || 0),
+            stockQuantity: normalized.stockQuantity,
+            inStock: normalized.inStock,
+            isDefault: variant?.isDefault === true,
+            order: Number.isFinite(Number(variant?.order)) ? Number(variant.order) : index,
+          }
+        })
+
+        const defaultVariant = normalizedVariants.find((variant) => variant.isDefault) || normalizedVariants[0]
+        payload = {
+          variants: normalizedVariants,
+          stockQuantity: Number(defaultVariant?.stockQuantity || 0),
+          inStock: Boolean(defaultVariant?.inStock),
+        }
+      }
+
+      const response = await adminAPI.updateGroceryProduct(productId, payload)
+      const updatedProduct = response?.data?.data?.product || response?.data?.data || null
 
       setProducts((prev) =>
         prev.map((product) =>
           String(product._id) === String(productId)
-            ? { ...product, stockQuantity, inStock: effectiveInStock }
+            ? (updatedProduct ? { ...product, ...updatedProduct } : {
+                ...product,
+                ...payload,
+              })
             : product
         )
       )
+
+      const syncedProduct = updatedProduct || payload
+      const syncedVariants = Array.isArray(syncedProduct?.variants)
+        ? syncedProduct.variants.map((variant, index) => ({
+            name: variant?.name || "",
+            mrp: Number(variant?.mrp || 0),
+            sellingPrice: Number(variant?.sellingPrice || 0),
+            stockQuantity: Number(variant?.stockQuantity || 0),
+            inStock: Boolean(variant?.inStock),
+            isDefault: variant?.isDefault === true,
+            order: Number.isFinite(Number(variant?.order)) ? Number(variant.order) : index,
+          }))
+        : []
+
       setEditedRows((prev) => ({
         ...prev,
         [productId]: {
-          stockQuantity,
-          inStock: effectiveInStock,
+          stockQuantity: Number(syncedProduct?.stockQuantity || 0),
+          inStock: Boolean(syncedProduct?.inStock),
+          variants: syncedVariants,
         },
       }))
       toast.success("Stock updated")
@@ -182,52 +289,109 @@ export default function GroceryStockManagement() {
               ) : (
                 filteredProducts.map((product) => {
                   const productId = String(product._id)
+                  const hasVariants = Array.isArray(product?.variants) && product.variants.length > 0
                   const rowEdit = editedRows[productId] || {
                     stockQuantity: Number(product.stockQuantity || 0),
                     inStock: Boolean(product.inStock),
+                    variants: [],
                   }
                   const isSaving = savingProductId === productId
 
                   return (
-                    <tr key={productId}>
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-slate-900">{product.name || "Unnamed Product"}</div>
-                        <div className="text-xs text-slate-500">{product.unit || "-"}</div>
-                      </td>
-                      <td className="px-4 py-3 text-sm text-slate-700">
-                        {product?.category?.name || "-"}
-                      </td>
-                      <td className="px-4 py-3">
-                        <input
-                          type="number"
-                          min={0}
-                          value={rowEdit.stockQuantity}
-                          onChange={(e) => setRowField(productId, "stockQuantity", e.target.value)}
-                          className="w-28 px-2 py-1.5 border border-slate-300 rounded-md text-sm"
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        <select
-                          value={rowEdit.inStock ? "yes" : "no"}
-                          onChange={(e) => setRowField(productId, "inStock", e.target.value === "yes")}
-                          disabled={Number(rowEdit.stockQuantity || 0) <= 0}
-                          className="px-2 py-1.5 border border-slate-300 rounded-md text-sm"
-                        >
-                          <option value="yes">In Stock</option>
-                          <option value="no">Out of Stock</option>
-                        </select>
-                      </td>
-                      <td className="px-4 py-3">
-                        <button
-                          onClick={() => handleSave(productId)}
-                          disabled={isSaving}
-                          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-900 text-white text-sm hover:bg-slate-800 disabled:opacity-60"
-                        >
-                          {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                          Update
-                        </button>
-                      </td>
-                    </tr>
+                    <Fragment key={productId}>
+                      <tr>
+                        <td className="px-4 py-3">
+                          <div className="font-medium text-slate-900">{product.name || "Unnamed Product"}</div>
+                          <div className="text-xs text-slate-500">{product.unit || "-"}</div>
+                          {hasVariants ? (
+                            <div className="mt-1 text-[11px] text-emerald-700 font-medium">
+                              {rowEdit.variants?.length || product.variants.length} variants available
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-slate-700">
+                          {product?.category?.name || "-"}
+                        </td>
+                        <td className="px-4 py-3">
+                          <input
+                            type="number"
+                            min={0}
+                            value={rowEdit.stockQuantity}
+                            onChange={(e) => setRowField(productId, "stockQuantity", e.target.value)}
+                            disabled={hasVariants}
+                            className="w-28 px-2 py-1.5 border border-slate-300 rounded-md text-sm disabled:bg-slate-100 disabled:text-slate-400"
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <select
+                            value={rowEdit.inStock ? "yes" : "no"}
+                            onChange={(e) => setRowField(productId, "inStock", e.target.value === "yes")}
+                            disabled={hasVariants || Number(rowEdit.stockQuantity || 0) <= 0}
+                            className="px-2 py-1.5 border border-slate-300 rounded-md text-sm disabled:bg-slate-100 disabled:text-slate-400"
+                          >
+                            <option value="yes">In Stock</option>
+                            <option value="no">Out of Stock</option>
+                          </select>
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => handleSave(productId)}
+                            disabled={isSaving}
+                            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-slate-900 text-white text-sm hover:bg-slate-800 disabled:opacity-60"
+                          >
+                            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                            Update
+                          </button>
+                        </td>
+                      </tr>
+                      {hasVariants ? (
+                        <tr>
+                          <td colSpan={5} className="px-4 pb-4 pt-0">
+                            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                              <div className="text-xs font-semibold text-slate-700 uppercase tracking-wide mb-2">
+                                Variant Stock
+                              </div>
+                              <div className="space-y-2">
+                                {rowEdit.variants?.map((variant, variantIndex) => (
+                                  <div
+                                    key={`${productId}-variant-${variantIndex}`}
+                                    className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto_auto] gap-2 items-center bg-white border border-slate-200 rounded-md p-2"
+                                  >
+                                    <div className="text-sm text-slate-800 font-medium">
+                                      {variant?.name || `Variant ${variantIndex + 1}`}
+                                      {variant?.isDefault ? (
+                                        <span className="ml-2 text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded">
+                                          Default
+                                        </span>
+                                      ) : null}
+                                    </div>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      value={Number(variant?.stockQuantity || 0)}
+                                      onChange={(e) => setVariantField(productId, variantIndex, "stockQuantity", e.target.value)}
+                                      className="w-28 px-2 py-1.5 border border-slate-300 rounded-md text-sm"
+                                    />
+                                    <select
+                                      value={variant?.inStock ? "yes" : "no"}
+                                      onChange={(e) => setVariantField(productId, variantIndex, "inStock", e.target.value === "yes")}
+                                      disabled={Number(variant?.stockQuantity || 0) <= 0}
+                                      className="px-2 py-1.5 border border-slate-300 rounded-md text-sm disabled:bg-slate-100 disabled:text-slate-400"
+                                    >
+                                      <option value="yes">In Stock</option>
+                                      <option value="no">Out of Stock</option>
+                                    </select>
+                                    <div className="text-xs text-slate-500">
+                                      MRP {Number(variant?.mrp || 0)} / SP {Number(variant?.sellingPrice || 0)}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
+                    </Fragment>
                   )
                 })
               )}

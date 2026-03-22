@@ -248,6 +248,13 @@ const deliverySchema = new mongoose.Schema(
     cod: codSchema,
     // Metrics
     metrics: metricsSchema,
+    // Public rating field for parity with Restaurant model.
+    rating: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5
+    },
     // Status
     status: {
       type: String,
@@ -305,6 +312,18 @@ deliverySchema.index({ isActive: 1 });
 deliverySchema.pre('save', async function (next) {
   if (this.isModified('phone') || this.isNew) {
     this.mobile = this.phone || null;
+  }
+  // Keep top-level rating and metrics.rating in sync.
+  if (this.isModified('rating') && !this.isModified('metrics.rating')) {
+    this.metrics = this.metrics || {};
+    this.metrics.rating = this.rating;
+  } else if (this.isModified('metrics.rating') && !this.isModified('rating')) {
+    this.rating = this.metrics?.rating ?? 0;
+  } else if (this.isNew) {
+    const initialRating = this.rating ?? this.metrics?.rating ?? 0;
+    this.rating = initialRating;
+    this.metrics = this.metrics || {};
+    this.metrics.rating = initialRating;
   }
   if (!this.isModified('password')) {
     return next();
