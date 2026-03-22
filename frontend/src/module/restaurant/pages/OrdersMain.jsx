@@ -823,6 +823,7 @@ export default function OrdersMain() {
     isActive: null,
     isAcceptingOrders: null,
     rejectionReason: null,
+    rejectedAt: null,
     onboarding: null,
     isLoading: true
   })
@@ -832,12 +833,12 @@ export default function OrdersMain() {
   const hasCompletedVerificationSubmission = isGroceryStore
     ? completedOnboardingSteps >= 1
     : completedOnboardingSteps === 4 || (normalizedVerificationStatus && normalizedVerificationStatus !== "onboarding")
+  const rejectionStatusValues = new Set(["rejected", "declined", "denied", "verification_rejected"])
   const hasRejectedVerification =
-    normalizedVerificationStatus === "rejected" ||
-    normalizedVerificationStatus === "declined"
-  const rejectionReasonText = hasRejectedVerification
-    ? String(restaurantStatus.rejectionReason || "").trim()
-    : ""
+    rejectionStatusValues.has(normalizedVerificationStatus) ||
+    Boolean(String(restaurantStatus.rejectionReason || "").trim()) ||
+    Boolean(restaurantStatus.rejectedAt)
+  const rejectionReasonText = String(restaurantStatus.rejectionReason || "").trim()
   const canAccessLiveOrders =
     restaurantStatus.isActive === true && restaurantStatus.isAcceptingOrders !== false
   const shouldShowVerificationState =
@@ -1049,12 +1050,18 @@ export default function OrdersMain() {
             isAcceptingOrders: restaurant.isAcceptingOrders !== false,
             status: restaurant.status || null,
             rejectionReason: restaurant.rejectionReason || null,
+            rejectedAt: restaurant.rejectedAt || null,
             onboarding: restaurant.onboarding || null,
             isLoading: false
           })
 
+          const hasRejectedSignal =
+            rejectionStatusValues.has(normalizedStatus) ||
+            Boolean(String(restaurant.rejectionReason || "").trim()) ||
+            Boolean(restaurant.rejectedAt)
           const shouldRedirectToPendingApproval =
             restaurant.isActive !== true &&
+            !hasRejectedSignal &&
             (
               completedOnboardingSteps >= 4 ||
               pendingLikeStatuses.has(normalizedStatus)
@@ -1148,6 +1155,7 @@ export default function OrdersMain() {
           isAcceptingOrders: restaurant.isAcceptingOrders !== false,
           status: restaurant.status || null,
           rejectionReason: restaurant.rejectionReason || null,
+          rejectedAt: restaurant.rejectedAt || null,
           onboarding: restaurant.onboarding || null,
           isLoading: false
         })
@@ -2247,7 +2255,7 @@ export default function OrdersMain() {
               : 'bg-white border border-yellow-200'
               }`}
           >
-            {rejectionReasonText ? (
+            {hasRejectedVerification ? (
               <>
                 <div className="flex items-start gap-3 mb-3">
                   <div className="flex-shrink-0 rounded-full p-2 bg-red-100">
@@ -2258,7 +2266,8 @@ export default function OrdersMain() {
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
                       <p className="text-xs font-semibold text-red-800 mb-2">Reason for Rejection:</p>
                       <div className="text-xs text-red-700 space-y-1">
-                        {rejectionReasonText.split('\n').filter(line => line.trim()).length > 1 ? (
+                        {rejectionReasonText
+                          ? (rejectionReasonText.split('\n').filter(line => line.trim()).length > 1 ? (
                           <ul className="space-y-1 list-disc list-inside">
                             {rejectionReasonText.split('\n').map((point, index) => (
                               point.trim() && (
@@ -2268,7 +2277,8 @@ export default function OrdersMain() {
                           </ul>
                         ) : (
                           <p className="text-red-700">{rejectionReasonText}</p>
-                        )}
+                          ))
+                          : <p className="text-red-700">Your verification was denied. Please update details and resubmit.</p>}
                       </div>
                     </div>
                   </div>
