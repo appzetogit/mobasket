@@ -3564,31 +3564,20 @@ export default function Home() {
                       <Link
                         to={`/user/restaurants/${restaurantSlug}`}
                         className="h-full flex"
-                        onMouseEnter={() => {
-                          if (isRestaurantAvailable) prefetchRestaurant(restaurant);
-                        }}
-                        onFocus={() => {
-                          if (isRestaurantAvailable) prefetchRestaurant(restaurant);
-                        }}
-                        onTouchStart={() => {
-                          if (isRestaurantAvailable) prefetchRestaurant(restaurant);
-                        }}
-                        onClick={(e) => {
-                          if (!isRestaurantAvailable) {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            return;
-                          }
+                        onMouseEnter={() => prefetchRestaurant(restaurant)}
+                        onFocus={() => prefetchRestaurant(restaurant)}
+                        onTouchStart={() => prefetchRestaurant(restaurant)}
+                        onClick={(e) =>
                           navigateWithPriorityPrefetch(
                             e,
                             restaurant,
                             `/user/restaurants/${restaurantSlug}`,
-                          );
-                        }}
+                          )
+                        }
                       >
                         <Card
                           className={`overflow-hidden gap-0 border border-gray-100 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] transition-all duration-300 py-0 rounded-[24px] flex flex-col h-full w-full relative shadow-sm hover:shadow-md ${isOutOfService ? "grayscale opacity-75" : ""
-                            } ${!isRestaurantAvailable ? "grayscale opacity-60 pointer-events-none cursor-not-allowed" : "cursor-pointer"}`}
+                            } ${!isRestaurantAvailable ? "grayscale opacity-60" : ""} cursor-pointer`}
                         >
                           {/* Image Section */}
                           <div className="relative aspect-[16/9] overflow-hidden rounded-t-[24px]">
