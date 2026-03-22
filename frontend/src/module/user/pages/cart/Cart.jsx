@@ -615,13 +615,13 @@ export default function Cart() {
       try {
         const response = await adminAPI.getPublicFeeSettings("mofood")
         if (response.data.success && response.data.data.feeSettings) {
-          setFeeSettings({
-            deliveryFee: response.data.data.feeSettings.deliveryFee || 25,
-            freeDeliveryThreshold: response.data.data.feeSettings.freeDeliveryThreshold || 149,
-            platformFee: response.data.data.feeSettings.platformFee || 5,
-            gstRate: response.data.data.feeSettings.gstRate || 5,
-            minimumCodOrderValue: Number(response.data.data.feeSettings.minimumCodOrderValue || 0),
-          })
+          setFeeSettings({
+            deliveryFee: Number(response.data.data.feeSettings.deliveryFee ?? 25),
+            freeDeliveryThreshold: Number(response.data.data.feeSettings.freeDeliveryThreshold ?? 149),
+            platformFee: Number(response.data.data.feeSettings.platformFee ?? 5),
+            gstRate: Number(response.data.data.feeSettings.gstRate ?? 5),
+            minimumCodOrderValue: Number(response.data.data.feeSettings.minimumCodOrderValue ?? 0),
+          })
         }
       } catch (error) {
         console.error('Error fetching fee settings:', error)
@@ -634,12 +634,12 @@ export default function Cart() {
   // Use backend pricing if available, otherwise fallback to database settings
   const subtotal = pricing?.subtotal || cart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0)
   const deliveryFee = pricing?.deliveryFee ?? (subtotal >= feeSettings.freeDeliveryThreshold || appliedCoupon?.freeDelivery ? 0 : feeSettings.deliveryFee)
-  const platformFee = pricing?.platformFee || feeSettings.platformFee
+  const platformFee = pricing?.platformFee ?? feeSettings.platformFee
   const gstCharges = pricing?.tax || Math.round(subtotal * (feeSettings.gstRate / 100))
   const discount = pricing?.discount || (appliedCoupon ? Math.min(appliedCoupon.discount, subtotal * 0.5) : 0)
   const totalBeforeDiscount = subtotal + deliveryFee + platformFee + gstCharges
   const total = pricing?.total || (totalBeforeDiscount - discount)
-  const minimumCodOrderValue = Math.max(0, Number(feeSettings.minimumCodOrderValue || 0))
+  const minimumCodOrderValue = Math.max(0, Number(feeSettings.minimumCodOrderValue ?? 0))
   const isCodEligible = total >= minimumCodOrderValue
   const savings = pricing?.savings || (discount + (subtotal > 500 ? 32 : 0))
 

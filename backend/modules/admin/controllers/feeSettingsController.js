@@ -160,7 +160,8 @@ export const createOrUpdateFeeSettings = asyncHandler(async (req, res) => {
     const feeSettingsData = {
       platform,
       deliveryFee: deliveryFee !== undefined ? Number(deliveryFee) : 25,
-      freeDeliveryThreshold: freeDeliveryThreshold ? Number(freeDeliveryThreshold) : 149,
+      freeDeliveryThreshold:
+        freeDeliveryThreshold !== undefined ? Number(freeDeliveryThreshold) : 149,
       platformFee: Number(platformFee),
       gstRate: Number(gstRate),
       minimumCodOrderValue:

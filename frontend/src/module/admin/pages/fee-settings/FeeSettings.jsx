@@ -6,6 +6,12 @@ import { toast } from "sonner"
 
 // Fee Settings Component - Range-based delivery fee configuration
 export default function FeeSettings() {
+  const toNumberOrDefault = (value, fallback) => {
+    if (value === null || value === undefined || value === '') return fallback
+    const parsed = Number(value)
+    return Number.isFinite(parsed) ? parsed : fallback
+  }
+
   const [feeSettings, setFeeSettings] = useState({
     deliveryFee: 25,
     deliveryFeeRanges: [],
@@ -29,17 +35,18 @@ export default function FeeSettings() {
       setLoadingFeeSettings(true)
       const response = await adminAPI.getFeeSettings()
       if (response.data.success && response.data.data.feeSettings) {
+        const settings = response.data.data.feeSettings
         setFeeSettings({
-          deliveryFee: response.data.data.feeSettings.deliveryFee || 25,
-          deliveryFeeRanges: response.data.data.feeSettings.deliveryFeeRanges || [],
-          freeDeliveryThreshold: response.data.data.feeSettings.freeDeliveryThreshold || 149,
-          platformFee: response.data.data.feeSettings.platformFee || 5,
-          gstRate: response.data.data.feeSettings.gstRate || 5,
-          minimumCodOrderValue: Number(response.data.data.feeSettings.minimumCodOrderValue ?? 0),
-          driverEarningRangeStartKm: Number(response.data.data.feeSettings.driverEarningRangeStartKm ?? 0),
-          driverEarningRangeEndKm: Number(response.data.data.feeSettings.driverEarningRangeEndKm ?? 2),
-          driverEarningBaseAmount: Number(response.data.data.feeSettings.driverEarningBaseAmount ?? 20),
-          driverEarningExtraPerKm: Number(response.data.data.feeSettings.driverEarningExtraPerKm ?? 5),
+          deliveryFee: toNumberOrDefault(settings.deliveryFee, 25),
+          deliveryFeeRanges: Array.isArray(settings.deliveryFeeRanges) ? settings.deliveryFeeRanges : [],
+          freeDeliveryThreshold: toNumberOrDefault(settings.freeDeliveryThreshold, 149),
+          platformFee: toNumberOrDefault(settings.platformFee, 5),
+          gstRate: toNumberOrDefault(settings.gstRate, 5),
+          minimumCodOrderValue: toNumberOrDefault(settings.minimumCodOrderValue, 0),
+          driverEarningRangeStartKm: toNumberOrDefault(settings.driverEarningRangeStartKm, 0),
+          driverEarningRangeEndKm: toNumberOrDefault(settings.driverEarningRangeEndKm, 2),
+          driverEarningBaseAmount: toNumberOrDefault(settings.driverEarningBaseAmount, 20),
+          driverEarningExtraPerKm: toNumberOrDefault(settings.driverEarningExtraPerKm, 5),
         })
       }
     } catch (error) {
@@ -78,7 +85,7 @@ export default function FeeSettings() {
         freeDeliveryThreshold: Number(feeSettings.freeDeliveryThreshold),
         platformFee: Number(feeSettings.platformFee),
         gstRate: Number(feeSettings.gstRate),
-        minimumCodOrderValue: Number(feeSettings.minimumCodOrderValue || 0),
+        minimumCodOrderValue: Number(feeSettings.minimumCodOrderValue ?? 0),
         driverEarningRangeStartKm: Number(feeSettings.driverEarningRangeStartKm),
         driverEarningRangeEndKm: Number(feeSettings.driverEarningRangeEndKm),
         driverEarningBaseAmount: Number(feeSettings.driverEarningBaseAmount),
@@ -401,7 +408,12 @@ export default function FeeSettings() {
                     <input
                       type="number"
                       value={feeSettings.driverEarningRangeStartKm}
-                      onChange={(e) => setFeeSettings({ ...feeSettings, driverEarningRangeStartKm: e.target.value })}
+                      onChange={(e) =>
+                        setFeeSettings((prev) => ({
+                          ...prev,
+                          driverEarningRangeStartKm: e.target.value,
+                        }))
+                      }
                       min="0"
                       step="0.1"
                       className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
@@ -412,7 +424,12 @@ export default function FeeSettings() {
                     <input
                       type="number"
                       value={feeSettings.driverEarningRangeEndKm}
-                      onChange={(e) => setFeeSettings({ ...feeSettings, driverEarningRangeEndKm: e.target.value })}
+                      onChange={(e) =>
+                        setFeeSettings((prev) => ({
+                          ...prev,
+                          driverEarningRangeEndKm: e.target.value,
+                        }))
+                      }
                       min="0"
                       step="0.1"
                       className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
@@ -423,7 +440,12 @@ export default function FeeSettings() {
                     <input
                       type="number"
                       value={feeSettings.driverEarningBaseAmount}
-                      onChange={(e) => setFeeSettings({ ...feeSettings, driverEarningBaseAmount: e.target.value })}
+                      onChange={(e) =>
+                        setFeeSettings((prev) => ({
+                          ...prev,
+                          driverEarningBaseAmount: e.target.value,
+                        }))
+                      }
                       min="0"
                       step="0.01"
                       className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
@@ -434,7 +456,12 @@ export default function FeeSettings() {
                     <input
                       type="number"
                       value={feeSettings.driverEarningExtraPerKm}
-                      onChange={(e) => setFeeSettings({ ...feeSettings, driverEarningExtraPerKm: e.target.value })}
+                      onChange={(e) =>
+                        setFeeSettings((prev) => ({
+                          ...prev,
+                          driverEarningExtraPerKm: e.target.value,
+                        }))
+                      }
                       min="0"
                       step="0.01"
                       className="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
@@ -456,7 +483,13 @@ export default function FeeSettings() {
                   <input
                     type="number"
                     value={feeSettings.platformFee}
-                    onChange={(e) => setFeeSettings({ ...feeSettings, platformFee: e.target.value })}
+                    onWheel={(e) => e.currentTarget.blur()}
+                    onChange={(e) =>
+                      setFeeSettings((prev) => ({
+                        ...prev,
+                        platformFee: e.target.value,
+                      }))
+                    }
                     min="0"
                     step="1"
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
@@ -475,7 +508,13 @@ export default function FeeSettings() {
                   <input
                     type="number"
                     value={feeSettings.gstRate}
-                    onChange={(e) => setFeeSettings({ ...feeSettings, gstRate: e.target.value })}
+                    onWheel={(e) => e.currentTarget.blur()}
+                    onChange={(e) =>
+                      setFeeSettings((prev) => ({
+                        ...prev,
+                        gstRate: e.target.value,
+                      }))
+                    }
                     min="0"
                     max="100"
                     step="0.1"
@@ -494,7 +533,12 @@ export default function FeeSettings() {
                   <input
                     type="number"
                     value={feeSettings.minimumCodOrderValue}
-                    onChange={(e) => setFeeSettings({ ...feeSettings, minimumCodOrderValue: e.target.value })}
+                    onChange={(e) =>
+                      setFeeSettings((prev) => ({
+                        ...prev,
+                        minimumCodOrderValue: e.target.value,
+                      }))
+                    }
                     min="0"
                     step="1"
                     className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none"
