@@ -205,6 +205,7 @@ const GroceryPage = () => {
     storedUserLocation && typeof storedUserLocation === "object"
       ? storedUserLocation
       : userLocation;
+  const [locationRefreshTick, setLocationRefreshTick] = useState(0);
   const { zoneId, refreshZone, loading: zoneLoading } = useZone(effectiveZoneLocation, "mogrocery");
   const [availableZones, setAvailableZones] = useState([]);
   const [selectedGroceryZoneId, setSelectedGroceryZoneId] = useState("auto");
@@ -376,6 +377,9 @@ const GroceryPage = () => {
           refreshZone();
         }, 0);
       }
+
+      // Force dependent data to refresh even if computed zoneId does not change.
+      setLocationRefreshTick((prev) => prev + 1);
     };
 
     const handleStorageSync = (event) => {
@@ -385,10 +389,12 @@ const GroceryPage = () => {
     };
 
     window.addEventListener("userLocationChanged", syncLocationFromStorage);
+    window.addEventListener("userAddressesChanged", syncLocationFromStorage);
     window.addEventListener("storage", handleStorageSync);
 
     return () => {
       window.removeEventListener("userLocationChanged", syncLocationFromStorage);
+      window.removeEventListener("userAddressesChanged", syncLocationFromStorage);
       window.removeEventListener("storage", handleStorageSync);
     };
   }, [refreshZone, selectedGroceryZoneId]);
@@ -982,7 +988,7 @@ const GroceryPage = () => {
     setProductsPage(1);
     setHasMoreProducts(false);
     loadProductsPage(1, { replace: true });
-  }, [loadProductsPage]);
+  }, [loadProductsPage, locationRefreshTick]);
 
   useEffect(() => {
     if (!effectiveZoneId) {
@@ -1117,7 +1123,7 @@ const GroceryPage = () => {
     };
 
     fetchGroceryStores();
-  }, [effectiveZoneId, locationLoading, refreshZone, zoneLoading]);
+  }, [effectiveZoneId, locationLoading, refreshZone, zoneLoading, locationRefreshTick]);
 
   useEffect(() => {
     const targetElement = productPageLoadMoreRef.current;
