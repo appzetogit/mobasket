@@ -12,38 +12,65 @@ import mocare_hero from "@/assets/mocare_hero.png";
 const SelectionCard = ({ title, subtitle, image, icon: Icon, color, onClick, comingSoon, delay }) => {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 30, scale: 0.95 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{ 
-        delay, 
-        duration: 0.8, 
-        ease: [0.16, 1, 0.3, 1],
-        scale: { type: "spring", stiffness: 100, damping: 20 }
+      initial={{ opacity: 0, y: 30, scale: 0.9 }}
+      whileInView={{ 
+        opacity: 1, 
+        y: 0, 
+        scale: [0.9, 1.05, 1],
+        filter: "brightness(1.1)" 
       }}
-      whileHover={{ y: -8, scale: 1.01 }}
+      viewport={{ once: false, amount: 0.2 }}
+      transition={{ 
+        duration: 0.8, 
+        ease: [0.16, 1, 0.3, 1]
+      }}
+      whileHover={{ y: -8, scale: 1.02, filter: "brightness(1.2)" }}
       className="group relative w-full h-[320px] rounded-[2rem] overflow-hidden cursor-pointer shadow-xl transition-all duration-500 hover:shadow-2xl"
       onClick={!comingSoon ? onClick : undefined}
     >
+      {/* Flashing Shimmer Effect - More prominent when in view */}
+      <motion.div 
+        animate={{ 
+          x: ["-100%", "200%"],
+        }}
+        transition={{ 
+          repeat: Infinity, 
+          duration: 2.2, 
+          ease: "easeInOut",
+          repeatDelay: 3.5,
+          delay: delay + 0.5
+        }}
+        className="absolute inset-0 z-30 pointer-events-none skew-x-[-20deg]"
+        style={{
+          background: "linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.3) 50%, transparent 100%)",
+          width: "70%"
+        }}
+      />
+
       {/* Background Image */}
       <div className="absolute inset-0 z-0">
         <motion.img
           src={image}
           alt={title}
-          className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-105"
+          className="w-full h-full object-cover transition-transform duration-1000 group-hover:scale-110"
         />
-        <div className={`absolute inset-0 bg-gradient-to-b from-black/10 via-black/30 to-black/70 transition-opacity duration-500 ${comingSoon ? 'opacity-80 grayscale' : 'opacity-60 group-hover:opacity-50'}`} />
+        <div className={`absolute inset-0 bg-gradient-to-b from-black/10 via-black/40 to-black/80 transition-opacity duration-500 ${comingSoon ? 'opacity-90 grayscale' : 'opacity-75 group-hover:opacity-60'}`} />
       </div>
 
-      {/* Glow Effect on Hover */}
-      <div className={`absolute inset-0 z-10 opacity-0 group-hover:opacity-30 transition-opacity duration-700 bg-gradient-to-tr ${color}`} />
+      {/* Glow Effect on Scroll/Hover */}
+      <motion.div 
+        initial={{ opacity: 0 }}
+        whileInView={{ opacity: 0.3 }}
+        className={`absolute inset-0 z-10 transition-opacity duration-700 bg-gradient-to-tr ${color}`} 
+      />
 
       {/* Content Container */}
       <div className="relative z-20 h-full p-6 flex flex-col justify-end items-start gap-2">
         {/* Floating Icon */}
         <motion.div 
           initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: delay + 0.3 }}
+          whileInView={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.2 }}
           className="absolute top-6 left-6 p-3 rounded-xl bg-white/20 backdrop-blur-md border border-white/30"
         >
           <Icon className="w-5 h-5 text-white" />
@@ -133,7 +160,7 @@ export default function WelcomeSelectionPage() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 1, ease: [0.16, 1, 0.3, 1] }}
-            className="text-4xl md:text-6xl font-black text-slate-900 tracking-tighter"
+            className="text-4xl md:text-6xl font-black text-slate-800 tracking-tighter"
           >
             Welcome to<br/>
             <span>
