@@ -162,7 +162,11 @@ export default function SignupStep2() {
       }
     } catch (error) {
       console.error(`Error uploading ${docType}:`, error)
-      toast.error(`Failed to upload ${docType.replace(/([A-Z])/g, ' $1').trim()}`)
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        `Failed to upload ${docType.replace(/([A-Z])/g, ' $1').trim()}`
+      toast.error(message)
     } finally {
       setUploading(prev => ({ ...prev, [docType]: false }))
     }

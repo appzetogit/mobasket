@@ -78,9 +78,10 @@ const authenticateFlexible = async (req, res, next) => {
           return errorResponse(res, 401, 'Delivery partner not found');
         }
 
-        // Allow blocked/pending status partners to access (they can see rejection reason or verification message)
-        // Only block if account is inactive AND not blocked/pending (blocked/pending partners can login)
-        if (!delivery.isActive && delivery.status !== 'blocked' && delivery.status !== 'pending') {
+        // Allow uploads during onboarding/review/reverification flows as well.
+        // Restrict only when explicitly inactive for reasons outside the normal lifecycle.
+        const lifecycleStatuses = new Set(['onboarding', 'pending', 'approved', 'active', 'blocked']);
+        if (!delivery.isActive && !lifecycleStatuses.has(String(delivery.status || '').toLowerCase())) {
           return errorResponse(res, 401, 'Delivery partner account is inactive');
         }
 
