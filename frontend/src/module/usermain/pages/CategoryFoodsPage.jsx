@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle, Minus, Plus, ShoppingCart, X } from "lucide-react";
+import { ArrowLeft, CheckCircle, ChevronDown, Minus, Plus, ShoppingCart, X } from "lucide-react";
 import { toast } from "sonner";
 import { useCart } from "../../user/context/CartContext";
 import WishlistButton from "@/components/WishlistButton";
-import api from "@/lib/api";
+import api, { restaurantAPI } from "@/lib/api";
 import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
 import AddToCartAnimation from "../../user/components/AddToCartAnimation";
@@ -232,6 +232,12 @@ export function CategoryFoodsContent({
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [zoneStores, setZoneStores] = useState([]);
+  const [onlineStores, setOnlineStores] = useState([]);
+  const [isStoreMenuOpen, setIsStoreMenuOpen] = useState(false);
+  const [storeCategoryMeta, setStoreCategoryMeta] = useState({
+    categoryIds: [],
+    categoryNames: [],
+  });
   const [isCategoriesLoading, setIsCategoriesLoading] = useState(true);
   const [isProductsLoading, setIsProductsLoading] = useState(true);
   const [isLoadingMoreProducts, setIsLoadingMoreProducts] = useState(false);
@@ -239,6 +245,7 @@ export function CategoryFoodsContent({
   const [hasMoreProducts, setHasMoreProducts] = useState(false);
   const scrollableRef = useRef(null);
   const loadMoreInFlightRef = useRef(false);
+  const storeMenuRef = useRef(null);
 
   useEffect(() => {
     setSelectedCategory(initialCategory || "all");
@@ -306,6 +313,50 @@ export function CategoryFoodsContent({
   useEffect(() => {
     let mounted = true;
 
+    const fetchOnlineStores = async () => {
+      try {
+        const response = await restaurantAPI.getRestaurants({
+          limit: 200,
+          platform: "mogrocery",
+          onlyZone: "true",
+          ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
+        });
+        const restaurants = Array.isArray(response?.data?.data?.restaurants)
+          ? response.data.data.restaurants
+          : [];
+
+        const zoneOnlineStores = restaurants
+          .filter((restaurant) => {
+            if (String(restaurant?.platform || "").toLowerCase() !== "mogrocery") return false;
+            if (restaurant?.isActive === false) return false;
+            if (restaurant?.isOnline === false) return false;
+            if (restaurant?.isAcceptingOrders === false) return false;
+            return true;
+          })
+          .map((store) => ({
+            id: String(store?._id || store?.id || store?.restaurantId || "").trim(),
+            name: String(store?.name || store?.restaurantName || "Store").trim(),
+          }))
+          .filter((store) => store.id);
+
+        if (!mounted) return;
+        setOnlineStores(zoneOnlineStores);
+      } catch {
+        if (!mounted) return;
+        setOnlineStores([]);
+      }
+    };
+
+    fetchOnlineStores();
+
+    return () => {
+      mounted = false;
+    };
+  }, [effectiveZoneId]);
+
+  useEffect(() => {
+    let mounted = true;
+
     const fetchCategories = async () => {
       try {
         const response = await api.get("/grocery/categories", {
@@ -335,6 +386,59 @@ export function CategoryFoodsContent({
       if (!exists) setSelectedCategory("all");
     }
   }, [categories, isCategoriesLoading, selectedCategory]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchStoreCategoryMeta = async () => {
+      if (!selectedStoreId || selectedStoreId === "all-stores") {
+        if (mounted) {
+          setStoreCategoryMeta({ categoryIds: [], categoryNames: [] });
+        }
+        return;
+      }
+
+      try {
+        const response = await api.get("/grocery/products", {
+          params: {
+            page: 1,
+            limit: 200,
+            ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
+            storeId: selectedStoreId,
+          },
+        });
+
+        const data = Array.isArray(response?.data?.data) ? response.data.data : [];
+        const categoryIds = new Set();
+        const categoryNames = new Set();
+
+        data.forEach((product) => {
+          const categoryId = String(
+            product?.category?._id || product?.category?.id || product?.category || ""
+          ).trim();
+          if (categoryId) categoryIds.add(categoryId);
+
+          const categoryName = String(product?.category?.name || "").trim().toLowerCase();
+          if (categoryName) categoryNames.add(categoryName);
+        });
+
+        if (!mounted) return;
+        setStoreCategoryMeta({
+          categoryIds: Array.from(categoryIds),
+          categoryNames: Array.from(categoryNames),
+        });
+      } catch {
+        if (!mounted) return;
+        setStoreCategoryMeta({ categoryIds: [], categoryNames: [] });
+      }
+    };
+
+    fetchStoreCategoryMeta();
+
+    return () => {
+      mounted = false;
+    };
+  }, [effectiveZoneId, selectedStoreId]);
 
   useEffect(() => {
     let mounted = true;
@@ -542,6 +646,18 @@ export function CategoryFoodsContent({
 
   const sidebarCategories = useMemo(() => {
     const dynamic = categories
+      .filter((category) => {
+        if (!selectedStoreId || selectedStoreId === "all-stores") return true;
+
+        const categoryId = String(category?._id || "").trim();
+        const categorySlug = String(category?.slug || "").trim();
+        const categoryName = String(category?.name || "").trim().toLowerCase();
+        return (
+          (categoryId && storeCategoryMeta.categoryIds.includes(categoryId)) ||
+          (categorySlug && storeCategoryMeta.categoryIds.includes(categorySlug)) ||
+          (categoryName && storeCategoryMeta.categoryNames.includes(categoryName))
+        );
+      })
       .map((category) => ({
         id: String(category?._id || category?.slug || "").trim(),
         name: category?.name || "Category",
@@ -550,10 +666,26 @@ export function CategoryFoodsContent({
       .filter((category) => category.id);
 
     return [{ id: "all", name: "All", icon: imgBag3D }, ...dynamic];
-  }, [categories]);
+  }, [categories, selectedStoreId, storeCategoryMeta.categoryIds, storeCategoryMeta.categoryNames]);
+
+  useEffect(() => {
+    if (selectedCategory === "all") return;
+    const exists = sidebarCategories.some(
+      (category) => String(category?.id || "") === String(selectedCategory)
+    );
+    if (!exists) {
+      setSelectedCategory("all");
+      setSelectedSubcategoryId("");
+    }
+  }, [selectedCategory, sidebarCategories]);
 
   const selectedStoreLabel = useMemo(() => {
     if (!selectedStoreId || selectedStoreId === "all-stores") return "All Stores";
+
+    const matchedOnlineStore = onlineStores.find(
+      (store) => String(store?.id || "") === String(selectedStoreId)
+    );
+    if (matchedOnlineStore?.name) return matchedOnlineStore.name;
 
     const matchedZoneStore = zoneStores.find(
       (store) => String(store?.id || "") === String(selectedStoreId)
@@ -566,19 +698,38 @@ export function CategoryFoodsContent({
     ).trim();
 
     return matchedStoreName || "Selected Store";
-  }, [products, selectedStoreId, zoneStores]);
+  }, [onlineStores, products, selectedStoreId, zoneStores]);
 
   useEffect(() => {
     if (!selectedStoreId || selectedStoreId === "all-stores") return;
-    if (zoneStores.length === 0) return;
+    if (onlineStores.length === 0) return;
 
-    const existsInZone = zoneStores.some(
+    const existsInOnlineStores = onlineStores.some(
       (store) => String(store?.id || "") === String(selectedStoreId)
     );
-    if (!existsInZone) {
+    if (!existsInOnlineStores) {
       setSelectedStoreId("all-stores");
     }
-  }, [selectedStoreId, zoneStores]);
+  }, [onlineStores, selectedStoreId]);
+
+  useEffect(() => {
+    setSelectedCategory("all");
+    setSelectedSubcategoryId("");
+  }, [selectedStoreId]);
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (!storeMenuRef.current) return;
+      if (!storeMenuRef.current.contains(event.target)) {
+        setIsStoreMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, []);
 
   const handleProductCardClick = (product) => {
     const productId = product?._id || product?.id;
@@ -684,13 +835,60 @@ export function CategoryFoodsContent({
             <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">{products.length} items</span>
           </div>
 
-          <div className="ml-auto text-right">
-            <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500">
-              Store
-            </p>
-            <p className="text-xs font-bold text-slate-700 dark:text-slate-200 line-clamp-1 max-w-[140px]">
-              {selectedStoreLabel}
-            </p>
+          <div ref={storeMenuRef} className="ml-auto relative">
+            <button
+              type="button"
+              onClick={() => setIsStoreMenuOpen((prev) => !prev)}
+              className="text-right"
+            >
+              <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500">
+                Store
+              </p>
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-200 line-clamp-1 max-w-[160px] flex items-center justify-end gap-1">
+                <span className="truncate">{selectedStoreLabel}</span>
+                <ChevronDown size={12} className={`transition-transform ${isStoreMenuOpen ? "rotate-180" : ""}`} />
+              </p>
+            </button>
+
+            {isStoreMenuOpen && (
+              <div className="absolute right-0 top-[calc(100%+6px)] z-[70] w-[190px] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0f172a] shadow-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedStoreId("all-stores");
+                    setIsStoreMenuOpen(false);
+                  }}
+                  className={`w-full text-left px-3 py-2 text-xs font-semibold ${
+                    selectedStoreId === "all-stores"
+                      ? "bg-[#fff4cc] dark:bg-[#152338] text-slate-900 dark:text-cyan-100"
+                      : "text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  All Stores
+                </button>
+                {onlineStores.length > 0 ? (
+                  onlineStores.map((store) => (
+                    <button
+                      type="button"
+                      key={store.id}
+                      onClick={() => {
+                        setSelectedStoreId(store.id);
+                        setIsStoreMenuOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-xs font-semibold ${
+                        selectedStoreId === store.id
+                          ? "bg-[#fff4cc] dark:bg-[#152338] text-slate-900 dark:text-cyan-100"
+                          : "text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      }`}
+                    >
+                      {store.name}
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500">No online stores</p>
+                )}
+              </div>
+            )}
           </div>
 
           {isModal && (
@@ -922,12 +1120,8 @@ const CategoryFoodsPage = () => {
   const stateCategoryId = String(location?.state?.categoryId || "").trim();
   const stateStoreId = String(location?.state?.storeId || "").trim();
   const queryStoreId = String(new URLSearchParams(location?.search || "").get("storeId") || "").trim();
-  const cachedStoreId =
-    typeof window !== "undefined"
-      ? String(localStorage.getItem("mogrocery:selectedStoreId") || "").trim()
-      : "";
   const initialCategory = isCategoriesRootPage ? "all" : (id || stateCategoryId || "all");
-  const initialStoreId = queryStoreId || stateStoreId || cachedStoreId || "all-stores";
+  const initialStoreId = queryStoreId || stateStoreId || "all-stores";
 
   return (
     <CategoryFoodsContent
