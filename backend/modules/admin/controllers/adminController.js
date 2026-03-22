@@ -1789,8 +1789,19 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
     const parsedLimit = Math.max(parseInt(limit, 10) || 50, 1);
     const skip = (parsedPage - 1) * parsedLimit;
 
+    const emptyRejectionReasonConditions = [
+      { rejectionReason: { $exists: false } },
+      { rejectionReason: null },
+      { rejectionReason: '' },
+      { rejectionReason: { $regex: /^\s*$/ } },
+    ];
+    const hasMeaningfulRejectionReasonCondition = {
+      rejectionReason: { $regex: /\S/ },
+    };
+
     let query = {
       isActive: false,
+      approvedAt: null,
       $or: [
         { status: 'pending' },
         { 'onboarding.completedSteps': { $gte: 4 } },
@@ -1798,14 +1809,15 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
     };
 
     if (status === 'rejected') {
-      query.rejectionReason = { $exists: true, $ne: null };
+      query.$and = [
+        ...(query.$and || []),
+        hasMeaningfulRejectionReasonCondition,
+      ];
     } else {
       query.$and = [
+        ...(query.$and || []),
         {
-          $or: [
-            { rejectionReason: { $exists: false } },
-            { rejectionReason: null },
-          ],
+          $or: emptyRejectionReasonConditions,
         },
       ];
     }
@@ -1842,6 +1854,9 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
         zone = restaurant.location.city;
       }
 
+      const normalizedRejectionReason = String(restaurant.rejectionReason || '').trim();
+      const hasMeaningfulRejectionReason = Boolean(normalizedRejectionReason);
+
       return {
         _id: restaurant._id.toString(),
         sl: skip + index + 1,
@@ -1854,8 +1869,8 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
         ownerPhone: restaurant.ownerPhone || restaurant.phone || 'N/A',
         zone,
         businessModel: restaurant.businessModel || 'Commission Base',
-        status: restaurant.rejectionReason ? 'Rejected' : 'Pending',
-        rejectionReason: restaurant.rejectionReason || null,
+        status: hasMeaningfulRejectionReason ? 'Rejected' : 'Pending',
+        rejectionReason: hasMeaningfulRejectionReason ? normalizedRejectionReason : null,
         createdAt: restaurant.createdAt,
         fullData: {
           ...restaurant,
@@ -1898,7 +1913,7 @@ export const approveRestaurant = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, 'Restaurant is already approved');
     }
 
-    if (restaurant.rejectionReason) {
+    if (String(restaurant.rejectionReason || '').trim()) {
       return errorResponse(res, 400, 'Cannot approve a rejected restaurant. Please remove rejection reason first.');
     }
 
@@ -1996,24 +2011,30 @@ export const getGroceryStoreJoinRequests = asyncHandler(async (req, res) => {
     } = req.query;
 
     let query = {};
+    const emptyRejectionReasonConditions = [
+      { rejectionReason: { $exists: false } },
+      { rejectionReason: null },
+      { rejectionReason: '' },
+      { rejectionReason: { $regex: /^\s*$/ } }
+    ];
+    const hasMeaningfulRejectionReasonCondition = {
+      rejectionReason: { $regex: /\S/ }
+    };
     
     if (status === 'pending') {
       // Show only onboarded stores that are awaiting review.
       query.$and = [
         { isActive: false },
+        { approvedAt: null },
         { 'onboarding.completedSteps': { $gte: 1 } },
-        {
-          $or: [
-            { rejectionReason: { $exists: false } },
-            { rejectionReason: null }
-          ]
-        }
+        { $or: emptyRejectionReasonConditions }
       ];
     } else if (status === 'rejected') {
       query.$and = [
         { isActive: false },
+        { approvedAt: null },
         { 'onboarding.completedSteps': { $gte: 1 } },
-        { rejectionReason: { $exists: true, $ne: null } }
+        hasMeaningfulRejectionReasonCondition
       ];
     }
 
@@ -2060,6 +2081,9 @@ export const getGroceryStoreJoinRequests = asyncHandler(async (req, res) => {
         zone = store.location.city;
       }
 
+      const normalizedRejectionReason = String(store.rejectionReason || '').trim();
+      const hasMeaningfulRejectionReason = Boolean(normalizedRejectionReason);
+
       return {
         _id: store._id.toString(),
         sl: skip + index + 1,
@@ -2068,8 +2092,8 @@ export const getGroceryStoreJoinRequests = asyncHandler(async (req, res) => {
         ownerName: store.ownerName || 'N/A',
         ownerPhone: store.ownerPhone || store.phone || 'N/A',
         zone: zone,
-        status: store.rejectionReason ? 'Rejected' : 'Pending',
-        rejectionReason: store.rejectionReason || null,
+        status: hasMeaningfulRejectionReason ? 'Rejected' : 'Pending',
+        rejectionReason: hasMeaningfulRejectionReason ? normalizedRejectionReason : null,
         createdAt: store.createdAt,
         fullData: {
           ...store,
@@ -2201,7 +2225,7 @@ export const reverifyRestaurant = asyncHandler(async (req, res) => {
     }
 
     // Check if restaurant was rejected
-    if (!restaurant.rejectionReason) {
+    if (!String(restaurant.rejectionReason || '').trim()) {
       return errorResponse(res, 400, 'Restaurant is not rejected. Only rejected restaurants can be reverified.');
     }
 

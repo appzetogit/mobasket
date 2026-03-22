@@ -19,7 +19,7 @@ const normalizeStoreOnboardingState = (store) => {
     store?.isActive === true ||
     Boolean(store?.approvedAt) ||
     Boolean(store?.rejectedAt) ||
-    Boolean(store?.rejectionReason) ||
+    Boolean(String(store?.rejectionReason || '').trim()) ||
     Number(onboarding?.completedSteps || 0) >= 1;
 
   if (isProvisioned && Number(onboarding?.completedSteps || 0) < 1) {

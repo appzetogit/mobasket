@@ -9,7 +9,7 @@ const normalizeRestaurantOnboardingState = (restaurant) => {
     restaurant?.isActive === true ||
     Boolean(restaurant?.approvedAt) ||
     Boolean(restaurant?.rejectedAt) ||
-    Boolean(restaurant?.rejectionReason) ||
+    Boolean(String(restaurant?.rejectionReason || '').trim()) ||
     (status && status !== 'onboarding') ||
     Number(onboarding?.completedSteps || 0) >= 4;
 

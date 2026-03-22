@@ -940,7 +940,7 @@ const normalizeRestaurantOnboardingState = (restaurant) => {
     restaurant?.isActive === true ||
     Boolean(restaurant?.approvedAt) ||
     Boolean(restaurant?.rejectedAt) ||
-    Boolean(restaurant?.rejectionReason) ||
+    Boolean(String(restaurant?.rejectionReason || '').trim()) ||
     (status && status !== 'onboarding') ||
     Number(onboarding?.completedSteps || 0) >= 4;
 
@@ -1024,7 +1024,7 @@ export const getCurrentRestaurant = asyncHandler(async (req, res) => {
       slug: req.restaurant.slug,
       isAcceptingOrders,
       // Include verification status
-      rejectionReason: req.restaurant.rejectionReason || null,
+      rejectionReason: String(req.restaurant.rejectionReason || '').trim() || null,
       approvedAt: req.restaurant.approvedAt || null,
       rejectedAt: req.restaurant.rejectedAt || null
     }
@@ -1066,7 +1066,7 @@ export const reverifyRestaurant = asyncHandler(async (req, res) => {
     const restaurant = req.restaurant; // Already attached by authenticate middleware
 
     // Check if restaurant was rejected
-    if (!restaurant.rejectionReason) {
+    if (!String(restaurant.rejectionReason || '').trim()) {
       return errorResponse(res, 400, 'Restaurant is not rejected. Only rejected restaurants can be reverified.');
     }
 

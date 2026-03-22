@@ -527,7 +527,7 @@ const normalizeStoreOnboardingState = (store) => {
     store?.isActive === true ||
     Boolean(store?.approvedAt) ||
     Boolean(store?.rejectedAt) ||
-    Boolean(store?.rejectionReason) ||
+    Boolean(String(store?.rejectionReason || '').trim()) ||
     Number(onboarding?.completedSteps || 0) >= 1;
 
   if (isProvisioned && Number(onboarding?.completedSteps || 0) < 1) {
@@ -684,7 +684,7 @@ export const reverifyGroceryStore = asyncHandler(async (req, res) => {
     const store = req.store; // Already attached by authenticate middleware
 
     // Only rejected stores can reverify.
-    if (!store?.rejectionReason) {
+    if (!String(store?.rejectionReason || '').trim()) {
       return errorResponse(
         res,
         400,
