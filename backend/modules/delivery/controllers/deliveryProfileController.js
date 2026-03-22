@@ -198,6 +198,9 @@ export const updateProfile = asyncHandler(async (req, res) => {
     // 4. Update status if documents were updated
     if (documentUpdatedForStatus) {
       deliveryDoc.status = 'pending';
+      deliveryDoc.rejectionReason = null;
+      deliveryDoc.rejectedAt = null;
+      deliveryDoc.rejectedBy = null;
     }
 
     // 5. Save and return
@@ -235,9 +238,9 @@ export const reverify = asyncHandler(async (req, res) => {
     // Reset to pending status and clear rejection details
     delivery.status = 'pending';
     delivery.isActive = true; // Allow login to see verification message
-    delivery.rejectionReason = undefined;
-    delivery.rejectedAt = undefined;
-    delivery.rejectedBy = undefined;
+    delivery.rejectionReason = null;
+    delivery.rejectedAt = null;
+    delivery.rejectedBy = null;
 
     await delivery.save();
 

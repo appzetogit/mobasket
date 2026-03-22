@@ -186,6 +186,9 @@ export const updateOnboarding = asyncHandler(async (req, res) => {
       ) {
         update.isActive = false;
         update.isAcceptingOrders = false;
+        update.rejectionReason = null;
+        update.rejectedAt = null;
+        update.rejectedBy = null;
       }
     }
 

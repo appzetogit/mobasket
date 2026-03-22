@@ -87,6 +87,8 @@ const getOrderPreviewPhotoUrl = (value) => {
 const fetchOrdersLite = (orderAPI, params = {}) =>
   orderAPI.getOrders({
     includeItemImages: false,
+    compact: true,
+    limit: 100,
     ...params,
   })
 

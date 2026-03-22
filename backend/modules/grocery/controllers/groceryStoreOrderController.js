@@ -12,6 +12,31 @@ const parseBooleanQuery = (value, defaultValue = true) => {
   return defaultValue;
 };
 
+const COMPACT_ORDER_SELECT_FIELDS = [
+  'orderId',
+  'status',
+  'createdAt',
+  'updatedAt',
+  'deliveredAt',
+  'estimatedDeliveryTime',
+  'deliveryFleet',
+  'restaurantId',
+  'userId',
+  'address',
+  'items',
+  'pricing',
+  'total',
+  'payment',
+  'scheduledDelivery',
+  'note',
+  'sendCutlery',
+  'deliveryState',
+  'assignmentInfo',
+  'tracking',
+  'cancelledBy',
+  'cancellationReason'
+].join(' ');
+
 const sanitizeOrderItemsForList = (order) => {
   if (!order || !Array.isArray(order.items)) return order;
   return {
@@ -34,6 +59,7 @@ export const getGroceryStoreOrders = asyncHandler(async (req, res) => {
     const store = req.store; // From groceryStoreAuth middleware
     const { status, page = 1, limit = 50 } = req.query;
     const includeItemImages = parseBooleanQuery(req.query.includeItemImages, true);
+    const compact = parseBooleanQuery(req.query.compact, false);
 
     // Get store ID - normalize to string (Order.restaurantId is String type)
     const storeIdString = store._id?.toString() ||
@@ -105,12 +131,17 @@ export const getGroceryStoreOrders = asyncHandler(async (req, res) => {
       status: status || 'all'
     });
 
-    const orders = await Order.find(query)
+    const orderQuery = Order.find(query)
       .populate('userId', 'name email phone')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
-      .skip(skip)
-      .lean();
+      .skip(skip);
+
+    if (compact) {
+      orderQuery.select(COMPACT_ORDER_SELECT_FIELDS);
+    }
+
+    const orders = await orderQuery.lean();
 
     const total = await Order.countDocuments(query);
     const normalizedOrders = includeItemImages

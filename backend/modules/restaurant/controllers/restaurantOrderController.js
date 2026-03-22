@@ -98,6 +98,31 @@ const parseBooleanQuery = (value, defaultValue = true) => {
   return defaultValue;
 };
 
+const COMPACT_ORDER_SELECT_FIELDS = [
+  'orderId',
+  'status',
+  'createdAt',
+  'updatedAt',
+  'deliveredAt',
+  'estimatedDeliveryTime',
+  'deliveryFleet',
+  'restaurantId',
+  'userId',
+  'address',
+  'items',
+  'pricing',
+  'total',
+  'payment',
+  'scheduledDelivery',
+  'note',
+  'sendCutlery',
+  'deliveryState',
+  'assignmentInfo',
+  'tracking',
+  'cancelledBy',
+  'cancellationReason'
+].join(' ');
+
 const sanitizeOrderItemsForList = (order) => {
   if (!order || !Array.isArray(order.items)) return order;
   return {
@@ -119,6 +144,7 @@ export const getRestaurantOrders = asyncHandler(async (req, res) => {
     const restaurant = req.restaurant;
     const { status, page = 1, limit = 50 } = req.query;
     const includeItemImages = parseBooleanQuery(req.query.includeItemImages, true);
+    const compact = parseBooleanQuery(req.query.compact, false);
 
     // Get restaurant ID - normalize to string (Order.restaurantId is String type)
     const restaurantIdString = restaurant._id?.toString() ||
@@ -185,12 +211,17 @@ export const getRestaurantOrders = asyncHandler(async (req, res) => {
       status: status || 'all'
     });
 
-    const orders = await Order.find(query)
+    const orderQuery = Order.find(query)
       .populate('userId', 'name email phone')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
-      .skip(skip)
-      .lean();
+      .skip(skip);
+
+    if (compact) {
+      orderQuery.select(COMPACT_ORDER_SELECT_FIELDS);
+    }
+
+    const orders = await orderQuery.lean();
 
     const total = await Order.countDocuments(query);
     const normalizedOrders = includeItemImages

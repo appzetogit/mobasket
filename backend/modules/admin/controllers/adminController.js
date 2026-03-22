@@ -2231,8 +2231,11 @@ export const reverifyRestaurant = asyncHandler(async (req, res) => {
 
     // Clear rejection details and mark as pending again
     restaurant.rejectionReason = null;
-    restaurant.rejectedAt = undefined;
-    restaurant.rejectedBy = undefined;
+    restaurant.rejectedAt = null;
+    restaurant.rejectedBy = null;
+    restaurant.approvedAt = null;
+    restaurant.approvedBy = null;
+    restaurant.status = 'pending';
     restaurant.isActive = false; // Keep inactive until approved
 
     await restaurant.save();
