@@ -184,7 +184,28 @@ const GroceryPage = () => {
   const { addresses, getDefaultAddress } = useProfile();
   const { location: userLocation, loading: locationLoading } = useUserLocation();
   const { openLocationSelector } = useLocationSelector();
-  const { zoneId, refreshZone, loading: zoneLoading } = useZone(userLocation, "mogrocery");
+  const [storedUserLocation, setStoredUserLocation] = useState(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const parsed = JSON.parse(localStorage.getItem("userLocation") || "null");
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
+  });
+  const [userLocationSource, setUserLocationSource] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return String(localStorage.getItem("userLocationSource") || "").trim().toLowerCase();
+    } catch {
+      return "";
+    }
+  });
+  const effectiveZoneLocation =
+    storedUserLocation && typeof storedUserLocation === "object"
+      ? storedUserLocation
+      : userLocation;
+  const { zoneId, refreshZone, loading: zoneLoading } = useZone(effectiveZoneLocation, "mogrocery");
   const [availableZones, setAvailableZones] = useState([]);
   const [selectedGroceryZoneId, setSelectedGroceryZoneId] = useState("auto");
   const [isZoneMenuOpen, setIsZoneMenuOpen] = useState(false);
@@ -211,23 +232,6 @@ const GroceryPage = () => {
     if (typeof window === "undefined") return "all-stores";
     const cachedStoreId = String(localStorage.getItem("mogrocery:selectedStoreId") || "").trim();
     return cachedStoreId || "all-stores";
-  });
-  const [storedUserLocation, setStoredUserLocation] = useState(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const parsed = JSON.parse(localStorage.getItem("userLocation") || "null");
-      return parsed && typeof parsed === "object" ? parsed : null;
-    } catch {
-      return null;
-    }
-  });
-  const [userLocationSource, setUserLocationSource] = useState(() => {
-    if (typeof window === "undefined") return "";
-    try {
-      return String(localStorage.getItem("userLocationSource") || "").trim().toLowerCase();
-    } catch {
-      return "";
-    }
   });
 
   const [isScrolled, setIsScrolled] = useState(false);
@@ -364,6 +368,14 @@ const GroceryPage = () => {
       } catch {
         setUserLocationSource("");
       }
+
+      // Trigger zone re-detection immediately when location is changed from selector.
+      // This avoids requiring a manual page refresh for updated store availability.
+      if (selectedGroceryZoneId === "auto" && typeof refreshZone === "function") {
+        setTimeout(() => {
+          refreshZone();
+        }, 0);
+      }
     };
 
     const handleStorageSync = (event) => {
@@ -379,7 +391,23 @@ const GroceryPage = () => {
       window.removeEventListener("userLocationChanged", syncLocationFromStorage);
       window.removeEventListener("storage", handleStorageSync);
     };
-  }, []);
+  }, [refreshZone, selectedGroceryZoneId]);
+
+  useEffect(() => {
+    if (selectedGroceryZoneId !== "auto") return;
+    if (typeof refreshZone !== "function") return;
+
+    const lat = Number(storedUserLocation?.latitude);
+    const lng = Number(storedUserLocation?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    refreshZone();
+  }, [
+    refreshZone,
+    selectedGroceryZoneId,
+    storedUserLocation?.latitude,
+    storedUserLocation?.longitude,
+  ]);
 
   const getStoreCoordinates = (store) => {
     const geoCoordinates = store?.location?.coordinates;

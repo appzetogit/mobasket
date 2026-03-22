@@ -20,6 +20,8 @@ import {
   getOrderEditSession,
 } from "@/module/user/utils/orderEditSession";
 
+const isMongoObjectId = (value) => /^[a-fA-F0-9]{24}$/.test(String(value || "").trim());
+
 export default function CartPage() {
   const navigate = useNavigate();
   const { cart, updateQuantity, removeFromCart, addToCart, getCartItem, isGroceryItem } = useCart();
@@ -118,15 +120,22 @@ export default function CartPage() {
 
       try {
         const restaurantResponse = await restaurantAPI.getRestaurantById(String(restaurantId));
-        const outletTimingsResponse = await api
-          .get(`/restaurant/${String(restaurantId)}/outlet-timings`)
-          .catch(() => null);
 
         const restaurant =
           restaurantResponse?.data?.data?.restaurant ||
           restaurantResponse?.data?.restaurant ||
           restaurantResponse?.data?.data ||
           null;
+
+        const resolvedRestaurantMongoId = String(
+          restaurant?._id || (isMongoObjectId(restaurantId) ? restaurantId : "")
+        ).trim();
+
+        const outletTimingsResponse = resolvedRestaurantMongoId
+          ? await api
+              .get(`/restaurant/${resolvedRestaurantMongoId}/outlet-timings`)
+              .catch(() => null)
+          : null;
 
         const outletTimings =
           outletTimingsResponse?.data?.data?.outletTimings?.timings ||
