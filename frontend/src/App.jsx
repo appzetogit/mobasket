@@ -11,6 +11,7 @@ import {
   syncNativeMobilePushForCurrentSession,
   teardownWebPushListener,
 } from "@/lib/webPush";
+import { applyScopedAppTheme } from "@/lib/utils/themeScope";
 
 const UserRouter = lazy(() => import("@/module/user/components/UserRouter"));
 const RestaurantAppRoutes = lazy(() => import("@/route-groups/RestaurantAppRoutes"));
@@ -63,6 +64,13 @@ function shouldSkipPartnerBackgroundSetup(pathname = "") {
 
 export default function App() {
   const location = useLocation();
+
+  useEffect(() => {
+    const savedTheme =
+      typeof window !== "undefined" ? localStorage.getItem("appTheme") || "light" : "light";
+
+    applyScopedAppTheme(location.pathname, savedTheme);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (typeof window === "undefined" || !("geolocation" in navigator)) return;

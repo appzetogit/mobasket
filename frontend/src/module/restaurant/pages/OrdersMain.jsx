@@ -1522,7 +1522,7 @@ export default function OrdersMain() {
 
       if (acceptedOrderId && typeof orderAPI?.resendDeliveryNotification === "function") {
         // Best-effort nudge so the delivery assignment flow starts immediately.
-        orderAPI.resendDeliveryNotification(acceptedOrderId).catch(() => {})
+        orderAPI.resendDeliveryNotification(acceptedOrderId).catch(() => { })
       }
 
       toast.success('Order accepted successfully')
@@ -2270,15 +2270,15 @@ export default function OrdersMain() {
                       <div className="text-xs text-red-700 space-y-1">
                         {rejectionReasonText
                           ? (rejectionReasonText.split('\n').filter(line => line.trim()).length > 1 ? (
-                          <ul className="space-y-1 list-disc list-inside">
-                            {rejectionReasonText.split('\n').map((point, index) => (
-                              point.trim() && (
-                                <li key={index}>{point.trim()}</li>
-                              )
-                            ))}
-                          </ul>
-                        ) : (
-                          <p className="text-red-700">{rejectionReasonText}</p>
+                            <ul className="space-y-1 list-disc list-inside">
+                              {rejectionReasonText.split('\n').map((point, index) => (
+                                point.trim() && (
+                                  <li key={index}>{point.trim()}</li>
+                                )
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-red-700">{rejectionReasonText}</p>
                           ))
                           : <p className="text-red-700">Your verification was denied. Please update details and resubmit.</p>}
                       </div>
@@ -3484,20 +3484,20 @@ function ReadyOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 
           const transformedOrders = readyOrders.map(order => {
             const assignment = resolveDeliveryAssignment(order)
             return ({
-            orderId: order.orderId || order._id,
-            mongoId: order._id,
-            status: String(order.status || 'ready').toLowerCase(),
-            customerName: order.userId?.name || 'Customer',
-            type: order.deliveryFleet === 'standard' ? 'Home Delivery' : 'Express Delivery',
-            tableOrToken: null,
-            timePlaced: new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-            eta: null, // Don't show ETA for ready orders
-            itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
-            photoUrl: getOrderPreviewPhotoUrl(order.items?.[0]?.image),
-            photoAlt: order.items?.[0]?.name || 'Order',
-            deliveryPartnerId: assignment.deliveryPartnerId,
-            hasDeliveryAssignment: assignment.hasDeliveryAssignment,
-          })
+              orderId: order.orderId || order._id,
+              mongoId: order._id,
+              status: String(order.status || 'ready').toLowerCase(),
+              customerName: order.userId?.name || 'Customer',
+              type: order.deliveryFleet === 'standard' ? 'Home Delivery' : 'Express Delivery',
+              tableOrToken: null,
+              timePlaced: new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+              eta: null, // Don't show ETA for ready orders
+              itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
+              photoUrl: getOrderPreviewPhotoUrl(order.items?.[0]?.image),
+              photoAlt: order.items?.[0]?.name || 'Order',
+              deliveryPartnerId: assignment.deliveryPartnerId,
+              hasDeliveryAssignment: assignment.hasDeliveryAssignment,
+            })
           })
 
           if (isMounted) {

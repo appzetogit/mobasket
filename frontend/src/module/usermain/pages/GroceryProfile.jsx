@@ -23,6 +23,7 @@ import { motion } from "framer-motion";
 import { useProfile } from "@/module/user/context/ProfileContext";
 import { clearModuleAuth } from "@/lib/utils/auth";
 import { authAPI, userAPI } from "@/lib/api";
+import { applyScopedAppTheme } from "@/lib/utils/themeScope";
 import { toast } from "sonner";
 
 const GroceryProfile = () => {
@@ -87,13 +88,8 @@ const GroceryProfile = () => {
   });
 
   React.useEffect(() => {
-    const root = document.documentElement;
-    if (appearance === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
     localStorage.setItem("appTheme", appearance);
+    applyScopedAppTheme(window.location.pathname, appearance);
   }, [appearance]);
 
   const displayName = userProfile?.name || "Your account";
@@ -183,7 +179,7 @@ const GroceryProfile = () => {
             <motion.div
               whileHover={{ scale: 1.01 }}
               onClick={() => navigate("/profile/edit")}
-              className="bg-gradient-to-r from-[#FFFDE7] to-[#FFF9C4] rounded-2xl p-4 flex items-center justify-between shadow-sm border border-yellow-100 mx-1 cursor-pointer"
+              className="bg-gradient-to-r from-[#FFFDE7] to-[#FFF9C4] dark:from-[#1a1a1a] dark:to-[#242424] rounded-2xl p-4 flex items-center justify-between shadow-sm border border-yellow-100 dark:border-gray-800 mx-1 cursor-pointer"
             >
               <div className="flex-1">
                 <h4 className="font-bold text-slate-800 dark:text-slate-100 tracking-tight">
@@ -206,7 +202,7 @@ const GroceryProfile = () => {
 
       <div className="md:max-w-6xl md:mx-auto w-full">
         {/* --- QUICK ACTIONS --- */}
-        <div className="px-4 -mt-4 grid grid-cols-3 gap-3 mb-6">
+        <div className={`px-4 grid grid-cols-2 gap-4 mb-6 ${hasBirthday ? "-mt-4" : ""}`}>
           {[
             {
               icon: ShoppingBag,

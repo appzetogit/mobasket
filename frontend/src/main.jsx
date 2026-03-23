@@ -6,6 +6,7 @@ import './index.css'
 import { getGoogleMapsApiKey } from './lib/utils/googleMapsApiKey.js'
 import { loadBusinessSettings } from './lib/utils/businessSettings.js'
 import { API_BASE_URL } from './lib/api/config.js'
+import { applyScopedAppTheme } from './lib/utils/themeScope.js'
 
 // Load business settings on app start (favicon, title)
 // Silently handle errors - this is not critical for app functionality
@@ -72,11 +73,7 @@ window.__googleMapsLoaded = window.__googleMapsLoaded || false;
 
 // Apply theme on app initialization
 const savedTheme = localStorage.getItem('appTheme') || 'light'
-if (savedTheme === 'dark') {
-  document.documentElement.classList.add('dark')
-} else {
-  document.documentElement.classList.remove('dark')
-}
+applyScopedAppTheme(window.location.pathname, savedTheme)
 
 const originalLog = console.log
 console.log = (...args) => {

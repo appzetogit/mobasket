@@ -3967,7 +3967,7 @@ export default function OrderTracking() {
 
         </motion.div>
 
-        {!isPlanSubscriptionOrder && (
+        {!isPlanSubscriptionOrder && String(order?.status || "").toLowerCase() !== "cancelled" && (
 
         <motion.div
 

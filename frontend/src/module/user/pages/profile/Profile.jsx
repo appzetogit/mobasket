@@ -46,6 +46,7 @@ import { locationAPI } from "@/lib/api";
 import { firebaseAuth } from "@/lib/firebase";
 import { clearModuleAuth } from "@/lib/utils/auth";
 import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey";
+import { applyScopedAppTheme } from "@/lib/utils/themeScope";
 import { toast } from "sonner";
 
 export default function Profile() {
@@ -87,14 +88,8 @@ export default function Profile() {
 
   // Apply theme to document
   useEffect(() => {
-    const root = document.documentElement;
-    if (appearance === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
-    // Save to localStorage
     localStorage.setItem("appTheme", appearance);
+    applyScopedAppTheme(window.location.pathname, appearance);
   }, [appearance]);
 
   // Get first letter of name for avatar

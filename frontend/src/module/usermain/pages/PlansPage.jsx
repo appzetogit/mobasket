@@ -74,7 +74,14 @@ const normalizePlanDisplayProducts = (products) =>
       ...item,
       image: resolvePlanProductImage(item),
     }))
-    .filter((item) => Boolean(String(item?.name || "").trim()));
+    .filter((item) => {
+        const name = String(item?.name || "").trim();
+        if (!name) return false;
+        // Remove static mock products
+        const staticNames = ['Organic Rice', 'Organic Flour', 'Imported Cheese', 'Organic Milk'];
+        if (staticNames.includes(name)) return false;
+        return true;
+    });
 
 const PlansPage = () => {
   const navigate = useNavigate();
@@ -1157,7 +1164,7 @@ const PlansPage = () => {
                                 <img
                                   src={productImage}
                                   alt={prod?.name || "Product"}
-                                  className="w-6 h-6 object-cover rounded"
+                                  className="w-12 h-12 object-cover rounded-md"
                                   loading="lazy"
                                   onError={(e) => {
                                     e.currentTarget.style.display = "none";

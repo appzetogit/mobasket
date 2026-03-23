@@ -652,7 +652,7 @@ export default function Inventory() {
   })
 
   // Inventory tabs
-  const inventoryTabs = ["all-items", "add-ons"]
+  const inventoryTabs = isGroceryStore ? ["all-items"] : ["all-items", "add-ons"]
 
   // Tab bar ref for excluding swipe on topbar
   const tabBarRef = useRef(null)
@@ -872,6 +872,11 @@ export default function Inventory() {
   }
 
   useEffect(() => {
+    if (isGroceryStore && activeTab === "add-ons") {
+      setActiveTab("all-items")
+      return
+    }
+
     if (activeTab === "add-ons") {
       fetchAddons(true)
     }
@@ -1492,31 +1497,33 @@ export default function Inventory() {
             </span>
           </motion.button>
 
-          <motion.button
-            onClick={() => setActiveTab("add-ons")}
-            className={`px-6 py-3.5 rounded-full font-medium text-sm whitespace-nowrap relative overflow-hidden ${activeTab === "add-ons"
-              ? 'text-white'
-              : 'bg-white text-black'
-              }`}
-            animate={{
-              scale: activeTab === "add-ons" ? 1.05 : 1,
-            }}
-            transition={{ duration: 0.2 }}
-          >
-            {activeTab === "add-ons" && (
-              <motion.div
-                layoutId="activeTabBackground"
-                className="absolute inset-0 bg-black rounded-full -z-10"
-                initial={false}
-                transition={{
-                  type: "spring",
-                  stiffness: 500,
-                  damping: 30
-                }}
-              />
-            )}
-            <span className="relative z-10">Add ons</span>
-          </motion.button>
+          {!isGroceryStore && (
+            <motion.button
+              onClick={() => setActiveTab("add-ons")}
+              className={`px-6 py-3.5 rounded-full font-medium text-sm whitespace-nowrap relative overflow-hidden ${activeTab === "add-ons"
+                ? 'text-white'
+                : 'bg-white text-black'
+                }`}
+              animate={{
+                scale: activeTab === "add-ons" ? 1.05 : 1,
+              }}
+              transition={{ duration: 0.2 }}
+            >
+              {activeTab === "add-ons" && (
+                <motion.div
+                  layoutId="activeTabBackground"
+                  className="absolute inset-0 bg-black rounded-full -z-10"
+                  initial={false}
+                  transition={{
+                    type: "spring",
+                    stiffness: 500,
+                    damping: 30
+                  }}
+                />
+              )}
+              <span className="relative z-10">Add ons</span>
+            </motion.button>
+          )}
         </div>
       </div>
 

@@ -186,7 +186,7 @@ export default function DeliverySignIn() {
             <Label htmlFor="delivery-phone" className="text-sm text-gray-700">
               Mobile number
             </Label>
-            <div className="flex items-stretch gap-2">
+            <div className="flex items-center gap-2">
               <Select
                 value={formData.countryCode}
                 onValueChange={(value) => {
