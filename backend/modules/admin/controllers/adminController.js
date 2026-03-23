@@ -2020,20 +2020,29 @@ export const getGroceryStoreJoinRequests = asyncHandler(async (req, res) => {
     const hasMeaningfulRejectionReasonCondition = {
       rejectionReason: { $regex: /\S/ }
     };
+    const hasOnboardingSubmissionCondition = {
+      $or: [
+        { 'onboarding.completedSteps': { $gte: 1 } },
+        { 'onboarding.step1': { $exists: true } },
+        { 'onboarding.step2': { $exists: true } },
+        { 'onboarding.step3': { $exists: true } },
+        { 'onboarding.step4': { $exists: true } }
+      ]
+    };
     
     if (status === 'pending') {
       // Show only onboarded stores that are awaiting review.
       query.$and = [
         { isActive: false },
         { approvedAt: null },
-        { 'onboarding.completedSteps': { $gte: 1 } },
+        hasOnboardingSubmissionCondition,
         { $or: emptyRejectionReasonConditions }
       ];
     } else if (status === 'rejected') {
       query.$and = [
         { isActive: false },
         { approvedAt: null },
-        { 'onboarding.completedSteps': { $gte: 1 } },
+        hasOnboardingSubmissionCondition,
         hasMeaningfulRejectionReasonCondition
       ];
     }

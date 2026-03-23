@@ -46,17 +46,23 @@ export default function PendingApproval() {
         const module = isStore ? "grocery-store" : "restaurant"
         const normalizedStatus = String(entity.status || "").trim().toLowerCase()
         const completedOnboardingSteps = Number(entity?.onboarding?.completedSteps || 0)
+        const isApprovedAndActive =
+            entity.isActive === true ||
+            Boolean(entity.approvedAt) ||
+            normalizedStatus === "active" ||
+            normalizedStatus === "approved"
         localStorage.setItem(`${module}_user`, JSON.stringify(entity))
         setUserName(entity.ownerName || entity.name || "Restaurant Owner")
         setVerificationStatus(normalizedStatus || "pending")
         setRejectionReason(String(entity.rejectionReason || "").trim())
 
-        if (entity.isActive === true) {
+        if (isApprovedAndActive) {
             navigate(isStore ? "/store" : "/restaurant", { replace: true })
             return entity
         }
 
-        if (normalizedStatus === "onboarding" && completedOnboardingSteps < 4) {
+        const minimumSubmittedSteps = isStore ? 1 : 4
+        if (normalizedStatus === "onboarding" && completedOnboardingSteps < minimumSubmittedSteps) {
             navigate(isStore ? "/store/onboarding?step=1" : "/restaurant/onboarding?step=1", { replace: true })
             return entity
         }

@@ -84,7 +84,11 @@ export default function ProtectedRoute({ children, requiredRole, loginPath, modu
     if (user) {
       const normalizedStatus = String(user.status || '').trim().toLowerCase();
       const completedOnboardingSteps = Number(user?.onboarding?.completedSteps || 0);
-      const isApprovedAndActive = user.isActive === true;
+      const isApprovedAndActive =
+        user.isActive === true ||
+        Boolean(user?.approvedAt) ||
+        normalizedStatus === 'active' ||
+        normalizedStatus === 'approved';
       const isOnboardingPage = location.pathname.startsWith(`/${modulePrefix}/onboarding`) ||
         location.pathname.includes('/otp') ||
         location.pathname.includes('/login');

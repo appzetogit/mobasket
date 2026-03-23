@@ -71,8 +71,33 @@ const buildPhoneQuery = (normalizedPhone) => {
 const isDuplicateKeyError = (error) =>
   error?.code === 11000 || /E11000 duplicate key error/i.test(String(error?.message || ''));
 
+const getStoreSelectionScore = (store = {}) => {
+  let score = 0;
+  if (store?.isActive === true) score += 1000;
+  if (store?.approvedAt) score += 500;
+  if (!String(store?.rejectionReason || '').trim()) score += 100;
+  if (Number(store?.onboarding?.completedSteps || 0) >= 1) score += 10;
+  return score;
+};
+
+const findBestStoreCandidate = (stores = []) => {
+  if (!Array.isArray(stores) || stores.length === 0) return null;
+
+  return stores
+    .slice()
+    .sort((left, right) => {
+      const scoreDiff = getStoreSelectionScore(right) - getStoreSelectionScore(left);
+      if (scoreDiff !== 0) return scoreDiff;
+      return new Date(right?.updatedAt || 0).getTime() - new Date(left?.updatedAt || 0).getTime();
+    })[0] || null;
+};
+
 const findStoreWithLegacyFallback = async (filter, projection = null) => {
-  let store = await GroceryStore.findOne(filter, projection);
+  const stores = await GroceryStore.find(filter, projection)
+    .sort({ isActive: -1, approvedAt: -1, updatedAt: -1, createdAt: -1 })
+    .limit(20);
+
+  let store = findBestStoreCandidate(stores);
   if (!store) {
     store = await hydrateGroceryStoreFromLegacy(filter, projection);
   }
@@ -704,6 +729,16 @@ export const reverifyGroceryStore = asyncHandler(async (req, res) => {
     // Clear approval fields as a safety measure (should already be null when rejected).
     store.approvedAt = null;
     store.approvedBy = null;
+
+    // Ensure the store remains visible in admin "joining request" pending queue.
+    // Some legacy records may not have completedSteps persisted even after onboarding.
+    const completedSteps = Number(store?.onboarding?.completedSteps || 0);
+    if (!store.onboarding || typeof store.onboarding !== 'object') {
+      store.onboarding = {};
+    }
+    if (!Number.isFinite(completedSteps) || completedSteps < 1) {
+      store.onboarding.completedSteps = 1;
+    }
 
     await store.save();
 
