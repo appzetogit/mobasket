@@ -743,8 +743,20 @@ export default function RestaurantsList() {
 
   // Show full phone number without masking
   const formatPhone = (phone) => {
-    if (!phone) return ""
-    return phone
+    const raw = String(phone || "").trim()
+    if (!raw) return ""
+    if (raw.toUpperCase() === "N/A") return "N/A"
+
+    const digits = raw.replace(/\D/g, "")
+    if (!digits) return raw
+
+    // Keep a consistent India display in admin list while preserving non-India numbers as entered.
+    if (digits.length === 10) return `+91 ${digits}`
+    if (digits.length === 11 && digits.startsWith("0")) return `+91 ${digits.slice(1)}`
+    if (digits.length === 12 && digits.startsWith("91")) return `+91 ${digits.slice(2)}`
+    if (raw.startsWith("+")) return `+${digits}`
+
+    return raw
   }
 
   const renderStars = (rating) => {
@@ -1544,7 +1556,14 @@ export default function RestaurantsList() {
                           <div>
                             <p className="text-xs text-slate-500">Phone</p>
                             <p className="text-sm font-medium text-slate-900">
-                              {restaurantDetails?.ownerPhone || restaurantDetails?.phone || selectedRestaurant?.ownerPhone || selectedRestaurant?.originalData?.ownerPhone || selectedRestaurant?.originalData?.phone || "N/A"}
+                              {formatPhone(
+                                restaurantDetails?.ownerPhone ||
+                                  restaurantDetails?.phone ||
+                                  selectedRestaurant?.ownerPhone ||
+                                  selectedRestaurant?.originalData?.ownerPhone ||
+                                  selectedRestaurant?.originalData?.phone ||
+                                  "N/A",
+                              )}
                             </p>
                           </div>
                         </div>
@@ -1584,7 +1603,7 @@ export default function RestaurantsList() {
                             <Phone className="w-5 h-5 text-slate-400" />
                             <div>
                               <p className="text-xs text-slate-500">Primary Contact</p>
-                              <p className="text-sm font-medium text-slate-900">{restaurantDetails.primaryContactNumber}</p>
+                              <p className="text-sm font-medium text-slate-900">{formatPhone(restaurantDetails.primaryContactNumber)}</p>
                             </div>
                           </div>
                         )}
@@ -1756,13 +1775,13 @@ export default function RestaurantsList() {
                         {restaurantDetails.onboarding.step1.ownerPhone && (
                           <div>
                             <p className="text-xs text-slate-500 mb-1">Owner Phone (at registration)</p>
-                            <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step1.ownerPhone}</p>
+                            <p className="font-medium text-slate-900">{formatPhone(restaurantDetails.onboarding.step1.ownerPhone)}</p>
                           </div>
                         )}
                         {restaurantDetails.onboarding.step1.primaryContactNumber && (
                           <div>
                             <p className="text-xs text-slate-500 mb-1">Primary Contact (at registration)</p>
-                            <p className="font-medium text-slate-900">{restaurantDetails.onboarding.step1.primaryContactNumber}</p>
+                            <p className="font-medium text-slate-900">{formatPhone(restaurantDetails.onboarding.step1.primaryContactNumber)}</p>
                           </div>
                         )}
                         {restaurantDetails.onboarding.step1.location && (
