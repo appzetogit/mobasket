@@ -12,6 +12,14 @@ import { Loader } from "@googlemaps/js-api-loader"
 
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"])
 const ALLOWED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"]
+const isFlutterWebView = () => (
+  Boolean(window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function")
+)
+const isEmbeddedAndroidWebView = () => {
+  if (typeof window === "undefined") return false
+  const ua = String(window.navigator?.userAgent || "")
+  return /;\s*wv\)/i.test(ua) || /\bversion\/[\d.]+ chrome\/[\d.]+ mobile\b/i.test(ua)
+}
 
 const waitForGoogleMaps = (timeoutMs = 12000) =>
   new Promise((resolve, reject) => {
@@ -746,7 +754,11 @@ export default function GroceryStoreOnboarding() {
   }
 
   const handleStoreImageCameraCapture = async () => {
-    if (!window.flutter_inappwebview?.callHandler) {
+    if (!isFlutterWebView()) {
+      if (isEmbeddedAndroidWebView()) {
+        toast.error("Unable to open camera. Please allow camera permission and try again.")
+        return
+      }
       storeImageCameraInputRef.current?.click()
       return
     }
@@ -808,7 +820,11 @@ export default function GroceryStoreOnboarding() {
   }
 
   const handleAdditionalImagesCameraCapture = async () => {
-    if (!window.flutter_inappwebview?.callHandler) {
+    if (!isFlutterWebView()) {
+      if (isEmbeddedAndroidWebView()) {
+        toast.error("Unable to open camera. Please allow camera permission and try again.")
+        return
+      }
       additionalImagesCameraInputRef.current?.click()
       return
     }

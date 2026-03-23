@@ -38,6 +38,14 @@ const DEFAULT_CLOSING_TIME = "22:00"
 const GOOGLE_MAP_ID = String(import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "").trim()
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"])
 const ALLOWED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"]
+const isFlutterWebView = () => (
+  Boolean(window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function")
+)
+const isEmbeddedAndroidWebView = () => {
+  if (typeof window === "undefined") return false
+  const ua = String(window.navigator?.userAgent || "")
+  return /;\s*wv\)/i.test(ua) || /\bversion\/[\d.]+ chrome\/[\d.]+ mobile\b/i.test(ua)
+}
 
 const getVerificationRedirectPath = (restaurant) => {
   const normalizedStatus = String(restaurant?.status || "").trim().toLowerCase()
@@ -1075,7 +1083,7 @@ export default function RestaurantOnboarding() {
   }
 
   const handleCameraCapture = async (onSuccess) => {
-    if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+    if (isFlutterWebView()) {
       try {
         toast.loading("Capturing image...", { id: "cameraCapture" });
         const result = await window.flutter_inappwebview.callHandler('openCamera');
@@ -1113,6 +1121,26 @@ export default function RestaurantOnboarding() {
       toast.error("Camera is only available in the mobile app");
     }
   };
+
+  const openCameraSafely = (onSuccess, fallbackInputId = null) => {
+    if (isFlutterWebView()) {
+      handleCameraCapture(onSuccess)
+      return
+    }
+
+    // On Android WebView builds, HTML camera inputs can relaunch/refresh the page.
+    if (isEmbeddedAndroidWebView()) {
+      toast.error("Unable to open camera. Please allow camera permission and try again.")
+      return
+    }
+
+    if (fallbackInputId) {
+      document.getElementById(fallbackInputId)?.click()
+      return
+    }
+
+    openFallbackCameraInput(onSuccess)
+  }
 
   const isAllowedImageFile = (file) => {
     if (!(file instanceof File)) return false
@@ -1906,21 +1934,12 @@ export default function RestaurantOnboarding() {
               <button
                 type="button"
                 onClick={() => {
-                  if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-                    handleCameraCapture((file) => {
-                      setStep2((prev) => ({
-                        ...prev,
-                        menuImages: [file],
-                      }))
-                    });
-                  } else {
-                    openFallbackCameraInput((file) => {
-                      setStep2((prev) => ({
-                        ...prev,
-                        menuImages: [file],
-                      }))
-                    })
-                  }
+                  openCameraSafely((file) => {
+                    setStep2((prev) => ({
+                      ...prev,
+                      menuImages: [file],
+                    }))
+                  })
                 }}
                 className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
               >
@@ -2036,21 +2055,12 @@ export default function RestaurantOnboarding() {
             <button
               type="button"
               onClick={() => {
-                if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-                  handleCameraCapture((file) => {
-                    setStep2((prev) => ({
-                      ...prev,
-                      profileImage: file,
-                    }))
-                  });
-                } else {
-                  openFallbackCameraInput((file) => {
-                    setStep2((prev) => ({
-                      ...prev,
-                      profileImage: file,
-                    }))
-                  })
-                }
+                openCameraSafely((file) => {
+                  setStep2((prev) => ({
+                    ...prev,
+                    profileImage: file,
+                  }))
+                })
               }}
               className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
             >
@@ -2168,11 +2178,7 @@ export default function RestaurantOnboarding() {
               <button
                 type="button"
                 onClick={() => {
-                  if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-                    handleCameraCapture((f) => onFileChange(f));
-                  } else {
-                    document.getElementById(cameraInputId)?.click();
-                  }
+                  openCameraSafely((f) => onFileChange(f), cameraInputId)
                 }}
                 className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-gray-300 text-xs font-medium cursor-pointer hover:bg-gray-50"
               >

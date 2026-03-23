@@ -34,6 +34,16 @@ const normalizeFlutterPickerResult = (result) => {
   return primary.fileData || primary.data || primary
 }
 
+const isFlutterWebView = () => (
+  Boolean(window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function")
+)
+
+const isEmbeddedAndroidWebView = () => {
+  if (typeof window === "undefined") return false
+  const ua = String(window.navigator?.userAgent || "")
+  return /;\s*wv\)/i.test(ua) || /\bversion\/[\d.]+ chrome\/[\d.]+ mobile\b/i.test(ua)
+}
+
 export default function SignupStep2() {
   const navigate = useNavigate()
   const [uploadedDocs, setUploadedDocs] = useState({
@@ -210,7 +220,7 @@ export default function SignupStep2() {
   }
 
   const getFlutterImageAsFile = async (source, fallbackName) => {
-    if (!(window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function")) {
+    if (!isFlutterWebView()) {
       return null
     }
 
@@ -250,9 +260,18 @@ export default function SignupStep2() {
   const pickImageFromSource = async (docType, source, fallbackInputId) => {
     if (uploading[docType]) return
 
+    const inFlutterWebView = isFlutterWebView()
+    const inEmbeddedWebView = inFlutterWebView || isEmbeddedAndroidWebView()
     const flutterFile = await getFlutterImageAsFile(source, `${docType}-${Date.now()}.jpg`)
     if (flutterFile) {
       await handleFileSelect(docType, flutterFile)
+      return
+    }
+
+    // In Flutter WebView APK builds, falling back to an HTML file input with
+    // camera capture can relaunch/reload the page. Avoid that fallback there.
+    if (inEmbeddedWebView) {
+      toast.error(`Unable to open ${source}. Please allow camera/media permission and try again.`)
       return
     }
 
