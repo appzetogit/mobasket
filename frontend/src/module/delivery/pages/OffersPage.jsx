@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import { navigateBackWithinDelivery } from "@/module/delivery/utils/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import { 
   ArrowLeft,
@@ -94,7 +95,8 @@ const generateOffers = () => {
 }
 
 export default function OffersPage() {
-  const navigate = useNavigate()
+  const navigate = useNavigate()
+  const handleBack = () => navigateBackWithinDelivery(navigate)
   const [activeFilter, setActiveFilter] = useState("this-week")
   const [showWeekSelector, setShowWeekSelector] = useState(false)
   const [selectedWeekStart, setSelectedWeekStart] = useState(null)
@@ -202,7 +204,7 @@ export default function OffersPage() {
       <div className="bg-white border-b border-gray-200 px-4 py-4 md:py-6 flex items-center justify-between rounded-b-3xl md:rounded-b-none sticky top-0 z-10">
         <div className="flex items-center gap-4">
           <button 
-            onClick={() => navigate(-1)}
+            onClick={handleBack}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
           >
             <ArrowLeft className="w-5 h-5 text-gray-600" />

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
+import { navigateBackWithinDelivery } from "@/module/delivery/utils/navigation"
 import { 
   ArrowLeft,
   MessageCircle,
@@ -25,7 +26,8 @@ import {
 } from "../utils/deliveryWalletState"
 
 export default function AcceptedOrderDetails() {
-  const navigate = useNavigate()
+  const navigate = useNavigate()
+  const handleBack = () => navigateBackWithinDelivery(navigate)
   const { orderId } = useParams()
   const [orderStatus, setOrderStatus] = useState(() => getDeliveryOrderStatus(orderId))
   const [paymentStatus, setPaymentStatus] = useState(() => getDeliveryOrderPaymentStatus(orderId))
@@ -106,7 +108,7 @@ export default function AcceptedOrderDetails() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-4 md:py-3 flex items-center justify-between rounded-b-3xl md:rounded-b-none sticky top-0 z-10">
         <button 
-          onClick={() => navigate(-1)}
+          onClick={handleBack}
           className="p-2 -ml-2"
         >
           <ArrowLeft className="w-6 h-6 text-gray-900" />

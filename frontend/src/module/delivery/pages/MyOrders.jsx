@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import { navigateBackWithinDelivery } from "@/module/delivery/utils/navigation"
 import { 
   ArrowLeft,
   Search,
@@ -17,7 +18,8 @@ import { toast } from "sonner"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 
 export default function MyOrders() {
-  const navigate = useNavigate()
+  const navigate = useNavigate()
+  const handleBack = () => navigateBackWithinDelivery(navigate)
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -213,7 +215,7 @@ export default function MyOrders() {
       {/* Header */}
       <div className="bg-white p-4 flex items-center shadow-sm sticky top-0 z-10">
         <button
-          onClick={() => navigate(-1)}
+          onClick={handleBack}
           className="p-1 hover:bg-gray-100 rounded-full transition-colors"
         >
           <ArrowLeft className="w-6 h-6 text-gray-700" />

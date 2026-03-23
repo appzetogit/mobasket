@@ -9,11 +9,11 @@ export default function Coupons() {
       <div className="max-w-[1100px] mx-auto px-4 md:px-6 lg:px-8 py-4 md:pt-20 lg:pt-24 md:pb-6 lg:pb-8">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
-          <Link to="/user/profile">
+          <div className="cursor-pointer inline-block" onClick={() => { if (window.history.length > 1) { window.history.back(); } else { window.location.href = '/user/profile'; } }}>
             <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
               <ArrowLeft className="h-5 w-5 text-black dark:text-white" />
             </Button>
-          </Link>
+          </div>
           <h1 className="text-xl font-bold text-black dark:text-white">Your coupons</h1>
         </div>
 

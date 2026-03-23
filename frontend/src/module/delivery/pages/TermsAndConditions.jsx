@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react"
 import { motion } from "framer-motion"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import { ArrowLeft, FileText, Loader2 } from "lucide-react"
 import api from "@/lib/api"
 import { API_ENDPOINTS } from "@/lib/api/config"
+import { navigateBackWithinDelivery } from "@/module/delivery/utils/navigation"
 
 export default function TermsAndConditions() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [loading, setLoading] = useState(true)
   const [termsData, setTermsData] = useState({
     title: "Terms and Conditions",
@@ -48,11 +50,10 @@ export default function TermsAndConditions() {
   }, [termsData.updatedAt])
 
   const handleBack = () => {
-    if (window.history.length > 1) {
-      navigate(-1)
-      return
-    }
-    navigate("/delivery/sign-in")
+    const fallbackPath = location.pathname.startsWith("/delivery/profile")
+      ? "/delivery"
+      : "/delivery/sign-in"
+    navigateBackWithinDelivery(navigate, fallbackPath)
   }
 
   return (

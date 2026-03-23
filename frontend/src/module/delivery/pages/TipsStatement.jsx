@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import { navigateBackWithinDelivery } from "@/module/delivery/utils/navigation"
 import { 
   ArrowLeft,
   ChevronDown,
@@ -11,7 +12,8 @@ import { DateRangeCalendar } from "@/components/ui/date-range-calendar"
 import WeekSelector from "../components/WeekSelector"
 
 export default function TipsStatement() {
-  const navigate = useNavigate()
+  const navigate = useNavigate()
+  const handleBack = () => navigateBackWithinDelivery(navigate)
   
   // Date range state
   const [startDate, setStartDate] = useState(() => {
@@ -78,7 +80,7 @@ export default function TipsStatement() {
       {/* Header */}
       <div className="bg-white border-b border-gray-200 px-4 py-4 md:py-6 flex items-center gap-4 rounded-b-3xl md:rounded-b-none">
         <button 
-          onClick={() => navigate(-1)}
+          onClick={handleBack}
           className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
         >
           <ArrowLeft className="w-5 h-5 text-gray-600" />
