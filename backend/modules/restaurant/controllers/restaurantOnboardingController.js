@@ -9,7 +9,7 @@ const normalizeRestaurantOnboardingState = (restaurant) => {
     restaurant?.isActive === true ||
     Boolean(restaurant?.approvedAt) ||
     Boolean(restaurant?.rejectedAt) ||
-    Boolean(restaurant?.rejectionReason) ||
+    Boolean(String(restaurant?.rejectionReason || '').trim()) ||
     (status && status !== 'onboarding') ||
     Number(onboarding?.completedSteps || 0) >= 4;
 
@@ -392,8 +392,16 @@ export const upsertOnboarding = async (req, res) => {
     if (finalCompletedSteps === 4 || (step4 && completedSteps === 4)) {
       console.log('✅ Onboarding is complete (step 4), finalizing restaurant data...');
 
-      // Update status to pending for admin approval
-      await Restaurant.findByIdAndUpdate(restaurantId, { $set: { status: 'pending', isActive: false } });
+      // Update status to pending for admin approval and clear stale rejection markers.
+      await Restaurant.findByIdAndUpdate(restaurantId, {
+        $set: {
+          status: 'pending',
+          isActive: false,
+          rejectionReason: null,
+          rejectedAt: null,
+          rejectedBy: null,
+        },
+      });
 
       // All individual steps have already updated the restaurant schema above
       // This section is kept for backward compatibility and final validation

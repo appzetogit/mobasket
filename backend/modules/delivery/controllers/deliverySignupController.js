@@ -208,7 +208,11 @@ export const submitSignupDocuments = asyncHandler(async (req, res) => {
         }
       },
       // Mark signup as complete - status remains pending until admin approval
-      status: 'pending'
+      status: 'pending',
+      // Clear stale rejection markers from previous denial before re-submission.
+      rejectionReason: null,
+      rejectedAt: null,
+      rejectedBy: null
     };
 
     const updatedDelivery = await Delivery.findByIdAndUpdate(

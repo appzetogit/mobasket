@@ -51,7 +51,7 @@ const normalizeProductVariants = (variants) => {
         mrp: Math.max(0, mrp),
         sellingPrice: Math.max(0, sellingPrice),
         stockQuantity: Number.isFinite(stockQuantity) ? Math.max(0, stockQuantity) : 0,
-        inStock: variant?.inStock !== false,
+        inStock: (variant?.inStock !== false) && (Number.isFinite(stockQuantity) ? Math.max(0, stockQuantity) : 0) > 0,
         isDefault: variant?.isDefault === true,
         order: Number.isFinite(order) ? order : index,
       };
@@ -69,6 +69,16 @@ const normalizeProductVariants = (variants) => {
     ...variant,
     isDefault: index === resolvedDefaultIndex,
   }));
+};
+
+const normalizeStockState = (stockQuantity, inStock) => {
+  const normalizedStockQuantity = Number.isFinite(Number(stockQuantity))
+    ? Math.max(0, Number(stockQuantity))
+    : 0;
+  return {
+    stockQuantity: normalizedStockQuantity,
+    inStock: normalizedStockQuantity > 0 ? Boolean(inStock) : false,
+  };
 };
 
 const buildVariantBackedProductFields = ({
@@ -94,12 +104,11 @@ const buildVariantBackedProductFields = ({
   }
 
   return {
+    ...normalizeStockState(stockQuantity, inStock),
     variants: [],
     mrp: Number(mrp),
     sellingPrice: Number(sellingPrice),
     unit: String(unit || '').trim(),
-    stockQuantity: Number(stockQuantity) || 0,
-    inStock: Boolean(inStock),
   };
 };
 
@@ -320,11 +329,13 @@ export const updateGroceryStoreProductStock = asyncHandler(async (req, res) => {
     }
 
     const update = {};
-    if (inStock !== undefined) {
-      update.inStock = Boolean(inStock);
-    }
-    if (stockQuantity !== undefined) {
-      update.stockQuantity = Number(stockQuantity) || 0;
+    if (inStock !== undefined || stockQuantity !== undefined) {
+      const normalizedStockState = normalizeStockState(
+        stockQuantity !== undefined ? stockQuantity : existingProduct.stockQuantity,
+        inStock !== undefined ? inStock : existingProduct.inStock,
+      );
+      update.stockQuantity = normalizedStockState.stockQuantity;
+      update.inStock = normalizedStockState.inStock;
     }
 
     if (Object.keys(update).length === 0) {
@@ -596,6 +607,13 @@ export const updateGroceryStoreProduct = asyncHandler(async (req, res) => {
       update.unit = variantBackedFields.unit;
       update.stockQuantity = variantBackedFields.stockQuantity;
       update.inStock = variantBackedFields.inStock;
+    } else if (update.stockQuantity !== undefined || update.inStock !== undefined) {
+      const normalizedStockState = normalizeStockState(
+        update.stockQuantity ?? existingProduct.stockQuantity,
+        update.inStock ?? existingProduct.inStock,
+      );
+      update.stockQuantity = normalizedStockState.stockQuantity;
+      update.inStock = normalizedStockState.inStock;
     }
 
     const product = await GroceryProduct.findByIdAndUpdate(

@@ -31,7 +31,6 @@ const Payments = lazy(() => import("../pages/profile/Payments"));
 const AddPayment = lazy(() => import("../pages/profile/AddPayment"));
 const EditPayment = lazy(() => import("../pages/profile/EditPayment"));
 const Favorites = lazy(() => import("../pages/profile/Favorites"));
-const Settings = lazy(() => import("../pages/profile/Settings"));
 const Coupons = lazy(() => import("../pages/profile/Coupons"));
 const RedeemGoldCoupon = lazy(() => import("../pages/profile/RedeemGoldCoupon"));
 const About = lazy(() => import("../pages/profile/About"));
@@ -77,6 +76,23 @@ function RouteLoader({ label = "Loading..." }) {
   );
 }
 
+function HomeSkeletonLoader() {
+  return (
+    <div className="min-h-screen bg-white px-4 py-4 animate-pulse">
+      <div className="h-10 rounded-2xl bg-gray-100 mb-4" />
+      <div className="h-28 rounded-2xl bg-gray-100 mb-4" />
+      <div className="grid grid-cols-2 gap-3 mb-4">
+        <div className="h-24 rounded-2xl bg-gray-100" />
+        <div className="h-24 rounded-2xl bg-gray-100" />
+      </div>
+      <div className="h-44 rounded-2xl bg-gray-100 mb-4" />
+      <div className="h-20 rounded-2xl bg-gray-100 mb-3" />
+      <div className="h-20 rounded-2xl bg-gray-100 mb-3" />
+      <div className="h-20 rounded-2xl bg-gray-100" />
+    </div>
+  );
+}
+
 export default function UserRouter() {
   useEffect(() => {
     const preload = () => {
@@ -107,7 +123,9 @@ export default function UserRouter() {
           path="/home"
           element={
             <ProtectedRoute requiredRole="user" loginPath="/user/auth/sign-in">
-              <Home />
+              <Suspense fallback={<HomeSkeletonLoader />}>
+                <Home />
+              </Suspense>
             </ProtectedRoute>
           }
         />
@@ -287,14 +305,6 @@ export default function UserRouter() {
           element={
             <ProtectedRoute requiredRole="user" loginPath="/user/auth/sign-in">
               <Favorites />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/profile/settings"
-          element={
-            <ProtectedRoute requiredRole="user" loginPath="/user/auth/sign-in">
-              <Settings />
             </ProtectedRoute>
           }
         />

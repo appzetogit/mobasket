@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
-import { Calendar, Clock, Truck, ChevronDown } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { Calendar, Clock, Truck } from "lucide-react";
 import {
   format,
   setHours,
@@ -20,6 +20,7 @@ const WEEK_DAYS = [
   "Friday",
   "Saturday",
 ];
+const MAX_SCHEDULE_ADVANCE_DAYS = 2;
 
 const parseTimeToMinutes = (timeText) => {
   if (!timeText || typeof timeText !== "string") return null;
@@ -75,9 +76,14 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
   const [deliveryType, setDeliveryType] = useState("now"); // 'now' | 'scheduled'
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTimeSlot, setSelectedTimeSlot] = useState("");
-  const dateInputRef = useRef(null);
+  const maxScheduleDate = useMemo(() => {
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() + MAX_SCHEDULE_ADVANCE_DAYS);
+    return date;
+  }, []);
   const upcomingDates = useMemo(
-    () => Array.from({ length: 7 }, (_, index) => addDays(new Date(), index)),
+    () => Array.from({ length: MAX_SCHEDULE_ADVANCE_DAYS + 1 }, (_, index) => addDays(new Date(), index)),
     [],
   );
   const selectedDayName = WEEK_DAYS[selectedDate.getDay()];
@@ -205,6 +211,20 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
     ? selectedTimeSlot
     : "";
 
+  useEffect(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    if (isAfter(selectedDate, maxScheduleDate)) {
+      setSelectedDate(maxScheduleDate);
+      return;
+    }
+
+    if (isAfter(today, selectedDate)) {
+      setSelectedDate(today);
+    }
+  }, [maxScheduleDate, selectedDate]);
+
 
   // Notify parent
   useEffect(() => {
@@ -306,66 +326,6 @@ const DeliveryScheduler = ({ type = "food", onScheduleChange, restaurantSchedule
                   </button>
                 );
               })}
-            </div>
-            <div className="relative">
-              <button
-                type="button"
-                className="w-full flex items-center justify-between bg-orange-50/50 border border-orange-200 text-orange-900 rounded-xl px-4 py-3 shadow-sm hover:border-[#ff8100] transition-colors dark:bg-orange-500/10 dark:border-orange-400/40 dark:text-orange-100"
-                onClick={() => {
-                  const input = dateInputRef.current;
-                  if (!input) return;
-                  if (typeof input.showPicker === "function") {
-                    try {
-                      input.showPicker();
-                      return;
-                    } catch {
-                      // Fall back to click() when showPicker is blocked
-                    }
-                  }
-                  input.click();
-                }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="bg-[#ff8100] p-2 rounded-lg text-white">
-                    <Calendar size={18} />
-                  </div>
-                  <div className="flex flex-col items-start">
-                    <span className="text-[10px] font-bold text-orange-600 uppercase tracking-wider">Date</span>
-                    <span className="text-sm font-bold text-gray-900 dark:text-gray-100">
-                      {format(selectedDate, "EEE, MMM d")}
-                    </span>
-                  </div>
-                </div>
-                <ChevronDown size={16} className="text-orange-400" />
-              </button>
-              <input
-                ref={dateInputRef}
-                type="date"
-                className="absolute -z-10 opacity-0 pointer-events-none w-0 h-0"
-                value={
-                  !isNaN(selectedDate.getTime())
-                    ? format(selectedDate, "yyyy-MM-dd")
-                    : ""
-                }
-                min={format(new Date(), "yyyy-MM-dd")}
-                onChange={(e) => {
-                  const rawValue = e.target.value;
-                  const [year, month, day] = String(rawValue)
-                    .split("-")
-                    .map((value) => Number(value));
-                  if (
-                    Number.isInteger(year) &&
-                    Number.isInteger(month) &&
-                    Number.isInteger(day)
-                  ) {
-                    // Parse as local date to avoid UTC timezone shifts.
-                    const date = new Date(year, month - 1, day, 12, 0, 0, 0);
-                    if (!isNaN(date.getTime())) {
-                      setSelectedDate(date);
-                    }
-                  }
-                }}
-              />
             </div>
           </div>
 

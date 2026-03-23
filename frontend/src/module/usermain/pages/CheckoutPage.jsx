@@ -34,6 +34,9 @@ import {
 import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
 import { ensureAddressCoordinates } from "@/lib/utils/addressGeocoding";
 
+const isMongoObjectId = (value) => /^[a-fA-F0-9]{24}$/.test(String(value || "").trim());
+const MAX_SCHEDULE_ADVANCE_DAYS = 2;
+
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -61,12 +64,14 @@ export default function CheckoutPage() {
     freeDeliveryThreshold: 149,
     platformFee: 5,
     gstRate: 5,
+    minimumCodOrderValue: 0,
   });
   const [pendingOnlineOrder, setPendingOnlineOrder] = useState(null);
   const [restaurantAvailability, setRestaurantAvailability] = useState({
     isAvailable: true,
     reason: "",
   });
+  const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [orderingForSomeoneElse, setOrderingForSomeoneElse] = useState(false);
   const [showRecipientMap, setShowRecipientMap] = useState(false);
@@ -118,6 +123,12 @@ export default function CheckoutPage() {
     ? new Date(location.state.deliveryDate)
     : null;
   const deliveryTimeSlot = location.state?.deliveryTimeSlot || null;
+  const maxScheduledAt = useMemo(() => {
+    const date = new Date();
+    date.setHours(23, 59, 59, 999);
+    date.setDate(date.getDate() + MAX_SCHEDULE_ADVANCE_DAYS);
+    return date;
+  }, []);
 
   const foodItems = useMemo(
     () => cart.filter((item) => !isGroceryItem(item)),
@@ -673,6 +684,7 @@ export default function CheckoutPage() {
           ),
           platformFee: Number(settings.platformFee ?? prev.platformFee),
           gstRate: Number(settings.gstRate ?? prev.gstRate),
+          minimumCodOrderValue: Number(settings.minimumCodOrderValue ?? prev.minimumCodOrderValue ?? 0),
         }));
       } catch (error) {
         console.error("Failed to fetch public fee settings:", error);
@@ -713,15 +725,22 @@ export default function CheckoutPage() {
 
       try {
         const restaurantResponse = await restaurantAPI.getRestaurantById(String(restaurantId));
-        const outletTimingsResponse = await api
-          .get(`/restaurant/${String(restaurantId)}/outlet-timings`)
-          .catch(() => null);
 
         const restaurant =
           restaurantResponse?.data?.data?.restaurant ||
           restaurantResponse?.data?.restaurant ||
           restaurantResponse?.data?.data ||
           {};
+
+        const resolvedRestaurantMongoId = String(
+          restaurant?._id || (isMongoObjectId(restaurantId) ? restaurantId : "")
+        ).trim();
+
+        const outletTimingsResponse = resolvedRestaurantMongoId
+          ? await api
+              .get(`/restaurant/${resolvedRestaurantMongoId}/outlet-timings`)
+              .catch(() => null)
+          : null;
 
         const outletTimings =
           outletTimingsResponse?.data?.data?.outletTimings?.timings ||
@@ -746,7 +765,22 @@ export default function CheckoutPage() {
     };
 
     fetchRestaurantAvailability();
-  }, [foodItems.length, restaurantId]);
+  }, [foodItems.length, restaurantId, availabilityRefreshKey]);
+
+  useEffect(() => {
+    const refresh = () => setAvailabilityRefreshKey((prev) => prev + 1);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    const timer = window.setInterval(refresh, 60000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
 
   useEffect(() => {
     const fetchPricingPreview = async () => {
@@ -908,10 +942,18 @@ export default function CheckoutPage() {
   }, [calculatedPricing, feeSettings, foodItems, selectedAddress, orderingForSomeoneElse, recipientDetails]);
 
   const hasSufficientWalletBalance = walletBalance >= orderSummary.total;
+  const minimumCodOrderValue = Math.max(0, Number(feeSettings.minimumCodOrderValue || 0));
+  const isCodEligible = orderSummary.total >= minimumCodOrderValue;
   const visibleCoupons = showAllCoupons ? availableCoupons : availableCoupons.slice(0, 4);
   const hasRecipientCoordinates =
     Number.isFinite(Number(recipientDetails?.latitude)) &&
     Number.isFinite(Number(recipientDetails?.longitude));
+
+  useEffect(() => {
+    if (paymentMethod === "cash" && !isCodEligible) {
+      setPaymentMethod("card");
+    }
+  }, [paymentMethod, isCodEligible]);
 
   const buildOrderItems = () =>
     foodItems.map((item) => ({
@@ -1183,6 +1225,10 @@ export default function CheckoutPage() {
         toast.error("Scheduled delivery time must be in the future.");
         return;
       }
+      if (scheduledAt.getTime() > maxScheduledAt.getTime()) {
+        toast.error("Scheduled delivery can be set up to 2 days in advance only.");
+        return;
+      }
     }
 
     if (!restaurantId) {
@@ -1206,6 +1252,10 @@ export default function CheckoutPage() {
         toast.error("Insufficient wallet balance. Add money or choose another payment method.");
         return;
       }
+    }
+    if (paymentMethod === "cash" && !isCodEligible) {
+      toast.error(`COD is available on orders of Rs ${minimumCodOrderValue} and above.`);
+      return;
     }
 
     setIsPlacingOrder(true);
@@ -2160,7 +2210,12 @@ export default function CheckoutPage() {
                 </span>
               </button>
               <button
-                onClick={() => setPaymentMethod("cash")}
+                onClick={() => {
+                  if (isCodEligible) {
+                    setPaymentMethod("cash");
+                  }
+                }}
+                disabled={!isCodEligible}
                 className={`w-full flex items-center gap-3 p-3 rounded-lg border-2 transition-colors ${paymentMethod === "cash"
                   ? "border-yellow-500 bg-yellow-100 dark:bg-yellow-500/10"
                   : "border-gray-200 bg-white dark:border-white/10 dark:bg-[#0f172a]"
@@ -2175,6 +2230,11 @@ export default function CheckoutPage() {
                   Cash on Delivery
                 </span>
               </button>
+              {!isCodEligible && (
+                <p className="text-xs font-medium text-amber-700">
+                  COD is available on orders of Rs {minimumCodOrderValue} and above.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -2187,7 +2247,8 @@ export default function CheckoutPage() {
           disabled={
             isPlacingOrder ||
             !restaurantAvailability.isAvailable ||
-            (paymentMethod === "wallet" && !walletLoading && !hasSufficientWalletBalance)
+            (paymentMethod === "wallet" && !walletLoading && !hasSufficientWalletBalance) ||
+            (paymentMethod === "cash" && !isCodEligible)
           }
         >
           {isPlacingOrder

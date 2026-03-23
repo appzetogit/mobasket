@@ -518,7 +518,9 @@ export const getRestaurants = async (req, res) => {
           if (!timing) return restaurant;
           return {
             ...restaurant,
-            isAcceptingOrders: isOpenFromOutletTimings(timing),
+            isAcceptingOrders:
+              Boolean(restaurant?.isAcceptingOrders !== false) &&
+              isOpenFromOutletTimings(timing),
           };
         });
       }
@@ -669,7 +671,9 @@ export const getRestaurantById = async (req, res) => {
         .select('timings')
         .lean();
       if (outletTimings?.timings) {
-        restaurant.isAcceptingOrders = isOpenFromOutletTimings(outletTimings.timings);
+        restaurant.isAcceptingOrders =
+          Boolean(restaurant?.isAcceptingOrders !== false) &&
+          isOpenFromOutletTimings(outletTimings.timings);
       }
     }
 
@@ -733,7 +737,9 @@ export const getRestaurantByOwner = async (req, res) => {
       .select('timings')
       .lean();
     if (outletTimings?.timings) {
-      restaurant.isAcceptingOrders = isOpenFromOutletTimings(outletTimings.timings);
+      restaurant.isAcceptingOrders =
+        Boolean(restaurant?.isAcceptingOrders !== false) &&
+        isOpenFromOutletTimings(outletTimings.timings);
     }
 
     return successResponse(res, 200, 'Restaurant retrieved successfully', {

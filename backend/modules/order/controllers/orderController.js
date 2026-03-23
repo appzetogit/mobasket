@@ -19,10 +19,12 @@ import OrderEvent from '../models/OrderEvent.js';
 import UserWallet from '../../user/models/UserWallet.js';
 import Menu from '../../restaurant/models/Menu.js';
 import User from '../../auth/models/User.js';
+import Delivery from '../../delivery/models/Delivery.js';
 import OutletTimings from '../../restaurant/models/OutletTimings.js';
 import GroceryProduct from '../../grocery/models/GroceryProduct.js';
 import GroceryPlan from '../../grocery/models/GroceryPlan.js';
 import GroceryPlanOffer from '../../grocery/models/GroceryPlanOffer.js';
+import FeeSettings from '../../admin/models/FeeSettings.js';
 import { reduceGroceryStockForOrder, restoreGroceryStockForOrder } from '../services/groceryStockService.js';
 import {
   getDefaultPendingCartEdit,
@@ -92,6 +94,78 @@ const resolveOrderPlatform = async (restaurantId) => {
     restaurant = await GroceryStore.findOne(query).select('platform').lean();
   }
   return normalizePlatform(restaurant?.platform);
+};
+
+const getMinimumCodOrderValueForPlatform = async (platform) => {
+  const normalizedPlatform = platform === 'mogrocery' ? 'mogrocery' : 'mofood';
+  const platformFilter =
+    normalizedPlatform === 'mogrocery'
+      ? { platform: 'mogrocery' }
+      : { $or: [{ platform: 'mofood' }, { platform: { $exists: false } }] };
+
+  const feeSettings = await FeeSettings.findOne({
+    ...platformFilter,
+    isActive: true
+  })
+    .sort({ createdAt: -1 })
+    .select('minimumCodOrderValue')
+    .lean();
+
+  return Math.max(0, Number(feeSettings?.minimumCodOrderValue || 0));
+};
+
+const computeNextAverageRating = (currentAverage = 0, currentCount = 0, newRating = 0) => {
+  const safeAverage = Number(currentAverage) || 0;
+  const safeCount = Number(currentCount) || 0;
+  const safeRating = Number(newRating) || 0;
+  const nextCount = safeCount + 1;
+  const nextAverage = Number((((safeAverage * safeCount) + safeRating) / nextCount).toFixed(2));
+  return { nextAverage, nextCount };
+};
+
+const updateRestaurantAggregateRating = async (restaurantIdentifier, newRating) => {
+  const restaurant = await findRestaurantOrStoreByIdentifier(restaurantIdentifier);
+  if (!restaurant) return null;
+
+  const { nextAverage, nextCount } = computeNextAverageRating(
+    restaurant.rating,
+    restaurant.totalRatings,
+    newRating
+  );
+
+  restaurant.rating = nextAverage;
+  restaurant.totalRatings = nextCount;
+  await restaurant.save({ validateBeforeSave: false });
+
+  return {
+    id: restaurant._id?.toString?.() || String(restaurant._id || ''),
+    rating: restaurant.rating,
+    totalRatings: restaurant.totalRatings
+  };
+};
+
+const updateDeliveryAggregateRating = async (deliveryId, newRating) => {
+  if (!deliveryId) return null;
+
+  const delivery = await Delivery.findById(deliveryId);
+  if (!delivery) return null;
+
+  const currentAverage = Number(delivery.metrics?.rating ?? delivery.rating ?? 0);
+  const currentCount = Number(delivery.metrics?.ratingCount ?? 0);
+  const { nextAverage, nextCount } = computeNextAverageRating(currentAverage, currentCount, newRating);
+
+  delivery.metrics = delivery.metrics || {};
+  delivery.metrics.rating = nextAverage;
+  delivery.metrics.ratingCount = nextCount;
+  delivery.rating = nextAverage;
+
+  await delivery.save({ validateBeforeSave: false });
+
+  return {
+    id: delivery._id?.toString?.() || String(delivery._id || ''),
+    rating: Number(delivery.rating || 0),
+    ratingCount: Number(delivery.metrics?.ratingCount || 0)
+  };
 };
 
 const ensurePostOrderActionsShape = (order) => {
@@ -1437,6 +1511,21 @@ export const createOrder = async (req, res) => {
     // Ensure couponCode is included in pricing
     const persistedCouponCode = pricing?.couponCode || pricing?.appliedCoupon?.code || couponCode || null;
 
+    if (normalizedPaymentMethod === 'cash') {
+      const minimumCodOrderValue = await getMinimumCodOrderValueForPlatform(pricingPlatform);
+      const orderTotal = Math.max(0, Number(pricing?.total || 0));
+      if (orderTotal < minimumCodOrderValue) {
+        return res.status(400).json({
+          success: false,
+          message: `Cash on Delivery is available for orders of Rs ${minimumCodOrderValue} or more`,
+          data: {
+            minimumCodOrderValue,
+            orderTotal
+          }
+        });
+      }
+    }
+
     // Create order in database
     const order = new Order({
       orderId: generatedOrderId,
@@ -2008,6 +2097,20 @@ export const switchOrderToCash = async (req, res) => {
       });
     }
 
+    const orderPlatformForCod = normalizePlatform(order.restaurantPlatform || (await resolveOrderPlatform(order.restaurantId)));
+    const minimumCodOrderValue = await getMinimumCodOrderValueForPlatform(orderPlatformForCod);
+    const orderTotal = Math.max(0, Number(order.pricing?.total || 0));
+    if (orderTotal < minimumCodOrderValue) {
+      return res.status(400).json({
+        success: false,
+        message: `Cash on Delivery is available for orders of Rs ${minimumCodOrderValue} or more`,
+        data: {
+          minimumCodOrderValue,
+          orderTotal
+        }
+      });
+    }
+
     order.payment.method = 'cash';
     order.payment.status = 'pending';
     order.payment.razorpayOrderId = undefined;
@@ -2512,6 +2615,195 @@ export const getOrderDetails = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch order details'
+    });
+  }
+};
+
+/**
+ * Submit restaurant/delivery rating for a delivered order
+ * PATCH /api/order/:id/review
+ */
+export const submitOrderReview = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+    const {
+      restaurantRating,
+      restaurantComment,
+      deliveryRating,
+      deliveryComment
+    } = req.body || {};
+
+    const hasRestaurantPayload =
+      restaurantRating !== undefined || (typeof restaurantComment === 'string' && restaurantComment.trim().length > 0);
+    const hasDeliveryPayload =
+      deliveryRating !== undefined || (typeof deliveryComment === 'string' && deliveryComment.trim().length > 0);
+
+    if (!hasRestaurantPayload && !hasDeliveryPayload) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one rating (restaurant or delivery) is required'
+      });
+    }
+
+    const validateRating = (value) => Number.isInteger(value) && value >= 1 && value <= 5;
+
+    if (restaurantRating !== undefined && !validateRating(Number(restaurantRating))) {
+      return res.status(400).json({
+        success: false,
+        message: 'Restaurant rating must be an integer between 1 and 5'
+      });
+    }
+
+    if (deliveryRating !== undefined && !validateRating(Number(deliveryRating))) {
+      return res.status(400).json({
+        success: false,
+        message: 'Delivery rating must be an integer between 1 and 5'
+      });
+    }
+
+    if (hasRestaurantPayload && restaurantRating === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Restaurant rating is required when submitting restaurant review'
+      });
+    }
+
+    if (hasDeliveryPayload && deliveryRating === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Delivery rating is required when submitting delivery review'
+      });
+    }
+
+    let order = null;
+    if (mongoose.Types.ObjectId.isValid(id) && id.length === 24) {
+      order = await Order.findOne({ _id: id, userId });
+    }
+    if (!order) {
+      order = await Order.findOne({ orderId: id, userId });
+    }
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    if (String(order.status || '').toLowerCase() !== 'delivered') {
+      return res.status(400).json({
+        success: false,
+        message: 'You can rate only delivered orders'
+      });
+    }
+
+    const existingRestaurantRating = order.review?.restaurant?.rating ?? order.review?.rating ?? null;
+    const existingDeliveryRating = order.review?.delivery?.rating ?? null;
+
+    if (restaurantRating !== undefined && existingRestaurantRating !== null && existingRestaurantRating !== undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Restaurant has already been rated for this order'
+      });
+    }
+
+    if (deliveryRating !== undefined && existingDeliveryRating !== null && existingDeliveryRating !== undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'Delivery partner has already been rated for this order'
+      });
+    }
+
+    if (deliveryRating !== undefined && !order.deliveryPartnerId) {
+      return res.status(400).json({
+        success: false,
+        message: 'This order has no assigned delivery partner to rate'
+      });
+    }
+
+    const now = new Date();
+    const setData = {};
+    let submittedRestaurantRating = null;
+    let submittedDeliveryRating = null;
+
+    if (restaurantRating !== undefined) {
+      const normalizedRestaurantRating = Number(restaurantRating);
+      submittedRestaurantRating = normalizedRestaurantRating;
+      setData['review.restaurant.rating'] = normalizedRestaurantRating;
+      setData['review.restaurant.submittedAt'] = now;
+      if (typeof restaurantComment === 'string' && restaurantComment.trim()) {
+        setData['review.restaurant.comment'] = restaurantComment.trim();
+      }
+
+      // Backward compatibility for existing restaurant review reports.
+      setData['review.rating'] = normalizedRestaurantRating;
+      setData['review.submittedAt'] = now;
+      setData['review.reviewedBy'] = userId;
+      if (typeof restaurantComment === 'string' && restaurantComment.trim()) {
+        setData['review.comment'] = restaurantComment.trim();
+      }
+    }
+
+    if (deliveryRating !== undefined) {
+      const normalizedDeliveryRating = Number(deliveryRating);
+      submittedDeliveryRating = normalizedDeliveryRating;
+      setData['review.delivery.rating'] = normalizedDeliveryRating;
+      setData['review.delivery.submittedAt'] = now;
+      if (typeof deliveryComment === 'string' && deliveryComment.trim()) {
+        setData['review.delivery.comment'] = deliveryComment.trim();
+      }
+
+      // Keep top-level reviewer metadata in sync.
+      setData['review.reviewedBy'] = userId;
+      if (!setData['review.submittedAt']) {
+        setData['review.submittedAt'] = now;
+      }
+    }
+
+    await Order.updateOne({ _id: order._id }, { $set: setData });
+
+    let restaurantAggregate = null;
+    let deliveryAggregate = null;
+
+    if (submittedRestaurantRating !== null) {
+      try {
+        restaurantAggregate = await updateRestaurantAggregateRating(order.restaurantId, submittedRestaurantRating);
+      } catch (aggregateError) {
+        logger.error(`Failed to update restaurant aggregate rating for order ${order.orderId}: ${aggregateError.message}`);
+      }
+    }
+
+    if (submittedDeliveryRating !== null) {
+      try {
+        deliveryAggregate = await updateDeliveryAggregateRating(order.deliveryPartnerId, submittedDeliveryRating);
+      } catch (aggregateError) {
+        logger.error(`Failed to update delivery aggregate rating for order ${order.orderId}: ${aggregateError.message}`);
+      }
+    }
+
+    const updatedOrder = await Order.findById(order._id)
+      .populate('restaurantId', 'name slug profileImage address location estimatedDeliveryTime distance phone ownerPhone platform rating totalRatings')
+      .populate('deliveryPartnerId', 'name email phone avatar availability.currentLocation rating metrics.rating metrics.ratingCount')
+      .populate('userId', 'name fullName phone email')
+      .lean();
+
+    return res.json({
+      success: true,
+      message: 'Review submitted successfully',
+      data: {
+        order: enrichOrderWithModificationWindow(updatedOrder),
+        aggregates: {
+          restaurant: restaurantAggregate,
+          delivery: deliveryAggregate
+        }
+      }
+    });
+  } catch (error) {
+    logger.error(`Error submitting order review: ${error.message}`);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to submit order review'
     });
   }
 };

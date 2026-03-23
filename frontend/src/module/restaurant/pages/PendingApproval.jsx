@@ -66,6 +66,7 @@ export default function PendingApproval() {
             "pending",
             "rejected",
             "declined",
+            "blocked",
             "submitted",
             "verification_pending",
             "in_review",
@@ -129,7 +130,10 @@ export default function PendingApproval() {
         }
     }
 
-    const isRejected = verificationStatus === "rejected" || verificationStatus === "declined"
+    const isRejected =
+        verificationStatus === "rejected" ||
+        verificationStatus === "declined" ||
+        verificationStatus === "blocked"
 
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center px-6 py-12 relative overflow-hidden">

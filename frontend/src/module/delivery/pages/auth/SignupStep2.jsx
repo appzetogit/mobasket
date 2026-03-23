@@ -15,6 +15,35 @@ const getCachedDeliveryUser = () => {
   }
 }
 
+const IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif"]
+
+const isLikelyImageFile = (file) => {
+  if (!file) return false
+  const mimeType = String(file.type || "").toLowerCase().trim()
+  const fileName = String(file.name || "").toLowerCase().trim()
+  if (mimeType.startsWith("image/")) return true
+  return IMAGE_EXTENSIONS.some((ext) => fileName.endsWith(ext))
+}
+
+const normalizeFlutterPickerResult = (result) => {
+  if (!result) return null
+  const primary = Array.isArray(result) ? result[0] : result
+  if (!primary) return null
+
+  // Different APK builds can wrap payloads differently.
+  return primary.fileData || primary.data || primary
+}
+
+const isFlutterWebView = () => (
+  Boolean(window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function")
+)
+
+const isEmbeddedAndroidWebView = () => {
+  if (typeof window === "undefined") return false
+  const ua = String(window.navigator?.userAgent || "")
+  return /;\s*wv\)/i.test(ua) || /\bversion\/[\d.]+ chrome\/[\d.]+ mobile\b/i.test(ua)
+}
+
 export default function SignupStep2() {
   const navigate = useNavigate()
   const [uploadedDocs, setUploadedDocs] = useState({
@@ -124,7 +153,7 @@ export default function SignupStep2() {
     if (!file) return
 
     // Validate file type
-    if (!file.type.startsWith('image/')) {
+    if (!isLikelyImageFile(file)) {
       toast.error("Please select an image file")
       return
     }
@@ -162,7 +191,11 @@ export default function SignupStep2() {
       }
     } catch (error) {
       console.error(`Error uploading ${docType}:`, error)
-      toast.error(`Failed to upload ${docType.replace(/([A-Z])/g, ' $1').trim()}`)
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        `Failed to upload ${docType.replace(/([A-Z])/g, ' $1').trim()}`
+      toast.error(message)
     } finally {
       setUploading(prev => ({ ...prev, [docType]: false }))
     }
@@ -186,32 +219,60 @@ export default function SignupStep2() {
     return new File([blob], result.fileName || fallbackName, { type: mimeType })
   }
 
+  const getFlutterImageAsFile = async (source, fallbackName) => {
+    if (!isFlutterWebView()) {
+      return null
+    }
+
+    const handlerCalls = source === "gallery"
+      ? [
+        ["openGallery", {}],
+        ["openCamera", { source: "gallery", accept: "image/*", multiple: false, quality: 0.8 }],
+      ]
+      : [
+        ["openCamera", { source: "camera", accept: "image/*", multiple: false, quality: 0.8 }],
+        ["openCamera", {}],
+      ]
+
+    for (const [handlerName, payload] of handlerCalls) {
+      try {
+        const rawResult = await window.flutter_inappwebview.callHandler(handlerName, payload)
+        const normalized = normalizeFlutterPickerResult(rawResult)
+
+        if (!normalized || normalized.cancelled === true || normalized.success === false) {
+          continue
+        }
+
+        if (normalized.file instanceof File) {
+          return normalized.file
+        }
+
+        const converted = convertFlutterResultToFile(normalized, fallbackName)
+        if (converted) return converted
+      } catch {
+        // Try next handler variant.
+      }
+    }
+
+    return null
+  }
+
   const pickImageFromSource = async (docType, source, fallbackInputId) => {
     if (uploading[docType]) return
 
-    if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function") {
-      try {
-        const result = await window.flutter_inappwebview.callHandler("openCamera", {
-          source,
-          accept: "image/*",
-          multiple: false,
-          quality: 0.8,
-        })
+    const inFlutterWebView = isFlutterWebView()
+    const inEmbeddedWebView = inFlutterWebView || isEmbeddedAndroidWebView()
+    const flutterFile = await getFlutterImageAsFile(source, `${docType}-${Date.now()}.jpg`)
+    if (flutterFile) {
+      await handleFileSelect(docType, flutterFile)
+      return
+    }
 
-        if (result?.success && result?.base64) {
-          const file = convertFlutterResultToFile(result, `${docType}-${Date.now()}.jpg`)
-          if (file) {
-            await handleFileSelect(docType, file)
-            return
-          }
-        }
-
-        if (result?.cancelled) {
-          return
-        }
-      } catch {
-        // Fall back to browser file picker.
-      }
+    // In Flutter WebView APK builds, falling back to an HTML file input with
+    // camera capture can relaunch/reload the page. Avoid that fallback there.
+    if (inEmbeddedWebView) {
+      toast.error(`Unable to open ${source}. Please allow camera/media permission and try again.`)
+      return
     }
 
     document.getElementById(fallbackInputId)?.click()

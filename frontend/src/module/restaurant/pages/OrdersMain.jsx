@@ -77,6 +77,57 @@ const formatOrderStatusLabel = (status) => {
   }
 }
 
+const getOrderPreviewPhotoUrl = (value) => {
+  const normalized = String(value || "").trim()
+  if (!normalized) return null
+  if (normalized.startsWith("data:image")) return null
+  return normalized
+}
+
+const fetchOrdersLite = (orderAPI, params = {}) =>
+  orderAPI.getOrders({
+    includeItemImages: false,
+    compact: true,
+    limit: 100,
+    ...params,
+  })
+
+const resolveDeliveryAssignment = (order = {}) => {
+  const explicitDeliveryPartnerId =
+    order?.deliveryPartnerId?._id ||
+    order?.deliveryPartnerId ||
+    order?.assignmentInfo?.acceptedBy ||
+    order?.assignmentInfo?.deliveryPartnerId ||
+    order?.deliveryState?.acceptedBy ||
+    order?.deliveryState?.deliveryPartnerId ||
+    order?.deliveryState?.partnerId ||
+    null
+
+  const deliveryStateStatus = String(order?.deliveryState?.status || "").toLowerCase()
+  const deliveryPhase = String(order?.deliveryState?.currentPhase || "").toLowerCase()
+  const notificationPhase = String(order?.assignmentInfo?.notificationPhase || "").toLowerCase()
+
+  const hasAssignedStateSignal =
+    notificationPhase === "accepted" ||
+    deliveryStateStatus === "accepted" ||
+    deliveryStateStatus === "reached_pickup" ||
+    deliveryStateStatus === "order_confirmed" ||
+    deliveryStateStatus === "en_route_to_delivery" ||
+    deliveryStateStatus === "reached_drop" ||
+    deliveryStateStatus === "delivered" ||
+    deliveryPhase === "en_route_to_pickup" ||
+    deliveryPhase === "at_pickup" ||
+    deliveryPhase === "en_route_to_delivery" ||
+    deliveryPhase === "at_delivery" ||
+    deliveryPhase === "picked_up" ||
+    deliveryPhase === "completed"
+
+  return {
+    deliveryPartnerId: explicitDeliveryPartnerId ? String(explicitDeliveryPartnerId) : null,
+    hasDeliveryAssignment: Boolean(explicitDeliveryPartnerId) || hasAssignedStateSignal,
+  }
+}
+
 // Completed Orders List Component
 function NewOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 0 }) {
   const [orders, setOrders] = useState([])
@@ -94,7 +145,7 @@ function NewOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 0 
 
     const fetchOrders = async () => {
       try {
-        const response = await orderAPI.getOrders()
+        const response = await fetchOrdersLite(orderAPI, { status: "confirmed" })
         if (!isMounted) return
 
         if (response.data?.success && Array.isArray(response.data.data?.orders)) {
@@ -233,7 +284,7 @@ function CompletedOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTic
 
     const fetchOrders = async () => {
       try {
-        const response = await orderAPI.getOrders()
+        const response = await fetchOrdersLite(orderAPI)
 
         if (!isMounted) return
 
@@ -252,7 +303,7 @@ function CompletedOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTic
             timePlaced: new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
             deliveredAt: order.deliveredAt || order.updatedAt || order.createdAt,
             itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
-            photoUrl: order.items?.[0]?.image || null,
+            photoUrl: getOrderPreviewPhotoUrl(order.items?.[0]?.image),
             photoAlt: order.items?.[0]?.name || 'Order',
             amount: order.pricing?.total || order.total || 0
           }))
@@ -409,7 +460,7 @@ function CompletedOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTic
                       <div className="flex items-baseline gap-1">
                         <span className="text-[11px] text-gray-500">Amount</span>
                         <span className="text-xs font-medium text-black">
-                          ₹{order.amount.toFixed(2)}
+                          â‚¹{order.amount.toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -443,7 +494,7 @@ function CancelledOrders({ onSelectOrder, orderAPI, isGroceryStore = false, sear
 
     const fetchOrders = async () => {
       try {
-        const response = await orderAPI.getOrders()
+        const response = await fetchOrdersLite(orderAPI, { status: "cancelled" })
 
         if (!isMounted) return
 
@@ -465,7 +516,7 @@ function CancelledOrders({ onSelectOrder, orderAPI, isGroceryStore = false, sear
             cancelledBy: order.cancelledBy || 'unknown',
             cancellationReason: order.cancellationReason || 'No reason provided',
             itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
-            photoUrl: order.items?.[0]?.image || null,
+            photoUrl: getOrderPreviewPhotoUrl(order.items?.[0]?.image),
             photoAlt: order.items?.[0]?.name || 'Order',
             amount: order.pricing?.total || order.total || 0
           }))
@@ -637,7 +688,7 @@ function CancelledOrders({ onSelectOrder, orderAPI, isGroceryStore = false, sear
                       <div className="flex items-baseline gap-1">
                         <span className="text-[11px] text-gray-500">Amount</span>
                         <span className="text-xs font-medium text-black">
-                          ₹{order.amount.toFixed(2)}
+                          â‚¹{order.amount.toFixed(2)}
                         </span>
                       </div>
                     </div>
@@ -774,6 +825,7 @@ export default function OrdersMain() {
     isActive: null,
     isAcceptingOrders: null,
     rejectionReason: null,
+    rejectedAt: null,
     onboarding: null,
     isLoading: true
   })
@@ -783,12 +835,12 @@ export default function OrdersMain() {
   const hasCompletedVerificationSubmission = isGroceryStore
     ? completedOnboardingSteps >= 1
     : completedOnboardingSteps === 4 || (normalizedVerificationStatus && normalizedVerificationStatus !== "onboarding")
+  const rejectionStatusValues = new Set(["rejected", "declined", "denied", "verification_rejected"])
   const hasRejectedVerification =
-    normalizedVerificationStatus === "rejected" ||
-    normalizedVerificationStatus === "declined"
-  const rejectionReasonText = hasRejectedVerification
-    ? String(restaurantStatus.rejectionReason || "").trim()
-    : ""
+    rejectionStatusValues.has(normalizedVerificationStatus) ||
+    Boolean(String(restaurantStatus.rejectionReason || "").trim()) ||
+    Boolean(restaurantStatus.rejectedAt)
+  const rejectionReasonText = String(restaurantStatus.rejectionReason || "").trim()
   const canAccessLiveOrders =
     restaurantStatus.isActive === true && restaurantStatus.isAcceptingOrders !== false
   const shouldShowVerificationState =
@@ -899,7 +951,7 @@ export default function OrdersMain() {
     }
 
     try {
-      const response = await orderAPI.getOrders()
+      const response = await fetchOrdersLite(orderAPI)
       const rawOrders = response?.data?.data?.orders || []
 
       const counts = {
@@ -1000,12 +1052,18 @@ export default function OrdersMain() {
             isAcceptingOrders: restaurant.isAcceptingOrders !== false,
             status: restaurant.status || null,
             rejectionReason: restaurant.rejectionReason || null,
+            rejectedAt: restaurant.rejectedAt || null,
             onboarding: restaurant.onboarding || null,
             isLoading: false
           })
 
+          const hasRejectedSignal =
+            rejectionStatusValues.has(normalizedStatus) ||
+            Boolean(String(restaurant.rejectionReason || "").trim()) ||
+            Boolean(restaurant.rejectedAt)
           const shouldRedirectToPendingApproval =
             restaurant.isActive !== true &&
+            !hasRejectedSignal &&
             (
               completedOnboardingSteps >= 4 ||
               pendingLikeStatuses.has(normalizedStatus)
@@ -1061,7 +1119,7 @@ export default function OrdersMain() {
 
     window.addEventListener('restaurantProfileRefresh', handleProfileRefresh)
 
-    // Auto-poll store status every 30 s ΓÇö ONLY for /store (grocery store)
+    // Auto-poll store status every 30 s Î“Ã‡Ã¶ ONLY for /store (grocery store)
     // Restaurant status is fetched once on mount; this interval does NOT affect it
     let statusPollInterval = null
     if (isGroceryStore) {
@@ -1099,6 +1157,7 @@ export default function OrdersMain() {
           isAcceptingOrders: restaurant.isAcceptingOrders !== false,
           status: restaurant.status || null,
           rejectionReason: restaurant.rejectionReason || null,
+          rejectedAt: restaurant.rejectedAt || null,
           onboarding: restaurant.onboarding || null,
           isLoading: false
         })
@@ -1194,7 +1253,7 @@ export default function OrdersMain() {
     if (showNewOrderPopupRef.current) return false
 
     try {
-      const response = await orderAPI.getOrders()
+      const response = await fetchOrdersLite(orderAPI, { status: "confirmed" })
       const rawOrders = response?.data?.data?.orders
       if (!response?.data?.success || !Array.isArray(rawOrders) || rawOrders.length === 0) {
         return false
@@ -1334,13 +1393,14 @@ export default function OrdersMain() {
 
   // Countdown timer
   useEffect(() => {
-    if (showNewOrderPopup && countdown > 0) {
-      const timer = setInterval(() => {
-        setCountdown(prev => prev - 1)
-      }, 1000)
-      return () => clearInterval(timer)
-    }
-  }, [showNewOrderPopup, countdown])
+    if (!showNewOrderPopup) return undefined
+
+    const timer = setInterval(() => {
+      setCountdown((prev) => (prev > 0 ? prev - 1 : 0))
+    }, 1000)
+
+    return () => clearInterval(timer)
+  }, [showNewOrderPopup])
 
   // Format countdown time
   const formatTime = (seconds) => {
@@ -1471,7 +1531,7 @@ export default function OrdersMain() {
         error?.code === 'ECONNABORTED' ||
         String(error?.message || '').toLowerCase().includes('timeout')
 
-      console.error('Γ¥î Error accepting order:', error)
+      console.error('Î“Â¥Ã® Error accepting order:', error)
       const errorMessage = isTimeoutError
         ? 'Accept request timed out. Backend may be slow. Please check the order list and retry once.'
         : (
@@ -1692,9 +1752,9 @@ export default function OrdersMain() {
           throw lastError
         }
 
-        console.log('Γ£à Order rejected:', rejectedOrderId || orderIdCandidates[0])
+        console.log('Î“Â£Ã  Order rejected:', rejectedOrderId || orderIdCandidates[0])
       } catch (error) {
-        console.error('Γ¥î Error rejecting order:', error)
+        console.error('Î“Â¥Ã® Error rejecting order:', error)
         alert('Failed to reject order. Please try again.')
         return
       }
@@ -1741,7 +1801,7 @@ export default function OrdersMain() {
       setOrderToCancel(null)
       setCancelReason("")
     } catch (error) {
-      console.error('Γ¥î Error cancelling order:', error)
+      console.error('Î“Â¥Ã® Error cancelling order:', error)
       toast.error(error.response?.data?.message || 'Failed to cancel order')
     }
   }
@@ -1833,8 +1893,8 @@ export default function OrdersMain() {
         const tableData = orderToPrint.items.map(item => [
           item.name || 'Item',
           item.quantity || 1,
-          `₹${(item.price || 0).toFixed(2)}`,
-          `₹${((item.price || 0) * (item.quantity || 1)).toFixed(2)}`
+          `â‚¹${(item.price || 0).toFixed(2)}`,
+          `â‚¹${((item.price || 0) * (item.quantity || 1)).toFixed(2)}`
         ])
 
         autoTable(doc, {
@@ -1858,7 +1918,7 @@ export default function OrdersMain() {
       // Total
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(12)
-      doc.text(`Total: ₹${(orderToPrint.total || 0).toFixed(2)}`, 20, yPos)
+      doc.text(`Total: â‚¹${(orderToPrint.total || 0).toFixed(2)}`, 20, yPos)
 
       // Payment status
       yPos += 10
@@ -1886,7 +1946,7 @@ export default function OrdersMain() {
       if (orderToPrint.sendCutlery) {
         yPos += 15
         doc.setFont('helvetica', 'normal')
-        doc.text('Γ£ô Send cutlery requested', 20, yPos)
+        doc.text('Î“Â£Ã´ Send cutlery requested', 20, yPos)
       }
 
       // Footer
@@ -1904,7 +1964,7 @@ export default function OrdersMain() {
       const fileName = `Order-${orderToPrint.orderId || 'Receipt'}-${Date.now()}.pdf`
       doc.save(fileName)
     } catch (error) {
-      console.error('Γ¥î Error generating PDF:', error)
+      console.error('Î“Â¥Ã® Error generating PDF:', error)
       alert('Failed to generate PDF. Please try again.')
     }
   }
@@ -2197,7 +2257,7 @@ export default function OrdersMain() {
               : 'bg-white border border-yellow-200'
               }`}
           >
-            {rejectionReasonText ? (
+            {hasRejectedVerification ? (
               <>
                 <div className="flex items-start gap-3 mb-3">
                   <div className="flex-shrink-0 rounded-full p-2 bg-red-100">
@@ -2208,7 +2268,8 @@ export default function OrdersMain() {
                     <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
                       <p className="text-xs font-semibold text-red-800 mb-2">Reason for Rejection:</p>
                       <div className="text-xs text-red-700 space-y-1">
-                        {rejectionReasonText.split('\n').filter(line => line.trim()).length > 1 ? (
+                        {rejectionReasonText
+                          ? (rejectionReasonText.split('\n').filter(line => line.trim()).length > 1 ? (
                           <ul className="space-y-1 list-disc list-inside">
                             {rejectionReasonText.split('\n').map((point, index) => (
                               point.trim() && (
@@ -2218,7 +2279,8 @@ export default function OrdersMain() {
                           </ul>
                         ) : (
                           <p className="text-red-700">{rejectionReasonText}</p>
-                        )}
+                          ))
+                          : <p className="text-red-700">Your verification was denied. Please update details and resubmit.</p>}
                       </div>
                     </div>
                   </div>
@@ -2401,7 +2463,7 @@ export default function OrdersMain() {
                                       {item.quantity} x {item.name}
                                     </p>
                                     <p className="text-xs text-gray-600 ml-2">
-                                      ₹{item.price * item.quantity}
+                                      â‚¹{item.price * item.quantity}
                                     </p>
                                   </div>
                                 </div>
@@ -2434,7 +2496,7 @@ export default function OrdersMain() {
                       <span className="text-sm font-semibold text-gray-900">Total bill</span>
                     </div>
                     <span className="text-base font-bold text-gray-900">
-                      ₹{(popupOrder || newOrder)?.total || 0}
+                      â‚¹{(popupOrder || newOrder)?.total || 0}
                     </span>
                   </div>
 
@@ -2802,7 +2864,7 @@ export default function OrdersMain() {
                   <p className="text-[11px] text-gray-500 mt-1">
                     {selectedOrder.type}
                     {selectedOrder.tableOrToken
-                      ? ` ΓÇó ${selectedOrder.tableOrToken}`
+                      ? ` Î“Ã‡Ã³ ${selectedOrder.tableOrToken}`
                       : ""}
                   </p>
                 </div>
@@ -2846,7 +2908,7 @@ export default function OrdersMain() {
                 <span>Payment: <span className="font-medium text-black">Paid online</span></span>
               </div>
 
-              {String(selectedOrder.status || "").toLowerCase() === "preparing" && !selectedOrder.deliveryPartnerId && (
+              {["preparing", "ready"].includes(String(selectedOrder.status || "").toLowerCase()) && !(selectedOrder.deliveryPartnerId || selectedOrder.hasDeliveryAssignment) && (
                 <div className="mb-3">
                   <ResendNotificationButton orderAPI={orderAPI}
                     orderId={selectedOrder.orderId}
@@ -2936,6 +2998,7 @@ function OrderCard({
   photoUrl,
   photoAlt,
   deliveryPartnerId,
+  hasDeliveryAssignment,
   onSelect,
   onCancel,
   onMarkReady,
@@ -2944,6 +3007,7 @@ function OrderCard({
 }) {
   const normalizedStatus = String(status || "").toLowerCase()
   const isReady = normalizedStatus === "ready"
+  const isDeliveryAssigned = Boolean(deliveryPartnerId || hasDeliveryAssignment)
 
   return (
     <div className="w-full bg-white rounded-2xl p-4 mb-3 border border-gray-200 hover:border-gray-400 transition-colors relative">
@@ -2974,6 +3038,7 @@ function OrderCard({
             eta,
             itemsSummary,
             deliveryPartnerId,
+            hasDeliveryAssignment,
           })
         }
         className={`w-full text-left flex gap-3 items-stretch cursor-pointer ${normalizedStatus === "preparing" ? "pr-8" : ""}`}
@@ -3039,20 +3104,20 @@ function OrderCard({
             <div className="flex flex-col gap-1">
               <p className="text-[11px] text-gray-500">
                 {type}
-                {tableOrToken ? ` ΓÇó ${tableOrToken}` : ""}
+                {tableOrToken ? ` Î“Ã‡Ã³ ${tableOrToken}` : ""}
               </p>
-              {/* Delivery Assignment Status - Only show for preparing orders */}
-              {normalizedStatus === 'preparing' && (
+              {/* Delivery Assignment Status - show for preparing and ready orders */}
+              {['preparing', 'ready'].includes(normalizedStatus) && (
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${deliveryPartnerId
+                  <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ${isDeliveryAssigned
                     ? 'bg-green-100 text-green-700 border border-green-300'
                     : 'bg-orange-100 text-orange-700 border border-orange-300'
                     }`}>
-                    <span className={`h-1.5 w-1.5 rounded-full ${deliveryPartnerId ? 'bg-green-500' : 'bg-orange-500'
+                    <span className={`h-1.5 w-1.5 rounded-full ${isDeliveryAssigned ? 'bg-green-500' : 'bg-orange-500'
                       }`} />
-                    {deliveryPartnerId ? 'Assigned' : 'Not Assigned'}
+                    {isDeliveryAssigned ? 'Assigned' : 'Not Assigned'}
                   </span>
-                  {!deliveryPartnerId && (
+                  {!isDeliveryAssigned && (
                     <ResendNotificationButton orderAPI={orderAPI} orderId={orderId} mongoId={mongoId} />
                   )}
                 </div>
@@ -3111,7 +3176,7 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "", 
     const fetchOrders = async () => {
       try {
         // Fetch all orders and filter for 'preparing' status on frontend
-        const response = await orderAPI.getOrders()
+        const response = await fetchOrdersLite(orderAPI, { status: "preparing" })
 
         if (!isMounted) return
 
@@ -3144,6 +3209,7 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "", 
             const preparingTimestamp = order.tracking?.preparing?.timestamp
               ? new Date(order.tracking.preparing.timestamp)
               : new Date(order.createdAt) // Fallback to createdAt if preparing timestamp not available
+            const assignment = resolveDeliveryAssignment(order)
 
             return {
               orderId: order.orderId || order._id,
@@ -3156,9 +3222,10 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "", 
               initialETA, // Store initial ETA in minutes
               preparingTimestamp, // Store when order started preparing
               itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
-              photoUrl: order.items?.[0]?.image || null,
+              photoUrl: getOrderPreviewPhotoUrl(order.items?.[0]?.image),
               photoAlt: order.items?.[0]?.name || 'Order',
-              deliveryPartnerId: order.deliveryPartnerId || null // Track if delivery partner is assigned
+              deliveryPartnerId: assignment.deliveryPartnerId,
+              hasDeliveryAssignment: assignment.hasDeliveryAssignment,
             }
           })
 
@@ -3280,7 +3347,7 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "", 
               if (status === 400 && (msg.includes('cannot be marked as ready') || msg.includes('current status'))) {
                 // Keep in markedReadyOrdersRef so we don't retry; order will disappear on next fetch
               } else {
-                console.error(`Γ¥î Failed to auto-mark order ${order.orderId} as ready:`, error)
+                console.error(`Î“Â¥Ã® Failed to auto-mark order ${order.orderId} as ready:`, error)
                 markedReadyOrdersRef.current.delete(orderKey)
               }
               // Don't show error toast - it will retry on next check (for non-idempotent errors)
@@ -3369,6 +3436,7 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "", 
                 photoUrl={order.photoUrl}
                 photoAlt={order.photoAlt}
                 deliveryPartnerId={order.deliveryPartnerId}
+                hasDeliveryAssignment={order.hasDeliveryAssignment}
                 onSelect={onSelectOrder}
                 onCancel={onCancel}
                 onMarkReady={handleMarkReady}
@@ -3403,7 +3471,7 @@ function ReadyOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 
     const fetchOrders = async () => {
       try {
         // Fetch all orders and filter for 'ready' status on frontend
-        const response = await orderAPI.getOrders()
+        const response = await fetchOrdersLite(orderAPI, { status: "ready" })
 
         if (!isMounted) return
 
@@ -3413,7 +3481,9 @@ function ReadyOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 
             order => order.status === 'ready'
           )
 
-          const transformedOrders = readyOrders.map(order => ({
+          const transformedOrders = readyOrders.map(order => {
+            const assignment = resolveDeliveryAssignment(order)
+            return ({
             orderId: order.orderId || order._id,
             mongoId: order._id,
             status: String(order.status || 'ready').toLowerCase(),
@@ -3423,9 +3493,12 @@ function ReadyOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 
             timePlaced: new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
             eta: null, // Don't show ETA for ready orders
             itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
-            photoUrl: order.items?.[0]?.image || null,
-            photoAlt: order.items?.[0]?.name || 'Order'
-          }))
+            photoUrl: getOrderPreviewPhotoUrl(order.items?.[0]?.image),
+            photoAlt: order.items?.[0]?.name || 'Order',
+            deliveryPartnerId: assignment.deliveryPartnerId,
+            hasDeliveryAssignment: assignment.hasDeliveryAssignment,
+          })
+          })
 
           if (isMounted) {
             setOrders(transformedOrders)
@@ -3529,7 +3602,7 @@ const OutForDeliveryOrders = ({ onSelectOrder, orderAPI, searchQuery = "", refre
     const fetchOrders = async () => {
       try {
         // Fetch all orders and filter for 'out_for_delivery' status on frontend
-        const response = await orderAPI.getOrders()
+        const response = await fetchOrdersLite(orderAPI, { status: "out_for_delivery" })
 
         if (!isMounted) return
 
@@ -3549,7 +3622,7 @@ const OutForDeliveryOrders = ({ onSelectOrder, orderAPI, searchQuery = "", refre
             timePlaced: new Date(order.createdAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
             eta: null,
             itemsSummary: order.items?.map(item => `${item.quantity}x ${item.name}`).join(', ') || 'No items',
-            photoUrl: order.items?.[0]?.image || null,
+            photoUrl: getOrderPreviewPhotoUrl(order.items?.[0]?.image),
             photoAlt: order.items?.[0]?.name || 'Order'
           }))
 
@@ -3654,7 +3727,7 @@ function ScheduledOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTic
 
     const fetchOrders = async () => {
       try {
-        const response = await orderAPI.getOrders()
+        const response = await fetchOrdersLite(orderAPI)
 
         if (!isMounted) return
 
@@ -3687,7 +3760,7 @@ function ScheduledOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTic
             scheduledAt: order.scheduledDelivery?.scheduledFor || order.createdAt,
             eta: null,
             itemsSummary: order.items?.map((item) => `${item.quantity}x ${item.name}`).join(", ") || "No items",
-            photoUrl: order.items?.[0]?.image || null,
+            photoUrl: getOrderPreviewPhotoUrl(order.items?.[0]?.image),
             photoAlt: order.items?.[0]?.name || "Order",
           }))
           .sort((a, b) => {

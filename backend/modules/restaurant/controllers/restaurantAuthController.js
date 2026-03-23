@@ -785,18 +785,9 @@ export const login = asyncHandler(async (req, res) => {
   if (fcmPatch.fcmTokenMobile) {
     restaurant.fcmTokenMobile = fcmPatch.fcmTokenMobile;
   }
-  if (restaurant.isAcceptingOrders !== true) {
-    restaurant.isAcceptingOrders = true;
-  }
-  if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile || restaurant.isModified('isAcceptingOrders')) {
+  if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile) {
     await restaurant.save();
   }
-
-    // Logged-in restaurants should appear online in user listings.
-    if (restaurant.isActive && restaurant.isAcceptingOrders !== true) {
-      restaurant.isAcceptingOrders = true;
-      await restaurant.save();
-    }
 
     // Generate tokens (email may be null for phone signups)
     const tokens = jwtService.generateTokens({
@@ -904,11 +895,6 @@ export const refreshToken = asyncHandler(async (req, res) => {
     // Allow inactive restaurants to refresh tokens - they need access to complete onboarding
     // The middleware will handle blocking inactive restaurants from accessing restricted routes
 
-    if (restaurant.isActive && restaurant.isAcceptingOrders !== true) {
-      restaurant.isAcceptingOrders = true;
-      await restaurant.save();
-    }
-
     // Generate new access token
     const accessToken = jwtService.generateAccessToken({
       userId: restaurant._id.toString(),
@@ -954,7 +940,7 @@ const normalizeRestaurantOnboardingState = (restaurant) => {
     restaurant?.isActive === true ||
     Boolean(restaurant?.approvedAt) ||
     Boolean(restaurant?.rejectedAt) ||
-    Boolean(restaurant?.rejectionReason) ||
+    Boolean(String(restaurant?.rejectionReason || '').trim()) ||
     (status && status !== 'onboarding') ||
     Number(onboarding?.completedSteps || 0) >= 4;
 
@@ -1007,9 +993,10 @@ export const getCurrentRestaurant = asyncHandler(async (req, res) => {
     restaurantId: req.restaurant._id,
     isActive: true,
   }).lean();
-  const isAcceptingOrders = outletTimings?.timings
+  const isAcceptingOrdersFromTimings = outletTimings?.timings
     ? isOpenFromOutletTimings(outletTimings.timings)
-    : req.restaurant.isAcceptingOrders;
+    : true;
+  const isAcceptingOrders = Boolean(req.restaurant.isAcceptingOrders !== false) && isAcceptingOrdersFromTimings;
   // Restaurant is attached by authenticate middleware
   return successResponse(res, 200, 'Restaurant retrieved successfully', {
     restaurant: {
@@ -1037,7 +1024,7 @@ export const getCurrentRestaurant = asyncHandler(async (req, res) => {
       slug: req.restaurant.slug,
       isAcceptingOrders,
       // Include verification status
-      rejectionReason: req.restaurant.rejectionReason || null,
+      rejectionReason: String(req.restaurant.rejectionReason || '').trim() || null,
       approvedAt: req.restaurant.approvedAt || null,
       rejectedAt: req.restaurant.rejectedAt || null
     }
@@ -1079,14 +1066,17 @@ export const reverifyRestaurant = asyncHandler(async (req, res) => {
     const restaurant = req.restaurant; // Already attached by authenticate middleware
 
     // Check if restaurant was rejected
-    if (!restaurant.rejectionReason) {
+    if (!String(restaurant.rejectionReason || '').trim()) {
       return errorResponse(res, 400, 'Restaurant is not rejected. Only rejected restaurants can be reverified.');
     }
 
     // Clear rejection details and mark as pending again
     restaurant.rejectionReason = null;
-    restaurant.rejectedAt = undefined;
-    restaurant.rejectedBy = undefined;
+    restaurant.rejectedAt = null;
+    restaurant.rejectedBy = null;
+    restaurant.approvedAt = null;
+    restaurant.approvedBy = null;
+    restaurant.status = 'pending';
     restaurant.isActive = false; // Keep inactive until approved
 
     await restaurant.save();
@@ -1246,10 +1236,7 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     if (fcmPatch.fcmTokenMobile) {
       restaurant.fcmTokenMobile = fcmPatch.fcmTokenMobile;
     }
-    if (restaurant.isAcceptingOrders !== true) {
-      restaurant.isAcceptingOrders = true;
-    }
-    if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile || restaurant.isModified('isAcceptingOrders')) {
+    if (fcmPatch.fcmTokenWeb || fcmPatch.fcmTokenMobile) {
       await restaurant.save();
     }
 

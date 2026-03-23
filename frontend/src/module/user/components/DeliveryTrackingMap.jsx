@@ -111,8 +111,8 @@ const DeliveryTrackingMap = ({
   const mapInitializedRef = useRef(false);
   const directionsCacheRef = useRef(new Map()); // Cache for locally generated route paths
   const lastRouteRequestRef = useRef({ start: null, end: null, timestamp: 0 });
-  const SOCKET_LOCATION_REFRESH_INTERVAL_MS = 1500;
-  const SOCKET_LOCATION_STALE_THRESHOLD_MS = 2000;
+  const SOCKET_LOCATION_REFRESH_INTERVAL_MS = 4000;
+  const SOCKET_LOCATION_STALE_THRESHOLD_MS = 4500;
   const ROUTE_RECALC_MIN_INTERVAL_MS = 2500;
 
   const backendUrl = SOCKET_BASE_URL;
@@ -164,6 +164,81 @@ const DeliveryTrackingMap = ({
       deliveryPhase === 'delivered'
     );
   }, [order?.status, order?.deliveryState?.status, order?.deliveryState?.currentPhase]);
+
+  const hasBillProof = useMemo(() => {
+    return Boolean(order?.billImageUrl || order?.deliveryState?.billImageUrl);
+  }, [order?.billImageUrl, order?.deliveryState?.billImageUrl]);
+
+  const isCustomerLegByState = useCallback((phaseValue, statusValue, orderStatusValue, billProofOverride = hasBillProof) => {
+    const phase = String(phaseValue || '').toLowerCase();
+    const status = String(statusValue || '').toLowerCase();
+    const orderStatus = String(orderStatusValue || '').toLowerCase();
+
+    return (
+      Boolean(billProofOverride) ||
+      phase === 'picked_up' ||
+      phase === 'en_route_to_delivery' ||
+      phase === 'at_delivery' ||
+      status === 'order_confirmed' ||
+      status === 'en_route_to_delivery' ||
+      status === 'reached_drop' ||
+      status === 'at_delivery' ||
+      orderStatus === 'out_for_delivery' ||
+      orderStatus === 'picked_up'
+    );
+  }, [hasBillProof]);
+
+  const trimRouteToRiderAndCustomer = useCallback((points, riderLocation, customerLocation) => {
+    if (!Array.isArray(points) || points.length === 0) return [];
+
+    const normalizedPoints = points
+      .map((point) => ({ lat: Number(point?.lat), lng: Number(point?.lng) }))
+      .filter((point) => Number.isFinite(point.lat) && Number.isFinite(point.lng));
+
+    if (normalizedPoints.length === 0) return [];
+
+    const riderLat = Number(riderLocation?.lat);
+    const riderLng = Number(riderLocation?.lng);
+    const hasRider = Number.isFinite(riderLat) && Number.isFinite(riderLng);
+
+    let trimmed = normalizedPoints;
+    if (hasRider) {
+      const nearest = findNearestPointOnPolyline(normalizedPoints, { lat: riderLat, lng: riderLng });
+      if (nearest?.nearestPoint) {
+        const candidate = trimPolylineBehindRider(normalizedPoints, nearest.nearestPoint, nearest.segmentIndex);
+        if (Array.isArray(candidate) && candidate.length > 0) {
+          trimmed = candidate;
+        }
+      }
+      trimmed = [{ lat: riderLat, lng: riderLng }, ...trimmed];
+    }
+
+    const customerLat = Number(customerLocation?.lat);
+    const customerLng = Number(customerLocation?.lng);
+    const hasCustomer = Number.isFinite(customerLat) && Number.isFinite(customerLng);
+    if (hasCustomer) {
+      const lastPoint = trimmed[trimmed.length - 1];
+      const sameAsCustomer =
+        lastPoint &&
+        Math.abs(lastPoint.lat - customerLat) < 0.00005 &&
+        Math.abs(lastPoint.lng - customerLng) < 0.00005;
+      if (!sameAsCustomer) {
+        trimmed.push({ lat: customerLat, lng: customerLng });
+      }
+    }
+
+    const deduped = [];
+    for (const point of trimmed) {
+      const prev = deduped[deduped.length - 1];
+      const isDuplicate =
+        prev &&
+        Math.abs(prev.lat - point.lat) < 0.000001 &&
+        Math.abs(prev.lng - point.lng) < 0.000001;
+      if (!isDuplicate) deduped.push(point);
+    }
+
+    return deduped;
+  }, []);
 
   const renderPolylinePath = useCallback((points, isCustomerLeg = false) => {
     if (!mapInstance.current || !window.google?.maps || !Array.isArray(points) || points.length === 0) {
@@ -491,15 +566,11 @@ const DeliveryTrackingMap = ({
       return { start: null, end: null };
     }
 
-    const isCustomerLeg =
-      currentPhase === 'en_route_to_delivery' ||
-      status === 'order_confirmed' ||
-      status === 'en_route_to_delivery' ||
-      orderStatus === 'out_for_delivery';
+    const isCustomerLeg = isCustomerLegByState(currentPhase, status, orderStatus);
 
     // If we already have live rider location, show rider -> customer route
     // so the user always sees where the driver is relative to their location.
-    if (hasRiderLocation) {
+    if (hasRiderLocation && isCustomerLeg) {
       return {
         start: { lat: liveRiderLocation.lat, lng: liveRiderLocation.lng },
         end: effectiveCustomerCoords
@@ -531,16 +602,12 @@ const DeliveryTrackingMap = ({
 
     // Fallback: no route (prevents incorrect line from default/invalid store coords)
     return { start: null, end: null };
-  }, [order, deliveryBoyLocation, currentLocation, restaurantCoords, effectiveCustomerCoords, hasDeliveryPartner]);
+  }, [order, deliveryBoyLocation, currentLocation, restaurantCoords, effectiveCustomerCoords, hasDeliveryPartner, isCustomerLegByState]);
 
   const getOrderStoredRoutePoints = useCallback(() => {
     const routePhase = order?.deliveryState?.currentPhase;
     const routeStatus = order?.deliveryState?.status;
-    const isCustomerLeg =
-      routePhase === 'en_route_to_delivery' ||
-      routeStatus === 'order_confirmed' ||
-      routeStatus === 'en_route_to_delivery' ||
-      order?.status === 'out_for_delivery';
+    const isCustomerLeg = isCustomerLegByState(routePhase, routeStatus, order?.status);
 
     const routeCoordinates = isCustomerLeg
       ? order?.deliveryState?.routeToDelivery?.coordinates
@@ -561,7 +628,7 @@ const DeliveryTrackingMap = ({
       .filter(Boolean);
 
     return points.length > 1 ? { points, isCustomerLeg } : null;
-  }, [order]);
+  }, [order, isCustomerLegByState]);
 
   // Move bike smoothly with rotation
   const moveBikeSmoothly = useCallback((lat, lng, heading) => {
@@ -1020,11 +1087,11 @@ const DeliveryTrackingMap = ({
           (Date.now() - firebaseLastUpdated) <= 15000;
         activeFirebaseAliasRef.current = isFreshFirebaseStream ? alias : null;
 
-        const isCustomerLeg =
-          value?.status === 'en_route_to_delivery' ||
-          value?.status === 'out_for_delivery' ||
-          order?.status === 'out_for_delivery' ||
-          order?.deliveryState?.currentPhase === 'en_route_to_delivery';
+        const isCustomerLeg = isCustomerLegByState(
+          value?.currentPhase ?? order?.deliveryState?.currentPhase,
+          value?.status ?? order?.deliveryState?.status,
+          value?.order_status ?? order?.status
+        );
         isCustomerLegRef.current = isCustomerLeg;
 
         let points = [];
@@ -1105,6 +1172,25 @@ const DeliveryTrackingMap = ({
         }
 
         if (canUseFirebaseRoute) {
+          const riderFromFirebase =
+            Number.isFinite(Number(value?.boy_lat)) && Number.isFinite(Number(value?.boy_lng))
+              ? { lat: Number(value.boy_lat), lng: Number(value.boy_lng) }
+              : null;
+          const riderForTrim =
+            riderFromFirebase ||
+            (deliveryBoyLocation && Number.isFinite(Number(deliveryBoyLocation.lat)) && Number.isFinite(Number(deliveryBoyLocation.lng))
+              ? { lat: Number(deliveryBoyLocation.lat), lng: Number(deliveryBoyLocation.lng) }
+              : (currentLocation && Number.isFinite(Number(currentLocation.lat)) && Number.isFinite(Number(currentLocation.lng))
+                ? { lat: Number(currentLocation.lat), lng: Number(currentLocation.lng) }
+                : null));
+          const destinationForTrim = effectiveCustomerCoords || firebaseCustomerCoordsValue || null;
+          if (isCustomerLeg) {
+            pointsToRender = trimRouteToRiderAndCustomer(pointsToRender, riderForTrim, destinationForTrim);
+            canUseFirebaseRoute = Array.isArray(pointsToRender) && pointsToRender.length > 1;
+          }
+        }
+
+        if (canUseFirebaseRoute) {
           hasFirebaseRouteRef.current = true;
           setHasFirebaseRoute(true);
           if (isMapLoaded) {
@@ -1155,7 +1241,14 @@ const DeliveryTrackingMap = ({
     restaurantCoords?.lng,
     isMapLoaded,
     moveBikeSmoothly,
-    renderPolylinePath
+    renderPolylinePath,
+    hasBillProof,
+    isCustomerLegByState,
+    trimRouteToRiderAndCustomer,
+    deliveryBoyLocation?.lat,
+    deliveryBoyLocation?.lng,
+    currentLocation?.lat,
+    currentLocation?.lng
   ]);
 
   // Initialize Google Map (only once - prevent re-initialization)
@@ -1519,7 +1612,16 @@ const DeliveryTrackingMap = ({
     if (!hasFirebaseRouteRef.current && !hasFirebaseRoute) {
       const orderStoredRoute = getOrderStoredRoutePoints();
       if (orderStoredRoute?.points?.length > 1) {
-        renderPolylinePath(orderStoredRoute.points, orderStoredRoute.isCustomerLeg);
+        const riderForTrim =
+          (deliveryBoyLocation && Number.isFinite(Number(deliveryBoyLocation.lat)) && Number.isFinite(Number(deliveryBoyLocation.lng)))
+            ? { lat: Number(deliveryBoyLocation.lat), lng: Number(deliveryBoyLocation.lng) }
+            : (currentLocation && Number.isFinite(Number(currentLocation.lat)) && Number.isFinite(Number(currentLocation.lng)))
+              ? { lat: Number(currentLocation.lat), lng: Number(currentLocation.lng) }
+              : null;
+        const pointsToRender = orderStoredRoute.isCustomerLeg
+          ? trimRouteToRiderAndCustomer(orderStoredRoute.points, riderForTrim, effectiveCustomerCoords)
+          : orderStoredRoute.points;
+        renderPolylinePath(pointsToRender, orderStoredRoute.isCustomerLeg);
         return;
       }
     }
@@ -1533,11 +1635,7 @@ const DeliveryTrackingMap = ({
     const routePhase = order?.deliveryState?.currentPhase;
     const routeStatus = order?.deliveryState?.status;
     
-    const isCustomerLeg =
-      routePhase === 'en_route_to_delivery' ||
-      routeStatus === 'order_confirmed' ||
-      routeStatus === 'en_route_to_delivery' ||
-      order?.status === 'out_for_delivery';
+    const isCustomerLeg = isCustomerLegByState(routePhase, routeStatus, order?.status);
     isCustomerLegRef.current = isCustomerLeg;
 
     const route = getRouteToShow();
@@ -1573,7 +1671,7 @@ const DeliveryTrackingMap = ({
         }
       }
     }
-  }, [isMapLoaded, deliveryBoyLat, deliveryBoyLng, currentLat, currentLng, order?.deliveryState?.currentPhase, order?.deliveryState?.status, restaurantLat, restaurantLng, effectiveCustomerCoords?.lat, effectiveCustomerCoords?.lng, moveBikeSmoothly, getRouteToShow, drawRoute, hasDeliveryPartner, hasFirebaseRoute, getOrderStoredRoutePoints, renderPolylinePath]);
+  }, [isMapLoaded, deliveryBoyLat, deliveryBoyLng, currentLat, currentLng, order?.deliveryState?.currentPhase, order?.deliveryState?.status, restaurantLat, restaurantLng, effectiveCustomerCoords?.lat, effectiveCustomerCoords?.lng, moveBikeSmoothly, getRouteToShow, drawRoute, hasDeliveryPartner, hasFirebaseRoute, getOrderStoredRoutePoints, renderPolylinePath, hasBillProof, deliveryBoyLocation, currentLocation, effectiveCustomerCoords, trimRouteToRiderAndCustomer, isCustomerLegByState, order?.status]);
 
   // Update bike when REAL location changes (from socket)
   useEffect(() => {

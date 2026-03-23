@@ -125,7 +125,8 @@ export default function Cart() {
     deliveryFee: 25,
     freeDeliveryThreshold: 149,
     platformFee: 5,
-    gstRate: 5,
+    gstRate: 5,
+    minimumCodOrderValue: 0,
   })
 
 
@@ -152,9 +153,23 @@ export default function Cart() {
   // Get restaurant ID from cart or restaurant data
   // Priority: restaurantData > cart[0].restaurantId
   // DO NOT use cart[0].restaurant as slug fallback - it creates wrong slugs
-  const restaurantId = cart.length > 0
-    ? (restaurantData?._id || restaurantData?.restaurantId || cart[0]?.restaurantId || null)
-    : null
+  const restaurantId = cart.length > 0
+
+    ? (restaurantData?._id || restaurantData?.restaurantId || cart[0]?.restaurantId || null)
+
+    : null
+
+  const isMongoObjectId = (value) => /^[a-f\d]{24}$/i.test(String(value || "").trim())
+
+  const canonicalRestaurantMongoId = (() => {
+    const fromRestaurantData = restaurantData?._id || restaurantData?.id
+    if (isMongoObjectId(fromRestaurantData)) return String(fromRestaurantData)
+
+    const fromCart = cart[0]?.restaurantId
+    if (isMongoObjectId(fromCart)) return String(fromCart)
+
+    return null
+  })()
 
   // Stable restaurant ID for addons fetch (memoized to prevent dependency array issues)
   // Prefer restaurantData IDs (more reliable) over slug from cart
@@ -220,9 +235,13 @@ export default function Cart() {
       if (cart[0]?.restaurantId) {
         try {
           const cartRestaurantId = cart[0].restaurantId;
-          const cartRestaurantName = cart[0].restaurant;
-
-          console.log("🔄 Fetching restaurant data by restaurantId from cart:", cartRestaurantId)
+          const cartRestaurantName = cart[0].restaurant;
+
+          if (!isMongoObjectId(cartRestaurantId)) {
+            console.log("Skipping direct /restaurant/:id lookup for non-ObjectId cart restaurantId:", cartRestaurantId)
+          } else {
+
+          console.log("Fetching restaurant data by restaurantId from cart:", cartRestaurantId)
           const response = await restaurantAPI.getRestaurantById(cartRestaurantId)
           const data = response?.data?.data?.restaurant || response?.data?.restaurant
 
@@ -271,10 +290,11 @@ export default function Cart() {
               cartRestaurantId: cartRestaurantId,
               cartRestaurantName: cartRestaurantName
             })
-            setRestaurantData(data)
+            setRestaurantData({ ...data, _id: data?._id || data?.id || null })
             setLoadingRestaurant(false)
             return
           }
+          }
         } catch (error) {
           console.warn("⚠️ Failed to fetch by cart restaurantId, trying fallback...", error)
         }
@@ -326,7 +346,7 @@ export default function Cart() {
               slug: matchingRestaurant.slug,
               cartRestaurantName: cart[0]?.restaurant
             })
-            setRestaurantData(matchingRestaurant)
+            setRestaurantData({ ...matchingRestaurant, _id: matchingRestaurant?._id || matchingRestaurant?.id || null })
             setLoadingRestaurant(false)
             return
           } else {
@@ -457,7 +477,7 @@ export default function Cart() {
   // Fetch coupons for items in cart
   useEffect(() => {
     const fetchCouponsForCartItems = async () => {
-      if (cart.length === 0 || !restaurantId) {
+      if (cart.length === 0 || !canonicalRestaurantMongoId) {
         setAvailableCoupons([])
         return
       }
@@ -477,7 +497,7 @@ export default function Cart() {
 
         try {
           console.log(`[CART-COUPONS] Fetching coupons for itemId: ${cartItem.id}, name: ${cartItem.name}`)
-          const response = await restaurantAPI.getCouponsByItemIdPublic(restaurantId, cartItem.id)
+          const response = await restaurantAPI.getCouponsByItemIdPublic(canonicalRestaurantMongoId, cartItem.id)
 
           if (response?.data?.success && response?.data?.data?.coupons) {
             const coupons = response.data.data.coupons
@@ -513,12 +533,12 @@ export default function Cart() {
     }
 
     fetchCouponsForCartItems()
-  }, [cart, restaurantId])
+  }, [cart, canonicalRestaurantMongoId])
 
   // Calculate pricing from backend whenever cart, address, or coupon changes
   useEffect(() => {
     const calculatePricing = async () => {
-      if (cart.length === 0 || !defaultAddress) {
+      if (cart.length === 0 || !defaultAddress || !canonicalRestaurantMongoId) {
         setPricing(null)
         return
       }
@@ -537,7 +557,7 @@ export default function Cart() {
 
         const response = await orderAPI.calculateOrder({
           items,
-          restaurantId: restaurantData?._id || restaurantData?.restaurantId || restaurantId || null,
+          restaurantId: canonicalRestaurantMongoId || null,
           deliveryAddress: defaultAddress,
           couponCode: appliedCoupon?.code || couponCode || null,
           deliveryFleet: deliveryFleet || 'standard',
@@ -568,7 +588,7 @@ export default function Cart() {
     }
 
     calculatePricing()
-  }, [cart, defaultAddress, appliedCoupon, couponCode, deliveryFleet, restaurantId])
+  }, [cart, defaultAddress, appliedCoupon, couponCode, deliveryFleet, canonicalRestaurantMongoId])
 
   // Fetch wallet balance
   useEffect(() => {
@@ -595,12 +615,13 @@ export default function Cart() {
       try {
         const response = await adminAPI.getPublicFeeSettings("mofood")
         if (response.data.success && response.data.data.feeSettings) {
-          setFeeSettings({
-            deliveryFee: response.data.data.feeSettings.deliveryFee || 25,
-            freeDeliveryThreshold: response.data.data.feeSettings.freeDeliveryThreshold || 149,
-            platformFee: response.data.data.feeSettings.platformFee || 5,
-            gstRate: response.data.data.feeSettings.gstRate || 5,
-          })
+          setFeeSettings({
+            deliveryFee: Number(response.data.data.feeSettings.deliveryFee ?? 25),
+            freeDeliveryThreshold: Number(response.data.data.feeSettings.freeDeliveryThreshold ?? 149),
+            platformFee: Number(response.data.data.feeSettings.platformFee ?? 5),
+            gstRate: Number(response.data.data.feeSettings.gstRate ?? 5),
+            minimumCodOrderValue: Number(response.data.data.feeSettings.minimumCodOrderValue ?? 0),
+          })
         }
       } catch (error) {
         console.error('Error fetching fee settings:', error)
@@ -613,12 +634,20 @@ export default function Cart() {
   // Use backend pricing if available, otherwise fallback to database settings
   const subtotal = pricing?.subtotal || cart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0)
   const deliveryFee = pricing?.deliveryFee ?? (subtotal >= feeSettings.freeDeliveryThreshold || appliedCoupon?.freeDelivery ? 0 : feeSettings.deliveryFee)
-  const platformFee = pricing?.platformFee || feeSettings.platformFee
+  const platformFee = pricing?.platformFee ?? feeSettings.platformFee
   const gstCharges = pricing?.tax || Math.round(subtotal * (feeSettings.gstRate / 100))
   const discount = pricing?.discount || (appliedCoupon ? Math.min(appliedCoupon.discount, subtotal * 0.5) : 0)
   const totalBeforeDiscount = subtotal + deliveryFee + platformFee + gstCharges
-  const total = pricing?.total || (totalBeforeDiscount - discount)
-  const savings = pricing?.savings || (discount + (subtotal > 500 ? 32 : 0))
+  const total = pricing?.total || (totalBeforeDiscount - discount)
+  const minimumCodOrderValue = Math.max(0, Number(feeSettings.minimumCodOrderValue ?? 0))
+  const isCodEligible = total >= minimumCodOrderValue
+  const savings = pricing?.savings || (discount + (subtotal > 500 ? 32 : 0))
+
+  useEffect(() => {
+    if (selectedPaymentMethod === "cash" && !isCodEligible) {
+      setSelectedPaymentMethod("razorpay")
+    }
+  }, [selectedPaymentMethod, isCodEligible])
 
   // Restaurant name from data or cart
   const restaurantName = restaurantData?.name || cart[0]?.restaurant || "Restaurant"
@@ -703,7 +732,7 @@ export default function Cart() {
 
           const response = await orderAPI.calculateOrder({
             items,
-            restaurantId: restaurantData?._id || restaurantData?.restaurantId || restaurantId || null,
+            restaurantId: canonicalRestaurantMongoId || null,
             deliveryAddress: defaultAddress,
             couponCode: coupon.code,
             deliveryFleet: deliveryFleet || 'standard',
@@ -740,7 +769,7 @@ export default function Cart() {
 
         const response = await orderAPI.calculateOrder({
           items,
-          restaurantId: restaurantData?._id || restaurantData?.restaurantId || restaurantId || null,
+          restaurantId: canonicalRestaurantMongoId || null,
           deliveryAddress: defaultAddress,
           couponCode: null,
           deliveryFleet: deliveryFleet || 'standard',
@@ -818,7 +847,7 @@ export default function Cart() {
 
       // CRITICAL: Validate restaurant ID before placing order
       // Ensure we're using the correct restaurant from restaurantData (most reliable)
-      const finalRestaurantId = restaurantData?._id || restaurantData?.restaurantId || null;
+      const finalRestaurantId = canonicalRestaurantMongoId || null;
       const finalRestaurantName = restaurantData?.name || null;
 
       if (!finalRestaurantId) {
@@ -1765,16 +1794,24 @@ export default function Cart() {
                   >
                     <option value="razorpay">Razorpay</option>
                     <option value="wallet">Wallet {walletBalance > 0 ? `(₹${walletBalance.toFixed(0)})` : ''}</option>
-                    <option value="cash">COD</option>
+                    <option value="cash" disabled={!isCodEligible}>
+                      {isCodEligible ? "COD" : `COD (Min Rs ${minimumCodOrderValue})`}
+                    </option>
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500 dark:text-gray-400" />
                 </div>
               </div>
 
-              <Button
+              {!isCodEligible && (
+                <p className="text-xs text-amber-700 dark:text-amber-300 mb-3">
+                  COD is available on orders of Rs {minimumCodOrderValue} and above.
+                </p>
+              )}
+
+              <Button
                 size="lg"
                 onClick={handlePlaceOrder}
-                disabled={isPlacingOrder || (selectedPaymentMethod === "wallet" && walletBalance < total)}
+                disabled={isPlacingOrder || (selectedPaymentMethod === "wallet" && walletBalance < total) || (selectedPaymentMethod === "cash" && !isCodEligible)}
                 className="w-full bg-green-700 hover:bg-green-800 dark:bg-green-600 dark:hover:bg-green-700 text-white px-6 md:px-10 h-14 md:h-16 rounded-lg md:rounded-xl text-base md:text-lg font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {(selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet") && (
@@ -2189,3 +2226,11 @@ export default function Cart() {
     </div>
   )
 }
+
+
+
+
+
+
+
+

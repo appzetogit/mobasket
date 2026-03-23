@@ -83,6 +83,7 @@ export const createOrUpdateFeeSettings = asyncHandler(async (req, res) => {
       freeDeliveryThreshold,
       platformFee,
       gstRate,
+      minimumCodOrderValue,
       driverEarningRangeStartKm,
       driverEarningRangeEndKm,
       driverEarningBaseAmount,
@@ -97,6 +98,12 @@ export const createOrUpdateFeeSettings = asyncHandler(async (req, res) => {
 
     if (gstRate === undefined || gstRate < 0 || gstRate > 100) {
       return errorResponse(res, 400, 'GST rate must be between 0 and 100');
+    }
+    if (
+      minimumCodOrderValue !== undefined &&
+      (!Number.isFinite(Number(minimumCodOrderValue)) || Number(minimumCodOrderValue) < 0)
+    ) {
+      return errorResponse(res, 400, 'Minimum COD order value must be a positive number');
     }
 
     const normalizedRangeStartKm =
@@ -153,9 +160,12 @@ export const createOrUpdateFeeSettings = asyncHandler(async (req, res) => {
     const feeSettingsData = {
       platform,
       deliveryFee: deliveryFee !== undefined ? Number(deliveryFee) : 25,
-      freeDeliveryThreshold: freeDeliveryThreshold ? Number(freeDeliveryThreshold) : 149,
+      freeDeliveryThreshold:
+        freeDeliveryThreshold !== undefined ? Number(freeDeliveryThreshold) : 149,
       platformFee: Number(platformFee),
       gstRate: Number(gstRate),
+      minimumCodOrderValue:
+        minimumCodOrderValue !== undefined ? Number(minimumCodOrderValue) : 0,
       driverEarningRangeStartKm: normalizedRangeStartKm,
       driverEarningRangeEndKm: normalizedRangeEndKm,
       driverEarningBaseAmount: normalizedBaseAmount,
@@ -201,6 +211,7 @@ export const updateFeeSettings = asyncHandler(async (req, res) => {
       freeDeliveryThreshold,
       platformFee,
       gstRate,
+      minimumCodOrderValue,
       driverEarningRangeStartKm,
       driverEarningRangeEndKm,
       driverEarningBaseAmount,
@@ -269,6 +280,13 @@ export const updateFeeSettings = asyncHandler(async (req, res) => {
         return errorResponse(res, 400, 'GST rate must be between 0 and 100');
       }
       feeSettings.gstRate = Number(gstRate);
+    }
+    if (minimumCodOrderValue !== undefined) {
+      const value = Number(minimumCodOrderValue);
+      if (!Number.isFinite(value) || value < 0) {
+        return errorResponse(res, 400, 'Minimum COD order value must be a positive number');
+      }
+      feeSettings.minimumCodOrderValue = value;
     }
 
     if (driverEarningRangeStartKm !== undefined) {
@@ -370,7 +388,7 @@ export const getPublicFeeSettings = asyncHandler(async (req, res) => {
       isActive: true
     })
       .sort({ createdAt: -1 })
-      .select('platform deliveryFee deliveryFeeRanges freeDeliveryThreshold platformFee gstRate driverEarningRangeStartKm driverEarningRangeEndKm driverEarningBaseAmount driverEarningExtraPerKm')
+      .select('platform deliveryFee deliveryFeeRanges freeDeliveryThreshold platformFee gstRate minimumCodOrderValue driverEarningRangeStartKm driverEarningRangeEndKm driverEarningBaseAmount driverEarningExtraPerKm')
       .lean();
 
     // If no active settings, return default values
@@ -383,6 +401,7 @@ export const getPublicFeeSettings = asyncHandler(async (req, res) => {
           freeDeliveryThreshold: 149,
           platformFee: 5,
           gstRate: 5,
+          minimumCodOrderValue: 0,
           driverEarningRangeStartKm: 0,
           driverEarningRangeEndKm: 2,
           driverEarningBaseAmount: 20,

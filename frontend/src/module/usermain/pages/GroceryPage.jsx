@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import {
   Search,
   ArrowLeft,
@@ -42,8 +42,9 @@ import imgBag3D from "@/assets/icons/shopping-bag_18008822.png";
 const INITIAL_GROCERY_BESTSELLER_COUNT = 6;
 const INITIAL_GROCERY_LAYOUT_PRODUCT_COUNT = 8;
 const INITIAL_GROCERY_SEARCH_PRODUCT_COUNT = 8;
-const INITIAL_GROCERY_CATEGORY_SECTION_COUNT = 4;
+const INITIAL_GROCERY_CATEGORY_SECTION_COUNT = 1;
 const INITIAL_GROCERY_BESTSELLER_SECTION_COUNT = 2;
+const GROCERY_PRODUCTS_PAGE_SIZE = 120;
 
 const normalizeAddressText = (value) =>
   String(value || "")
@@ -160,6 +161,21 @@ const parseStoredAddresses = () => {
   }
 };
 
+const mergeUniqueProducts = (existingProducts, incomingProducts) => {
+  const mergedMap = new Map();
+  (Array.isArray(existingProducts) ? existingProducts : []).forEach((product) => {
+    const key = String(product?._id || product?.id || "").trim();
+    if (!key) return;
+    mergedMap.set(key, product);
+  });
+  (Array.isArray(incomingProducts) ? incomingProducts : []).forEach((product) => {
+    const key = String(product?._id || product?.id || "").trim();
+    if (!key) return;
+    mergedMap.set(key, product);
+  });
+  return Array.from(mergedMap.values());
+};
+
 const GroceryPage = () => {
   const FALLBACK_IMAGE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
   const navigate = useNavigate();
@@ -168,7 +184,29 @@ const GroceryPage = () => {
   const { addresses, getDefaultAddress } = useProfile();
   const { location: userLocation, loading: locationLoading } = useUserLocation();
   const { openLocationSelector } = useLocationSelector();
-  const { zoneId, refreshZone, loading: zoneLoading } = useZone(userLocation, "mogrocery");
+  const [storedUserLocation, setStoredUserLocation] = useState(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      const parsed = JSON.parse(localStorage.getItem("userLocation") || "null");
+      return parsed && typeof parsed === "object" ? parsed : null;
+    } catch {
+      return null;
+    }
+  });
+  const [userLocationSource, setUserLocationSource] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      return String(localStorage.getItem("userLocationSource") || "").trim().toLowerCase();
+    } catch {
+      return "";
+    }
+  });
+  const effectiveZoneLocation =
+    storedUserLocation && typeof storedUserLocation === "object"
+      ? storedUserLocation
+      : userLocation;
+  const [locationRefreshTick, setLocationRefreshTick] = useState(0);
+  const { zoneId, refreshZone, loading: zoneLoading } = useZone(effectiveZoneLocation, "mogrocery");
   const [availableZones, setAvailableZones] = useState([]);
   const [selectedGroceryZoneId, setSelectedGroceryZoneId] = useState("auto");
   const [isZoneMenuOpen, setIsZoneMenuOpen] = useState(false);
@@ -196,23 +234,6 @@ const GroceryPage = () => {
     const cachedStoreId = String(localStorage.getItem("mogrocery:selectedStoreId") || "").trim();
     return cachedStoreId || "all-stores";
   });
-  const [storedUserLocation, setStoredUserLocation] = useState(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const parsed = JSON.parse(localStorage.getItem("userLocation") || "null");
-      return parsed && typeof parsed === "object" ? parsed : null;
-    } catch {
-      return null;
-    }
-  });
-  const [userLocationSource, setUserLocationSource] = useState(() => {
-    if (typeof window === "undefined") return "";
-    try {
-      return String(localStorage.getItem("userLocationSource") || "").trim().toLowerCase();
-    } catch {
-      return "";
-    }
-  });
 
   const [isScrolled, setIsScrolled] = useState(false);
   const [currentBanner, setCurrentBanner] = useState(0);
@@ -231,13 +252,20 @@ const GroceryPage = () => {
   const [isStoresLoading, setIsStoresLoading] = useState(true);
   const [vegMode, setVegMode] = useState(false);
   const [showSnow, setShowSnow] = useState(false);
-  const [showDeferredSections, setShowDeferredSections] = useState(false);
-  const [renderAllProductGrids, setRenderAllProductGrids] = useState(false);
+  const [bestSellerVisibleCount, setBestSellerVisibleCount] = useState(INITIAL_GROCERY_BESTSELLER_COUNT);
+  const [layoutProductVisibleCount, setLayoutProductVisibleCount] = useState(INITIAL_GROCERY_LAYOUT_PRODUCT_COUNT);
+  const [searchProductVisibleCount, setSearchProductVisibleCount] = useState(INITIAL_GROCERY_SEARCH_PRODUCT_COUNT);
+  const [homepageCategoryVisibleCount, setHomepageCategoryVisibleCount] = useState(INITIAL_GROCERY_CATEGORY_SECTION_COUNT);
+  const [hasScrolledForCategoryLazyLoad, setHasScrolledForCategoryLazyLoad] = useState(false);
+  const [bestSellerSectionVisibleCount, setBestSellerSectionVisibleCount] = useState(INITIAL_GROCERY_BESTSELLER_SECTION_COUNT);
   const [homepageCategories, setHomepageCategories] = useState([]);
   const [bestSellerItems, setBestSellerItems] = useState([]);
   const [bestSellerSections, setBestSellerSections] = useState([]);
   const [rawProducts, setRawProducts] = useState([]);
   const [allProducts, setAllProducts] = useState([]);
+  const [productsPage, setProductsPage] = useState(1);
+  const [hasMoreProducts, setHasMoreProducts] = useState(false);
+  const [isLoadingMoreProducts, setIsLoadingMoreProducts] = useState(false);
   const [groceryStores, setGroceryStores] = useState([]);
   const [hasActiveGroceryStore, setHasActiveGroceryStore] = useState(true);
   const [activeGroceryOrder, setActiveGroceryOrder] = useState(null);
@@ -245,6 +273,13 @@ const GroceryPage = () => {
   const orderSnapshotRef = useRef(new Map());
   const hasSeededOrderSnapshotRef = useRef(false);
   const zoneRecoveryAttemptedRef = useRef(false);
+  const productLoadInFlightRef = useRef(false);
+  const productPageLoadMoreRef = useRef(null);
+  const bestSellerLoadMoreRef = useRef(null);
+  const layoutProductsLoadMoreRef = useRef(null);
+  const searchProductsLoadMoreRef = useRef(null);
+  const homepageCategoryLoadMoreRef = useRef(null);
+  const bestSellerSectionsLoadMoreRef = useRef(null);
   const isAnySheetOpen = showCategorySheet || showCollectionSheet || showWishlistSheet;
   const collectionHandleStartYRef = useRef(null);
   const wishlistHandleStartYRef = useRef(null);
@@ -294,40 +329,6 @@ const GroceryPage = () => {
   }, [availableZones, selectedGroceryZoneId]);
 
   useEffect(() => {
-    let timeoutId;
-
-    const enableDeferredSections = () => {
-      setShowDeferredSections(true);
-      timeoutId = window.setTimeout(() => {
-        setRenderAllProductGrids(true);
-      }, 800);
-    };
-
-    if (typeof window === "undefined") return undefined;
-
-    if ("requestIdleCallback" in window) {
-      const idleId = window.requestIdleCallback(enableDeferredSections, {
-        timeout: 1200,
-      });
-
-      return () => {
-        window.cancelIdleCallback?.(idleId);
-        if (timeoutId) {
-          window.clearTimeout(timeoutId);
-        }
-      };
-    }
-
-    timeoutId = window.setTimeout(enableDeferredSections, 500);
-
-    return () => {
-      if (timeoutId) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-  }, []);
-
-  useEffect(() => {
     if (!isAnySheetOpen) return undefined;
 
     const body = document.body;
@@ -368,6 +369,17 @@ const GroceryPage = () => {
       } catch {
         setUserLocationSource("");
       }
+
+      // Trigger zone re-detection immediately when location is changed from selector.
+      // This avoids requiring a manual page refresh for updated store availability.
+      if (selectedGroceryZoneId === "auto" && typeof refreshZone === "function") {
+        setTimeout(() => {
+          refreshZone();
+        }, 0);
+      }
+
+      // Force dependent data to refresh even if computed zoneId does not change.
+      setLocationRefreshTick((prev) => prev + 1);
     };
 
     const handleStorageSync = (event) => {
@@ -377,13 +389,31 @@ const GroceryPage = () => {
     };
 
     window.addEventListener("userLocationChanged", syncLocationFromStorage);
+    window.addEventListener("userAddressesChanged", syncLocationFromStorage);
     window.addEventListener("storage", handleStorageSync);
 
     return () => {
       window.removeEventListener("userLocationChanged", syncLocationFromStorage);
+      window.removeEventListener("userAddressesChanged", syncLocationFromStorage);
       window.removeEventListener("storage", handleStorageSync);
     };
-  }, []);
+  }, [refreshZone, selectedGroceryZoneId]);
+
+  useEffect(() => {
+    if (selectedGroceryZoneId !== "auto") return;
+    if (typeof refreshZone !== "function") return;
+
+    const lat = Number(storedUserLocation?.latitude);
+    const lng = Number(storedUserLocation?.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+
+    refreshZone();
+  }, [
+    refreshZone,
+    selectedGroceryZoneId,
+    storedUserLocation?.latitude,
+    storedUserLocation?.longitude,
+  ]);
 
   const getStoreCoordinates = (store) => {
     const geoCoordinates = store?.location?.coordinates;
@@ -886,27 +916,42 @@ const GroceryPage = () => {
     fetchBestSellers();
   }, []);
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      // Wait for location/zone resolution, but use cached grocery zone immediately on first load.
+  const loadProductsPage = useCallback(
+    async (pageToLoad, { replace = false } = {}) => {
       if ((locationLoading || zoneLoading) && !effectiveZoneId) {
-        return;
+        return false;
       }
 
       if (!effectiveZoneId) {
         setRawProducts([]);
         setAllProducts([]);
+        setProductsPage(1);
+        setHasMoreProducts(false);
         setIsProductsLoading(false);
-        return;
+        setIsLoadingMoreProducts(false);
+        return false;
+      }
+
+      if (replace) {
+        setIsProductsLoading(true);
+      } else {
+        setIsLoadingMoreProducts(true);
       }
 
       try {
         const response = await api.get("/grocery/products", {
-          params: { page: 1, limit: 1000, zoneId: effectiveZoneId },
+          params: { page: pageToLoad, limit: GROCERY_PRODUCTS_PAGE_SIZE, zoneId: effectiveZoneId },
         });
         const products = Array.isArray(response?.data?.data) ? response.data.data : [];
-        setRawProducts(products);
+        setRawProducts((previousProducts) =>
+          replace
+            ? mergeUniqueProducts([], products)
+            : mergeUniqueProducts(previousProducts, products)
+        );
+        setProductsPage(pageToLoad);
+        setHasMoreProducts(products.length >= GROCERY_PRODUCTS_PAGE_SIZE);
         zoneRecoveryAttemptedRef.current = false;
+        return products.length > 0;
       } catch (error) {
         const statusCode = Number(error?.response?.status || 0);
         const message = String(error?.response?.data?.message || "").toLowerCase();
@@ -922,16 +967,28 @@ const GroceryPage = () => {
           }
         }
 
-        setRawProducts([]);
-        setAllProducts([]);
+        if (replace) {
+          setRawProducts([]);
+          setAllProducts([]);
+        }
+        setHasMoreProducts(false);
+        return false;
       } finally {
-        setIsProductsLoading(false);
+        if (replace) {
+          setIsProductsLoading(false);
+        } else {
+          setIsLoadingMoreProducts(false);
+        }
       }
-    };
+    },
+    [effectiveZoneId, locationLoading, refreshZone, zoneLoading]
+  );
 
-    setIsProductsLoading(true);
-    fetchProducts();
-  }, [effectiveZoneId, locationLoading, refreshZone, zoneLoading]);
+  useEffect(() => {
+    setProductsPage(1);
+    setHasMoreProducts(false);
+    loadProductsPage(1, { replace: true });
+  }, [loadProductsPage, locationRefreshTick]);
 
   useEffect(() => {
     if (!effectiveZoneId) {
@@ -1066,7 +1123,29 @@ const GroceryPage = () => {
     };
 
     fetchGroceryStores();
-  }, [effectiveZoneId, locationLoading, refreshZone, zoneLoading]);
+  }, [effectiveZoneId, locationLoading, refreshZone, zoneLoading, locationRefreshTick]);
+
+  useEffect(() => {
+    const targetElement = productPageLoadMoreRef.current;
+    if (!targetElement) return undefined;
+    if (isProductsLoading || isLoadingMoreProducts || !hasMoreProducts) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting || productLoadInFlightRef.current) return;
+        productLoadInFlightRef.current = true;
+        loadProductsPage(productsPage + 1, { replace: false })
+          .finally(() => {
+            productLoadInFlightRef.current = false;
+          });
+      },
+      { rootMargin: "320px 0px" }
+    );
+
+    observer.observe(targetElement);
+    return () => observer.disconnect();
+  }, [hasMoreProducts, isLoadingMoreProducts, isProductsLoading, loadProductsPage, productsPage]);
 
   useEffect(() => {
     if (!hasUserSession) return undefined;
@@ -1827,10 +1906,8 @@ const GroceryPage = () => {
 
   const displayedBestSellers = useMemo(
     () =>
-      showDeferredSections
-        ? visibleBestSellers
-        : visibleBestSellers.slice(0, INITIAL_GROCERY_BESTSELLER_COUNT),
-    [showDeferredSections, visibleBestSellers],
+      visibleBestSellers.slice(0, bestSellerVisibleCount),
+    [bestSellerVisibleCount, visibleBestSellers],
   );
 
   const orderedBestSellerProductSections = useMemo(() => {
@@ -1890,10 +1967,8 @@ const GroceryPage = () => {
 
   const displayedBestSellerProductSections = useMemo(
     () =>
-      showDeferredSections
-        ? orderedBestSellerProductSections
-        : orderedBestSellerProductSections.slice(0, INITIAL_GROCERY_BESTSELLER_SECTION_COUNT),
-    [orderedBestSellerProductSections, showDeferredSections],
+      orderedBestSellerProductSections.slice(0, bestSellerSectionVisibleCount),
+    [bestSellerSectionVisibleCount, orderedBestSellerProductSections],
   );
 
   const storeFilterOptions = useMemo(() => {
@@ -2076,27 +2151,224 @@ const GroceryPage = () => {
 
   const displayedLayoutProducts = useMemo(
     () =>
-      renderAllProductGrids
-        ? visibleLayoutProducts
-        : visibleLayoutProducts.slice(0, INITIAL_GROCERY_LAYOUT_PRODUCT_COUNT),
-    [renderAllProductGrids, visibleLayoutProducts],
+      visibleLayoutProducts.slice(0, layoutProductVisibleCount),
+    [layoutProductVisibleCount, visibleLayoutProducts],
   );
 
   const displayedSearchProducts = useMemo(
     () =>
-      renderAllProductGrids
-        ? visibleSearchProducts
-        : visibleSearchProducts.slice(0, INITIAL_GROCERY_SEARCH_PRODUCT_COUNT),
-    [renderAllProductGrids, visibleSearchProducts],
+      visibleSearchProducts.slice(0, searchProductVisibleCount),
+    [searchProductVisibleCount, visibleSearchProducts],
   );
 
   const displayedHomepageCategorySections = useMemo(
     () =>
-      showDeferredSections
-        ? homepageCategoryDisplaySections
-        : homepageCategoryDisplaySections.slice(0, INITIAL_GROCERY_CATEGORY_SECTION_COUNT),
-    [homepageCategoryDisplaySections, showDeferredSections],
+      homepageCategoryDisplaySections.slice(0, homepageCategoryVisibleCount),
+    [homepageCategoryDisplaySections, homepageCategoryVisibleCount],
   );
+
+  useEffect(() => {
+    setBestSellerVisibleCount(INITIAL_GROCERY_BESTSELLER_COUNT);
+  }, [activeCategoryId, effectiveZoneId, hasActiveSearch, searchQuery, selectedStoreId]);
+
+  useEffect(() => {
+    setLayoutProductVisibleCount(INITIAL_GROCERY_LAYOUT_PRODUCT_COUNT);
+  }, [activeCategoryId, activeSubcategoryId, effectiveZoneId, selectedStoreId]);
+
+  useEffect(() => {
+    setSearchProductVisibleCount(INITIAL_GROCERY_SEARCH_PRODUCT_COUNT);
+  }, [effectiveZoneId, searchQuery, selectedStoreId]);
+
+  useEffect(() => {
+    setHomepageCategoryVisibleCount(INITIAL_GROCERY_CATEGORY_SECTION_COUNT);
+    setHasScrolledForCategoryLazyLoad(false);
+  }, [effectiveZoneId, searchQuery, selectedStoreId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    if (hasScrolledForCategoryLazyLoad) return undefined;
+
+    const unlockLazyLoad = () => {
+      const scrollTop = window.scrollY || window.pageYOffset || 0;
+      if (scrollTop > 20) {
+        setHasScrolledForCategoryLazyLoad(true);
+      }
+    };
+
+    const onKeyDown = (event) => {
+      const key = String(event?.key || "").toLowerCase();
+      if (key === "arrowdown" || key === "pagedown" || key === " " || key === "spacebar") {
+        unlockLazyLoad();
+      }
+    };
+
+    window.addEventListener("wheel", unlockLazyLoad, { passive: true });
+    window.addEventListener("touchmove", unlockLazyLoad, { passive: true });
+    window.addEventListener("keydown", onKeyDown);
+
+    return () => {
+      window.removeEventListener("wheel", unlockLazyLoad);
+      window.removeEventListener("touchmove", unlockLazyLoad);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [hasScrolledForCategoryLazyLoad]);
+
+  useEffect(() => {
+    setBestSellerSectionVisibleCount(INITIAL_GROCERY_BESTSELLER_SECTION_COUNT);
+  }, [effectiveZoneId, searchQuery, selectedStoreId]);
+
+  useEffect(() => {
+    const targetElement = bestSellerLoadMoreRef.current;
+    const canLoadMore =
+      !shouldShowShimmer &&
+      !shouldShowUnavailableMap &&
+      activeCategoryId === "all" &&
+      visibleBestSellers.length > displayedBestSellers.length;
+    if (!targetElement || !canLoadMore) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting) return;
+        setBestSellerVisibleCount((previous) =>
+          Math.min(previous + INITIAL_GROCERY_BESTSELLER_COUNT, visibleBestSellers.length)
+        );
+      },
+      { rootMargin: "260px 0px" }
+    );
+    observer.observe(targetElement);
+    return () => observer.disconnect();
+  }, [
+    activeCategoryId,
+    displayedBestSellers.length,
+    shouldShowShimmer,
+    shouldShowUnavailableMap,
+    visibleBestSellers.length,
+  ]);
+
+  useEffect(() => {
+    const targetElement = layoutProductsLoadMoreRef.current;
+    const canLoadMore =
+      !shouldShowShimmer &&
+      !shouldShowUnavailableMap &&
+      activeCategoryId !== "all" &&
+      visibleLayoutProducts.length > displayedLayoutProducts.length;
+    if (!targetElement || !canLoadMore) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting) return;
+        setLayoutProductVisibleCount((previous) =>
+          Math.min(previous + INITIAL_GROCERY_LAYOUT_PRODUCT_COUNT, visibleLayoutProducts.length)
+        );
+      },
+      { rootMargin: "260px 0px" }
+    );
+    observer.observe(targetElement);
+    return () => observer.disconnect();
+  }, [
+    activeCategoryId,
+    displayedLayoutProducts.length,
+    shouldShowShimmer,
+    shouldShowUnavailableMap,
+    visibleLayoutProducts.length,
+  ]);
+
+  useEffect(() => {
+    const targetElement = searchProductsLoadMoreRef.current;
+    const canLoadMore =
+      !shouldShowShimmer &&
+      !shouldShowUnavailableMap &&
+      hasActiveSearch &&
+      visibleSearchProducts.length > displayedSearchProducts.length;
+    if (!targetElement || !canLoadMore) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting) return;
+        setSearchProductVisibleCount((previous) =>
+          Math.min(previous + INITIAL_GROCERY_SEARCH_PRODUCT_COUNT, visibleSearchProducts.length)
+        );
+      },
+      { rootMargin: "260px 0px" }
+    );
+    observer.observe(targetElement);
+    return () => observer.disconnect();
+  }, [
+    displayedSearchProducts.length,
+    hasActiveSearch,
+    shouldShowShimmer,
+    shouldShowUnavailableMap,
+    visibleSearchProducts.length,
+  ]);
+
+  useEffect(() => {
+    const targetElement = homepageCategoryLoadMoreRef.current;
+    const canLoadMore =
+      !shouldShowShimmer &&
+      !shouldShowUnavailableMap &&
+      !hasActiveSearch &&
+      activeCategoryId === "all" &&
+      hasScrolledForCategoryLazyLoad &&
+      homepageCategoryDisplaySections.length > displayedHomepageCategorySections.length;
+    if (!targetElement || !canLoadMore) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting) return;
+        const currentScrollTop = window.scrollY || window.pageYOffset || 0;
+        if (currentScrollTop <= 20) return;
+        setHomepageCategoryVisibleCount((previous) =>
+          Math.min(previous + INITIAL_GROCERY_CATEGORY_SECTION_COUNT, homepageCategoryDisplaySections.length)
+        );
+      },
+      { rootMargin: "40px 0px", threshold: 0.6 }
+    );
+    observer.observe(targetElement);
+    return () => observer.disconnect();
+  }, [
+    activeCategoryId,
+    displayedHomepageCategorySections.length,
+    hasActiveSearch,
+    hasScrolledForCategoryLazyLoad,
+    homepageCategoryDisplaySections.length,
+    shouldShowShimmer,
+    shouldShowUnavailableMap,
+  ]);
+
+  useEffect(() => {
+    const targetElement = bestSellerSectionsLoadMoreRef.current;
+    const canLoadMore =
+      !shouldShowShimmer &&
+      !shouldShowUnavailableMap &&
+      !hasActiveSearch &&
+      activeCategoryId === "all" &&
+      orderedBestSellerProductSections.length > displayedBestSellerProductSections.length;
+    if (!targetElement || !canLoadMore) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting) return;
+        setBestSellerSectionVisibleCount((previous) =>
+          Math.min(previous + INITIAL_GROCERY_BESTSELLER_SECTION_COUNT, orderedBestSellerProductSections.length)
+        );
+      },
+      { rootMargin: "300px 0px" }
+    );
+    observer.observe(targetElement);
+    return () => observer.disconnect();
+  }, [
+    activeCategoryId,
+    displayedBestSellerProductSections.length,
+    hasActiveSearch,
+    orderedBestSellerProductSections.length,
+    shouldShowShimmer,
+    shouldShowUnavailableMap,
+  ]);
 
   const savedHeaderAddress = useMemo(() => {
     const addressList = Array.isArray(addresses) && addresses.length > 0
@@ -2864,7 +3136,7 @@ const GroceryPage = () => {
         </div>
       )}
 
-      {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && showDeferredSections && bannerImages.length > 0 && (
+      {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && bannerImages.length > 0 && (
         <div className="relative z-0 -mt-1 animate-fade-in-up px-4 pt-2 pb-1 md:max-w-6xl mx-auto">
           <div className="relative w-full aspect-[2.3/1] md:aspect-[3.6/1] bg-white/20 backdrop-blur-sm rounded-2xl shadow-lg border border-white/30 overflow-hidden">
             {bannerImages.map((bannerImg, index) => (
@@ -2933,8 +3205,11 @@ const GroceryPage = () => {
               );
             })}
           </div>
-          {!showDeferredSections && visibleBestSellers.length > displayedBestSellers.length && (
-            <p className="pt-3 text-center text-sm text-slate-500 dark:text-slate-400">
+          {visibleBestSellers.length > displayedBestSellers.length && (
+            <p
+              ref={bestSellerLoadMoreRef}
+              className="pt-3 text-center text-sm text-slate-500 dark:text-slate-400"
+            >
               Loading more bestsellers...
             </p>
           )}
@@ -3114,8 +3389,13 @@ const GroceryPage = () => {
                   })}
                 </div>
               )}
-              {!renderAllProductGrids && visibleLayoutProducts.length > displayedLayoutProducts.length && (
-                <p className="px-1 pt-3 text-sm text-slate-500 dark:text-slate-400">Loading more products...</p>
+              {visibleLayoutProducts.length > displayedLayoutProducts.length && (
+                <p
+                  ref={layoutProductsLoadMoreRef}
+                  className="px-1 pt-3 text-sm text-slate-500 dark:text-slate-400"
+                >
+                  Loading more products...
+                </p>
               )}
             </section>
           </div>
@@ -3213,8 +3493,13 @@ const GroceryPage = () => {
               );
             })}
           </div>
-          {!renderAllProductGrids && visibleSearchProducts.length > displayedSearchProducts.length && (
-            <p className="pt-3 text-sm text-slate-500 dark:text-slate-400">Loading more search results...</p>
+          {visibleSearchProducts.length > displayedSearchProducts.length && (
+            <p
+              ref={searchProductsLoadMoreRef}
+              className="pt-3 text-sm text-slate-500 dark:text-slate-400"
+            >
+              Loading more search results...
+            </p>
           )}
         </div>
       )}
@@ -3276,6 +3561,8 @@ const GroceryPage = () => {
                   <img
                     src={card.image || FALLBACK_IMAGE}
                     alt={card.name}
+                    loading="lazy"
+                    decoding="async"
                     className={`w-full h-full object-contain transition-transform duration-300 drop-shadow-[0_12px_10px_rgba(0,0,0,0.22)] md:hover:scale-110 ${cardIndex === 0 ? "scale-110 md:scale-100" : ""
                       }`}
                   />
@@ -3294,9 +3581,14 @@ const GroceryPage = () => {
         </div>
       ))}
 
-      {!showDeferredSections && !shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && homepageCategoryDisplaySections.length > displayedHomepageCategorySections.length && (
+      {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && homepageCategoryDisplaySections.length > displayedHomepageCategorySections.length && (
         <div className="px-4 pb-4 relative z-10 md:max-w-6xl md:mx-auto">
-          <p className="text-sm text-slate-500 dark:text-slate-400">Loading more categories...</p>
+          <p
+            ref={homepageCategoryLoadMoreRef}
+            className="text-sm text-slate-500 dark:text-slate-400"
+          >
+            Loading more categories...
+          </p>
         </div>
       )}
 
@@ -3410,10 +3702,19 @@ const GroceryPage = () => {
               </div>
             </div>
           ))}
-          {!showDeferredSections && orderedBestSellerProductSections.length > displayedBestSellerProductSections.length && (
-            <p className="text-sm text-slate-500 dark:text-slate-400">Loading more curated sections...</p>
+          {orderedBestSellerProductSections.length > displayedBestSellerProductSections.length && (
+            <p
+              ref={bestSellerSectionsLoadMoreRef}
+              className="text-sm text-slate-500 dark:text-slate-400"
+            >
+              Loading more curated sections...
+            </p>
           )}
         </div>
+      )}
+
+      {!shouldShowShimmer && !shouldShowUnavailableMap && hasMoreProducts && (
+        <div ref={productPageLoadMoreRef} className="h-8 w-full" aria-hidden="true" />
       )}
 
       {/* --- 8. BOTTOM FLOATING OFFER --- */}

@@ -20,6 +20,8 @@ import {
   getOrderEditSession,
 } from "@/module/user/utils/orderEditSession";
 
+const isMongoObjectId = (value) => /^[a-fA-F0-9]{24}$/.test(String(value || "").trim());
+
 export default function CartPage() {
   const navigate = useNavigate();
   const { cart, updateQuantity, removeFromCart, addToCart, getCartItem, isGroceryItem } = useCart();
@@ -35,6 +37,7 @@ export default function CartPage() {
     isAvailable: true,
     reason: "",
   });
+  const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
   const [orderEditSession, setOrderEditSession] = useState(() => getOrderEditSession());
   const [editSecondsLeft, setEditSecondsLeft] = useState(() =>
     getOrderEditRemainingSeconds(getOrderEditSession()),
@@ -118,15 +121,22 @@ export default function CartPage() {
 
       try {
         const restaurantResponse = await restaurantAPI.getRestaurantById(String(restaurantId));
-        const outletTimingsResponse = await api
-          .get(`/restaurant/${String(restaurantId)}/outlet-timings`)
-          .catch(() => null);
 
         const restaurant =
           restaurantResponse?.data?.data?.restaurant ||
           restaurantResponse?.data?.restaurant ||
           restaurantResponse?.data?.data ||
           null;
+
+        const resolvedRestaurantMongoId = String(
+          restaurant?._id || (isMongoObjectId(restaurantId) ? restaurantId : "")
+        ).trim();
+
+        const outletTimingsResponse = resolvedRestaurantMongoId
+          ? await api
+              .get(`/restaurant/${resolvedRestaurantMongoId}/outlet-timings`)
+              .catch(() => null)
+          : null;
 
         const outletTimings =
           outletTimingsResponse?.data?.data?.outletTimings?.timings ||
@@ -157,7 +167,22 @@ export default function CartPage() {
     };
 
     fetchRestaurantSchedule();
-  }, [restaurantId]);
+  }, [restaurantId, availabilityRefreshKey]);
+
+  useEffect(() => {
+    const refresh = () => setAvailabilityRefreshKey((prev) => prev + 1);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    const timer = window.setInterval(refresh, 60000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
 
   const handleCheckout = () => {
     if (cartItems.length === 0) {

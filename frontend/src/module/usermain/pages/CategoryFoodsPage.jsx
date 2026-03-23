@@ -1,21 +1,64 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, CheckCircle, Minus, Plus, ShoppingCart, X } from "lucide-react";
+import { ArrowLeft, CheckCircle, ChevronDown, Minus, Plus, ShoppingCart, X } from "lucide-react";
 import { toast } from "sonner";
 import { useCart } from "../../user/context/CartContext";
 import WishlistButton from "@/components/WishlistButton";
-import api from "@/lib/api";
+import api, { restaurantAPI } from "@/lib/api";
 import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
 import AddToCartAnimation from "../../user/components/AddToCartAnimation";
+import imgBag3D from "@/assets/icons/shopping-bag_18008822.png";
 
 const FALLBACK_IMAGE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+const MAX_INLINE_IMAGE_BYTES = 80_000;
+const PRODUCTS_PAGE_SIZE = 30;
+const PRODUCTS_CACHE_TTL_MS = 2 * 60 * 1000;
+const productsPageCache = new Map();
+const CATEGORY_SKELETON_COUNT = 6;
+const PRODUCT_SKELETON_COUNT = 8;
+
+const getProductsCacheKey = ({
+  zoneId = "",
+  categoryId = "all",
+  subcategoryId = "",
+  storeId = "all-stores",
+  page = 1,
+}) =>
+  [
+    String(zoneId || "no-zone").trim(),
+    String(categoryId || "all").trim(),
+    String(subcategoryId || "").trim(),
+    String(storeId || "all-stores").trim(),
+    String(page || 1),
+  ].join("::");
+
+const isLikelyOversizedInlineImage = (value) => {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("data:image")) return false;
+  return trimmed.length > MAX_INLINE_IMAGE_BYTES;
+};
 
 const extractImage = (product) => {
   const images = Array.isArray(product?.images) ? product.images : [];
-  const firstArrayImage = images.find((img) => typeof img === "string" && img.trim());
-  if (firstArrayImage) return firstArrayImage;
-  if (typeof product?.image === "string" && product.image.trim()) return product.image;
+  const normalizedImages = images
+    .filter((img) => typeof img === "string" && img.trim())
+    .map((img) => img.trim());
+
+  const firstRemoteImage = normalizedImages.find(
+    (img) => img.startsWith("http://") || img.startsWith("https://")
+  );
+  if (firstRemoteImage) return firstRemoteImage;
+
+  const firstInlineImage = normalizedImages.find((img) => !isLikelyOversizedInlineImage(img));
+  if (firstInlineImage) return firstInlineImage;
+
+  if (typeof product?.image === "string" && product.image.trim()) {
+    const singleImage = product.image.trim();
+    if (!isLikelyOversizedInlineImage(singleImage)) return singleImage;
+  }
+
   return FALLBACK_IMAGE;
 };
 
@@ -135,6 +178,39 @@ const buildProductDetailState = (product) => {
   };
 };
 
+const CategoryTabsSkeleton = () => (
+  <div className="w-full bg-white dark:bg-[#0f172a] overflow-x-auto no-scrollbar z-10 flex items-center px-2 shadow-sm border-b border-gray-50 dark:border-slate-800 flex-shrink-0">
+    {Array.from({ length: CATEGORY_SKELETON_COUNT }).map((_, index) => (
+      <div key={`category-skeleton-${index}`} className="flex flex-col items-center justify-center gap-1.5 py-3 px-1 min-w-[76px] flex-shrink-0">
+        <div className="w-14 h-14 rounded-full bg-slate-200 dark:bg-slate-800 animate-pulse" />
+        <div className="w-12 h-2.5 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+      </div>
+    ))}
+  </div>
+);
+
+const ProductsGridSkeleton = () => (
+  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+    {Array.from({ length: PRODUCT_SKELETON_COUNT }).map((_, index) => (
+      <div
+        key={`product-skeleton-${index}`}
+        className="flex flex-col bg-white dark:bg-[#0f172a] rounded-xl overflow-hidden shadow-sm border border-slate-100 dark:border-slate-800 h-full"
+      >
+        <div className="relative w-full h-40 md:h-48 p-2 bg-white dark:bg-[#0b1220]">
+          <div className="w-full h-full rounded-lg bg-slate-200 dark:bg-slate-800 animate-pulse" />
+          <div className="absolute bottom-2 right-2 w-12 h-6 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+        </div>
+        <div className="px-2 pb-2 pt-1 flex-1">
+          <div className="h-3.5 w-4/5 rounded bg-slate-200 dark:bg-slate-800 animate-pulse mb-2" />
+          <div className="h-3.5 w-3/5 rounded bg-slate-200 dark:bg-slate-800 animate-pulse mb-2" />
+          <div className="h-3 w-1/3 rounded bg-slate-200 dark:bg-slate-800 animate-pulse mb-2" />
+          <div className="h-3.5 w-1/2 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
 export function CategoryFoodsContent({
   onClose,
   isModal = false,
@@ -155,9 +231,21 @@ export function CategoryFoodsContent({
   const [selectedStoreId, setSelectedStoreId] = useState(initialStoreId || "all-stores");
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
-  const [categoryScopeProducts, setCategoryScopeProducts] = useState([]);
+  const [zoneStores, setZoneStores] = useState([]);
+  const [onlineStores, setOnlineStores] = useState([]);
+  const [isStoreMenuOpen, setIsStoreMenuOpen] = useState(false);
+  const [storeCategoryMeta, setStoreCategoryMeta] = useState({
+    categoryIds: [],
+    categoryNames: [],
+  });
   const [isCategoriesLoading, setIsCategoriesLoading] = useState(true);
   const [isProductsLoading, setIsProductsLoading] = useState(true);
+  const [isLoadingMoreProducts, setIsLoadingMoreProducts] = useState(false);
+  const [productsPage, setProductsPage] = useState(1);
+  const [hasMoreProducts, setHasMoreProducts] = useState(false);
+  const scrollableRef = useRef(null);
+  const loadMoreInFlightRef = useRef(false);
+  const storeMenuRef = useRef(null);
 
   useEffect(() => {
     setSelectedCategory(initialCategory || "all");
@@ -180,6 +268,91 @@ export function CategoryFoodsContent({
     }
     localStorage.removeItem("mogrocery:selectedStoreId");
   }, [selectedStoreId]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchZoneStores = async () => {
+      try {
+        const params = {
+          page: 1,
+          limit: 120,
+          ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
+        };
+        const response = await api.get("/grocery/products", { params });
+        const data = Array.isArray(response?.data?.data) ? response.data.data : [];
+        const map = new Map();
+
+        data.forEach((product) => {
+          const storeId = String(
+            product?.storeId?._id || product?.storeId?.id || product?.storeId || ""
+          ).trim();
+          if (!storeId || map.has(storeId)) return;
+
+          map.set(storeId, {
+            id: storeId,
+            name: String(product?.storeId?.name || product?.storeName || "").trim() || "Store",
+          });
+        });
+
+        if (!mounted) return;
+        setZoneStores(Array.from(map.values()));
+      } catch {
+        if (!mounted) return;
+        setZoneStores([]);
+      }
+    };
+
+    fetchZoneStores();
+
+    return () => {
+      mounted = false;
+    };
+  }, [effectiveZoneId]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchOnlineStores = async () => {
+      try {
+        const response = await restaurantAPI.getRestaurants({
+          limit: 200,
+          platform: "mogrocery",
+          onlyZone: "true",
+          ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
+        });
+        const restaurants = Array.isArray(response?.data?.data?.restaurants)
+          ? response.data.data.restaurants
+          : [];
+
+        const zoneOnlineStores = restaurants
+          .filter((restaurant) => {
+            if (String(restaurant?.platform || "").toLowerCase() !== "mogrocery") return false;
+            if (restaurant?.isActive === false) return false;
+            if (restaurant?.isOnline === false) return false;
+            if (restaurant?.isAcceptingOrders === false) return false;
+            return true;
+          })
+          .map((store) => ({
+            id: String(store?._id || store?.id || store?.restaurantId || "").trim(),
+            name: String(store?.name || store?.restaurantName || "Store").trim(),
+          }))
+          .filter((store) => store.id);
+
+        if (!mounted) return;
+        setOnlineStores(zoneOnlineStores);
+      } catch {
+        if (!mounted) return;
+        setOnlineStores([]);
+      }
+    };
+
+    fetchOnlineStores();
+
+    return () => {
+      mounted = false;
+    };
+  }, [effectiveZoneId]);
 
   useEffect(() => {
     let mounted = true;
@@ -217,16 +390,191 @@ export function CategoryFoodsContent({
   useEffect(() => {
     let mounted = true;
 
-    const fetchProducts = async () => {
-      if ((locationLoading || zoneLoading) && !effectiveZoneId) {
+    const fetchStoreCategoryMeta = async () => {
+      if (!selectedStoreId || selectedStoreId === "all-stores") {
+        if (mounted) {
+          setStoreCategoryMeta({ categoryIds: [], categoryNames: [] });
+        }
         return;
       }
 
       try {
-        setIsProductsLoading(true);
+        const response = await api.get("/grocery/products", {
+          params: {
+            page: 1,
+            limit: 200,
+            ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
+            storeId: selectedStoreId,
+          },
+        });
+
+        const data = Array.isArray(response?.data?.data) ? response.data.data : [];
+        const categoryIds = new Set();
+        const categoryNames = new Set();
+
+        data.forEach((product) => {
+          const categoryId = String(
+            product?.category?._id || product?.category?.id || product?.category || ""
+          ).trim();
+          if (categoryId) categoryIds.add(categoryId);
+
+          const categoryName = String(product?.category?.name || "").trim().toLowerCase();
+          if (categoryName) categoryNames.add(categoryName);
+        });
+
+        if (!mounted) return;
+        setStoreCategoryMeta({
+          categoryIds: Array.from(categoryIds),
+          categoryNames: Array.from(categoryNames),
+        });
+      } catch {
+        if (!mounted) return;
+        setStoreCategoryMeta({ categoryIds: [], categoryNames: [] });
+      }
+    };
+
+    fetchStoreCategoryMeta();
+
+    return () => {
+      mounted = false;
+    };
+  }, [effectiveZoneId, selectedStoreId]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const fetchProductsPage = async (pageToLoad, { append = false } = {}) => {
+      try {
+        if (append) {
+          setIsLoadingMoreProducts(true);
+        } else {
+          setIsProductsLoading(true);
+        }
+
         const params = {
-          page: 1,
-          limit: 200,
+          page: pageToLoad,
+          limit: PRODUCTS_PAGE_SIZE,
+          ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
+          ...(selectedCategory && selectedCategory !== "all" ? { categoryId: selectedCategory } : {}),
+          ...(selectedSubcategoryId ? { subcategoryId: selectedSubcategoryId } : {}),
+          ...(selectedStoreId && selectedStoreId !== "all-stores"
+            ? { storeId: selectedStoreId }
+            : {}),
+        };
+        const cacheKey = getProductsCacheKey({
+          zoneId: effectiveZoneId,
+          categoryId: selectedCategory,
+          subcategoryId: selectedSubcategoryId,
+          storeId: selectedStoreId,
+          page: pageToLoad,
+        });
+
+        if (!append) {
+          const cached = productsPageCache.get(cacheKey);
+          const isFresh = cached && Date.now() - Number(cached.ts || 0) < PRODUCTS_CACHE_TTL_MS;
+          if (isFresh && Array.isArray(cached.items)) {
+            setProducts(cached.items);
+            setProductsPage(pageToLoad);
+            setHasMoreProducts(Boolean(cached.hasMore));
+            setIsProductsLoading(false);
+            return;
+          }
+        }
+
+        const response = await api.get("/grocery/products", { params });
+        const data = Array.isArray(response?.data?.data) ? response.data.data : [];
+        let zoneSafeData = data.filter((product) => {
+          if (!effectiveZoneId) return true;
+          const productZoneId = String(
+            product?.zoneId?._id ||
+            product?.zoneId?.id ||
+            product?.zoneId ||
+            product?.storeId?.zoneId?._id ||
+            product?.storeId?.zoneId?.id ||
+            product?.storeId?.zoneId ||
+            "",
+          ).trim();
+          return !productZoneId || productZoneId === String(effectiveZoneId);
+        });
+
+        if (selectedStoreId && selectedStoreId !== "all-stores") {
+          zoneSafeData = zoneSafeData.filter((product) =>
+            doesProductMatchStore(product, selectedStoreId),
+          );
+        }
+
+        if (!mounted) return;
+        productsPageCache.set(cacheKey, {
+          items: zoneSafeData,
+          hasMore: zoneSafeData.length >= PRODUCTS_PAGE_SIZE,
+          ts: Date.now(),
+        });
+        setProducts((previousProducts) => {
+          if (!append) return zoneSafeData;
+
+          const mergedMap = new Map();
+          (Array.isArray(previousProducts) ? previousProducts : []).forEach((item) => {
+            const key = String(item?._id || item?.id || "").trim();
+            if (!key) return;
+            mergedMap.set(key, item);
+          });
+          zoneSafeData.forEach((item) => {
+            const key = String(item?._id || item?.id || "").trim();
+            if (!key) return;
+            mergedMap.set(key, item);
+          });
+          return Array.from(mergedMap.values());
+        });
+        setProductsPage(pageToLoad);
+        setHasMoreProducts(zoneSafeData.length >= PRODUCTS_PAGE_SIZE);
+      } catch {
+        if (!mounted) return;
+        if (!append) setProducts([]);
+        setHasMoreProducts(false);
+      } finally {
+        if (!mounted) return;
+        if (append) {
+          setIsLoadingMoreProducts(false);
+        } else {
+          setIsProductsLoading(false);
+        }
+      }
+    };
+
+    setProducts([]);
+    setProductsPage(1);
+    setHasMoreProducts(false);
+    setIsLoadingMoreProducts(false);
+    fetchProductsPage(1, { append: false });
+
+    return () => {
+      mounted = false;
+    };
+  }, [
+    effectiveZoneId,
+    selectedCategory,
+    selectedStoreId,
+    selectedSubcategoryId,
+  ]);
+
+  useEffect(() => {
+    const container = scrollableRef.current;
+    if (!container) return undefined;
+    if (isProductsLoading || isLoadingMoreProducts || !hasMoreProducts) return undefined;
+
+    const handleScroll = async () => {
+      if (loadMoreInFlightRef.current) return;
+      const nearBottom =
+        container.scrollTop + container.clientHeight >= container.scrollHeight - 220;
+      if (!nearBottom) return;
+
+      loadMoreInFlightRef.current = true;
+      try {
+        setIsLoadingMoreProducts(true);
+        const nextPage = productsPage + 1;
+        const params = {
+          page: nextPage,
+          limit: PRODUCTS_PAGE_SIZE,
           ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
           ...(selectedCategory && selectedCategory !== "all" ? { categoryId: selectedCategory } : {}),
           ...(selectedSubcategoryId ? { subcategoryId: selectedSubcategoryId } : {}),
@@ -251,188 +599,137 @@ export function CategoryFoodsContent({
           return !productZoneId || productZoneId === String(effectiveZoneId);
         });
 
-        if (zoneSafeData.length === 0) {
-          const fallbackResponse = await api.get("/grocery/products", {
-            params: {
-              limit: 1000,
-              ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
-            },
-          });
-          const fallbackData = Array.isArray(fallbackResponse?.data?.data) ? fallbackResponse.data.data : [];
-          zoneSafeData = fallbackData.filter((product) => {
-            const productCategoryId = extractId(product?.category);
-            const productSubcategoryIds = [
-              ...(Array.isArray(product?.subcategories) ? product.subcategories : []),
-              product?.subcategory,
-            ]
-              .map((subcategory) => extractId(subcategory))
-              .filter(Boolean);
-
-            const categoryMatch =
-              !selectedCategory ||
-              selectedCategory === "all" ||
-              productCategoryId === String(selectedCategory);
-            const subcategoryMatch =
-              !selectedSubcategoryId ||
-              productSubcategoryIds.includes(String(selectedSubcategoryId));
-            const storeMatch =
-              !selectedStoreId ||
-              selectedStoreId === "all-stores" ||
-              doesProductMatchStore(product, selectedStoreId);
-
-            return categoryMatch && subcategoryMatch && storeMatch;
-          });
-        }
-
         if (selectedStoreId && selectedStoreId !== "all-stores") {
-          zoneSafeData = zoneSafeData.filter(
-            (product) => doesProductMatchStore(product, selectedStoreId),
+          zoneSafeData = zoneSafeData.filter((product) =>
+            doesProductMatchStore(product, selectedStoreId),
           );
         }
 
-        if (!mounted) return;
-        setProducts(zoneSafeData);
+        setProducts((previousProducts) => {
+          const mergedMap = new Map();
+          (Array.isArray(previousProducts) ? previousProducts : []).forEach((item) => {
+            const key = String(item?._id || item?.id || "").trim();
+            if (!key) return;
+            mergedMap.set(key, item);
+          });
+          zoneSafeData.forEach((item) => {
+            const key = String(item?._id || item?.id || "").trim();
+            if (!key) return;
+            mergedMap.set(key, item);
+          });
+          return Array.from(mergedMap.values());
+        });
+        setProductsPage(nextPage);
+        setHasMoreProducts(zoneSafeData.length >= PRODUCTS_PAGE_SIZE);
       } catch {
-        if (!mounted) return;
-        setProducts([]);
+        setHasMoreProducts(false);
       } finally {
-        if (mounted) setIsProductsLoading(false);
+        setIsLoadingMoreProducts(false);
+        loadMoreInFlightRef.current = false;
       }
     };
 
-    fetchProducts();
-
+    container.addEventListener("scroll", handleScroll, { passive: true });
     return () => {
-      mounted = false;
+      container.removeEventListener("scroll", handleScroll);
     };
   }, [
     effectiveZoneId,
-    locationLoading,
+    hasMoreProducts,
+    isLoadingMoreProducts,
+    isProductsLoading,
+    productsPage,
     selectedCategory,
     selectedStoreId,
     selectedSubcategoryId,
-    zoneLoading,
-  ]);
-
-  useEffect(() => {
-    let mounted = true;
-
-    const fetchCategoryScopeProducts = async () => {
-      if ((locationLoading || zoneLoading) && !effectiveZoneId) {
-        return;
-      }
-
-      try {
-        const params = {
-          page: 1,
-          limit: 2000,
-          ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
-          ...(selectedStoreId && selectedStoreId !== "all-stores"
-            ? { storeId: selectedStoreId }
-            : {}),
-        };
-
-        const response = await api.get("/grocery/products", { params });
-        const data = Array.isArray(response?.data?.data) ? response.data.data : [];
-        let zoneSafeData = data.filter((product) => {
-          if (!effectiveZoneId) return true;
-          const productZoneId = String(
-            product?.zoneId?._id ||
-            product?.zoneId?.id ||
-            product?.zoneId ||
-            product?.storeId?.zoneId?._id ||
-            product?.storeId?.zoneId?.id ||
-            product?.storeId?.zoneId ||
-            "",
-          ).trim();
-          return !productZoneId || productZoneId === String(effectiveZoneId);
-        });
-
-        if (zoneSafeData.length === 0) {
-          const fallbackResponse = await api.get("/grocery/products", {
-            params: {
-              limit: 1000,
-              ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
-            },
-          });
-          const fallbackData = Array.isArray(fallbackResponse?.data?.data) ? fallbackResponse.data.data : [];
-          zoneSafeData = fallbackData.filter((product) => {
-            const storeMatch =
-              !selectedStoreId ||
-              selectedStoreId === "all-stores" ||
-              doesProductMatchStore(product, selectedStoreId);
-
-            return storeMatch;
-          });
-        }
-
-        if (selectedStoreId && selectedStoreId !== "all-stores") {
-          zoneSafeData = zoneSafeData.filter(
-            (product) => doesProductMatchStore(product, selectedStoreId),
-          );
-        }
-
-        if (!mounted) return;
-        setCategoryScopeProducts(zoneSafeData);
-      } catch {
-        if (!mounted) return;
-        setCategoryScopeProducts([]);
-      }
-    };
-
-    fetchCategoryScopeProducts();
-
-    return () => {
-      mounted = false;
-    };
-  }, [
-    effectiveZoneId,
-    locationLoading,
-    selectedStoreId,
-    zoneLoading,
   ]);
 
   const sidebarCategories = useMemo(() => {
-    const categoryIdsWithProducts = new Set();
-    const categoryNamesWithProducts = new Set();
-    categoryScopeProducts.forEach((product) => {
-      const categoryId = String(
-        product?.category?._id || product?.category?.id || product?.category || ""
-      ).trim();
-      if (categoryId) categoryIdsWithProducts.add(categoryId);
-
-      const categoryName = String(product?.category?.name || "").trim().toLowerCase();
-      if (categoryName) categoryNamesWithProducts.add(categoryName);
-    });
-
     const dynamic = categories
       .filter((category) => {
+        if (!selectedStoreId || selectedStoreId === "all-stores") return true;
+
         const categoryId = String(category?._id || "").trim();
         const categorySlug = String(category?.slug || "").trim();
         const categoryName = String(category?.name || "").trim().toLowerCase();
         return (
-          (categoryId && categoryIdsWithProducts.has(categoryId)) ||
-          (categorySlug && categoryIdsWithProducts.has(categorySlug)) ||
-          (categoryName && categoryNamesWithProducts.has(categoryName))
+          (categoryId && storeCategoryMeta.categoryIds.includes(categoryId)) ||
+          (categorySlug && storeCategoryMeta.categoryIds.includes(categorySlug)) ||
+          (categoryName && storeCategoryMeta.categoryNames.includes(categoryName))
         );
       })
       .map((category) => ({
-        id: String(category?._id || ""),
+        id: String(category?._id || category?.slug || "").trim(),
         name: category?.name || "Category",
         icon: category?.image || FALLBACK_IMAGE,
       }))
       .filter((category) => category.id);
 
-    return [{ id: "all", name: "All", icon: dynamic[0]?.icon || FALLBACK_IMAGE }, ...dynamic];
-  }, [categories, categoryScopeProducts]);
+    return [{ id: "all", name: "All", icon: imgBag3D }, ...dynamic];
+  }, [categories, selectedStoreId, storeCategoryMeta.categoryIds, storeCategoryMeta.categoryNames]);
 
   useEffect(() => {
     if (selectedCategory === "all") return;
     const exists = sidebarCategories.some(
       (category) => String(category?.id || "") === String(selectedCategory)
     );
-    if (!exists) setSelectedCategory("all");
+    if (!exists) {
+      setSelectedCategory("all");
+      setSelectedSubcategoryId("");
+    }
   }, [selectedCategory, sidebarCategories]);
+
+  const selectedStoreLabel = useMemo(() => {
+    if (!selectedStoreId || selectedStoreId === "all-stores") return "All Stores";
+
+    const matchedOnlineStore = onlineStores.find(
+      (store) => String(store?.id || "") === String(selectedStoreId)
+    );
+    if (matchedOnlineStore?.name) return matchedOnlineStore.name;
+
+    const matchedZoneStore = zoneStores.find(
+      (store) => String(store?.id || "") === String(selectedStoreId)
+    );
+    if (matchedZoneStore?.name) return matchedZoneStore.name;
+
+    const matchedProduct = products.find((product) => doesProductMatchStore(product, selectedStoreId));
+    const matchedStoreName = String(
+      matchedProduct?.storeId?.name || matchedProduct?.storeName || ""
+    ).trim();
+
+    return matchedStoreName || "Selected Store";
+  }, [onlineStores, products, selectedStoreId, zoneStores]);
+
+  useEffect(() => {
+    if (!selectedStoreId || selectedStoreId === "all-stores") return;
+    if (onlineStores.length === 0) return;
+
+    const existsInOnlineStores = onlineStores.some(
+      (store) => String(store?.id || "") === String(selectedStoreId)
+    );
+    if (!existsInOnlineStores) {
+      setSelectedStoreId("all-stores");
+    }
+  }, [onlineStores, selectedStoreId]);
+
+  useEffect(() => {
+    setSelectedCategory("all");
+    setSelectedSubcategoryId("");
+  }, [selectedStoreId]);
+
+  useEffect(() => {
+    const handleOutsideClick = (event) => {
+      if (!storeMenuRef.current) return;
+      if (!storeMenuRef.current.contains(event.target)) {
+        setIsStoreMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+    };
+  }, []);
 
   const handleProductCardClick = (product) => {
     const productId = product?._id || product?.id;
@@ -538,6 +835,62 @@ export function CategoryFoodsContent({
             <span className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">{products.length} items</span>
           </div>
 
+          <div ref={storeMenuRef} className="ml-auto relative">
+            <button
+              type="button"
+              onClick={() => setIsStoreMenuOpen((prev) => !prev)}
+              className="text-right"
+            >
+              <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400 dark:text-slate-500">
+                Store
+              </p>
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-200 line-clamp-1 max-w-[160px] flex items-center justify-end gap-1">
+                <span className="truncate">{selectedStoreLabel}</span>
+                <ChevronDown size={12} className={`transition-transform ${isStoreMenuOpen ? "rotate-180" : ""}`} />
+              </p>
+            </button>
+
+            {isStoreMenuOpen && (
+              <div className="absolute right-0 top-[calc(100%+6px)] z-[70] w-[190px] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-[#0f172a] shadow-lg overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedStoreId("all-stores");
+                    setIsStoreMenuOpen(false);
+                  }}
+                  className={`w-full text-left px-3 py-2 text-xs font-semibold ${
+                    selectedStoreId === "all-stores"
+                      ? "bg-[#fff4cc] dark:bg-[#152338] text-slate-900 dark:text-cyan-100"
+                      : "text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  All Stores
+                </button>
+                {onlineStores.length > 0 ? (
+                  onlineStores.map((store) => (
+                    <button
+                      type="button"
+                      key={store.id}
+                      onClick={() => {
+                        setSelectedStoreId(store.id);
+                        setIsStoreMenuOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 text-xs font-semibold ${
+                        selectedStoreId === store.id
+                          ? "bg-[#fff4cc] dark:bg-[#152338] text-slate-900 dark:text-cyan-100"
+                          : "text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                      }`}
+                    >
+                      {store.name}
+                    </button>
+                  ))
+                ) : (
+                  <p className="px-3 py-2 text-xs text-slate-400 dark:text-slate-500">No online stores</p>
+                )}
+              </div>
+            )}
+          </div>
+
           {isModal && (
             <button
               onClick={onClose}
@@ -549,49 +902,53 @@ export function CategoryFoodsContent({
         </div>
 
         <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
-          <div className="w-full bg-white dark:bg-[#0f172a] overflow-x-auto no-scrollbar z-10 flex items-center px-2 shadow-sm border-b border-gray-50 dark:border-slate-800 flex-shrink-0">
-            {sidebarCategories.map((cat) => (
-              <div
-                key={cat.id}
-                onClick={() => {
-                  setSelectedCategory(cat.id);
-                  setSelectedSubcategoryId("");
-                }}
-                className={`relative flex flex-col items-center justify-center gap-1.5 py-3 px-1 cursor-pointer transition-all min-w-[76px] flex-shrink-0 ${selectedCategory === cat.id ? "bg-transparent" : "bg-white dark:bg-[#0f172a]"}`}
-              >
+          {isCategoriesLoading ? (
+            <CategoryTabsSkeleton />
+          ) : (
+            <div className="w-full bg-white dark:bg-[#0f172a] overflow-x-auto no-scrollbar z-10 flex items-center px-2 shadow-sm border-b border-gray-50 dark:border-slate-800 flex-shrink-0">
+              {sidebarCategories.map((cat) => (
                 <div
-                  className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${selectedCategory === cat.id
-                    ? "bg-[#fef3c7] scale-105 border-2 border-[#facd01] dark:bg-[#152338]"
-                    : "bg-slate-50 border border-transparent dark:bg-[#111827] dark:border-slate-700"
-                    } p-1.5`}
+                  key={cat.id}
+                  onClick={() => {
+                    setSelectedCategory(cat.id);
+                    setSelectedSubcategoryId("");
+                  }}
+                  className={`relative flex flex-col items-center justify-center gap-1.5 py-3 px-1 cursor-pointer transition-all min-w-[76px] flex-shrink-0 ${selectedCategory === cat.id ? "bg-transparent" : "bg-white dark:bg-[#0f172a]"}`}
                 >
-                  <img
-                    src={cat.icon || FALLBACK_IMAGE}
-                    alt={cat.name}
-                    className="w-full h-full object-contain drop-shadow-sm"
-                    onError={(e) => {
-                      e.currentTarget.src = FALLBACK_IMAGE;
-                    }}
-                  />
+                  <div
+                    className={`w-14 h-14 rounded-full flex items-center justify-center transition-all duration-300 ${selectedCategory === cat.id
+                      ? "bg-[#fef3c7] scale-105 border-2 border-[#facd01] dark:bg-[#152338]"
+                      : "bg-slate-50 border border-transparent dark:bg-[#111827] dark:border-slate-700"
+                      } p-1.5`}
+                  >
+                    <img
+                      src={cat.icon || FALLBACK_IMAGE}
+                      alt={cat.name}
+                      className="w-full h-full object-contain drop-shadow-sm"
+                      loading="lazy"
+                      decoding="async"
+                      onError={(e) => {
+                        e.currentTarget.src = cat.id === "all" ? imgBag3D : FALLBACK_IMAGE;
+                      }}
+                    />
+                  </div>
+
+                  <span
+                    className={`text-[10px] text-center leading-tight px-0.5 font-bold line-clamp-2 max-w-[70px] ${selectedCategory === cat.id ? "text-slate-900 dark:text-slate-100" : "text-slate-500 dark:text-slate-400"}`}
+                  >
+                    {cat.name}
+                  </span>
+
+                  {selectedCategory === cat.id && (
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-1 bg-[#facd01] rounded-t-full" />
+                  )}
                 </div>
+              ))}
+            </div>
+          )}
 
-                <span
-                  className={`text-[10px] text-center leading-tight px-0.5 font-bold line-clamp-2 max-w-[70px] ${selectedCategory === cat.id ? "text-slate-900 dark:text-slate-100" : "text-slate-500 dark:text-slate-400"}`}
-                >
-                  {cat.name}
-                </span>
-
-                {selectedCategory === cat.id && (
-                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-8 h-1 bg-[#facd01] rounded-t-full" />
-                )}
-              </div>
-            ))}
-          </div>
-
-          <div data-sheet-scrollable="true" className="flex-1 min-h-0 bg-white dark:bg-[#0b1220] h-full overflow-y-auto pb-24 px-3 pt-4 touch-auto [-webkit-overflow-scrolling:touch]">
-            {isProductsLoading && (
-              <div className="text-sm text-slate-500 dark:text-slate-400 px-1 py-2">Loading products...</div>
-            )}
+          <div ref={scrollableRef} data-sheet-scrollable="true" className="flex-1 min-h-0 bg-white dark:bg-[#0b1220] h-full overflow-y-auto pb-24 px-3 pt-4 touch-auto [-webkit-overflow-scrolling:touch]">
+            {isProductsLoading && <ProductsGridSkeleton />}
 
             {!isProductsLoading && products.length === 0 && (
               <div className="text-sm text-slate-500 dark:text-slate-400 px-1 py-2">
@@ -632,6 +989,8 @@ export function CategoryFoodsContent({
                           src={extractImage(item)}
                           alt={item?.name || "Product"}
                           className="w-full h-full object-contain drop-shadow-[0_8px_6px_rgba(0,0,0,0.15)]"
+                          loading="lazy"
+                          decoding="async"
                         />
 
                         {alreadyInCart ? (
@@ -724,6 +1083,12 @@ export function CategoryFoodsContent({
                 })}
               </div>
             )}
+
+            {!isProductsLoading && isLoadingMoreProducts && (
+              <div className="text-sm text-slate-500 dark:text-slate-400 px-1 py-3">
+                Loading more products...
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -755,12 +1120,8 @@ const CategoryFoodsPage = () => {
   const stateCategoryId = String(location?.state?.categoryId || "").trim();
   const stateStoreId = String(location?.state?.storeId || "").trim();
   const queryStoreId = String(new URLSearchParams(location?.search || "").get("storeId") || "").trim();
-  const cachedStoreId =
-    typeof window !== "undefined"
-      ? String(localStorage.getItem("mogrocery:selectedStoreId") || "").trim()
-      : "";
   const initialCategory = isCategoriesRootPage ? "all" : (id || stateCategoryId || "all");
-  const initialStoreId = queryStoreId || stateStoreId || cachedStoreId || "all-stores";
+  const initialStoreId = queryStoreId || stateStoreId || "all-stores";
 
   return (
     <CategoryFoodsContent

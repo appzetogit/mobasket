@@ -27,9 +27,10 @@ let lastDbNotReadyLogAt = 0;
  * @param {string} defaultValue - Default value if not found
  * @returns {Promise<string>} Environment variable value (decrypted)
  */
-export async function getEnvVar(key, defaultValue = '') {
+export async function getEnvVar(key, defaultValue = '', options = {}) {
   try {
-    const envVars = await getAllEnvVars();
+    const { forceRefresh = false } = options || {};
+    const envVars = await getAllEnvVars({ forceRefresh });
     let value = envVars[key] || defaultValue;
     
     // Decrypt if encrypted (for direct access, toEnvObject already decrypts, but this is a safety check)
@@ -54,11 +55,12 @@ export async function getEnvVar(key, defaultValue = '') {
  * Uses caching to reduce database queries
  * @returns {Promise<Object>} Object containing all environment variables
  */
-export async function getAllEnvVars() {
+export async function getAllEnvVars(options = {}) {
   try {
+    const { forceRefresh = false } = options || {};
     // Check cache
     const now = Date.now();
-    if (envCache && cacheTimestamp && (now - cacheTimestamp) < CACHE_DURATION) {
+    if (!forceRefresh && envCache && cacheTimestamp && (now - cacheTimestamp) < CACHE_DURATION) {
       return envCache;
     }
 
@@ -103,12 +105,106 @@ export function clearEnvCache() {
  * @returns {Promise<Object>} { keyId, keySecret }
  */
 export async function getRazorpayCredentials() {
-  const apiKey = await getEnvVar('RAZORPAY_API_KEY');
-  const secretKey = await getEnvVar('RAZORPAY_SECRET_KEY');
+  const normalizeCredential = (value) => {
+    let cleaned = String(value || '').trim();
+    // Allow pasting in .env style, e.g. RAZORPAY_API_KEY=rzp_test_xxx
+    const eqIndex = cleaned.indexOf('=');
+    if (eqIndex > 0) {
+      const maybeKey = cleaned.slice(0, eqIndex).trim().toUpperCase();
+      if (maybeKey.includes('RAZORPAY')) {
+        cleaned = cleaned.slice(eqIndex + 1).trim();
+      }
+    }
+    if (
+      (cleaned.startsWith('"') && cleaned.endsWith('"')) ||
+      (cleaned.startsWith("'") && cleaned.endsWith("'"))
+    ) {
+      cleaned = cleaned.slice(1, -1).trim();
+    }
+    return cleaned;
+  };
+
+  const looksLikeApiKey = (value) => /^rzp_/i.test(String(value || '').trim());
+  const normalizePair = (rawKeyId, rawKeySecret) => {
+    const first = normalizeCredential(rawKeyId);
+    const second = normalizeCredential(rawKeySecret);
+    const keyId = looksLikeApiKey(first) || !looksLikeApiKey(second) ? first : second;
+    const keySecret = keyId === first ? second : first;
+    return {
+      keyId: keyId || '',
+      keySecret: keySecret || ''
+    };
+  };
+
+  const findRazorpayPairFromDbDocs = async () => {
+    try {
+      if (mongoose.connection.readyState !== 1) return null;
+
+      const docs = await EnvironmentVariable.find({})
+        .sort({ lastUpdatedAt: -1, updatedAt: -1, createdAt: -1 })
+        .limit(10)
+        .lean();
+
+      for (const doc of docs) {
+        const decryptIfNeeded = (value) => {
+          const raw = String(value || '');
+          if (!raw) return '';
+          if (!isEncrypted(raw)) return raw;
+          return decrypt(raw);
+        };
+        const candidate = normalizePair(
+          decryptIfNeeded(doc?.RAZORPAY_API_KEY),
+          decryptIfNeeded(doc?.RAZORPAY_SECRET_KEY),
+        );
+        if (candidate.keyId && candidate.keySecret) {
+          return candidate;
+        }
+      }
+      return null;
+    } catch (error) {
+      logger.warn(`Error while scanning Razorpay credentials across env docs: ${error.message}`);
+      return null;
+    }
+  };
+
+  // Force-refresh Razorpay keys from DB to avoid stale per-instance cache
+  // in multi-server deployments right after admin ENV updates.
+  const apiKeyRaw =
+    (await getEnvVar('RAZORPAY_API_KEY', '', { forceRefresh: true })) ||
+    (await getEnvVar('RAZORPAY_KEY_ID', '', { forceRefresh: true }));
+  const secretKeyRaw =
+    (await getEnvVar('RAZORPAY_SECRET_KEY', '', { forceRefresh: true })) ||
+    (await getEnvVar('RAZORPAY_KEY_SECRET', '', { forceRefresh: true }));
+
+  // Fallback to process.env so payment flow remains functional even if
+  // DB-backed env document is temporarily unavailable on a worker.
+  const processEnvApiKey =
+    process.env.RAZORPAY_API_KEY ||
+    process.env.RAZORPAY_KEY_ID ||
+    '';
+  const processEnvSecretKey =
+    process.env.RAZORPAY_SECRET_KEY ||
+    process.env.RAZORPAY_KEY_SECRET ||
+    '';
+  let selected = normalizePair(apiKeyRaw, secretKeyRaw);
+
+  // If singleton lookup returned empty/missing pair (e.g., stale blank latest doc),
+  // scan recent env docs and pick the first valid non-empty pair.
+  if (!selected.keyId || !selected.keySecret) {
+    const fromDbDocs = await findRazorpayPairFromDbDocs();
+    if (fromDbDocs?.keyId && fromDbDocs?.keySecret) {
+      selected = fromDbDocs;
+    }
+  }
+
+  // Final fallback for resilience if DB-backed env is unavailable.
+  if (!selected.keyId || !selected.keySecret) {
+    selected = normalizePair(processEnvApiKey, processEnvSecretKey);
+  }
 
   return {
-    keyId: apiKey || '',
-    keySecret: secretKey || ''
+    keyId: selected.keyId || '',
+    keySecret: selected.keySecret || ''
   };
 }
 

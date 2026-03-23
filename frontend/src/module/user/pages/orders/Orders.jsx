@@ -5,11 +5,59 @@ import { orderAPI, api, API_ENDPOINTS } from "@/lib/api"
 import { toast } from "sonner"
 import { getCompanyNameAsync } from "@/lib/utils/businessSettings"
 
+const isMoGroceryOrder = (rawOrder = null) => {
+  const restaurantPlatform = String(rawOrder?.restaurantId?.platform || rawOrder?.platform || "").toLowerCase()
+  const restaurantLabel = String(
+    rawOrder?.restaurantName ||
+    rawOrder?.restaurant ||
+    rawOrder?.storeName ||
+    rawOrder?.groceryStoreName ||
+    rawOrder?.restaurantId?.name ||
+    ""
+  ).toLowerCase()
+  const orderNote = String(rawOrder?.note || "").toLowerCase()
+
+  return (
+    restaurantPlatform === "mogrocery" ||
+    restaurantLabel === "mogrocery" ||
+    orderNote.includes("[mogrocery]")
+  )
+}
+
+const resolveOrderDisplayName = (rawOrder = null, isGrocery = false) => {
+  const nameCandidates = [
+    rawOrder?.restaurantId?.name,
+    rawOrder?.restaurantName,
+    rawOrder?.storeName,
+    rawOrder?.groceryStoreName,
+    rawOrder?.restaurant,
+  ]
+
+  for (const candidate of nameCandidates) {
+    const value = String(candidate || "").trim()
+    if (!value) continue
+    if (value.toLowerCase() === "mogrocery") continue
+    return value
+  }
+
+  return isGrocery ? "Store" : "Restaurant"
+}
+
+const getOrderTargetPath = (orderLike = {}) => {
+  const vendorId = orderLike?.restaurantId || orderLike?.storeId || ""
+  if (orderLike?.isGroceryOrder) {
+    return `/grocery${vendorId ? `?storeId=${encodeURIComponent(String(vendorId))}` : ""}`
+  }
+  return vendorId ? `/user/restaurants/${vendorId}` : null
+}
+
 export default function Orders() {
+  const ORDERS_PER_PAGE = 8
   const navigate = useNavigate()
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
   const [ratingModal, setRatingModal] = useState({ open: false, order: null })
   const [ratingTarget, setRatingTarget] = useState("delivery")
   const [activeMenuOrderId, setActiveMenuOrderId] = useState(null)
@@ -212,6 +260,7 @@ export default function Orders() {
           // Transform API orders to match UI structure
           const transformedOrders = ordersData.map(order => {
             const createdAt = order.createdAt ? new Date(order.createdAt) : new Date()
+            const groceryOrder = isMoGroceryOrder(order)
 
             // Check if cancelled by restaurant or user
             const isCancelled = order.status === 'cancelled'
@@ -252,7 +301,9 @@ export default function Orders() {
               pricing: order.pricing || {}, // Keep full pricing object for discounts, coupons
               payment: order.payment || {},
               paymentMethod: order.payment?.method || order.paymentMethod,
-              restaurant: order.restaurantId?.name || order.restaurantName || 'Restaurant',
+              isGroceryOrder: groceryOrder,
+              platform: order.restaurantId?.platform || order.platform || null,
+              restaurant: resolveOrderDisplayName(order, groceryOrder),
               restaurantId: order.restaurantId?._id || order.restaurantId,
               restaurantImage: order.restaurantId?.profileImage?.url || order.restaurantId?.profileImage || null,
               restaurantLocation: order.restaurantId?.location?.area || order.restaurantId?.location?.city || order.address?.city || '',
@@ -352,11 +403,26 @@ export default function Orders() {
     return restaurantMatch || itemsMatch
   })
 
+  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PER_PAGE))
+  const currentPageSafe = Math.min(currentPage, totalPages)
+  const startIndex = (currentPageSafe - 1) * ORDERS_PER_PAGE
+  const paginatedOrders = filteredOrders.slice(startIndex, startIndex + ORDERS_PER_PAGE)
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery])
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
+
   // Handle reorder
   const handleReorder = (order) => {
-    // Navigate to restaurant page or cart
-    if (order.restaurantId) {
-      navigate(`/user/restaurants/${order.restaurantId}`)
+    const targetPath = getOrderTargetPath(order)
+    if (targetPath) {
+      navigate(targetPath)
     } else {
       toast.info('Restaurant information not available')
     }
@@ -372,10 +438,11 @@ export default function Orders() {
     const location =
       order.restaurantLocation ||
       `${order.address?.city || ""}, ${order.address?.state || ""}`.trim()
+    const entityLabel = order.isGroceryOrder ? "store" : "restaurant"
 
     const shareText = `Check out ${order.restaurant} on ${companyName}.
 Location: ${location || "Location not available"}
-Order again from this restaurant in the ${companyName} app.`
+Order again from this ${entityLabel} in the ${companyName} app.`
 
     try {
       if (navigator.share) {
@@ -544,7 +611,7 @@ Order again from this restaurant in the ${companyName} app.`
               <p className="text-gray-600 dark:text-gray-400">No orders found matching your search</p>
             </div>
           ) : (
-            filteredOrders.map((order) => {
+            paginatedOrders.map((order) => {
               // Normalize payment fields from backend variants (e.g. COD/cash_on_delivery/cash)
               const normalizedPaymentMethod = String(
                 order.payment?.method || order.paymentMethod || ''
@@ -628,10 +695,10 @@ Order again from this restaurant in the ${companyName} app.`
                             {order.deliveryPartnerPhone && ` • ${order.deliveryPartnerPhone}`}
                           </p>
                         )}
-                        {order.restaurantId && (
-                          <Link to={`/user/restaurants/${order.restaurantId}`}>
+                        {getOrderTargetPath(order) && (
+                          <Link to={getOrderTargetPath(order)}>
                             <button className="text-xs text-red-500 font-medium flex items-center mt-1 hover:text-red-600">
-                              View menu <span className="ml-0.5">▸</span>
+                              {order.isGroceryOrder ? "View store" : "View menu"} <span className="ml-0.5">&gt;</span>
                             </button>
                           </Link>
                         )}
@@ -654,9 +721,7 @@ Order again from this restaurant in the ${companyName} app.`
                         type="button"
                         onClick={() => handleShareRestaurant(order)}
                         className="w-full text-left px-3 py-2 hover:bg-gray-50 text-gray-800 dark:text-gray-100 dark:hover:bg-white/10"
-                      >
-                        Share restaurant
-                      </button>
+                      >{order.isGroceryOrder ? "Share store" : "Share restaurant"}</button>
                       <button
                         type="button"
                         onClick={() => handleViewOrderDetails(order)}
@@ -891,6 +956,58 @@ Order again from this restaurant in the ${companyName} app.`
           )}
         </div>
 
+        {filteredOrders.length > 0 && totalPages > 1 && (
+          <div className="px-4 py-3">
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 flex items-center justify-between gap-2 dark:bg-[#151a23] dark:border-white/10">
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
+                disabled={currentPageSafe === 1}
+                className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-200 text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 dark:border-white/10 dark:text-gray-200 dark:hover:bg-white/10"
+              >
+                Prev
+              </button>
+
+              <div className="flex items-center gap-1.5">
+                {Array.from({ length: totalPages }, (_, index) => index + 1)
+                  .filter((page) => {
+                    if (totalPages <= 5) return true
+                    if (page === 1 || page === totalPages) return true
+                    return Math.abs(page - currentPageSafe) <= 1
+                  })
+                  .map((page, index, arr) => {
+                    const prevPage = arr[index - 1]
+                    const shouldShowDots = prevPage && page - prevPage > 1
+                    return (
+                      <div key={`page-slot-${page}`} className="flex items-center gap-1.5">
+                        {shouldShowDots && <span className="text-xs text-gray-400">...</span>}
+                        <button
+                          type="button"
+                          onClick={() => setCurrentPage(page)}
+                          className={`min-w-7 h-7 px-2 text-xs rounded-md border ${page === currentPageSafe
+                              ? "bg-[#E23744] border-[#E23744] text-white"
+                              : "border-gray-200 text-gray-700 hover:bg-gray-50 dark:border-white/10 dark:text-gray-200 dark:hover:bg-white/10"
+                            }`}
+                        >
+                          {page}
+                        </button>
+                      </div>
+                    )
+                  })}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
+                disabled={currentPageSafe === totalPages}
+                className="px-3 py-1.5 text-xs font-medium rounded-md border border-gray-200 text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-gray-50 dark:border-white/10 dark:text-gray-200 dark:hover:bg-white/10"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Footer Branding */}
         <div className="flex justify-center mt-8 mb-4">
           <h1 className="text-4xl font-black text-gray-200 tracking-tighter italic dark:text-white/20">MOBASKET</h1>
@@ -1015,4 +1132,5 @@ Order again from this restaurant in the ${companyName} app.`
     </div>
   )
 }
+
 

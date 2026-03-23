@@ -15,6 +15,7 @@ import {
 import api, { authAPI } from "@/lib/api"
 import { API_ENDPOINTS } from "@/lib/api/config"
 import { firebaseAuth, googleProvider, ensureFirebaseAuthInitialized } from "@/lib/firebase"
+import { isFlutterSignInCancelled, isFlutterWebViewBridgeAvailable, signInWithFlutterNativeGoogle } from "@/lib/utils/flutterGoogleSignIn"
 import { setAuthData } from "@/lib/utils/auth"
 import { loadBusinessSettings } from "@/lib/utils/businessSettings"
 import loginBanner from "@/assets/loginbanner.png"
@@ -502,10 +503,34 @@ export default function SignIn() {
         throw new Error("Firebase Auth is not initialized. Please check your Firebase configuration.")
       }
 
+      const typedEmail = String(formData?.email || "").trim()
+      const providerParams = {}
+      if (typedEmail) {
+        providerParams.login_hint = typedEmail
+      } else if (!isFlutterWebViewBridgeAvailable()) {
+        // Keep account chooser in regular browsers, but avoid forcing it in WebView.
+        providerParams.prompt = "select_account"
+      }
+      googleProvider.setCustomParameters(providerParams)
+
+      const isFlutterBridge = isFlutterWebViewBridgeAvailable()
+      if (isFlutterBridge) {
+        const flutterResult = await signInWithFlutterNativeGoogle(auth)
+        if (flutterResult?.user) {
+          await processSignedInUser(flutterResult.user, "flutter-native-google")
+          return
+        }
+
+        // In Flutter WebView, redirect/popup can open a Google email page and break UX.
+        // Require native handler success instead of falling back to web OAuth screens.
+        throw new Error(
+          "Google Sign-In is not available in this app build. Please update the app to continue with Google."
+        )
+      }
+
       const { signInWithPopup, signInWithRedirect } = await import("firebase/auth")
 
       try {
-        googleProvider.setCustomParameters({ prompt: "select_account" })
         const popupResult = await signInWithPopup(auth, googleProvider)
         if (popupResult?.user) {
           await processSignedInUser(popupResult.user, "google-popup")
@@ -548,6 +573,8 @@ export default function SignIn() {
         message = "Sign-in was cancelled. Please try again."
       } else if (errorCode === "auth/network-request-failed") {
         message = "Network error. Please check your connection and try again."
+      } else if (isFlutterSignInCancelled(error)) {
+        message = "Sign-in was cancelled. Please try again."
       } else if (errorMessage) {
         message = errorMessage
       } else if (error?.response?.data?.message) {

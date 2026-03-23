@@ -231,7 +231,7 @@ export const calculateDeliveryFee = async (
     }
   }
 
-  return feeSettings.deliveryFee || 25;
+  return feeSettings.deliveryFee ?? 25;
 };
 
 /**
@@ -239,7 +239,7 @@ export const calculateDeliveryFee = async (
  */
 export const calculatePlatformFee = async (platform = 'mofood') => {
   const feeSettings = await getFeeSettings(platform);
-  return feeSettings.platformFee || 5;
+  return feeSettings.platformFee ?? 5;
 };
 
 /**
@@ -249,7 +249,7 @@ export const calculatePlatformFee = async (platform = 'mofood') => {
 export const calculateGST = async (subtotal, discount = 0, platform = 'mofood') => {
   const taxableAmount = subtotal - discount;
   const feeSettings = await getFeeSettings(platform);
-  const gstRate = (feeSettings.gstRate || 5) / 100; // Convert percentage to decimal
+  const gstRate = (feeSettings.gstRate ?? 5) / 100; // Convert percentage to decimal
   return Math.round(taxableAmount * gstRate);
 };
 

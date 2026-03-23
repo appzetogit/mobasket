@@ -185,19 +185,6 @@ export default function RestaurantNavbar({
   useEffect(() => {
     const updateStatus = () => {
       try {
-        if (!isGroceryStore) {
-          const savedTimings = localStorage.getItem("restaurant_outlet_timings")
-          if (savedTimings) {
-            const parsedTimings = JSON.parse(savedTimings)
-            const scheduleStatus = isOpenFromOutletTimingsMap(parsedTimings)
-            if (typeof scheduleStatus === "boolean") {
-              setStatus(scheduleStatus ? "Online" : "Offline")
-              localStorage.setItem("restaurant_online_status", JSON.stringify(scheduleStatus))
-              return
-            }
-          }
-        }
-
         if (typeof restaurantData?.isAcceptingOrders === "boolean") {
           const backendOnline = restaurantData.isAcceptingOrders;
           setStatus(backendOnline ? "Online" : "Offline");
@@ -211,10 +198,23 @@ export default function RestaurantNavbar({
         if (savedStatus !== null) {
           const isOnline = JSON.parse(savedStatus)
           setStatus(isOnline ? "Online" : "Offline")
-        } else {
-          // Default to Offline if not set
-          setStatus("Offline")
+          return
         }
+
+        if (!isGroceryStore) {
+          const savedTimings = localStorage.getItem("restaurant_outlet_timings")
+          if (savedTimings) {
+            const parsedTimings = JSON.parse(savedTimings)
+            const scheduleStatus = isOpenFromOutletTimingsMap(parsedTimings)
+            if (typeof scheduleStatus === "boolean") {
+              setStatus(scheduleStatus ? "Online" : "Offline")
+              return
+            }
+          }
+        }
+
+        // Default to Offline if no other signal is available
+        setStatus("Offline")
       } catch (error) {
         console.error("Error loading restaurant/store status:", error)
         setStatus("Offline")

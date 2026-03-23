@@ -38,6 +38,14 @@ const DEFAULT_CLOSING_TIME = "22:00"
 const GOOGLE_MAP_ID = String(import.meta.env.VITE_GOOGLE_MAPS_MAP_ID || "").trim()
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"])
 const ALLOWED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"]
+const isFlutterWebView = () => (
+  Boolean(window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function")
+)
+const isEmbeddedAndroidWebView = () => {
+  if (typeof window === "undefined") return false
+  const ua = String(window.navigator?.userAgent || "")
+  return /;\s*wv\)/i.test(ua) || /\bversion\/[\d.]+ chrome\/[\d.]+ mobile\b/i.test(ua)
+}
 
 const getVerificationRedirectPath = (restaurant) => {
   const normalizedStatus = String(restaurant?.status || "").trim().toLowerCase()
@@ -1075,13 +1083,17 @@ export default function RestaurantOnboarding() {
   }
 
   const handleCameraCapture = async (onSuccess) => {
-    if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
+    if (isFlutterWebView()) {
       try {
         toast.loading("Capturing image...", { id: "cameraCapture" });
         const result = await window.flutter_inappwebview.callHandler('openCamera');
         if (result && result.success && result.base64) {
           const base64Data = result.base64;
-          const mimeType = result.mimeType || 'image/jpeg';
+          const mimeType = String(result.mimeType || 'image/jpeg').toLowerCase();
+          if (mimeType && !mimeType.startsWith("image/")) {
+            toast.error("Only image files are allowed", { id: "cameraCapture" });
+            return;
+          }
           const filename = result.fileName || `camera_${Date.now()}.jpg`;
 
           const byteCharacters = atob(base64Data);
@@ -1091,6 +1103,10 @@ export default function RestaurantOnboarding() {
           }
           const byteArray = new Uint8Array(byteNumbers);
           const file = new File([byteArray], filename, { type: mimeType });
+          if (!isAllowedImageFile(file)) {
+            toast.error("Please choose a JPG, PNG, or WEBP image", { id: "cameraCapture" });
+            return;
+          }
 
           onSuccess(file);
           toast.success("Image captured successfully", { id: "cameraCapture" });
@@ -1105,6 +1121,26 @@ export default function RestaurantOnboarding() {
       toast.error("Camera is only available in the mobile app");
     }
   };
+
+  const openCameraSafely = (onSuccess, fallbackInputId = null) => {
+    if (isFlutterWebView()) {
+      handleCameraCapture(onSuccess)
+      return
+    }
+
+    // On Android WebView builds, HTML camera inputs can relaunch/refresh the page.
+    if (isEmbeddedAndroidWebView()) {
+      toast.error("Unable to open camera. Please allow camera permission and try again.")
+      return
+    }
+
+    if (fallbackInputId) {
+      document.getElementById(fallbackInputId)?.click()
+      return
+    }
+
+    openFallbackCameraInput(onSuccess)
+  }
 
   const isAllowedImageFile = (file) => {
     if (!(file instanceof File)) return false
@@ -1122,7 +1158,13 @@ export default function RestaurantOnboarding() {
     input.style.display = "none"
     input.onchange = (event) => {
       const file = event.target?.files?.[0] || null
-      if (file) onSuccess(file)
+      if (file) {
+        if (!isAllowedImageFile(file)) {
+          toast.error("Please choose a JPG, PNG, or WEBP image")
+        } else {
+          onSuccess(file)
+        }
+      }
       input.remove()
     }
     document.body.appendChild(input)
@@ -1892,21 +1934,12 @@ export default function RestaurantOnboarding() {
               <button
                 type="button"
                 onClick={() => {
-                  if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-                    handleCameraCapture((file) => {
-                      setStep2((prev) => ({
-                        ...prev,
-                        menuImages: [file],
-                      }))
-                    });
-                  } else {
-                    openFallbackCameraInput((file) => {
-                      setStep2((prev) => ({
-                        ...prev,
-                        menuImages: [file],
-                      }))
-                    })
-                  }
+                  openCameraSafely((file) => {
+                    setStep2((prev) => ({
+                      ...prev,
+                      menuImages: [file],
+                    }))
+                  })
                 }}
                 className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
               >
@@ -2022,21 +2055,12 @@ export default function RestaurantOnboarding() {
             <button
               type="button"
               onClick={() => {
-                if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-                  handleCameraCapture((file) => {
-                    setStep2((prev) => ({
-                      ...prev,
-                      profileImage: file,
-                    }))
-                  });
-                } else {
-                  openFallbackCameraInput((file) => {
-                    setStep2((prev) => ({
-                      ...prev,
-                      profileImage: file,
-                    }))
-                  })
-                }
+                openCameraSafely((file) => {
+                  setStep2((prev) => ({
+                    ...prev,
+                    profileImage: file,
+                  }))
+                })
               }}
               className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium cursor-pointer"
             >
@@ -2154,11 +2178,7 @@ export default function RestaurantOnboarding() {
               <button
                 type="button"
                 onClick={() => {
-                  if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-                    handleCameraCapture((f) => onFileChange(f));
-                  } else {
-                    document.getElementById(cameraInputId)?.click();
-                  }
+                  openCameraSafely((f) => onFileChange(f), cameraInputId)
                 }}
                 className="flex-1 inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-gray-300 text-xs font-medium cursor-pointer hover:bg-gray-50"
               >

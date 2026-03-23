@@ -12,6 +12,8 @@ import {
   MapPin,
   RotateCcw,
   FileText,
+  Star,
+  Loader2,
 } from "lucide-react"
 import { orderAPI, restaurantAPI } from "@/lib/api"
 import { toast } from "sonner"
@@ -19,12 +21,36 @@ import { jsPDF } from "jspdf"
 import autoTable from "jspdf-autotable"
 import { getCompanyNameAsync } from "@/lib/utils/businessSettings"
 
+const toValidRating = (value) => {
+  const numeric = Number(value)
+  return Number.isFinite(numeric) && numeric >= 1 && numeric <= 5 ? numeric : 0
+}
+
+const getRestaurantRatingFromOrder = (orderData) => {
+  const restaurantScoped = toValidRating(orderData?.review?.restaurant?.rating)
+  if (restaurantScoped > 0) return restaurantScoped
+
+  // Backward compatibility: use shared review.rating only when no delivery-scoped rating exists.
+  const hasDeliveryScoped = toValidRating(orderData?.review?.delivery?.rating) > 0
+  if (hasDeliveryScoped) return 0
+
+  return toValidRating(orderData?.review?.rating)
+}
+
+const getDeliveryRatingFromOrder = (orderData) =>
+  toValidRating(orderData?.review?.delivery?.rating)
+
 export default function UserOrderDetails() {
   const navigate = useNavigate()
   const { orderId } = useParams()
   const [order, setOrder] = useState(null)
   const [restaurant, setRestaurant] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [restaurantRating, setRestaurantRating] = useState(0)
+  const [deliveryRating, setDeliveryRating] = useState(0)
+  const [restaurantComment, setRestaurantComment] = useState("")
+  const [deliveryComment, setDeliveryComment] = useState("")
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false)
 
   useEffect(() => {
     const fetchOrderDetails = async () => {
@@ -44,6 +70,12 @@ export default function UserOrderDetails() {
         }
 
         setOrder(orderData)
+        const existingRestaurantRating = getRestaurantRatingFromOrder(orderData)
+        const existingDeliveryRating = getDeliveryRatingFromOrder(orderData)
+        setRestaurantRating(existingRestaurantRating > 0 ? existingRestaurantRating : 0)
+        setDeliveryRating(existingDeliveryRating > 0 ? existingDeliveryRating : 0)
+        setRestaurantComment(orderData?.review?.restaurant?.comment || orderData?.review?.comment || "")
+        setDeliveryComment(orderData?.review?.delivery?.comment || "")
 
         // If restaurantId is just a string (not populated), fetch restaurant details separately
         const restaurantId = orderData.restaurantId
@@ -160,6 +192,10 @@ export default function UserOrderDetails() {
 
   const items = Array.isArray(order.items) ? order.items : []
   const pricing = order.pricing || {}
+  const isDeliveredOrder = String(order.status || "").toLowerCase() === "delivered"
+  const hasRatedRestaurant = getRestaurantRatingFromOrder(order) > 0
+  const hasRatedDelivery = getDeliveryRatingFromOrder(order) > 0
+  const canRateDelivery = isDeliveredOrder && !!order.deliveryPartnerId
 
   // Payment status flags
   const normalizedPaymentMethod = String(order.payment?.method || order.paymentMethod || "Online").trim().toLowerCase()
@@ -311,6 +347,74 @@ export default function UserOrderDetails() {
       toast.error("Failed to download summary")
     }
   }
+
+  const handleSubmitReview = async () => {
+    if (!order) return
+
+    // Only submit rating blocks that are newly provided in this session.
+    // If already rated earlier, avoid re-sending that field (backend rejects duplicates).
+    const hasRestaurantReview = !hasRatedRestaurant && restaurantRating > 0
+    const hasDeliveryReview = !hasRatedDelivery && deliveryRating > 0
+
+    if (!hasRestaurantReview && !hasDeliveryReview) {
+      toast.error("Please rate restaurant and/or delivery")
+      return
+    }
+
+    try {
+      setIsSubmittingReview(true)
+      const payload = {}
+
+      if (hasRestaurantReview) {
+        payload.restaurantRating = restaurantRating
+        if (restaurantComment.trim()) {
+          payload.restaurantComment = restaurantComment.trim()
+        }
+      }
+
+      if (hasDeliveryReview) {
+        payload.deliveryRating = deliveryRating
+        if (deliveryComment.trim()) {
+          payload.deliveryComment = deliveryComment.trim()
+        }
+      }
+
+      const orderIdForReview = order.orderId || order._id || orderId
+      const response = await orderAPI.submitOrderReview(orderIdForReview, payload)
+      const updatedOrder = response?.data?.data?.order
+
+      if (updatedOrder) {
+        setOrder(updatedOrder)
+      }
+
+      toast.success("Thanks for your ratings!")
+    } catch (error) {
+      toast.error(error?.response?.data?.message || "Failed to submit ratings")
+    } finally {
+      setIsSubmittingReview(false)
+    }
+  }
+
+  const renderRatingStars = (current, onSelect, disabled = false) => (
+    <div className="flex items-center gap-1">
+      {Array.from({ length: 5 }, (_, idx) => {
+        const value = idx + 1
+        const active = current >= value
+
+        return (
+          <button
+            key={value}
+            type="button"
+            disabled={disabled}
+            onClick={() => onSelect(value)}
+            className={`transition-transform ${disabled ? "cursor-not-allowed opacity-70" : "hover:scale-110"}`}
+          >
+            <Star className={`w-6 h-6 ${active ? "text-yellow-400 fill-yellow-400" : "text-gray-300 dark:text-gray-500"}`} />
+          </button>
+        )
+      })}
+    </div>
+  )
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 font-sans relative dark:bg-[#0b0b0b] dark:text-gray-100">
@@ -578,6 +682,72 @@ export default function UserOrderDetails() {
               </div>
             </div>
           </div>
+
+          {isDeliveredOrder && (
+            <div className="bg-white p-4 rounded-xl shadow-sm space-y-4 dark:bg-[#151a23] dark:border dark:border-white/10">
+              <h3 className="font-semibold text-gray-800 dark:text-gray-100">Rate this order</h3>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Restaurant (out of 5)</p>
+                {renderRatingStars(
+                  restaurantRating || getRestaurantRatingFromOrder(order),
+                  setRestaurantRating,
+                  hasRatedRestaurant
+                )}
+                <textarea
+                  rows={2}
+                  value={restaurantComment}
+                  onChange={(e) => setRestaurantComment(e.target.value)}
+                  disabled={hasRatedRestaurant}
+                  placeholder="Write restaurant feedback (optional)"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:bg-[#0f172a] dark:border-white/10 dark:text-gray-100"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-gray-700 dark:text-gray-200">Delivery Partner (out of 5)</p>
+                {canRateDelivery ? (
+                  <>
+                    {renderRatingStars(
+                      deliveryRating || getDeliveryRatingFromOrder(order),
+                      setDeliveryRating,
+                      hasRatedDelivery
+                    )}
+                    <textarea
+                      rows={2}
+                      value={deliveryComment}
+                      onChange={(e) => setDeliveryComment(e.target.value)}
+                      disabled={hasRatedDelivery}
+                      placeholder="Write delivery feedback (optional)"
+                      className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm dark:bg-[#0f172a] dark:border-white/10 dark:text-gray-100"
+                    />
+                  </>
+                ) : (
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    Delivery partner details are not available for this order.
+                  </p>
+                )}
+              </div>
+
+              {(!hasRatedRestaurant || (!hasRatedDelivery && canRateDelivery)) && (
+                <button
+                  type="button"
+                  onClick={handleSubmitReview}
+                  disabled={isSubmittingReview}
+                  className="w-full bg-[#E23744] text-white py-2.5 rounded-lg font-semibold hover:bg-red-600 disabled:opacity-60 flex items-center justify-center gap-2"
+                >
+                  {isSubmittingReview ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : (
+                    "Submit Ratings"
+                  )}
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Fixed Bottom Buttons */}

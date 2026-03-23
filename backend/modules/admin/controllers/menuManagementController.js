@@ -59,15 +59,100 @@ const findMenuItemById = (sections = [], itemId) => {
   return null;
 };
 
+const getSectionKey = (section = {}, index = 0) =>
+  String(section?.id || section?.name || `section-${index}`);
+
+const sanitizeItemForAdmin = (item = {}, includeImages = true) => ({
+  id: item?.id || '',
+  name: item?.name || '',
+  price: Number(item?.price || 0),
+  foodType: item?.foodType === 'Veg' ? 'Veg' : 'Non-Veg',
+  description: item?.description || '',
+  isAvailable: item?.isAvailable !== false,
+  image: includeImages ? (item?.image || '') : '',
+  images: includeImages ? (Array.isArray(item?.images) ? item.images : []) : []
+});
+
+const sanitizeSectionForAdmin = (section = {}, includeImages = true) => ({
+  ...section,
+  items: Array.isArray(section?.items)
+    ? section.items.map((item) => sanitizeItemForAdmin(item, includeImages))
+    : [],
+  subsections: Array.isArray(section?.subsections)
+    ? section.subsections.map((subsection) => ({
+      ...subsection,
+      items: Array.isArray(subsection?.items)
+        ? subsection.items.map((item) => sanitizeItemForAdmin(item, includeImages))
+        : []
+    }))
+    : []
+});
+
 export const getRestaurantMenuForAdmin = asyncHandler(async (req, res) => {
   const { restaurantId } = req.params;
+  const lite = String(req.query?.lite || '').toLowerCase() === 'true';
+  const includeImagesRaw = String(req.query?.includeImages || '').trim().toLowerCase();
+  const includeImages = includeImagesRaw ? includeImagesRaw === 'true' : true;
+  const sectionId = String(req.query?.sectionId || '').trim();
+  const sectionKey = String(req.query?.sectionKey || '').trim();
 
   const restaurant = await findRestaurantByIdentifier(String(restaurantId || '').trim());
   if (!restaurant) {
     return errorResponse(res, 404, 'Restaurant not found');
   }
 
-  const menu = await Menu.findOne({ restaurant: restaurant._id }).lean();
+  const menu = sectionId
+    ? await Menu.findOne(
+      { restaurant: restaurant._id, 'sections.id': sectionId },
+      {
+        _id: 1,
+        restaurant: 1,
+        isActive: 1,
+        'sections.$': 1
+      }
+    ).lean()
+    : await Menu.findOne({ restaurant: restaurant._id }).lean();
+  const fallbackMenu = {
+    restaurant: restaurant._id,
+    sections: [],
+    addons: [],
+    isActive: true
+  };
+  const resolvedMenu = menu || fallbackMenu;
+
+  if (lite) {
+    const sections = Array.isArray(resolvedMenu.sections) ? resolvedMenu.sections : [];
+    const categories = sections.map((section, index) => ({
+      id: section?.id || '',
+      key: getSectionKey(section, index),
+      name: section?.name || 'Unnamed Section',
+      itemCount:
+        (Array.isArray(section?.items) ? section.items.length : 0) +
+        (Array.isArray(section?.subsections)
+          ? section.subsections.reduce(
+            (sum, subsection) => sum + (Array.isArray(subsection?.items) ? subsection.items.length : 0),
+            0
+          )
+          : 0)
+    }));
+
+    return successResponse(res, 200, 'Restaurant menu categories fetched successfully', {
+      restaurant: {
+        _id: restaurant._id,
+        name: restaurant.name,
+        restaurantId: restaurant.restaurantId,
+        platform: restaurant.platform
+      },
+      categories
+    });
+  }
+
+  let sections = Array.isArray(resolvedMenu.sections) ? resolvedMenu.sections : [];
+  if (!sectionId && sectionKey) {
+    sections = sections.filter((section, index) => getSectionKey(section, index) === sectionKey);
+  }
+
+  const sanitizedSections = sections.map((section) => sanitizeSectionForAdmin(section, includeImages));
 
   return successResponse(res, 200, 'Restaurant menu fetched successfully', {
     restaurant: {
@@ -76,12 +161,48 @@ export const getRestaurantMenuForAdmin = asyncHandler(async (req, res) => {
       restaurantId: restaurant.restaurantId,
       platform: restaurant.platform
     },
-    menu: menu || {
-      restaurant: restaurant._id,
-      sections: [],
-      addons: [],
-      isActive: true
+    menu: {
+      ...resolvedMenu,
+      sections: sanitizedSections,
+      addons: []
     }
+  });
+});
+
+export const getRestaurantMenuCategoriesForAdmin = asyncHandler(async (req, res) => {
+  const { restaurantId } = req.params;
+
+  const restaurant = await findRestaurantByIdentifier(String(restaurantId || '').trim());
+  if (!restaurant) {
+    return errorResponse(res, 404, 'Restaurant not found');
+  }
+
+  const menu = await Menu.findOne(
+    { restaurant: restaurant._id },
+    {
+      _id: 1,
+      restaurant: 1,
+      isActive: 1,
+      'sections.id': 1,
+      'sections.name': 1
+    }
+  ).lean();
+
+  const sections = Array.isArray(menu?.sections) ? menu.sections : [];
+  const categories = sections.map((section, index) => ({
+    id: section?.id || '',
+    key: getSectionKey(section, index),
+    name: section?.name || 'Unnamed Section'
+  }));
+
+  return successResponse(res, 200, 'Restaurant menu categories fetched successfully', {
+    restaurant: {
+      _id: restaurant._id,
+      name: restaurant.name,
+      restaurantId: restaurant.restaurantId,
+      platform: restaurant.platform
+    },
+    categories
   });
 });
 
@@ -254,35 +375,59 @@ export const updateRestaurantMenuItemByAdmin = asyncHandler(async (req, res) => 
     return errorResponse(res, 404, 'Restaurant not found');
   }
 
-  const menu = await Menu.findOne({ restaurant: restaurant._id });
-  if (!menu) {
-    return errorResponse(res, 404, 'Restaurant menu not found');
+  const nextImages = extractNonEmptyImages(item.images);
+  const normalizedImage = normalizeImageUrl(item.image);
+  const nextImage = normalizedImage || nextImages[0] || '';
+  const nextImagesValue = nextImages.length > 0 ? nextImages : (nextImage ? [nextImage] : []);
+
+  const patchFields = {
+    name: String(item.name).trim(),
+    price: Number(item.price),
+    foodType: item.foodType === 'Veg' ? 'Veg' : 'Non-Veg',
+    description: String(item.description || '').trim(),
+    isAvailable: item.isAvailable !== false,
+    approvalStatus: 'approved'
+  };
+  if (item.category !== undefined) {
+    const categoryValue = String(item.category || '').trim();
+    if (categoryValue) patchFields.category = categoryValue;
+  }
+  if (normalizedImage || nextImages.length > 0) {
+    patchFields.image = nextImage;
+    patchFields.images = nextImagesValue;
   }
 
-  const found = findMenuItemById(menu.sections, String(itemId));
-  if (!found?.item) {
+  const itemIdString = String(itemId);
+  const setDirect = Object.fromEntries(
+    Object.entries(patchFields).map(([key, value]) => [`sections.$[].items.$[menuItem].${key}`, value]),
+  );
+  const setNested = Object.fromEntries(
+    Object.entries(patchFields).map(([key, value]) => [`sections.$[].subsections.$[].items.$[menuItem].${key}`, value]),
+  );
+
+  const directResult = await Menu.updateOne(
+    { restaurant: restaurant._id, 'sections.items.id': itemIdString },
+    { $set: setDirect },
+    {
+      arrayFilters: [{ 'menuItem.id': itemIdString }],
+    },
+  );
+
+  let matchedCount = Number(directResult?.matchedCount || 0);
+  if (matchedCount === 0) {
+    const nestedResult = await Menu.updateOne(
+      { restaurant: restaurant._id, 'sections.subsections.items.id': itemIdString },
+      { $set: setNested },
+      {
+        arrayFilters: [{ 'menuItem.id': itemIdString }],
+      },
+    );
+    matchedCount = Number(nestedResult?.matchedCount || 0);
+  }
+
+  if (matchedCount === 0) {
     return errorResponse(res, 404, 'Menu item not found');
   }
-
-  const nextImages = extractNonEmptyImages(item.images);
-  const nextImage =
-    normalizeImageUrl(item.image) ||
-    nextImages[0] ||
-    normalizeImageUrl(found.item.image) ||
-    '';
-
-  found.item.name = String(item.name).trim();
-  found.item.price = Number(item.price);
-  found.item.foodType = item.foodType === 'Veg' ? 'Veg' : 'Non-Veg';
-  found.item.description = String(item.description || '').trim();
-  found.item.image = nextImage;
-  found.item.images = nextImages.length > 0 ? nextImages : (nextImage ? [nextImage] : []);
-  found.item.isAvailable = item.isAvailable !== false;
-  found.item.category = String(item.category || found.section?.name || found.item.category || '').trim() || found.item.category;
-  found.item.approvalStatus = found.item.approvalStatus || 'approved';
-
-  menu.markModified('sections');
-  await menu.save();
 
   return successResponse(res, 200, 'Menu item updated successfully', {
     restaurant: {
@@ -290,6 +435,11 @@ export const updateRestaurantMenuItemByAdmin = asyncHandler(async (req, res) => 
       name: restaurant.name,
       restaurantId: restaurant.restaurantId
     },
-    item: found.item
+    item: {
+      id: itemIdString,
+      ...patchFields,
+      image: patchFields.image || '',
+      images: patchFields.images || []
+    }
   });
 });

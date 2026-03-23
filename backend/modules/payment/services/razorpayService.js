@@ -173,8 +173,11 @@ const createOrder = async (options) => {
     // Return more descriptive, app-safe error message
     let errorMessage = 'Failed to create payment order';
     if (isAuthFailure) {
+      const credentials = await getRazorpayCredentials();
+      const keyId = String(credentials?.keyId || '').trim();
+      const keyHint = keyId ? `${keyId.slice(0, 10)}...` : 'missing';
       errorMessage =
-        'Payment gateway authentication failed. Please reconfigure Razorpay keys in admin settings.';
+        `Payment gateway authentication failed. Please verify Razorpay API key/secret pair in admin ENV setup (key: ${keyHint}).`;
     } else if (error?.error?.description) {
       errorMessage = String(error.error.description);
     } else if (error?.message) {

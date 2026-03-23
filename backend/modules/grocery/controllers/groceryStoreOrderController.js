@@ -4,6 +4,51 @@ import Order from '../../order/models/Order.js';
 import Payment from '../../payment/models/Payment.js';
 import mongoose from 'mongoose';
 
+const parseBooleanQuery = (value, defaultValue = true) => {
+  if (value === undefined || value === null || value === '') return defaultValue;
+  const normalized = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'y', 'on'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'n', 'off'].includes(normalized)) return false;
+  return defaultValue;
+};
+
+const COMPACT_ORDER_SELECT_FIELDS = [
+  'orderId',
+  'status',
+  'createdAt',
+  'updatedAt',
+  'deliveredAt',
+  'estimatedDeliveryTime',
+  'deliveryFleet',
+  'restaurantId',
+  'userId',
+  'address',
+  'items',
+  'pricing',
+  'total',
+  'payment',
+  'scheduledDelivery',
+  'note',
+  'sendCutlery',
+  'deliveryState',
+  'assignmentInfo',
+  'tracking',
+  'cancelledBy',
+  'cancellationReason'
+].join(' ');
+
+const sanitizeOrderItemsForList = (order) => {
+  if (!order || !Array.isArray(order.items)) return order;
+  return {
+    ...order,
+    items: order.items.map((item) => {
+      if (!item || typeof item !== 'object') return item;
+      const { image, images, ...rest } = item;
+      return rest;
+    })
+  };
+};
+
 /**
  * Get all orders for grocery store
  * GET /api/grocery/store/orders
@@ -13,6 +58,8 @@ export const getGroceryStoreOrders = asyncHandler(async (req, res) => {
   try {
     const store = req.store; // From groceryStoreAuth middleware
     const { status, page = 1, limit = 50 } = req.query;
+    const includeItemImages = parseBooleanQuery(req.query.includeItemImages, true);
+    const compact = parseBooleanQuery(req.query.compact, false);
 
     // Get store ID - normalize to string (Order.restaurantId is String type)
     const storeIdString = store._id?.toString() ||
@@ -84,23 +131,31 @@ export const getGroceryStoreOrders = asyncHandler(async (req, res) => {
       status: status || 'all'
     });
 
-    const orders = await Order.find(query)
+    const orderQuery = Order.find(query)
       .populate('userId', 'name email phone')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
-      .skip(skip)
-      .lean();
+      .skip(skip);
+
+    if (compact) {
+      orderQuery.select(COMPACT_ORDER_SELECT_FIELDS);
+    }
+
+    const orders = await orderQuery.lean();
 
     const total = await Order.countDocuments(query);
+    const normalizedOrders = includeItemImages
+      ? orders
+      : orders.map((order) => sanitizeOrderItemsForList(order));
 
     // Resolve paymentMethod: order.payment.method or Payment collection (COD fallback)
-    const orderIds = orders.map(o => o._id);
+    const orderIds = normalizedOrders.map(o => o._id);
     const codOrderIds = new Set();
     try {
       const codPayments = await Payment.find({ orderId: { $in: orderIds }, method: 'cash' }).select('orderId').lean();
       codPayments.forEach(p => codOrderIds.add(p.orderId?.toString()));
     } catch (e) { /* ignore */ }
-    const ordersWithPaymentMethod = orders.map(o => {
+    const ordersWithPaymentMethod = normalizedOrders.map(o => {
       let paymentMethod = o.payment?.method ?? 'razorpay';
       if (paymentMethod !== 'cash' && codOrderIds.has(o._id?.toString())) paymentMethod = 'cash';
       return { ...o, paymentMethod };

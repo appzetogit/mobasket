@@ -1097,8 +1097,8 @@ export const deliveryAPI = {
   getOrders: (params = {}) => {
     return apiClient.get(API_ENDPOINTS.DELIVERY.ORDERS, { params });
   },
-  getOrderDetails: (orderId) => {
-    return apiClient.get(API_ENDPOINTS.DELIVERY.ORDER_BY_ID.replace(':orderId', orderId));
+  getOrderDetails: (orderId, config = {}) => {
+    return apiClient.get(API_ENDPOINTS.DELIVERY.ORDER_BY_ID.replace(':orderId', orderId), config);
   },
   acceptOrder: (orderId, currentLocation = {}) => {
     const payload = {};
@@ -1110,10 +1110,12 @@ export const deliveryAPI = {
     }
     return apiClient.patch(API_ENDPOINTS.DELIVERY.ORDER_ACCEPT.replace(':orderId', orderId), payload);
   },
-  rejectOrder: (orderId, reason = '') => {
-    return apiClient.patch(API_ENDPOINTS.DELIVERY.ORDER_REJECT.replace(':orderId', orderId), {
-      reason
-    });
+  rejectOrder: (orderId, reason = '', config = {}) => {
+    return apiClient.patch(
+      API_ENDPOINTS.DELIVERY.ORDER_REJECT.replace(':orderId', orderId),
+      { reason },
+      config
+    );
   },
   confirmReachedPickup: (orderId, currentLocation = {}) => {
     const payload = {};
@@ -1316,8 +1318,11 @@ export const adminAPI = {
   getRestaurants: (params = {}) => {
     return apiClient.get(API_ENDPOINTS.ADMIN.RESTAURANTS, { params });
   },
-  getRestaurantMenu: (restaurantId) => {
-    return apiClient.get(`/admin/restaurants/${restaurantId}/menu`);
+  getRestaurantMenu: (restaurantId, params = {}) => {
+    return apiClient.get(`/admin/restaurants/${restaurantId}/menu`, { params });
+  },
+  getRestaurantMenuCategories: (restaurantId) => {
+    return apiClient.get(`/admin/restaurants/${restaurantId}/menu/categories`);
   },
   addRestaurantMenuItem: (restaurantId, payload) => {
     return apiClient.post(`/admin/restaurants/${restaurantId}/menu/items`, payload);
@@ -2279,6 +2284,11 @@ export const orderAPI = {
   // Cancel order
   cancelOrder: (orderId, reason) => {
     return apiClient.patch(API_ENDPOINTS.ORDER.CANCEL.replace(':id', orderId), { reason });
+  },
+
+  // Submit delivered-order rating (restaurant and/or delivery)
+  submitOrderReview: (orderId, reviewData) => {
+    return apiClient.patch(API_ENDPOINTS.ORDER.REVIEW.replace(':id', orderId), reviewData);
   },
 
   // Edit order cart during post-order modification window

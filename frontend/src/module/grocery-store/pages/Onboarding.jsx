@@ -10,6 +10,39 @@ import { clearStoreSignupSession } from "@/lib/utils/auth"
 import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey"
 import { Loader } from "@googlemaps/js-api-loader"
 
+const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"])
+const ALLOWED_IMAGE_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp"]
+const isFlutterWebView = () => (
+  Boolean(window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function")
+)
+const isEmbeddedAndroidWebView = () => {
+  if (typeof window === "undefined") return false
+  const ua = String(window.navigator?.userAgent || "")
+  return /;\s*wv\)/i.test(ua) || /\bversion\/[\d.]+ chrome\/[\d.]+ mobile\b/i.test(ua)
+}
+
+const waitForGoogleMaps = (timeoutMs = 12000) =>
+  new Promise((resolve, reject) => {
+    if (window.google?.maps?.Map) {
+      resolve(window.google)
+      return
+    }
+
+    const startedAt = Date.now()
+    const interval = window.setInterval(() => {
+      if (window.google?.maps?.Map) {
+        window.clearInterval(interval)
+        resolve(window.google)
+        return
+      }
+
+      if (Date.now() - startedAt >= timeoutMs) {
+        window.clearInterval(interval)
+        reject(new Error("Google Maps failed to load"))
+      }
+    }, 150)
+  })
+
 const parseAddressComponents = (components = []) => {
   const byType = (type) => components.find((component) => component.types?.includes(type))
   const streetNumber = byType("street_number")?.long_name || ""
@@ -92,6 +125,17 @@ const sanitizeInputByField = (field, value) => {
 
 const normalizePhoneDigits = (value) => String(value || "").replace(/\D/g, "")
 const normalizeEmailValue = (value) => String(value || "").trim().toLowerCase()
+const isRejectedStoreState = (store) => {
+  if (!store || typeof store !== "object") return false
+  const normalizedStatus = String(store.status || "").trim().toLowerCase()
+  return (
+    normalizedStatus === "rejected" ||
+    normalizedStatus === "declined" ||
+    normalizedStatus === "blocked" ||
+    Boolean(store.rejectedAt) ||
+    Boolean(String(store.rejectionReason || "").trim())
+  )
+}
 
 const getAuthenticatedStoreEmail = (store) => {
   const directEmail = normalizeEmailValue(store?.email || store?.googleEmail)
@@ -132,9 +176,7 @@ export default function GroceryStoreOnboarding() {
   const autocompleteInputRef = useRef(null)
   const autocompleteRef = useRef(null)
   const storeImageCameraInputRef = useRef(null)
-  const storeImageGalleryInputRef = useRef(null)
   const additionalImagesCameraInputRef = useRef(null)
-  const additionalImagesGalleryInputRef = useRef(null)
   const [mapLoading, setMapLoading] = useState(true)
   const [mapError, setMapError] = useState("")
   const [locationSearch, setLocationSearch] = useState("")
@@ -271,21 +313,27 @@ export default function GroceryStoreOnboarding() {
       })
     })
 
-    if (autocompleteInputRef.current && google.maps.places && !autocompleteRef.current) {
-      const autocomplete = new google.maps.places.Autocomplete(autocompleteInputRef.current, {
-        types: ["geocode", "establishment"],
-        componentRestrictions: { country: "in" },
-      })
+    const isFlutterWebView = Boolean(window.flutter_inappwebview?.callHandler)
+    if (!isFlutterWebView && autocompleteInputRef.current && google.maps.places?.Autocomplete && !autocompleteRef.current) {
+      try {
+        const autocomplete = new google.maps.places.Autocomplete(autocompleteInputRef.current, {
+          types: ["geocode", "establishment"],
+          componentRestrictions: { country: "in" },
+          fields: ["formatted_address", "geometry", "name", "address_components"],
+        })
 
-      autocomplete.addListener("place_changed", () => {
-        const place = autocomplete.getPlace()
-        if (!place?.geometry?.location) return
-        const lat = place.geometry.location.lat()
-        const lng = place.geometry.location.lng()
-        updateSelectedLocation(lat, lng, place.formatted_address || place.name || "", place.address_components || [])
-      })
+        autocomplete.addListener("place_changed", () => {
+          const place = autocomplete.getPlace()
+          if (!place?.geometry?.location) return
+          const lat = place.geometry.location.lat()
+          const lng = place.geometry.location.lng()
+          updateSelectedLocation(lat, lng, place.formatted_address || place.name || "", place.address_components || [])
+        })
 
-      autocompleteRef.current = autocomplete
+        autocompleteRef.current = autocomplete
+      } catch (error) {
+        console.warn("Places autocomplete disabled due to runtime error:", error?.message || error)
+      }
     }
 
     if (Number.isFinite(initialLat) && Number.isFinite(initialLng)) {
@@ -389,8 +437,10 @@ export default function GroceryStoreOnboarding() {
         setMapLoading(true)
         setMapError("")
 
-        let googleLib = window.google
-        if (!googleLib?.maps) {
+        let googleLib = null
+        try {
+          googleLib = await waitForGoogleMaps()
+        } catch {
           const apiKey = await getGoogleMapsApiKey()
           if (!apiKey) {
             throw new Error("Google Maps API key is missing")
@@ -549,8 +599,11 @@ export default function GroceryStoreOnboarding() {
   const validateImage = (file) => {
     if (!file) return "No file selected";
 
-    const validFormats = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
-    if (!validFormats.includes(file.type)) {
+    const mimeType = String(file.type || "").toLowerCase();
+    const fileName = String(file.name || "").toLowerCase();
+    const hasAllowedMime = ALLOWED_IMAGE_MIME_TYPES.has(mimeType);
+    const hasAllowedExtension = ALLOWED_IMAGE_EXTENSIONS.some((ext) => fileName.endsWith(ext));
+    if (!hasAllowedMime && !hasAllowedExtension) {
       return "Only JPG, JPEG, PNG, or WEBP formats are allowed";
     }
 
@@ -681,6 +734,10 @@ export default function GroceryStoreOnboarding() {
   }
 
   const uploadCapturedImage = async (base64Data, filename, mimeType, folder) => {
+    const normalizedMimeType = String(mimeType || "").toLowerCase()
+    if (normalizedMimeType && !normalizedMimeType.startsWith("image/")) {
+      throw new Error("Only image files are allowed")
+    }
     const cleanBase64 = String(base64Data || "").replace(/^data:[^;]+;base64,/, "")
     const byteCharacters = atob(cleanBase64)
     const byteNumbers = new Array(byteCharacters.length)
@@ -688,12 +745,20 @@ export default function GroceryStoreOnboarding() {
       byteNumbers[i] = byteCharacters.charCodeAt(i)
     }
     const byteArray = new Uint8Array(byteNumbers)
-    const file = new File([byteArray], filename, { type: mimeType || "image/jpeg" })
+    const file = new File([byteArray], filename, { type: normalizedMimeType || "image/jpeg" })
+    const imageError = validateImage(file)
+    if (imageError) {
+      throw new Error(imageError)
+    }
     return handleUpload(file, folder)
   }
 
   const handleStoreImageCameraCapture = async () => {
-    if (!window.flutter_inappwebview?.callHandler) {
+    if (!isFlutterWebView()) {
+      if (isEmbeddedAndroidWebView()) {
+        toast.error("Unable to open camera. Please allow camera permission and try again.")
+        return
+      }
       storeImageCameraInputRef.current?.click()
       return
     }
@@ -708,10 +773,25 @@ export default function GroceryStoreOnboarding() {
 
       let uploaded = null
       if (result instanceof File) {
+        const imageError = validateImage(result)
+        if (imageError) {
+          toast.error(imageError)
+          return
+        }
         uploaded = await handleUpload(result, "mobasket/grocery-store/store")
       } else if (result?.file instanceof File) {
+        const imageError = validateImage(result.file)
+        if (imageError) {
+          toast.error(imageError)
+          return
+        }
         uploaded = await handleUpload(result.file, "mobasket/grocery-store/store")
       } else if (Array.isArray(result?.files) && result.files[0] instanceof File) {
+        const imageError = validateImage(result.files[0])
+        if (imageError) {
+          toast.error(imageError)
+          return
+        }
         uploaded = await handleUpload(result.files[0], "mobasket/grocery-store/store")
       } else if (result?.base64) {
         uploaded = await uploadCapturedImage(
@@ -739,114 +819,12 @@ export default function GroceryStoreOnboarding() {
     }
   }
 
-  const handleStoreImageGalleryPick = async () => {
-    if (!window.flutter_inappwebview?.callHandler) {
-      storeImageGalleryInputRef.current?.click()
-      return
-    }
-
-    try {
-      setSaving(true)
-      const result = await window.flutter_inappwebview.callHandler("openGallery")
-      const files = normalizeGalleryResults(result)
-      const first = files?.[0]
-
-      if (!first) {
-        storeImageGalleryInputRef.current?.click()
-        return
-      }
-
-      let uploaded = null
-      if (first instanceof File) {
-        uploaded = await handleUpload(first, "mobasket/grocery-store/store")
-      } else if (first?.file instanceof File) {
-        uploaded = await handleUpload(first.file, "mobasket/grocery-store/store")
-      } else if (first?.base64) {
-        uploaded = await uploadCapturedImage(
-          first.base64,
-          first.fileName || `store_gallery_${Date.now()}.jpg`,
-          first.mimeType || "image/jpeg",
-          "mobasket/grocery-store/store"
-        )
-      }
-
-      if (!uploaded) {
-        storeImageGalleryInputRef.current?.click()
-        return
-      }
-
-      setImages((prev) => ({ ...prev, storeImage: uploaded }))
-      toast.success("Store image uploaded successfully")
-    } catch {
-      storeImageGalleryInputRef.current?.click()
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  const normalizeGalleryResults = (result) => {
-    if (!result) return []
-    if (result instanceof File) return [result]
-    if (result?.file instanceof File) return [result.file]
-    if (Array.isArray(result?.files)) return result.files
-    if (Array.isArray(result)) return result
-    if (result?.base64) return [result]
-    return []
-  }
-
-  const handleAdditionalImagesGalleryPick = async () => {
-    if (!window.flutter_inappwebview?.callHandler) {
-      additionalImagesGalleryInputRef.current?.click()
-      return
-    }
-
-    try {
-      setSaving(true)
-      const result = await window.flutter_inappwebview.callHandler("openGallery")
-      const files = normalizeGalleryResults(result)
-      if (!files.length) {
-        additionalImagesGalleryInputRef.current?.click()
-        return
-      }
-
-      const uploads = []
-      for (const fileData of files) {
-        if (fileData instanceof File) {
-          uploads.push(await handleUpload(fileData, "mobasket/grocery-store/additional"))
-          continue
-        }
-        if (fileData?.file instanceof File) {
-          uploads.push(await handleUpload(fileData.file, "mobasket/grocery-store/additional"))
-          continue
-        }
-        if (!fileData?.base64) continue
-        const uploaded = await uploadCapturedImage(
-          fileData.base64,
-          fileData.fileName || `additional_gallery_${Date.now()}.jpg`,
-          fileData.mimeType || "image/jpeg",
-          "mobasket/grocery-store/additional"
-        )
-        uploads.push(uploaded)
-      }
-
-      if (uploads.length) {
-        setImages((prev) => ({
-          ...prev,
-          additionalImages: [...prev.additionalImages, ...uploads],
-        }))
-        toast.success(`${uploads.length} image(s) uploaded successfully`)
-      } else {
-        additionalImagesGalleryInputRef.current?.click()
-      }
-    } catch {
-      additionalImagesGalleryInputRef.current?.click()
-    } finally {
-      setSaving(false)
-    }
-  }
-
   const handleAdditionalImagesCameraCapture = async () => {
-    if (!window.flutter_inappwebview?.callHandler) {
+    if (!isFlutterWebView()) {
+      if (isEmbeddedAndroidWebView()) {
+        toast.error("Unable to open camera. Please allow camera permission and try again.")
+        return
+      }
       additionalImagesCameraInputRef.current?.click()
       return
     }
@@ -861,10 +839,25 @@ export default function GroceryStoreOnboarding() {
 
       let uploaded = null
       if (result instanceof File) {
+        const imageError = validateImage(result)
+        if (imageError) {
+          toast.error(imageError)
+          return
+        }
         uploaded = await handleUpload(result, "mobasket/grocery-store/additional")
       } else if (result?.file instanceof File) {
+        const imageError = validateImage(result.file)
+        if (imageError) {
+          toast.error(imageError)
+          return
+        }
         uploaded = await handleUpload(result.file, "mobasket/grocery-store/additional")
       } else if (Array.isArray(result?.files) && result.files[0] instanceof File) {
+        const imageError = validateImage(result.files[0])
+        if (imageError) {
+          toast.error(imageError)
+          return
+        }
         uploaded = await handleUpload(result.files[0], "mobasket/grocery-store/additional")
       } else if (result?.base64) {
         uploaded = await uploadCapturedImage(
@@ -1074,6 +1067,15 @@ export default function GroceryStoreOnboarding() {
     setSaving(true)
 
     try {
+      let shouldTriggerReverify = false
+      try {
+        const cachedStoreRaw = localStorage.getItem("grocery-store_user")
+        const cachedStore = cachedStoreRaw ? JSON.parse(cachedStoreRaw) : null
+        shouldTriggerReverify = isRejectedStoreState(cachedStore)
+      } catch {
+        shouldTriggerReverify = false
+      }
+
       const formattedAddress = [
         form.location.addressLine1,
         form.location.addressLine2,
@@ -1114,12 +1116,13 @@ export default function GroceryStoreOnboarding() {
         window.dispatchEvent(new Event("groceryStoreAuthChanged"))
       }
 
-      // If this account was previously rejected, move it back to re-verification
-      // immediately after submitting corrected details.
-      try {
-        await groceryStoreAPI.reverify()
-      } catch {
-        // Reverify can fail for accounts that are already pending; ignore safely.
+      // Only rejected stores need to be moved back to re-verification.
+      if (shouldTriggerReverify) {
+        try {
+          await groceryStoreAPI.reverify()
+        } catch {
+          // Reverify can fail for accounts that are already pending; ignore safely.
+        }
       }
 
       try {
@@ -1371,15 +1374,20 @@ export default function GroceryStoreOnboarding() {
                       <Camera className="w-4 h-4" />
                       <span>Camera</span>
                     </button>
-                    <button
-                      type="button"
-                      onClick={handleStoreImageGalleryPick}
-                      disabled={saving}
-                      className="inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium disabled:opacity-60"
+                    <label
+                      className={`relative inline-flex justify-center items-center gap-1.5 px-3 py-1.5 rounded-sm bg-white text-black border border-black text-xs font-medium overflow-hidden ${saving ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
                     >
                       <ImageIcon className="w-4 h-4" />
                       <span>Gallery</span>
-                    </button>
+                      <input
+                        id="storeImageGalleryInput"
+                        type="file"
+                        accept="image/*"
+                        className="absolute inset-0 opacity-0 cursor-pointer"
+                        onChange={handleStoreImageChange}
+                        disabled={saving}
+                      />
+                    </label>
                   </div>
                   <input
                     ref={storeImageCameraInputRef}
@@ -1387,15 +1395,6 @@ export default function GroceryStoreOnboarding() {
                     type="file"
                     accept="image/*"
                     capture="environment"
-                    className="hidden"
-                    onChange={handleStoreImageChange}
-                    disabled={saving}
-                  />
-                  <input
-                    ref={storeImageGalleryInputRef}
-                    id="storeImageGalleryInput"
-                    type="file"
-                    accept="image/*"
                     className="hidden"
                     onChange={handleStoreImageChange}
                     disabled={saving}
@@ -1423,31 +1422,27 @@ export default function GroceryStoreOnboarding() {
                     <Upload className="w-6 h-6 text-gray-400 mb-1" />
                     <span className="text-xs text-gray-500">Camera</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleAdditionalImagesGalleryPick}
-                    disabled={saving}
-                    className="aspect-square border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 disabled:opacity-60"
+                  <label
+                    className={`relative aspect-square border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center hover:border-gray-400 overflow-hidden ${saving ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
                   >
                     <ImageIcon className="w-6 h-6 text-gray-400 mb-1" />
                     <span className="text-xs text-gray-500">Gallery</span>
-                  </button>
+                    <input
+                      id="additionalImagesGalleryInput"
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="absolute inset-0 opacity-0 cursor-pointer"
+                      onChange={handleAdditionalImageChange}
+                      disabled={saving}
+                    />
+                  </label>
                   <input
                     ref={additionalImagesCameraInputRef}
                     id="additionalImagesCameraInput"
                     type="file"
                     accept="image/*"
                     capture="environment"
-                    className="hidden"
-                    onChange={handleAdditionalImageChange}
-                    disabled={saving}
-                  />
-                  <input
-                    ref={additionalImagesGalleryInputRef}
-                    id="additionalImagesGalleryInput"
-                    type="file"
-                    accept="image/*"
-                    multiple
                     className="hidden"
                     onChange={handleAdditionalImageChange}
                     disabled={saving}
