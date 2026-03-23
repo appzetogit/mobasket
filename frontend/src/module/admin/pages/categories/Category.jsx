@@ -22,7 +22,7 @@ const createEmptyProductVariant = () => ({
   name: "",
   mrp: "",
   sellingPrice: "",
-  stockQuantity: 0,
+  stockQuantity: 1,
   inStock: true,
   isDefault: false,
 })
@@ -68,7 +68,7 @@ const getInitialFormData = () => ({
   mrp: "",
   sellingPrice: "",
   unit: "",
-  stockQuantity: 0,
+  stockQuantity: 1,
   inStock: true,
   variants: [],
 })

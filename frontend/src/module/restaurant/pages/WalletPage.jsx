@@ -1,18 +1,15 @@
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import Lenis from "lenis"
 import BottomNavbar from "../components/BottomNavbar"
+import BottomNavOrders from "../components/BottomNavOrders"
 import MenuOverlay from "../components/MenuOverlay"
 import { 
   Wallet, 
   DollarSign, 
   Hand, 
   SlidersHorizontal,
-  Home,
-  ShoppingBag,
-  Store,
-  Menu,
   Clock,
   CheckCircle,
   TrendingUp,
@@ -28,15 +25,15 @@ import {
   calculateBalances, 
   createWithdrawRequest,
   setBalanceAdjusted,
-  getBalanceAdjusted,
-  getTransactionsByType
+  getBalanceAdjusted
 } from "../utils/walletState"
 import { formatCurrency } from "../utils/currency"
 
 export default function WalletPage() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const isStore = location.pathname.startsWith("/store")
   const [showMenu, setShowMenu] = useState(false)
-  const [activeTab, setActiveTab] = useState("withdraw")
   const [showAdjustModal, setShowAdjustModal] = useState(false)
   const [isBalanceAdjusted, setIsBalanceAdjusted] = useState(getBalanceAdjusted())
   const [showWithdrawModal, setShowWithdrawModal] = useState(false)
@@ -58,11 +55,11 @@ export default function WalletPage() {
     "Debit Card"
   ]
   
-  // Get transactions based on active tab and filters
+  // Get transactions based on filters
   const getFilteredTransactions = () => {
-    let filtered = activeTab === "withdraw" 
-      ? getTransactionsByType("withdrawal")
-      : getTransactionsByType("payment")
+    let filtered = Array.isArray(walletState?.transactions)
+      ? [...walletState.transactions]
+      : []
     
     // Apply status filter
     if (filterStatus !== "all") {
@@ -311,42 +308,6 @@ export default function WalletPage() {
           className=" w-full bg-white rounded-xl p-4 md:p-6 shadow-md"
         >
           <div className="w-100%">
-            {/* Tabs */}
-            <div className="flex gap-4 mb-4 border-b border-gray-200 ">
-              <button
-                onClick={() => setActiveTab("withdraw")}
-                className={`pb-3 px-2 text-sm md:text-base font-medium transition-colors relative ${
-                  activeTab === "withdraw"
-                    ? "text-[#ff8100]"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                Withdraw Request
-                {activeTab === "withdraw" && (
-                  <motion.div
-                    layoutId="activeTab"
-                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#ff8100]"
-                  />
-                )}
-              </button>
-              <button
-                onClick={() => setActiveTab("payment")}
-                className={`pb-3 px-2 text-sm md:text-base font-medium transition-colors relative ${
-                  activeTab === "payment"
-                    ? "text-[#ff8100]"
-                    : "text-gray-600 hover:text-gray-900"
-                }`}
-              >
-                Payment History
-                {activeTab === "payment" && (
-                  <motion.div
-                    layoutId="activeTab"
-                    className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#ff8100]"
-                  />
-                )}
-              </button>
-            </div>
-
             {/* Transaction History Header */}
             <div className="flex items-center justify-between mb-4 relative">
               <h2 className="text-lg md:text-xl font-semibold text-gray-900">Transaction History</h2>
@@ -624,11 +585,15 @@ export default function WalletPage() {
 
       {/* Bottom Navigation Bar - Mobile Only (Hide when withdraw modal is open) */}
       {!showWithdrawModal && (
-        <BottomNavbar onMenuClick={() => setShowMenu(true)} />
+        isStore ? (
+          <BottomNavOrders />
+        ) : (
+          <BottomNavbar onMenuClick={() => setShowMenu(true)} />
+        )
       )}
       
       {/* Menu Overlay */}
-      <MenuOverlay showMenu={showMenu} setShowMenu={setShowMenu} />
+      {!isStore && <MenuOverlay showMenu={showMenu} setShowMenu={setShowMenu} />}
     </div>
   )
 }

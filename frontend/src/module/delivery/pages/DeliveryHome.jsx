@@ -2144,6 +2144,8 @@ export default function DeliveryHome() {
   const routeSimulationTimerRef = useRef(null)
   const routeSimulationIndexRef = useRef(0)
   const lastSimulationHeadingRef = useRef(0)
+  const lastMainMarkerHeadingRef = useRef(0)
+  const lastDirectionsMarkerHeadingRef = useRef(0)
   const isRouteSimulationEnabledRef = useRef(false)
 
 
@@ -7711,6 +7713,7 @@ export default function DeliveryHome() {
 
 
             animateMarkerSmoothly(bikeMarkerRef.current, { lat: displayLat, lng: displayLng }, 700, markerAnimationRef)
+            updateBikeMarkerHeading(displayLat, displayLng, heading)
 
 
           } else {
@@ -20480,7 +20483,11 @@ export default function DeliveryHome() {
           // Add custom Bike Marker (Delivery Boy)
 
 
-          const directionsBikeIconUrl = await getRotatedBikeIcon(0);
+          const directionsBaseHeading = Number.isFinite(lastMainMarkerHeadingRef.current)
+            ? lastMainMarkerHeadingRef.current
+            : 0;
+          lastDirectionsMarkerHeadingRef.current = normalizeHeading(directionsBaseHeading);
+          const directionsBikeIconUrl = await getRotatedBikeIcon(lastDirectionsMarkerHeadingRef.current);
 
 
           if (!directionsBikeMarkerRef.current) {
@@ -20751,6 +20758,41 @@ export default function DeliveryHome() {
 
 
       directionsBikeMarkerRef.current.setPosition(newPosition);
+
+      const previousPosition = lastBikePositionRef.current;
+      let targetDirectionsHeading = lastDirectionsMarkerHeadingRef.current;
+      if (previousPosition) {
+        const movedMeters = calculateDistanceInMeters(
+          previousPosition.lat,
+          previousPosition.lng,
+          newPosition.lat,
+          newPosition.lng
+        );
+        if (movedMeters >= 1.5) {
+          targetDirectionsHeading = calculateHeading(
+            previousPosition.lat,
+            previousPosition.lng,
+            newPosition.lat,
+            newPosition.lng
+          );
+        } else if (Number.isFinite(lastMainMarkerHeadingRef.current)) {
+          targetDirectionsHeading = lastMainMarkerHeadingRef.current;
+        }
+      }
+
+      const smoothedDirectionsHeading = smoothHeading(
+        lastDirectionsMarkerHeadingRef.current,
+        targetDirectionsHeading,
+        20
+      );
+      lastDirectionsMarkerHeadingRef.current = smoothedDirectionsHeading;
+
+      getRotatedBikeIcon(smoothedDirectionsHeading)
+        .then((rotatedIconUrl) => {
+          if (!directionsBikeMarkerRef.current) return;
+          directionsBikeMarkerRef.current.setIcon(buildBikeMarkerIcon(rotatedIconUrl));
+        })
+        .catch(() => {});
 
 
 
@@ -25806,6 +25848,25 @@ export default function DeliveryHome() {
 
   }
 
+  const normalizeHeading = (value) => {
+    const numeric = Number(value)
+    if (!Number.isFinite(numeric)) return 0
+    return ((numeric % 360) + 360) % 360
+  }
+
+  const getShortestHeadingDelta = (fromHeading, toHeading) => {
+    return ((toHeading - fromHeading + 540) % 360) - 180
+  }
+
+  const smoothHeading = (currentHeading, targetHeading, maxStep = 22) => {
+    const current = normalizeHeading(currentHeading)
+    const target = normalizeHeading(targetHeading)
+    const delta = getShortestHeadingDelta(current, target)
+    if (Math.abs(delta) <= 0.5) return target
+    const limitedDelta = Math.max(-maxStep, Math.min(maxStep, delta))
+    return normalizeHeading(current + limitedDelta)
+  }
+
 
 
 
@@ -26042,6 +26103,43 @@ export default function DeliveryHome() {
 
 
   };
+
+  const updateBikeMarkerHeading = useCallback(async (latitude, longitude, heading = null) => {
+    if (!bikeMarkerRef.current || !window.google || !window.google.maps) {
+      return
+    }
+
+    const markerPos = bikeMarkerRef.current.getPosition?.()
+    const prevLat = markerPos?.lat?.()
+    const prevLng = markerPos?.lng?.()
+
+    let targetHeading = Number.isFinite(Number(heading)) ? normalizeHeading(Number(heading)) : null
+
+    if (targetHeading === null && Number.isFinite(prevLat) && Number.isFinite(prevLng)) {
+      const movedMeters = haversineDistance(prevLat, prevLng, latitude, longitude)
+      if (movedMeters >= 1.5) {
+        targetHeading = calculateHeading(prevLat, prevLng, latitude, longitude)
+      }
+    }
+
+    if (targetHeading === null) {
+      targetHeading = lastMainMarkerHeadingRef.current
+    }
+
+    const smoothedHeading = smoothHeading(lastMainMarkerHeadingRef.current, targetHeading, 26)
+    lastMainMarkerHeadingRef.current = smoothedHeading
+
+    try {
+      const rotatedIconUrl = await getRotatedBikeIcon(smoothedHeading)
+      if (!bikeMarkerRef.current) return
+      bikeMarkerRef.current.setIcon({
+        ...buildBikeMarkerIcon(rotatedIconUrl)
+      })
+      bikeMarkerRef.current.setZIndex(1000)
+    } catch {
+      // Ignore icon rotation failures and keep current marker icon.
+    }
+  }, [])
 
 
 
@@ -26326,10 +26424,37 @@ export default function DeliveryHome() {
 
 
 
+    const previousLat = previousMarkerPosition?.lat?.();
+    const previousLng = previousMarkerPosition?.lng?.();
+    let resolvedTargetHeading = Number.isFinite(Number(heading))
+      ? normalizeHeading(Number(heading))
+      : null;
+
+    if (
+      resolvedTargetHeading === null &&
+      Number.isFinite(previousLat) &&
+      Number.isFinite(previousLng)
+    ) {
+      const movedMeters = haversineDistance(previousLat, previousLng, latitude, longitude);
+      if (movedMeters >= 1.5) {
+        resolvedTargetHeading = calculateHeading(previousLat, previousLng, latitude, longitude);
+      }
+    }
+
+    if (resolvedTargetHeading === null) {
+      resolvedTargetHeading = lastMainMarkerHeadingRef.current;
+    }
+
+    const resolvedHeading = smoothHeading(
+      lastMainMarkerHeadingRef.current,
+      resolvedTargetHeading,
+      24
+    );
+    lastMainMarkerHeadingRef.current = resolvedHeading;
+    lastDirectionsMarkerHeadingRef.current = resolvedHeading;
+
     // Get rotated icon URL
-
-
-    const rotatedIconUrl = await getRotatedBikeIcon(heading || 0);
+    const rotatedIconUrl = await getRotatedBikeIcon(resolvedHeading);
 
 
 
@@ -26563,7 +26688,7 @@ export default function DeliveryHome() {
       // Update icon with rotation for smooth movement
 
 
-      const currentHeading = heading !== null && heading !== undefined ? heading : 0;
+      const currentHeading = resolvedHeading;
 
 
       const rotatedIconUrl = await getRotatedBikeIcon(currentHeading);

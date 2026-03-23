@@ -28,7 +28,9 @@ const normalizeVariantsForForm = (variants = []) => {
       mrp: variant?.mrp ?? "",
       sellingPrice: variant?.sellingPrice ?? "",
       stockQuantity: variant?.stockQuantity ?? 0,
-      inStock: variant?.inStock !== false,
+      inStock: Number.isFinite(Number(variant?.stockQuantity))
+        ? Number(variant?.stockQuantity) > 0
+        : variant?.inStock !== false,
       isDefault: variant?.isDefault === true,
       order: variant?.order ?? index,
     }))
@@ -81,10 +83,12 @@ export default function GroceryStoreProductDetailsPage() {
 
   useEffect(() => {
     const parsedStock = Number(stockQuantity)
-    if (Number.isFinite(parsedStock) && parsedStock <= 0 && inStock) {
+    if (!Number.isFinite(parsedStock)) {
       setInStock(false)
+      return
     }
-  }, [inStock, stockQuantity])
+    setInStock(parsedStock > 0)
+  }, [stockQuantity])
 
   // Fetch categories and subcategories (public endpoints – no admin auth)
   const fetchCategoriesAndSubcategories = async () => {
@@ -346,11 +350,23 @@ export default function GroceryStoreProductDetailsPage() {
   }
 
   const updateVariant = (index, key, value) => {
-    setVariants((prev) => prev.map((variant, variantIndex) => (
-      variantIndex === index
-        ? { ...variant, [key]: value }
-        : variant
-    )))
+    setVariants((prev) => prev.map((variant, variantIndex) => {
+      if (variantIndex !== index) return variant
+      if (key !== "stockQuantity") {
+        return { ...variant, [key]: value }
+      }
+
+      const parsedStock = Number(value)
+      if (!Number.isFinite(parsedStock)) {
+        return { ...variant, stockQuantity: value, inStock: false }
+      }
+
+      return {
+        ...variant,
+        stockQuantity: value,
+        inStock: parsedStock > 0,
+      }
+    }))
   }
 
   const setDefaultVariant = (index) => {
@@ -782,7 +798,10 @@ export default function GroceryStoreProductDetailsPage() {
                 onChange={(e) => {
                   const val = e.target.value
                   const cleaned = val.replace(/^0+(?=\d)/, '')
-                  setStockQuantity(cleaned || '0')
+                  const nextStockValue = cleaned || '0'
+                  setStockQuantity(nextStockValue)
+                  const parsedStock = Number(nextStockValue)
+                  setInStock(Number.isFinite(parsedStock) && parsedStock > 0)
                 }}
                 placeholder="0"
                 className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900"
