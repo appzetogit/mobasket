@@ -129,9 +129,9 @@ export default function SignupStep1() {
       return;
     }
 
-    // Validation for City - only letters, no spaces
+    // Validation for City - letters and spaces
     if (name === "city") {
-      const cityRegex = /^[a-zA-Z]*$/;
+      const cityRegex = /^[a-zA-Z\s]*$/;
       if (value === "" || cityRegex.test(value)) {
         setFormData(prev => ({
           ...prev,
@@ -148,9 +148,9 @@ export default function SignupStep1() {
       return;
     }
 
-    // Validation for State - only letters, no spaces
+    // Validation for State - letters and spaces
     if (name === "state") {
-      const stateRegex = /^[a-zA-Z]*$/;
+      const stateRegex = /^[a-zA-Z\s]*$/;
       if (value === "" || stateRegex.test(value)) {
         setFormData(prev => ({
           ...prev,
@@ -239,18 +239,18 @@ export default function SignupStep1() {
       newErrors.address = "Address is required"
     }
 
-    // Validate City - only letters, no spaces
+    // Validate City - only letters and spaces
     if (!formData.city.trim()) {
       newErrors.city = "City is required"
-    } else if (!/^[a-zA-Z]+$/.test(formData.city.trim())) {
-      newErrors.city = "City should only contain letters (no spaces)"
+    } else if (!/^[a-zA-Z\s]+$/.test(formData.city.trim())) {
+      newErrors.city = "City should only contain letters and spaces"
     }
 
-    // Validate State - only letters, no spaces
+    // Validate State - only letters and spaces
     if (!formData.state.trim()) {
       newErrors.state = "State is required"
-    } else if (!/^[a-zA-Z]+$/.test(formData.state.trim())) {
-      newErrors.state = "State should only contain letters (no spaces)"
+    } else if (!/^[a-zA-Z\s]+$/.test(formData.state.trim())) {
+      newErrors.state = "State should only contain letters and spaces"
     }
 
     // Validate Vehicle Name - mandatory
@@ -425,12 +425,12 @@ export default function SignupStep1() {
                     className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.city ? "border-red-500" : "border-gray-300"
                       }`}
                     placeholder="E.g., Indore"
-                    pattern="[a-zA-Z]+"
-                    title="City should only contain letters (no spaces)"
+                    pattern="[a-zA-Z\s]+"
+                    title="City should only contain letters and spaces"
                   />
                   {errors.city && <p className="text-red-500 text-sm mt-1">{errors.city}</p>}
                   {!errors.city && formData.city && (
-                    <p className="text-xs text-gray-500 mt-1">Only letters are allowed (no spaces)</p>
+                    <p className="text-xs text-gray-500 mt-1">Only letters and spaces are allowed</p>
                   )}
                 </div>
                 <div>
@@ -444,13 +444,13 @@ export default function SignupStep1() {
                     onChange={handleChange}
                     className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.state ? "border-red-500" : "border-gray-300"
                       }`}
-                    placeholder="E.g., MadhyaPradesh"
-                    pattern="[a-zA-Z]+"
-                    title="State should only contain letters (no spaces)"
+                    placeholder="E.g., Madhya Pradesh"
+                    pattern="[a-zA-Z\s]+"
+                    title="State should only contain letters and spaces"
                   />
                   {errors.state && <p className="text-red-500 text-sm mt-1">{errors.state}</p>}
                   {!errors.state && formData.state && (
-                    <p className="text-xs text-gray-500 mt-1">Only letters are allowed (no spaces)</p>
+                    <p className="text-xs text-gray-500 mt-1">Only letters and spaces are allowed</p>
                   )}
                 </div>
               </div>
@@ -485,7 +485,7 @@ export default function SignupStep1() {
                   onChange={handleChange}
                   className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${errors.vehicleName ? "border-red-500" : "border-gray-300"
                     }`}
-                  placeholder="E.g., HondaActiva"
+                  placeholder="E.g., Honda Activa 6G"
                 />
                 {errors.vehicleName && <p className="text-red-500 text-sm mt-1">{errors.vehicleName}</p>}
               </div>
