@@ -359,6 +359,7 @@ export default function SignupStep2() {
     const isUploading = uploading[docType]
     const galleryInputId = `${docType}-gallery-input`
     const cameraInputId = `${docType}-camera-input`
+    const filesInputId = `${docType}-files-input`
 
     const handleSelect = (e) => {
       const selectedFile = e.target.files?.[0]
@@ -424,6 +425,14 @@ export default function SignupStep2() {
                     >
                       Camera
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById(filesInputId)?.click()}
+                      disabled={isUploading}
+                      className="px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      Choose files
+                    </button>
                   </div>
                 </>
               )}
@@ -443,6 +452,14 @@ export default function SignupStep2() {
               className="hidden"
               accept="image/*"
               capture="environment"
+              onChange={handleSelect}
+              disabled={isUploading}
+            />
+            <input
+              id={filesInputId}
+              type="file"
+              className="hidden"
+              accept="image/*"
               onChange={handleSelect}
               disabled={isUploading}
             />

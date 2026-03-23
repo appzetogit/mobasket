@@ -11,7 +11,6 @@ import {
   ChevronRight,
   Info,
   Clock,
-  Users,
   Settings,
   Bell,
   Truck,
@@ -700,7 +699,6 @@ export default function ExploreMore() {
     { id: 1, label: "Outlet info", icon: Info, route: "/restaurant/outlet-info" },
     { id: 2, label: "Outlet timings", icon: Clock, route: "/restaurant/outlet-timings" },
     // { id: 3, label: "Switch outlet", icon: Building2, route: "/restaurant/switch-outlet" },
-    { id: 4, label: "Manage staff", icon: Users, route: "/restaurant/contact-details" },
   ]
 
   const settingsItems = isGroceryStore ? [

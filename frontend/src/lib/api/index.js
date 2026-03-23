@@ -396,22 +396,14 @@ export const restaurantAPI = {
   uploadProfileImage: (file) => {
     const formData = new FormData();
     formData.append('file', file);
-    return apiClient.post(`${API_ENDPOINTS.RESTAURANT.PROFILE}/image`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    return apiClient.post(`${API_ENDPOINTS.RESTAURANT.PROFILE}/image`, formData);
   },
 
   // Upload menu image
   uploadMenuImage: (file) => {
     const formData = new FormData();
     formData.append('file', file);
-    return apiClient.post(`${API_ENDPOINTS.RESTAURANT.PROFILE}/menu-image`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    return apiClient.post(`${API_ENDPOINTS.RESTAURANT.PROFILE}/menu-image`, formData);
   },
 
   // Staff Management
@@ -2235,11 +2227,7 @@ export const uploadAPI = {
       formData.append('folder', options.folder);
     }
 
-    return apiClient.post(API_ENDPOINTS.UPLOAD.MEDIA, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    return apiClient.post(API_ENDPOINTS.UPLOAD.MEDIA, formData);
   },
 };
 
