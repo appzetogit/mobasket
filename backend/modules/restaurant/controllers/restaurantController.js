@@ -8,6 +8,7 @@ import { uploadToCloudinary, deleteFromCloudinary } from '../../../shared/utils/
 import { initializeCloudinary } from '../../../config/cloudinary.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 import mongoose from 'mongoose';
+import Order from '../../order/models/Order.js';
 import { isOpenFromOutletTimings } from '../utils/outletTimingStatus.js';
 
 /**
@@ -525,6 +526,52 @@ export const getRestaurants = async (req, res) => {
       }
     }
 
+    // Dynamic rating calculation for the restaurant list
+    if (restaurants.length > 0) {
+      try {
+        const idStrings = restaurants.map((r) => String(r._id || r.restaurantId || ""));
+        const idObjects = idStrings.filter((id) => mongoose.Types.ObjectId.isValid(id)).map((id) => new mongoose.Types.ObjectId(id));
+        const combinedIds = Array.from(new Set([...idStrings, ...idObjects]));
+
+        const ratingAggr = await Order.aggregate([
+          {
+            $match: {
+              restaurantId: { $in: combinedIds },
+              status: "delivered",
+              "review.rating": { $exists: true, $ne: null, $gt: 0 }
+            }
+          },
+          {
+            $group: {
+              _id: "$restaurantId",
+              avgRating: { $avg: "$review.rating" },
+              count: { $sum: 1 }
+            }
+          }
+        ]);
+
+        const ratingDataMap = new Map();
+        ratingAggr.forEach((item) => {
+          ratingDataMap.set(String(item._id), item);
+        });
+
+        restaurants = restaurants.map((r) => {
+          const stats = ratingDataMap.get(String(r._id)) || ratingDataMap.get(String(r.restaurantId));
+          if (stats) {
+            return {
+              ...r,
+              rating: Number(stats.avgRating.toFixed(1)),
+              totalRatings: stats.count,
+              reviewCount: stats.count
+            };
+          }
+          return r;
+        });
+      } catch (aggrError) {
+        console.error("Rating aggregation error:", aggrError);
+      }
+    }
+
     // Apply string-based filters that can't be done in MongoDB query
     if (maxDeliveryTime) {
       const maxTime = parseInt(maxDeliveryTime);
@@ -627,6 +674,38 @@ export const getRestaurantById = async (req, res) => {
         restaurant.isAcceptingOrders =
           Boolean(restaurant?.isAcceptingOrders !== false) &&
           isOpenFromOutletTimings(outletTimings.timings);
+      }
+    }
+
+    // Calculate rating from reviews in orders
+    if (restaurant && (restaurant._id || restaurant.restaurantId)) {
+      const targetId = (restaurant._id || restaurant.restaurantId).toString();
+      // Search by either ObjectId or legacy String ID
+      const query = {
+        $or: [
+          { restaurantId: targetId },
+        ],
+        status: 'delivered',
+        'review.rating': { $exists: true, $gt: 0 }
+      };
+
+      if (mongoose.Types.ObjectId.isValid(targetId)) {
+        query.$or.push({ restaurantId: new mongoose.Types.ObjectId(targetId) });
+      }
+
+      const ratedOrders = await Order.find(query)
+        .select('review.rating')
+        .lean();
+
+      if (ratedOrders.length > 0) {
+        const totalRatingSum = ratedOrders.reduce((sum, o) => sum + (o.review?.rating || 0), 0);
+        restaurant.rating = Number((totalRatingSum / ratedOrders.length).toFixed(1));
+        restaurant.totalRatings = ratedOrders.length;
+        restaurant.reviewCount = ratedOrders.length;
+      } else {
+        // Fallback or keep as-is if no new reviews
+        restaurant.rating = restaurant.rating || 0;
+        restaurant.totalRatings = restaurant.totalRatings || 0;
       }
     }
 

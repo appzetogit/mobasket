@@ -1726,12 +1726,15 @@ export default function Home() {
               const image = allImages[0] || "";
               const rating = extractRestaurantRating(restaurant);
 
+              const totalRatings = Number(restaurant?.totalRatings || restaurant?.reviewCount || 0);
+
               return {
                 id: restaurant.restaurantId || restaurant._id,
                 name: restaurant.name,
                 cuisine: cuisine,
                 cuisines: Array.isArray(restaurant.cuisines) ? restaurant.cuisines : [],
                 rating,
+                totalRatings,
                 deliveryTime: deliveryTime,
                 distance: distance,
                 distanceInKm: distanceInKm, // Store numeric distance for sorting
@@ -3649,6 +3652,11 @@ export default function Home() {
                                     strokeWidth={3}
                                   />
                                 </div>
+                                {restaurant.totalRatings > 0 && (
+                                  <span className="text-[9px] text-gray-400 font-bold uppercase tracking-wider text-right">
+                                    {restaurant.totalRatings.toLocaleString()}+ ratings
+                                  </span>
+                                )}
                                 <p className="text-[11px] text-neutral-500 dark:text-gray-400 font-medium whitespace-nowrap">
                                   ₹{restaurant.priceRange || "200"} for one
                                 </p>
