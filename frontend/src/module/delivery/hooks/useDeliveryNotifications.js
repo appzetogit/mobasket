@@ -236,9 +236,6 @@ export const useDeliveryNotifications = (options = {}) => {
   }, [enabled]);
 
   // Step 3: All callbacks before effects (unconditional)
-  // Track user interaction for autoplay policy
-  const userInteractedRef = useRef(false);
-  
   const playNotificationSound = useCallback(() => {
     try {
       const soundFile = getSelectedSoundUrl();
@@ -265,11 +262,6 @@ export const useDeliveryNotifications = (options = {}) => {
           return;
         }
 
-        // Only play if user has interacted with the page (browser autoplay policy)
-        if (!userInteractedRef.current) {
-          return;
-        }
-        
         audioRef.current.currentTime = 0;
         audioRef.current.play().catch(error => {
           const message = String(error?.message || '');
@@ -302,10 +294,6 @@ export const useDeliveryNotifications = (options = {}) => {
   const triggerOrderBuzz = useCallback(() => {
     try {
       if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') {
-        return;
-      }
-      // Match the browser gesture requirement used by audio playback.
-      if (!userInteractedRef.current) {
         return;
       }
       // Two short pulses for new order alert.
@@ -405,28 +393,9 @@ export const useDeliveryNotifications = (options = {}) => {
   }, [enabled, isEligibleForOrders, isRiderOnlineForOrders]);
 
   // Step 4: All effects (unconditional hook calls, conditional logic inside)
-  // Track user interaction for autoplay policy
   useEffect(() => {
     requestBrowserNotificationPermission();
-
-    const handleUserInteraction = () => {
-      userInteractedRef.current = true;
-      // Remove listeners after first interaction
-      document.removeEventListener('click', handleUserInteraction);
-      document.removeEventListener('touchstart', handleUserInteraction);
-      document.removeEventListener('keydown', handleUserInteraction);
-    };
-    
-    // Listen for user interaction
-    document.addEventListener('click', handleUserInteraction, { once: true });
-    document.addEventListener('touchstart', handleUserInteraction, { once: true });
-    document.addEventListener('keydown', handleUserInteraction, { once: true });
-    
-    return () => {
-      document.removeEventListener('click', handleUserInteraction);
-      document.removeEventListener('touchstart', handleUserInteraction);
-      document.removeEventListener('keydown', handleUserInteraction);
-    };
+    return undefined;
   }, []);
   
   // Initialize audio on mount - use selected preference from localStorage

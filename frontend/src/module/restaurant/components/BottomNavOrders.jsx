@@ -64,7 +64,7 @@ export default function BottomNavOrders() {
     // For grocery stores, only show orders tabs, no hub mode
     if (isGroceryStore) {
       return (
-        <div className="sticky bottom-0 z-40 pb-2">
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
           <div className="flex items-center gap-2 w-full">
             <div className="flex-1">
               <div className="bg-black rounded-full py-1.5 px-1 shadow-lg relative ml-1">
@@ -318,7 +318,7 @@ export default function BottomNavOrders() {
         </>
       )}
 
-      <div className="sticky bottom-0 z-40 pb-2">
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)]">
         <div className="flex items-center gap-2 w-full">
 
           {/* Left toggle (Hub → Orders) */}

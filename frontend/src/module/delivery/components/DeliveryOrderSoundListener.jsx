@@ -18,7 +18,8 @@ export default function DeliveryOrderSoundListener() {
     try {
       const deliveryToken =
         localStorage.getItem("delivery_accessToken") || localStorage.getItem("accessToken");
-      return Boolean(deliveryToken);
+      const deliveryRefreshToken = localStorage.getItem("delivery_refreshToken");
+      return Boolean(deliveryToken || deliveryRefreshToken);
     } catch {
       return false;
     }
