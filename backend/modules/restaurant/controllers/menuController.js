@@ -804,7 +804,8 @@ export const getMenuByRestaurantId = async (req, res) => {
         },
       });
     }
-    // Filter menu for user side: only show enabled sections and available items
+    // Filter menu for user side: only show enabled sections and approved items.
+    // Keep out-of-stock items (isAvailable === false) so user can still see them as unavailable.
     const filteredSections = (menu.sections || [])
       .filter(section => {
         // Only show sections where isEnabled is not explicitly false
@@ -812,23 +813,20 @@ export const getMenuByRestaurantId = async (req, res) => {
         return section.isEnabled !== false;
       })
       .map(section => {
-        // Filter direct items - only show available AND approved items
-        // Items where isAvailable is not explicitly false AND approvalStatus is 'approved' should be shown
+        // Filter direct items - show approved items (including unavailable ones)
         const availableItems = (section.items || []).filter(item => {
-          const isAvailable = item.isAvailable !== false;
           const isApproved = item.approvalStatus === 'approved' || !item.approvalStatus; // Include approved or legacy items without approvalStatus
-          return isAvailable && isApproved;
+          return isApproved;
         }).map(sanitizeMenuItemForPublic);
 
         // Filter subsections and their items
         const availableSubsections = (section.subsections || [])
           .map(subsection => {
             const availableSubsectionItems = (subsection.items || []).filter(item => {
-              const isAvailable = item.isAvailable !== false;
               const isApproved = item.approvalStatus === 'approved' || !item.approvalStatus; // Include approved or legacy items without approvalStatus
-              return isAvailable && isApproved;
+              return isApproved;
             }).map(sanitizeMenuItemForPublic);
-            // Only include subsection if it has available items
+            // Only include subsection if it has any approved items
             if (availableSubsectionItems.length > 0) {
               return {
                 ...subsection,
@@ -839,8 +837,7 @@ export const getMenuByRestaurantId = async (req, res) => {
           })
           .filter(subsection => subsection !== null); // Remove null subsections
 
-        // Include section if it has at least one available item OR at least one subsection with available items
-        // This ensures category remains visible even if some items are unavailable
+        // Include section if it has at least one approved item OR subsection with approved items.
         if (availableItems.length > 0 || availableSubsections.length > 0) {
           return {
             ...section,
@@ -851,7 +848,7 @@ export const getMenuByRestaurantId = async (req, res) => {
         }
         return null;
       })
-      .filter(section => section !== null); // Remove null sections (sections with no available items)
+      .filter(section => section !== null); // Remove null sections (sections with no approved items)
 
     return successResponse(res, 200, 'Menu retrieved successfully', {
       menu: {
