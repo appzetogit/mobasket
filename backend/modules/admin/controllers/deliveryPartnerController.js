@@ -205,6 +205,9 @@ export const approveDeliveryPartner = asyncHandler(async (req, res) => {
     delivery.verifiedAt = new Date();
     delivery.verifiedBy = adminId;
     delivery.isActive = true;
+    // Eligibility checks require phone verification. Admin approval should make
+    // the partner immediately eligible for delivery endpoints.
+    delivery.phoneVerified = true;
 
     // Also mark documents as verified if they have been uploaded
     if (delivery.documents) {
@@ -607,6 +610,9 @@ export const updateDeliveryPartnerStatus = asyncHandler(async (req, res) => {
         return errorResponse(res, 400, `Invalid status. Must be one of: ${validStatuses.join(', ')}`);
       }
       delivery.status = status;
+      if (status === 'approved' || status === 'active') {
+        delivery.phoneVerified = true;
+      }
     }
 
     // Update isActive if provided
