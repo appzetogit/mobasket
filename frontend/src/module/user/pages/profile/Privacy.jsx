@@ -1,4 +1,4 @@
-import { Link } from "react-router-dom"
+import { useNavigate } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { ArrowLeft, Lock, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
@@ -8,6 +8,7 @@ import api from "@/lib/api"
 import { API_ENDPOINTS } from "@/lib/api/config"
 
 export default function Privacy() {
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [privacyData, setPrivacyData] = useState({
     title: 'Privacy Policy',
@@ -54,11 +55,11 @@ export default function Privacy() {
       <div className="max-w-[1100px] mx-auto px-4 md:px-6 lg:px-8 py-6 md:pt-20 lg:pt-24 md:pb-6 lg:pb-8">
         {/* Header */}
         <div className="flex items-center gap-3 md:gap-4 mb-6 md:mb-8">
-          <Link to="/user/profile/about">
+          <div className="cursor-pointer inline-block" onClick={() => { if (window.history.length > 1) { window.history.back(); } else { window.location.href = '/user/profile'; } }}>
             <Button variant="ghost" size="icon" className="h-9 w-9 md:h-10 md:w-10 p-0 hover:bg-gray-100 dark:hover:bg-gray-800">
               <ArrowLeft className="h-5 w-5 md:h-6 md:w-6 text-gray-900 dark:text-white" />
             </Button>
-          </Link>
+          </div>
           <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white">Privacy Policy</h1>
         </div>
 

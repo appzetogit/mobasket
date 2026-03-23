@@ -3478,7 +3478,7 @@ export default function OrderTracking() {
 
               transition={{ duration: 0.5 }}
 
-            >
+            > 
 
               <RefreshCw className="w-4 h-4" />
 
@@ -3967,8 +3967,6 @@ export default function OrderTracking() {
 
         </motion.div>
 
-
-
         {!isPlanSubscriptionOrder && (
 
         <motion.div
@@ -4026,8 +4024,6 @@ export default function OrderTracking() {
           </motion.div>
 
         )}
-
-
 
       </div>
 

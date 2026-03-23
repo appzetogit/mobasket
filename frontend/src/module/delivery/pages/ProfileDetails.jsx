@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
+import { navigateBackWithinDelivery } from "@/module/delivery/utils/navigation"
 import { ArrowLeft, Plus, Edit2, ChevronRight, FileText, CheckCircle, XCircle, Eye, X, Upload, Camera, Trash2 } from "lucide-react"
 import BottomPopup from "../components/BottomPopup"
 import { toast } from "sonner"
@@ -7,7 +8,8 @@ import { deliveryAPI, uploadAPI } from "@/lib/api"
 import { fetchDeliveryWallet } from "../utils/deliveryWalletState"
 
 export default function ProfileDetails() {
-  const navigate = useNavigate()
+  const navigate = useNavigate()
+  const handleBack = () => navigateBackWithinDelivery(navigate)
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [walletBalance, setWalletBalance] = useState(0)
@@ -265,7 +267,7 @@ export default function ProfileDetails() {
       {/* Header */}
       <div className="bg-white px-4 py-3 flex items-center gap-4 border-b border-gray-200">
         <button
-          onClick={() => navigate(-1)}
+          onClick={handleBack}
           className="p-2 hover:bg-gray-100 rounded-full transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />

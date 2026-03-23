@@ -1,9 +1,11 @@
 import { useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { navigateBackWithinDelivery } from "@/module/delivery/utils/navigation"
 import { ArrowLeft, Check } from "lucide-react"
 
 export default function ChangeLanguage() {
-  const navigate = useNavigate()
+  const navigate = useNavigate()
+  const handleBack = () => navigateBackWithinDelivery(navigate)
   
   const [selectedLanguage, setSelectedLanguage] = useState("english")
 
@@ -33,7 +35,7 @@ export default function ChangeLanguage() {
       <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="flex items-center gap-4 px-4 py-4">
           <button
-            onClick={() => navigate(-1)}
+            onClick={handleBack}
             className="p-2 hover:bg-gray-100 rounded-full transition-colors"
           >
             <ArrowLeft className="w-5 h-5 text-gray-700" />

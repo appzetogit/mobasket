@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import { navigateBackWithinDelivery } from "@/module/delivery/utils/navigation"
 import { motion } from "framer-motion"
 import { ArrowLeft, Headphones, ArrowRight, Phone } from "lucide-react"
 import { getCompanyNameAsync } from "@/lib/utils/businessSettings"
@@ -7,7 +8,8 @@ import { getCompanyNameAsync } from "@/lib/utils/businessSettings"
 const STORAGE_KEY = "mobasket_food_referrals"
 
 export default function YourReferrals() {
-  const navigate = useNavigate()
+  const navigate = useNavigate()
+  const handleBack = () => navigateBackWithinDelivery(navigate)
   const [activeTab, setActiveTab] = useState("in-progress")
   const [referrals, setReferrals] = useState([])
   const [earnings, setEarnings] = useState(0)
@@ -72,7 +74,7 @@ export default function YourReferrals() {
       {/* Header */}
       <div className="bg-black text-white px-4 py-4 flex items-center justify-between">
         <button
-          onClick={() => navigate(-1)}
+          onClick={handleBack}
           className="p-2 hover:bg-gray-800 rounded-full transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />

@@ -1,5 +1,6 @@
 import { ArrowLeft, AlertTriangle, Loader2 } from "lucide-react"
 import { useNavigate } from "react-router-dom"
+import { navigateBackWithinDelivery } from "@/module/delivery/utils/navigation"
 import { useEffect, useState } from "react"
 import {
   fetchDeliveryWallet,
@@ -18,7 +19,8 @@ import {
 } from "@/components/ui/dialog"
 
 export default function PocketBalancePage() {
-  const navigate = useNavigate()
+  const navigate = useNavigate()
+  const handleBack = () => navigateBackWithinDelivery(navigate)
   const [walletState, setWalletState] = useState({
     totalBalance: 0,
     cashInHand: 0,
@@ -226,7 +228,7 @@ export default function PocketBalancePage() {
 
       {/* Top Bar */}
       <div className="flex items-center gap-3 p-4 border-b border-gray-200">
-        <ArrowLeft onClick={() => navigate(-1)} size={22} className="cursor-pointer" />
+        <ArrowLeft onClick={handleBack} size={22} className="cursor-pointer" />
         <h1 className="text-lg font-semibold">Pocket balance</h1>
       </div>
 

@@ -696,7 +696,6 @@ export default function ExploreMore() {
   const manageOutletItems = isGroceryStore ? [
     { id: 1, label: "Store info", icon: Info, route: "/store/outlet-info" },
     // { id: 2, label: "Switch outlet", icon: Building2, route: "/store/switch-outlet" },
-    { id: 3, label: "Manage staff", icon: Users, route: "/store/contact-details" },
   ] : [
     { id: 1, label: "Outlet info", icon: Info, route: "/restaurant/outlet-info" },
     { id: 2, label: "Outlet timings", icon: Clock, route: "/restaurant/outlet-timings" },

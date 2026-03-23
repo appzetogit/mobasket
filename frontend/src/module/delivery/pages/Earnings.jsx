@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
+import { navigateBackWithinDelivery } from "@/module/delivery/utils/navigation"
 import { ArrowLeft, Share2, ChevronLeft, ChevronRight, ChevronDown, Loader2 } from "lucide-react"
 import { formatCurrency } from "../../restaurant/utils/currency"
 import { useProgressStore } from "../store/progressStore"
@@ -7,7 +8,8 @@ import { deliveryAPI } from "@/lib/api"
 import { toast } from "sonner"
 
 export default function Earnings() {
-  const navigate = useNavigate()
+  const navigate = useNavigate()
+  const handleBack = () => navigateBackWithinDelivery(navigate)
   const [activeTab, setActiveTab] = useState("week")
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [showDatePicker, setShowDatePicker] = useState(false)
@@ -543,7 +545,7 @@ export default function Earnings() {
       {/* Header */}
       <div className="bg-black text-white px-4 py-4 flex items-center justify-between">
         <button
-          onClick={() => navigate(-1)}
+          onClick={handleBack}
           className="p-2 hover:bg-gray-800 rounded-full transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />

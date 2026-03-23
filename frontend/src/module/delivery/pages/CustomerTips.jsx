@@ -1,16 +1,18 @@
 import { ArrowLeft, AlertTriangle } from "lucide-react"
 import { useNavigate } from "react-router-dom"
+import { navigateBackWithinDelivery } from "@/module/delivery/utils/navigation"
 
 export default function CustomerTipsBalancePage() {
 
-  const navigate = useNavigate()
+  const navigate = useNavigate()
+  const handleBack = () => navigateBackWithinDelivery(navigate)
 
   return (
     <div className="min-h-screen  bg-white text-black">
 
       {/* Top Bar */}
       <div className="flex items-center gap-3 p-4 border-b border-gray-200">
-        <ArrowLeft onClick={()=> navigate(-1)} size={22} className="cursor-pointer" />
+        <ArrowLeft onClick={handleBack} size={22} className="cursor-pointer" />
         <h1 className="text-lg font-semibold">Customer tips</h1>
       </div>
 

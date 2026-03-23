@@ -41,11 +41,11 @@ export default function Favorites() {
         <div className="max-w-[1100px] mx-auto space-y-6 md:pt-20 lg:pt-24 md:pb-6 lg:pb-8">
           <ScrollReveal>
             <div className="flex items-center gap-3 sm:gap-4">
-              <Link to="/user/profile">
+              <div className="cursor-pointer inline-block" onClick={() => { if (window.history.length > 1) { window.history.back(); } else { window.location.href = '/user/profile'; } }}>
                 <Button variant="ghost" size="icon" className="rounded-full h-8 w-8 sm:h-10 sm:w-10">
                   <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
-              </Link>
+              </div>
               <h1 className="text-lg sm:text-xl md:text-2xl font-bold">My Favorites</h1>
             </div>
           </ScrollReveal>
@@ -71,11 +71,11 @@ export default function Favorites() {
         <ScrollReveal>
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3 sm:gap-4">
-              <Link to="/user/profile">
+              <div className="cursor-pointer inline-block" onClick={() => { if (window.history.length > 1) { window.history.back(); } else { window.location.href = '/user/profile'; } }}>
                 <Button variant="ghost" size="icon" className="rounded-full h-8 w-8 sm:h-10 sm:w-10">
                   <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
-              </Link>
+              </div>
               <div>
                 <h1 className="text-lg sm:text-xl md:text-2xl font-bold">My Favorites</h1>
                 <p className="text-gray-700 dark:text-gray-300 mt-1 text-sm font-semibold">

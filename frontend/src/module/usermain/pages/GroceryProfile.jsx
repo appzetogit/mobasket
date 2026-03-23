@@ -291,7 +291,7 @@ const GroceryProfile = () => {
           <MenuItem icon={Share2} title="Share the app" onClick={handleShareApp} />
           <MenuItem icon={Info} title="About us" onClick={() => navigate("/profile/about")} />
           <MenuItem icon={Lock} title="Account privacy" onClick={() => navigate("/profile/privacy")} />
-          <MenuItem icon={Bell} title="Notification preferences" onClick={() => navigate("/profile/settings")} />
+
           <MenuItem
             icon={LogOut}
             title="Log out"

@@ -1839,7 +1839,7 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
 
     const restaurants = await Restaurant.find(query)
       .select('-password')
-      .sort({ createdAt: -1 })
+      .sort({ updatedAt: -1 })
       .skip(skip)
       .limit(parsedLimit)
       .lean();
