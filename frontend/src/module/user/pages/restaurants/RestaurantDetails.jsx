@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+﻿import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 
 import { createPortal } from "react-dom";
 
@@ -327,6 +327,7 @@ export default function RestaurantDetails() {
 
   const [showMenuSheet, setShowMenuSheet] = useState(false);
 
+  const [showLargeOrderMenu, setShowLargeOrderMenu] = useState(false);
 
   const [showSearch, setShowSearch] = useState(false);
 
@@ -3524,6 +3525,8 @@ export default function RestaurantDetails() {
 
       const hasUnder250Items = section.items.some((item) => {
 
+        if (item.isAvailable === false) return false;
+
         const finalPrice = getFinalPrice(item);
 
         return finalPrice <= 250;
@@ -3545,6 +3548,8 @@ export default function RestaurantDetails() {
         if (subsection.items && subsection.items.length > 0) {
 
           const hasUnder250Items = subsection.items.some((item) => {
+
+            if (item.isAvailable === false) return false;
 
             const finalPrice = getFinalPrice(item);
 
@@ -3963,9 +3968,6 @@ export default function RestaurantDetails() {
   // Show grayscale if either user is out of service OR restaurant is offline/closed as per outlet timings.
 
   const shouldShowGrayscale = isOutOfService || isRestaurantUnavailable;
-  const isSelectedItemUnavailable = selectedItem?.isAvailable === false;
-  const shouldDisableSelectedItemActions =
-    shouldShowGrayscale || isSelectedItemUnavailable;
 
 
 
@@ -4619,8 +4621,6 @@ export default function RestaurantDetails() {
                       {visibleDirectItems.map((item) => {
 
                         const quantity = quantities[item.id || item._id] || 0;
-                        const isItemUnavailable = item.isAvailable === false;
-                        const disableItemActions = shouldShowGrayscale || isItemUnavailable;
 
                         // Determine veg/non-veg based on foodType
 
@@ -4690,11 +4690,6 @@ export default function RestaurantDetails() {
                                 {item.name}
 
                               </h3>
-                              {isItemUnavailable && (
-                                <p className="mt-1 text-xs font-semibold text-red-500">
-                                  Unavailable
-                                </p>
-                              )}
 
 
 
@@ -4956,7 +4951,7 @@ export default function RestaurantDetails() {
 
                                   animate={{ opacity: 1, scale: 1 }}
 
-                                  className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-4 py-1.5 rounded-lg shadow-md flex items-center gap-1 ${disableItemActions
+                                  className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-4 py-1.5 rounded-lg shadow-md flex items-center gap-1 ${shouldShowGrayscale
 
                                     ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
 
@@ -4972,7 +4967,7 @@ export default function RestaurantDetails() {
 
                                       e.stopPropagation();
 
-                                      if (!disableItemActions) {
+                                      if (!shouldShowGrayscale) {
 
                                         updateItemQuantity(
 
@@ -4988,11 +4983,11 @@ export default function RestaurantDetails() {
 
                                     }}
 
-                                    disabled={disableItemActions}
+                                    disabled={shouldShowGrayscale}
 
                                     className={
 
-                                      disableItemActions
+                                      shouldShowGrayscale
 
                                         ? "text-gray-400 cursor-not-allowed"
 
@@ -5008,7 +5003,7 @@ export default function RestaurantDetails() {
 
                                   <span
 
-                                    className={`mx-2 text-sm ${disableItemActions ? "text-gray-400" : ""}`}
+                                    className={`mx-2 text-sm ${shouldShowGrayscale ? "text-gray-400" : ""}`}
 
                                   >
 
@@ -5022,7 +5017,7 @@ export default function RestaurantDetails() {
 
                                       e.stopPropagation();
 
-                                      if (!disableItemActions) {
+                                      if (!shouldShowGrayscale) {
 
                                         updateItemQuantity(
 
@@ -5038,11 +5033,11 @@ export default function RestaurantDetails() {
 
                                     }}
 
-                                    disabled={disableItemActions}
+                                    disabled={shouldShowGrayscale}
 
                                     className={
 
-                                      disableItemActions
+                                      shouldShowGrayscale
 
                                         ? "text-gray-400 cursor-not-allowed"
 
@@ -5090,7 +5085,7 @@ export default function RestaurantDetails() {
 
                                     e.stopPropagation();
 
-                                    if (!disableItemActions) {
+                                    if (!shouldShowGrayscale) {
 
                                       updateItemQuantity(item, 1, e);
 
@@ -5098,9 +5093,9 @@ export default function RestaurantDetails() {
 
                                   }}
 
-                                  disabled={disableItemActions}
+                                  disabled={shouldShowGrayscale}
 
-                                  className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-6 py-1.5 rounded-lg shadow-md flex items-center gap-1 transition-colors ${disableItemActions
+                                  className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-6 py-1.5 rounded-lg shadow-md flex items-center gap-1 transition-colors ${shouldShowGrayscale
 
                                     ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
 
@@ -5110,17 +5105,15 @@ export default function RestaurantDetails() {
 
                                 >
 
-                                  {isItemUnavailable ? (
-                                    "Unavailable"
-                                  ) : (
-                                    <>
-                                      ADD{" "}
-                                      <Plus
-                                        size={14}
-                                        className="stroke-[3px]"
-                                      />
-                                    </>
-                                  )}
+                                  ADD{" "}
+
+                                  <Plus
+
+                                    size={14}
+
+                                    className="stroke-[3px]"
+
+                                  />
 
                                 </motion.button>
 
@@ -5190,6 +5183,8 @@ export default function RestaurantDetails() {
                               return false;
 
                             return subsection.items.some((item) => {
+
+                              if (item.isAvailable === false) return false;
 
                               const finalPrice = getFinalPrice(item);
 
@@ -5315,8 +5310,6 @@ export default function RestaurantDetails() {
                                         const quantity =
 
                                           quantities[item.id || item._id] || 0;
-                                        const isItemUnavailable = item.isAvailable === false;
-                                        const disableItemActions = shouldShowGrayscale || isItemUnavailable;
 
                                         // Determine veg/non-veg based on foodType
 
@@ -5396,11 +5389,6 @@ export default function RestaurantDetails() {
                                                 {item.name}
 
                                               </h3>
-                                              {isItemUnavailable && (
-                                                <p className="mt-1 text-xs font-semibold text-red-500">
-                                                  Unavailable
-                                                </p>
-                                              )}
 
 
 
@@ -5678,7 +5666,7 @@ export default function RestaurantDetails() {
 
                                                   }}
 
-                                                  className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-4 py-1.5 rounded-lg shadow-md flex items-center gap-1 ${disableItemActions
+                                                  className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-4 py-1.5 rounded-lg shadow-md flex items-center gap-1 ${shouldShowGrayscale
 
                                                     ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
 
@@ -5696,7 +5684,7 @@ export default function RestaurantDetails() {
 
                                                       if (
 
-                                                        !disableItemActions
+                                                        !shouldShowGrayscale
 
                                                       ) {
 
@@ -5722,13 +5710,13 @@ export default function RestaurantDetails() {
 
                                                     disabled={
 
-                                                      disableItemActions
+                                                      shouldShowGrayscale
 
                                                     }
 
                                                     className={
 
-                                                      disableItemActions
+                                                      shouldShowGrayscale
 
                                                         ? "text-gray-400 cursor-not-allowed"
 
@@ -5744,7 +5732,7 @@ export default function RestaurantDetails() {
 
                                                   <span
 
-                                                    className={`mx-2 text-sm ${disableItemActions ? "text-gray-400" : ""}`}
+                                                    className={`mx-2 text-sm ${shouldShowGrayscale ? "text-gray-400" : ""}`}
 
                                                   >
 
@@ -5760,7 +5748,7 @@ export default function RestaurantDetails() {
 
                                                       if (
 
-                                                        !disableItemActions
+                                                        !shouldShowGrayscale
 
                                                       ) {
 
@@ -5780,13 +5768,13 @@ export default function RestaurantDetails() {
 
                                                     disabled={
 
-                                                      disableItemActions
+                                                      shouldShowGrayscale
 
                                                     }
 
                                                     className={
 
-                                                      disableItemActions
+                                                      shouldShowGrayscale
 
                                                         ? "text-gray-400 cursor-not-allowed"
 
@@ -5848,7 +5836,7 @@ export default function RestaurantDetails() {
 
                                                     if (
 
-                                                      !disableItemActions
+                                                      !shouldShowGrayscale
 
                                                     ) {
 
@@ -5868,11 +5856,11 @@ export default function RestaurantDetails() {
 
                                                   disabled={
 
-                                                    disableItemActions
+                                                    shouldShowGrayscale
 
                                                   }
 
-                                                  className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-6 py-1.5 rounded-lg shadow-md flex items-center gap-1 transition-colors ${disableItemActions
+                                                  className={`absolute -bottom-2 left-1/2 -translate-x-1/2 bg-white border font-bold px-6 py-1.5 rounded-lg shadow-md flex items-center gap-1 transition-colors ${shouldShowGrayscale
 
                                                     ? "border-gray-300 text-gray-400 cursor-not-allowed opacity-50"
 
@@ -5882,17 +5870,15 @@ export default function RestaurantDetails() {
 
                                                 >
 
-                                                  {isItemUnavailable ? (
-                                                    "Unavailable"
-                                                  ) : (
-                                                    <>
-                                                      ADD{" "}
-                                                      <Plus
-                                                        size={14}
-                                                        className="stroke-[3px]"
-                                                      />
-                                                    </>
-                                                  )}
+                                                  ADD{" "}
+
+                                                  <Plus
+
+                                                    size={14}
+
+                                                    className="stroke-[3px]"
+
+                                                  />
 
                                                 </motion.button>
 
@@ -6108,6 +6094,58 @@ export default function RestaurantDetails() {
                         </button>
 
                       ))}
+
+                    </div>
+
+
+
+                    {/* Large Order Menu Section */}
+
+                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-800">
+
+                      <button
+
+                        className="w-full flex items-center justify-between py-3 px-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-lg transition-colors"
+
+                        onClick={() =>
+
+                          setShowLargeOrderMenu(!showLargeOrderMenu)
+
+                        }
+
+                      >
+
+                        <span className="text-base font-semibold text-gray-900 dark:text-white">
+
+                          LARGE ORDER MENU
+
+                        </span>
+
+                        <ChevronDown
+
+                          className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform ${showLargeOrderMenu ? "rotate-180" : ""
+
+                            }`}
+
+                        />
+
+                      </button>
+
+                      {showLargeOrderMenu && (
+
+                        <div className="mt-2 space-y-1 pl-4">
+
+                          {/* Add large order menu items here if needed */}
+
+                          <p className="text-sm text-gray-500 dark:text-gray-400 py-2">
+
+                            Large order options coming soon
+
+                          </p>
+
+                        </div>
+
+                      )}
 
                     </div>
 
@@ -7476,11 +7514,6 @@ export default function RestaurantDetails() {
                       </p>
 
                     )}
-                    {isSelectedItemUnavailable && (
-                      <p className="text-xs text-red-500 font-semibold mb-4">
-                        Currently unavailable
-                      </p>
-                    )}
 
                   </div>
 
@@ -7496,7 +7529,7 @@ export default function RestaurantDetails() {
 
                       <div
 
-                        className={`flex items-center gap-3 border-2 rounded-lg px-3 h-[44px] bg-white dark:bg-[#2a2a2a] ${shouldDisableSelectedItemActions
+                        className={`flex items-center gap-3 border-2 rounded-lg px-3 h-[44px] bg-white dark:bg-[#2a2a2a] ${shouldShowGrayscale
 
                           ? "border-gray-300 dark:border-gray-700 opacity-50"
 
@@ -7510,7 +7543,7 @@ export default function RestaurantDetails() {
 
                           onClick={(e) => {
 
-                            if (!shouldDisableSelectedItemActions) {
+                            if (!shouldShowGrayscale) {
 
                               updateItemQuantity(
 
@@ -7536,11 +7569,11 @@ export default function RestaurantDetails() {
 
                             (quantities[selectedItem.id || selectedItem._id] || 0) === 0 ||
 
-                            shouldDisableSelectedItemActions
+                            shouldShowGrayscale
 
                           }
 
-                          className={`${shouldDisableSelectedItemActions
+                          className={`${shouldShowGrayscale
 
                             ? "text-gray-300 dark:text-gray-600 cursor-not-allowed"
 
@@ -7556,7 +7589,7 @@ export default function RestaurantDetails() {
 
                         <span
 
-                          className={`text-lg font-semibold min-w-[2rem] text-center ${shouldDisableSelectedItemActions
+                          className={`text-lg font-semibold min-w-[2rem] text-center ${shouldShowGrayscale
 
                             ? "text-gray-400 dark:text-gray-600"
 
@@ -7574,7 +7607,7 @@ export default function RestaurantDetails() {
 
                           onClick={(e) => {
 
-                            if (!shouldDisableSelectedItemActions) {
+                            if (!shouldShowGrayscale) {
 
                               updateItemQuantity(
 
@@ -7590,11 +7623,11 @@ export default function RestaurantDetails() {
 
                           }}
 
-                          disabled={shouldDisableSelectedItemActions}
+                          disabled={shouldShowGrayscale}
 
                           className={
 
-                            shouldDisableSelectedItemActions
+                            shouldShowGrayscale
 
                               ? "text-gray-300 dark:text-gray-600 cursor-not-allowed"
 
@@ -7616,7 +7649,7 @@ export default function RestaurantDetails() {
 
                       <Button
 
-                        className={`flex-1 h-[44px] rounded-lg font-semibold flex items-center justify-center gap-2 ${shouldDisableSelectedItemActions
+                        className={`flex-1 h-[44px] rounded-lg font-semibold flex items-center justify-center gap-2 ${shouldShowGrayscale
 
                           ? "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-600 cursor-not-allowed opacity-50"
 
@@ -7626,7 +7659,7 @@ export default function RestaurantDetails() {
 
                         onClick={(e) => {
 
-                          if (!shouldDisableSelectedItemActions) {
+                          if (!shouldShowGrayscale) {
 
                             updateItemQuantity(
 
@@ -7644,11 +7677,11 @@ export default function RestaurantDetails() {
 
                         }}
 
-                        disabled={shouldDisableSelectedItemActions}
+                        disabled={shouldShowGrayscale}
 
                       >
 
-                        <span>{isSelectedItemUnavailable ? "Unavailable" : "Add item"}</span>
+                        <span>Add item</span>
 
                         <div className="flex items-center gap-1">
 
@@ -8518,7 +8551,6 @@ export default function RestaurantDetails() {
   );
 
 }
-
 
 
 

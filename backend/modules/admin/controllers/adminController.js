@@ -46,7 +46,7 @@ const getRestaurantLocationSnapshot = (restaurant = {}) => {
       : {};
   const onboardingLocation =
     restaurant?.onboarding?.step1?.location &&
-    typeof restaurant.onboarding.step1.location === 'object'
+      typeof restaurant.onboarding.step1.location === 'object'
       ? restaurant.onboarding.step1.location
       : {};
 
@@ -164,8 +164,8 @@ const normalizeOutletTimingsPayload = (inputTimings = [], fallback = {}) => {
     const entry = mapByDay.get(day) || {};
     const fallbackIsOpen = Array.isArray(fallback?.openDays)
       ? fallback.openDays.some(
-          (d) => String(d || '').slice(0, 3).toLowerCase() === day.slice(0, 3).toLowerCase()
-        )
+        (d) => String(d || '').slice(0, 3).toLowerCase() === day.slice(0, 3).toLowerCase()
+      )
       : true;
     const isOpen = entry?.isOpen !== undefined ? Boolean(entry.isOpen) : fallbackIsOpen;
 
@@ -179,11 +179,11 @@ const normalizeOutletTimingsPayload = (inputTimings = [], fallback = {}) => {
       String(entry?.closingTime || '').trim() ||
       (slots[slots.length - 1]
         ? minutesToTime24(
-            parseSlotTimeToMinutes(
-              slots[slots.length - 1].end,
-              slots[slots.length - 1].endPeriod
-            )
+          parseSlotTimeToMinutes(
+            slots[slots.length - 1].end,
+            slots[slots.length - 1].endPeriod
           )
+        )
         : String(fallback?.closingTime || '22:00'));
 
     const slotList = slots.length > 0 ? slots : (() => {
@@ -237,13 +237,13 @@ const deriveRestaurantTimingFieldsFromOutletTimings = (timings = []) => {
     deliveryTimings:
       openingMinutes.length > 0 && closingMinutes.length > 0
         ? {
-            openingTime: minutesToTime24(Math.min(...openingMinutes)) || '09:00',
-            closingTime: minutesToTime24(Math.max(...closingMinutes)) || '22:00',
-          }
+          openingTime: minutesToTime24(Math.min(...openingMinutes)) || '09:00',
+          closingTime: minutesToTime24(Math.max(...closingMinutes)) || '22:00',
+        }
         : {
-            openingTime: '09:00',
-            closingTime: '22:00',
-          },
+          openingTime: '09:00',
+          closingTime: '22:00',
+        },
   };
 };
 
@@ -322,11 +322,11 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       : requestedPlatform === 'mogrocery'
         ? { restaurantPlatform: 'mogrocery' }
         : {
-            $or: [
-              { restaurantPlatform: 'mofood' },
-              { restaurantPlatform: { $exists: false } }
-            ]
-          };
+          $or: [
+            { restaurantPlatform: 'mofood' },
+            { restaurantPlatform: { $exists: false } }
+          ]
+        };
     const scopedSettlementMatch = { restaurantId: { $in: scopedRestaurantObjectIds } };
 
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -433,105 +433,105 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       ]),
       scopedRestaurantObjectIds.length > 0
         ? OrderSettlement.aggregate([
-            { $match: scopedSettlementMatch },
-            {
-              $group: {
-                _id: null,
-                totalCommission: { $sum: '$adminEarning.commission' },
-                totalPlatformFee: { $sum: '$adminEarning.platformFee' },
-                totalDeliveryFee: { $sum: '$adminEarning.deliveryFee' },
-                totalGST: { $sum: '$adminEarning.gst' }
-              }
+          { $match: scopedSettlementMatch },
+          {
+            $group: {
+              _id: null,
+              totalCommission: { $sum: '$adminEarning.commission' },
+              totalPlatformFee: { $sum: '$adminEarning.platformFee' },
+              totalDeliveryFee: { $sum: '$adminEarning.deliveryFee' },
+              totalGST: { $sum: '$adminEarning.gst' }
             }
-          ])
+          }
+        ])
         : Promise.resolve([]),
       scopedRestaurantObjectIds.length > 0
         ? OrderSettlement.aggregate([
-            {
-              $match: {
-                ...scopedSettlementMatch,
-                createdAt: { $gte: last30Days, $lte: now }
-              }
-            },
-            {
-              $group: {
-                _id: null,
-                totalCommission: { $sum: '$adminEarning.commission' },
-                totalPlatformFee: { $sum: '$adminEarning.platformFee' },
-                totalDeliveryFee: { $sum: '$adminEarning.deliveryFee' },
-                totalGST: { $sum: '$adminEarning.gst' }
-              }
+          {
+            $match: {
+              ...scopedSettlementMatch,
+              createdAt: { $gte: last30Days, $lte: now }
             }
-          ])
+          },
+          {
+            $group: {
+              _id: null,
+              totalCommission: { $sum: '$adminEarning.commission' },
+              totalPlatformFee: { $sum: '$adminEarning.platformFee' },
+              totalDeliveryFee: { $sum: '$adminEarning.deliveryFee' },
+              totalGST: { $sum: '$adminEarning.gst' }
+            }
+          }
+        ])
         : Promise.resolve([]),
       scopedRestaurantObjectIds.length > 0
         ? OrderSettlement.aggregate([
-            { $match: scopedSettlementMatch },
-            {
-              $lookup: {
-                from: 'orders',
-                localField: 'orderId',
-                foreignField: '_id',
-                as: 'order'
-              }
-            },
-            { $unwind: '$order' },
-            {
-              $match: {
-                'order.status': 'delivered',
-                'order.deliveredAt': { $gte: monthlyWindowStart, $lte: now }
-              }
-            },
-            {
-              $group: {
-                _id: {
-                  year: { $year: '$order.deliveredAt' },
-                  month: { $month: '$order.deliveredAt' }
-                },
-                commission: { $sum: '$adminEarning.commission' }
-              }
+          { $match: scopedSettlementMatch },
+          {
+            $lookup: {
+              from: 'orders',
+              localField: 'orderId',
+              foreignField: '_id',
+              as: 'order'
             }
-          ])
+          },
+          { $unwind: '$order' },
+          {
+            $match: {
+              'order.status': 'delivered',
+              'order.deliveredAt': { $gte: monthlyWindowStart, $lte: now }
+            }
+          },
+          {
+            $group: {
+              _id: {
+                year: { $year: '$order.deliveredAt' },
+                month: { $month: '$order.deliveredAt' }
+              },
+              commission: { $sum: '$adminEarning.commission' }
+            }
+          }
+        ])
         : Promise.resolve([]),
       requestedPlatform === 'mogrocery'
         ? GroceryStore.countDocuments({ isActive: true, ...(cityRegex ? { 'location.city': cityRegex } : {}) })
         : Restaurant.countDocuments({ ...restaurantPlatformQuery, isActive: true, ...(cityRegex ? { 'location.city': cityRegex } : {}) }),
       requestedPlatform === 'mogrocery'
         ? GroceryStore.countDocuments({
-            ...pendingRestaurantRequestsQuery,
-            ...(cityRegex
-              ? {
-                  $or: [
-                    { 'location.city': cityRegex },
-                    { 'onboarding.step1.location.city': cityRegex }
-                  ]
-                }
-              : {})
-          })
+          ...pendingRestaurantRequestsQuery,
+          ...(cityRegex
+            ? {
+              $or: [
+                { 'location.city': cityRegex },
+                { 'onboarding.step1.location.city': cityRegex }
+              ]
+            }
+            : {})
+        })
         : Restaurant.countDocuments({
-            ...restaurantPlatformQuery,
-            ...pendingRestaurantRequestsQuery,
-            ...(cityRegex
-              ? {
-                  $or: [
-                    { 'location.city': cityRegex },
-                    { 'onboarding.step1.location.city': cityRegex }
-                  ]
-                }
-              : {})
-          }),
+          ...restaurantPlatformQuery,
+          ...pendingRestaurantRequestsQuery,
+          ...(cityRegex
+            ? {
+              $or: [
+                { 'location.city': cityRegex },
+                { 'onboarding.step1.location.city': cityRegex }
+              ]
+            }
+            : {})
+        }),
       requestedPlatform === 'mogrocery'
         ? GroceryStore.countDocuments({
-            createdAt: { $gte: last24Hours },
-            isActive: true,
-            ...(cityRegex ? { 'location.city': cityRegex } : {})
-          })
+          createdAt: { $gte: last24Hours },
+          isActive: true,
+          ...(cityRegex ? { 'location.city': cityRegex } : {})
+        })
         : Restaurant.countDocuments({
-            ...restaurantPlatformQuery,
-            createdAt: { $gte: last24Hours },
-            isActive: true,
-            ...(cityRegex ? { 'location.city': cityRegex } : {})
-          }),
+          ...restaurantPlatformQuery,
+          createdAt: { $gte: last24Hours },
+          isActive: true,
+          ...(cityRegex ? { 'location.city': cityRegex } : {})
+        }),
       User.aggregate([
         { $match: { role: 'delivery' } },
         {
@@ -558,66 +558,66 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
       ]),
       scopedRestaurantObjectIds.length > 0
         ? (await import('../../restaurant/models/Menu.js')).default.aggregate([
-            { $match: { isActive: true, restaurant: { $in: scopedRestaurantObjectIds } } },
-            {
-              $project: {
-                foodsCount: {
-                  $sum: {
-                    $map: {
-                      input: { $ifNull: ['$sections', []] },
-                      as: 'section',
-                      in: {
-                        $add: [
-                          {
-                            $size: {
-                              $filter: {
-                                input: { $ifNull: ['$$section.items', []] },
-                                as: 'item',
-                                cond: { $ne: ['$$item.approvalStatus', 'rejected'] }
-                              }
+          { $match: { isActive: true, restaurant: { $in: scopedRestaurantObjectIds } } },
+          {
+            $project: {
+              foodsCount: {
+                $sum: {
+                  $map: {
+                    input: { $ifNull: ['$sections', []] },
+                    as: 'section',
+                    in: {
+                      $add: [
+                        {
+                          $size: {
+                            $filter: {
+                              input: { $ifNull: ['$$section.items', []] },
+                              as: 'item',
+                              cond: { $ne: ['$$item.approvalStatus', 'rejected'] }
                             }
-                          },
-                          {
-                            $sum: {
-                              $map: {
-                                input: { $ifNull: ['$$section.subsections', []] },
-                                as: 'subsection',
-                                in: {
-                                  $size: {
-                                    $filter: {
-                                      input: { $ifNull: ['$$subsection.items', []] },
-                                      as: 'item',
-                                      cond: { $ne: ['$$item.approvalStatus', 'rejected'] }
-                                    }
+                          }
+                        },
+                        {
+                          $sum: {
+                            $map: {
+                              input: { $ifNull: ['$$section.subsections', []] },
+                              as: 'subsection',
+                              in: {
+                                $size: {
+                                  $filter: {
+                                    input: { $ifNull: ['$$subsection.items', []] },
+                                    as: 'item',
+                                    cond: { $ne: ['$$item.approvalStatus', 'rejected'] }
                                   }
                                 }
                               }
                             }
                           }
-                        ]
-                      }
-                    }
-                  }
-                },
-                addonsCount: {
-                  $size: {
-                    $filter: {
-                      input: { $ifNull: ['$addons', []] },
-                      as: 'addon',
-                      cond: { $ne: ['$$addon.approvalStatus', 'rejected'] }
+                        }
+                      ]
                     }
                   }
                 }
-              }
-            },
-            {
-              $group: {
-                _id: null,
-                totalFoods: { $sum: '$foodsCount' },
-                totalAddons: { $sum: '$addonsCount' }
+              },
+              addonsCount: {
+                $size: {
+                  $filter: {
+                    input: { $ifNull: ['$addons', []] },
+                    as: 'addon',
+                    cond: { $ne: ['$$addon.approvalStatus', 'rejected'] }
+                  }
+                }
               }
             }
-          ])
+          },
+          {
+            $group: {
+              _id: null,
+              totalFoods: { $sum: '$foodsCount' },
+              totalAddons: { $sum: '$addonsCount' }
+            }
+          }
+        ])
         : Promise.resolve([]),
     ]);
 
@@ -782,7 +782,7 @@ export const getAdmins = asyncHandler(async (req, res) => {
     const { limit = 50, offset = 0, search } = req.query;
 
     const query = {};
-    
+
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: 'i' } },
@@ -895,7 +895,7 @@ export const createAdmin = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     logger.error(`Error creating admin: ${error.message}`);
-    
+
     if (error.code === 11000) {
       const duplicateField = resolveDuplicateAdminField(error);
       const duplicateValue = resolveDuplicateAdminValue(error, duplicateField);
@@ -910,7 +910,7 @@ export const createAdmin = asyncHandler(async (req, res) => {
       }
       return errorResponse(res, 400, `Admin with duplicate ${duplicateField} already exists${suffix}`);
     }
-    
+
     return errorResponse(res, 500, 'Failed to create admin');
   }
 });
@@ -963,7 +963,7 @@ export const updateAdmin = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     logger.error(`Error updating admin: ${error.message}`);
-    
+
     if (error.code === 11000) {
       const duplicateField = resolveDuplicateAdminField(error);
       const duplicateValue = resolveDuplicateAdminValue(error, duplicateField);
@@ -978,7 +978,7 @@ export const updateAdmin = asyncHandler(async (req, res) => {
       }
       return errorResponse(res, 400, `Admin with duplicate ${duplicateField} already exists${suffix}`);
     }
-    
+
     return errorResponse(res, 500, 'Failed to update admin');
   }
 });
@@ -1053,36 +1053,36 @@ export const updateAdminProfile = asyncHandler(async (req, res) => {
     // Update fields (email cannot be changed via profile update)
     if (name !== undefined && name !== null) {
       const trimmedName = name.trim();
-      
+
       // Validate name - only letters, spaces, apostrophes, and hyphens
       const nameRegex = /^[a-zA-Z\s'-]+$/;
       if (!nameRegex.test(trimmedName)) {
         return errorResponse(res, 400, 'Full Name can only contain letters, spaces, apostrophes, and hyphens');
       }
-      
+
       if (trimmedName.length < 2) {
         return errorResponse(res, 400, 'Full Name must be at least 2 characters long');
       }
-      
+
       admin.name = trimmedName;
     }
-    
+
     if (phone !== undefined) {
       // Allow empty string to clear phone number
       if (phone && phone.trim()) {
         const phoneDigits = phone.trim().replace(/\D/g, '');
-        
+
         // Validate phone - must be exactly 10 digits
         if (phoneDigits.length !== 10) {
           return errorResponse(res, 400, 'Phone Number must be exactly 10 digits');
         }
-        
+
         admin.phone = phoneDigits;
       } else {
         admin.phone = null;
       }
     }
-    
+
     if (profileImage !== undefined) {
       // Allow empty string to clear profile image
       admin.profileImage = profileImage || null;
@@ -1169,7 +1169,7 @@ export const getUsers = asyncHandler(async (req, res) => {
 
     // Build query
     const query = { role: 'user' }; // Only get users, not restaurants/delivery/admins
-    
+
     // Search filter
     if (search) {
       query.$or = [
@@ -1234,7 +1234,7 @@ export const getUsers = asyncHandler(async (req, res) => {
     // Format users with order statistics
     const formattedUsers = users.map((user, index) => {
       const stats = statsMap[user._id.toString()] || { totalOrder: 0, totalOrderAmount: 0 };
-      
+
       // Format joining date
       const joiningDate = new Date(user.createdAt);
       const formattedDate = joiningDate.toLocaleDateString('en-GB', {
@@ -1419,8 +1419,8 @@ export const updateUserStatus = asyncHandler(async (req, res) => {
  */
 export const getRestaurants = asyncHandler(async (req, res) => {
   try {
-    const { 
-      page = 1, 
+    const {
+      page = 1,
       limit = 50,
       search,
       status,
@@ -1839,7 +1839,7 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
 
     const restaurants = await Restaurant.find(query)
       .select('-password')
-      .sort({ updatedAt: -1 })
+      .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parsedLimit)
       .lean();
@@ -2003,9 +2003,9 @@ export const rejectRestaurant = asyncHandler(async (req, res) => {
  */
 export const getGroceryStoreJoinRequests = asyncHandler(async (req, res) => {
   try {
-    const { 
-      status = 'pending', 
-      page = 1, 
+    const {
+      status = 'pending',
+      page = 1,
       limit = 50,
       search
     } = req.query;
@@ -2020,29 +2020,20 @@ export const getGroceryStoreJoinRequests = asyncHandler(async (req, res) => {
     const hasMeaningfulRejectionReasonCondition = {
       rejectionReason: { $regex: /\S/ }
     };
-    const hasOnboardingSubmissionCondition = {
-      $or: [
-        { 'onboarding.completedSteps': { $gte: 1 } },
-        { 'onboarding.step1': { $exists: true } },
-        { 'onboarding.step2': { $exists: true } },
-        { 'onboarding.step3': { $exists: true } },
-        { 'onboarding.step4': { $exists: true } }
-      ]
-    };
-    
+
     if (status === 'pending') {
       // Show only onboarded stores that are awaiting review.
       query.$and = [
         { isActive: false },
         { approvedAt: null },
-        hasOnboardingSubmissionCondition,
+        { 'onboarding.completedSteps': { $gte: 1 } },
         { $or: emptyRejectionReasonConditions }
       ];
     } else if (status === 'rejected') {
       query.$and = [
         { isActive: false },
         { approvedAt: null },
-        hasOnboardingSubmissionCondition,
+        { 'onboarding.completedSteps': { $gte: 1 } },
         hasMeaningfulRejectionReasonCondition
       ];
     }
@@ -2057,7 +2048,7 @@ export const getGroceryStoreJoinRequests = asyncHandler(async (req, res) => {
           { email: { $regex: search.trim(), $options: 'i' } }
         ]
       };
-      
+
       if (query.$and) {
         query.$and.push(searchConditions);
       } else {
@@ -2609,13 +2600,13 @@ export const createRestaurant = asyncHandler(async (req, res) => {
     return successResponse(res, 201, 'Restaurant created successfully', responseData);
   } catch (error) {
     logger.error(`Error creating restaurant: ${error.message}`, { error: error.stack });
-    
+
     // Handle duplicate key errors
     if (error.code === 11000) {
       const field = Object.keys(error.keyPattern || {})[0];
       return errorResponse(res, 400, `Restaurant with this ${field} already exists`);
     }
-    
+
     return errorResponse(res, 500, `Failed to create restaurant: ${error.message}`);
   }
 });
@@ -2680,10 +2671,10 @@ export const deleteRestaurantAddon = asyncHandler(async (req, res) => {
     }
 
     const Menu = (await import('../../restaurant/models/Menu.js')).default;
-    
+
     // Find menu
     const menu = await Menu.findOne({ restaurant: restaurantId });
-    
+
     if (!menu) {
       return errorResponse(res, 404, 'Menu not found');
     }
@@ -2694,20 +2685,20 @@ export const deleteRestaurantAddon = asyncHandler(async (req, res) => {
     if (menu.addons.length > 0) {
       logger.info(`Available addon IDs: ${menu.addons.map(a => a.id).join(', ')}`);
     }
-    
+
     const addonIndex = menu.addons.findIndex(a => {
       const menuAddonId = String(a.id || '');
       const searchId = String(addonId || '');
       return menuAddonId === searchId;
     });
-    
+
     if (addonIndex === -1) {
       logger.warn(`Addon not found. Searched for: "${addonId}", Available IDs: ${menu.addons.map(a => `"${a.id}"`).join(', ')}`);
       return errorResponse(res, 404, `Add-on not found. Searched ID: ${addonId}`);
     }
 
     const addonName = menu.addons[addonIndex].name || 'Unknown';
-    
+
     menu.addons.splice(addonIndex, 1);
     menu.markModified('addons');
     await menu.save();
@@ -2737,8 +2728,8 @@ export const deleteRestaurantAddon = asyncHandler(async (req, res) => {
  */
 export const getAllOffers = asyncHandler(async (req, res) => {
   try {
-    const { 
-      page = 1, 
+    const {
+      page = 1,
       limit = 50,
       search,
       status,
@@ -2767,11 +2758,11 @@ export const getAllOffers = asyncHandler(async (req, res) => {
     const query = {
       restaurant: { $in: eligibleRestaurantIds }
     };
-    
+
     if (status) {
       query.status = status;
     }
-    
+
     if (restaurantId) {
       query.restaurant = {
         $in: eligibleRestaurantIds.filter((id) => String(id) === String(restaurantId))
@@ -2791,18 +2782,18 @@ export const getAllOffers = asyncHandler(async (req, res) => {
 
     const unresolvedStoreIds = requestedPlatform === 'mogrocery'
       ? Array.from(
-          new Set(
-            offers
-              .map((offer) => {
-                if (offer?.restaurant && typeof offer.restaurant === 'object') {
-                  return String(offer.restaurant?._id || '');
-                }
-                return String(offer?.restaurant || '');
-              })
-              .filter(Boolean)
-              .filter((id) => !offers.some((offer) => String(offer?.restaurant?._id || '') === id && offer?.restaurant?.name))
-          )
+        new Set(
+          offers
+            .map((offer) => {
+              if (offer?.restaurant && typeof offer.restaurant === 'object') {
+                return String(offer.restaurant?._id || '');
+              }
+              return String(offer?.restaurant || '');
+            })
+            .filter(Boolean)
+            .filter((id) => !offers.some((offer) => String(offer?.restaurant?._id || '') === id && offer?.restaurant?.name))
         )
+      )
       : [];
 
     let groceryStoreNameMap = new Map();
@@ -2838,11 +2829,11 @@ export const getAllOffers = asyncHandler(async (req, res) => {
           // Apply search filter if provided
           if (search) {
             const searchLower = search.toLowerCase();
-            const matchesSearch = 
+            const matchesSearch =
               offer.restaurant?.name?.toLowerCase().includes(searchLower) ||
               item.itemName?.toLowerCase().includes(searchLower) ||
               item.couponCode?.toLowerCase().includes(searchLower);
-            
+
             if (!matchesSearch) {
               return; // Skip this item if it doesn't match search
             }
@@ -3018,13 +3009,13 @@ export const createOffer = asyncHandler(async (req, res) => {
     } else {
       const foodQuery = restaurantScope === 'all'
         ? {
-            isActive: true,
-            $or: [{ platform: 'mofood' }, { platform: { $exists: false } }]
-          }
+          isActive: true,
+          $or: [{ platform: 'mofood' }, { platform: { $exists: false } }]
+        }
         : {
-            _id: { $in: validIds },
-            $or: [{ platform: 'mofood' }, { platform: { $exists: false } }]
-          };
+          _id: { $in: validIds },
+          $or: [{ platform: 'mofood' }, { platform: { $exists: false } }]
+        };
 
       const foodRestaurants = await Restaurant.find(foodQuery)
         .select('_id name restaurantId')
@@ -3290,13 +3281,13 @@ export const updateOffer = asyncHandler(async (req, res) => {
 export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
   try {
     const { restaurantId } = req.params;
-    
+
     logger.info(`Fetching restaurant analytics for: ${restaurantId}`);
-    
+
     if (!restaurantId) {
       return errorResponse(res, 400, 'Restaurant ID is required');
     }
-    
+
     if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
       logger.warn(`Invalid restaurant ID format: ${restaurantId}`);
       return errorResponse(res, 400, 'Invalid restaurant ID format');
@@ -3308,7 +3299,7 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
       logger.warn(`Restaurant not found: ${restaurantId}`);
       return errorResponse(res, 404, 'Restaurant not found');
     }
-    
+
     logger.info(`Restaurant found: ${restaurant.name} (${restaurant.restaurantId})`);
 
     // Calculate date ranges
@@ -3323,7 +3314,7 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
     const restaurantIdString = restaurantId.toString();
     const restaurantIdField = restaurant?.restaurantId || restaurantIdString;
     const restaurantObjectIdString = restaurant._id.toString();
-    
+
     logger.info(`📊 Fetching order statistics for restaurant:`, {
       restaurantId: restaurantId,
       restaurantIdString: restaurantIdString,
@@ -3331,7 +3322,7 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
       restaurantObjectIdString: restaurantObjectIdString,
       restaurantName: restaurant.name
     });
-    
+
     // Build query to match restaurantId in multiple formats
     const orderMatchQuery = {
       $or: [
@@ -3340,9 +3331,9 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
         { restaurantId: restaurantObjectIdString }
       ]
     };
-    
+
     logger.info(`🔍 Order query:`, orderMatchQuery);
-    
+
     const orderStats = await Order.aggregate([
       {
         $match: orderMatchQuery
@@ -3375,13 +3366,13 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
       }
     });
 
-    const totalOrders = (orderStatusMap.delivered || 0) + (orderStatusMap.cancelled || 0) + 
-                       (orderStatusMap.pending || 0) + (orderStatusMap.confirmed || 0) +
-                       (orderStatusMap.preparing || 0) + (orderStatusMap.ready || 0) +
-                       (orderStatusMap.out_for_delivery || 0);
+    const totalOrders = (orderStatusMap.delivered || 0) + (orderStatusMap.cancelled || 0) +
+      (orderStatusMap.pending || 0) + (orderStatusMap.confirmed || 0) +
+      (orderStatusMap.preparing || 0) + (orderStatusMap.ready || 0) +
+      (orderStatusMap.out_for_delivery || 0);
     const completedOrders = orderStatusMap.delivered || 0;
     const cancelledOrders = orderStatusMap.cancelled || 0;
-    
+
     logger.info(`📊 Calculated order statistics:`, {
       totalOrders,
       completedOrders,
@@ -3439,43 +3430,43 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
 
     // Get commission and earnings data from OrderSettlement (more accurate)
     // Match settlements by restaurantId (ObjectId in OrderSettlement)
-    const restaurantIdForSettlement = restaurant._id instanceof mongoose.Types.ObjectId 
-      ? restaurant._id 
+    const restaurantIdForSettlement = restaurant._id instanceof mongoose.Types.ObjectId
+      ? restaurant._id
       : new mongoose.Types.ObjectId(restaurant._id);
-    
+
     // Get all settlements for this restaurant
     const allSettlements = await OrderSettlement.find({
       restaurantId: restaurantIdForSettlement
     }).lean();
-    
+
     // Calculate totals from settlements
     let totalCommission = 0;
     let totalRestaurantEarning = 0;
     let totalFoodPrice = 0;
-    
+
     allSettlements.forEach(s => {
       totalCommission += s.restaurantEarning?.commission || 0;
       totalRestaurantEarning += s.restaurantEarning?.netEarning || 0;
       totalFoodPrice += s.restaurantEarning?.foodPrice || 0;
     });
-    
+
     totalCommission = Math.round(totalCommission * 100) / 100;
     totalRestaurantEarning = Math.round(totalRestaurantEarning * 100) / 100;
     totalFoodPrice = Math.round(totalFoodPrice * 100) / 100;
-    
+
     // Get monthly settlements
     const monthlySettlements = await OrderSettlement.find({
       restaurantId: restaurantIdForSettlement,
       createdAt: { $gte: startOfMonth }
     }).lean();
-    
+
     let monthlyCommission = 0;
     let monthlyRestaurantEarning = 0;
     monthlySettlements.forEach(s => {
       monthlyCommission += s.restaurantEarning?.commission || 0;
       monthlyRestaurantEarning += s.restaurantEarning?.netEarning || 0;
     });
-    
+
     monthlyCommission = Math.round(monthlyCommission * 100) / 100;
     monthlyRestaurantEarning = Math.round(monthlyRestaurantEarning * 100) / 100;
     const monthlyProfit = monthlyRestaurantEarning; // Restaurant profit = net earning
@@ -3485,14 +3476,14 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
       restaurantId: restaurantIdForSettlement,
       createdAt: { $gte: startOfYear }
     }).lean();
-    
+
     let yearlyCommission = 0;
     let yearlyRestaurantEarning = 0;
     yearlySettlements.forEach(s => {
       yearlyCommission += s.restaurantEarning?.commission || 0;
       yearlyRestaurantEarning += s.restaurantEarning?.netEarning || 0;
     });
-    
+
     yearlyCommission = Math.round(yearlyCommission * 100) / 100;
     yearlyRestaurantEarning = Math.round(yearlyRestaurantEarning * 100) / 100;
     const yearlyProfit = yearlyRestaurantEarning; // Restaurant profit = net earning
@@ -3503,7 +3494,7 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
       restaurantId: restaurantIdForSettlement,
       createdAt: { $gte: last12MonthsStart }
     }).lean();
-    
+
     // Group by month
     const monthlyEarningsMap = new Map();
     last12MonthsSettlements.forEach(s => {
@@ -3511,35 +3502,35 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
       const current = monthlyEarningsMap.get(monthKey) || 0;
       monthlyEarningsMap.set(monthKey, current + (s.restaurantEarning?.netEarning || 0));
     });
-    
+
     const avgMonthlyProfit = monthlyEarningsMap.size > 0
       ? Array.from(monthlyEarningsMap.values()).reduce((sum, val) => sum + val, 0) / monthlyEarningsMap.size
       : 0;
 
     // Get commission percentage from RestaurantCommission
     const RestaurantCommission = (await import('../models/RestaurantCommission.js')).default;
-    
+
     // Use restaurant._id directly - ensure it's an ObjectId
-    const restaurantIdForQuery = restaurant._id instanceof mongoose.Types.ObjectId 
-      ? restaurant._id 
+    const restaurantIdForQuery = restaurant._id instanceof mongoose.Types.ObjectId
+      ? restaurant._id
       : new mongoose.Types.ObjectId(restaurant._id);
-    
+
     logger.info(`🔍 Looking for commission config:`, {
       restaurantId: restaurantId,
       restaurantObjectId: restaurantIdForQuery.toString(),
       restaurantName: restaurant.name,
       restaurantIdString: restaurant.restaurantId
     });
-    
+
     // Try using the static method first
     let commissionConfig = await RestaurantCommission.getCommissionForRestaurant(restaurantIdForQuery);
-    
+
     if (commissionConfig) {
       // Convert to plain object if needed
       commissionConfig = commissionConfig.toObject ? commissionConfig.toObject() : commissionConfig;
       logger.info(`✅ Found commission using static method`);
     }
-    
+
     // If not found, try direct query
     if (!commissionConfig) {
       logger.info(`⚠️ Static method didn't find commission, trying direct query`);
@@ -3547,36 +3538,36 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
         restaurant: restaurantIdForQuery,
         status: true
       });
-      
+
       if (commissionConfig) {
         commissionConfig = commissionConfig.toObject ? commissionConfig.toObject() : commissionConfig;
       }
     }
-    
+
     // If still not found, try without status filter
     if (!commissionConfig) {
       logger.info(`⚠️ Trying without status filter`);
       commissionConfig = await RestaurantCommission.findOne({
         restaurant: restaurantIdForQuery
       });
-      
+
       if (commissionConfig) {
         commissionConfig = commissionConfig.toObject ? commissionConfig.toObject() : commissionConfig;
       }
     }
-    
+
     // Also try by restaurantId string field
     if (!commissionConfig && restaurant?.restaurantId) {
       logger.info(`🔄 Trying by restaurantId string: ${restaurant.restaurantId}`);
       commissionConfig = await RestaurantCommission.findOne({
         restaurantId: restaurant.restaurantId
       });
-      
+
       if (commissionConfig) {
         commissionConfig = commissionConfig.toObject ? commissionConfig.toObject() : commissionConfig;
       }
     }
-    
+
     // Final debug: List all commissions to see what's in DB
     if (!commissionConfig) {
       const allCommissions = await RestaurantCommission.find({}).lean();
@@ -3589,7 +3580,7 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
         status: c.status,
         defaultCommission: c.defaultCommission
       })));
-      
+
       // Check if restaurant ObjectId matches any commission
       const matching = allCommissions.filter(c => {
         const cRestaurantId = c.restaurant?.toString ? c.restaurant.toString() : String(c.restaurant);
@@ -3611,7 +3602,7 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
         defaultCommissionType: commissionConfig.defaultCommission?.type,
         defaultCommissionValue: commissionConfig.defaultCommission?.value
       });
-      
+
       if (commissionConfig.defaultCommission) {
         // Get default commission value - if type is percentage, show the percentage value
         logger.info(`📊 Processing defaultCommission:`, {
@@ -3619,11 +3610,11 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
           value: commissionConfig.defaultCommission.value,
           valueType: typeof commissionConfig.defaultCommission.value
         });
-        
+
         if (commissionConfig.defaultCommission.type === 'percentage') {
           const rawValue = commissionConfig.defaultCommission.value;
-          commissionPercentage = typeof rawValue === 'number' 
-            ? rawValue 
+          commissionPercentage = typeof rawValue === 'number'
+            ? rawValue
             : parseFloat(rawValue) || 0;
           logger.info(`✅ Found commission percentage: ${commissionPercentage}% for restaurant ${restaurantId} (raw value: ${rawValue})`);
         } else if (commissionConfig.defaultCommission.type === 'amount') {
@@ -3639,23 +3630,23 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
       logger.warn(`⚠️ This restaurant may not have a commission configuration set up.`);
       logger.warn(`💡 To set up commission, go to Restaurant Commission page and add commission for this restaurant.`);
     }
-    
+
     // Log the final commission percentage being returned
     logger.info(`📊 Final commission percentage being returned: ${commissionPercentage}%`);
     logger.info(`📤 Sending response with commissionPercentage: ${commissionPercentage}`);
 
     // Get ratings from FeedbackExperience (restaurantId is ObjectId in FeedbackExperience)
     const FeedbackExperience = (await import('../models/FeedbackExperience.js')).default;
-    
-    const restaurantIdForRating = restaurant._id instanceof mongoose.Types.ObjectId 
-      ? restaurant._id 
+
+    const restaurantIdForRating = restaurant._id instanceof mongoose.Types.ObjectId
+      ? restaurant._id
       : new mongoose.Types.ObjectId(restaurant._id);
-    
+
     logger.info(`⭐ Fetching ratings for restaurant:`, {
       restaurantId: restaurantId,
       restaurantObjectId: restaurantIdForRating.toString()
     });
-    
+
     const ratingStats = await FeedbackExperience.aggregate([
       {
         $match: {
@@ -3676,7 +3667,7 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
 
     const averageRating = ratingStats[0]?.averageRating || 0;
     const totalRatings = ratingStats[0]?.totalRatings || 0;
-    
+
     logger.info(`⭐ Calculated ratings:`, {
       averageRating,
       totalRatings
@@ -3763,14 +3754,14 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
 export const getCustomerWalletReport = asyncHandler(async (req, res) => {
   try {
     console.log('🔍 Fetching customer wallet report...');
-    const { 
+    const {
       fromDate,
       toDate,
       all,
       customer,
       search
     } = req.query;
-    
+
     console.log('📋 Query params:', { fromDate, toDate, all, customer, search });
 
     const UserWallet = (await import('../../user/models/UserWallet.js')).default;
@@ -3804,14 +3795,14 @@ export const getCustomerWalletReport = asyncHandler(async (req, res) => {
     let allTransactions = [];
     wallets.forEach(wallet => {
       if (!wallet.userId) return;
-      
+
       // Sort transactions by date (oldest first for balance calculation)
-      const sortedTransactions = [...wallet.transactions].sort((a, b) => 
+      const sortedTransactions = [...wallet.transactions].sort((a, b) =>
         new Date(a.createdAt) - new Date(b.createdAt)
       );
-      
+
       let runningBalance = 0;
-      
+
       sortedTransactions.forEach((transaction) => {
         // Update running balance if transaction is completed (before date filter)
         let balance = runningBalance;
@@ -3824,7 +3815,7 @@ export const getCustomerWalletReport = asyncHandler(async (req, res) => {
             balance = runningBalance;
           }
         }
-        
+
         // Apply date filter if provided
         if (fromDate || toDate) {
           const transDate = new Date(transaction.createdAt);
@@ -3888,7 +3879,7 @@ export const getCustomerWalletReport = asyncHandler(async (req, res) => {
 
     // Filter by customer
     if (customer && customer !== 'Select Customer') {
-      allTransactions = allTransactions.filter(t => 
+      allTransactions = allTransactions.filter(t =>
         t.customer.toLowerCase().includes(customer.toLowerCase())
       );
     }

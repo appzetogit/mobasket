@@ -186,7 +186,7 @@ export default function DeliverySignIn() {
             <Label htmlFor="delivery-phone" className="text-sm text-gray-700">
               Mobile number
             </Label>
-            <div className="flex items-center gap-2">
+            <div className="flex items-stretch gap-2">
               <Select
                 value={formData.countryCode}
                 onValueChange={(value) => {
@@ -216,11 +216,10 @@ export default function DeliverySignIn() {
                   value={formData.phone}
                   onChange={handlePhoneChange}
                   placeholder="Enter phone number"
-                  className={`h-12 rounded-lg border-gray-300 bg-white pl-10 shadow-sm transition-colors placeholder:text-gray-400 ${
-                    error
+                  className={`h-12 rounded-lg border-gray-300 bg-white pl-10 shadow-sm transition-colors placeholder:text-gray-400 ${error
                       ? "border-red-500 focus-visible:border-red-500 focus-visible:ring-2 focus-visible:ring-red-500/20"
                       : "focus-visible:border-primary-orange focus-visible:ring-2 focus-visible:ring-primary-orange/20"
-                  }`}
+                    }`}
                 />
               </div>
             </div>
