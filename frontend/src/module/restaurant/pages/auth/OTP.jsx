@@ -218,13 +218,7 @@ export default function RestaurantOTP() {
         sessionStorage.removeItem("restaurantAuthData")
 
         setTimeout(async () => {
-          if (data.needsSignup) {
-            // Force restart signup from the beginning as requested
-            localStorage.removeItem("restaurant_onboarding_data");
-            navigate("/restaurant/onboarding?step=1", { replace: true });
-          } else {
-            await redirectRestaurantAfterAuth(navigate, { replace: true })
-          }
+          await redirectRestaurantAfterAuth(navigate, { replace: true })
         }, 500)
       }
     } catch (err) {
