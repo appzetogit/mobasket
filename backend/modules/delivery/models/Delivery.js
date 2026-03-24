@@ -62,7 +62,8 @@ const documentsSchema = new mongoose.Schema({
     accountNumber: String, // Encrypted
     ifscCode: String,
     accountHolderName: String,
-    bankName: String
+    bankName: String,
+    upiId: String
   }
 }, { _id: false });
 

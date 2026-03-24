@@ -23,7 +23,8 @@ export default function ProfileDetails() {
     accountHolderName: "",
     accountNumber: "",
     ifscCode: "",
-    bankName: ""
+    bankName: "",
+    upiId: ""
   })
   const [bankDetailsErrors, setBankDetailsErrors] = useState({})
   const [isUpdatingBankDetails, setIsUpdatingBankDetails] = useState(false)
@@ -57,7 +58,8 @@ export default function ProfileDetails() {
             accountHolderName: profileData?.documents?.bankDetails?.accountHolderName || "",
             accountNumber: profileData?.documents?.bankDetails?.accountNumber || "",
             ifscCode: profileData?.documents?.bankDetails?.ifscCode || "",
-            bankName: profileData?.documents?.bankDetails?.bankName || ""
+            bankName: profileData?.documents?.bankDetails?.bankName || "",
+            upiId: profileData?.documents?.bankDetails?.upiId || ""
           })
         }
       } catch (error) {
@@ -707,7 +709,8 @@ export default function ProfileDetails() {
                   accountHolderName: profile?.documents?.bankDetails?.accountHolderName || "",
                   accountNumber: profile?.documents?.bankDetails?.accountNumber || "",
                   ifscCode: profile?.documents?.bankDetails?.ifscCode || "",
-                  bankName: profile?.documents?.bankDetails?.bankName || ""
+                  bankName: profile?.documents?.bankDetails?.bankName || "",
+                  upiId: profile?.documents?.bankDetails?.upiId || ""
                 })
                 setBankDetailsErrors({})
               }}
@@ -749,6 +752,14 @@ export default function ProfileDetails() {
                 <p className="text-sm text-gray-900 mb-1">Bank Name</p>
                 <p className="text-base text-gray-900">
                   {profile?.documents?.bankDetails?.bankName || "-"}
+                </p>
+              </div>
+            </div>
+            <div className="p-2 px-3 flex items-center justify-between">
+              <div className="w-full align-center flex content-center justify-between">
+                <p className="text-sm text-gray-900 mb-1">UPI ID (Optional)</p>
+                <p className="text-base text-gray-900">
+                  {profile?.documents?.bankDetails?.upiId || "-"}
                 </p>
               </div>
             </div>
@@ -884,7 +895,7 @@ export default function ProfileDetails() {
               placeholder="Enter account holder name"
               className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${bankDetailsErrors.accountHolderName ? "border-red-500" : "border-gray-300"
                 }`}
-              pattern="[a-zA-Z\s'-]+"
+              pattern="[-A-Za-z ']+"
               title="Account holder name can only contain letters, spaces, apostrophes, and hyphens"
             />
             {bankDetailsErrors.accountHolderName && (
@@ -984,7 +995,7 @@ export default function ProfileDetails() {
               placeholder="Enter bank name"
               className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${bankDetailsErrors.bankName ? "border-red-500" : "border-gray-300"
                 }`}
-              pattern="[a-zA-Z\s'&-]+"
+              pattern="[-A-Za-z '&]+"
               title="Bank name can only contain letters, spaces, apostrophes, hyphens, and ampersands"
             />
             {bankDetailsErrors.bankName && (
@@ -992,6 +1003,28 @@ export default function ProfileDetails() {
             )}
             {!bankDetailsErrors.bankName && bankDetails.bankName && (
               <p className="text-xs text-gray-500 mt-1">Only letters, spaces, apostrophes, hyphens, and ampersands are allowed</p>
+            )}
+          </div>
+
+          {/* UPI ID (Optional) */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              UPI ID <span className="text-gray-400">(Optional)</span>
+            </label>
+            <input
+              type="text"
+              value={bankDetails.upiId}
+              onChange={(e) => {
+                const value = e.target.value.trim()
+                setBankDetails(prev => ({ ...prev, upiId: value }))
+                setBankDetailsErrors(prev => ({ ...prev, upiId: "" }))
+              }}
+              placeholder="Enter UPI ID (e.g., yourname@bank)"
+              className={`w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-green-500 ${bankDetailsErrors.upiId ? "border-red-500" : "border-gray-300"
+                }`}
+            />
+            {bankDetailsErrors.upiId && (
+              <p className="text-red-500 text-xs mt-1">{bankDetailsErrors.upiId}</p>
             )}
           </div>
 
@@ -1045,6 +1078,14 @@ export default function ProfileDetails() {
                 }
               }
 
+              // UPI ID validation (optional)
+              if (bankDetails.upiId && bankDetails.upiId.trim()) {
+                const upiRegex = /^[a-zA-Z0-9._-]{2,}@[a-zA-Z0-9.-]{2,}$/
+                if (!upiRegex.test(bankDetails.upiId.trim())) {
+                  errors.upiId = "Invalid UPI ID format (example: name@bank)"
+                }
+              }
+
               if (Object.keys(errors).length > 0) {
                 setBankDetailsErrors(errors)
                 toast.error("Please fill all required fields correctly")
@@ -1055,12 +1096,12 @@ export default function ProfileDetails() {
               try {
                 await deliveryAPI.updateProfile({
                   documents: {
-                    ...profile?.documents,
                     bankDetails: {
                       accountHolderName: bankDetails.accountHolderName.trim(),
                       accountNumber: bankDetails.accountNumber.trim(),
                       ifscCode: bankDetails.ifscCode.trim(),
-                      bankName: bankDetails.bankName.trim()
+                      bankName: bankDetails.bankName.trim(),
+                      upiId: bankDetails.upiId?.trim() || ""
                     }
                   }
                 })

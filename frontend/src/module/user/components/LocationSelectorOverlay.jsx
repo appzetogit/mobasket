@@ -1833,8 +1833,8 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                 clearTimeout(locationUpdateTimeoutRef.current)
               }
               
-              // Throttle updates - only process after 2 seconds of no new updates
-              locationUpdateTimeoutRef.current = setTimeout(() => {
+              // Throttle updates - only process after 4 seconds of no new updates
+              locationUpdateTimeoutRef.current = setTimeout(() => {
                 // Only log significant updates to avoid console spam
                 if (!lastUserLocationRef.current || 
                     calculateDistance(
@@ -1846,7 +1846,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                   console.log("📍 Location update (throttled):", { latitude, longitude, heading })
                 }
                 createOrUpdateMarker(latitude, longitude, heading, accuracy)
-              }, 2000) // Wait 2 seconds before processing update
+              }, 4000) // Wait 4 seconds before processing update
             },
             (error) => {
               // Suppress timeout errors - they're non-critical and will retry
@@ -1906,8 +1906,8 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                 clearTimeout(locationUpdateTimeoutRef.current)
               }
               
-              // Throttle updates - only process after 2 seconds of no new updates
-              locationUpdateTimeoutRef.current = setTimeout(() => {
+              // Throttle updates - only process after 4 seconds of no new updates
+              locationUpdateTimeoutRef.current = setTimeout(() => {
                 // Only log significant updates to avoid console spam
                 if (!lastUserLocationRef.current || 
                     calculateDistance(
@@ -1919,7 +1919,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                   console.log("📍 Location update (after initial error, throttled):", { latitude, longitude, heading })
                 }
                 createOrUpdateMarker(latitude, longitude, heading, accuracy)
-              }, 2000) // Wait 2 seconds before processing update
+              }, 4000) // Wait 4 seconds before processing update
             },
             (error) => {
               // Suppress timeout errors in watchPosition too

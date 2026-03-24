@@ -81,6 +81,9 @@ const updateProfileSchema = Joi.object({
       }).optional().allow(null, ''),
       bankName: Joi.string().trim().min(2).max(100).pattern(/^[a-zA-Z\s'&-]+$/).messages({
         'string.pattern.base': 'Bank name can only contain letters, spaces, apostrophes, hyphens, and ampersands'
+      }).optional().allow(null, ''),
+      upiId: Joi.string().trim().max(120).pattern(/^[a-zA-Z0-9._-]{2,}@[a-zA-Z0-9.-]{2,}$/).messages({
+        'string.pattern.base': 'Invalid UPI ID format (example: name@bank)'
       }).optional().allow(null, '')
     }).optional(),
     aadhar: Joi.object({
@@ -120,6 +123,7 @@ export const updateProfile = asyncHandler(async (req, res) => {
     }
 
     let documentUpdatedForStatus = false;
+    const normalizeComparable = (value) => String(value ?? '').trim();
 
     // 2. Handle Documents (Nested) - Explicitly use .set() for reliability
     if (updateData.documents) {
@@ -133,27 +137,39 @@ export const updateProfile = asyncHandler(async (req, res) => {
       if (docs.aadhar) {
         if (docs.aadhar.number) deliveryDoc.set('documents.aadhar.number', docs.aadhar.number);
         if (docs.aadhar.document) {
+          const existingAadharDoc = normalizeComparable(deliveryDoc.get('documents.aadhar.document'));
+          const incomingAadharDoc = normalizeComparable(docs.aadhar.document);
           deliveryDoc.set('documents.aadhar.document', docs.aadhar.document);
-          deliveryDoc.set('documents.aadhar.verified', false);
-          documentUpdatedForStatus = true;
+          if (incomingAadharDoc && incomingAadharDoc !== existingAadharDoc) {
+            deliveryDoc.set('documents.aadhar.verified', false);
+            documentUpdatedForStatus = true;
+          }
         }
       }
 
       if (docs.pan) {
         if (docs.pan.number) deliveryDoc.set('documents.pan.number', docs.pan.number);
         if (docs.pan.document) {
+          const existingPanDoc = normalizeComparable(deliveryDoc.get('documents.pan.document'));
+          const incomingPanDoc = normalizeComparable(docs.pan.document);
           deliveryDoc.set('documents.pan.document', docs.pan.document);
-          deliveryDoc.set('documents.pan.verified', false);
-          documentUpdatedForStatus = true;
+          if (incomingPanDoc && incomingPanDoc !== existingPanDoc) {
+            deliveryDoc.set('documents.pan.verified', false);
+            documentUpdatedForStatus = true;
+          }
         }
       }
 
       if (docs.drivingLicense) {
         if (docs.drivingLicense.number) deliveryDoc.set('documents.drivingLicense.number', docs.drivingLicense.number);
         if (docs.drivingLicense.document) {
+          const existingLicenseDoc = normalizeComparable(deliveryDoc.get('documents.drivingLicense.document'));
+          const incomingLicenseDoc = normalizeComparable(docs.drivingLicense.document);
           deliveryDoc.set('documents.drivingLicense.document', docs.drivingLicense.document);
-          deliveryDoc.set('documents.drivingLicense.verified', false);
-          documentUpdatedForStatus = true;
+          if (incomingLicenseDoc && incomingLicenseDoc !== existingLicenseDoc) {
+            deliveryDoc.set('documents.drivingLicense.verified', false);
+            documentUpdatedForStatus = true;
+          }
         }
       }
 
@@ -162,6 +178,7 @@ export const updateProfile = asyncHandler(async (req, res) => {
         if (docs.bankDetails.accountNumber) deliveryDoc.set('documents.bankDetails.accountNumber', docs.bankDetails.accountNumber);
         if (docs.bankDetails.ifscCode) deliveryDoc.set('documents.bankDetails.ifscCode', docs.bankDetails.ifscCode);
         if (docs.bankDetails.bankName) deliveryDoc.set('documents.bankDetails.bankName', docs.bankDetails.bankName);
+        if (docs.bankDetails.upiId !== undefined) deliveryDoc.set('documents.bankDetails.upiId', docs.bankDetails.upiId);
       }
     }
 

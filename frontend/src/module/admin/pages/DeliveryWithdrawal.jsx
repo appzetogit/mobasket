@@ -154,6 +154,22 @@ export default function DeliveryWithdrawal() {
     return `₹${Number(amount).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   }
 
+  const formatPaymentMethod = (method) => {
+    const value = String(method || "").trim().toLowerCase()
+    if (!value) return "N/A"
+    if (value === "bank_transfer") return "Bank Transfer"
+    if (value === "upi") return "UPI"
+    if (value === "card") return "Card"
+    return method
+  }
+
+  const maskAccountNumber = (accountNumber) => {
+    const digits = String(accountNumber || "").replace(/\s+/g, "")
+    if (!digits) return "N/A"
+    if (digits.length <= 4) return digits
+    return `****${digits.slice(-4)}`
+  }
+
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
       <div className="max-w-7xl mx-auto">
@@ -333,6 +349,46 @@ export default function DeliveryWithdrawal() {
                   <p className="text-sm font-medium text-slate-900 mt-1">{selectedRequest.deliveryPhone || "N/A"}</p>
                 </div>
                 <div>
+                  <label className="text-xs font-semibold text-slate-500 uppercase">Payment method</label>
+                  <p className="text-sm font-medium text-slate-900 mt-1">
+                    {formatPaymentMethod(selectedRequest.paymentMethod)}
+                  </p>
+                </div>
+                {selectedRequest.paymentMethod === "bank_transfer" && (
+                  <>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 uppercase">Account holder name</label>
+                      <p className="text-sm font-medium text-slate-900 mt-1">
+                        {selectedRequest.bankDetails?.accountHolderName || "N/A"}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 uppercase">Account number</label>
+                      <p className="text-sm font-medium text-slate-900 mt-1">
+                        {maskAccountNumber(selectedRequest.bankDetails?.accountNumber)}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 uppercase">IFSC code</label>
+                      <p className="text-sm font-medium text-slate-900 mt-1">
+                        {selectedRequest.bankDetails?.ifscCode || "N/A"}
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 uppercase">Bank name</label>
+                      <p className="text-sm font-medium text-slate-900 mt-1">
+                        {selectedRequest.bankDetails?.bankName || "N/A"}
+                      </p>
+                    </div>
+                  </>
+                )}
+                {selectedRequest.paymentMethod === "upi" && (
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 uppercase">UPI ID</label>
+                    <p className="text-sm font-medium text-slate-900 mt-1">{selectedRequest.upiId || "N/A"}</p>
+                  </div>
+                )}
+                <div>
                   <label className="text-xs font-semibold text-slate-500 uppercase">Request time</label>
                   <p className="text-sm font-medium text-slate-900 mt-1">{formatDate(selectedRequest.requestedAt || selectedRequest.createdAt)}</p>
                 </div>
@@ -360,12 +416,6 @@ export default function DeliveryWithdrawal() {
                   <div>
                     <label className="text-xs font-semibold text-slate-500 uppercase">Rejection reason</label>
                     <p className="text-sm font-medium text-slate-900 mt-1">{selectedRequest.rejectionReason}</p>
-                  </div>
-                )}
-                {selectedRequest.upiId && (
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 uppercase">UPI ID</label>
-                    <p className="text-sm font-medium text-slate-900 mt-1">{selectedRequest.upiId}</p>
                   </div>
                 )}
               </div>
@@ -426,3 +476,4 @@ export default function DeliveryWithdrawal() {
     </div>
   )
 }
+

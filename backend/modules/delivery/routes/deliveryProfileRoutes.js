@@ -52,6 +52,9 @@ router.put('/profile', validate(Joi.object({
       }).optional().allow(null, ''),
       bankName: Joi.string().trim().min(2).max(100).pattern(/^[a-zA-Z\s'&-]+$/).messages({
         'string.pattern.base': 'Bank name can only contain letters, spaces, apostrophes, hyphens, and ampersands'
+      }).optional().allow(null, ''),
+      upiId: Joi.string().trim().max(120).pattern(/^[a-zA-Z0-9._-]{2,}@[a-zA-Z0-9.-]{2,}$/).messages({
+        'string.pattern.base': 'Invalid UPI ID format (example: name@bank)'
       }).optional().allow(null, '')
     }).optional(),
     aadhar: Joi.object({

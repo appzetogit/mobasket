@@ -6675,28 +6675,7 @@ export default function DeliveryHome() {
           } else if (window.deliveryMapInstance) {
 
 
-            // Map already initialized - keep route context for active order, else rider-centric view.
-
-
-            const fitted = selectedRestaurantRef.current
-
-
-              ? fitMapToActiveRoute(window.deliveryMapInstance)
-
-
-              : false
-
-
-            if (!fitted) {
-
-
-              window.deliveryMapInstance.setCenter({ lat: smoothedLocation[0], lng: smoothedLocation[1] })
-
-
-              window.deliveryMapInstance.setZoom(18)
-
-
-            }
+            // Map already initialized. Keep camera stable during live updates.
 
 
             createOrUpdateBikeMarker(smoothedLocation[0], smoothedLocation[1], heading, !isUserPanningRef.current)
@@ -6705,7 +6684,7 @@ export default function DeliveryHome() {
             updateRoutePolyline()
 
 
-            console.log('[LOC] Map recentered to GPS location')
+            console.log('[LOC] Live location updated without camera recenter')
 
 
           }
@@ -6828,34 +6807,13 @@ export default function DeliveryHome() {
 
 
 
-                      // Recenter map if already initialized, otherwise it will initialize when location is set
+                      // Keep camera stable if map is already initialized.
 
 
                       if (window.deliveryMapInstance) {
 
 
-                        const fitted = selectedRestaurantRef.current
-
-
-                          ? fitMapToActiveRoute(window.deliveryMapInstance)
-
-
-                          : false
-
-
-                        if (!fitted) {
-
-
-                          window.deliveryMapInstance.setCenter({ lat, lng })
-
-
-                          window.deliveryMapInstance.setZoom(18)
-
-
-                        }
-
-
-                        console.log('[LOC] Recentered map to GPS location')
+                        console.log('[LOC] GPS retry location applied without camera recenter')
 
 
 
@@ -18090,34 +18048,7 @@ export default function DeliveryHome() {
 
 
 
-        if (selectedRestaurantRef.current) {
-
-
-          const fitted = fitMapToActiveRoute(map)
-
-
-          if (!fitted && hasRiderLocation) {
-
-
-            map.panTo({ lat: riderLat, lng: riderLng })
-
-
-            if ((map.getZoom?.() || 0) < 16) map.setZoom(16)
-
-
-          }
-
-
-        } else if (hasRiderLocation) {
-
-
-          map.panTo({ lat: riderLat, lng: riderLng })
-
-
-          if ((map.getZoom?.() || 0) < 16) map.setZoom(16)
-
-
-        }
+        // Keep the map viewport stable after resize; do not auto-pan/zoom here.
 
 
 
@@ -18420,19 +18351,7 @@ export default function DeliveryHome() {
 
 
 
-      // Center map on bike location smoothly
-
-
-      window.deliveryMapInstance.panTo({
-
-
-        lat: riderLocation[0],
-
-
-        lng: riderLocation[1]
-
-
-      });
+      // Keep camera stable; update marker only.
 
 
 
@@ -26304,7 +26223,7 @@ export default function DeliveryHome() {
   // Google Maps marker functions - Zomato style exact location tracking
 
 
-  const createOrUpdateBikeMarker = async (latitude, longitude, heading = null, shouldCenterMap = true) => {
+  const createOrUpdateBikeMarker = async (latitude, longitude, heading = null, shouldCenterMap = false) => {
 
 
     if (!window.google || !window.google.maps || !window.deliveryMapInstance) {
@@ -26526,46 +26445,7 @@ export default function DeliveryHome() {
 
 
 
-      // Keep full active route visible when navigation is active.
-
-
-      if (shouldCenterMap && selectedRestaurantRef.current) {
-
-
-        const fitted = fitMapToActiveRoute(map);
-
-
-        if (!fitted) {
-
-
-          map.setCenter(position);
-
-
-        }
-
-
-      } else if (shouldCenterMap) {
-
-
-        const currentZoom = map.getZoom();
-
-
-        map.setCenter(position);
-
-
-        // Only set zoom to 18 if current zoom is less than 18 (don't reduce user's zoom)
-
-
-        if (currentZoom < 18) {
-
-
-          map.setZoom(18); // Full zoom in for better visibility
-
-
-        }
-
-
-      }
+      // Keep camera stable; marker creation should not force auto-centering.
 
 
 
@@ -26718,40 +26598,7 @@ export default function DeliveryHome() {
 
 
 
-      // Auto-center map on bike location when idle; keep full route visible for active orders.
-
-
-      if (shouldCenterMap && !isUserPanningRef.current) {
-
-
-        if (selectedRestaurantRef.current) {
-
-
-          const fitted = fitMapToActiveRoute(map);
-
-
-          if (!fitted) {
-
-
-            map.panTo(position);
-
-
-          }
-
-
-        } else {
-
-
-          // Smooth pan to bike location
-
-
-          map.panTo(position);
-
-
-        }
-
-
-      }
+      // Do not auto-pan during live updates; keep viewport stable.
 
 
 
@@ -36372,6 +36219,7 @@ export default function DeliveryHome() {
 
 
 }
+
 
 
 

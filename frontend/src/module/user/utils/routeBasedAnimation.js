@@ -228,14 +228,17 @@ export function getPointOnPolylineByProgress(polylinePoints, progress) {
   
   const clampedProgress = Math.max(0, Math.min(1, progress));
   const totalPoints = polylinePoints.length;
-  const targetIndex = Math.floor(clampedProgress * (totalPoints - 1));
+  const scaled = clampedProgress * (totalPoints - 1);
+  const targetIndex = Math.floor(scaled);
   const nextIndex = Math.min(targetIndex + 1, totalPoints - 1);
+  const segmentProgress = Math.max(0, Math.min(1, scaled - targetIndex));
   
   return {
     currentPoint: polylinePoints[targetIndex],
     nextPoint: polylinePoints[nextIndex],
     currentIndex: targetIndex,
-    nextIndex: nextIndex
+    nextIndex: nextIndex,
+    segmentProgress
   };
 }
 
@@ -311,7 +314,11 @@ export class RouteBasedAnimationController {
       cancelAnimationFrame(this.animationFrameId);
     }
     
-    const targetPos = pointInfo.nextPoint;
+    const targetPos = interpolatePoint(
+      pointInfo.currentPoint,
+      pointInfo.nextPoint,
+      pointInfo.segmentProgress ?? 0
+    );
     const currentPos = this.marker.getPosition();
     
     if (currentPos) {
