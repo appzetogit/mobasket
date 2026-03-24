@@ -488,7 +488,7 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
     // Normalize deliveryPartnerId to string
     const normalizedDeliveryPartnerId = deliveryPartnerId?.toString() || deliveryPartnerId;
 
-    const pushResult = await sendOrderPushNotification({
+    const pushPromise = sendOrderPushNotification({
       recipients: [deliveryPartner],
       title: 'New delivery order',
       body: `${order.orderId} has been assigned to you.`,
@@ -611,6 +611,7 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
       console.error(`❌ Failed to send notification - no sockets found and broadcast failed`);
     }
     }
+    const pushResult = await pushPromise;
 
     return {
       success: true,
@@ -895,7 +896,7 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
             : [])
         ];
 
-        const pushResult = await sendOrderPushNotification({
+        const pushPromise = sendOrderPushNotification({
           recipients: [deliveryPartner],
           title: phase === 'expanded' ? 'New order available nearby' : 'Priority order available',
           body: `${order.orderId} is available for pickup.`,
@@ -947,6 +948,7 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
           });
           }
         }
+        const pushResult = await pushPromise;
         console.log('Delivery push result:', {
           deliveryPartnerId: normalizedId,
           orderId: order.orderId,
