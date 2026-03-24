@@ -326,12 +326,12 @@ export default function DeliveryWithdrawal() {
 
         {/* View details dialog */}
         <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-          <DialogContent className="max-w-md bg-white p-0">
+          <DialogContent className="max-w-md w-[95vw] max-h-[90vh] bg-white p-0 overflow-hidden flex flex-col">
             <DialogHeader className="px-6 pt-6 pb-4">
               <DialogTitle>Withdrawal request details</DialogTitle>
             </DialogHeader>
             {selectedRequest && (
-              <div className="px-6 pb-6 space-y-4">
+              <div className="px-6 pb-6 space-y-4 overflow-y-auto">
                 <div>
                   <label className="text-xs font-semibold text-slate-500 uppercase">Amount</label>
                   <p className="text-sm font-medium text-slate-900 mt-1">{formatCurrency(selectedRequest.amount)}</p>
@@ -386,6 +386,12 @@ export default function DeliveryWithdrawal() {
                   <div>
                     <label className="text-xs font-semibold text-slate-500 uppercase">UPI ID</label>
                     <p className="text-sm font-medium text-slate-900 mt-1">{selectedRequest.upiId || "N/A"}</p>
+                  </div>
+                )}
+                {selectedRequest.paymentMethod !== "upi" && selectedRequest.upiId && (
+                  <div>
+                    <label className="text-xs font-semibold text-slate-500 uppercase">UPI ID</label>
+                    <p className="text-sm font-medium text-slate-900 mt-1">{selectedRequest.upiId}</p>
                   </div>
                 )}
                 <div>

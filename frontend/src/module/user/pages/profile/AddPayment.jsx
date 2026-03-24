@@ -185,7 +185,7 @@ export default function AddPayment() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" className="flex-1 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200">
+                <Button type="submit" className="flex-1">
                   Save Payment Method
                 </Button>
               </div>

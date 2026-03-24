@@ -54,16 +54,6 @@ const DEFAULT_FILTER_COUNTS = {
   cancelled: 0,
 }
 
-const isEntityApprovedAndActive = (entity = {}) => {
-  const normalizedStatus = String(entity?.status || "").trim().toLowerCase()
-  return (
-    entity?.isActive === true ||
-    Boolean(entity?.approvedAt) ||
-    normalizedStatus === "active" ||
-    normalizedStatus === "approved"
-  )
-}
-
 const formatOrderStatusLabel = (status) => {
   const normalizedStatus = String(status || "").trim().toLowerCase()
 
@@ -833,7 +823,6 @@ export default function OrdersMain() {
   const acceptSlidePointerIdRef = useRef(null)
   const [restaurantStatus, setRestaurantStatus] = useState({
     isActive: null,
-    approvedAt: null,
     isAcceptingOrders: null,
     rejectionReason: null,
     rejectedAt: null,
@@ -843,7 +832,6 @@ export default function OrdersMain() {
   const [isReverifying, setIsReverifying] = useState(false)
   const completedOnboardingSteps = Number(restaurantStatus.onboarding?.completedSteps || 0)
   const normalizedVerificationStatus = String(restaurantStatus.status || "").trim().toLowerCase()
-  const isApprovedAndActive = isEntityApprovedAndActive(restaurantStatus)
   const hasCompletedVerificationSubmission = isGroceryStore
     ? completedOnboardingSteps >= 1
     : completedOnboardingSteps === 4 || (normalizedVerificationStatus && normalizedVerificationStatus !== "onboarding")
@@ -854,11 +842,11 @@ export default function OrdersMain() {
     Boolean(restaurantStatus.rejectedAt)
   const rejectionReasonText = String(restaurantStatus.rejectionReason || "").trim()
   const canAccessLiveOrders =
-    isApprovedAndActive && restaurantStatus.isAcceptingOrders !== false
+    restaurantStatus.isActive === true && restaurantStatus.isAcceptingOrders !== false
   const shouldShowVerificationState =
     !restaurantStatus.isLoading &&
     (hasCompletedVerificationSubmission || hasRejectedVerification) &&
-    !isApprovedAndActive
+    restaurantStatus.isActive !== true
 
   useEffect(() => {
     if (!authFailed) return
@@ -1061,7 +1049,6 @@ export default function OrdersMain() {
           ])
           setRestaurantStatus({
             isActive: restaurant.isActive,
-            approvedAt: restaurant.approvedAt || null,
             isAcceptingOrders: restaurant.isAcceptingOrders !== false,
             status: restaurant.status || null,
             rejectionReason: restaurant.rejectionReason || null,
@@ -1074,12 +1061,11 @@ export default function OrdersMain() {
             rejectionStatusValues.has(normalizedStatus) ||
             Boolean(String(restaurant.rejectionReason || "").trim()) ||
             Boolean(restaurant.rejectedAt)
-          const hasApprovedSignal = isEntityApprovedAndActive(restaurant)
           const shouldRedirectToPendingApproval =
-            !hasApprovedSignal &&
+            restaurant.isActive !== true &&
             !hasRejectedSignal &&
             (
-              (isGroceryStore ? completedOnboardingSteps >= 1 : completedOnboardingSteps >= 4) ||
+              completedOnboardingSteps >= 4 ||
               pendingLikeStatuses.has(normalizedStatus)
             )
 
@@ -1089,7 +1075,7 @@ export default function OrdersMain() {
           }
 
           // Once the restaurant/store has moved past onboarding and is not pending approval, keep them on home.
-          if (hasApprovedSignal || (normalizedStatus && normalizedStatus !== "onboarding")) {
+          if (normalizedStatus && normalizedStatus !== "onboarding") {
             return
           }
 
@@ -1168,7 +1154,6 @@ export default function OrdersMain() {
       if (restaurant) {
         setRestaurantStatus({
           isActive: restaurant.isActive,
-          approvedAt: restaurant.approvedAt || null,
           isAcceptingOrders: restaurant.isAcceptingOrders !== false,
           status: restaurant.status || null,
           rejectionReason: restaurant.rejectionReason || null,

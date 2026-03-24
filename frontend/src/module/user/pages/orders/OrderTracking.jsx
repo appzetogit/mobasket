@@ -3315,7 +3315,7 @@ export default function OrderTracking() {
 
                 transition={{ delay: 0.9 }}
 
-              className="text-2xl font-bold text-gray-900 mt-6 dark:text-gray-100"
+                className="text-2xl font-bold text-gray-900 mt-6 dark:text-gray-100"
 
               >
 
@@ -3478,7 +3478,7 @@ export default function OrderTracking() {
 
               transition={{ duration: 0.5 }}
 
-            > 
+            >
 
               <RefreshCw className="w-4 h-4" />
 
@@ -3967,9 +3967,9 @@ export default function OrderTracking() {
 
         </motion.div>
 
-        {!isPlanSubscriptionOrder && String(order?.status || "").toLowerCase() !== "cancelled" && (
+        {!isPlanSubscriptionOrder && (
 
-        <motion.div
+          <motion.div
 
             className="bg-white rounded-xl shadow-sm overflow-hidden dark:bg-[#151a23] dark:border dark:border-white/10"
 
