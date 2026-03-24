@@ -382,18 +382,10 @@ export default function DeliveryWithdrawal() {
                     </div>
                   </>
                 )}
-                {selectedRequest.paymentMethod === "upi" && (
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 uppercase">UPI ID</label>
-                    <p className="text-sm font-medium text-slate-900 mt-1">{selectedRequest.upiId || "N/A"}</p>
-                  </div>
-                )}
-                {selectedRequest.paymentMethod !== "upi" && selectedRequest.upiId && (
-                  <div>
-                    <label className="text-xs font-semibold text-slate-500 uppercase">UPI ID</label>
-                    <p className="text-sm font-medium text-slate-900 mt-1">{selectedRequest.upiId}</p>
-                  </div>
-                )}
+                <div>
+                  <label className="text-xs font-semibold text-slate-500 uppercase">UPI ID</label>
+                  <p className="text-sm font-medium text-slate-900 mt-1">{selectedRequest.upiId || "N/A"}</p>
+                </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-500 uppercase">Request time</label>
                   <p className="text-sm font-medium text-slate-900 mt-1">{formatDate(selectedRequest.requestedAt || selectedRequest.createdAt)}</p>

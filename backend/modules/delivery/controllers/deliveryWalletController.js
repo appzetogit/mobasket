@@ -414,7 +414,7 @@ export const createWithdrawalRequest = asyncHandler(async (req, res) => {
       status: 'Pending',
       paymentMethod,
       bankDetails: paymentMethod === 'bank_transfer' ? bankDetails : undefined,
-      upiId: paymentMethod === 'upi' ? upiId : undefined,
+      upiId: upiId || undefined,
       transactionId,
       walletId: wallet._id,
       deliveryName,

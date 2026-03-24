@@ -28,7 +28,7 @@ export const getDeliveryWithdrawalRequests = asyncHandler(async (req, res) => {
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit, 10))
-      .populate('deliveryId', 'name deliveryId phone email')
+      .populate('deliveryId', 'name deliveryId phone email documents.bankDetails.upiId')
       .populate('processedBy', 'name email')
       .lean();
 
@@ -44,7 +44,7 @@ export const getDeliveryWithdrawalRequests = asyncHandler(async (req, res) => {
       status: r.status,
       paymentMethod: r.paymentMethod,
       bankDetails: r.bankDetails,
-      upiId: r.upiId,
+      upiId: r.upiId || r.deliveryId?.documents?.bankDetails?.upiId || null,
       requestedAt: r.requestedAt,
       processedAt: r.processedAt,
       processedBy: r.processedBy ? { name: r.processedBy.name, email: r.processedBy.email } : null,
