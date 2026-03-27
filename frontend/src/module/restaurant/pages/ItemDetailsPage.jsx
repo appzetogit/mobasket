@@ -398,6 +398,13 @@ export default function ItemDetailsPage() {
     }
   }
 
+  const openInputPicker = (inputRef) => {
+    const input = inputRef?.current
+    if (!input) return
+    input.value = ""
+    input.click()
+  }
+
   const buildFileFromBase64 = (base64, fileName, mimeType) => {
     if (!base64) {
       throw new Error("Invalid image data")
@@ -428,9 +435,9 @@ export default function ItemDetailsPage() {
           toast.error("Failed to capture image")
         }
       } else if (cameraInputRef.current) {
-        cameraInputRef.current.click()
+        openInputPicker(cameraInputRef)
       } else if (fileInputRef.current) {
-        fileInputRef.current.click()
+        openInputPicker(fileInputRef)
       }
     } catch (error) {
       console.error("Camera capture error:", error)
@@ -442,7 +449,7 @@ export default function ItemDetailsPage() {
 
   const handleGalleryPick = async () => {
     if (!window?.flutter_inappwebview?.callHandler) {
-      fileInputRef.current?.click()
+      openInputPicker(fileInputRef)
       return
     }
 
@@ -463,7 +470,7 @@ export default function ItemDetailsPage() {
       console.error("Gallery pick error:", error)
     }
 
-    fileInputRef.current?.click()
+    openInputPicker(fileInputRef)
   }
 
   const handleImageAdd = (e) => {

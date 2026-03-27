@@ -848,7 +848,6 @@ export default function OrdersMain() {
     (hasCompletedVerificationSubmission || hasRejectedVerification) &&
     restaurantStatus.isActive !== true
   const shouldShowContactAdminState =
-    !isGroceryStore &&
     !hasRejectedVerification &&
     restaurantStatus.isActive === false
 
@@ -2333,11 +2332,15 @@ export default function OrdersMain() {
             ) : (
               <>
                 <h3 className="text-lg font-bold text-gray-900 mb-1">
-                  {shouldShowContactAdminState ? "Restaurant Inactive" : "Verification Done in 24 Hours"}
+                  {shouldShowContactAdminState
+                    ? (isGroceryStore ? "Store Offline" : "Restaurant Inactive")
+                    : "Verification Done in 24 Hours"}
                 </h3>
                 <p className="text-sm text-gray-600">
                   {shouldShowContactAdminState
-                    ? "Your restaurant account is inactive. Please contact admin directly."
+                    ? (isGroceryStore
+                      ? "Your store is offline right now. Please contact admin directly."
+                      : "Your restaurant account is inactive. Please contact admin directly.")
                     : "Your account is under verification. You'll be notified once approved."}
                 </p>
               </>

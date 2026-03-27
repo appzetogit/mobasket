@@ -192,6 +192,13 @@ export default function GroceryStoreProductDetailsPage() {
     }
   }, [id, isNewProduct])
 
+  const openInputPicker = (inputRef) => {
+    const input = inputRef?.current
+    if (!input) return
+    input.value = ""
+    input.click()
+  }
+
   const handleImageAdd = async (e) => {
     if (uploadingImages) return
     const file = e.target.files?.[0]
@@ -231,6 +238,7 @@ export default function GroceryStoreProductDetailsPage() {
 
   const handleCameraAdd = async (index) => {
     if (uploadingImages) return;
+    setUpdatingImageIndex(index);
 
     if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
       try {
@@ -276,63 +284,65 @@ export default function GroceryStoreProductDetailsPage() {
         setUpdatingImageIndex(null);
       }
     } else {
-      setUpdatingImageIndex(index);
-      fileInputRef.current?.click();
+      openInputPicker(fileInputRef);
     }
   };
 
   const handleGalleryAdd = async (index) => {
     if (uploadingImages) return;
+    setUpdatingImageIndex(index);
 
-    if (window.flutter_inappwebview && window.flutter_inappwebview.callHandler) {
-      try {
-        setUploadingImages(true);
-        const result = await window.flutter_inappwebview.callHandler('openGallery');
-        const fileData = Array.isArray(result?.files) && result.files.length
-          ? result.files[0]
-          : (Array.isArray(result) && result.length ? result[0] : result);
-
-        if (fileData?.base64) {
-          const base64Data = fileData.base64;
-          const mimeType = fileData.mimeType || 'image/jpeg';
-          const filename = fileData.fileName || `gallery_${Date.now()}.jpg`;
-
-          const byteCharacters = atob(base64Data);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-          }
-          const byteArray = new Uint8Array(byteNumbers);
-          const file = new File([byteArray], filename, { type: mimeType });
-
-          const uploaded = await uploadAPI.uploadMedia(file, { folder: "mobasket/grocery-store/products" });
-          const url = uploaded?.data?.data?.url || uploaded?.data?.url;
-
-          if (url) {
-            if (index !== null) {
-              setImages(prev => {
-                const next = [...prev];
-                next[index] = url;
-                return next;
-              });
-              toast.success("Image updated successfully");
-            } else {
-              setImages(prev => [...prev, url]);
-              toast.success("Image uploaded successfully");
-            }
-            return;
-          }
-        }
-      } catch (error) {
-        console.error('Gallery error:', error);
-      } finally {
-        setUploadingImages(false);
-        setUpdatingImageIndex(null);
-      }
+    if (!window.flutter_inappwebview || !window.flutter_inappwebview.callHandler) {
+      openInputPicker(galleryInputRef);
+      return;
     }
 
-    setUpdatingImageIndex(index);
-    galleryInputRef.current?.click();
+    try {
+      setUploadingImages(true);
+      const result = await window.flutter_inappwebview.callHandler('openGallery');
+      const fileData = Array.isArray(result?.files) && result.files.length
+        ? result.files[0]
+        : (Array.isArray(result) && result.length ? result[0] : result);
+
+      if (fileData?.base64) {
+        const base64Data = fileData.base64;
+        const mimeType = fileData.mimeType || 'image/jpeg';
+        const filename = fileData.fileName || `gallery_${Date.now()}.jpg`;
+
+        const byteCharacters = atob(base64Data);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const byteArray = new Uint8Array(byteNumbers);
+        const file = new File([byteArray], filename, { type: mimeType });
+
+        const uploaded = await uploadAPI.uploadMedia(file, { folder: "mobasket/grocery-store/products" });
+        const url = uploaded?.data?.data?.url || uploaded?.data?.url;
+
+        if (url) {
+          if (index !== null) {
+            setImages(prev => {
+              const next = [...prev];
+              next[index] = url;
+              return next;
+            });
+            toast.success("Image updated successfully");
+          } else {
+            setImages(prev => [...prev, url]);
+            toast.success("Image uploaded successfully");
+          }
+          return;
+        }
+      }
+    } catch (error) {
+      console.error('Gallery error:', error);
+    } finally {
+      setUploadingImages(false);
+      setUpdatingImageIndex(null);
+    }
+
+    openInputPicker(galleryInputRef);
   };
 
   const removeImage = (index) => {
@@ -839,7 +849,6 @@ export default function GroceryStoreProductDetailsPage() {
               capture="environment"
               className="hidden"
               onChange={handleImageAdd}
-              disabled={uploadingImages}
             />
             <input
               ref={galleryInputRef}
@@ -847,7 +856,6 @@ export default function GroceryStoreProductDetailsPage() {
               accept="image/*"
               className="hidden"
               onChange={handleImageAdd}
-              disabled={uploadingImages}
             />
             <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
               {images.map((img, idx) => (
@@ -896,7 +904,8 @@ export default function GroceryStoreProductDetailsPage() {
                   </button>
                 </div>
               ))}
-              <div
+              <button
+                type="button"
                 onClick={() => {
                   setUpdatingImageIndex(null)
                   handleCameraAdd(null)
@@ -905,8 +914,9 @@ export default function GroceryStoreProductDetailsPage() {
               >
                 <Camera className="w-6 h-6 text-slate-400 mb-1" />
                 <span className="text-xs text-slate-500">Camera</span>
-              </div>
-              <div
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   setUpdatingImageIndex(null)
                   handleGalleryAdd(null)
@@ -915,7 +925,7 @@ export default function GroceryStoreProductDetailsPage() {
               >
                 <ImageIcon className="w-6 h-6 text-slate-400 mb-1" />
                 <span className="text-xs text-slate-500">Gallery</span>
-              </div>
+              </button>
             </div>
             {uploadingImages && (
               <div className="mt-2 flex items-center gap-2 text-sm text-slate-500">

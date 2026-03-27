@@ -19,6 +19,9 @@ export const saveOrderEditSession = (session) => {
     restaurantName: session.restaurantName ? String(session.restaurantName) : "",
     expiresAt: toSafeNumber(session.expiresAt, 0),
     items: Array.isArray(session.items) ? session.items : [],
+    deliveryAddress: isObject(session.deliveryAddress) ? session.deliveryAddress : null,
+    orderingForSomeoneElse: Boolean(session.orderingForSomeoneElse),
+    recipientDetails: isObject(session.recipientDetails) ? session.recipientDetails : null,
   };
 
   localStorage.setItem(ORDER_EDIT_SESSION_KEY, JSON.stringify(normalized));

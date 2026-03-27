@@ -2283,6 +2283,37 @@ export default function OrderTracking() {
 
 
     const expiresAt = Date.now() + Math.max(0, Number(modificationWindowSeconds || 0)) * 1000
+    const rawAddress = order?.address && typeof order.address === "object" ? order.address : {}
+    const normalizedDeliveryAddress = {
+      ...rawAddress,
+      formattedAddress: String(
+        rawAddress?.formattedAddress ||
+        order?.deliveryAddress ||
+        resolveTrackingDeliveryAddress(order, null) ||
+        "",
+      ).trim(),
+      street: String(rawAddress?.street || rawAddress?.address || rawAddress?.addressLine1 || "").trim(),
+      additionalDetails: String(
+        rawAddress?.additionalDetails || rawAddress?.area || rawAddress?.label || "",
+      ).trim(),
+      city: String(rawAddress?.city || rawAddress?.location?.city || "").trim(),
+      state: String(rawAddress?.state || rawAddress?.location?.state || "").trim(),
+      zipCode: String(
+        rawAddress?.zipCode || rawAddress?.postalCode || rawAddress?.pincode || "",
+      ).trim(),
+      latitude:
+        rawAddress?.latitude ??
+        rawAddress?.lat ??
+        rawAddress?.location?.latitude ??
+        rawAddress?.location?.lat ??
+        "",
+      longitude:
+        rawAddress?.longitude ??
+        rawAddress?.lng ??
+        rawAddress?.location?.longitude ??
+        rawAddress?.location?.lng ??
+        "",
+    }
 
     const session = saveOrderEditSession({
 
@@ -2315,6 +2346,13 @@ export default function OrderTracking() {
         isVeg: item.isVeg !== false
 
       })),
+
+      deliveryAddress:
+        normalizedDeliveryAddress.formattedAddress ||
+        normalizedDeliveryAddress.street ||
+        normalizedDeliveryAddress.city
+          ? normalizedDeliveryAddress
+          : null,
 
     })
 

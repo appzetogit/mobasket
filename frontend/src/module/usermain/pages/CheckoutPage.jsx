@@ -117,6 +117,15 @@ export default function CheckoutPage() {
   const pricingPreviewCacheRef = useRef({ signature: null, pricing: null });
   const recipientZoneCheckCacheRef = useRef({ key: null, inService: null });
 
+  const hasHydratedEditableAddress = useCallback((address) => {
+    if (!address || typeof address !== "object") return false;
+    return Boolean(
+      String(address.formattedAddress || "").trim() ||
+      String(address.street || "").trim() ||
+      String(address.address || "").trim(),
+    );
+  }, []);
+
   const deliveryType =
     location.state?.deliveryType === "scheduled" ? "scheduled" : "now";
   const deliveryDate = location.state?.deliveryDate
@@ -170,13 +179,19 @@ export default function CheckoutPage() {
       const saved = saveOrderEditSession(incomingSession);
       setOrderEditSession(saved);
       setEditSecondsLeft(getOrderEditRemainingSeconds(saved));
+      if (hasHydratedEditableAddress(saved?.deliveryAddress)) {
+        setSelectedAddress(saved.deliveryAddress);
+      }
       return;
     }
 
     const saved = getOrderEditSession();
     setOrderEditSession(saved);
     setEditSecondsLeft(getOrderEditRemainingSeconds(saved));
-  }, [location.state]);
+    if (hasHydratedEditableAddress(saved?.deliveryAddress)) {
+      setSelectedAddress(saved.deliveryAddress);
+    }
+  }, [hasHydratedEditableAddress, location.state]);
 
   useEffect(() => {
     const tick = () => {
@@ -197,6 +212,11 @@ export default function CheckoutPage() {
   useEffect(() => {
     const defaultAddress = getDefaultAddress();
     const selectedId = selectedAddress?.id || selectedAddress?._id;
+
+    if (!selectedId && hasHydratedEditableAddress(selectedAddress)) {
+      return;
+    }
+
     if (selectedId && Array.isArray(addresses) && addresses.length > 0) {
       const stillExists = addresses.find((a) => (a.id || a._id) === selectedId);
       if (stillExists) {
@@ -211,7 +231,7 @@ export default function CheckoutPage() {
     }
 
     setSelectedAddress(null);
-  }, [addresses, getDefaultAddress, selectedAddress]);
+  }, [addresses, getDefaultAddress, hasHydratedEditableAddress, selectedAddress]);
 
   const resetNewAddressForm = () => {
     setNewAddress({

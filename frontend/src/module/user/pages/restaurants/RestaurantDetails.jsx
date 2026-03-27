@@ -4237,92 +4237,108 @@ export default function RestaurantDetails() {
 
         {/* Filter/Category Buttons */}
 
-        <div className="border-y border-gray-200 py-3 -mx-4 px-4 overflow-x-auto scrollbar-hide">
+        <div className="sticky top-0 z-40 -mx-4 border-y border-gray-200 bg-white/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-white/85 dark:border-gray-800 dark:bg-[#0a0a0a]/95 dark:supports-[backdrop-filter]:bg-[#0a0a0a]/85">
 
-          <div className="flex items-center gap-2 w-max">
+          <div className="flex items-center justify-between gap-3">
 
-            <Button
+            <div className="overflow-x-auto scrollbar-hide">
+              <div className="flex items-center gap-2 w-max">
 
-              variant="outline"
+                <Button
 
-              size="sm"
+                  variant="outline"
 
-              className={`flex items-center gap-1.5 whitespace-nowrap border-gray-300 bg-white rounded-full ${filters.vegNonVeg === "veg"
+                  size="sm"
 
-                ? "border-green-500 bg-green-50"
+                  className={`flex items-center gap-1.5 whitespace-nowrap border-gray-300 bg-white rounded-full ${filters.vegNonVeg === "veg"
 
-                : ""
+                    ? "border-green-500 bg-green-50"
 
-                }`}
+                    : ""
 
-              onClick={() =>
+                    }`}
 
-                setFilters((prev) => ({
+                  onClick={() =>
 
-                  ...prev,
+                    setFilters((prev) => ({
 
-                  vegNonVeg: prev.vegNonVeg === "veg" ? null : "veg",
+                      ...prev,
 
-                }))
+                      vegNonVeg: prev.vegNonVeg === "veg" ? null : "veg",
 
-              }
+                    }))
 
-            >
+                  }
 
-              <div className="h-3 w-3 rounded-full bg-green-500" />
+                >
 
-              Veg
+                  <div className="h-3 w-3 rounded-full bg-green-500" />
 
-              {filters.vegNonVeg === "veg" && (
+                  Veg
 
-                <X className="h-3 w-3 text-gray-600" />
+                  {filters.vegNonVeg === "veg" && (
 
-              )}
+                    <X className="h-3 w-3 text-gray-600" />
 
-            </Button>
+                  )}
 
-            {!vegMode && (
+                </Button>
 
-              <Button
+                {!vegMode && (
 
-                variant="outline"
+                  <Button
 
-                size="sm"
+                    variant="outline"
 
-                className={`flex items-center gap-1.5 whitespace-nowrap border-gray-300 bg-white rounded-full ${filters.vegNonVeg === "non-veg"
+                    size="sm"
 
-                  ? "border-amber-700 bg-amber-50"
+                    className={`flex items-center gap-1.5 whitespace-nowrap border-gray-300 bg-white rounded-full ${filters.vegNonVeg === "non-veg"
 
-                  : ""
+                      ? "border-amber-700 bg-amber-50"
 
-                  }`}
+                      : ""
 
-                onClick={() =>
+                      }`}
 
-                  setFilters((prev) => ({
+                    onClick={() =>
 
-                    ...prev,
+                      setFilters((prev) => ({
 
-                    vegNonVeg: prev.vegNonVeg === "non-veg" ? null : "non-veg",
+                        ...prev,
 
-                  }))
+                        vegNonVeg: prev.vegNonVeg === "non-veg" ? null : "non-veg",
 
-                }
+                      }))
 
-              >
+                    }
 
-                <div className="h-3 w-3 rounded-full bg-amber-700" />
+                  >
 
-                Non-veg
+                    <div className="h-3 w-3 rounded-full bg-amber-700" />
 
-                {filters.vegNonVeg === "non-veg" && (
+                    Non-veg
 
-                  <X className="h-3 w-3 text-gray-600" />
+                    {filters.vegNonVeg === "non-veg" && (
+
+                      <X className="h-3 w-3 text-gray-600" />
+
+                    )}
+
+                  </Button>
 
                 )}
+              </div>
+            </div>
 
+            {!showFilterSheet && !showMenuSheet && !showMenuOptionsSheet && (
+              <Button
+                className="shrink-0 rounded-full bg-gray-800 px-5 py-2 text-white shadow-lg shadow-black/15 hover:bg-gray-900"
+                size="sm"
+                onClick={() => setShowMenuSheet(true)}
+              >
+                <Utensils className="mr-2 h-4 w-4" />
+                Menu
               </Button>
-
             )}
 
           </div>
@@ -5902,36 +5918,6 @@ export default function RestaurantDetails() {
         </div>
 
       )}
-
-
-
-      {/* Menu Button - Fixed at page bottom right (hidden when filter or menu sheet open) */}
-
-      {!showFilterSheet && !showMenuSheet && !showMenuOptionsSheet && (
-
-        <div className="pointer-events-none fixed inset-x-0 bottom-5 z-50 flex justify-end px-4 sm:px-6">
-
-          <Button
-
-            className="pointer-events-auto bg-gray-800 hover:bg-gray-900 text-white flex items-center gap-2 shadow-lg shadow-black/20 px-6 py-2.5 rounded-full"
-
-            size="lg"
-
-            onClick={() => setShowMenuSheet(true)}
-
-          >
-
-            <Utensils className="h-5 w-5" />
-
-            Menu
-
-          </Button>
-
-        </div>
-
-      )}
-
-
 
       {/* Menu Categories Bottom Sheet - Rendered via Portal */}
 
