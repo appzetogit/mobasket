@@ -105,10 +105,7 @@ export default function ProtectedRoute({ children, requiredRole, loginPath, modu
       ]);
       const shouldStayOnPendingApproval =
         !isApprovedAndActive &&
-        (
-          completedOnboardingSteps >= 4 ||
-          pendingLikeStatuses.has(normalizedStatus)
-        );
+        pendingLikeStatuses.has(normalizedStatus);
 
       if (shouldStayOnPendingApproval) {
         if (!isPendingPage && !isAuthPage) {
@@ -119,9 +116,8 @@ export default function ProtectedRoute({ children, requiredRole, loginPath, modu
       // Handle onboarding status
       if (!isApprovedAndActive && normalizedStatus === 'onboarding') {
         if (completedOnboardingSteps >= 4) {
-          if (!isPendingPage && !isAuthPage) {
-            return <Navigate to={`/${modulePrefix}/pending-approval`} replace />;
-          }
+          // Let onboarding-complete accounts render and self-resolve with fresh backend
+          // state instead of forcing a pending redirect from possibly stale cached auth data.
         }
         // Allow both onboarding and pending pages to render so they can self-resolve
         // using fresh backend state, instead of bouncing due to stale localStorage status.

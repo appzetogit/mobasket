@@ -847,6 +847,10 @@ export default function OrdersMain() {
     !restaurantStatus.isLoading &&
     (hasCompletedVerificationSubmission || hasRejectedVerification) &&
     restaurantStatus.isActive !== true
+  const shouldShowContactAdminState =
+    !isGroceryStore &&
+    !hasRejectedVerification &&
+    restaurantStatus.isActive === false
 
   useEffect(() => {
     if (!authFailed) return
@@ -1047,6 +1051,11 @@ export default function OrdersMain() {
             "in_review",
             "under_review",
           ])
+          const isApprovedAndActive =
+            restaurant.isActive === true ||
+            Boolean(restaurant.approvedAt) ||
+            normalizedStatus === "active" ||
+            normalizedStatus === "approved"
           setRestaurantStatus({
             isActive: restaurant.isActive,
             isAcceptingOrders: restaurant.isAcceptingOrders !== false,
@@ -1062,7 +1071,7 @@ export default function OrdersMain() {
             Boolean(String(restaurant.rejectionReason || "").trim()) ||
             Boolean(restaurant.rejectedAt)
           const shouldRedirectToPendingApproval =
-            restaurant.isActive !== true &&
+            !isApprovedAndActive &&
             !hasRejectedSignal &&
             (
               completedOnboardingSteps >= 4 ||
@@ -2323,8 +2332,14 @@ export default function OrdersMain() {
               </>
             ) : (
               <>
-                <h3 className="text-lg font-bold text-gray-900 mb-1">Verification Done in 24 Hours</h3>
-                <p className="text-sm text-gray-600">Your account is under verification. You'll be notified once approved.</p>
+                <h3 className="text-lg font-bold text-gray-900 mb-1">
+                  {shouldShowContactAdminState ? "Restaurant Inactive" : "Verification Done in 24 Hours"}
+                </h3>
+                <p className="text-sm text-gray-600">
+                  {shouldShowContactAdminState
+                    ? "Your restaurant account is inactive. Please contact admin directly."
+                    : "Your account is under verification. You'll be notified once approved."}
+                </p>
               </>
             )}
           </motion.div>

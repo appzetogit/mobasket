@@ -127,12 +127,17 @@ export const checkOnboardingStatus = async () => {
       onboardingData?.completedSteps ||
       0
     )
+    const isApprovedAndActive =
+      restaurantProfile?.isActive === true ||
+      Boolean(restaurantProfile?.approvedAt) ||
+      normalizedStatus === "active" ||
+      normalizedStatus === "approved"
 
     // When onboarding is already complete but the restaurant is still awaiting approval,
     // always prefer the pending-approval screen over bouncing back to onboarding/home.
     if (
       restaurantProfile &&
-      restaurantProfile.isActive !== true &&
+      !isApprovedAndActive &&
       (
         normalizedStatus === "pending" ||
         normalizedStatus === "rejected" ||

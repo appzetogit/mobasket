@@ -50,12 +50,17 @@ const isEmbeddedAndroidWebView = () => {
 const getVerificationRedirectPath = (restaurant) => {
   const normalizedStatus = String(restaurant?.status || "").trim().toLowerCase()
   const completedSteps = Number(restaurant?.onboarding?.completedSteps || 0)
+  const isApprovedAndActive =
+    restaurant?.isActive === true ||
+    Boolean(restaurant?.approvedAt) ||
+    normalizedStatus === "active" ||
+    normalizedStatus === "approved"
   const isApprovalPendingStatus =
     normalizedStatus === "pending" ||
     normalizedStatus === "rejected" ||
     normalizedStatus === "declined"
 
-  if (restaurant?.isActive === true) {
+  if (isApprovedAndActive) {
     return "/restaurant"
   }
 
