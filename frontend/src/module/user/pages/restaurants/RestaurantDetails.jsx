@@ -343,6 +343,7 @@ export default function RestaurantDetails() {
   const [visibleDirectItemsBySection, setVisibleDirectItemsBySection] = useState({});
   const [visibleSubsectionItemsBySection, setVisibleSubsectionItemsBySection] = useState({});
   const progressiveSectionsInitializedForSlugRef = useRef("");
+  const autoExpandedFirstSectionForSlugRef = useRef("");
 
   const [filters, setFilters] = useState({
 
@@ -489,12 +490,18 @@ export default function RestaurantDetails() {
   }, [restaurant?.id, restaurant?.restaurantId, restaurant?._id]);
 
   const _hydrateRestaurantDeferredData = useCallback(
-    async (restaurantIdForMenu, transformedRestaurant, { cancelledRef } = {}) => {
+    async (
+      restaurantIdForMenu,
+      transformedRestaurant,
+      { cancelledRef, silentlyRefreshMenu = false } = {},
+    ) => {
       if (!restaurantIdForMenu) return;
 
       const isCancelled = () => cancelledRef?.current === true;
 
-      setLoadingDeferredContent(true);
+      if (!silentlyRefreshMenu) {
+        setLoadingDeferredContent(true);
+      }
 
       try {
         const normalizeLookupId = (value) => String(value || "").trim();
@@ -561,7 +568,7 @@ export default function RestaurantDetails() {
             throw fastMenuLookupError;
           }
 
-          if (!isCancelled()) {
+          if (!isCancelled() && !silentlyRefreshMenu) {
             setRestaurant((prev) =>
               prev
                 ? {
@@ -612,11 +619,11 @@ export default function RestaurantDetails() {
               : prev,
           );
 
-          setExpandedSections(new Set());
+          setExpandedSections(getInitialExpandedSections(menuSections));
 
           // Resolve menu-loading state immediately from menu API result.
           // Do not block empty-state UI on slower personalization/inventory calls.
-          if (!isCancelled()) {
+          if (!isCancelled() && !silentlyRefreshMenu) {
             setLoadingDeferredContent(false);
           }
 
@@ -978,7 +985,7 @@ export default function RestaurantDetails() {
 
         let prefetchedPayload = getPrefetchedRestaurantForRoute(slug);
         if (!prefetchedPayload) {
-          prefetchedPayload = await awaitPrefetchedRestaurantForRoute(slug, { maxWaitMs: 700 });
+          prefetchedPayload = await awaitPrefetchedRestaurantForRoute(slug, { maxWaitMs: 250 });
         }
         const prefetchedMenuSections = Array.isArray(prefetchedPayload?.menuSections)
           ? prefetchedPayload.menuSections
@@ -1026,7 +1033,7 @@ export default function RestaurantDetails() {
             }
 
             if (zoneId) {
-              const searchParams = { limit: 100, zoneId };
+              const searchParams = { limit: 40, zoneId };
               const searchResponse = await restaurantAPI.getRestaurants(searchParams);
               const restaurants =
                 searchResponse?.data?.data?.restaurants ||
@@ -1775,12 +1782,12 @@ export default function RestaurantDetails() {
               : transformedRestaurant,
           );
           if (initialMenuSections.length > 0) {
-            setExpandedSections(new Set());
+            setExpandedSections(getInitialExpandedSections(initialMenuSections));
           }
 
           fetchedRestaurantRef.current = true; // Mark as fetched
           setLoadingRestaurant(false);
-          setLoadingDeferredContent(true);
+          setLoadingDeferredContent(initialMenuSections.length === 0);
 
 
 
@@ -1830,6 +1837,7 @@ export default function RestaurantDetails() {
           if (restaurantIdForMenu) {
             _hydrateRestaurantDeferredData(restaurantIdForMenu, transformedRestaurant, {
               cancelledRef,
+              silentlyRefreshMenu: initialMenuSections.length > 0,
             });
           } else {
             setLoadingDeferredContent(false);
@@ -3654,11 +3662,31 @@ export default function RestaurantDetails() {
 
   useEffect(() => {
     progressiveSectionsInitializedForSlugRef.current = "";
+    autoExpandedFirstSectionForSlugRef.current = "";
     setExpandedSections(new Set());
     setVisibleSectionCount(1);
     setVisibleDirectItemsBySection({});
     setVisibleSubsectionItemsBySection({});
   }, [normalizedSlug]);
+
+  const toggleExpandedSection = useCallback((sectionKey) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(sectionKey)) {
+        next.delete(sectionKey);
+      } else {
+        next.add(sectionKey);
+      }
+      return next;
+    });
+  }, []);
+
+  const getInitialExpandedSections = useCallback((sections = []) => {
+    if (!Array.isArray(sections) || sections.length === 0) {
+      return new Set();
+    }
+    return new Set([0]);
+  }, []);
 
   useEffect(() => {
     if (!loadingDeferredContent) return undefined;
@@ -3721,6 +3749,16 @@ export default function RestaurantDetails() {
     if (hasActiveSearchQuery) return filteredSections;
     return filteredSections.slice(0, Math.max(1, visibleSectionCount));
   }, [filteredSections, hasActiveSearchQuery, visibleSectionCount]);
+
+  useEffect(() => {
+    if (hasActiveSearchQuery) return;
+    if (autoExpandedFirstSectionForSlugRef.current === normalizedSlug) return;
+    if (!Array.isArray(renderedSections) || renderedSections.length === 0) return;
+
+    autoExpandedFirstSectionForSlugRef.current = normalizedSlug;
+    setExpandedSections(new Set([renderedSections[0].originalIndex]));
+  }, [renderedSections, hasActiveSearchQuery, normalizedSlug]);
+
   const hasRenderableMenuSections = renderedSections.length > 0;
 
   const visibleMenuCategories = useMemo(
@@ -4422,7 +4460,22 @@ export default function RestaurantDetails() {
 
 
               const isExpanded = expandedSections.has(originalIndex);
-
+              const directItemCount = Array.isArray(section?.items) ? section.items.length : 0;
+              const subsectionCount = Array.isArray(section?.subsections) ? section.subsections.length : 0;
+              const subsectionItemCount = subsectionCount
+                ? section.subsections.reduce(
+                    (total, subsection) =>
+                      total + (Array.isArray(subsection?.items) ? subsection.items.length : 0),
+                    0,
+                  )
+                : 0;
+              const totalItemCount = directItemCount + subsectionItemCount;
+              const sectionMeta = [
+                totalItemCount > 0 ? `${totalItemCount} item${totalItemCount === 1 ? "" : "s"}` : null,
+                subsectionCount > 0
+                  ? `${subsectionCount} ${subsectionCount === 1 ? "group" : "groups"}`
+                  : null,
+              ].filter(Boolean);
               const shouldShowSectionItems = isExpanded || hasSearchQuery;
 
               const filteredDirectItems = shouldShowSectionItems
@@ -4441,154 +4494,65 @@ export default function RestaurantDetails() {
               return (
 
                 <div
-
                   key={sectionIndex}
-
                   id={sectionId}
-
-                  className="space-y-4 scroll-mt-20"
-
+                  className={`scroll-mt-20 rounded-[28px] border transition-all duration-200 ${
+                    isExpanded
+                      ? "space-y-4 border-orange-200 bg-white p-4 shadow-[0_18px_50px_rgba(15,23,42,0.08)] sm:p-5"
+                      : "border-slate-200/90 bg-gradient-to-br from-white via-orange-50/50 to-slate-50 p-3 shadow-[0_8px_24px_rgba(15,23,42,0.05)] sm:p-4"
+                  }`}
                 >
 
                   {/* Section Header */}
 
-                  {isRecommendedSection && (
-
-                    <div className="flex items-center justify-between">
-
-                      <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-
-                        Recommended for you
-
-                      </h2>
-
-                      <button
-
-                        onClick={(e) => {
-
-                          e.stopPropagation();
-
-                          setExpandedSections((prev) => {
-
-                            const newSet = new Set(prev);
-
-                            if (newSet.has(originalIndex)) {
-
-                              newSet.delete(originalIndex);
-
-                            } else {
-
-                              newSet.add(originalIndex);
-
-                            }
-
-                            return newSet;
-
-                          });
-
-                        }}
-
-                        className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
-
-                      >
-
-                        <ChevronDown
-
-                          className={`h-5 w-5 text-gray-600 dark:text-gray-400 transition-transform duration-200 ${isExpanded ? "" : "-rotate-90"
-
-                            }`}
-
-                        />
-
-                      </button>
-
-                    </div>
-
-                  )}
-
-                  {!isRecommendedSection && (
-
-                    <div className="flex items-center justify-between">
-
-                      <div className="space-y-1">
-
-                        <h2 className="text-lg font-bold text-gray-900 dark:text-white">
-
-                          {section?.name &&
-
-                            typeof section.name === "string" &&
-
-                            section.name.trim()
-
-                            ? section.name.trim()
-
-                            : section?.title &&
-
-                              typeof section.title === "string" &&
-
-                              section.title.trim()
-
-                              ? section.title.trim()
-
-                              : "Unnamed Section"}
-
-                        </h2>
-
-                        {section.subtitle && (
-
-                          <button className="text-sm text-blue-600 dark:text-blue-400 underline">
-
-                            {section.subtitle}
-
-                          </button>
-
+                  <button
+                    type="button"
+                    aria-expanded={isExpanded}
+                    onClick={() => toggleExpandedSection(originalIndex)}
+                    className="flex w-full items-start justify-between gap-3 rounded-2xl text-left"
+                  >
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {isRecommendedSection && (
+                          <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-700">
+                            Picks for you
+                          </span>
                         )}
-
+                        {sectionMeta.map((meta) => (
+                          <span
+                            key={`${sectionId}-${meta}`}
+                            className="inline-flex items-center rounded-full bg-white/90 px-2.5 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200"
+                          >
+                            {meta}
+                          </span>
+                        ))}
                       </div>
 
-                      <button
-
-                        onClick={(e) => {
-
-                          e.stopPropagation();
-
-                          setExpandedSections((prev) => {
-
-                            const newSet = new Set(prev);
-
-                            if (newSet.has(originalIndex)) {
-
-                              newSet.delete(originalIndex);
-
-                            } else {
-
-                              newSet.add(originalIndex);
-
-                            }
-
-                            return newSet;
-
-                          });
-
-                        }}
-
-                        className="p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded transition-colors"
-
-                      >
-
-                        <ChevronDown
-
-                          className={`h-5 w-5 text-gray-600 dark:text-gray-400 transition-transform duration-200 ${isExpanded ? "" : "-rotate-90"
-
-                            }`}
-
-                        />
-
-                      </button>
-
+                      <div className="space-y-1">
+                        <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+                          {sectionTitle}
+                        </h2>
+                        {section.subtitle && (
+                          <p className="text-sm text-slate-500 dark:text-slate-400">
+                            {section.subtitle}
+                          </p>
+                        )}
+                        {!isExpanded && !hasSearchQuery && totalItemCount > 0 && (
+                          <p className="text-sm text-slate-500 dark:text-slate-400">
+                            Tap to view this category
+                          </p>
+                        )}
+                      </div>
                     </div>
 
-                  )}
+                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-600 shadow-sm transition-transform duration-200">
+                      <ChevronDown
+                        className={`h-5 w-5 transition-transform duration-200 ${
+                          isExpanded ? "rotate-0" : "-rotate-90"
+                        }`}
+                      />
+                    </span>
+                  </button>
 
 
 
@@ -5941,15 +5905,15 @@ export default function RestaurantDetails() {
 
 
 
-      {/* Menu Button - Sticky at page bottom right (hidden when filter or menu sheet open) */}
+      {/* Menu Button - Fixed at page bottom right (hidden when filter or menu sheet open) */}
 
       {!showFilterSheet && !showMenuSheet && !showMenuOptionsSheet && (
 
-        <div className="sticky dark:bg-[#1a1a1a] bottom-4 flex justify-end px-4 z-50 mt-auto">
+        <div className="pointer-events-none fixed inset-x-0 bottom-5 z-50 flex justify-end px-4 sm:px-6">
 
           <Button
 
-            className="bg-gray-800 hover:bg-gray-900 text-white flex items-center gap-2 shadow-lg px-6 py-2.5 rounded-lg"
+            className="pointer-events-auto bg-gray-800 hover:bg-gray-900 text-white flex items-center gap-2 shadow-lg shadow-black/20 px-6 py-2.5 rounded-full"
 
             size="lg"
 
