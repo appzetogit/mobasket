@@ -57,6 +57,30 @@ function normalizeDeliveryPartnerZoneIds(rawZones = []) {
     .filter(Boolean);
 }
 
+function getActiveZoneIdsForPoint(lat, lng, activeZones = []) {
+  if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
+    return [];
+  }
+
+  return activeZones
+    .filter((zone) => isPointInZoneBoundary(Number(lat), Number(lng), zone.coordinates))
+    .map((zone) => String(zone?._id || '').trim())
+    .filter(Boolean);
+}
+
+function resolveEffectiveDeliveryPartnerZoneIds(partner, activeZones = []) {
+  const savedZoneIds = normalizeDeliveryPartnerZoneIds(partner?.availability?.zones);
+  const coordinates = partner?.availability?.currentLocation?.coordinates;
+
+  if (!Array.isArray(coordinates) || coordinates.length < 2) {
+    return savedZoneIds;
+  }
+
+  const [lng, lat] = coordinates;
+  const currentZoneIds = getActiveZoneIdsForPoint(lat, lng, activeZones);
+  return currentZoneIds.length > 0 ? currentZoneIds : savedZoneIds;
+}
+
 function normalizeZoneOption(rawOptions = null) {
   // Backward compatibility: some legacy callers pass a 5th numeric arg (top-N hint).
   if (!rawOptions || typeof rawOptions === 'number') {
@@ -305,7 +329,7 @@ export async function findNearestDeliveryBoys(restaurantLat, restaurantLng, rest
 
         // Zone filtering (same as findNearestDeliveryBoy)
         if (zone) {
-          const partnerZoneIds = normalizeDeliveryPartnerZoneIds(partner.availability?.zones);
+          const partnerZoneIds = resolveEffectiveDeliveryPartnerZoneIds(partner, activeZones);
           if (partnerZoneIds.length > 0 && !partnerZoneIds.includes(String(zone._id))) {
             return null;
           }
@@ -326,7 +350,7 @@ export async function findNearestDeliveryBoys(restaurantLat, restaurantLng, rest
           distance,
           latitude: lat,
           longitude: lng,
-          zoneId: normalizeDeliveryPartnerZoneIds(partner.availability?.zones)[0] || null
+          zoneId: resolveEffectiveDeliveryPartnerZoneIds(partner, activeZones)[0] || null
         };
       })
       .filter(partner => partner !== null && partner.distance <= priorityDistance)
@@ -454,7 +478,7 @@ export async function findNearestDeliveryBoy(
               if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
 
               if (zone) {
-                const partnerZoneIds = normalizeDeliveryPartnerZoneIds(partner.availability?.zones);
+                const partnerZoneIds = resolveEffectiveDeliveryPartnerZoneIds(partner, activeZones);
                 if (partnerZoneIds.length > 0 && !partnerZoneIds.includes(String(zone._id))) {
                   continue;
                 }
@@ -536,7 +560,7 @@ export async function findNearestDeliveryBoy(
 
         // Filter by zone if zone exists
         if (zone) {
-          const partnerZoneIds = normalizeDeliveryPartnerZoneIds(partner.availability?.zones);
+          const partnerZoneIds = resolveEffectiveDeliveryPartnerZoneIds(partner, activeZones);
 
           if (partnerZoneIds.length > 0 && !partnerZoneIds.includes(String(zone._id))) {
             console.log(`⚠️ Delivery partner ${partner._id} not in zone ${zone.name} (partner zones: ${partnerZoneIds.join(',')}, required zone: ${zone._id})`);
@@ -567,7 +591,7 @@ export async function findNearestDeliveryBoy(
           distance,
           latitude: lat,
           longitude: lng,
-          zoneId: normalizeDeliveryPartnerZoneIds(partner.availability?.zones)[0] || null
+          zoneId: resolveEffectiveDeliveryPartnerZoneIds(partner, activeZones)[0] || null
         };
       })
       .filter(partner => partner !== null && partner.distance <= maxDistance)

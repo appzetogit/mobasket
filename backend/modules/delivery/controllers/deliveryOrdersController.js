@@ -481,18 +481,14 @@ const getCurrentDeliveryZoneIds = async (deliveryId) => {
     .map(normalizeZoneId)
     .filter(Boolean);
 
-  if (savedZoneIds.length > 0) {
-    return Array.from(new Set(savedZoneIds));
-  }
-
   const coordinates = deliveryPartner.availability?.currentLocation?.coordinates;
   if (!Array.isArray(coordinates) || coordinates.length < 2) {
-    return [];
+    return Array.from(new Set(savedZoneIds));
   }
 
   const [longitude, latitude] = coordinates;
   if (!Number.isFinite(Number(latitude)) || !Number.isFinite(Number(longitude))) {
-    return [];
+    return Array.from(new Set(savedZoneIds));
   }
 
   const activeZones = await Zone.find({
@@ -507,10 +503,12 @@ const getCurrentDeliveryZoneIds = async (deliveryId) => {
     .select('_id coordinates')
     .lean();
 
-  return activeZones
+  const liveZoneIds = activeZones
     .filter((zone) => isPointInZoneBoundary(Number(latitude), Number(longitude), zone.coordinates))
     .map((zone) => normalizeZoneId(zone._id))
     .filter(Boolean);
+
+  return Array.from(new Set(liveZoneIds.length > 0 ? liveZoneIds : savedZoneIds));
 };
 
 /**

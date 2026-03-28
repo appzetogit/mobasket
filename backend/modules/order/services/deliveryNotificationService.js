@@ -143,12 +143,25 @@ const isPointInZoneBoundary = (lat, lng, zoneCoordinates = []) => {
   return inside;
 };
 
+const getActiveZoneIdsForCoordinates = (partnerCoords = null, activeZones = []) => {
+  if (!partnerCoords) return [];
+
+  return activeZones
+    .filter((zone) =>
+      isPointInZoneBoundary(partnerCoords.lat, partnerCoords.lng, zone.coordinates)
+    )
+    .map((zone) => normalizeZoneId(zone?._id))
+    .filter(Boolean);
+};
+
 const isDeliveryPartnerZoneEligible = (deliveryPartner, zoneContext = {}) => {
   const { requiredZoneId = null, requiredZone = null, activeZones = [] } = zoneContext;
   if (!deliveryPartner) return false;
 
-  const partnerZoneIds = normalizeDeliveryPartnerZoneIds(deliveryPartner.availability?.zones);
   const partnerCoords = getDeliveryPartnerCoordinates(deliveryPartner);
+  const currentZoneIds = getActiveZoneIdsForCoordinates(partnerCoords, activeZones);
+  const savedZoneIds = normalizeDeliveryPartnerZoneIds(deliveryPartner.availability?.zones);
+  const partnerZoneIds = currentZoneIds.length > 0 ? currentZoneIds : savedZoneIds;
 
   if (requiredZoneId) {
     if (!requiredZone) return false;
