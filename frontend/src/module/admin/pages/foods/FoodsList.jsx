@@ -4,6 +4,16 @@ import { adminAPI } from "@/lib/api";
 import { buildImageFallback } from "@/lib/utils/imageFallback";
 import { toast } from "sonner";
 
+function extractRestaurantZone(restaurant = {}) {
+  return (
+    restaurant?.location?.area ||
+    restaurant?.location?.city ||
+    restaurant?.onboarding?.step1?.location?.area ||
+    restaurant?.onboarding?.step1?.location?.city ||
+    "Unassigned"
+  );
+}
+
 function normalizeImage(item = {}) {
   if (typeof item?.image === "string" && item.image.trim()) return item.image;
   if (item?.image && typeof item.image === "object") {
@@ -43,6 +53,7 @@ function flattenApprovedItems(menuSections = [], restaurant = {}) {
       restaurantName: restaurant?.name || "-",
       restaurantId: restaurant?.restaurantId || restaurant?._id || "-",
       restaurantMongoId: String(restaurant?._id || ""),
+      zoneName: extractRestaurantZone(restaurant),
       sectionName: sectionName || "-",
       subsectionName: subsectionName || "",
       sectionId: section?.id || "",
@@ -75,7 +86,10 @@ function flattenApprovedItems(menuSections = [], restaurant = {}) {
 
 export default function FoodsList() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [selectedRestaurant, setSelectedRestaurant] = useState("all");
+  const [selectedZone, setSelectedZone] = useState("all");
   const [foods, setFoods] = useState([]);
+  const [zoneOptions, setZoneOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [editOpen, setEditOpen] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
@@ -95,11 +109,20 @@ export default function FoodsList() {
       try {
         setLoading(true);
 
-        const restaurantResponse = await adminAPI.getRestaurants({ limit: 1000, status: "active" });
+        const [restaurantResponse, zonesResponse] = await Promise.all([
+          adminAPI.getRestaurants({ limit: 1000, status: "active" }),
+          adminAPI.getZones({ limit: 1000, platform: "mofood" }),
+        ]);
+
         const restaurants =
           restaurantResponse?.data?.data?.restaurants ||
           restaurantResponse?.data?.data ||
           restaurantResponse?.data?.restaurants ||
+          [];
+
+        const zones =
+          zonesResponse?.data?.data?.zones ||
+          zonesResponse?.data?.zones ||
           [];
 
         const mofoodRestaurants = (Array.isArray(restaurants) ? restaurants : []).filter((restaurant) => {
@@ -107,11 +130,19 @@ export default function FoodsList() {
           return platform === "mofood" && restaurant?.isActive !== false;
         });
 
+        setZoneOptions(
+          (Array.isArray(zones) ? zones : [])
+            .map((zone) => String(zone?.name || zone?.zoneName || "").trim())
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b)),
+        );
+
         const menuResponses = await Promise.all(
           mofoodRestaurants.map(async (restaurant) => {
             try {
               const response = await adminAPI.getRestaurantMenu(
                 String(restaurant?._id || restaurant?.restaurantId || ""),
+                { includeImages: false },
               );
               const menu = response?.data?.data?.menu || response?.data?.menu || { sections: [] };
               return flattenApprovedItems(menu?.sections, restaurant);
@@ -142,6 +173,30 @@ export default function FoodsList() {
 
     fetchApprovedFoods();
   }, []);
+
+  const restaurantOptions = useMemo(
+    () =>
+      Array.from(
+        new Map(
+          foods.map((food) => [
+            String(food.restaurantMongoId || food.restaurantId),
+            {
+              value: String(food.restaurantMongoId || food.restaurantId),
+              label: food.restaurantName || "-",
+            },
+          ]),
+        ).values(),
+      ).sort((a, b) => a.label.localeCompare(b.label)),
+    [foods],
+  );
+
+  const derivedZoneOptions = useMemo(() => {
+    const foodZones = foods
+      .map((food) => String(food.zoneName || "").trim())
+      .filter(Boolean);
+
+    return Array.from(new Set([...zoneOptions, ...foodZones])).sort((a, b) => a.localeCompare(b));
+  }, [foods, zoneOptions]);
 
   const openEditModal = (food) => {
     const initialImage = food?.image === buildImageFallback(40, "FOO") ? "" : food?.image || "";
@@ -239,17 +294,28 @@ export default function FoodsList() {
 
   const filteredFoods = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return foods;
+    return foods.filter((food) => {
+      const matchesRestaurant =
+        selectedRestaurant === "all" ||
+        String(food.restaurantMongoId || food.restaurantId) === selectedRestaurant;
 
-    return foods.filter((food) =>
-      food.itemName?.toLowerCase().includes(query) ||
-      food.restaurantName?.toLowerCase().includes(query) ||
-      String(food.restaurantId || "").toLowerCase().includes(query) ||
-      food.sectionName?.toLowerCase().includes(query) ||
-      food.subsectionName?.toLowerCase().includes(query) ||
-      food.foodType?.toLowerCase().includes(query),
-    );
-  }, [foods, searchQuery]);
+      const matchesZone =
+        selectedZone === "all" ||
+        String(food.zoneName || "").trim().toLowerCase() === selectedZone.toLowerCase();
+
+      const matchesSearch =
+        !query ||
+        food.itemName?.toLowerCase().includes(query) ||
+        food.restaurantName?.toLowerCase().includes(query) ||
+        String(food.restaurantId || "").toLowerCase().includes(query) ||
+        String(food.zoneName || "").toLowerCase().includes(query) ||
+        food.sectionName?.toLowerCase().includes(query) ||
+        food.subsectionName?.toLowerCase().includes(query) ||
+        food.foodType?.toLowerCase().includes(query);
+
+      return matchesRestaurant && matchesZone && matchesSearch;
+    });
+  }, [foods, searchQuery, selectedRestaurant, selectedZone]);
 
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
@@ -266,22 +332,48 @@ export default function FoodsList() {
           <h1 className="text-2xl font-bold text-slate-900">Approved Foods</h1>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div className="flex flex-col gap-4">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold text-slate-900">Available approved food items</h2>
             <span className="px-3 py-1 rounded-full text-sm font-semibold bg-emerald-100 text-emerald-700">
               {filteredFoods.length}
             </span>
           </div>
-          <div className="relative flex-1 sm:flex-initial min-w-[220px]">
-            <input
-              type="text"
-              placeholder="Search by food, restaurant, section"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 pr-4 py-2.5 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
-            />
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(200px,0.7fr)_minmax(200px,0.7fr)] gap-3">
+            <div className="relative min-w-[220px]">
+              <input
+                type="text"
+                placeholder="Search by food, restaurant, section, zone"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 pr-4 py-2.5 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
+              />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            </div>
+            <select
+              value={selectedRestaurant}
+              onChange={(e) => setSelectedRestaurant(e.target.value)}
+              className="px-3 py-2.5 text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
+            >
+              <option value="all">All Restaurants</option>
+              {restaurantOptions.map((restaurant) => (
+                <option key={restaurant.value} value={restaurant.value}>
+                  {restaurant.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={selectedZone}
+              onChange={(e) => setSelectedZone(e.target.value)}
+              className="px-3 py-2.5 text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
+            >
+              <option value="all">All Zones</option>
+              {derivedZoneOptions.map((zone) => (
+                <option key={zone} value={zone}>
+                  {zone}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </div>
@@ -328,6 +420,8 @@ export default function FoodsList() {
                           src={food.image}
                           alt={food.itemName || "food"}
                           className="w-full h-full object-cover"
+                          loading="lazy"
+                          decoding="async"
                           onError={(e) => {
                             e.currentTarget.src = buildImageFallback(40, "FOO");
                           }}
@@ -343,7 +437,10 @@ export default function FoodsList() {
                     <td className="px-4 py-3">
                       <div className="flex flex-col">
                         <span className="text-sm text-slate-900">{food.restaurantName}</span>
-                        <span className="text-xs text-slate-500">{food.restaurantId}</span>
+                        <span className="text-xs text-slate-500">
+                          {food.restaurantId}
+                          {food.zoneName ? ` • ${food.zoneName}` : ""}
+                        </span>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-slate-700">
