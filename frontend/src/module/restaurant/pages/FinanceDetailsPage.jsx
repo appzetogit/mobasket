@@ -2,11 +2,13 @@ import { useState, useRef, useEffect } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
 import { ArrowLeft, ChevronDown, ChevronUp, Download, Mail, X, Info } from "lucide-react"
+import { restaurantAPI } from "@/lib/api"
 
 export default function FinanceDetailsPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const financeData = location.state?.financeData || {}
+  const [financeData, setFinanceData] = useState(() => location.state?.financeData || null)
+  const [loadingFinance, setLoadingFinance] = useState(() => !location.state?.financeData)
   
   const [activeTab, setActiveTab] = useState("summary")
   const [isTransitioning, setIsTransitioning] = useState(false)
@@ -53,6 +55,34 @@ export default function FinanceDetailsPage() {
     }
   }, [activeTab])
 
+  useEffect(() => {
+    if (location.state?.financeData) return
+
+    let isMounted = true
+    const fetchFinanceData = async () => {
+      try {
+        setLoadingFinance(true)
+        const response = await restaurantAPI.getFinance()
+        if (isMounted && response?.data?.success && response?.data?.data) {
+          setFinanceData(response.data.data)
+        }
+      } catch (error) {
+        if (error?.response?.status !== 401) {
+          console.error("Error fetching finance details:", error)
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingFinance(false)
+        }
+      }
+    }
+
+    fetchFinanceData()
+    return () => {
+      isMounted = false
+    }
+  }, [location.state?.financeData])
+
   const handleDownload = () => {
     setShowDownloadPopup(true)
     // In a real app, this would trigger PDF download
@@ -69,43 +99,54 @@ export default function FinanceDetailsPage() {
     }, 2000)
   }
 
+  const currentCycle = financeData?.currentCycle || {}
+  const restaurant = financeData?.restaurant || {}
+
   // Settlement data with sub-items
   const settlementData = {
-    totalOrders: financeData?.totalOrders || 127,
-    netOrderValue: financeData?.netOrderValue || {
-      itemSubtotal: 15000.00,
-      totalGSTCollected: 2700.00,
-      restaurantDiscountPromos: 500.00,
-      restaurantDiscountOthers: 300.00,
-      total: 18500.00
+    totalOrders: Number(currentCycle?.totalOrders) || 0,
+    netOrderValue: {
+      itemSubtotal: Number(currentCycle?.totalOrderValue) || 0,
+      totalGSTCollected: Number(currentCycle?.totalTax) || 0,
+      restaurantDiscountPromos: 0,
+      restaurantDiscountOthers: 0,
+      total: Number(currentCycle?.totalOrderValue) || 0,
     },
-    additions: financeData?.additions || {
-      tds194H: 200.00,
-      tds194C: 250.00,
-      total: 450.00
+    additions: {
+      tds194H: 0,
+      tds194C: 0,
+      total: 0,
     },
-    orderLevelDeductions: financeData?.orderLevelDeductions || {
-      total: 1200.00
+    orderLevelDeductions: {
+      total: Number(currentCycle?.totalCommission) || 0,
     },
-    taxDeductions: financeData?.taxDeductions || {
-      gstOnServiceFees: 500.00,
-      tds194O: 200.00,
-      gstPaidByZomato: 150.00,
-      total: 850.00
+    taxDeductions: {
+      gstOnServiceFees: Number(currentCycle?.totalTax) || 0,
+      tds194O: 0,
+      gstPaidByZomato: 0,
+      total: Number(currentCycle?.totalTax) || 0,
     },
-    investmentsInGrowth: financeData?.investmentsInGrowth || {
-      onlineOrderingAds: 350.00,
-      total: 350.00
+    investmentsInGrowth: {
+      onlineOrderingAds: Number(currentCycle?.totalPlatformFee) || 0,
+      total: Number(currentCycle?.totalPlatformFee) || 0,
     },
   }
 
   // Calculate estimated payout: A + B - C - D - E
-  const estimatedPayout = 
-    (settlementData.netOrderValue?.total || 0) +
-    (settlementData.additions?.total || 0) -
-    (settlementData.orderLevelDeductions?.total || 0) -
-    (settlementData.taxDeductions?.total || 0) -
-    (settlementData.investmentsInGrowth?.total || 0)
+  const estimatedPayout =
+    Number(currentCycle?.estimatedPayout) ||
+    (
+      (settlementData.netOrderValue?.total || 0) +
+      (settlementData.additions?.total || 0) -
+      (settlementData.orderLevelDeductions?.total || 0) -
+      (settlementData.taxDeductions?.total || 0) -
+      (settlementData.investmentsInGrowth?.total || 0)
+    )
+
+  const cycleLabel =
+    currentCycle?.start && currentCycle?.end
+      ? `${currentCycle.start.day} - ${currentCycle.end.day} ${currentCycle.start.month}'${currentCycle.start.year}`
+      : "-"
 
   const toggleSection = (section) => {
     setExpandedSections(prev => ({
@@ -127,7 +168,7 @@ export default function FinanceDetailsPage() {
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-lg font-bold text-gray-900 truncate">
-              Kadhai Chammach Restaurant
+              {restaurant?.name || "Restaurant"}
             </h1>
             <p className="text-xs text-gray-600 mt-0.5">
               ID: 20959122 • By Pass Road (South), Indore
@@ -198,6 +239,9 @@ export default function FinanceDetailsPage() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-4 py-4">
+        {loadingFinance ? (
+          <div className="py-10 text-center text-sm text-gray-500">Loading finance details...</div>
+        ) : (
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -216,12 +260,12 @@ export default function FinanceDetailsPage() {
                       <p className="text-2xl font-bold text-gray-900 mb-1">
                         ₹{estimatedPayout.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </p>
-                      <p className="text-xs text-gray-600">from 15 - 18 Dec'25</p>
+                      <p className="text-xs text-gray-600">from {cycleLabel}</p>
                       <p className="text-xs text-gray-600 mt-1">Payout date: -</p>
                     </div>
                     <div>
                       <p className="text-xs text-gray-600 mb-1">Payout for</p>
-                      <p className="text-sm font-semibold text-gray-900">15 - 21 Dec'25</p>
+                      <p className="text-sm font-semibold text-gray-900">{cycleLabel}</p>
                     </div>
                   </div>
                 </div>
@@ -541,6 +585,7 @@ export default function FinanceDetailsPage() {
             )}
           </motion.div>
         </AnimatePresence>
+        )}
       </div>
 
       {/* Download Popup */}

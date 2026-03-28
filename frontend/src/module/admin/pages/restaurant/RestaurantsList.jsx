@@ -16,6 +16,14 @@ import inactiveIcon from "../../assets/Dashboard-icons/image3.png"
 
 const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
+const formatCurrency = (amount) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(amount) || 0)
+
 const to24HourTime = (slotTime, slotPeriod) => {
   if (!slotTime || typeof slotTime !== "string") return ""
   const [rawHour, rawMinute] = slotTime.split(":").map(Number)
@@ -232,6 +240,15 @@ export default function RestaurantsList() {
     location: resolveRestaurantLocation(restaurant),
   })
 
+  const getRestaurantPocketBalance = (restaurant = {}) =>
+    Number(
+      restaurant?.originalData?.wallet?.totalBalance ??
+        restaurant?.originalData?.wallet?.pocketBalance ??
+        restaurant?.wallet?.totalBalance ??
+        restaurant?.wallet?.pocketBalance ??
+        0,
+    ) || 0
+
   const isPointInPolygon = (latitude, longitude, coordinates = []) => {
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || !Array.isArray(coordinates) || coordinates.length < 3) {
       return false
@@ -347,6 +364,7 @@ export default function RestaurantsList() {
             rating: restaurant.ratings?.average || restaurant.rating || 0,
             logo: restaurant.profileImage?.url || restaurant.logo || buildImageFallback(40, "RES"),
             address: formatRestaurantAddress(restaurant),
+            pocketBalance: Number(restaurant?.wallet?.totalBalance) || 0,
             // Preserve original restaurant data for details modal
             originalData: normalizeRestaurantRecord(restaurant),
           }
@@ -632,6 +650,10 @@ export default function RestaurantsList() {
   const totalRestaurants = restaurants.length
   const activeRestaurants = restaurants.filter(r => r.status).length
   const inactiveRestaurants = restaurants.filter(r => !r.status).length
+  const totalPocketBalance = filteredRestaurants.reduce(
+    (sum, restaurant) => sum + getRestaurantPocketBalance(restaurant),
+    0,
+  )
 
   const zoneOptions = useMemo(() => {
     const seen = new Set()
@@ -1294,6 +1316,16 @@ export default function RestaurantsList() {
             </div>
           </div>
 
+          <div className="mb-6 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-700">
+              Pocket Balance
+            </p>
+            <p className="mt-1 text-2xl font-bold text-emerald-900">{formatCurrency(totalPocketBalance)}</p>
+            <p className="mt-1 text-sm text-emerald-800">
+              Total available balance for the {filteredRestaurants.length} visible {entityLabelPlural.toLowerCase()}.
+            </p>
+          </div>
+
           {/* Table */}
           <div className="overflow-x-auto">
             {loading ? (
@@ -1335,6 +1367,11 @@ export default function RestaurantsList() {
                         <span>Cuisine</span>
                       </div>
                     </th>
+                    <th className="px-6 py-4 text-right text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                      <div className="flex items-center justify-end gap-1">
+                        <span>Pocket Balance</span>
+                      </div>
+                    </th>
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-1">
                         <span>Status</span>
@@ -1346,7 +1383,7 @@ export default function RestaurantsList() {
                 <tbody className="bg-white divide-y divide-slate-100">
                   {filteredRestaurants.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-20 text-center">
+                      <td colSpan={8} className="px-6 py-20 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <p className="text-lg font-semibold text-slate-700 mb-1">No Data Found</p>
                           <p className="text-sm text-slate-500">No restaurants match your search</p>
@@ -1410,6 +1447,11 @@ export default function RestaurantsList() {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="text-sm text-slate-700">{restaurant.cuisine}</span>
                         </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+                            {formatCurrency(getRestaurantPocketBalance(restaurant))}
+                          </span>
+                        </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <button
                             onClick={() => handleToggleStatus(restaurant.id)}
@@ -1468,6 +1510,7 @@ export default function RestaurantsList() {
             )}
           </div>
         </div>
+
       </div>
 
       {/* Restaurant Details Modal */}

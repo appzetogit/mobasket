@@ -1,6 +1,7 @@
 import Admin from '../models/Admin.js';
 import Order from '../../order/models/Order.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import RestaurantWallet from '../../restaurant/models/RestaurantWallet.js';
 import GroceryStore from '../../grocery/models/GroceryStore.js';
 import OutletTimings from '../../restaurant/models/OutletTimings.js';
 import Offer from '../../restaurant/models/Offer.js';
@@ -1510,7 +1511,35 @@ export const getRestaurants = asyncHandler(async (req, res) => {
       .limit(parsedLimit)
       .lean();
 
-    const normalizedRestaurants = restaurants.map(normalizeRestaurantAddressRecord);
+    const restaurantIds = restaurants
+      .map((restaurant) => restaurant?._id)
+      .filter(Boolean);
+
+    const wallets = restaurantIds.length > 0
+      ? await RestaurantWallet.find({ restaurantId: { $in: restaurantIds } })
+        .select('restaurantId totalBalance totalEarned totalWithdrawn')
+        .lean()
+      : [];
+
+    const walletByRestaurantId = new Map(
+      wallets.map((wallet) => [
+        String(wallet.restaurantId),
+        {
+          totalBalance: Number(wallet.totalBalance) || 0,
+          totalEarned: Number(wallet.totalEarned) || 0,
+          totalWithdrawn: Number(wallet.totalWithdrawn) || 0,
+        },
+      ])
+    );
+
+    const normalizedRestaurants = restaurants.map((restaurant) => ({
+      ...normalizeRestaurantAddressRecord(restaurant),
+      wallet: walletByRestaurantId.get(String(restaurant._id)) || {
+        totalBalance: 0,
+        totalEarned: 0,
+        totalWithdrawn: 0,
+      },
+    }));
 
     // Get total count
     const total = await Restaurant.countDocuments(query);
