@@ -1,7 +1,7 @@
 import User from '../models/User.js';
 import Admin from '../../admin/models/Admin.js';
 import otpService from '../services/otpService.js';
-import jwtService from '../services/jwtService.js';
+import jwtService, { refreshCookieMaxAgeMs } from '../services/jwtService.js';
 import googleAuthService from '../services/googleAuthService.js';
 import firebaseAuthService from '../services/firebaseAuthService.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
@@ -40,7 +40,7 @@ const setUserRefreshCookies = (res, token) => {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'strict',
-    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+    maxAge: refreshCookieMaxAgeMs
   };
   // Keep legacy cookie for backward compatibility and add module-specific cookie to avoid collisions.
   res.cookie('refreshToken', token, cookieOptions);
@@ -371,8 +371,11 @@ export const refreshToken = asyncHandler(async (req, res) => {
       phone: user.phone
     });
 
+    setUserRefreshCookies(res, refreshToken);
+
     return successResponse(res, 200, 'Token refreshed successfully', {
-      accessToken
+      accessToken,
+      refreshToken
     });
   } catch (error) {
     return errorResponse(res, 401, error.message || 'Invalid refresh token');

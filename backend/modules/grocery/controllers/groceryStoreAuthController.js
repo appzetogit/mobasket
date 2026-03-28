@@ -1,6 +1,6 @@
 import GroceryStore, { hydrateGroceryStoreFromLegacy, hydrateGroceryStoreByIdFromLegacy } from '../models/GroceryStore.js';
 import otpService from '../../auth/services/otpService.js';
-import jwtService from '../../auth/services/jwtService.js';
+import jwtService, { refreshCookieMaxAgeMs } from '../../auth/services/jwtService.js';
 import firebaseAuthService from '../../auth/services/firebaseAuthService.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
@@ -70,6 +70,29 @@ const buildPhoneQuery = (normalizedPhone) => {
 
 const isDuplicateKeyError = (error) =>
   error?.code === 11000 || /E11000 duplicate key error/i.test(String(error?.message || ''));
+
+const groceryRefreshCookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict',
+  maxAge: refreshCookieMaxAgeMs
+};
+
+const groceryClearCookieOptions = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'strict'
+};
+
+const setGroceryRefreshCookies = (res, token) => {
+  res.cookie('refreshToken', token, groceryRefreshCookieOptions);
+  res.cookie('groceryStoreRefreshToken', token, groceryRefreshCookieOptions);
+};
+
+const clearGroceryRefreshCookies = (res) => {
+  res.clearCookie('refreshToken', groceryClearCookieOptions);
+  res.clearCookie('groceryStoreRefreshToken', groceryClearCookieOptions);
+};
 
 const getStoreSelectionScore = (store = {}) => {
   let score = 0;
@@ -255,12 +278,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       email: store.email
     });
 
-    res.cookie('refreshToken', tokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    });
+    setGroceryRefreshCookies(res, tokens.refreshToken);
 
     const storeResponse = store.toObject();
     delete storeResponse.password;
@@ -328,12 +346,7 @@ export const register = asyncHandler(async (req, res) => {
       email: store.email
     });
 
-    res.cookie('refreshToken', tokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    });
+    setGroceryRefreshCookies(res, tokens.refreshToken);
 
     const storeResponse = store.toObject();
     delete storeResponse.password;
@@ -392,12 +405,7 @@ export const login = asyncHandler(async (req, res) => {
       email: store.email
     });
 
-    res.cookie('refreshToken', tokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    });
+    setGroceryRefreshCookies(res, tokens.refreshToken);
 
     const storeResponse = store.toObject();
     delete storeResponse.password;
@@ -460,12 +468,7 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
       email: store.email
     });
 
-    res.cookie('refreshToken', tokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    });
+    setGroceryRefreshCookies(res, tokens.refreshToken);
 
     const storeResponse = store.toObject();
     delete storeResponse.password;
@@ -489,7 +492,11 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
 });
 
 export const refreshToken = asyncHandler(async (req, res) => {
-  const refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+  const refreshToken =
+    req.cookies?.groceryStoreRefreshToken ||
+    req.cookies?.refreshToken ||
+    req.body?.refreshToken ||
+    req.headers['x-refresh-token'];
 
   if (!refreshToken) {
     return errorResponse(res, 401, 'Refresh token is required');
@@ -517,12 +524,7 @@ export const refreshToken = asyncHandler(async (req, res) => {
       email: store.email
     });
 
-    res.cookie('refreshToken', tokens.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    });
+    setGroceryRefreshCookies(res, tokens.refreshToken);
 
     return successResponse(res, 200, 'Token refreshed successfully', {
       accessToken: tokens.accessToken,
@@ -539,7 +541,7 @@ export const logout = asyncHandler(async (req, res) => {
     await req.store.save();
   }
 
-  res.clearCookie('refreshToken');
+  clearGroceryRefreshCookies(res);
   return successResponse(res, 200, 'Logged out successfully');
 });
 

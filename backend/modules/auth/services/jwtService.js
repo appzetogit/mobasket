@@ -2,6 +2,15 @@ import jwt from 'jsonwebtoken';
 import dotenv from 'dotenv';
 dotenv.config();
 
+const DEFAULT_REFRESH_COOKIE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+export const refreshCookieMaxAgeMs = (() => {
+  const rawValue = Number(process.env.JWT_REFRESH_COOKIE_MAX_AGE_MS);
+  if (Number.isFinite(rawValue) && rawValue > 0) {
+    return rawValue;
+  }
+  return DEFAULT_REFRESH_COOKIE_MAX_AGE_MS;
+})();
+
 /**
  * JWT Service
  * Handles JWT token generation and verification
@@ -12,7 +21,7 @@ class JWTService {
 
     this.secret = secret;
     this.accessTokenExpiry = process.env.JWT_ACCESS_EXPIRY || '24h';
-    this.refreshTokenExpiry = process.env.JWT_REFRESH_EXPIRY || '7d';
+    this.refreshTokenExpiry = process.env.JWT_REFRESH_EXPIRY || '30d';
     
   }
 

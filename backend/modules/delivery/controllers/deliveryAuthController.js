@@ -1,6 +1,6 @@
 import Delivery from '../models/Delivery.js';
 import otpService from '../../auth/services/otpService.js';
-import jwtService from '../../auth/services/jwtService.js';
+import jwtService, { refreshCookieMaxAgeMs } from '../../auth/services/jwtService.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { initializeFirebaseAdmin, admin } from '../../../shared/services/firebaseAdminService.js';
@@ -461,13 +461,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
           sameSite: 'strict',
-          maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+          maxAge: refreshCookieMaxAgeMs
         });
         res.cookie('deliveryRefreshToken', tokens.refreshToken, {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
           sameSite: 'strict',
-          maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+          maxAge: refreshCookieMaxAgeMs
         });
 
         return successResponse(res, 200, 'OTP verified. Please complete your profile.', {
@@ -509,13 +509,13 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      maxAge: refreshCookieMaxAgeMs
     });
     res.cookie('deliveryRefreshToken', tokens.refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+      maxAge: refreshCookieMaxAgeMs
     });
 
     // Update last login
@@ -592,8 +592,22 @@ export const refreshToken = asyncHandler(async (req, res) => {
       email: delivery.email || delivery.phone || delivery.deliveryId
     });
 
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: refreshCookieMaxAgeMs
+    });
+    res.cookie('deliveryRefreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: refreshCookieMaxAgeMs
+    });
+
     return successResponse(res, 200, 'Token refreshed successfully', {
-      accessToken
+      accessToken,
+      refreshToken
     });
   } catch (error) {
     return errorResponse(res, 401, error.message || 'Invalid refresh token');
