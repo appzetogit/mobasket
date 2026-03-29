@@ -12,6 +12,7 @@ import FoodApproval from "../pages/restaurant/FoodApproval";
 import GroceryApproval from "../pages/grocery/GroceryApproval";
 import GroceryProductApproval from "../pages/grocery/GroceryProductApproval";
 import OrdersPage from "../pages/orders/OrdersPage";
+import CombinedOrdersPage from "../pages/orders/CombinedOrdersPage";
 import OrderDetectDelivery from "../pages/OrderDetectDelivery";
 import Category from "../pages/categories/Category";
 import FeeSettings from "../pages/fee-settings/FeeSettings";
@@ -143,7 +144,8 @@ export default function AdminRouter() {
         }
       >
         {/* Dashboard */}
-        <Route path="/" element={<AdminHome />} />
+        <Route path="/" element={<CombinedOrdersPage />} />
+        <Route path="/dashboard" element={<AdminHome />} />
 
 
         <Route path="/point-of-sale" element={<PointOfSale />} />
@@ -157,6 +159,7 @@ export default function AdminRouter() {
 
         {/* ORDER MANAGEMENT */}
         {/* Orders */}
+        <Route path="all-orders" element={<CombinedOrdersPage />} />
         <Route path="orders/all" element={<OrdersPage statusKey="all" platformOverride="mofood" />} />
         <Route path="orders/scheduled" element={<OrdersPage statusKey="scheduled" platformOverride="mofood" />} />
         <Route path="orders/pending" element={<OrdersPage statusKey="pending" platformOverride="mofood" />} />

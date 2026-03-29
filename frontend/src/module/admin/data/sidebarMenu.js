@@ -2,8 +2,14 @@
 export const sidebarMenuData = [
   {
     type: "link",
+    label: "All Platform Orders",
+    path: "/admin/all-orders",
+    icon: "FileText",
+  },
+  {
+    type: "link",
     label: "Dashboard",
-    path: "/admin",
+    path: "/admin/dashboard",
     icon: "LayoutDashboard",
   },
   {
@@ -331,8 +337,14 @@ export const sidebarMenuData = [
 export const mogroceryMenuData = [
   {
     type: "link",
+    label: "All Platform Orders",
+    path: "/admin/all-orders",
+    icon: "FileText",
+  },
+  {
+    type: "link",
     label: "Dashboard",
-    path: "/admin",
+    path: "/admin/dashboard",
     icon: "LayoutDashboard",
   },
   {

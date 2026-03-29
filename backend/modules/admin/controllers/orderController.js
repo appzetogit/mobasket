@@ -746,7 +746,7 @@ export const getOrders = asyncHandler(async (req, res) => {
       } else {
         const statusMap = {
           'pending': 'Pending',
-          'confirmed': 'Accepted',
+          'confirmed': 'Pending',
           'preparing': 'Processing',
           'ready': 'Ready',
           'out_for_delivery': 'Food On The Way',
@@ -1046,7 +1046,7 @@ export const getOrderById = asyncHandler(async (req, res) => {
       : (paymentStatusMap[order.payment?.status] || 'Pending');
     const displayStatusMap = {
       pending: 'Pending',
-      confirmed: 'Accepted',
+      confirmed: 'Pending',
       preparing: 'Processing',
       ready: 'Ready',
       out_for_delivery: 'Food On The Way',
@@ -1136,6 +1136,39 @@ const resolveRestaurantForOrder = async (order) => {
       { slug: restaurantId }
     ]
   }).lean();
+};
+
+const resolveStoreDocumentForOrder = async (order) => {
+  if (!order?.restaurantId) return null;
+
+  const restaurantId = String(order.restaurantId).trim();
+  if (!restaurantId) return null;
+
+  const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
+  const GroceryStore = (await import('../../grocery/models/GroceryStore.js')).default;
+
+  if (mongoose.Types.ObjectId.isValid(restaurantId) && restaurantId.length === 24) {
+    const restaurantById = await Restaurant.findById(restaurantId);
+    if (restaurantById) return restaurantById;
+
+    const groceryById = await GroceryStore.findById(restaurantId);
+    if (groceryById) return groceryById;
+  }
+
+  const restaurantByAlias = await Restaurant.findOne({
+    $or: [
+      { restaurantId },
+      { slug: restaurantId }
+    ]
+  });
+  if (restaurantByAlias) return restaurantByAlias;
+
+  return GroceryStore.findOne({
+    $or: [
+      { restaurantId },
+      { slug: restaurantId }
+    ]
+  });
 };
 
 const isOrderAdminApprovalAllowed = (restaurantDoc) =>
@@ -1320,6 +1353,93 @@ export const approveOrderRequest = asyncHandler(async (req, res) => {
   } catch (error) {
     console.error('Error approving order request:', error);
     return errorResponse(res, 500, 'Failed to approve order');
+  }
+});
+
+/**
+ * Accept order directly from admin using the same store/restaurant flow.
+ * PATCH /api/admin/orders/:id/accept
+ */
+export const acceptOrderFromAdmin = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const order = await resolveAdminOrderById(id);
+    if (!order) {
+      return errorResponse(res, 404, 'Order not found');
+    }
+
+    if (order.status === 'cancelled') {
+      return errorResponse(res, 400, 'Cannot accept a cancelled order');
+    }
+
+    if (order.status === 'delivered') {
+      return errorResponse(res, 400, 'Cannot accept a delivered order');
+    }
+
+    const storeDocument = await resolveStoreDocumentForOrder(order);
+    if (!storeDocument) {
+      return errorResponse(res, 404, 'Restaurant or store not found for this order');
+    }
+
+    const { acceptOrder: restaurantAcceptOrder } =
+      await import('../../restaurant/controllers/restaurantOrderController.js');
+
+    req.params.id = order._id.toString();
+    req.restaurant = storeDocument;
+
+    return restaurantAcceptOrder(req, res);
+  } catch (error) {
+    console.error('Error accepting order from admin:', error);
+    return errorResponse(res, 500, 'Failed to accept order');
+  }
+});
+
+/**
+ * Reject order directly from admin using the same store/restaurant flow.
+ * PATCH /api/admin/orders/:id/reject-direct
+ */
+export const rejectOrderFromAdmin = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+
+    if (!reason || !String(reason).trim()) {
+      return errorResponse(res, 400, 'Rejection reason is required');
+    }
+
+    const order = await resolveAdminOrderById(id);
+    if (!order) {
+      return errorResponse(res, 404, 'Order not found');
+    }
+
+    if (order.status === 'cancelled') {
+      return errorResponse(res, 400, 'Order is already cancelled');
+    }
+
+    if (order.status === 'delivered') {
+      return errorResponse(res, 400, 'Cannot reject a delivered order');
+    }
+
+    const storeDocument = await resolveStoreDocumentForOrder(order);
+    if (!storeDocument) {
+      return errorResponse(res, 404, 'Restaurant or store not found for this order');
+    }
+
+    const { rejectOrder: restaurantRejectOrder } =
+      await import('../../restaurant/controllers/restaurantOrderController.js');
+
+    req.params.id = order._id.toString();
+    req.body = {
+      ...req.body,
+      reason: String(reason).trim()
+    };
+    req.restaurant = storeDocument;
+
+    return restaurantRejectOrder(req, res);
+  } catch (error) {
+    console.error('Error rejecting order from admin:', error);
+    return errorResponse(res, 500, 'Failed to reject order');
   }
 });
 

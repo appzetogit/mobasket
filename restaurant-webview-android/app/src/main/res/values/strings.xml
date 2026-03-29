@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">MoBasket Restaurant</string>
+    <string name="restaurant_web_url">https://www.mobasket.in/restaurant/login</string>
+    <string name="restaurant_fcm_api_url">https://api.mobasket.in/api/restaurant/auth/fcm-token</string>
+</resources>

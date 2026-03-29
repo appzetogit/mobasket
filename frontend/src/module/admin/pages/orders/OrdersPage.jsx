@@ -319,6 +319,27 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
     }
   }
 
+  const handleAdminAcceptStoreOrder = async (order) => {
+    const orderIdToUse = order.id || order._id || order.orderId
+    if (!orderIdToUse) {
+      toast.error("Order ID not found")
+      return
+    }
+
+    try {
+      await adminAPI.acceptStoreOrderFromAdmin(orderIdToUse)
+      toast.success(
+        activePlatform === "mogrocery"
+          ? `Order ${order.orderId} accepted by store and riders notified`
+          : `Order ${order.orderId} accepted by restaurant and riders notified`
+      )
+      await fetchOrders({ showLoader: false, force: true })
+    } catch (error) {
+      console.error("Error accepting order from admin:", error)
+      toast.error(error?.response?.data?.message || "Failed to accept order")
+    }
+  }
+
   const handleDeleteOrder = async (order) => {
     const orderIdToUse = order.id || order._id || order.orderId
     if (!orderIdToUse) {
@@ -670,9 +691,11 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         onViewOrder={handleViewOrder}
         onPrintOrder={handlePrintOrder}
         onRefund={handleRefund}
+        onAdminStoreAccept={handleAdminAcceptStoreOrder}
         onAcceptOrder={handleApproveOrderRequest}
         onRejectOrder={handleRejectOrderRequest}
         enableApprovalActions={activePlatform === "mogrocery" && (statusKey === "all" || statusKey === "scheduled")}
+        enableDirectAcceptAction={statusKey === "all"}
         enableRiderActions={activePlatform === "mogrocery" && statusKey === "all"}
         onResendRiderNotification={handleResendRiderNotification}
         onShowRiderDetails={handleShowRiderDetails}

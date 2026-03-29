@@ -79,8 +79,11 @@ export default function OrdersTable({
   onViewOrder,
   onPrintOrder,
   onRefund,
+  onAdminStoreAccept,
+  onAdminStoreReject,
   onAcceptOrder,
   onRejectOrder,
+  enableDirectAcceptAction = false,
   enableApprovalActions = false,
   enableRiderActions = false,
   onResendRiderNotification,
@@ -88,6 +91,7 @@ export default function OrdersTable({
   onCancelOrder,
   onDeleteOrder,
   isGrocery = false,
+  highlightedOrderIds = [],
   serverPagination = false,
   currentPage: externalCurrentPage = 1,
   totalItems = 0,
@@ -201,6 +205,25 @@ export default function OrdersTable({
     }
   }
 
+  const highlightedIdSet = useMemo(
+    () => new Set((highlightedOrderIds || []).map((value) => String(value))),
+    [highlightedOrderIds]
+  )
+
+  const canDirectAcceptStoreOrder = (order) => {
+    const backendStatus = String(order?.status || "").toLowerCase()
+    const orderStatus = String(order?.orderStatus || "").toLowerCase()
+
+    if (backendStatus === "cancelled" || backendStatus === "delivered") return false
+    if (order?.timedOutByRestaurant) return false
+
+    return (
+      backendStatus === "pending" ||
+      backendStatus === "confirmed" ||
+      orderStatus === "pending"
+    )
+  }
+
   const formatRestaurantName = (name) => {
     if (name === "Cafe Monarch") return "Café Monarch"
     return name
@@ -309,7 +332,10 @@ export default function OrdersTable({
             {paginatedOrders.map((order, index) => (
               <tr
                 key={order.orderId}
-                className="hover:bg-slate-50 transition-colors"
+                className={`transition-colors ${highlightedIdSet.has(String(order.id || order._id || order.orderId))
+                  ? "bg-amber-50 hover:bg-amber-100 animate-pulse ring-1 ring-amber-300/70"
+                  : "hover:bg-slate-50"
+                  }`}
               >
                 {visibleColumns.si && (
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -346,7 +372,17 @@ export default function OrdersTable({
                 )}
                 {visibleColumns.restaurant && (
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-medium text-slate-700">{formatRestaurantName(order.restaurant)}</span>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm font-medium text-slate-700">{formatRestaurantName(order.restaurant)}</span>
+                      {order.restaurantPlatform && (
+                        <span className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${String(order.restaurantPlatform).toLowerCase() === "mogrocery"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-blue-100 text-blue-700"
+                          }`}>
+                          {String(order.restaurantPlatform).toLowerCase() === "mogrocery" ? "MoGrocery" : "MoFoods"}
+                        </span>
+                      )}
+                    </div>
                   </td>
                 )}
                 {visibleColumns.foodItems && (
@@ -469,6 +505,30 @@ export default function OrdersTable({
                 {visibleColumns.actions && (
                   <td className="px-6 py-4 whitespace-nowrap text-center">
                     <div className="flex items-center justify-center gap-2">
+                      {enableDirectAcceptAction &&
+                        typeof onAdminStoreAccept === "function" &&
+                        canDirectAcceptStoreOrder(order) && (
+                          <>
+                            <button
+                              onClick={() => onAdminStoreAccept(order)}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-green-700"
+                              title={isGrocery ? "Accept order as store and notify riders" : "Accept order as restaurant and notify riders"}
+                            >
+                              <CheckCircle2 className="h-4 w-4" />
+                              <span>Accept</span>
+                            </button>
+                            {typeof onAdminStoreReject === "function" && (
+                              <button
+                                onClick={() => onAdminStoreReject(order)}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-red-700"
+                                title={isGrocery ? "Reject order as store" : "Reject order as restaurant"}
+                              >
+                                <XCircle className="h-4 w-4" />
+                                <span>Reject</span>
+                              </button>
+                            )}
+                          </>
+                        )}
                       <button
                         onClick={() => onViewOrder(order)}
                         className="p-1.5 rounded text-orange-600 hover:bg-orange-50 transition-colors"

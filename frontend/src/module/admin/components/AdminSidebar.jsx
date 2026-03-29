@@ -101,6 +101,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
   const [searchQuery, setSearchQuery] = useState("")
   const [logoUrl, setLogoUrl] = useState(null)
   const [companyName, setCompanyName] = useState(null)
+  const [ordersAttentionActive, setOrdersAttentionActive] = useState(false)
   const [adminUser] = useState(() => {
     try {
       const raw = localStorage.getItem("admin_user")
@@ -297,6 +298,29 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     setIsCollapsed(prev => !prev)
   }
 
+  useEffect(() => {
+    const storageKey = "adminAllOrdersAttentionUntil"
+
+    const syncAttentionState = () => {
+      try {
+        const storedValue = String(localStorage.getItem(storageKey) || "").trim()
+        const expiresAt = Number(storedValue || 0)
+        setOrdersAttentionActive(storedValue === "active" || expiresAt > Date.now())
+      } catch {
+        setOrdersAttentionActive(false)
+      }
+    }
+
+    syncAttentionState()
+    const intervalId = window.setInterval(syncAttentionState, 1000)
+    window.addEventListener("storage", syncAttentionState)
+
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener("storage", syncAttentionState)
+    }
+  }, [])
+
   // Generate initial expanded state from menu data
   const getInitialExpandedState = () => {
     const storageKey = `adminSidebarExpanded:${platform}`
@@ -467,6 +491,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
   const renderMenuItem = (item, index, isInSection = false) => {
     if (item.type === "link") {
       const Icon = iconMap[item.icon] || Utensils
+      const isOrdersAttentionItem = item.path === "/admin/all-orders" && ordersAttentionActive
       return (
         <Link
           key={index}
@@ -482,6 +507,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
             isActive(item.path)
               ? "bg-white/10 text-white border border-white/15 font-semibold"
               : "text-neutral-300 hover:bg-white/5 hover:text-white",
+            isOrdersAttentionItem && "animate-[ordersBlink_0.9s_ease-in-out_infinite] bg-amber-500/20 text-white border border-amber-300/60 shadow-[0_0_0_1px_rgba(252,211,77,0.2)]",
             isCollapsed && "justify-center px-2"
           )}
           style={{ animationDelay: `${index * 0.05}s` }}
@@ -490,10 +516,13 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
           <Icon className={cn(
             "shrink-0 transition-all duration-300 text-left",
             isInSection ? "w-4 h-4" : "w-4 h-4",
-            isActive(item.path) ? "text-white scale-110" : "text-neutral-300"
+            isActive(item.path) ? "text-white scale-110" : "text-neutral-300",
+            isOrdersAttentionItem && "text-amber-200"
           )} />
           {!isCollapsed && (
-            <span className={cn("text-left whitespace-nowrap", isInSection ? "font-semibold" : "font-medium")}>{item.label}</span>
+            <span className={cn("text-left whitespace-nowrap", isInSection ? "font-semibold" : "font-medium")}>
+              {item.label}
+            </span>
           )}
         </Link>
       )
@@ -609,6 +638,17 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
             opacity: 1;
             max-height: 500px;
             transform: translateY(0);
+          }
+        }
+
+        @keyframes ordersBlink {
+          0%, 100% {
+            opacity: 1;
+            box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.15);
+          }
+          50% {
+            opacity: 0.75;
+            box-shadow: 0 0 0 6px rgba(251, 191, 36, 0.08);
           }
         }
         

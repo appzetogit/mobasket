@@ -232,6 +232,8 @@ import {
   getOrders,
   getOrderById,
   deleteOrderPermanently,
+  acceptOrderFromAdmin,
+  rejectOrderFromAdmin,
   approveOrderRequest,
   rejectOrderRequest,
   resendRiderNotification,
@@ -520,6 +522,8 @@ router.delete('/safety-emergency/:id', deleteSafetyEmergency);
 
 // Order Management
 router.get('/orders', getOrders);
+router.patch('/orders/:id/accept', acceptOrderFromAdmin);
+router.patch('/orders/:id/reject-direct', rejectOrderFromAdmin);
 router.post('/orders/:id/approve', approveOrderRequest);
 router.post('/orders/:id/reject', rejectOrderRequest);
 router.delete('/orders/:id', deleteOrderPermanently);

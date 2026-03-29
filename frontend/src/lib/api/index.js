@@ -2170,6 +2170,14 @@ export const adminAPI = {
     return apiClient.post(`/admin/orders/${id}/approve`);
   },
 
+  acceptStoreOrderFromAdmin: (id, payload = {}) => {
+    return apiClient.patch(`/admin/orders/${id}/accept`, payload);
+  },
+
+  rejectStoreOrderFromAdmin: (id, reason) => {
+    return apiClient.patch(`/admin/orders/${id}/reject-direct`, { reason });
+  },
+
   rejectOrderRequest: (id, reason) => {
     return apiClient.post(`/admin/orders/${id}/reject`, { reason });
   },
