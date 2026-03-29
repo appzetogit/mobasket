@@ -1,9 +1,0 @@
-<resources>
-    <style name="Theme.MoBasketRestaurantWebView" parent="Theme.Material3.DayNight.NoActionBar">
-        <item name="android:statusBarColor">@color/logo_bg</item>
-        <item name="android:navigationBarColor">@color/logo_bg</item>
-        <item name="android:windowBackground">@color/logo_bg</item>
-        <item name="android:windowSplashScreenBackground">@color/logo_bg</item>
-        <item name="android:windowSplashScreenAnimatedIcon">@drawable/restaurant_logo_only</item>
-    </style>
-</resources>
