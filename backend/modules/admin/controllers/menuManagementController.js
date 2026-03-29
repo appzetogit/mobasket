@@ -2,10 +2,74 @@ import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import Menu from '../../restaurant/models/Menu.js';
+import Zone from '../models/Zone.js';
 import mongoose from 'mongoose';
 
 const generateId = (prefix = 'id') =>
   `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const getAdminAssignedZoneIds = (admin = null) => {
+  if (!admin || String(admin?.role || '').toLowerCase() === 'super_admin') return [];
+  return Array.from(
+    new Set(
+      (Array.isArray(admin?.assignedZoneIds) ? admin.assignedZoneIds : [])
+        .map((zone) => String(zone?._id || zone || '').trim())
+        .filter(Boolean)
+    )
+  );
+};
+
+const isPointInZone = (lat, lng, zoneCoordinates = []) => {
+  if (!Array.isArray(zoneCoordinates) || zoneCoordinates.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = zoneCoordinates.length - 1; i < zoneCoordinates.length; j = i++) {
+    const coordI = zoneCoordinates[i];
+    const coordJ = zoneCoordinates[j];
+    const xi = typeof coordI === 'object' ? Number(coordI.latitude ?? coordI.lat) : NaN;
+    const yi = typeof coordI === 'object' ? Number(coordI.longitude ?? coordI.lng) : NaN;
+    const xj = typeof coordJ === 'object' ? Number(coordJ.latitude ?? coordJ.lat) : NaN;
+    const yj = typeof coordJ === 'object' ? Number(coordJ.longitude ?? coordJ.lng) : NaN;
+    if (![xi, yi, xj, yj].every(Number.isFinite)) continue;
+    const intersect = ((yi > lng) !== (yj > lng)) &&
+      (lat < ((xj - xi) * (lng - yi)) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+};
+
+const canAdminAccessRestaurant = async (admin = null, restaurant = null) => {
+  const assignedZoneIds = getAdminAssignedZoneIds(admin);
+  if (assignedZoneIds.length === 0) return true;
+
+  const scopedZones = await Zone.find({
+    _id: { $in: assignedZoneIds },
+    isActive: true,
+    $or: [{ platform: 'mofood' }, { platform: { $exists: false } }]
+  })
+    .select('_id restaurantId coordinates')
+    .lean();
+
+  const explicitZoneId = String(restaurant?.zoneId?._id || restaurant?.zoneId || '').trim();
+  if (explicitZoneId && scopedZones.some((zone) => String(zone._id) === explicitZoneId)) return true;
+
+  const restaurantIdCandidates = new Set([
+    String(restaurant?._id || '').trim(),
+    String(restaurant?.restaurantId || '').trim()
+  ].filter(Boolean));
+
+  if (scopedZones.some((zone) => {
+    const linkedRestaurantId = String(zone?.restaurantId?._id || zone?.restaurantId || '').trim();
+    return linkedRestaurantId && restaurantIdCandidates.has(linkedRestaurantId);
+  })) {
+    return true;
+  }
+
+  const lat = Number(restaurant?.location?.latitude ?? restaurant?.location?.coordinates?.[1]);
+  const lng = Number(restaurant?.location?.longitude ?? restaurant?.location?.coordinates?.[0]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+
+  return scopedZones.some((zone) => isPointInZone(lat, lng, zone.coordinates || []));
+};
 
 const normalizeImageUrl = (value) => {
   if (typeof value === 'string') return value.trim();
@@ -100,6 +164,9 @@ export const getRestaurantMenuForAdmin = asyncHandler(async (req, res) => {
   if (!restaurant) {
     return errorResponse(res, 404, 'Restaurant not found');
   }
+  if (!(await canAdminAccessRestaurant(req.user || req.admin, restaurant))) {
+    return errorResponse(res, 403, 'Access denied for restaurants outside your assigned zones');
+  }
 
   const menu = sectionId
     ? await Menu.findOne(
@@ -175,6 +242,9 @@ export const getRestaurantMenuCategoriesForAdmin = asyncHandler(async (req, res)
   const restaurant = await findRestaurantByIdentifier(String(restaurantId || '').trim());
   if (!restaurant) {
     return errorResponse(res, 404, 'Restaurant not found');
+  }
+  if (!(await canAdminAccessRestaurant(req.user || req.admin, restaurant))) {
+    return errorResponse(res, 403, 'Access denied for restaurants outside your assigned zones');
   }
 
   const menu = await Menu.findOne(
@@ -373,6 +443,12 @@ export const updateRestaurantMenuItemByAdmin = asyncHandler(async (req, res) => 
   const restaurant = await findRestaurantByIdentifier(String(restaurantId || '').trim());
   if (!restaurant) {
     return errorResponse(res, 404, 'Restaurant not found');
+  }
+  if (!(await canAdminAccessRestaurant(req.user || req.admin, restaurant))) {
+    return errorResponse(res, 403, 'Access denied for restaurants outside your assigned zones');
+  }
+  if (!(await canAdminAccessRestaurant(req.user || req.admin, restaurant))) {
+    return errorResponse(res, 403, 'Access denied for restaurants outside your assigned zones');
   }
 
   const nextImages = extractNonEmptyImages(item.images);

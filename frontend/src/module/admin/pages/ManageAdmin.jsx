@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { adminAPI } from "@/lib/api";
 import { adminAccessOptions } from "../data/adminAccessOptions";
+import { toast } from "sonner";
 
 const emptyForm = {
   name: "",
@@ -10,9 +11,11 @@ const emptyForm = {
   role: "admin",
   isActive: true,
   sidebarAccess: [],
+  assignedZoneIds: [],
 };
 
 const normalizeArray = (value) => (Array.isArray(value) ? value : []);
+const normalizeZoneList = (value) => (Array.isArray(value) ? value : []);
 
 export default function ManageAdmin() {
   const [admins, setAdmins] = useState([]);
@@ -21,6 +24,8 @@ export default function ManageAdmin() {
   const [editingId, setEditingId] = useState("");
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
+  const [zonesByPlatform, setZonesByPlatform] = useState({ mofood: [], mogrocery: [] });
+  const [zonesLoading, setZonesLoading] = useState(false);
 
   const currentAdmin = useMemo(() => {
     try {
@@ -53,6 +58,32 @@ export default function ManageAdmin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canManageAdmins]);
 
+  useEffect(() => {
+    if (!canManageAdmins) return;
+
+    const loadZones = async () => {
+      try {
+        setZonesLoading(true);
+        const [mofoodResponse, mogroceryResponse] = await Promise.all([
+          adminAPI.getZones({ limit: 1000, platform: "mofood" }),
+          adminAPI.getZones({ limit: 1000, platform: "mogrocery" }),
+        ]);
+
+        setZonesByPlatform({
+          mofood: normalizeZoneList(mofoodResponse?.data?.data?.zones || mofoodResponse?.data?.zones),
+          mogrocery: normalizeZoneList(mogroceryResponse?.data?.data?.zones || mogroceryResponse?.data?.zones),
+        });
+      } catch (err) {
+        console.error("Failed to load zones for admin assignment:", err);
+        toast.error(err?.response?.data?.message || "Failed to load zones");
+      } finally {
+        setZonesLoading(false);
+      }
+    };
+
+    loadZones();
+  }, [canManageAdmins]);
+
   const handleToggleAccess = (path) => {
     setForm((prev) => {
       const exists = prev.sidebarAccess.includes(path);
@@ -61,6 +92,19 @@ export default function ManageAdmin() {
         sidebarAccess: exists
           ? prev.sidebarAccess.filter((entry) => entry !== path)
           : [...prev.sidebarAccess, path],
+      };
+    });
+  };
+
+  const handleToggleZone = (zoneId) => {
+    setForm((prev) => {
+      const normalizedId = String(zoneId || "");
+      const exists = prev.assignedZoneIds.includes(normalizedId);
+      return {
+        ...prev,
+        assignedZoneIds: exists
+          ? prev.assignedZoneIds.filter((entry) => entry !== normalizedId)
+          : [...prev.assignedZoneIds, normalizedId],
       };
     });
   };
@@ -79,18 +123,30 @@ export default function ManageAdmin() {
         role: form.role,
         isActive: form.isActive,
         sidebarAccess: form.sidebarAccess,
+        assignedZoneIds: form.assignedZoneIds,
       };
 
+      let savedAdmin = null;
       if (!editingId) {
         payload.password = form.password;
-        await adminAPI.createAdmin(payload);
+        const response = await adminAPI.createAdmin(payload);
+        savedAdmin = response?.data?.data?.admin || response?.data?.admin || null;
       } else {
-        await adminAPI.updateAdmin(editingId, payload);
+        const response = await adminAPI.updateAdmin(editingId, payload);
+        savedAdmin = response?.data?.data?.admin || response?.data?.admin || null;
+      }
+
+      const currentAdminId = String(currentAdmin?._id || currentAdmin?.id || "");
+      if (savedAdmin && editingId && String(savedAdmin?._id || savedAdmin?.id || "") === currentAdminId) {
+        localStorage.setItem("admin_user", JSON.stringify(savedAdmin));
+        window.dispatchEvent(new Event("adminAuthChanged"));
       }
 
       setForm(emptyForm);
       setEditingId("");
+      setError("");
       await loadAdmins();
+      toast.success(editingId ? "Admin updated successfully" : "Admin created successfully");
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to save admin");
     } finally {
@@ -108,6 +164,7 @@ export default function ManageAdmin() {
       role: admin?.role || "admin",
       isActive: admin?.isActive !== false,
       sidebarAccess: normalizeArray(admin?.sidebarAccess),
+      assignedZoneIds: normalizeArray(admin?.assignedZoneIds).map((zone) => String(zone?._id || zone || "")),
     });
   };
 
@@ -242,6 +299,52 @@ export default function ManageAdmin() {
           </div>
         </div>
 
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-800">Zone Assignment</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              Assigned admins will only see and operate on orders from these zones. Leave empty for full zone visibility.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {["mofood", "mogrocery"].map((platform) => (
+              <div key={platform} className="rounded-xl border border-slate-200 p-4">
+                <p className="text-sm font-bold text-slate-900 mb-3">
+                  {platform === "mogrocery" ? "MoGrocery" : "MoFood"}
+                </p>
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {zonesLoading ? (
+                    <p className="text-sm text-slate-500">Loading zones...</p>
+                  ) : normalizeZoneList(zonesByPlatform[platform]).length === 0 ? (
+                    <p className="text-sm text-slate-500">No zones found.</p>
+                  ) : (
+                    normalizeZoneList(zonesByPlatform[platform]).map((zone) => {
+                      const zoneId = String(zone?._id || zone?.id || "");
+                      const zoneName = zone?.name || zone?.zoneName || "Unnamed Zone";
+                      return (
+                        <label key={`${platform}-${zoneId}`} className="flex items-start gap-2 text-sm text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={form.assignedZoneIds.includes(zoneId)}
+                            onChange={() => handleToggleZone(zoneId)}
+                            className="mt-0.5"
+                          />
+                          <span>
+                            {zoneName}
+                            <span className="block text-xs text-slate-500">
+                              {zone?.serviceLocation || zone?.country || zoneId}
+                            </span>
+                          </span>
+                        </label>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         <div className="flex items-center gap-3">
           <button
             type="submit"
@@ -278,6 +381,7 @@ export default function ManageAdmin() {
                   <th className="py-2 pr-4">Role</th>
                   <th className="py-2 pr-4">Status</th>
                   <th className="py-2 pr-4">Access Count</th>
+                  <th className="py-2 pr-4">Zones</th>
                   <th className="py-2">Actions</th>
                 </tr>
               </thead>
@@ -295,6 +399,13 @@ export default function ManageAdmin() {
                         </span>
                       </td>
                       <td className="py-3 pr-4 text-slate-700">{normalizeArray(admin?.sidebarAccess).length}</td>
+                      <td className="py-3 pr-4 text-slate-700">
+                        {normalizeArray(admin?.assignedZoneIds).length > 0
+                          ? normalizeArray(admin?.assignedZoneIds)
+                              .map((zone) => zone?.name || zone?.zoneName || "-")
+                              .join(", ")
+                          : "All zones"}
+                      </td>
                       <td className="py-3 space-x-3">
                         <button type="button" onClick={() => startEdit(admin)} className="text-blue-600 font-semibold">
                           Edit

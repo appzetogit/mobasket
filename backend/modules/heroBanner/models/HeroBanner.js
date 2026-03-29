@@ -32,6 +32,13 @@ const heroBannerSchema = new mongoose.Schema({
     }],
     default: []
   },
+  zoneIds: {
+    type: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Zone'
+    }],
+    default: []
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -46,6 +53,7 @@ const heroBannerSchema = new mongoose.Schema({
 
 // Index for ordering
 heroBannerSchema.index({ platform: 1, order: 1, isActive: 1 });
+heroBannerSchema.index({ platform: 1, zoneIds: 1, isActive: 1, order: 1 });
 
 export default mongoose.model('HeroBanner', heroBannerSchema);
 

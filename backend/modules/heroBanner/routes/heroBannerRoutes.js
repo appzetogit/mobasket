@@ -10,6 +10,7 @@ import {
   updateBannerOrder,
   toggleBannerStatus,
   linkRestaurantsToBanner,
+  assignZonesToBanner,
   getLandingConfig,
   getLandingCategories,
   createLandingCategory,
@@ -95,6 +96,7 @@ router.delete('/:id', authenticateAdmin, deleteHeroBanner);
 router.patch('/:id/order', authenticateAdmin, updateBannerOrder);
 router.patch('/:id/status', authenticateAdmin, toggleBannerStatus);
 router.patch('/:id/link-restaurants', authenticateAdmin, linkRestaurantsToBanner);
+router.patch('/:id/zones', authenticateAdmin, assignZonesToBanner);
 
 // Admin routes - Landing Page Categories
 router.get('/landing/categories', authenticateAdmin, getLandingCategories);

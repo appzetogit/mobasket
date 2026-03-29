@@ -13,6 +13,7 @@ import Menu from '../../restaurant/models/Menu.js';
 import GroceryCategory from '../../grocery/models/GroceryCategory.js';
 import GrocerySubcategory from '../../grocery/models/GrocerySubcategory.js';
 import GroceryProduct from '../../grocery/models/GroceryProduct.js';
+import Zone from '../../admin/models/Zone.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
 import { cloudinary } from '../../../config/cloudinary.js';
@@ -24,6 +25,62 @@ const buildPlatformFilter = (platform) =>
   platform === 'mofood'
     ? { $or: [{ platform: 'mofood' }, { platform: { $exists: false } }] }
     : { platform: 'mogrocery' };
+
+const parseBannerZoneIds = (value) => {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => String(entry?._id || entry || '').trim())
+      .filter(Boolean);
+  }
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return [];
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((entry) => String(entry?._id || entry || '').trim())
+          .filter(Boolean);
+      }
+    } catch {
+      return trimmed
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+    }
+  }
+
+  return [];
+};
+
+const buildHeroBannerZoneVisibilityFilter = (zoneId) => {
+  if (!zoneId || !mongoose.Types.ObjectId.isValid(zoneId)) {
+    return {
+      $or: [
+        { zoneIds: { $exists: false } },
+        { zoneIds: { $size: 0 } }
+      ]
+    };
+  }
+
+  return {
+    $or: [
+      { zoneIds: { $exists: false } },
+      { zoneIds: { $size: 0 } },
+      { zoneIds: new mongoose.Types.ObjectId(zoneId) }
+    ]
+  };
+};
+
+const buildHeroBannerPublicFilter = (platform, zoneId) => ({
+  $and: [
+    buildPlatformFilter(platform),
+    { isActive: true },
+    buildHeroBannerZoneVisibilityFilter(zoneId),
+  ],
+});
 
 const GROCERY_BEST_SELLER_MODEL_BY_TYPE = {
   category: 'GroceryCategory',
@@ -43,7 +100,8 @@ const GROCERY_BEST_SELLER_DB_MODEL_BY_TYPE = {
 export const getHeroBanners = async (req, res) => {
   try {
     const platform = getPlatformFromRequest(req);
-    const banners = await HeroBanner.find({ ...buildPlatformFilter(platform), isActive: true })
+    const { zoneId } = req.query;
+    const banners = await HeroBanner.find(buildHeroBannerPublicFilter(platform, zoneId))
       .populate('linkedRestaurants', 'name slug restaurantId profileImage')
       .sort({ order: 1, createdAt: -1 })
       .select('imageUrl order linkedRestaurants')
@@ -69,6 +127,7 @@ export const getAllHeroBanners = async (req, res) => {
     const platform = getPlatformFromRequest(req);
     const banners = await HeroBanner.find(buildPlatformFilter(platform))
       .populate('linkedRestaurants', 'name slug restaurantId profileImage')
+      .populate('zoneIds', 'name zoneName serviceLocation platform')
       .sort({ order: 1, createdAt: -1 })
       .lean();
 
@@ -425,6 +484,48 @@ export const getLandingConfig = async (req, res) => {
   } catch (error) {
     console.error('Error fetching landing config:', error);
     return errorResponse(res, 500, 'Failed to fetch landing config');
+  }
+};
+
+/**
+ * Assign zones to a hero banner
+ */
+export const assignZonesToBanner = async (req, res) => {
+  try {
+    const platform = getPlatformFromRequest(req);
+    const { id } = req.params;
+    const zoneIds = parseBannerZoneIds(req.body?.zoneIds);
+
+    const banner = await HeroBanner.findOne({ _id: id, ...buildPlatformFilter(platform) });
+    if (!banner) {
+      return errorResponse(res, 404, 'Hero banner not found');
+    }
+
+    const validZoneObjectIds = zoneIds
+      .filter((zoneId) => mongoose.Types.ObjectId.isValid(zoneId))
+      .map((zoneId) => new mongoose.Types.ObjectId(zoneId));
+
+    let matchedZones = [];
+    if (validZoneObjectIds.length > 0) {
+      matchedZones = await Zone.find({
+        _id: { $in: validZoneObjectIds },
+        ...buildPlatformFilter(platform)
+      })
+        .select('_id')
+        .lean();
+    }
+
+    banner.zoneIds = matchedZones.map((zone) => zone._id);
+    banner.updatedAt = new Date();
+    await banner.save();
+    await banner.populate('zoneIds', 'name zoneName serviceLocation platform');
+
+    return successResponse(res, 200, 'Banner zones updated successfully', {
+      banner
+    });
+  } catch (error) {
+    console.error('Error assigning zones to hero banner:', error);
+    return errorResponse(res, 500, 'Failed to update banner zones');
   }
 };
 

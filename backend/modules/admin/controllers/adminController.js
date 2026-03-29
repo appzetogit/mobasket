@@ -1,4 +1,5 @@
 import Admin from '../models/Admin.js';
+import Zone from '../models/Zone.js';
 import Order from '../../order/models/Order.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import RestaurantWallet from '../../restaurant/models/RestaurantWallet.js';
@@ -38,6 +39,117 @@ const buildCityRegex = (value = '') => {
   if (!trimmed) return null;
   const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(escaped, 'i');
+};
+
+const isSuperAdmin = (admin = null) =>
+  String(admin?.role || '').toLowerCase() === 'super_admin';
+
+const getAdminAssignedZoneIds = (admin = null) => {
+  if (!admin || isSuperAdmin(admin)) return [];
+
+  return Array.from(
+    new Set(
+      (Array.isArray(admin?.assignedZoneIds) ? admin.assignedZoneIds : [])
+        .map((zone) => String(zone?._id || zone || '').trim())
+        .filter(Boolean)
+    )
+  );
+};
+
+const isPointInZone = (lat, lng, zoneCoordinates = []) => {
+  if (!Array.isArray(zoneCoordinates) || zoneCoordinates.length < 3) return false;
+
+  let inside = false;
+  for (let i = 0, j = zoneCoordinates.length - 1; i < zoneCoordinates.length; j = i++) {
+    const coordI = zoneCoordinates[i];
+    const coordJ = zoneCoordinates[j];
+    const xi = typeof coordI === 'object' ? Number(coordI.latitude ?? coordI.lat) : NaN;
+    const yi = typeof coordI === 'object' ? Number(coordI.longitude ?? coordI.lng) : NaN;
+    const xj = typeof coordJ === 'object' ? Number(coordJ.latitude ?? coordJ.lat) : NaN;
+    const yj = typeof coordJ === 'object' ? Number(coordJ.longitude ?? coordJ.lng) : NaN;
+
+    if (![xi, yi, xj, yj].every(Number.isFinite)) continue;
+
+    const intersect = ((yi > lng) !== (yj > lng)) &&
+      (lat < ((xj - xi) * (lng - yi)) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+
+  return inside;
+};
+
+const getEntityZoneIdsFromZones = (entity = {}, activeZones = []) => {
+  const resolvedZoneIds = new Set();
+  const explicitZoneId = String(
+    entity?.zoneId?._id ||
+    entity?.zoneId?.id ||
+    entity?.zoneId ||
+    ''
+  ).trim();
+
+  if (explicitZoneId) {
+    const explicitZone = activeZones.find((zone) => String(zone?._id || '') === explicitZoneId);
+    if (explicitZone?._id) {
+      resolvedZoneIds.add(String(explicitZone._id));
+    }
+  }
+
+  const entityIdCandidates = new Set([
+    String(entity?._id || '').trim(),
+    String(entity?.restaurantId || '').trim()
+  ].filter(Boolean));
+
+  activeZones.forEach((zone) => {
+    const linkedRestaurantId = String(zone?.restaurantId?._id || zone?.restaurantId || '').trim();
+    if (linkedRestaurantId && entityIdCandidates.has(linkedRestaurantId)) {
+      resolvedZoneIds.add(String(zone._id));
+    }
+  });
+
+  const lat = Number(entity?.location?.latitude ?? entity?.location?.coordinates?.[1]);
+  const lng = Number(entity?.location?.longitude ?? entity?.location?.coordinates?.[0]);
+  if (Number.isFinite(lat) && Number.isFinite(lng)) {
+    activeZones.forEach((zone) => {
+      if (zone?._id && isPointInZone(lat, lng, zone.coordinates || [])) {
+        resolvedZoneIds.add(String(zone._id));
+      }
+    });
+  }
+
+  return Array.from(resolvedZoneIds);
+};
+
+const getAdminScopedZones = async (admin = null, platform = 'mofood') => {
+  const assignedZoneIds = getAdminAssignedZoneIds(admin);
+  if (assignedZoneIds.length === 0) return [];
+
+  const platformQuery = platform === 'mogrocery'
+    ? { platform: 'mogrocery' }
+    : { $or: [{ platform: 'mofood' }, { platform: { $exists: false } }] };
+
+  return Zone.find({
+    _id: { $in: assignedZoneIds },
+    isActive: true,
+    ...platformQuery,
+  })
+    .select('_id restaurantId coordinates platform isActive')
+    .lean();
+};
+
+const filterEntitiesByAdminZoneScope = (entities = [], scopedZones = []) => {
+  if (!Array.isArray(scopedZones) || scopedZones.length === 0) return Array.isArray(entities) ? entities : [];
+  const scopedZoneIdSet = new Set(scopedZones.map((zone) => String(zone?._id || '')).filter(Boolean));
+
+  return (Array.isArray(entities) ? entities : []).filter((entity) => {
+    const entityZoneIds = getEntityZoneIdsFromZones(entity, scopedZones);
+    return entityZoneIds.some((zoneId) => scopedZoneIdSet.has(zoneId));
+  });
+};
+
+const canAdminAccessEntity = (admin = null, entity = null, scopedZones = []) => {
+  const assignedZoneIds = getAdminAssignedZoneIds(admin);
+  if (assignedZoneIds.length === 0) return true;
+  return filterEntitiesByAdminZoneScope([entity], scopedZones).length > 0;
 };
 
 const getRestaurantLocationSnapshot = (restaurant = {}) => {
@@ -259,6 +371,17 @@ const normalizeSidebarAccess = (sidebarAccess) => {
   );
 };
 
+const normalizeAssignedZoneIds = (assignedZoneIds) => {
+  if (!Array.isArray(assignedZoneIds)) return [];
+  return Array.from(
+    new Set(
+      assignedZoneIds
+        .map((entry) => String(entry || '').trim())
+        .filter((entry) => mongoose.Types.ObjectId.isValid(entry))
+    )
+  ).map((entry) => new mongoose.Types.ObjectId(entry));
+};
+
 const resolveDuplicateAdminField = (error) => {
   const fieldFromPattern = error?.keyPattern ? Object.keys(error.keyPattern)[0] : null;
   if (fieldFromPattern) return fieldFromPattern;
@@ -297,6 +420,8 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
     const requestedPlatform = req.query?.platform === 'mogrocery' ? 'mogrocery' : 'mofood';
     const requestedCity = String(req.query?.city || req.query?.zone || '').trim();
     const cityRegex = buildCityRegex(requestedCity);
+    const scopedZones = await getAdminScopedZones(req.user, requestedPlatform);
+    const hasZoneScope = scopedZones.length > 0;
     const restaurantPlatformQuery = { $or: [{ platform: 'mofood' }, { platform: { $exists: false } }] };
     const now = new Date();
     const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -305,14 +430,19 @@ export const getDashboardStats = asyncHandler(async (req, res) => {
 
     let scopedRestaurants = [];
     if (requestedPlatform === 'mogrocery') {
-      scopedRestaurants = await GroceryStore.find(
-        cityRegex ? { 'location.city': cityRegex } : {}
-      ).select('_id').lean();
+      const groceryQuery = cityRegex ? { 'location.city': cityRegex } : {};
+      if (hasZoneScope) {
+        groceryQuery.zoneId = { $in: scopedZones.map((zone) => zone._id) };
+      }
+      scopedRestaurants = await GroceryStore.find(groceryQuery).select('_id').lean();
     } else {
-      scopedRestaurants = await Restaurant.find({
+      const foodRestaurants = await Restaurant.find({
         ...restaurantPlatformQuery,
         ...(cityRegex ? { 'location.city': cityRegex } : {})
       }).select('_id').lean();
+      scopedRestaurants = hasZoneScope
+        ? filterEntitiesByAdminZoneScope(foodRestaurants, scopedZones)
+        : foodRestaurants;
     }
 
     const scopedRestaurantObjectIds = scopedRestaurants.map((restaurant) => restaurant._id);
@@ -793,6 +923,7 @@ export const getAdmins = asyncHandler(async (req, res) => {
 
     const admins = await Admin.find(query)
       .select('-password')
+      .populate('assignedZoneIds', 'name zoneName platform isActive')
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .skip(parseInt(offset))
@@ -822,6 +953,7 @@ export const getAdminById = asyncHandler(async (req, res) => {
 
     const admin = await Admin.findById(id)
       .select('-password')
+      .populate('assignedZoneIds', 'name zoneName platform isActive')
       .lean();
 
     if (!admin) {
@@ -843,7 +975,7 @@ export const createAdmin = asyncHandler(async (req, res) => {
   try {
     await Admin.ensureLegacyIndexesCleaned();
 
-    const { name, email, password, phone, role, sidebarAccess } = req.body;
+    const { name, email, password, phone, role, sidebarAccess, assignedZoneIds } = req.body;
     const normalizedEmail = String(email || "").trim().toLowerCase();
     const normalizedPhone = phone !== undefined ? String(phone || "").trim() : undefined;
 
@@ -876,7 +1008,8 @@ export const createAdmin = asyncHandler(async (req, res) => {
       isActive: true,
       phoneVerified: false,
       role: role === 'super_admin' ? 'super_admin' : (role === 'moderator' ? 'moderator' : 'admin'),
-      sidebarAccess: normalizeSidebarAccess(sidebarAccess)
+      sidebarAccess: normalizeSidebarAccess(sidebarAccess),
+      assignedZoneIds: normalizeAssignedZoneIds(assignedZoneIds)
     };
 
     if (normalizedPhone) {
@@ -884,6 +1017,7 @@ export const createAdmin = asyncHandler(async (req, res) => {
     }
 
     const admin = await Admin.create(adminData);
+    await admin.populate('assignedZoneIds', 'name zoneName platform isActive');
 
     // Remove password from response
     const adminResponse = admin.toObject();
@@ -925,7 +1059,7 @@ export const updateAdmin = asyncHandler(async (req, res) => {
     await Admin.ensureLegacyIndexesCleaned();
 
     const { id } = req.params;
-    const { name, email, phone, isActive, role, sidebarAccess } = req.body;
+    const { name, email, phone, isActive, role, sidebarAccess, assignedZoneIds } = req.body;
     const normalizedEmail = email !== undefined ? String(email || '').trim().toLowerCase() : undefined;
     const normalizedPhone = phone !== undefined ? String(phone || '').trim() : undefined;
 
@@ -951,8 +1085,12 @@ export const updateAdmin = asyncHandler(async (req, res) => {
     if (sidebarAccess !== undefined) {
       admin.sidebarAccess = normalizeSidebarAccess(sidebarAccess);
     }
+    if (assignedZoneIds !== undefined) {
+      admin.assignedZoneIds = normalizeAssignedZoneIds(assignedZoneIds);
+    }
 
     await admin.save();
+    await admin.populate('assignedZoneIds', 'name zoneName platform isActive');
 
     const adminResponse = admin.toObject();
     delete adminResponse.password;
@@ -1022,6 +1160,7 @@ export const getAdminProfile = asyncHandler(async (req, res) => {
   try {
     const admin = await Admin.findById(req.user._id)
       .select('-password')
+      .populate('assignedZoneIds', 'name zoneName platform isActive')
       .lean();
 
     if (!admin) {
@@ -1091,6 +1230,7 @@ export const updateAdminProfile = asyncHandler(async (req, res) => {
 
     // Save to database
     await admin.save();
+    await admin.populate('assignedZoneIds', 'name zoneName platform isActive');
 
     // Remove password from response
     const adminResponse = admin.toObject();
@@ -1502,14 +1642,27 @@ export const getRestaurants = asyncHandler(async (req, res) => {
     const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
     const parsedLimit = Math.max(parseInt(limit, 10) || 50, 1);
     const skip = (parsedPage - 1) * parsedLimit;
+    const scopedZones = await getAdminScopedZones(req.user, 'mofood');
+    const hasZoneScope = scopedZones.length > 0;
 
-    // Fetch restaurants
-    const restaurants = await Restaurant.find(query)
+    const restaurantQuery = Restaurant.find(query)
       .select('-password')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parsedLimit)
-      .lean();
+      .sort({ createdAt: -1 });
+
+    let restaurants = [];
+    let total = 0;
+    if (hasZoneScope) {
+      const scopedRestaurantPool = await restaurantQuery.clone().lean();
+      const filteredRestaurants = filterEntitiesByAdminZoneScope(scopedRestaurantPool, scopedZones);
+      total = filteredRestaurants.length;
+      restaurants = filteredRestaurants.slice(skip, skip + parsedLimit);
+    } else {
+      restaurants = await restaurantQuery
+        .skip(skip)
+        .limit(parsedLimit)
+        .lean();
+      total = await Restaurant.countDocuments(query);
+    }
 
     const restaurantIds = restaurants
       .map((restaurant) => restaurant?._id)
@@ -1541,9 +1694,6 @@ export const getRestaurants = asyncHandler(async (req, res) => {
       },
     }));
 
-    // Get total count
-    const total = await Restaurant.countDocuments(query);
-
     return successResponse(res, 200, 'Restaurants retrieved successfully', {
       restaurants: normalizedRestaurants,
       pagination: {
@@ -1568,6 +1718,11 @@ export const getRestaurantById = asyncHandler(async (req, res) => {
 
     if (!restaurant) {
       return errorResponse(res, 404, 'Restaurant not found');
+    }
+
+    const scopedZones = await getAdminScopedZones(req.user, 'mofood');
+    if (!canAdminAccessEntity(req.user, restaurant, scopedZones)) {
+      return errorResponse(res, 403, 'Access denied for restaurants outside your assigned zones');
     }
 
     const outletTimingsDoc = await OutletTimings.findOne({
@@ -1606,6 +1761,11 @@ export const updateRestaurantStatus = asyncHandler(async (req, res) => {
 
     if (!restaurant) {
       return errorResponse(res, 404, 'Restaurant not found');
+    }
+
+    const scopedZones = await getAdminScopedZones(req.user, 'mofood');
+    if (!canAdminAccessEntity(req.user, restaurant.toObject(), scopedZones)) {
+      return errorResponse(res, 403, 'Access denied for restaurants outside your assigned zones');
     }
 
     restaurant.isActive = isActive;
@@ -1650,6 +1810,11 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
     const restaurant = await Restaurant.findById(id);
     if (!restaurant) {
       return errorResponse(res, 404, 'Restaurant not found');
+    }
+
+    const scopedZones = await getAdminScopedZones(req.user, 'mofood');
+    if (!canAdminAccessEntity(req.user, restaurant.toObject(), scopedZones)) {
+      return errorResponse(res, 403, 'Access denied for restaurants outside your assigned zones');
     }
 
     const updateData = {};
@@ -1817,6 +1982,8 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
     const parsedPage = Math.max(parseInt(page, 10) || 1, 1);
     const parsedLimit = Math.max(parseInt(limit, 10) || 50, 1);
     const skip = (parsedPage - 1) * parsedLimit;
+    const scopedZones = await getAdminScopedZones(req.user, 'mofood');
+    const hasZoneScope = scopedZones.length > 0;
 
     const emptyRejectionReasonConditions = [
       { rejectionReason: { $exists: false } },
@@ -1866,14 +2033,24 @@ export const getRestaurantJoinRequests = asyncHandler(async (req, res) => {
       ];
     }
 
-    const restaurants = await Restaurant.find(query)
+    const requestQuery = Restaurant.find(query)
       .select('-password')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parsedLimit)
-      .lean();
+      .sort({ createdAt: -1 });
 
-    const total = await Restaurant.countDocuments(query);
+    let restaurants = [];
+    let total = 0;
+    if (hasZoneScope) {
+      const scopedRestaurantPool = await requestQuery.clone().lean();
+      const filteredRestaurants = filterEntitiesByAdminZoneScope(scopedRestaurantPool, scopedZones);
+      total = filteredRestaurants.length;
+      restaurants = filteredRestaurants.slice(skip, skip + parsedLimit);
+    } else {
+      restaurants = await requestQuery
+        .skip(skip)
+        .limit(parsedLimit)
+        .lean();
+      total = await Restaurant.countDocuments(query);
+    }
 
     const formattedRequests = restaurants.map((restaurant, index) => {
       let zone = 'All over the World';
@@ -1938,6 +2115,11 @@ export const approveRestaurant = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, 'Restaurant not found');
     }
 
+    const scopedZones = await getAdminScopedZones(req.user, 'mofood');
+    if (!canAdminAccessEntity(req.user, restaurant.toObject(), scopedZones)) {
+      return errorResponse(res, 403, 'Access denied for restaurants outside your assigned zones');
+    }
+
     if (restaurant.isActive) {
       return errorResponse(res, 400, 'Restaurant is already approved');
     }
@@ -1996,6 +2178,11 @@ export const rejectRestaurant = asyncHandler(async (req, res) => {
 
     if (!restaurant) {
       return errorResponse(res, 404, 'Restaurant not found');
+    }
+
+    const scopedZones = await getAdminScopedZones(req.user, 'mofood');
+    if (!canAdminAccessEntity(req.user, restaurant.toObject(), scopedZones)) {
+      return errorResponse(res, 403, 'Access denied for restaurants outside your assigned zones');
     }
 
     // Set rejection details (allow updating if already rejected)
@@ -2092,6 +2279,17 @@ export const getGroceryStoreJoinRequests = asyncHandler(async (req, res) => {
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    const scopedZones = await getAdminScopedZones(req.user, 'mogrocery');
+    const hasZoneScope = scopedZones.length > 0;
+    const scopedZoneIds = scopedZones.map((zone) => zone._id);
+
+    if (hasZoneScope) {
+      if (query.$and) {
+        query.$and.push({ zoneId: { $in: scopedZoneIds } });
+      } else {
+        query.zoneId = { $in: scopedZoneIds };
+      }
+    }
 
     const stores = await GroceryStore.find(query)
       .select('-password')
@@ -2161,6 +2359,11 @@ export const approveGroceryStore = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, 'Grocery store not found');
     }
 
+    const scopedZones = await getAdminScopedZones(req.user, 'mogrocery');
+    if (!canAdminAccessEntity(req.user, store.toObject(), scopedZones)) {
+      return errorResponse(res, 403, 'Access denied for stores outside your assigned zones');
+    }
+
     if (store.isActive) {
       return errorResponse(res, 400, 'Grocery store is already active');
     }
@@ -2210,6 +2413,11 @@ export const rejectGroceryStore = asyncHandler(async (req, res) => {
 
     if (!store) {
       return errorResponse(res, 404, 'Grocery store not found');
+    }
+
+    const scopedZones = await getAdminScopedZones(req.user, 'mogrocery');
+    if (!canAdminAccessEntity(req.user, store.toObject(), scopedZones)) {
+      return errorResponse(res, 403, 'Access denied for stores outside your assigned zones');
     }
 
     store.rejectionReason = reason.trim();
@@ -2766,20 +2974,31 @@ export const getAllOffers = asyncHandler(async (req, res) => {
       platform
     } = req.query;
     const requestedPlatform = platform === 'mogrocery' ? 'mogrocery' : 'mofood';
+    const scopedZones = await getAdminScopedZones(req.user, requestedPlatform);
+    const hasZoneScope = scopedZones.length > 0;
     let eligibleRestaurantIds = [];
     if (requestedPlatform === 'mogrocery') {
-      const [restaurantEntities, groceryStores] = await Promise.all([
-        Restaurant.find({ platform: 'mogrocery' }).select('_id').lean(),
-        GroceryStore.find({ isActive: true }).select('_id').lean(),
+      const [restaurantEntitiesRaw, groceryStoresRaw] = await Promise.all([
+        Restaurant.find({ platform: 'mogrocery' }).select('_id location restaurantId zoneId').lean(),
+        GroceryStore.find({ isActive: true }).select('_id zoneId location restaurantId').lean(),
       ]);
+      const restaurantEntities = hasZoneScope
+        ? filterEntitiesByAdminZoneScope(restaurantEntitiesRaw, scopedZones)
+        : restaurantEntitiesRaw;
+      const groceryStores = hasZoneScope
+        ? filterEntitiesByAdminZoneScope(groceryStoresRaw, scopedZones)
+        : groceryStoresRaw;
       const mergedIds = [...restaurantEntities, ...groceryStores].map((entity) => String(entity?._id || ''));
       eligibleRestaurantIds = Array.from(new Set(mergedIds))
         .filter((id) => mongoose.Types.ObjectId.isValid(id))
         .map((id) => new mongoose.Types.ObjectId(id));
     } else {
-      const restaurantEntities = await Restaurant.find({
+      const restaurantEntitiesRaw = await Restaurant.find({
         $or: [{ platform: 'mofood' }, { platform: { $exists: false } }]
-      }).select('_id').lean();
+      }).select('_id location restaurantId zoneId').lean();
+      const restaurantEntities = hasZoneScope
+        ? filterEntitiesByAdminZoneScope(restaurantEntitiesRaw, scopedZones)
+        : restaurantEntitiesRaw;
       eligibleRestaurantIds = restaurantEntities.map((restaurant) => restaurant._id);
     }
 
@@ -2996,18 +3215,27 @@ export const createOffer = asyncHandler(async (req, res) => {
     }
 
     let targetRestaurants = [];
+    const requestedPlatform = String(platform) === 'mogrocery' ? 'mogrocery' : 'mofood';
+    const scopedZones = await getAdminScopedZones(req.user, requestedPlatform);
+    const hasZoneScope = scopedZones.length > 0;
     if (shouldCreateForBothPlatforms) {
-      const [foodRestaurants, groceryStores] = await Promise.all([
+      const [foodRestaurantsRaw, groceryStoresRaw] = await Promise.all([
         Restaurant.find({
           isActive: true,
           $or: [{ platform: 'mofood' }, { platform: { $exists: false } }]
         })
-          .select('_id name restaurantId slug')
+          .select('_id name restaurantId slug location zoneId')
           .lean(),
         GroceryStore.find({ isActive: true })
-          .select('_id name restaurantId slug')
+          .select('_id name restaurantId slug zoneId location')
           .lean(),
       ]);
+      const foodRestaurants = hasZoneScope
+        ? filterEntitiesByAdminZoneScope(foodRestaurantsRaw, scopedZones)
+        : foodRestaurantsRaw;
+      const groceryStores = hasZoneScope
+        ? filterEntitiesByAdminZoneScope(groceryStoresRaw, scopedZones)
+        : groceryStoresRaw;
 
       targetRestaurants = [
         ...foodRestaurants.map((restaurant) => ({
@@ -3026,9 +3254,12 @@ export const createOffer = asyncHandler(async (req, res) => {
         ? { isActive: true }
         : { _id: { $in: validIds } };
 
-      const groceryStores = await GroceryStore.find(groceryQuery)
-        .select('_id name restaurantId')
+      const groceryStoresRaw = await GroceryStore.find(groceryQuery)
+        .select('_id name restaurantId zoneId location')
         .lean();
+      const groceryStores = hasZoneScope
+        ? filterEntitiesByAdminZoneScope(groceryStoresRaw, scopedZones)
+        : groceryStoresRaw;
 
       targetRestaurants = groceryStores.map((store) => ({
         offerRestaurantId: store._id,
@@ -3046,9 +3277,12 @@ export const createOffer = asyncHandler(async (req, res) => {
           $or: [{ platform: 'mofood' }, { platform: { $exists: false } }]
         };
 
-      const foodRestaurants = await Restaurant.find(foodQuery)
-        .select('_id name restaurantId')
+      const foodRestaurantsRaw = await Restaurant.find(foodQuery)
+        .select('_id name restaurantId location zoneId')
         .lean();
+      const foodRestaurants = hasZoneScope
+        ? filterEntitiesByAdminZoneScope(foodRestaurantsRaw, scopedZones)
+        : foodRestaurantsRaw;
 
       targetRestaurants = foodRestaurants.map((restaurant) => ({
         offerRestaurantId: restaurant._id,
@@ -3154,19 +3388,25 @@ export const updateOffer = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, 'Offer not found');
     }
 
+    const linkedRestaurant =
+      await Restaurant.findById(offer.restaurant).select('_id platform location restaurantId zoneId').lean();
+    const linkedGroceryStore = linkedRestaurant
+      ? null
+      : await GroceryStore.findById(offer.restaurant).select('_id zoneId location restaurantId').lean();
+    const offerPlatform =
+      linkedRestaurant?.platform === 'mogrocery' || linkedGroceryStore
+        ? 'mogrocery'
+        : 'mofood';
+    const scopedZones = await getAdminScopedZones(req.user, offerPlatform);
+    const offerEntity = linkedGroceryStore || linkedRestaurant;
+    if (!canAdminAccessEntity(req.user, offerEntity, scopedZones)) {
+      return errorResponse(res, 403, 'Access denied for offers outside your assigned zones');
+    }
+
     if (platform !== undefined) {
       if (!['mofood', 'mogrocery'].includes(String(platform))) {
         return errorResponse(res, 400, 'platform must be "mofood" or "mogrocery"');
       }
-
-      const linkedRestaurant = await Restaurant.findById(offer.restaurant).select('platform').lean();
-      const linkedGroceryStore = linkedRestaurant
-        ? null
-        : await GroceryStore.findById(offer.restaurant).select('_id').lean();
-      const offerPlatform =
-        linkedRestaurant?.platform === 'mogrocery' || linkedGroceryStore
-          ? 'mogrocery'
-          : 'mofood';
       if (offerPlatform !== String(platform)) {
         return errorResponse(res, 404, 'Offer not found for requested platform');
       }

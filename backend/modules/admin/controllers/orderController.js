@@ -248,6 +248,30 @@ const findOrderByAdminIdentifier = async (id, session = null) => {
   return Order.findOne({ orderId: id }).session(session);
 };
 
+const getAdminAssignedZoneIds = (admin = null) => {
+  if (!admin || String(admin?.role || '').toLowerCase() === 'super_admin') return [];
+  return Array.from(
+    new Set(
+      (Array.isArray(admin?.assignedZoneIds) ? admin.assignedZoneIds : [])
+        .map((zone) => String(zone?._id || zone || '').trim())
+        .filter(Boolean)
+    )
+  );
+};
+
+const buildAdminZoneAccessCondition = (admin = null) => {
+  const assignedZoneIds = getAdminAssignedZoneIds(admin);
+  if (assignedZoneIds.length === 0) return null;
+  return { 'assignmentInfo.zoneId': { $in: assignedZoneIds } };
+};
+
+const canAdminAccessOrder = (admin = null, order = null) => {
+  const assignedZoneIds = getAdminAssignedZoneIds(admin);
+  if (assignedZoneIds.length === 0) return true;
+  const orderZoneId = String(order?.assignmentInfo?.zoneId || '').trim();
+  return Boolean(orderZoneId) && assignedZoneIds.includes(orderZoneId);
+};
+
 /**
  * Get all orders for admin
  * GET /api/admin/orders
@@ -283,6 +307,9 @@ export const getOrders = asyncHandler(async (req, res) => {
     const useDedicatedPlatformCollection = normalizedPlatform === 'mofood' || normalizedPlatform === 'mogrocery';
     const useLegacyPlatformFilter = !useDedicatedPlatformCollection;
     let platformRestaurantIds = null;
+    const adminZoneAccessCondition = buildAdminZoneAccessCondition(req.user);
+
+    addAndCondition(adminZoneAccessCondition);
 
     if (normalizedPlatform && useLegacyPlatformFilter) {
       if (normalizedPlatform === 'mogrocery') {
@@ -632,10 +659,19 @@ export const getOrders = asyncHandler(async (req, res) => {
           .filter((id) => mongoose.Types.ObjectId.isValid(id))
       )
     ).map((id) => new mongoose.Types.ObjectId(id));
+    const restaurantIds = Array.from(
+      new Set(
+        orders
+          .map((order) => String(order?.restaurantId || '').trim())
+          .filter((id) => mongoose.Types.ObjectId.isValid(id))
+      )
+    ).map((id) => new mongoose.Types.ObjectId(id));
 
     const usersCollection = mongoose.connection.db.collection('users');
     const deliveriesCollection = mongoose.connection.db.collection('deliveries');
-    const [users, deliveries] = await Promise.all([
+    const restaurantsCollection = mongoose.connection.db.collection('restaurants');
+    const groceryStoresCollection = mongoose.connection.db.collection('grocerystores');
+    const [users, deliveries, restaurants, groceryStores] = await Promise.all([
       userIds.length > 0
         ? usersCollection.find(
             { _id: { $in: userIds } },
@@ -647,11 +683,29 @@ export const getOrders = asyncHandler(async (req, res) => {
             { _id: { $in: deliveryIds } },
             { projection: { _id: 1, name: 1, phone: 1 } }
           ).toArray()
+        : [],
+      restaurantIds.length > 0
+        ? restaurantsCollection.find(
+            { _id: { $in: restaurantIds } },
+            { projection: { _id: 1, phone: 1, ownerPhone: 1, primaryContactNumber: 1 } }
+          ).toArray()
+        : [],
+      restaurantIds.length > 0
+        ? groceryStoresCollection.find(
+            { _id: { $in: restaurantIds } },
+            { projection: { _id: 1, phone: 1, ownerPhone: 1, primaryContactNumber: 1 } }
+          ).toArray()
         : []
     ]);
 
     const userMap = new Map(users.map((user) => [String(user._id), user]));
     const deliveryMap = new Map(deliveries.map((delivery) => [String(delivery._id), delivery]));
+    const restaurantContactMap = new Map();
+    [...restaurants, ...groceryStores].forEach((doc) => {
+      const contactNumber = doc?.phone || doc?.primaryContactNumber || doc?.ownerPhone || '';
+      if (!contactNumber) return;
+      restaurantContactMap.set(String(doc._id), contactNumber);
+    });
 
     // Get total count.
     // countDocuments can be very slow on large/unindexed filters; fail fast and fallback
@@ -709,6 +763,7 @@ export const getOrders = asyncHandler(async (req, res) => {
       const user = userMap.get(String(order.userId || '')) || null;
       const delivery = deliveryMap.get(String(order.deliveryPartnerId || '')) || null;
       const customerPhone = user?.phone || '';
+      const restaurantPhone = restaurantContactMap.get(String(order.restaurantId || '')) || '';
 
       // Map payment status
       const paymentMethod = String(order.payment?.method || '').toLowerCase();
@@ -832,6 +887,7 @@ export const getOrders = asyncHandler(async (req, res) => {
         customerEmail: user?.email || '',
         restaurant: order.restaurantName || order.restaurantId?.name || 'Unknown Restaurant',
         restaurantId: order.restaurantId?.toString() || order.restaurantId || '',
+        restaurantPhone,
         restaurantPlatform: derivedRestaurantPlatform,
         // Report-specific fields
         totalItemAmount: totalItemAmount,
@@ -943,6 +999,9 @@ export const deleteOrderPermanently = asyncHandler(async (req, res) => {
       if (!order) {
         throw new Error('ORDER_NOT_FOUND');
       }
+      if (!canAdminAccessOrder(req.user, order)) {
+        throw new Error('ORDER_ZONE_FORBIDDEN');
+      }
 
       const isGroceryOrder =
         String(order.restaurantPlatform || order.platform || '').toLowerCase() === 'mogrocery';
@@ -984,6 +1043,9 @@ export const deleteOrderPermanently = asyncHandler(async (req, res) => {
     if (error?.message === 'ORDER_NOT_FOUND') {
       return errorResponse(res, 404, 'Order not found');
     }
+    if (error?.message === 'ORDER_ZONE_FORBIDDEN') {
+      return errorResponse(res, 403, 'Access denied for orders outside your assigned zones');
+    }
 
     console.error('Error deleting order permanently:', error);
     return errorResponse(res, 500, 'Failed to delete order');
@@ -1023,6 +1085,9 @@ export const getOrderById = asyncHandler(async (req, res) => {
     if (!order) {
       return errorResponse(res, 404, 'Order not found');
     }
+    if (!canAdminAccessOrder(req.user, order)) {
+      return errorResponse(res, 403, 'Access denied for orders outside your assigned zones');
+    }
 
     const timedOutByRestaurant = isRestaurantAcceptTimeoutOrder(order);
     const acceptanceTimeoutAt = timedOutByRestaurant
@@ -1032,6 +1097,33 @@ export const getOrderById = asyncHandler(async (req, res) => {
     const orderDate = new Date(order.createdAt);
     const user = order.userId || {};
     const delivery = order.deliveryPartnerId || {};
+    let restaurantPhone =
+      order.restaurantId?.phone ||
+      order.restaurantId?.primaryContactNumber ||
+      order.restaurantId?.ownerPhone ||
+      '';
+
+    if (!restaurantPhone) {
+      const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
+      const GroceryStore = (await import('../../grocery/models/GroceryStore.js')).default;
+      const restaurantId = String(order.restaurantId?._id || order.restaurantId || '').trim();
+
+      if (restaurantId) {
+        let restaurantDoc = null;
+        if (mongoose.Types.ObjectId.isValid(restaurantId) && restaurantId.length === 24) {
+          restaurantDoc =
+            await Restaurant.findById(restaurantId).select('phone ownerPhone primaryContactNumber').lean() ||
+            await GroceryStore.findById(restaurantId).select('phone ownerPhone primaryContactNumber').lean();
+        }
+
+        restaurantPhone =
+          restaurantDoc?.phone ||
+          restaurantDoc?.primaryContactNumber ||
+          restaurantDoc?.ownerPhone ||
+          '';
+      }
+    }
+
     const paymentMethod = String(order.payment?.method || '').toLowerCase();
     const isCodPayment = paymentMethod === 'cash' || paymentMethod === 'cod';
     const paymentStatusMap = {
@@ -1085,6 +1177,7 @@ export const getOrderById = asyncHandler(async (req, res) => {
         customerPhone: user?.phone || '',
         customerEmail: user?.email || '',
         restaurant: order.restaurantName || order.restaurantId?.name || 'Unknown Restaurant',
+        restaurantPhone,
         paymentStatus: paymentStatusDisplay,
         paymentType: isCodPayment ? 'Cash on Delivery' : (paymentMethod === 'wallet' ? 'Wallet' : 'Online'),
         paymentCollectionStatus: isCodPayment
@@ -1368,6 +1461,9 @@ export const acceptOrderFromAdmin = asyncHandler(async (req, res) => {
     if (!order) {
       return errorResponse(res, 404, 'Order not found');
     }
+    if (!canAdminAccessOrder(req.user, order)) {
+      return errorResponse(res, 403, 'Access denied for orders outside your assigned zones');
+    }
 
     if (order.status === 'cancelled') {
       return errorResponse(res, 400, 'Cannot accept a cancelled order');
@@ -1411,6 +1507,9 @@ export const rejectOrderFromAdmin = asyncHandler(async (req, res) => {
     const order = await resolveAdminOrderById(id);
     if (!order) {
       return errorResponse(res, 404, 'Order not found');
+    }
+    if (!canAdminAccessOrder(req.user, order)) {
+      return errorResponse(res, 403, 'Access denied for orders outside your assigned zones');
     }
 
     if (order.status === 'cancelled') {
@@ -1460,6 +1559,9 @@ export const rejectOrderRequest = asyncHandler(async (req, res) => {
     const order = await resolveAdminOrderById(id);
     if (!order) {
       return errorResponse(res, 404, 'Order not found');
+    }
+    if (!canAdminAccessOrder(req.user, order)) {
+      return errorResponse(res, 403, 'Access denied for orders outside your assigned zones');
     }
 
     if (order.adminApproval?.status === 'rejected' || order.status === 'cancelled') {
@@ -1523,6 +1625,9 @@ export const resendRiderNotification = asyncHandler(async (req, res) => {
     const order = await resolveAdminOrderById(id);
     if (!order) {
       return errorResponse(res, 404, 'Order not found');
+    }
+    if (!canAdminAccessOrder(req.user, order)) {
+      return errorResponse(res, 403, 'Access denied for orders outside your assigned zones');
     }
 
     const restaurantDoc = await resolveRestaurantForOrder(order);
@@ -1696,9 +1801,11 @@ export const getSearchingDeliverymanOrders = asyncHandler(async (req, res) => {
     }
 
     // Combine all conditions
-    const finalQuery = searchConditions 
-      ? { $and: [baseConditions, searchConditions] }
-      : baseConditions;
+    const adminZoneAccessCondition = buildAdminZoneAccessCondition(req.user);
+    const andConditions = [baseConditions];
+    if (searchConditions) andConditions.push(searchConditions);
+    if (adminZoneAccessCondition) andConditions.push(adminZoneAccessCondition);
+    const finalQuery = andConditions.length === 1 ? andConditions[0] : { $and: andConditions };
 
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -1879,9 +1986,11 @@ export const getOngoingOrders = asyncHandler(async (req, res) => {
     }
 
     // Combine all conditions
-    const finalQuery = searchConditions 
-      ? { $and: [baseConditions, searchConditions] }
-      : baseConditions;
+    const adminZoneAccessCondition = buildAdminZoneAccessCondition(req.user);
+    const andConditions = [baseConditions];
+    if (searchConditions) andConditions.push(searchConditions);
+    if (adminZoneAccessCondition) andConditions.push(adminZoneAccessCondition);
+    const finalQuery = andConditions.length === 1 ? andConditions[0] : { $and: andConditions };
 
     // Calculate pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -2046,6 +2155,9 @@ export const getTransactionReport = asyncHandler(async (req, res) => {
     const normalizedPlatform = platform ? normalizePlatform(platform) : null;
     let platformRestaurantIds = null;
     let selectedRestaurantIds = null;
+    const adminZoneAccessCondition = buildAdminZoneAccessCondition(req.user);
+
+    addAndCondition(adminZoneAccessCondition);
 
     if (normalizedPlatform) {
       platformRestaurantIds = await getRestaurantIdsByPlatform(normalizedPlatform);
@@ -2385,6 +2497,8 @@ export const getRestaurantReport = asyncHandler(async (req, res) => {
     const Restaurant = (await import('../../restaurant/models/Restaurant.js')).default;
     const AdminCommission = (await import('../models/AdminCommission.js')).default;
     const FeedbackExperience = (await import('../models/FeedbackExperience.js')).default;
+    const Zone = (await import('../models/Zone.js')).default;
+    const assignedZoneIds = getAdminAssignedZoneIds(req.user);
 
     // Build restaurant query
     const restaurantQuery = {};
@@ -2398,12 +2512,23 @@ export const getRestaurantReport = asyncHandler(async (req, res) => {
 
     // Zone filter
     if (zone && zone !== 'All Zones') {
-      const Zone = (await import('../models/Zone.js')).default;
       const zoneDoc = await Zone.findOne({
         name: { $regex: zone, $options: 'i' }
       }).select('_id name').lean();
 
       if (zoneDoc) {
+        if (assignedZoneIds.length > 0 && !assignedZoneIds.includes(String(zoneDoc._id))) {
+          return successResponse(res, 200, 'Restaurant report retrieved successfully', {
+            restaurants: [],
+            pagination: {
+              page: 1,
+              limit: 1000,
+              total: 0,
+              pages: 0
+            }
+          });
+        }
+
         // Find restaurants in this zone by checking orders with this zoneId
         const ordersInZone = await Order.find({
           'assignmentInfo.zoneId': zoneDoc._id?.toString()
@@ -2428,6 +2553,29 @@ export const getRestaurantReport = asyncHandler(async (req, res) => {
             }
           });
         }
+      }
+    } else if (assignedZoneIds.length > 0) {
+      const ordersInAssignedZones = await Order.find({
+        'assignmentInfo.zoneId': { $in: assignedZoneIds }
+      }).distinct('restaurantId').lean();
+
+      if (ordersInAssignedZones.length > 0) {
+        andFilters.push({
+          $or: [
+            { _id: { $in: ordersInAssignedZones } },
+            { restaurantId: { $in: ordersInAssignedZones } }
+          ]
+        });
+      } else {
+        return successResponse(res, 200, 'Restaurant report retrieved successfully', {
+          restaurants: [],
+          pagination: {
+            page: 1,
+            limit: 1000,
+            total: 0,
+            pages: 0
+          }
+        });
       }
     }
 

@@ -352,6 +352,7 @@ const GroceryPage = () => {
 
   useEffect(() => {
     const syncLocationFromStorage = (event) => {
+      let nextLocationSource = "";
       try {
         const nextLocation =
           event?.detail && typeof event.detail === "object"
@@ -363,16 +364,25 @@ const GroceryPage = () => {
       }
 
       try {
-        setUserLocationSource(
-          String(localStorage.getItem("userLocationSource") || "").trim().toLowerCase()
-        );
+        nextLocationSource = String(localStorage.getItem("userLocationSource") || "").trim().toLowerCase();
+        setUserLocationSource(nextLocationSource);
       } catch {
+        nextLocationSource = "";
         setUserLocationSource("");
+      }
+
+      const shouldResetToAutoZone =
+        selectedGroceryZoneId !== "auto" &&
+        (nextLocationSource === "saved" || nextLocationSource === "current");
+
+      if (shouldResetToAutoZone) {
+        setSelectedGroceryZoneId("auto");
+        setSelectedStoreId("all-stores");
       }
 
       // Trigger zone re-detection immediately when location is changed from selector.
       // This avoids requiring a manual page refresh for updated store availability.
-      if (selectedGroceryZoneId === "auto" && typeof refreshZone === "function") {
+      if ((selectedGroceryZoneId === "auto" || shouldResetToAutoZone) && typeof refreshZone === "function") {
         setTimeout(() => {
           refreshZone();
         }, 0);
@@ -853,7 +863,10 @@ const GroceryPage = () => {
     const fetchGroceryBanners = async () => {
       try {
         const response = await api.get("/hero-banners/public", {
-          params: { platform: "mogrocery" },
+          params: {
+            platform: "mogrocery",
+            ...(effectiveZoneId ? { zoneId: effectiveZoneId } : {}),
+          },
         });
 
         const banners = Array.isArray(response?.data?.data?.banners)
@@ -875,7 +888,7 @@ const GroceryPage = () => {
     };
 
     fetchGroceryBanners();
-  }, []);
+  }, [effectiveZoneId]);
 
   useEffect(() => {
     const fetchHomepageCategories = async () => {

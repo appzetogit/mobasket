@@ -15,6 +15,7 @@ import alertSound from "@/assets/audio/alert.mp3";
 
 export default function FoodApproval() {
   const [requests, setRequests] = useState([]);
+  const [selectedRequestIds, setSelectedRequestIds] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRequest, setSelectedRequest] = useState(null);
@@ -97,6 +98,10 @@ export default function FoodApproval() {
 
       previousPendingCountRef.current = data.length;
       setRequests(data);
+      setSelectedRequestIds((prev) => {
+        const availableIds = new Set(data.map((request) => String(request._id || request.id || "")));
+        return prev.filter((id) => availableIds.has(id));
+      });
     } catch (error) {
       const isBackgroundRefresh = !showLoader;
       if (isBackgroundRefresh) {
@@ -170,6 +175,40 @@ export default function FoodApproval() {
     );
   }, [requests, searchQuery]);
 
+  const filteredRequestIds = useMemo(
+    () => filteredRequests.map((request) => String(request._id || request.id || "")),
+    [filteredRequests]
+  );
+
+  const allVisibleSelected =
+    filteredRequestIds.length > 0 &&
+    filteredRequestIds.every((id) => selectedRequestIds.includes(id));
+
+  const selectedVisibleCount = filteredRequestIds.filter((id) =>
+    selectedRequestIds.includes(id)
+  ).length;
+
+  const toggleRequestSelection = (request) => {
+    const requestId = String(request._id || request.id || "");
+    if (!requestId) return;
+
+    setSelectedRequestIds((prev) =>
+      prev.includes(requestId)
+        ? prev.filter((id) => id !== requestId)
+        : [...prev, requestId]
+    );
+  };
+
+  const toggleSelectAllVisible = () => {
+    setSelectedRequestIds((prev) => {
+      if (allVisibleSelected) {
+        return prev.filter((id) => !filteredRequestIds.includes(id));
+      }
+
+      return Array.from(new Set([...prev, ...filteredRequestIds]));
+    });
+  };
+
   const handleApprove = async (request) => {
     try {
       setProcessing(true);
@@ -182,6 +221,50 @@ export default function FoodApproval() {
     } catch (error) {
       console.error("Error approving food item:", error);
       toast.error(error?.response?.data?.message || "Failed to approve food item");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleBulkApprove = async () => {
+    const selectedRequests = filteredRequests.filter((request) =>
+      selectedRequestIds.includes(String(request._id || request.id || ""))
+    );
+
+    if (selectedRequests.length === 0) {
+      toast.error("Select at least one food item to approve");
+      return;
+    }
+
+    try {
+      setProcessing(true);
+      const results = await Promise.allSettled(
+        selectedRequests.map((request) => adminAPI.approveFoodItem(request._id || request.id))
+      );
+
+      const succeeded = results.filter((result) => result.status === "fulfilled").length;
+      const failed = results.length - succeeded;
+
+      if (succeeded > 0) {
+        stopNotificationAlarm();
+        toast.success(
+          failed > 0
+            ? `${succeeded} food items approved, ${failed} failed`
+            : `${succeeded} food items approved`
+        );
+      } else {
+        toast.error("Failed to approve selected food items");
+      }
+
+      await fetchPendingApprovals();
+      setSelectedRequestIds([]);
+      if (selectedRequest && selectedRequestIds.includes(String(selectedRequest._id || selectedRequest.id || ""))) {
+        setShowDetailModal(false);
+        setSelectedRequest(null);
+      }
+    } catch (error) {
+      console.error("Error bulk approving food items:", error);
+      toast.error("Failed to approve selected food items");
     } finally {
       setProcessing(false);
     }
@@ -227,7 +310,7 @@ export default function FoodApproval() {
             </span>
           </div>
 
-          <div className="mb-4">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="relative flex-1">
               <span className="absolute inset-y-0 left-2.5 flex items-center text-gray-400">
                 <Search className="w-4 h-4" />
@@ -239,6 +322,25 @@ export default function FoodApproval() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full rounded-md border border-gray-300 bg-white py-1.5 pl-9 pr-3 text-sm focus:outline-none focus:border-[#006fbd] focus:ring-1 focus:ring-[#006fbd]"
               />
+            </div>
+            <div className="flex items-center gap-3">
+              <label className="inline-flex items-center gap-2 text-sm text-gray-600">
+                <input
+                  type="checkbox"
+                  checked={allVisibleSelected}
+                  onChange={toggleSelectAllVisible}
+                  disabled={filteredRequestIds.length === 0 || processing}
+                  className="h-4 w-4 rounded border-gray-300 text-[#006fbd] focus:ring-[#006fbd]"
+                />
+                Select all visible
+              </label>
+              <button
+                onClick={handleBulkApprove}
+                disabled={processing || selectedVisibleCount === 0}
+                className="inline-flex items-center rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Approve Selected ({selectedVisibleCount})
+              </button>
             </div>
           </div>
 
@@ -257,6 +359,16 @@ export default function FoodApproval() {
                 <table className="min-w-full divide-y divide-gray-200 text-sm">
                   <thead style={{ backgroundColor: "rgba(0, 111, 189, 0.1)" }}>
                     <tr>
+                      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                        <input
+                          type="checkbox"
+                          checked={allVisibleSelected}
+                          onChange={toggleSelectAllVisible}
+                          disabled={filteredRequestIds.length === 0 || processing}
+                          className="h-4 w-4 rounded border-gray-300 text-[#006fbd] focus:ring-[#006fbd]"
+                          aria-label="Select all visible food items"
+                        />
+                      </th>
                       <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">S.No</th>
                       <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Item</th>
                       <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Restaurant</th>
@@ -270,13 +382,23 @@ export default function FoodApproval() {
                   <tbody className="divide-y divide-gray-200 bg-white">
                     {filteredRequests.length === 0 ? (
                       <tr>
-                        <td colSpan="8" className="px-3 py-8 text-center text-sm text-gray-500">
+                        <td colSpan="9" className="px-3 py-8 text-center text-sm text-gray-500">
                           No pending food item approval requests found.
                         </td>
                       </tr>
                     ) : (
                       filteredRequests.map((request, index) => (
                         <tr key={request._id || request.id} className="hover:bg-gray-50">
+                          <td className="px-3 py-3 whitespace-nowrap">
+                            <input
+                              type="checkbox"
+                              checked={selectedRequestIds.includes(String(request._id || request.id || ""))}
+                              onChange={() => toggleRequestSelection(request)}
+                              disabled={processing}
+                              className="h-4 w-4 rounded border-gray-300 text-[#006fbd] focus:ring-[#006fbd]"
+                              aria-label={`Select ${request.itemName || "food item"}`}
+                            />
+                          </td>
                           <td className="px-3 py-3 whitespace-nowrap text-sm text-gray-700 font-semibold">{index + 1}</td>
                           <td className="px-3 py-3 whitespace-nowrap">
                             <div className="text-sm">

@@ -49,6 +49,11 @@ export default function LandingPageManagement({ forcedPlatform, initialTab = 'ba
   const [bannersUploadProgress, setBannersUploadProgress] = useState({ current: 0, total: 0 })
   const [bannersDeleting, setBannersDeleting] = useState(null)
   const bannersFileInputRef = useRef(null)
+  const [bannerZones, setBannerZones] = useState([])
+  const [bannerZonesLoading, setBannerZonesLoading] = useState(false)
+  const [showBannerZoneModal, setShowBannerZoneModal] = useState(false)
+  const [selectedBannerZoneIds, setSelectedBannerZoneIds] = useState([])
+  const [savingBannerZones, setSavingBannerZones] = useState(false)
 
   // Categories
   const [categories, setCategories] = useState([])
@@ -196,7 +201,8 @@ export default function LandingPageManagement({ forcedPlatform, initialTab = 'ba
     fetchBanners()
     fetchUnder250Banners()
     fetchAllRestaurants()
-  }, [])
+    fetchBannerZones()
+  }, [platform])
 
   // Fetch Top 10 and Gourmet when Explore More tab is active
   useEffect(() => {
@@ -376,6 +382,26 @@ export default function LandingPageManagement({ forcedPlatform, initialTab = 'ba
     }
   }
 
+  const fetchBannerZones = async () => {
+    try {
+      setBannerZonesLoading(true)
+      const response = await adminAPI.getZones({ platform, isActive: true, limit: 500 })
+      const zoneList = response?.data?.data?.zones || response?.data?.zones || []
+      const normalizedZones = (Array.isArray(zoneList) ? zoneList : [])
+        .map((zone) => ({
+          _id: String(zone?._id || '').trim(),
+          name: String(zone?.name || zone?.zoneName || zone?.serviceLocation || 'Unnamed Zone').trim(),
+        }))
+        .filter((zone) => zone._id)
+
+      setBannerZones(normalizedZones)
+    } catch {
+      setBannerZones([])
+    } finally {
+      setBannerZonesLoading(false)
+    }
+  }
+
   const handleToggleBannerStatus = async (id, currentStatus) => {
     try {
       setError(null)
@@ -439,6 +465,55 @@ export default function LandingPageManagement({ forcedPlatform, initialTab = 'ba
       setErrorSafely(err.response?.data?.message || 'Failed to link restaurants to banner.')
     } finally {
       setLinkingRestaurants(false)
+    }
+  }
+
+  const handleOpenBannerZoneModal = (banner) => {
+    setSelectedBannerId(banner?._id || null)
+    setSelectedBannerZoneIds(
+      (Array.isArray(banner?.zoneIds) ? banner.zoneIds : [])
+        .map((zone) => String(zone?._id || zone || '').trim())
+        .filter(Boolean)
+    )
+    setShowBannerZoneModal(true)
+  }
+
+  const toggleBannerZoneSelection = (zoneId) => {
+    setSelectedBannerZoneIds((prev) => {
+      if (prev.includes(zoneId)) {
+        return prev.filter((id) => id !== zoneId)
+      }
+
+      return [...prev, zoneId]
+    })
+  }
+
+  const handleSaveBannerZones = async () => {
+    if (!selectedBannerId) return
+
+    try {
+      setSavingBannerZones(true)
+      setError(null)
+      setSuccess(null)
+
+      const response = await api.patch(
+        `/hero-banners/${selectedBannerId}/zones`,
+        { zoneIds: selectedBannerZoneIds },
+        getAuthConfig()
+      )
+
+      if (response.data.success) {
+        setSuccess('Banner zones updated successfully!')
+        localStorage.setItem(HERO_BANNER_SYNC_STORAGE_KEY, String(Date.now()))
+        window.dispatchEvent(new Event(HERO_BANNER_SYNC_EVENT))
+        setShowBannerZoneModal(false)
+        await fetchBanners()
+        setTimeout(() => setSuccess(null), 3000)
+      }
+    } catch (err) {
+      setErrorSafely(err.response?.data?.message || 'Failed to update banner zones.')
+    } finally {
+      setSavingBannerZones(false)
     }
   }
 
@@ -1758,6 +1833,13 @@ export default function LandingPageManagement({ forcedPlatform, initialTab = 'ba
                               <Megaphone className="w-4 h-4" />
                               Advertise
                             </button>
+                            <button
+                              onClick={() => handleOpenBannerZoneModal(banner)}
+                              className="px-3 py-1.5 rounded text-sm font-medium bg-emerald-100 text-emerald-800 hover:bg-emerald-200 flex items-center gap-1"
+                            >
+                              <Layout className="w-4 h-4" />
+                              Zones
+                            </button>
                             <button onClick={() => handleToggleBannerStatus(banner._id, banner.isActive)} className={`px-3 py-1.5 rounded text-sm font-medium ${banner.isActive ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
                               {banner.isActive ? 'Deactivate' : 'Activate'}
                             </button>
@@ -1783,6 +1865,30 @@ export default function LandingPageManagement({ forcedPlatform, initialTab = 'ba
                             </div>
                           </div>
                         )}
+                        <div className="mt-2 pt-2 border-t border-slate-200">
+                          <p className="text-xs text-slate-600 mb-1">
+                            Zones {banner.zoneIds?.length ? `(${banner.zoneIds.length})` : '(All Zones)'}:
+                          </p>
+                          {banner.zoneIds?.length ? (
+                            <div className="flex flex-wrap gap-1">
+                              {banner.zoneIds.slice(0, 4).map((zone, zoneIndex) => (
+                                <span
+                                  key={zone?._id || `banner-zone-${banner._id}-${zoneIndex}`}
+                                  className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded text-xs"
+                                >
+                                  {zone?.name || zone?.zoneName || 'Zone'}
+                                </span>
+                              ))}
+                              {banner.zoneIds.length > 4 && (
+                                <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-xs">
+                                  +{banner.zoneIds.length - 4} more
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-500">Visible in all active zones.</p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -2754,6 +2860,105 @@ export default function LandingPageManagement({ forcedPlatform, initialTab = 'ba
                     )}
                   </Button>
                 </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={showBannerZoneModal} onOpenChange={setShowBannerZoneModal}>
+          <DialogContent className="max-w-2xl max-h-[85vh] overflow-hidden flex flex-col p-0">
+            <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-200">
+              <DialogTitle className="text-2xl font-bold text-slate-900">Assign Banner Zones</DialogTitle>
+              <DialogDescription className="text-slate-600 mt-2">
+                Choose the zones where this banner should appear. Leave everything unchecked to show it in all zones.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto bg-white px-6 py-4">
+              {bannerZonesLoading ? (
+                <div className="flex flex-col items-center justify-center py-16">
+                  <Loader2 className="w-10 h-10 text-blue-600 animate-spin mb-3" />
+                  <p className="text-slate-500">Loading zones...</p>
+                </div>
+              ) : bannerZones.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-center">
+                  <Layout className="w-12 h-12 text-slate-300 mb-3" />
+                  <p className="text-slate-600 font-medium">No zones available</p>
+                  <p className="text-sm text-slate-500">Create active zones first to target banners zone-wise.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between rounded-lg bg-slate-50 border border-slate-200 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-slate-900">Show in all zones</p>
+                      <p className="text-xs text-slate-500">Use this when the banner should not be limited to specific zones.</p>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedBannerZoneIds([])}
+                      className="text-slate-700"
+                    >
+                      Clear zones
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {bannerZones.map((zone) => {
+                      const isSelected = selectedBannerZoneIds.includes(zone._id)
+
+                      return (
+                        <button
+                          key={zone._id}
+                          type="button"
+                          onClick={() => toggleBannerZoneSelection(zone._id)}
+                          className={`w-full flex items-center justify-between rounded-lg border px-4 py-3 text-left transition-colors ${
+                            isSelected
+                              ? 'border-emerald-300 bg-emerald-50'
+                              : 'border-slate-200 hover:bg-slate-50'
+                          }`}
+                        >
+                          <div>
+                            <p className="text-sm font-medium text-slate-900">{zone.name}</p>
+                            <p className="text-xs text-slate-500">Zone-target this hero banner to this area.</p>
+                          </div>
+                          <Checkbox
+                            checked={isSelected}
+                            onCheckedChange={() => toggleBannerZoneSelection(zone._id)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              <p className="text-sm text-slate-500">
+                {selectedBannerZoneIds.length > 0
+                  ? `${selectedBannerZoneIds.length} zone${selectedBannerZoneIds.length > 1 ? 's' : ''} selected`
+                  : 'No specific zones selected'}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowBannerZoneModal(false)}
+                  disabled={savingBannerZones}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleSaveBannerZones}
+                  disabled={savingBannerZones}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                >
+                  {savingBannerZones ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save Zones'}
+                </Button>
               </div>
             </div>
           </DialogContent>

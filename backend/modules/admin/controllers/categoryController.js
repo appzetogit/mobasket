@@ -1,5 +1,6 @@
 import AdminCategoryManagement from '../models/AdminCategoryManagement.js';
 import RestaurantCategory from '../../restaurant/models/RestaurantCategory.js';
+import Zone from '../models/Zone.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
@@ -15,6 +16,47 @@ const logger = winston.createLogger({
     })
   ]
 });
+
+const isPointInZone = (lat, lng, zoneCoordinates = []) => {
+  if (!Array.isArray(zoneCoordinates) || zoneCoordinates.length < 3) return false;
+
+  let inside = false;
+  for (let i = 0, j = zoneCoordinates.length - 1; i < zoneCoordinates.length; j = i++) {
+    const coordI = zoneCoordinates[i];
+    const coordJ = zoneCoordinates[j];
+    const xi = typeof coordI === 'object' ? Number(coordI.latitude ?? coordI.lat) : NaN;
+    const yi = typeof coordI === 'object' ? Number(coordI.longitude ?? coordI.lng) : NaN;
+    const xj = typeof coordJ === 'object' ? Number(coordJ.latitude ?? coordJ.lat) : NaN;
+    const yj = typeof coordJ === 'object' ? Number(coordJ.longitude ?? coordJ.lng) : NaN;
+
+    if (![xi, yi, xj, yj].every(Number.isFinite)) continue;
+
+    const intersect = ((yi > lng) !== (yj > lng)) &&
+      (lat < ((xj - xi) * (lng - yi)) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+
+  return inside;
+};
+
+const resolveRestaurantZone = (restaurant = {}, zones = []) => {
+  const restaurantIdCandidates = new Set([
+    String(restaurant?._id || '').trim(),
+    String(restaurant?.restaurantId || '').trim(),
+  ].filter(Boolean));
+
+  const linkedZone = zones.find((zone) => {
+    const linkedRestaurantId = String(zone?.restaurantId?._id || zone?.restaurantId || '').trim();
+    return linkedRestaurantId && restaurantIdCandidates.has(linkedRestaurantId);
+  });
+  if (linkedZone) return linkedZone;
+
+  const lat = Number(restaurant?.location?.latitude ?? restaurant?.location?.coordinates?.[1]);
+  const lng = Number(restaurant?.location?.longitude ?? restaurant?.location?.coordinates?.[0]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+
+  return zones.find((zone) => isPointInZone(lat, lng, zone.coordinates || [])) || null;
+};
 
 /**
  * Get All Categories (Public - for user frontend)
@@ -85,11 +127,20 @@ export const getPublicCategories = asyncHandler(async (req, res) => {
  */
 export const getCategories = asyncHandler(async (req, res) => {
   try {
-    const { limit = 100, offset = 0, search, priority, status } = req.query;
+    const { limit = 100, offset = 0, search, priority, status, zoneId } = req.query;
     const parsedLimit = Math.max(parseInt(limit, 10) || 100, 0);
     const parsedOffset = Math.max(parseInt(offset, 10) || 0, 0);
     const hasStatusFilter = status !== undefined;
     const normalizedStatus = status === 'true' || status === true;
+    const hasZoneFilter = Boolean(String(zoneId || '').trim());
+    const mofoodZones = !priority
+      ? await Zone.find({
+          isActive: true,
+          $or: [{ platform: 'mofood' }, { platform: { $exists: false } }]
+        })
+          .select('_id name zoneName restaurantId coordinates')
+          .lean()
+      : [];
 
     // Build admin category query
     const adminQuery = {};
@@ -133,22 +184,28 @@ export const getCategories = asyncHandler(async (req, res) => {
       const docs = await RestaurantCategory.find(restaurantQuery)
         .populate({
           path: 'restaurant',
-          select: 'name platform',
+          select: 'name platform restaurantId location',
           match: { platform: 'mofood' }
         })
         .lean();
 
       restaurantCategories = docs
         .filter((category) => Boolean(category.restaurant))
-        .map((category) => ({
-          ...category,
-          id: category._id?.toString(),
-          status: category.isActive !== false,
-          image: category.icon || DEFAULT_IMAGE_FALLBACK_40,
-          type: 'Global',
-          source: 'restaurant',
-          readOnly: false
-        }));
+        .map((category) => {
+          const matchedZone = resolveRestaurantZone(category.restaurant, mofoodZones);
+          return {
+            ...category,
+            id: category._id?.toString(),
+            status: category.isActive !== false,
+            image: category.icon || DEFAULT_IMAGE_FALLBACK_40,
+            type: 'Global',
+            source: 'restaurant',
+            readOnly: false,
+            zoneId: matchedZone?._id ? String(matchedZone._id) : '',
+            zoneName: matchedZone?.name || matchedZone?.zoneName || '',
+          };
+        })
+        .filter((category) => !hasZoneFilter || String(category.zoneId || '') === String(zoneId).trim());
     }
 
     const normalizedAdminCategories = adminCategories.map((category) => ({

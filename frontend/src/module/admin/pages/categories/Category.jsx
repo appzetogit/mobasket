@@ -97,6 +97,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
   const [grocerySubcategoryOptions, setGrocerySubcategoryOptions] = useState([])
   const [groceryStoreOptions, setGroceryStoreOptions] = useState([])
   const [groceryZoneOptions, setGroceryZoneOptions] = useState([])
+  const [foodZoneOptions, setFoodZoneOptions] = useState([])
   const [selectedZoneFilter, setSelectedZoneFilter] = useState("all-zones")
   const [selectedStoreFilter, setSelectedStoreFilter] = useState("all-stores")
   const [createProductCategoryInline, setCreateProductCategoryInline] = useState(false)
@@ -264,14 +265,6 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     })
   }
 
-  const clearAllFilters = () => {
-    setSearchQuery("")
-    setActiveFilters(new Set())
-    setSortBy(null)
-    setSelectedCuisine(null)
-    setCurrentPage(1)
-  }
-
   // Fetch categories from API
   useEffect(() => {
     fetchCategories()
@@ -280,6 +273,8 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
       fetchGrocerySubcategoryOptions()
       fetchGroceryStoreOptions()
       fetchGroceryZoneOptions()
+    } else {
+      fetchFoodZoneOptions()
     }
   }, [isGroceryScope, activeGroceryEntity])
 
@@ -326,6 +321,9 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
       setLoading(true)
       const params = {}
       if (searchQuery) params.search = searchQuery
+      if (!isGroceryScope && selectedZoneFilter && selectedZoneFilter !== "all-zones") {
+        params.zoneId = selectedZoneFilter
+      }
       if (isGroceryScope && activeGroceryEntity === "products") {
         if (selectedZoneFilter && selectedZoneFilter !== "all-zones") {
           params.zoneId = selectedZoneFilter
@@ -565,6 +563,33 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     }
   }
 
+  const fetchFoodZoneOptions = async () => {
+    if (isGroceryScope) return
+    try {
+      const response = await adminAPI.getZones({ platform: "mofood", limit: 500 })
+      if (!response?.data?.success) return
+
+      const rawZones =
+        response?.data?.data?.zones ||
+        response?.data?.data ||
+        response?.data?.zones ||
+        []
+
+      const normalized = (Array.isArray(rawZones) ? rawZones : [])
+        .filter((zone) => (zone?._id || zone?.id) && (zone?.name || zone?.zoneName))
+        .map((zone) => ({
+          id: String(zone?._id || zone?.id),
+          name: String(zone?.name || zone?.zoneName || "Unnamed Zone"),
+          isActive: zone?.isActive !== false,
+        }))
+
+      setFoodZoneOptions(normalized)
+    } catch (error) {
+      console.error('Error fetching food zone options:', error)
+      setFoodZoneOptions([])
+    }
+  }
+
   const filteredCategories = useMemo(() => {
     let result = [...categories]
     
@@ -574,6 +599,13 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
         cat.name?.toLowerCase().includes(query) ||
         cat.id?.toString().includes(query)
       )
+    }
+
+    if (!isGroceryScope && selectedZoneFilter && selectedZoneFilter !== "all-zones") {
+      result = result.filter((cat) => {
+        if (cat?.source === "admin") return true
+        return String(cat?.zoneId || "") === String(selectedZoneFilter)
+      })
     }
 
     if (isGroceryScope && activeGroceryEntity === "products") {
@@ -603,7 +635,12 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
   }, [searchQuery, activeGroceryEntity, isGroceryScope, selectedZoneFilter, selectedStoreFilter])
 
   useEffect(() => {
-    if (!isGroceryScope || activeGroceryEntity !== "products") {
+    if (!isGroceryScope) {
+      setSelectedStoreFilter("all-stores")
+      return
+    }
+
+    if (activeGroceryEntity !== "products") {
       setSelectedZoneFilter("all-zones")
       setSelectedStoreFilter("all-stores")
     }
@@ -1175,7 +1212,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            {isGroceryScope && activeGroceryEntity === "products" && (
+            {((!isGroceryScope) || (isGroceryScope && activeGroceryEntity === "products")) && (
               <div className="flex items-center gap-2 flex-wrap">
                 <select
                   value={selectedZoneFilter}
@@ -1183,25 +1220,27 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                   className="h-[42px] min-w-[170px] rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
                 >
                   <option value="all-zones">All Zones</option>
-                  {groceryZoneOptions.map((zone) => (
+                  {(isGroceryScope ? groceryZoneOptions : foodZoneOptions).map((zone) => (
                     <option key={zone.id} value={zone.id}>
                       {zone.name}
                     </option>
                   ))}
                 </select>
 
-                <select
-                  value={selectedStoreFilter}
-                  onChange={(event) => setSelectedStoreFilter(event.target.value)}
-                  className="h-[42px] min-w-[170px] rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
-                >
-                  <option value="all-stores">All Stores</option>
-                  {groceryStoreOptions.map((store) => (
-                    <option key={store.id} value={store.id}>
-                      {store.name}
-                    </option>
-                  ))}
-                </select>
+                {isGroceryScope && activeGroceryEntity === "products" && (
+                  <select
+                    value={selectedStoreFilter}
+                    onChange={(event) => setSelectedStoreFilter(event.target.value)}
+                    className="h-[42px] min-w-[170px] rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                  >
+                    <option value="all-stores">All Stores</option>
+                    {groceryStoreOptions.map((store) => (
+                      <option key={store.id} value={store.id}>
+                        {store.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             )}
 
@@ -1415,10 +1454,10 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
       )}
 
       {/* Filter Modal - Removed */}
-      {false && typeof window !== "undefined" &&
+      {isFilterOpen && typeof window !== "undefined" &&
         createPortal(
           <AnimatePresence>
-            {false && (
+            {isFilterOpen && (
               <div className="fixed inset-0 z-[100]">
                 {/* Backdrop */}
                 <div 

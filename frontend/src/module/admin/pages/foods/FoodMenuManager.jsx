@@ -46,16 +46,13 @@ function MenuImage({ src, alt, className, fallback }) {
   const normalizedSrc = normalizeImage(src);
   const [hasError, setHasError] = useState(false);
 
-  useEffect(() => {
-    setHasError(false);
-  }, [normalizedSrc]);
-
   if (!normalizedSrc || hasError) {
     return fallback;
   }
 
   return (
     <img
+      key={normalizedSrc}
       src={normalizedSrc}
       alt={alt}
       className={className}
@@ -64,11 +61,32 @@ function MenuImage({ src, alt, className, fallback }) {
   );
 }
 
+function SuggestionChips({ values = [], onSelect }) {
+  const visibleValues = Array.isArray(values) ? values.slice(0, 6) : [];
+  if (visibleValues.length === 0) return null;
+
+  return (
+    <div className="mt-1 flex flex-wrap gap-1.5">
+      {visibleValues.map((value) => (
+        <button
+          key={value}
+          type="button"
+          onClick={() => onSelect(value)}
+          className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-100"
+        >
+          {value}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function FoodMenuManager() {
   const [restaurants, setRestaurants] = useState([]);
   const [selectedRestaurantId, setSelectedRestaurantId] = useState("");
   const [categories, setCategories] = useState([]);
   const [menu, setMenu] = useState({ sections: [] });
+  const [menuSuggestionSource, setMenuSuggestionSource] = useState({ sections: [] });
   const [addons, setAddons] = useState([]);
   const [loadingRestaurants, setLoadingRestaurants] = useState(true);
   const [loadingCategories, setLoadingCategories] = useState(false);
@@ -163,18 +181,30 @@ export default function FoodMenuManager() {
       if (!selectedRestaurantId) {
         setCategories([]);
         setMenu({ sections: [] });
+        setMenuSuggestionSource({ sections: [] });
         setSelectedSectionViewKey("");
         return;
       }
       try {
         setLoadingCategories(true);
         setMenu({ sections: [] });
+        const fullMenuResponse = await adminAPI.getRestaurantMenu(selectedRestaurantId, {
+          includeImages: true,
+        });
+        const fullMenuData =
+          fullMenuResponse?.data?.data?.menu ||
+          fullMenuResponse?.data?.menu ||
+          { sections: [] };
+        setMenuSuggestionSource({
+          sections: Array.isArray(fullMenuData.sections) ? fullMenuData.sections : [],
+        });
         await refreshCategories(selectedRestaurantId);
       } catch (error) {
         console.error("Failed to load menu categories:", error);
         toast.error("Failed to load restaurant categories");
         setCategories([]);
         setMenu({ sections: [] });
+        setMenuSuggestionSource({ sections: [] });
       } finally {
         setLoadingCategories(false);
       }
@@ -263,6 +293,69 @@ export default function FoodMenuManager() {
     if (!selectedSectionViewKey) return [];
     return Array.isArray(menu.sections) ? menu.sections : [];
   }, [menu.sections, selectedSectionViewKey]);
+
+  const suggestionData = useMemo(() => {
+    const suggestionSections = Array.isArray(menuSuggestionSource?.sections)
+      ? menuSuggestionSource.sections
+      : [];
+
+    const sectionNameSet = new Set();
+    const subsectionNameSet = new Set();
+    const itemNameSet = new Set();
+    const priceSet = new Set();
+    const descriptionSet = new Set();
+
+    suggestionSections.forEach((section) => {
+      const sectionName = String(section?.name || "").trim();
+      if (sectionName) sectionNameSet.add(sectionName);
+
+      (Array.isArray(section?.items) ? section.items : []).forEach((item) => {
+        const itemName = String(item?.name || "").trim();
+        const itemDescription = String(item?.description || "").trim();
+        const itemPrice = Number(item?.price);
+
+        if (itemName) itemNameSet.add(itemName);
+        if (itemDescription) descriptionSet.add(itemDescription);
+        if (Number.isFinite(itemPrice)) priceSet.add(itemPrice.toFixed(2));
+      });
+
+      (Array.isArray(section?.subsections) ? section.subsections : []).forEach((subsection) => {
+        const subsectionName = String(subsection?.name || "").trim();
+        if (subsectionName) subsectionNameSet.add(subsectionName);
+
+        (Array.isArray(subsection?.items) ? subsection.items : []).forEach((item) => {
+          const itemName = String(item?.name || "").trim();
+          const itemDescription = String(item?.description || "").trim();
+          const itemPrice = Number(item?.price);
+
+          if (itemName) itemNameSet.add(itemName);
+          if (itemDescription) descriptionSet.add(itemDescription);
+          if (Number.isFinite(itemPrice)) priceSet.add(itemPrice.toFixed(2));
+        });
+      });
+    });
+
+    const activeSectionId = String(form.sectionId || "");
+    const activeSection = categories.find(
+      (category) => String(category?.id || category?.key || "") === activeSectionId
+    );
+    const activeSectionName = String(activeSection?.name || form.sectionName || "").trim().toLowerCase();
+    const subsectionSuggestions = activeSectionName
+      ? suggestionSections
+          .filter((section) => String(section?.name || "").trim().toLowerCase() === activeSectionName)
+          .flatMap((section) => Array.isArray(section?.subsections) ? section.subsections : [])
+          .map((subsection) => String(subsection?.name || "").trim())
+          .filter(Boolean)
+      : Array.from(subsectionNameSet);
+
+    return {
+      sectionNames: Array.from(sectionNameSet).sort((a, b) => a.localeCompare(b)),
+      subsectionNames: Array.from(new Set(subsectionSuggestions)).sort((a, b) => a.localeCompare(b)),
+      itemNames: Array.from(itemNameSet).sort((a, b) => a.localeCompare(b)),
+      prices: Array.from(priceSet).sort((a, b) => Number(a) - Number(b)),
+      descriptions: Array.from(descriptionSet).sort((a, b) => a.localeCompare(b)),
+    };
+  }, [categories, form.sectionId, form.sectionName, menuSuggestionSource]);
 
   const resetForm = () => {
     setForm((prev) => ({
@@ -522,37 +615,65 @@ export default function FoodMenuManager() {
                 </option>
               ))}
             </select>
-            <input
-              type="text"
-              placeholder="Section name (if new)"
-              value={form.sectionName}
-              onChange={(event) => setForm((prev) => ({ ...prev, sectionName: event.target.value }))}
-              disabled={!!form.sectionId}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-100"
-            />
-            <input
-              type="text"
-              placeholder="Subsection (optional)"
-              value={form.subsectionName}
-              onChange={(event) => setForm((prev) => ({ ...prev, subsectionName: event.target.value }))}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            />
-            <input
-              type="text"
-              placeholder="Item name"
-              value={form.name}
-              onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            />
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="Price"
-              value={form.price}
-              onChange={(event) => setForm((prev) => ({ ...prev, price: event.target.value }))}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            />
+            <div>
+              <input
+                type="text"
+                placeholder="Section name (if new)"
+                value={form.sectionName}
+                onChange={(event) => setForm((prev) => ({ ...prev, sectionName: event.target.value }))}
+                list="food-menu-section-suggestions"
+                disabled={!!form.sectionId}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:bg-slate-100"
+              />
+              <SuggestionChips
+                values={form.sectionId ? [] : suggestionData.sectionNames}
+                onSelect={(value) => setForm((prev) => ({ ...prev, sectionName: value }))}
+              />
+            </div>
+            <div>
+              <input
+                type="text"
+                placeholder="Subsection (optional)"
+                value={form.subsectionName}
+                onChange={(event) => setForm((prev) => ({ ...prev, subsectionName: event.target.value }))}
+                list="food-menu-subsection-suggestions"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              />
+              <SuggestionChips
+                values={suggestionData.subsectionNames}
+                onSelect={(value) => setForm((prev) => ({ ...prev, subsectionName: value }))}
+              />
+            </div>
+            <div>
+              <input
+                type="text"
+                placeholder="Item name"
+                value={form.name}
+                onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+                list="food-menu-item-name-suggestions"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              />
+              <SuggestionChips
+                values={suggestionData.itemNames}
+                onSelect={(value) => setForm((prev) => ({ ...prev, name: value }))}
+              />
+            </div>
+            <div>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Price"
+                value={form.price}
+                onChange={(event) => setForm((prev) => ({ ...prev, price: event.target.value }))}
+                list="food-menu-price-suggestions"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              />
+              <SuggestionChips
+                values={suggestionData.prices}
+                onSelect={(value) => setForm((prev) => ({ ...prev, price: value }))}
+              />
+            </div>
             <select
               value={form.foodType}
               onChange={(event) => setForm((prev) => ({ ...prev, foodType: event.target.value }))}
@@ -561,20 +682,28 @@ export default function FoodMenuManager() {
               <option value="Veg">Veg</option>
               <option value="Non-Veg">Non-Veg</option>
             </select>
-            <input
-              type="text"
-              placeholder="Image URL (optional)"
-              value={form.image}
-              onChange={(event) => setForm((prev) => ({ ...prev, image: event.target.value }))}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            />
-            <textarea
-              placeholder="Description (optional)"
-              value={form.description}
-              onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
-              rows={2}
-              className="md:col-span-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
-            />
+            <div>
+              <input
+                type="text"
+                placeholder="Image URL (optional)"
+                value={form.image}
+                onChange={(event) => setForm((prev) => ({ ...prev, image: event.target.value }))}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <textarea
+                placeholder="Description (optional)"
+                value={form.description}
+                onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
+                rows={2}
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              />
+              <SuggestionChips
+                values={suggestionData.descriptions}
+                onSelect={(value) => setForm((prev) => ({ ...prev, description: value }))}
+              />
+            </div>
             <button
               type="submit"
               disabled={saving}
@@ -583,6 +712,31 @@ export default function FoodMenuManager() {
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
               Add Item
             </button>
+            <datalist id="food-menu-section-suggestions">
+              {suggestionData.sectionNames.map((value) => (
+                <option key={value} value={value} />
+              ))}
+            </datalist>
+            <datalist id="food-menu-subsection-suggestions">
+              {suggestionData.subsectionNames.map((value) => (
+                <option key={value} value={value} />
+              ))}
+            </datalist>
+            <datalist id="food-menu-item-name-suggestions">
+              {suggestionData.itemNames.map((value) => (
+                <option key={value} value={value} />
+              ))}
+            </datalist>
+            <datalist id="food-menu-price-suggestions">
+              {suggestionData.prices.map((value) => (
+                <option key={value} value={value} />
+              ))}
+            </datalist>
+            <datalist id="food-menu-description-suggestions">
+              {suggestionData.descriptions.map((value) => (
+                <option key={value} value={value} />
+              ))}
+            </datalist>
           </form>
         </div>
       </div>

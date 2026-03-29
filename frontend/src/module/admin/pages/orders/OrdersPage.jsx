@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from "react"
+import { useMemo, useState, useEffect, useRef, useCallback } from "react"
 import { useLocation } from "react-router-dom"
 import { FileText, Calendar, Package, BellRing } from "lucide-react"
 import { adminAPI } from "@/lib/api"
@@ -13,6 +13,10 @@ import RefundModal from "../../components/orders/RefundModal"
 import { useOrdersManagement } from "../../components/orders/useOrdersManagement"
 import { Loader2 } from "lucide-react"
 import { usePlatform } from "../../context/PlatformContext"
+
+const AUTO_REFRESH_MS = 10000
+const ORDER_ALERT_STORAGE_KEY = "adminAllOrdersAlertEvent"
+const ORDER_ALERT_CHANNEL_NAME = "admin-all-orders-alerts"
 
 // Status configuration with titles, colors, and icons
 const statusConfig = {
@@ -52,8 +56,10 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
   const fetchInFlightRef = useRef(false)
   const isMountedRef = useRef(true)
   const loadingGuardTimerRef = useRef(null)
+  const broadcastChannelRef = useRef(null)
+  const lastHandledAlertRef = useRef(0)
 
-  const playIncomingSound = () => {
+  const playIncomingSound = useCallback(() => {
     if (!audioRef.current) {
       pendingSoundRef.current = true
       return
@@ -62,7 +68,28 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
     audioRef.current.play().catch(() => {
       pendingSoundRef.current = true
     })
-  }
+  }, [])
+
+  const triggerIncomingAlert = useCallback(({ count = 1, syncOnly = false, eventTs = Date.now() } = {}) => {
+    if (!syncOnly) {
+      try {
+        const payload = JSON.stringify({
+          ts: eventTs,
+          count,
+          platform: activePlatform,
+          statusKey: "all",
+        })
+        localStorage.setItem(ORDER_ALERT_STORAGE_KEY, payload)
+        broadcastChannelRef.current?.postMessage(payload)
+      } catch {
+        // Ignore sync failures; playing locally is the primary action.
+      }
+    }
+
+    if (eventTs <= lastHandledAlertRef.current) return
+    lastHandledAlertRef.current = eventTs
+    playIncomingSound()
+  }, [activePlatform, playIncomingSound])
 
   const getIncomingRequestCount = (ordersList = []) => {
     return ordersList.filter((order) =>
@@ -72,7 +99,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
     ).length
   }
 
-  const fetchOrders = async ({ showLoader = true, force = false } = {}) => {
+  const fetchOrders = useCallback(async ({ showLoader = true, force = false } = {}) => {
     if (fetchInFlightRef.current && !force) {
       // Prevent dead-lock spinner if an old in-flight flag gets stuck.
       if (showLoader && isMountedRef.current) {
@@ -129,7 +156,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
           const incomingCount = getIncomingRequestCount(fetchedOrders)
           const previousCount = previousIncomingCountRef.current
           if ((previousCount === null && incomingCount > 0) || (previousCount !== null && incomingCount > previousCount)) {
-            playIncomingSound()
+            triggerIncomingAlert({ count: Math.max(1, incomingCount - (previousCount || 0)) })
             toast.info("New incoming order request received")
           }
           previousIncomingCountRef.current = incomingCount
@@ -167,7 +194,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
       fetchInFlightRef.current = false
       if (showLoader && isMountedRef.current) setIsLoading(false)
     }
-  }
+  }, [activePlatform, currentPage, pageSize, statusKey, triggerIncomingAlert])
 
   // Fetch orders from backend API
   useEffect(() => {
@@ -181,7 +208,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         loadingGuardTimerRef.current = null
       }
     }
-  }, [statusKey, activePlatform, currentPage, pageSize])
+  }, [fetchOrders])
 
   // Absolute fallback so UI never spins forever even if request lifecycle is interrupted.
   useEffect(() => {
@@ -197,6 +224,28 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
   useEffect(() => {
     setCurrentPage(1)
   }, [statusKey, activePlatform])
+
+  useEffect(() => {
+    if (statusKey !== "all") return undefined
+
+    const refreshOrders = () => {
+      fetchOrders({ showLoader: false })
+    }
+
+    const intervalId = window.setInterval(refreshOrders, AUTO_REFRESH_MS)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        refreshOrders()
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      window.clearInterval(intervalId)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [fetchOrders, statusKey])
 
   // Poll orders list and trigger sound even when tab is in background.
   useEffect(() => {
@@ -222,14 +271,46 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
       }
     }
 
+    const handleSyncedAlert = (payloadString) => {
+      try {
+        const payload = typeof payloadString === "string" ? JSON.parse(payloadString) : payloadString
+        if (!payload || payload.statusKey !== "all" || payload.platform !== activePlatform) return
+        triggerIncomingAlert({
+          count: payload.count,
+          syncOnly: true,
+          eventTs: Number(payload.ts) || Date.now(),
+        })
+      } catch {
+        // Ignore malformed cross-tab payloads.
+      }
+    }
+
+    const handleStorage = (event) => {
+      if (event.key !== ORDER_ALERT_STORAGE_KEY || !event.newValue) return
+      handleSyncedAlert(event.newValue)
+    }
+
+    if (typeof BroadcastChannel !== "undefined") {
+      broadcastChannelRef.current = new BroadcastChannel(ORDER_ALERT_CHANNEL_NAME)
+      broadcastChannelRef.current.onmessage = (event) => {
+        handleSyncedAlert(event.data)
+      }
+    }
+
+    window.addEventListener("storage", handleStorage)
     window.addEventListener("pointerdown", unlockAudio, { once: true })
     window.addEventListener("keydown", unlockAudio, { once: true })
     // Try immediate unlock once (works when browser already has prior user gesture).
     unlockAudio()
 
     return () => {
+      window.removeEventListener("storage", handleStorage)
       window.removeEventListener("pointerdown", unlockAudio)
       window.removeEventListener("keydown", unlockAudio)
+      if (broadcastChannelRef.current) {
+        broadcastChannelRef.current.close()
+        broadcastChannelRef.current = null
+      }
       if (audioRef.current) {
         audioRef.current.pause()
         audioRef.current.currentTime = 0
@@ -238,7 +319,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
       isAudioUnlockedRef.current = false
       pendingSoundRef.current = false
     }
-  }, [statusKey, activePlatform])
+  }, [activePlatform, playIncomingSound, statusKey, triggerIncomingAlert])
 
   const handleApproveOrderRequest = async (order) => {
     const orderIdToUse = order.id || order._id || order.orderId
@@ -572,7 +653,6 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
     setFilters,
     visibleColumns,
     filteredOrders,
-    count,
     activeFiltersCount,
     restaurants,
     handleApplyFilters,

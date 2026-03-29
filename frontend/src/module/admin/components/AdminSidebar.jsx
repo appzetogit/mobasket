@@ -102,6 +102,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
   const [logoUrl, setLogoUrl] = useState(null)
   const [companyName, setCompanyName] = useState(null)
   const [ordersAttentionActive, setOrdersAttentionActive] = useState(false)
+  const [ordersAttentionCount, setOrdersAttentionCount] = useState(0)
   const [adminUser] = useState(() => {
     try {
       const raw = localStorage.getItem("admin_user")
@@ -287,27 +288,39 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     }
   }, [isCollapsed, onCollapseChange])
   
-  // Notify parent on initial load
-  useEffect(() => {
-    if (onCollapseChange) {
-      onCollapseChange(isCollapsed)
-    }
-  }, [])
-  
   const toggleCollapse = () => {
     setIsCollapsed(prev => !prev)
   }
 
   useEffect(() => {
     const storageKey = "adminAllOrdersAttentionUntil"
+    const countStorageKey = "adminAllOrdersAttentionState"
 
     const syncAttentionState = () => {
       try {
         const storedValue = String(localStorage.getItem(storageKey) || "").trim()
         const expiresAt = Number(storedValue || 0)
         setOrdersAttentionActive(storedValue === "active" || expiresAt > Date.now())
+
+        const rawCountState = String(localStorage.getItem(countStorageKey) || "").trim()
+        if (!rawCountState) {
+          setOrdersAttentionCount(0)
+          return
+        }
+
+        try {
+          const parsed = JSON.parse(rawCountState)
+          const nextCount = Math.max(0, Number(parsed?.count) || 0)
+          setOrdersAttentionCount(nextCount)
+          if (typeof parsed?.active === "boolean") {
+            setOrdersAttentionActive(parsed.active || nextCount > 0 || storedValue === "active" || expiresAt > Date.now())
+          }
+        } catch {
+          setOrdersAttentionCount(0)
+        }
       } catch {
         setOrdersAttentionActive(false)
+        setOrdersAttentionCount(0)
       }
     }
 
@@ -410,37 +423,6 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     return filtered
   }, [searchQuery, menuData])
 
-  // Auto-expand sections with matches when searching
-  useEffect(() => {
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim()
-      
-      setExpandedSections((prev) => {
-        const newExpandedState = { ...prev }
-        
-        menuData.forEach((item) => {
-          if (item.type === "section") {
-            item.items.forEach((subItem) => {
-              if (subItem.type === "expandable") {
-                const matchesLabel = subItem.label.toLowerCase().includes(query)
-                const hasMatchingSubItems = subItem.subItems?.some(
-                  (si) => si.label.toLowerCase().includes(query)
-                )
-                
-                if (matchesLabel || hasMatchingSubItems) {
-                  const sectionKey = subItem.label.toLowerCase().replace(/\s+/g, "")
-                  newExpandedState[sectionKey] = true
-                }
-              }
-            })
-          }
-        })
-        
-        return newExpandedState
-      })
-    }
-  }, [searchQuery, menuData])
-
   const isActive = (path, allPaths = []) => {
     if (path === "/admin") {
       return location.pathname === path
@@ -466,12 +448,10 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     }
   }, [expandedSections, platform])
 
-  // Keep dashboard sidebar compact like the target layout
-  useEffect(() => {
-    if (location.pathname === "/admin") {
-      setExpandedSections(buildCollapsedSectionsState())
-    }
-  }, [location.pathname, platform, menuData])
+  const effectiveExpandedSections =
+    location.pathname === "/admin"
+      ? buildCollapsedSectionsState()
+      : expandedSections
 
   const toggleSection = (sectionKey) => {
     // Only one section open at a time. clicking an already-open section will close it.
@@ -492,6 +472,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     if (item.type === "link") {
       const Icon = iconMap[item.icon] || Utensils
       const isOrdersAttentionItem = item.path === "/admin/all-orders" && ordersAttentionActive
+      const showOrdersAttentionCount = item.path === "/admin/all-orders" && ordersAttentionCount > 0
       return (
         <Link
           key={index}
@@ -502,7 +483,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
             }
           }}
           className={cn(
-            "flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-300 ease-out menu-item-animate text-left",
+            "relative flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-300 ease-out menu-item-animate text-left",
             isInSection ? "text-[12px] font-semibold" : "text-[12px]",
             isActive(item.path)
               ? "bg-white/10 text-white border border-white/15 font-semibold"
@@ -524,6 +505,16 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
               {item.label}
             </span>
           )}
+          {showOrdersAttentionCount && !isCollapsed && (
+            <span className="ml-auto inline-flex min-w-[1.35rem] items-center justify-center rounded-full bg-amber-400 px-1.5 py-0.5 text-[10px] font-bold leading-none text-slate-950">
+              {ordersAttentionCount > 99 ? "99+" : ordersAttentionCount}
+            </span>
+          )}
+          {showOrdersAttentionCount && isCollapsed && (
+            <span className="absolute right-1 top-1 inline-flex min-w-[1rem] items-center justify-center rounded-full bg-amber-400 px-1 py-0.5 text-[9px] font-bold leading-none text-slate-950">
+              {ordersAttentionCount > 9 ? "9+" : ordersAttentionCount}
+            </span>
+          )}
         </Link>
       )
     }
@@ -531,7 +522,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     if (item.type === "expandable") {
       const Icon = iconMap[item.icon] || Utensils
       const sectionKey = item.label.toLowerCase().replace(/\s+/g, "")
-      const isExpanded = expandedSections[sectionKey] || false
+      const isExpanded = effectiveExpandedSections[sectionKey] || false
 
       if (isCollapsed) {
         return (
@@ -834,7 +825,36 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
               type="text"
               placeholder="Search Menu..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                const nextValue = e.target.value
+                setSearchQuery(nextValue)
+
+                const query = nextValue.toLowerCase().trim()
+                if (!query) return
+
+                setExpandedSections((prev) => {
+                  const nextExpandedState = { ...prev }
+
+                  menuData.forEach((item) => {
+                    if (item.type !== "section") return
+                    item.items.forEach((subItem) => {
+                      if (subItem.type !== "expandable") return
+
+                      const matchesLabel = subItem.label.toLowerCase().includes(query)
+                      const hasMatchingSubItems = subItem.subItems?.some(
+                        (si) => si.label.toLowerCase().includes(query)
+                      )
+
+                      if (matchesLabel || hasMatchingSubItems) {
+                        const sectionKey = subItem.label.toLowerCase().replace(/\s+/g, "")
+                        nextExpandedState[sectionKey] = true
+                      }
+                    })
+                  })
+
+                  return nextExpandedState
+                })
+              }}
               className={cn(
                 "w-full pl-9 py-2 bg-neutral-900 border border-neutral-800 rounded-lg text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-white/40 focus:border-white/40 transition-all duration-200 text-left",
                 searchQuery ? "pr-9" : "pr-3"

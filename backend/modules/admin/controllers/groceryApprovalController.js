@@ -3,6 +3,7 @@ import { successResponse, errorResponse } from '../../../shared/utils/response.j
 import Menu from '../../restaurant/models/Menu.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import GroceryStore from '../../grocery/models/GroceryStore.js';
+import Zone from '../models/Zone.js';
 import winston from 'winston';
 import mongoose from 'mongoose';
 
@@ -29,6 +30,30 @@ const resolvePlatformMatch = (platformQuery) => {
 
   // Keep existing grocery behavior when no platform is specified.
   return { $in: ['mogrocery', 'grocery'] };
+};
+
+const getAdminAssignedZoneIds = (admin = null) => {
+  if (!admin || String(admin?.role || '').toLowerCase() === 'super_admin') return [];
+  return Array.from(
+    new Set(
+      (Array.isArray(admin?.assignedZoneIds) ? admin.assignedZoneIds : [])
+        .map((zone) => String(zone?._id || zone || '').trim())
+        .filter(Boolean)
+    )
+  );
+};
+
+const getAdminScopedGroceryZoneIds = async (admin = null) => {
+  const assignedZoneIds = getAdminAssignedZoneIds(admin);
+  if (assignedZoneIds.length === 0) return [];
+  const zones = await Zone.find({
+    _id: { $in: assignedZoneIds },
+    isActive: true,
+    platform: 'mogrocery'
+  })
+    .select('_id')
+    .lean();
+  return zones.map((zone) => String(zone._id));
 };
 
 const GROCERY_APPROVAL_LIST_MENU_PROJECTION = [
@@ -109,9 +134,19 @@ const buildApprovalMenuCandidates = async ({ platform, restaurantMongoId }) => {
 export const getPendingGroceryApprovals = asyncHandler(async (req, res) => {
   try {
     const platformMatch = resolvePlatformMatch(req.query?.platform);
-    const restaurants = await Restaurant.find({ platform: platformMatch })
-      .select('_id name restaurantId')
-      .lean();
+    const scopedZoneIds = await getAdminScopedGroceryZoneIds(req.user || req.admin);
+    let restaurants = [];
+    if (String(req.query?.platform || '').toLowerCase() === 'mogrocery') {
+      restaurants = await GroceryStore.find(
+        scopedZoneIds.length > 0 ? { zoneId: { $in: scopedZoneIds } } : {}
+      )
+        .select('_id name restaurantId zoneId')
+        .lean();
+    } else {
+      restaurants = await Restaurant.find({ platform: platformMatch })
+        .select('_id name restaurantId')
+        .lean();
+    }
 
     if (restaurants.length === 0) {
       return successResponse(res, 200, 'Pending grocery approvals retrieved successfully', {
@@ -234,11 +269,26 @@ export const approveGroceryItem = asyncHandler(async (req, res) => {
     const adminId = req.user?._id || req.admin?._id || null;
     const contextPlatform = req.body?.platform || req.query?.platform;
     const contextRestaurantMongoId = req.body?.restaurantMongoId || req.query?.restaurantMongoId;
+    const scopedZoneIds = await getAdminScopedGroceryZoneIds(req.user || req.admin);
 
     const menus = await buildApprovalMenuCandidates({
       platform: contextPlatform,
       restaurantMongoId: contextRestaurantMongoId
     });
+    if (scopedZoneIds.length > 0) {
+      const allowedStores = await GroceryStore.find({
+        _id: { $in: menus.map((menu) => menu.restaurant).filter(Boolean) },
+        zoneId: { $in: scopedZoneIds }
+      })
+        .select('_id')
+        .lean();
+      const allowedStoreIds = new Set(allowedStores.map((store) => String(store._id)));
+      for (let index = menus.length - 1; index >= 0; index -= 1) {
+        if (!allowedStoreIds.has(String(menus[index]?.restaurant || ''))) {
+          menus.splice(index, 1);
+        }
+      }
+    }
     let foundItem = null;
     let foundMenu = null;
     let foundSection = null;
@@ -423,6 +473,7 @@ export const rejectGroceryItem = asyncHandler(async (req, res) => {
     const adminId = req.user?._id || req.admin?._id || null;
     const contextPlatform = req.body?.platform || req.query?.platform;
     const contextRestaurantMongoId = req.body?.restaurantMongoId || req.query?.restaurantMongoId;
+    const scopedZoneIds = await getAdminScopedGroceryZoneIds(req.user || req.admin);
 
     if (!reason || !reason.trim()) {
       return errorResponse(res, 400, 'Rejection reason is required');
@@ -432,6 +483,20 @@ export const rejectGroceryItem = asyncHandler(async (req, res) => {
       platform: contextPlatform,
       restaurantMongoId: contextRestaurantMongoId
     });
+    if (scopedZoneIds.length > 0) {
+      const allowedStores = await GroceryStore.find({
+        _id: { $in: menus.map((menu) => menu.restaurant).filter(Boolean) },
+        zoneId: { $in: scopedZoneIds }
+      })
+        .select('_id')
+        .lean();
+      const allowedStoreIds = new Set(allowedStores.map((store) => String(store._id)));
+      for (let index = menus.length - 1; index >= 0; index -= 1) {
+        if (!allowedStoreIds.has(String(menus[index]?.restaurant || ''))) {
+          menus.splice(index, 1);
+        }
+      }
+    }
     let foundItem = null;
     let foundMenu = null;
     let foundSection = null;

@@ -2,6 +2,7 @@ import GroceryStore from '../models/GroceryStore.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import Order from '../../order/models/Order.js';
 import GroceryProduct from '../models/GroceryProduct.js';
+import Zone from '../../admin/models/Zone.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
@@ -24,6 +25,30 @@ const buildStoreSearchOr = (search = '') => ([
   { phone: { $regex: search, $options: 'i' } },
   { email: { $regex: search, $options: 'i' } }
 ]);
+
+const getAdminAssignedZoneIds = (admin = null) => {
+  if (!admin || String(admin?.role || '').toLowerCase() === 'super_admin') return [];
+  return Array.from(
+    new Set(
+      (Array.isArray(admin?.assignedZoneIds) ? admin.assignedZoneIds : [])
+        .map((zone) => String(zone?._id || zone || '').trim())
+        .filter(Boolean)
+    )
+  );
+};
+
+const getScopedGroceryZoneIds = async (admin = null) => {
+  const assignedZoneIds = getAdminAssignedZoneIds(admin);
+  if (assignedZoneIds.length === 0) return [];
+  const zones = await Zone.find({
+    _id: { $in: assignedZoneIds },
+    isActive: true,
+    platform: 'mogrocery'
+  })
+    .select('_id')
+    .lean();
+  return zones.map((zone) => String(zone._id));
+};
 
 let lastLegacyHydrationAt = 0;
 const LEGACY_HYDRATION_COOLDOWN_MS = 60 * 1000;
@@ -210,6 +235,7 @@ export const getGroceryStores = asyncHandler(async (req, res) => {
     } = req.query;
 
     const query = {};
+    const scopedZoneIds = await getScopedGroceryZoneIds(req.user || req.admin);
 
     if (status === 'inactive') {
       query.isActive = false;
@@ -219,6 +245,9 @@ export const getGroceryStores = asyncHandler(async (req, res) => {
 
     if (search) {
       query.$or = buildStoreSearchOr(search);
+    }
+    if (scopedZoneIds.length > 0) {
+      query.zoneId = { $in: scopedZoneIds };
     }
 
     // Ensure old mogrocery stores from legacy Restaurant collection are visible
@@ -284,12 +313,16 @@ export const createGroceryStore = asyncHandler(async (req, res) => {
  */
 export const getGroceryStoreById = asyncHandler(async (req, res) => {
   try {
+    const scopedZoneIds = await getScopedGroceryZoneIds(req.user || req.admin);
     const store = await GroceryStore.findById(req.params.id)
       .select('-password')
       .lean();
 
     if (!store) {
       return errorResponse(res, 404, 'Grocery store not found');
+    }
+    if (scopedZoneIds.length > 0 && !scopedZoneIds.includes(String(store?.zoneId || ''))) {
+      return errorResponse(res, 403, 'Access denied for stores outside your assigned zones');
     }
 
     return successResponse(res, 200, 'Grocery store retrieved successfully', { store });
@@ -304,6 +337,17 @@ export const getGroceryStoreById = asyncHandler(async (req, res) => {
  */
 export const updateGroceryStore = asyncHandler(async (req, res) => {
   try {
+    const scopedZoneIds = await getScopedGroceryZoneIds(req.user || req.admin);
+    if (scopedZoneIds.length > 0) {
+      const existingStore = await GroceryStore.findById(req.params.id).select('zoneId').lean();
+      if (!existingStore) {
+        return errorResponse(res, 404, 'Grocery store not found');
+      }
+      if (!scopedZoneIds.includes(String(existingStore?.zoneId || ''))) {
+        return errorResponse(res, 403, 'Access denied for stores outside your assigned zones');
+      }
+    }
+
     const store = await GroceryStore.findOneAndUpdate(
       { _id: req.params.id },
       req.body,
@@ -326,6 +370,17 @@ export const updateGroceryStore = asyncHandler(async (req, res) => {
  */
 export const updateGroceryStoreStatus = asyncHandler(async (req, res) => {
   try {
+    const scopedZoneIds = await getScopedGroceryZoneIds(req.user || req.admin);
+    if (scopedZoneIds.length > 0) {
+      const existingStore = await GroceryStore.findById(req.params.id).select('zoneId').lean();
+      if (!existingStore) {
+        return errorResponse(res, 404, 'Grocery store not found');
+      }
+      if (!scopedZoneIds.includes(String(existingStore?.zoneId || ''))) {
+        return errorResponse(res, 403, 'Access denied for stores outside your assigned zones');
+      }
+    }
+
     const { isActive } = req.body;
     const statusUpdate = {
       isActive,
@@ -365,6 +420,17 @@ export const deleteGroceryStore = asyncHandler(async (req, res) => {
     }
 
     const storeObjectId = new mongoose.Types.ObjectId(id);
+    const scopedZoneIds = await getScopedGroceryZoneIds(req.user || req.admin);
+    if (scopedZoneIds.length > 0) {
+      const existingStore = await GroceryStore.findById(storeObjectId).select('zoneId').lean();
+      if (!existingStore) {
+        return errorResponse(res, 404, 'Grocery store not found');
+      }
+      if (!scopedZoneIds.includes(String(existingStore?.zoneId || ''))) {
+        return errorResponse(res, 403, 'Access denied for stores outside your assigned zones');
+      }
+    }
+
     const isLegacyStore = await isLegacyGroceryRestaurant(storeObjectId);
 
     const [store, legacyStore] = await Promise.all([

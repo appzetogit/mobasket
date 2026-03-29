@@ -1,10 +1,12 @@
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import GroceryProduct from '../../grocery/models/GroceryProduct.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import GroceryCategory from '../../grocery/models/GroceryCategory.js';
 import GrocerySubcategory from '../../grocery/models/GrocerySubcategory.js';
 import GroceryCategoryRequest from '../../grocery/models/GroceryCategoryRequest.js';
 import GrocerySubcategoryRequest from '../../grocery/models/GrocerySubcategoryRequest.js';
+import Zone from '../models/Zone.js';
 import mongoose from 'mongoose';
 
 const slugify = (value = '') =>
@@ -17,6 +19,30 @@ const slugify = (value = '') =>
 
 const getValidObjectId = (value) => (mongoose.Types.ObjectId.isValid(value) ? new mongoose.Types.ObjectId(value) : null);
 const isInlineBase64Image = (value = '') => /^data:image\//i.test(String(value).trim());
+
+const getAdminAssignedZoneIds = (admin = null) => {
+  if (!admin || String(admin?.role || '').toLowerCase() === 'super_admin') return [];
+  return Array.from(
+    new Set(
+      (Array.isArray(admin?.assignedZoneIds) ? admin.assignedZoneIds : [])
+        .map((zone) => String(zone?._id || zone || '').trim())
+        .filter(Boolean)
+    )
+  );
+};
+
+const getScopedGroceryZoneIds = async (admin = null) => {
+  const assignedZoneIds = getAdminAssignedZoneIds(admin);
+  if (assignedZoneIds.length === 0) return [];
+  const zones = await Zone.find({
+    _id: { $in: assignedZoneIds },
+    isActive: true,
+    platform: 'mogrocery'
+  })
+    .select('_id')
+    .lean();
+  return zones.map((zone) => String(zone._id));
+};
 
 const sanitizeProductImages = (product) => {
   if (!product || !Array.isArray(product.images)) return product;
@@ -171,6 +197,7 @@ export const getPendingGroceryProducts = asyncHandler(async (req, res) => {
   try {
     const { page = 1, limit = 50, storeId } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
+    const scopedZoneIds = await getScopedGroceryZoneIds(req.user || req.admin);
 
     const filter = {
       approvalStatus: 'pending'
@@ -180,13 +207,23 @@ export const getPendingGroceryProducts = asyncHandler(async (req, res) => {
       filter.storeId = storeId;
     }
 
+    if (scopedZoneIds.length > 0) {
+      const scopedStores = await GroceryStore.find({ zoneId: { $in: scopedZoneIds } })
+        .select('_id')
+        .lean();
+      const scopedStoreIds = scopedStores.map((store) => store._id);
+      filter.storeId = filter.storeId
+        ? { $in: scopedStoreIds.filter((id) => String(id) === String(filter.storeId)) }
+        : { $in: scopedStoreIds };
+    }
+
     const [products, total] = await Promise.all([
       GroceryProduct.find(filter)
         .select(PENDING_GROCERY_PRODUCT_LIST_PROJECTION)
         .populate('category', 'name slug section')
         .populate('subcategories', 'name slug')
         .populate('subcategory', 'name slug')
-        .populate('storeId', 'name email phone')
+        .populate('storeId', 'name email phone zoneId')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit))
@@ -216,6 +253,7 @@ export const getPendingGroceryProducts = asyncHandler(async (req, res) => {
 export const getPendingGroceryProductById = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
+    const scopedZoneIds = await getScopedGroceryZoneIds(req.user || req.admin);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return errorResponse(res, 400, 'Invalid product ID');
@@ -228,11 +266,14 @@ export const getPendingGroceryProductById = asyncHandler(async (req, res) => {
       .populate('category', 'name slug section')
       .populate('subcategories', 'name slug')
       .populate('subcategory', 'name slug')
-      .populate('storeId', 'name email phone')
+      .populate('storeId', 'name email phone zoneId')
       .lean();
 
     if (!product) {
       return errorResponse(res, 404, 'Pending product not found');
+    }
+    if (scopedZoneIds.length > 0 && !scopedZoneIds.includes(String(product?.storeId?.zoneId || ''))) {
+      return errorResponse(res, 403, 'Access denied for products outside your assigned zones');
     }
 
     return successResponse(res, 200, 'Pending product retrieved successfully', {
@@ -251,6 +292,7 @@ export const getPendingGroceryProductById = asyncHandler(async (req, res) => {
 export const approveGroceryProduct = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
+    const scopedZoneIds = await getScopedGroceryZoneIds(req.user || req.admin);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return errorResponse(res, 400, 'Invalid product ID');
@@ -259,6 +301,12 @@ export const approveGroceryProduct = asyncHandler(async (req, res) => {
     const existingProduct = await GroceryProduct.findById(id).lean();
     if (!existingProduct) {
       return errorResponse(res, 404, 'Product not found');
+    }
+    if (scopedZoneIds.length > 0) {
+      const store = await GroceryProduct.findById(id).populate('storeId', 'zoneId').select('storeId').lean();
+      if (!scopedZoneIds.includes(String(store?.storeId?.zoneId || ''))) {
+        return errorResponse(res, 403, 'Access denied for products outside your assigned zones');
+      }
     }
 
     const requestResolutionUpdate = await resolveRequestedCategoryAndSubcategories(existingProduct, req?.admin?._id || null);
@@ -295,9 +343,17 @@ export const rejectGroceryProduct = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
     const { reason = '' } = req.body;
+    const scopedZoneIds = await getScopedGroceryZoneIds(req.user || req.admin);
 
     if (!mongoose.Types.ObjectId.isValid(id)) {
       return errorResponse(res, 400, 'Invalid product ID');
+    }
+
+    if (scopedZoneIds.length > 0) {
+      const store = await GroceryProduct.findById(id).populate('storeId', 'zoneId').select('storeId').lean();
+      if (!scopedZoneIds.includes(String(store?.storeId?.zoneId || ''))) {
+        return errorResponse(res, 403, 'Access denied for products outside your assigned zones');
+      }
     }
 
     const product = await GroceryProduct.findByIdAndUpdate(

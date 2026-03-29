@@ -374,6 +374,9 @@ export default function OrdersTable({
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex flex-col gap-1">
                       <span className="text-sm font-medium text-slate-700">{formatRestaurantName(order.restaurant)}</span>
+                      {order.restaurantPhone && (
+                        <span className="text-xs text-slate-500">{order.restaurantPhone}</span>
+                      )}
                       {order.restaurantPlatform && (
                         <span className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${String(order.restaurantPlatform).toLowerCase() === "mogrocery"
                           ? "bg-emerald-100 text-emerald-700"

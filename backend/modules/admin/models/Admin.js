@@ -58,6 +58,19 @@ const adminSchema = new mongoose.Schema({
       message: 'sidebarAccess must be an array of strings'
     }
   },
+  assignedZoneIds: {
+    type: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Zone'
+    }],
+    default: [],
+    validate: {
+      validator: function (value) {
+        return Array.isArray(value);
+      },
+      message: 'assignedZoneIds must be an array'
+    }
+  },
   role: {
     type: String,
     enum: ['super_admin', 'admin', 'moderator'],
@@ -90,6 +103,7 @@ const adminSchema = new mongoose.Schema({
 adminSchema.index({ email: 1 }, { unique: true });
 adminSchema.index({ role: 1 });
 adminSchema.index({ isActive: 1 });
+adminSchema.index({ assignedZoneIds: 1 });
 
 // Hash password before saving
 adminSchema.pre('save', async function(next) {

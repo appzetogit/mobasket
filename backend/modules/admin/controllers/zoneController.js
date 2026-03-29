@@ -11,6 +11,17 @@ const buildPlatformQuery = (platform) => {
     : { platform: 'mogrocery' };
 };
 
+const getAdminAssignedZoneIds = (admin = null) => {
+  if (!admin || String(admin?.role || '').toLowerCase() === 'super_admin') return [];
+  return Array.from(
+    new Set(
+      (Array.isArray(admin?.assignedZoneIds) ? admin.assignedZoneIds : [])
+        .map((zone) => String(zone?._id || zone || '').trim())
+        .filter(Boolean)
+    )
+  );
+};
+
 /** Validate and normalize layers (inner, outer, outermost) with coordinates and deliveryCharge */
 const validateLayers = (layers) => {
   if (!layers || !Array.isArray(layers)) return null;
@@ -67,6 +78,15 @@ export const getZones = asyncHandler(async (req, res) => {
 
     // Build query
     const query = buildPlatformQuery(platform);
+    const assignedZoneIds = getAdminAssignedZoneIds(req.user);
+
+    if (assignedZoneIds.length > 0) {
+      query._id = {
+        $in: assignedZoneIds
+          .filter((id) => mongoose.Types.ObjectId.isValid(id))
+          .map((id) => new mongoose.Types.ObjectId(id))
+      };
+    }
 
     if (search) {
       query.$or = [
@@ -127,9 +147,15 @@ export const getZoneById = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
     const { platform } = req.query;
+    const assignedZoneIds = getAdminAssignedZoneIds(req.user);
+    const allowedZoneIds = assignedZoneIds
+      .filter((zoneId) => mongoose.Types.ObjectId.isValid(zoneId))
+      .map((zoneId) => new mongoose.Types.ObjectId(zoneId));
 
     const zone = await Zone.findOne({
-      _id: id,
+      _id: assignedZoneIds.length > 0
+        ? { $in: allowedZoneIds.filter((zoneId) => String(zoneId) === String(id)) }
+        : id,
       ...buildPlatformQuery(platform)
     })
       .populate({

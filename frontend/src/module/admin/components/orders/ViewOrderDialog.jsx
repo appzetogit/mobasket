@@ -307,9 +307,20 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order, isGrocery
           {order.restaurant && (
             <div className="border-t border-slate-200 pt-4">
               <h3 className="text-sm font-semibold text-slate-700 mb-4">{isGrocery ? "Store Information" : "Restaurant Information"}</h3>
-              <div className="space-y-1">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{isGrocery ? "Store Name" : "Restaurant Name"}</p>
-                <p className="text-sm font-medium text-slate-900">{order.restaurant}</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">{isGrocery ? "Store Name" : "Restaurant Name"}</p>
+                  <p className="text-sm font-medium text-slate-900">{order.restaurant}</p>
+                </div>
+                {order.restaurantPhone && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                      <Phone className="w-4 h-4" />
+                      Phone
+                    </p>
+                    <p className="text-sm font-medium text-slate-900">{order.restaurantPhone}</p>
+                  </div>
+                )}
               </div>
             </div>
           )}

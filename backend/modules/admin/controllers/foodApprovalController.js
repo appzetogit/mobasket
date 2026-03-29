@@ -2,6 +2,7 @@ import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import Menu from '../../restaurant/models/Menu.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import Zone from '../models/Zone.js';
 import winston from 'winston';
 import mongoose from 'mongoose';
 
@@ -30,6 +31,75 @@ const resolvePlatformMatch = (platformQuery) => {
 const isPendingApprovalStatus = (value) => {
   const normalized = String(value || '').trim().toLowerCase();
   return normalized === 'pending';
+};
+
+const getAdminAssignedZoneIds = (admin = null) => {
+  if (!admin || String(admin?.role || '').toLowerCase() === 'super_admin') return [];
+  return Array.from(
+    new Set(
+      (Array.isArray(admin?.assignedZoneIds) ? admin.assignedZoneIds : [])
+        .map((zone) => String(zone?._id || zone || '').trim())
+        .filter(Boolean)
+    )
+  );
+};
+
+const isPointInZone = (lat, lng, zoneCoordinates = []) => {
+  if (!Array.isArray(zoneCoordinates) || zoneCoordinates.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = zoneCoordinates.length - 1; i < zoneCoordinates.length; j = i++) {
+    const coordI = zoneCoordinates[i];
+    const coordJ = zoneCoordinates[j];
+    const xi = typeof coordI === 'object' ? Number(coordI.latitude ?? coordI.lat) : NaN;
+    const yi = typeof coordI === 'object' ? Number(coordI.longitude ?? coordI.lng) : NaN;
+    const xj = typeof coordJ === 'object' ? Number(coordJ.latitude ?? coordJ.lat) : NaN;
+    const yj = typeof coordJ === 'object' ? Number(coordJ.longitude ?? coordJ.lng) : NaN;
+    if (![xi, yi, xj, yj].every(Number.isFinite)) continue;
+    const intersect = ((yi > lng) !== (yj > lng)) &&
+      (lat < ((xj - xi) * (lng - yi)) / (yj - yi) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+};
+
+const getAdminScopedFoodZones = async (admin = null) => {
+  const assignedZoneIds = getAdminAssignedZoneIds(admin);
+  if (assignedZoneIds.length === 0) return [];
+
+  return Zone.find({
+    _id: { $in: assignedZoneIds },
+    isActive: true,
+    $or: [{ platform: 'mofood' }, { platform: { $exists: false } }]
+  })
+    .select('_id restaurantId coordinates')
+    .lean();
+};
+
+const restaurantMatchesScopedZones = (restaurant = {}, scopedZones = []) => {
+  if (!Array.isArray(scopedZones) || scopedZones.length === 0) return true;
+
+  const explicitZoneId = String(restaurant?.zoneId?._id || restaurant?.zoneId || '').trim();
+  if (explicitZoneId && scopedZones.some((zone) => String(zone?._id) === explicitZoneId)) {
+    return true;
+  }
+
+  const restaurantIdCandidates = new Set([
+    String(restaurant?._id || '').trim(),
+    String(restaurant?.restaurantId || '').trim()
+  ].filter(Boolean));
+
+  if (scopedZones.some((zone) => {
+    const linkedRestaurantId = String(zone?.restaurantId?._id || zone?.restaurantId || '').trim();
+    return linkedRestaurantId && restaurantIdCandidates.has(linkedRestaurantId);
+  })) {
+    return true;
+  }
+
+  const lat = Number(restaurant?.location?.latitude ?? restaurant?.location?.coordinates?.[1]);
+  const lng = Number(restaurant?.location?.longitude ?? restaurant?.location?.coordinates?.[0]);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false;
+
+  return scopedZones.some((zone) => isPointInZone(lat, lng, zone.coordinates || []));
 };
 
 const FOOD_APPROVAL_LIST_MENU_PROJECTION = [
@@ -102,9 +172,14 @@ const buildApprovalMenuCandidates = async ({ platform, restaurantMongoId }) => {
 export const getPendingFoodApprovals = asyncHandler(async (req, res) => {
   try {
     const platformMatch = resolvePlatformMatch(req.query?.platform || 'mofood');
-    const restaurants = await Restaurant.find({ platform: platformMatch })
-      .select('_id name restaurantId')
+    const scopedZones = await getAdminScopedFoodZones(req.user || req.admin);
+    let restaurants = await Restaurant.find({ platform: platformMatch })
+      .select('_id name restaurantId location zoneId')
       .lean();
+
+    if (scopedZones.length > 0) {
+      restaurants = restaurants.filter((restaurant) => restaurantMatchesScopedZones(restaurant, scopedZones));
+    }
 
     if (restaurants.length === 0) {
       return successResponse(res, 200, 'Pending food approvals retrieved successfully', {
@@ -269,11 +344,30 @@ export const approveFoodItem = asyncHandler(async (req, res) => {
     const adminId = req.user?._id || req.admin?._id || null;
     const contextPlatform = req.body?.platform || req.query?.platform || 'mofood';
     const contextRestaurantMongoId = req.body?.restaurantMongoId || req.query?.restaurantMongoId;
+    const scopedZones = await getAdminScopedFoodZones(req.user || req.admin);
 
     const menus = await buildApprovalMenuCandidates({
       platform: contextPlatform,
       restaurantMongoId: contextRestaurantMongoId
     });
+
+    if (scopedZones.length > 0) {
+      const allowedRestaurants = await Restaurant.find({
+        _id: { $in: menus.map((menu) => menu.restaurant).filter(Boolean) }
+      })
+        .select('_id restaurantId location zoneId')
+        .lean();
+      const allowedRestaurantIds = new Set(
+        allowedRestaurants
+          .filter((restaurant) => restaurantMatchesScopedZones(restaurant, scopedZones))
+          .map((restaurant) => String(restaurant._id))
+      );
+      for (let index = menus.length - 1; index >= 0; index -= 1) {
+        if (!allowedRestaurantIds.has(String(menus[index]?.restaurant || ''))) {
+          menus.splice(index, 1);
+        }
+      }
+    }
 
     let foundMenuMeta = null;
     for (const menu of menus) {
@@ -368,6 +462,7 @@ export const rejectFoodItem = asyncHandler(async (req, res) => {
     const adminId = req.user?._id || req.admin?._id || null;
     const contextPlatform = req.body?.platform || req.query?.platform || 'mofood';
     const contextRestaurantMongoId = req.body?.restaurantMongoId || req.query?.restaurantMongoId;
+    const scopedZones = await getAdminScopedFoodZones(req.user || req.admin);
 
     if (!reason || !reason.trim()) {
       return errorResponse(res, 400, 'Rejection reason is required');
@@ -377,6 +472,24 @@ export const rejectFoodItem = asyncHandler(async (req, res) => {
       platform: contextPlatform,
       restaurantMongoId: contextRestaurantMongoId
     });
+
+    if (scopedZones.length > 0) {
+      const allowedRestaurants = await Restaurant.find({
+        _id: { $in: menus.map((menu) => menu.restaurant).filter(Boolean) }
+      })
+        .select('_id restaurantId location zoneId')
+        .lean();
+      const allowedRestaurantIds = new Set(
+        allowedRestaurants
+          .filter((restaurant) => restaurantMatchesScopedZones(restaurant, scopedZones))
+          .map((restaurant) => String(restaurant._id))
+      );
+      for (let index = menus.length - 1; index >= 0; index -= 1) {
+        if (!allowedRestaurantIds.has(String(menus[index]?.restaurant || ''))) {
+          menus.splice(index, 1);
+        }
+      }
+    }
 
     let foundMenuMeta = null;
     for (const menu of menus) {

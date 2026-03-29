@@ -51,7 +51,9 @@ export const adminLogin = asyncHandler(async (req, res) => {
   }
 
   // Find admin by email (including password for comparison)
-  const admin = await Admin.findOne({ email: email.toLowerCase() }).select('+password');
+  const admin = await Admin.findOne({ email: email.toLowerCase() })
+    .select('+password')
+    .populate('assignedZoneIds', 'name zoneName platform isActive');
 
   if (!admin) {
     return errorResponse(res, 401, 'Invalid email or password');
@@ -103,6 +105,7 @@ export const getCurrentAdmin = asyncHandler(async (req, res) => {
     // req.user should be set by admin authentication middleware
     const admin = await Admin.findById(req.user._id || req.user.userId)
       .select('-password')
+      .populate('assignedZoneIds', 'name zoneName platform isActive')
       .lean();
 
     if (!admin) {

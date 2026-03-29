@@ -14,6 +14,7 @@ import { useOrdersManagement } from "../../components/orders/useOrdersManagement
 
 const AUTO_REFRESH_MS = 10000
 const SIDEBAR_ALERT_KEY = "adminAllOrdersAttentionUntil"
+const ORDERS_ALERT_COUNT_KEY = "adminAllOrdersAttentionState"
 
 const isAwaitingStoreDecision = (order) => {
   const backendStatus = String(order?.status || "").toLowerCase()
@@ -71,16 +72,54 @@ export default function CombinedOrdersPage() {
     [selectedOrder]
   )
 
+  const syncSidebarAlertState = (count) => {
+    const safeCount = Math.max(0, Number(count) || 0)
+    try {
+      const payload = JSON.stringify({
+        active: safeCount > 0,
+        count: safeCount,
+        updatedAt: Date.now(),
+      })
+      localStorage.setItem(ORDERS_ALERT_COUNT_KEY, payload)
+      if (safeCount > 0) {
+        localStorage.setItem(SIDEBAR_ALERT_KEY, "active")
+      } else {
+        localStorage.removeItem(SIDEBAR_ALERT_KEY)
+      }
+    } catch {
+      // Ignore storage sync failures.
+    }
+  }
+
+  const stopIncomingSound = () => {
+    pendingSoundRef.current = false
+    if (!audioRef.current) return
+    audioRef.current.pause()
+    audioRef.current.currentTime = 0
+  }
+
   const playIncomingSound = () => {
     if (!audioRef.current) {
       pendingSoundRef.current = true
       return
     }
 
+    audioRef.current.loop = true
     audioRef.current.currentTime = 0
     audioRef.current.play().catch(() => {
       pendingSoundRef.current = true
     })
+  }
+
+  const updateAlertStateFromHighlightedIds = (ids = []) => {
+    const alertCount = Array.isArray(ids) ? ids.length : 0
+
+    if (alertCount > 0) {
+      playIncomingSound()
+    } else {
+      stopIncomingSound()
+    }
+    syncSidebarAlertState(alertCount)
   }
 
   const fetchOrders = async ({ showLoader = true } = {}) => {
@@ -100,11 +139,14 @@ export default function CombinedOrdersPage() {
         (a, b) => new Date(b.createdAt || b.updatedAt || 0).getTime() - new Date(a.createdAt || a.updatedAt || 0).getTime()
       )
 
+      const hasBaselineOrders = knownOrderIdsRef.current.size > 0
       const incomingIds = []
-      for (const order of combinedOrders) {
-        const normalizedId = String(order.id || order._id || order.orderId)
-        if (!knownOrderIdsRef.current.has(normalizedId)) {
-          incomingIds.push(normalizedId)
+      if (hasBaselineOrders) {
+        for (const order of combinedOrders) {
+          const normalizedId = String(order.id || order._id || order.orderId)
+          if (!knownOrderIdsRef.current.has(normalizedId)) {
+            incomingIds.push(normalizedId)
+          }
         }
       }
 
@@ -114,28 +156,25 @@ export default function CombinedOrdersPage() {
         )
         return isAwaitingStoreDecision(matchingOrder)
       })
+      const nextHighlightedIds = (() => {
+        const previousIds = new Set((highlightedOrderIds || []).map((id) => String(id)))
+        const combinedIds = new Set([...previousIds, ...actionableIncomingIds])
+
+        return combinedOrders
+          .filter((order) => {
+            const normalizedId = String(order.id || order._id || order.orderId)
+            return combinedIds.has(normalizedId) && isAwaitingStoreDecision(order)
+          })
+          .map((order) => String(order.id || order._id || order.orderId))
+      })()
 
       if (isMountedRef.current) {
-        setHighlightedOrderIds((prev) => {
-          const previousIds = new Set((prev || []).map((id) => String(id)))
-          const combinedIds = new Set([...previousIds, ...actionableIncomingIds])
-
-          return combinedOrders
-            .filter((order) => {
-              const normalizedId = String(order.id || order._id || order.orderId)
-              return combinedIds.has(normalizedId) && isAwaitingStoreDecision(order)
-            })
-            .map((order) => String(order.id || order._id || order.orderId))
-        })
+        setHighlightedOrderIds(nextHighlightedIds)
       }
 
-      if (knownOrderIdsRef.current.size > 0 && actionableIncomingIds.length > 0) {
-        playIncomingSound()
-        try {
-          localStorage.setItem(SIDEBAR_ALERT_KEY, "active")
-        } catch {
-          // ignore storage errors
-        }
+      updateAlertStateFromHighlightedIds(nextHighlightedIds)
+
+      if (hasBaselineOrders && actionableIncomingIds.length > 0) {
         toast.info(`${actionableIncomingIds.length} new order${actionableIncomingIds.length > 1 ? "s" : ""} received`)
       }
 
@@ -176,18 +215,6 @@ export default function CombinedOrdersPage() {
   }, [])
 
   useEffect(() => {
-    try {
-      if (highlightedOrderIds.length > 0) {
-        localStorage.setItem(SIDEBAR_ALERT_KEY, "active")
-      } else {
-        localStorage.removeItem(SIDEBAR_ALERT_KEY)
-      }
-    } catch {
-      // ignore storage errors
-    }
-  }, [highlightedOrderIds])
-
-  useEffect(() => {
     audioRef.current = new Audio(alertSound)
     audioRef.current.preload = "auto"
     audioRef.current.volume = 0.85
@@ -203,7 +230,6 @@ export default function CombinedOrdersPage() {
         isAudioUnlockedRef.current = true
 
         if (pendingSoundRef.current) {
-          pendingSoundRef.current = false
           playIncomingSound()
         }
       } catch {
@@ -219,8 +245,7 @@ export default function CombinedOrdersPage() {
       window.removeEventListener("pointerdown", unlockAudio)
       window.removeEventListener("keydown", unlockAudio)
       if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current.currentTime = 0
+        stopIncomingSound()
         audioRef.current = null
       }
       pendingSoundRef.current = false
@@ -266,7 +291,9 @@ export default function CombinedOrdersPage() {
 
     try {
       await adminAPI.acceptStoreOrderFromAdmin(orderIdToUse)
-      setHighlightedOrderIds((prev) => prev.filter((id) => String(id) !== String(orderIdToUse)))
+      const nextHighlightedIds = highlightedOrderIds.filter((id) => String(id) !== String(orderIdToUse))
+      setHighlightedOrderIds(nextHighlightedIds)
+      updateAlertStateFromHighlightedIds(nextHighlightedIds)
       toast.success(
         String(order.restaurantPlatform || "").toLowerCase() === "mogrocery"
           ? `Order ${order.orderId} accepted by store and riders notified`
@@ -291,7 +318,9 @@ export default function CombinedOrdersPage() {
 
     try {
       await adminAPI.rejectStoreOrderFromAdmin(orderIdToUse, reason.trim())
-      setHighlightedOrderIds((prev) => prev.filter((id) => String(id) !== String(orderIdToUse)))
+      const nextHighlightedIds = highlightedOrderIds.filter((id) => String(id) !== String(orderIdToUse))
+      setHighlightedOrderIds(nextHighlightedIds)
+      updateAlertStateFromHighlightedIds(nextHighlightedIds)
       toast.success(
         String(order.restaurantPlatform || "").toLowerCase() === "mogrocery"
           ? `Order ${order.orderId} rejected by store`
@@ -321,8 +350,10 @@ export default function CombinedOrdersPage() {
           (currentOrder) => String(currentOrder.id || currentOrder._id || currentOrder.orderId) !== String(orderIdToUse)
         )
       )
-      setHighlightedOrderIds((prev) => prev.filter((id) => String(id) !== String(orderIdToUse)))
+      const nextHighlightedIds = highlightedOrderIds.filter((id) => String(id) !== String(orderIdToUse))
+      setHighlightedOrderIds(nextHighlightedIds)
       knownOrderIdsRef.current.delete(String(orderIdToUse))
+      updateAlertStateFromHighlightedIds(nextHighlightedIds)
     } catch (error) {
       console.error("Error deleting order:", error)
       toast.error(error?.response?.data?.message || "Failed to delete order")

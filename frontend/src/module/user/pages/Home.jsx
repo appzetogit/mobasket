@@ -993,68 +993,6 @@ export default function Home() {
     };
   }, [showVegModePopup]);
 
-  const fetchHeroBanners = useCallback(async ({ showLoader = false } = {}) => {
-    try {
-      if (showLoader) {
-        setLoadingBanners(true);
-      }
-      const response = await api.get("/hero-banners/public");
-      if (response.data.success && response.data.data.banners) {
-        const banners = response.data.data.banners;
-        setHeroBannersData(banners);
-        // Extract image URLs for display
-        setHeroBannerImages(banners.map((b) => b.imageUrl || b));
-        hasLoadedHeroBannersRef.current = true;
-      }
-    } catch (error) {
-      console.error("Error fetching hero banners:", error);
-      if (showLoader || !hasLoadedHeroBannersRef.current) {
-        // Fallback to empty array if the initial API load fails
-        setHeroBannerImages([]);
-        setHeroBannersData([]);
-      }
-    } finally {
-      if (showLoader) {
-        setLoadingBanners(false);
-      }
-    }
-  }, []);
-
-  // Fetch hero banners from API
-  useEffect(() => {
-    fetchHeroBanners({ showLoader: true });
-  }, [fetchHeroBanners]);
-
-  useEffect(() => {
-    const refreshHeroBanners = () => {
-      fetchHeroBanners();
-    };
-
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        fetchHeroBanners();
-      }
-    };
-
-    const handleStorage = (event) => {
-      if (event.key === HERO_BANNER_SYNC_STORAGE_KEY) {
-        fetchHeroBanners();
-      }
-    };
-
-    window.addEventListener("focus", refreshHeroBanners);
-    window.addEventListener(HERO_BANNER_SYNC_EVENT, refreshHeroBanners);
-    window.addEventListener("storage", handleStorage);
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-
-    return () => {
-      window.removeEventListener("focus", refreshHeroBanners);
-      window.removeEventListener(HERO_BANNER_SYNC_EVENT, refreshHeroBanners);
-      window.removeEventListener("storage", handleStorage);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, [fetchHeroBanners]);
-
   // Fetch fallback categories from backend API (used only when restaurant-derived categories are unavailable)
   useEffect(() => {
     const fetchRealCategories = async () => {
@@ -1325,6 +1263,70 @@ export default function Home() {
     selectedHomeZoneId && selectedHomeZoneId !== "auto" ? selectedHomeZoneId : zoneId;
   const hasManualZoneSelection =
     Boolean(selectedHomeZoneId) && selectedHomeZoneId !== "auto";
+
+  const fetchHeroBanners = useCallback(async ({ showLoader = false } = {}) => {
+    try {
+      if (showLoader) {
+        setLoadingBanners(true);
+      }
+      const params = { platform: "mofood" };
+      if (effectiveHomeZoneId) {
+        params.zoneId = effectiveHomeZoneId;
+      }
+
+      const response = await api.get("/hero-banners/public", { params });
+      if (response.data.success && response.data.data.banners) {
+        const banners = response.data.data.banners;
+        setHeroBannersData(banners);
+        setHeroBannerImages(banners.map((b) => b.imageUrl || b));
+        hasLoadedHeroBannersRef.current = true;
+      }
+    } catch (error) {
+      console.error("Error fetching hero banners:", error);
+      if (showLoader || !hasLoadedHeroBannersRef.current) {
+        setHeroBannerImages([]);
+        setHeroBannersData([]);
+      }
+    } finally {
+      if (showLoader) {
+        setLoadingBanners(false);
+      }
+    }
+  }, [effectiveHomeZoneId]);
+
+  useEffect(() => {
+    fetchHeroBanners({ showLoader: true });
+  }, [fetchHeroBanners]);
+
+  useEffect(() => {
+    const refreshHeroBanners = () => {
+      fetchHeroBanners();
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchHeroBanners();
+      }
+    };
+
+    const handleStorage = (event) => {
+      if (event.key === HERO_BANNER_SYNC_STORAGE_KEY) {
+        fetchHeroBanners();
+      }
+    };
+
+    window.addEventListener("focus", refreshHeroBanners);
+    window.addEventListener(HERO_BANNER_SYNC_EVENT, refreshHeroBanners);
+    window.addEventListener("storage", handleStorage);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("focus", refreshHeroBanners);
+      window.removeEventListener(HERO_BANNER_SYNC_EVENT, refreshHeroBanners);
+      window.removeEventListener("storage", handleStorage);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [fetchHeroBanners]);
 
   useEffect(() => {
     const handleUserLocationChanged = () => {
