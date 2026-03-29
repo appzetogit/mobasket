@@ -655,7 +655,19 @@ export const getOrders = asyncHandler(async (req, res) => {
     const deliveryIds = Array.from(
       new Set(
         orders
-          .map((order) => String(order?.deliveryPartnerId || '').trim())
+          .flatMap((order) => {
+            const ids = [
+              String(order?.deliveryPartnerId || '').trim(),
+              String(order?.assignmentInfo?.lastRejectedBy || '').trim(),
+              String(order?.assignmentInfo?.deliveryPartnerId || '').trim(),
+            ];
+
+            const rejectedIds = Array.isArray(order?.assignmentInfo?.rejectedDeliveryPartnerIds)
+              ? order.assignmentInfo.rejectedDeliveryPartnerIds.map((id) => String(id || '').trim())
+              : [];
+
+            return [...ids, ...rejectedIds];
+          })
           .filter((id) => mongoose.Types.ObjectId.isValid(id))
       )
     ).map((id) => new mongoose.Types.ObjectId(id));
@@ -762,6 +774,10 @@ export const getOrders = asyncHandler(async (req, res) => {
       // Get customer phone (unmasked - show full number for admin)
       const user = userMap.get(String(order.userId || '')) || null;
       const delivery = deliveryMap.get(String(order.deliveryPartnerId || '')) || null;
+      const assignmentDelivery =
+        deliveryMap.get(String(order.assignmentInfo?.deliveryPartnerId || '')) || null;
+      const lastRejectedDelivery =
+        deliveryMap.get(String(order.assignmentInfo?.lastRejectedBy || '')) || null;
       const customerPhone = user?.phone || '';
       const restaurantPhone = restaurantContactMap.get(String(order.restaurantId || '')) || '';
 
@@ -927,6 +943,23 @@ export const getOrders = asyncHandler(async (req, res) => {
         deliveryPartnerId: delivery?._id?.toString?.() || (order.deliveryPartnerId ? String(order.deliveryPartnerId) : null),
         deliveryPartnerName: delivery?.name || null,
         deliveryPartnerPhone: delivery?.phone || null,
+        assignmentInfo: {
+          assignedBy: order.assignmentInfo?.assignedBy || null,
+          assignedAt: order.assignmentInfo?.assignedAt || null,
+          notificationPhase: order.assignmentInfo?.notificationPhase || null,
+          deliveryPartnerId: order.assignmentInfo?.deliveryPartnerId || null,
+          acceptedFromNotification: Boolean(order.assignmentInfo?.acceptedFromNotification),
+          acceptedByName: assignmentDelivery?.name || delivery?.name || null,
+          acceptedByPhone: assignmentDelivery?.phone || delivery?.phone || null,
+          lastRejectedBy: order.assignmentInfo?.lastRejectedBy || null,
+          lastRejectedByName: lastRejectedDelivery?.name || null,
+          lastRejectedByPhone: lastRejectedDelivery?.phone || null,
+          lastRejectedAt: order.assignmentInfo?.lastRejectedAt || null,
+          lastRejectionReason: order.assignmentInfo?.lastRejectionReason || null,
+          rejectedDeliveryPartnerIds: Array.isArray(order.assignmentInfo?.rejectedDeliveryPartnerIds)
+            ? order.assignmentInfo.rejectedDeliveryPartnerIds
+            : [],
+        },
         estimatedDeliveryTime: order.estimatedDeliveryTime || 30,
         deliveredAt: order.deliveredAt,
         cancellationReason: order.cancellationReason || null,

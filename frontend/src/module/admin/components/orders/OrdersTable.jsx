@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react"
-import { Eye, Download, Loader2, CheckCircle2, XCircle, BellRing, Info, Trash2 } from "lucide-react"
+import { Eye, Download, Loader2, CheckCircle2, XCircle, BellRing, Info, Trash2, Bike } from "lucide-react"
 
 const getStatusColor = (orderStatus, isGrocery = false) => {
   // Grocery (Blinkit-style) status colors
@@ -88,6 +88,7 @@ export default function OrdersTable({
   enableRiderActions = false,
   onResendRiderNotification,
   onShowRiderDetails,
+  onAssignRider,
   onCancelOrder,
   onDeleteOrder,
   isGrocery = false,
@@ -100,6 +101,7 @@ export default function OrdersTable({
 }) {
   const [currentPage, setCurrentPage] = useState(1)
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' })
+  const [blinkPhase, setBlinkPhase] = useState(true)
   const itemsPerPage = serverPagination ? externalItemsPerPage : 10
   const effectiveCurrentPage = serverPagination ? externalCurrentPage : currentPage
   const totalPages = Math.max(1, Math.ceil((serverPagination ? totalItems : orders.length) / Math.max(1, itemsPerPage)))
@@ -110,6 +112,14 @@ export default function OrdersTable({
       setCurrentPage(1)
     }
   }, [orders.length, serverPagination])
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setBlinkPhase((prev) => !prev)
+    }, 700)
+
+    return () => window.clearInterval(intervalId)
+  }, [])
 
   // Sort orders based on sortConfig
   const sortedOrders = useMemo(() => {
@@ -126,7 +136,7 @@ export default function OrdersTable({
           aValue = a.orderId || ''
           bValue = b.orderId || ''
           break
-        case 'orderDate':
+        case 'orderDate': {
           // Parse date format "02 MAR 2026"
           const parseDate = (dateStr) => {
             const months = {
@@ -145,6 +155,7 @@ export default function OrdersTable({
           aValue = parseDate(a.date || '')
           bValue = parseDate(b.date || '')
           break
+        }
         case 'customer':
           aValue = (a.customerName || '').toLowerCase()
           bValue = (b.customerName || '').toLowerCase()
@@ -329,17 +340,26 @@ export default function OrdersTable({
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-slate-100">
-            {paginatedOrders.map((order, index) => (
+            {paginatedOrders.map((order, index) => {
+              const isHighlighted = highlightedIdSet.has(String(order.id || order._id || order.orderId))
+              const highlightedRowClass = blinkPhase
+                ? "bg-red-50 ring-2 ring-red-300 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.35)]"
+                : "bg-amber-50 ring-2 ring-amber-300 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.45)]"
+
+              return (
               <tr
                 key={order.orderId}
-                className={`transition-colors ${highlightedIdSet.has(String(order.id || order._id || order.orderId))
-                  ? "bg-amber-50 hover:bg-amber-100 animate-pulse ring-1 ring-amber-300/70"
+                className={`transition-all duration-300 ${isHighlighted
+                  ? `${highlightedRowClass} hover:bg-red-100`
                   : "hover:bg-slate-50"
                   }`}
               >
                 {visibleColumns.si && (
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="text-sm font-medium text-slate-700">{(effectiveCurrentPage - 1) * itemsPerPage + index + 1}</span>
+                    <div className="flex items-center gap-2">
+                      {isHighlighted && <BellRing className={`w-4 h-4 ${blinkPhase ? "text-red-600" : "text-amber-600"}`} />}
+                      <span className="text-sm font-medium text-slate-700">{(effectiveCurrentPage - 1) * itemsPerPage + index + 1}</span>
+                    </div>
                   </td>
                 )}
                 {visibleColumns.orderId && (
@@ -502,6 +522,23 @@ export default function OrdersTable({
                           {order.cancellationReason}
                         </div>
                       )}
+                      {order.deliveryPartnerName && (
+                        <div className="text-[11px] font-medium text-emerald-700">
+                          Accepted by: {order.deliveryPartnerName}
+                        </div>
+                      )}
+                      {!order.deliveryPartnerName && order.assignmentInfo?.lastRejectedByName && (
+                        <div className="text-[11px] font-medium text-amber-700">
+                          Last declined by: {order.assignmentInfo.lastRejectedByName}
+                        </div>
+                      )}
+                      {!order.deliveryPartnerName &&
+                        Array.isArray(order.assignmentInfo?.rejectedDeliveryPartnerIds) &&
+                        order.assignmentInfo.rejectedDeliveryPartnerIds.length > 0 && (
+                          <div className="text-[11px] text-slate-500">
+                            Declined by {order.assignmentInfo.rejectedDeliveryPartnerIds.length} rider{order.assignmentInfo.rejectedDeliveryPartnerIds.length > 1 ? "s" : ""}
+                          </div>
+                        )}
                     </div>
                   </td>
                 )}
@@ -566,6 +603,20 @@ export default function OrdersTable({
                               <XCircle className="w-4 h-4" />
                             </button>
                           </>
+                        )}
+                      {enableRiderActions &&
+                        typeof onAssignRider === "function" &&
+                        Boolean(order?.zoneId) &&
+                        !order.deliveryPartnerId &&
+                        !order.deliveryPartnerName &&
+                        ["preparing", "ready"].includes(String(order.status || "").toLowerCase()) && (
+                          <button
+                            onClick={() => onAssignRider(order)}
+                            className="p-1.5 rounded text-violet-600 hover:bg-violet-50 transition-colors"
+                            title={order.assignmentInfo?.lastRejectedAt ? "Reassign rider from this zone" : "Assign rider from this zone"}
+                          >
+                            <Bike className="w-4 h-4" />
+                          </button>
                         )}
                       {enableRiderActions &&
                         typeof onResendRiderNotification === "function" &&
@@ -671,7 +722,8 @@ export default function OrdersTable({
                   </td>
                 )}
               </tr>
-            ))}
+              )
+            })}
           </tbody>
         </table>
       </div>

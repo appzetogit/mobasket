@@ -1,9 +1,12 @@
 import { useMemo, useState, useEffect, useRef } from "react"
 import { useLocation } from "react-router-dom"
-import { BellRing, Loader2 } from "lucide-react"
+import { BellRing, Loader2, Search, Bike } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
 import alertSound from "@/assets/audio/alert.mp3"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import OrdersTopbar from "../../components/orders/OrdersTopbar"
 import OrdersTable from "../../components/orders/OrdersTable"
 import FilterPanel from "../../components/orders/FilterPanel"
@@ -35,11 +38,19 @@ export default function CombinedOrdersPage() {
   const [processingRefund, setProcessingRefund] = useState(null)
   const [refundModalOpen, setRefundModalOpen] = useState(false)
   const [selectedOrderForRefund, setSelectedOrderForRefund] = useState(null)
+  const [isAssignRiderOpen, setIsAssignRiderOpen] = useState(false)
+  const [selectedOrderForAssignment, setSelectedOrderForAssignment] = useState(null)
+  const [deliveryPartners, setDeliveryPartners] = useState([])
+  const [deliveryPartnersLoading, setDeliveryPartnersLoading] = useState(false)
+  const [deliverySearchQuery, setDeliverySearchQuery] = useState("")
+  const [assigningDeliveryPartnerId, setAssigningDeliveryPartnerId] = useState("")
   const knownOrderIdsRef = useRef(new Set())
   const isMountedRef = useRef(true)
   const audioRef = useRef(null)
   const pendingSoundRef = useRef(false)
   const isAudioUnlockedRef = useRef(false)
+  const highlightedOrderIdsRef = useRef([])
+  const isStoppingAudioRef = useRef(false)
 
   const {
     searchQuery,
@@ -72,6 +83,39 @@ export default function CombinedOrdersPage() {
     [selectedOrder]
   )
 
+  const availableDeliveryPartnersForSelectedOrder = useMemo(() => {
+    const requiredZoneId = String(selectedOrderForAssignment?.zoneId || "").trim()
+    const normalizedSearch = String(deliverySearchQuery || "").trim().toLowerCase()
+
+    return (Array.isArray(deliveryPartners) ? deliveryPartners : []).filter((partner) => {
+      const isOnline = Boolean(partner?.availability?.isOnline)
+      if (!isOnline) return false
+
+      const partnerZoneIds = Array.isArray(partner?.availability?.zones)
+        ? partner.availability.zones
+            .map((zone) => String(zone?._id || zone?.id || zone || "").trim())
+            .filter(Boolean)
+        : []
+
+      if (requiredZoneId && !partnerZoneIds.includes(requiredZoneId)) {
+        return false
+      }
+
+      if (!normalizedSearch) return true
+
+      const haystack = [
+        partner?.name,
+        partner?.phone,
+        partner?.deliveryId,
+        partner?.zone,
+      ]
+        .map((value) => String(value || "").toLowerCase())
+        .join(" ")
+
+      return haystack.includes(normalizedSearch)
+    })
+  }, [deliveryPartners, deliverySearchQuery, selectedOrderForAssignment])
+
   const syncSidebarAlertState = (count) => {
     const safeCount = Math.max(0, Number(count) || 0)
     try {
@@ -94,28 +138,44 @@ export default function CombinedOrdersPage() {
   const stopIncomingSound = () => {
     pendingSoundRef.current = false
     if (!audioRef.current) return
+    isStoppingAudioRef.current = true
     audioRef.current.pause()
     audioRef.current.currentTime = 0
   }
 
-  const playIncomingSound = () => {
+  const playIncomingSound = async () => {
     if (!audioRef.current) {
       pendingSoundRef.current = true
       return
     }
 
+    isStoppingAudioRef.current = false
     audioRef.current.loop = true
-    audioRef.current.currentTime = 0
-    audioRef.current.play().catch(() => {
+    if (audioRef.current.paused || audioRef.current.ended) {
+      audioRef.current.currentTime = 0
+    }
+    try {
+      await audioRef.current.play()
+      pendingSoundRef.current = false
+    } catch {
       pendingSoundRef.current = true
-    })
+    }
+  }
+
+  const ensureIncomingSound = async () => {
+    if (!highlightedOrderIdsRef.current.length) {
+      stopIncomingSound()
+      return
+    }
+
+    await playIncomingSound()
   }
 
   const updateAlertStateFromHighlightedIds = (ids = []) => {
     const alertCount = Array.isArray(ids) ? ids.length : 0
 
     if (alertCount > 0) {
-      playIncomingSound()
+      ensureIncomingSound()
     } else {
       stopIncomingSound()
     }
@@ -157,7 +217,7 @@ export default function CombinedOrdersPage() {
         return isAwaitingStoreDecision(matchingOrder)
       })
       const nextHighlightedIds = (() => {
-        const previousIds = new Set((highlightedOrderIds || []).map((id) => String(id)))
+        const previousIds = new Set((highlightedOrderIdsRef.current || []).map((id) => String(id)))
         const combinedIds = new Set([...previousIds, ...actionableIncomingIds])
 
         return combinedOrders
@@ -171,6 +231,7 @@ export default function CombinedOrdersPage() {
       if (isMountedRef.current) {
         setHighlightedOrderIds(nextHighlightedIds)
       }
+      highlightedOrderIdsRef.current = nextHighlightedIds
 
       updateAlertStateFromHighlightedIds(nextHighlightedIds)
 
@@ -215,6 +276,10 @@ export default function CombinedOrdersPage() {
   }, [])
 
   useEffect(() => {
+    highlightedOrderIdsRef.current = Array.isArray(highlightedOrderIds) ? highlightedOrderIds : []
+  }, [highlightedOrderIds])
+
+  useEffect(() => {
     audioRef.current = new Audio(alertSound)
     audioRef.current.preload = "auto"
     audioRef.current.volume = 0.85
@@ -230,21 +295,62 @@ export default function CombinedOrdersPage() {
         isAudioUnlockedRef.current = true
 
         if (pendingSoundRef.current) {
-          playIncomingSound()
+          ensureIncomingSound()
         }
       } catch {
         // browser still waiting for a direct user gesture
       }
     }
 
+    const handleAudioPaused = () => {
+      if (isStoppingAudioRef.current) {
+        isStoppingAudioRef.current = false
+        return
+      }
+      if (highlightedOrderIdsRef.current.length > 0) {
+        pendingSoundRef.current = true
+      }
+    }
+
+    const handleAudioEnded = () => {
+      if (highlightedOrderIdsRef.current.length > 0) {
+        pendingSoundRef.current = true
+      }
+    }
+
+    audioRef.current.addEventListener("pause", handleAudioPaused)
+    audioRef.current.addEventListener("ended", handleAudioEnded)
+
     window.addEventListener("pointerdown", unlockAudio, { once: true })
     window.addEventListener("keydown", unlockAudio, { once: true })
     unlockAudio()
 
+    const retryPendingSound = () => {
+      if (pendingSoundRef.current && highlightedOrderIdsRef.current.length > 0) {
+        ensureIncomingSound()
+      }
+    }
+
+    window.addEventListener("focus", retryPendingSound)
+    document.addEventListener("visibilitychange", retryPendingSound)
+    const watchdogId = window.setInterval(() => {
+      if (highlightedOrderIdsRef.current.length > 0) {
+        const audioIsPaused = !audioRef.current || audioRef.current.paused || audioRef.current.ended
+        if (pendingSoundRef.current || audioIsPaused) {
+          ensureIncomingSound()
+        }
+      }
+    }, 2500)
+
     return () => {
       window.removeEventListener("pointerdown", unlockAudio)
       window.removeEventListener("keydown", unlockAudio)
+      window.removeEventListener("focus", retryPendingSound)
+      document.removeEventListener("visibilitychange", retryPendingSound)
+      window.clearInterval(watchdogId)
       if (audioRef.current) {
+        audioRef.current.removeEventListener("pause", handleAudioPaused)
+        audioRef.current.removeEventListener("ended", handleAudioEnded)
         stopIncomingSound()
         audioRef.current = null
       }
@@ -290,9 +396,10 @@ export default function CombinedOrdersPage() {
     }
 
     try {
-      await adminAPI.acceptStoreOrderFromAdmin(orderIdToUse)
+      const response = await adminAPI.acceptStoreOrderFromAdmin(orderIdToUse)
       const nextHighlightedIds = highlightedOrderIds.filter((id) => String(id) !== String(orderIdToUse))
       setHighlightedOrderIds(nextHighlightedIds)
+      highlightedOrderIdsRef.current = nextHighlightedIds
       updateAlertStateFromHighlightedIds(nextHighlightedIds)
       toast.success(
         String(order.restaurantPlatform || "").toLowerCase() === "mogrocery"
@@ -300,9 +407,69 @@ export default function CombinedOrdersPage() {
           : `Order ${order.orderId} accepted by restaurant and riders notified`
       )
       await fetchOrders({ showLoader: false })
+
+      const assignedRider = response?.data?.data?.rider
+      const acceptedAlreadyAssigned = Boolean(response?.data?.data?.accepted)
+      if (!assignedRider && !acceptedAlreadyAssigned) {
+        await openAssignRiderDialog(order)
+      }
     } catch (error) {
       console.error("Error accepting order from combined admin page:", error)
       toast.error(error?.response?.data?.message || "Failed to accept order")
+    }
+  }
+
+  const openAssignRiderDialog = async (order) => {
+    setSelectedOrderForAssignment(order)
+    setDeliverySearchQuery("")
+    setIsAssignRiderOpen(true)
+    setDeliveryPartnersLoading(true)
+
+    try {
+      const response = await adminAPI.getDeliveryPartners({
+        limit: 300,
+        includeAvailability: true,
+        isActive: true,
+      })
+
+      const partners = response?.data?.data?.deliveryPartners || []
+      setDeliveryPartners(Array.isArray(partners) ? partners : [])
+    } catch (error) {
+      console.error("Error fetching delivery partners for manual assignment:", error)
+      toast.error(error?.response?.data?.message || "Failed to load delivery partners")
+      setDeliveryPartners([])
+    } finally {
+      setDeliveryPartnersLoading(false)
+    }
+  }
+
+  const handleAssignRider = async (deliveryPartner) => {
+    const orderIdToUse =
+      selectedOrderForAssignment?.id ||
+      selectedOrderForAssignment?._id ||
+      selectedOrderForAssignment?.orderId
+
+    const deliveryPartnerId = deliveryPartner?._id || deliveryPartner?.id
+
+    if (!orderIdToUse || !deliveryPartnerId) {
+      toast.error("Order or delivery partner is missing")
+      return
+    }
+
+    try {
+      setAssigningDeliveryPartnerId(String(deliveryPartnerId))
+      await adminAPI.assignOrderToDeliveryPartner(orderIdToUse, deliveryPartnerId)
+      toast.success(`Assigned ${deliveryPartner.name || "delivery partner"} to order ${selectedOrderForAssignment?.orderId}`)
+      setIsAssignRiderOpen(false)
+      setSelectedOrderForAssignment(null)
+      setDeliveryPartners([])
+      setDeliverySearchQuery("")
+      await fetchOrders({ showLoader: false })
+    } catch (error) {
+      console.error("Error assigning delivery partner manually:", error)
+      toast.error(error?.response?.data?.message || "Failed to assign rider")
+    } finally {
+      setAssigningDeliveryPartnerId("")
     }
   }
 
@@ -320,6 +487,7 @@ export default function CombinedOrdersPage() {
       await adminAPI.rejectStoreOrderFromAdmin(orderIdToUse, reason.trim())
       const nextHighlightedIds = highlightedOrderIds.filter((id) => String(id) !== String(orderIdToUse))
       setHighlightedOrderIds(nextHighlightedIds)
+      highlightedOrderIdsRef.current = nextHighlightedIds
       updateAlertStateFromHighlightedIds(nextHighlightedIds)
       toast.success(
         String(order.restaurantPlatform || "").toLowerCase() === "mogrocery"
@@ -352,6 +520,7 @@ export default function CombinedOrdersPage() {
       )
       const nextHighlightedIds = highlightedOrderIds.filter((id) => String(id) !== String(orderIdToUse))
       setHighlightedOrderIds(nextHighlightedIds)
+      highlightedOrderIdsRef.current = nextHighlightedIds
       knownOrderIdsRef.current.delete(String(orderIdToUse))
       updateAlertStateFromHighlightedIds(nextHighlightedIds)
     } catch (error) {
@@ -472,6 +641,88 @@ export default function CombinedOrdersPage() {
         onConfirm={handleRefundConfirm}
         isProcessing={processingRefund !== null}
       />
+      <Dialog
+        open={isAssignRiderOpen}
+        onOpenChange={(open) => {
+          setIsAssignRiderOpen(open)
+          if (!open) {
+            setSelectedOrderForAssignment(null)
+            setDeliverySearchQuery("")
+            setAssigningDeliveryPartnerId("")
+          }
+        }}
+      >
+        <DialogContent className="max-w-2xl bg-white p-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-200">
+            <DialogTitle className="flex items-center gap-2 text-slate-900">
+              <Bike className="w-5 h-5 text-violet-600" />
+              Assign Delivery Boy
+            </DialogTitle>
+            <DialogDescription className="text-slate-600">
+              {selectedOrderForAssignment?.orderId
+                ? `Choose an online delivery boy for order ${selectedOrderForAssignment.orderId}. Only riders from the same zone are shown.`
+                : "Choose an online delivery boy from the same zone."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+              <Input
+                value={deliverySearchQuery}
+                onChange={(event) => setDeliverySearchQuery(event.target.value)}
+                placeholder="Search rider by name, phone, ID..."
+                className="pl-9"
+              />
+            </div>
+          </div>
+
+          <div className="max-h-[60vh] overflow-y-auto px-6 py-4 space-y-3">
+            {deliveryPartnersLoading ? (
+              <div className="py-12 flex flex-col items-center justify-center gap-3">
+                <Loader2 className="w-6 h-6 animate-spin text-violet-600" />
+                <p className="text-sm text-slate-500">Loading available delivery boys...</p>
+              </div>
+            ) : availableDeliveryPartnersForSelectedOrder.length === 0 ? (
+              <div className="py-12 text-center">
+                <p className="text-sm font-medium text-slate-700">No online delivery boys found for this zone.</p>
+                <p className="text-xs text-slate-500 mt-1">Try again when a rider comes online in this zone.</p>
+              </div>
+            ) : (
+              availableDeliveryPartnersForSelectedOrder.map((partner) => {
+                const partnerId = String(partner?._id || partner?.id || "")
+                const isAssigning = assigningDeliveryPartnerId === partnerId
+                return (
+                  <div
+                    key={partnerId}
+                    className="flex items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-semibold text-slate-900 truncate">{partner?.name || "Delivery Boy"}</p>
+                        <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                          Online
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1">{partner?.phone || "No phone"}</p>
+                      <p className="text-xs text-slate-500">{partner?.deliveryId || "No rider ID"}</p>
+                      <p className="text-xs text-slate-500">{partner?.zone || "Zone not available"}</p>
+                    </div>
+                    <Button
+                      type="button"
+                      onClick={() => handleAssignRider(partner)}
+                      disabled={Boolean(assigningDeliveryPartnerId)}
+                      className="bg-violet-600 hover:bg-violet-700 text-white"
+                    >
+                      {isAssigning ? <Loader2 className="w-4 h-4 animate-spin" /> : "Assign"}
+                    </Button>
+                  </div>
+                )
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
       <OrdersTable
         orders={filteredOrders}
         visibleColumns={visibleColumns}
@@ -481,6 +732,8 @@ export default function CombinedOrdersPage() {
         onAdminStoreAccept={handleAdminAcceptStoreOrder}
         onAdminStoreReject={handleAdminRejectStoreOrder}
         enableDirectAcceptAction
+        enableRiderActions
+        onAssignRider={openAssignRiderDialog}
         onDeleteOrder={handleDeleteOrder}
         highlightedOrderIds={highlightedOrderIds}
       />

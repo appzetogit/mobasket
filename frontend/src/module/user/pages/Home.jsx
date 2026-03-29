@@ -1244,9 +1244,11 @@ export default function Home() {
     isInService,
     isOutOfService,
     loading: zoneLoading,
+    refreshZone,
   } = useZone(location);
   const [availableZones, setAvailableZones] = useState([]);
   const [selectedHomeZoneId, setSelectedHomeZoneId] = useState(getInitialHomeZoneSelection);
+  const [locationRefreshTick, setLocationRefreshTick] = useState(0);
   const [showToast, setShowToast] = useState(false);
   const [showManageCollections, setShowManageCollections] = useState(false);
   const [selectedRestaurantSlug, setSelectedRestaurantSlug] = useState(null);
@@ -1330,8 +1332,9 @@ export default function Home() {
 
   useEffect(() => {
     const handleUserLocationChanged = () => {
-      if (selectedHomeZoneId === "auto") return;
       let source = "";
+      let shouldResetToAutoZone = false;
+
       try {
         source = String(localStorage.getItem("userLocationSource") || "")
           .trim()
@@ -1340,16 +1343,27 @@ export default function Home() {
         source = "";
       }
 
-      if (source === "saved" || source === "current") {
+      shouldResetToAutoZone =
+        selectedHomeZoneId !== "auto" && (source === "saved" || source === "current");
+
+      if (shouldResetToAutoZone) {
         setSelectedHomeZoneId("auto");
       }
+
+      if ((selectedHomeZoneId === "auto" || shouldResetToAutoZone) && typeof refreshZone === "function") {
+        setTimeout(() => {
+          refreshZone();
+        }, 0);
+      }
+
+      setLocationRefreshTick((prev) => prev + 1);
     };
 
     window.addEventListener("userLocationChanged", handleUserLocationChanged);
     return () => {
       window.removeEventListener("userLocationChanged", handleUserLocationChanged);
     };
-  }, [selectedHomeZoneId]);
+  }, [refreshZone, selectedHomeZoneId]);
 
   useEffect(() => {
     try {
@@ -1828,7 +1842,7 @@ export default function Home() {
   // Fetch restaurants when appliedFilters change
   useEffect(() => {
     fetchRestaurants(appliedFilters);
-  }, [appliedFilters, fetchRestaurants]);
+  }, [appliedFilters, fetchRestaurants, locationRefreshTick]);
 
   useEffect(() => {
     const refresh = () => {

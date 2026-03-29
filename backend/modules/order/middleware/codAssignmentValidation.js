@@ -31,10 +31,25 @@ export const validateOrderAssignmentPayload = async (req, res, next) => {
     }
 
     const deliveryPartner = await Delivery.findById(deliveryPartnerId)
-      .select('_id name status isActive')
+      .select('_id name status isActive availability.isOnline availability.zones')
       .lean();
     if (!deliveryPartner || deliveryPartner.isActive === false) {
       return errorResponse(res, 404, 'Delivery partner not found or inactive');
+    }
+
+    if (!deliveryPartner?.availability?.isOnline) {
+      return errorResponse(res, 400, 'Selected delivery partner is currently offline');
+    }
+
+    const orderZoneId = String(order?.assignmentInfo?.zoneId || '').trim();
+    const deliveryZoneIds = Array.isArray(deliveryPartner?.availability?.zones)
+      ? deliveryPartner.availability.zones
+          .map((zone) => String(zone?._id || zone || '').trim())
+          .filter(Boolean)
+      : [];
+
+    if (orderZoneId && !deliveryZoneIds.includes(orderZoneId)) {
+      return errorResponse(res, 400, 'Selected delivery partner is not available in this order zone');
     }
 
     const codValidation = await validateCODLimitBeforeAssignment({

@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from "react"
 import { useSearchParams } from "react-router-dom"
 import { Search, Download, ChevronDown, Eye, Trash2, User, Star, Settings, FileText, FileSpreadsheet, Loader2, Check, Columns, ExternalLink, Calendar, MapPin, CreditCard, Mail, Phone, Bike, FileCheck } from "lucide-react"
 import { adminAPI } from "@/lib/api"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { exportDeliverymenToExcel, exportDeliverymenToPDF } from "../../components/deliveryman/deliverymanExportUtils"
 
@@ -16,9 +16,14 @@ export default function DeliverymanList() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [isViewOpen, setIsViewOpen] = useState(false)
+  const [openZoneMenuForId, setOpenZoneMenuForId] = useState("")
   const [selectedDeliveryman, setSelectedDeliveryman] = useState(null)
   const [viewDetails, setViewDetails] = useState(null)
   const [processing, setProcessing] = useState(false)
+  const [zoneSaving, setZoneSaving] = useState(false)
+  const [zonesLoading, setZonesLoading] = useState(false)
+  const [availableZones, setAvailableZones] = useState([])
+  const [selectedZoneIds, setSelectedZoneIds] = useState([])
   const [visibleColumns, setVisibleColumns] = useState({
     si: true,
     name: true,
@@ -78,6 +83,22 @@ export default function DeliverymanList() {
     }
   }
 
+  const fetchZones = async () => {
+    try {
+      setZonesLoading(true)
+      const response = await adminAPI.getZones({ isActive: true, limit: 500 })
+      const zones = response?.data?.data?.zones || []
+      setAvailableZones(zones)
+      return zones
+    } catch (err) {
+      console.error("Error fetching zones:", err)
+      alert(err.response?.data?.message || "Failed to load zones")
+      return []
+    } finally {
+      setZonesLoading(false)
+    }
+  }
+
   // Fetch on mount
   useEffect(() => {
     fetchDeliverymen()
@@ -90,7 +111,6 @@ export default function DeliverymanList() {
     }, 500) // Wait 500ms after user stops typing
 
     return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchQuery])
 
   useEffect(() => {
@@ -153,6 +173,85 @@ export default function DeliverymanList() {
   const handleDelete = (deliveryman) => {
     setSelectedDeliveryman(deliveryman)
     setIsDeleteOpen(true)
+  }
+
+  const handleZoneMenuOpenChange = async (deliveryman, open) => {
+    if (!open) {
+      if (openZoneMenuForId === String(deliveryman?._id || "")) {
+        setOpenZoneMenuForId("")
+      }
+      return
+    }
+
+    setSelectedDeliveryman(deliveryman)
+    setSelectedZoneIds((deliveryman.assignedZones || []).map((zone) => String(zone?._id || zone)))
+    setOpenZoneMenuForId(String(deliveryman?._id || ""))
+
+    if (availableZones.length === 0) {
+      await fetchZones()
+    }
+  }
+
+  const handleZoneToggle = (zoneId) => {
+    setSelectedZoneIds((prev) =>
+      prev.includes(zoneId)
+        ? prev.filter((id) => id !== zoneId)
+        : [...prev, zoneId]
+    )
+  }
+
+  const handleSaveZones = async () => {
+    if (!selectedDeliveryman?._id) return
+
+    try {
+      setZoneSaving(true)
+      const response = await adminAPI.updateDeliveryPartnerZones(selectedDeliveryman._id, selectedZoneIds)
+      const updatedAssignedZones = response?.data?.data?.delivery?.assignedZones || []
+
+      setDeliverymen((prev) =>
+        prev.map((deliveryman) =>
+          deliveryman._id === selectedDeliveryman._id
+            ? {
+                ...deliveryman,
+                assignedZones: updatedAssignedZones,
+                zone: updatedAssignedZones.length > 0
+                  ? updatedAssignedZones.map((zone) => zone.name).join(", ")
+                  : "Unassigned",
+                availability: {
+                  ...deliveryman.availability,
+                  zones: updatedAssignedZones.map((zone) => zone._id)
+                }
+              }
+            : deliveryman
+        )
+      )
+
+      if (String(viewDetails?._id || "") === String(selectedDeliveryman._id || "")) {
+        setViewDetails((prev) => prev ? {
+          ...prev,
+          assignedZones: updatedAssignedZones,
+          availability: {
+            ...prev.availability,
+            zones: updatedAssignedZones.map((zone) => zone._id)
+          }
+        } : prev)
+      }
+
+      setSelectedDeliveryman((prev) => prev ? {
+        ...prev,
+        assignedZones: updatedAssignedZones,
+        zone: updatedAssignedZones.length > 0
+          ? updatedAssignedZones.map((zone) => zone.name).join(", ")
+          : "Unassigned"
+      } : prev)
+      setOpenZoneMenuForId("")
+      alert(`Zones updated for ${selectedDeliveryman.name}`)
+    } catch (err) {
+      console.error("Error updating delivery partner zones:", err)
+      alert(err.response?.data?.message || "Failed to update delivery partner zones")
+    } finally {
+      setZoneSaving(false)
+    }
   }
 
   const confirmDelete = async () => {
@@ -397,8 +496,21 @@ export default function DeliverymanList() {
                           </td>
                         )}
                         {visibleColumns.zone && (
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm text-slate-700">{dm.zone}</span>
+                          <td className="px-6 py-4">
+                            {dm.assignedZones?.length > 0 ? (
+                              <div className="flex flex-wrap gap-2 max-w-[240px]">
+                                {dm.assignedZones.map((zone) => (
+                                  <span
+                                    key={zone._id}
+                                    className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 border border-emerald-200"
+                                  >
+                                    {zone.name}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-sm text-slate-400">Unassigned</span>
+                            )}
                           </td>
                         )}
                         {visibleColumns.totalOrders && (
@@ -418,6 +530,87 @@ export default function DeliverymanList() {
                         {visibleColumns.actions && (
                           <td className="px-6 py-4 whitespace-nowrap text-center">
                             <div className="flex items-center justify-center gap-2">
+                              <DropdownMenu
+                                open={openZoneMenuForId === String(dm._id)}
+                                onOpenChange={(open) => handleZoneMenuOpenChange(dm, open)}
+                              >
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    disabled={zoneSaving && selectedDeliveryman?._id === dm._id}
+                                    className="px-2.5 py-1.5 rounded bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs font-semibold inline-flex items-center gap-1"
+                                    title="Assign Zones"
+                                  >
+                                    Zones
+                                    <ChevronDown className="w-3.5 h-3.5" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent
+                                  align="start"
+                                  className="z-50 w-72 rounded-xl border border-slate-200 bg-white p-2 shadow-xl"
+                                  onCloseAutoFocus={(event) => event.preventDefault()}
+                                >
+                                  <DropdownMenuLabel className="text-slate-900">
+                                    Assign Zones
+                                  </DropdownMenuLabel>
+                                  <div className="px-2 pb-2 text-xs text-slate-500">
+                                    Pick the zones this rider can serve.
+                                  </div>
+                                  <DropdownMenuSeparator />
+                                  {zonesLoading ? (
+                                    <div className="flex items-center justify-center gap-2 px-2 py-6 text-sm text-slate-500">
+                                      <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+                                      Loading zones...
+                                    </div>
+                                  ) : availableZones.length === 0 ? (
+                                    <div className="px-2 py-4 text-sm text-slate-500">
+                                      No active zones found.
+                                    </div>
+                                  ) : (
+                                    <div className="max-h-64 overflow-y-auto">
+                                      {availableZones.map((zone) => {
+                                        const zoneId = String(zone._id)
+                                        return (
+                                          <DropdownMenuCheckboxItem
+                                            key={zoneId}
+                                            checked={selectedZoneIds.includes(zoneId)}
+                                            onCheckedChange={() => handleZoneToggle(zoneId)}
+                                            onSelect={(event) => event.preventDefault()}
+                                            className="items-start"
+                                          >
+                                            <div className="flex flex-col">
+                                              <span className="font-medium text-slate-900">{zone.name || zone.zoneName}</span>
+                                              <span className="text-xs text-slate-500">{zone.serviceLocation || zone.country || "Zone"}</span>
+                                            </div>
+                                          </DropdownMenuCheckboxItem>
+                                        )
+                                      })}
+                                    </div>
+                                  )}
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onSelect={(event) => {
+                                      event.preventDefault()
+                                      setSelectedZoneIds([])
+                                    }}
+                                    className="text-slate-600"
+                                  >
+                                    Clear All
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    onSelect={(event) => {
+                                      event.preventDefault()
+                                      handleSaveZones()
+                                    }}
+                                    disabled={zoneSaving || zonesLoading}
+                                    className="bg-emerald-50 text-emerald-700 focus:bg-emerald-100 focus:text-emerald-800"
+                                  >
+                                    {zoneSaving && selectedDeliveryman?._id === dm._id ? (
+                                      <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : null}
+                                    Save Zones
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
                               <button
                                 onClick={() => handleView(dm)}
                                 className="p-1.5 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors"
@@ -816,6 +1009,23 @@ export default function DeliverymanList() {
 
                 {/* Additional Info */}
                 <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="text-xs font-semibold text-slate-500 uppercase">Assigned Zones</label>
+                    {viewDetails.assignedZones?.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {viewDetails.assignedZones.map((zone) => (
+                          <span
+                            key={zone._id}
+                            className="inline-flex items-center rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 border border-emerald-200"
+                          >
+                            {zone.name}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-slate-500 mt-1">No zones assigned</p>
+                    )}
+                  </div>
                   {viewDetails.signupMethod && (
                     <div>
                       <label className="text-xs font-semibold text-slate-500 uppercase">Signup Method</label>

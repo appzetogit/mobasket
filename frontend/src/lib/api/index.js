@@ -1546,12 +1546,20 @@ export const adminAPI = {
     return apiClient.get(API_ENDPOINTS.ADMIN.DELIVERY_PARTNERS, { params });
   },
 
+  assignOrderToDeliveryPartner: (orderId, deliveryPartnerId) => {
+    return apiClient.post('/admin/orders/assign', { orderId, deliveryPartnerId });
+  },
+
   // Update delivery partner status
   updateDeliveryPartnerStatus: (id, status, isActive = null) => {
     const payload = {};
     if (status) payload.status = status;
     if (isActive !== null) payload.isActive = isActive;
     return apiClient.patch(API_ENDPOINTS.ADMIN.DELIVERY_PARTNER_STATUS.replace(':id', id), payload);
+  },
+
+  updateDeliveryPartnerZones: (id, zoneIds = []) => {
+    return apiClient.patch(`/admin/delivery-partners/${id}/zones`, { zoneIds });
   },
 
   // Delete delivery partner

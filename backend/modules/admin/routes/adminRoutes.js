@@ -53,6 +53,7 @@ import {
   rejectDeliveryPartner,
   getDeliveryPartners,
   updateDeliveryPartnerStatus,
+  updateDeliveryPartnerZones,
   deleteDeliveryPartner,
   reverifyDeliveryPartner
 } from '../controllers/deliveryPartnerController.js';
@@ -374,6 +375,7 @@ router.post('/delivery-partners/:id/approve', approveDeliveryPartner);
 router.post('/delivery-partners/:id/reject', rejectDeliveryPartner);
 router.post('/delivery-partners/:id/reverify', reverifyDeliveryPartner);
 router.patch('/delivery-partners/:id/status', updateDeliveryPartnerStatus);
+router.patch('/delivery-partners/:id/zones', updateDeliveryPartnerZones);
 router.delete('/delivery-partners/:id', deleteDeliveryPartner);
 
 // Delivery Partner Bonus Management

@@ -2,6 +2,8 @@ import Order from '../models/Order.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { getDeliveryCODSummary } from '../../delivery/services/codLimitService.js';
+import { notifyDeliveryBoyNewOrder } from '../services/deliveryNotificationService.js';
+import etaEventService from '../services/etaEventService.js';
 
 /**
  * Assign order to delivery partner (manual assignment) with COD-limit validation.
@@ -39,6 +41,18 @@ export const assignOrder = asyncHandler(async (req, res) => {
       409,
       'Order is no longer assignable. It may have been assigned already or status changed.',
     );
+  }
+
+  try {
+    await notifyDeliveryBoyNewOrder(assignedOrder, deliveryPartner._id);
+  } catch (notifyError) {
+    console.error(`Failed to notify manually assigned delivery partner ${deliveryPartner._id} for order ${assignedOrder.orderId}:`, notifyError);
+  }
+
+  try {
+    await etaEventService.handleRiderAssigned(assignedOrder._id.toString(), deliveryPartner._id.toString());
+  } catch (etaError) {
+    console.error(`Failed to emit ETA rider-assigned event for order ${assignedOrder.orderId}:`, etaError);
   }
 
   const codSummary = await getDeliveryCODSummary(deliveryPartner._id);

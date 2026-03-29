@@ -428,7 +428,7 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order, isGrocery
           )}
 
           {/* Delivery Partner Information */}
-          {(order.deliveryPartnerName || order.deliveryPartnerPhone) && (
+          {(order.deliveryPartnerName || order.deliveryPartnerPhone || order.assignmentInfo?.lastRejectedByName) && (
             <div className="border-t border-slate-200 pt-4">
               <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
                 <Truck className="w-4 h-4" />
@@ -445,6 +445,52 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order, isGrocery
                   <div className="space-y-1">
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Phone</p>
                     <p className="text-sm font-medium text-slate-900">{order.deliveryPartnerPhone}</p>
+                  </div>
+                )}
+                {order.deliveryState?.acceptedAt && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Accepted At</p>
+                    <p className="text-sm font-medium text-slate-900">
+                      {new Date(order.deliveryState.acceptedAt).toLocaleString("en-GB", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      }).toUpperCase()}
+                    </p>
+                  </div>
+                )}
+                {order.assignmentInfo?.assignedBy && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Assignment Source</p>
+                    <p className="text-sm font-medium text-slate-900">{order.assignmentInfo.assignedBy}</p>
+                  </div>
+                )}
+                {order.assignmentInfo?.lastRejectedByName && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Last Declined By</p>
+                    <p className="text-sm font-medium text-amber-700">{order.assignmentInfo.lastRejectedByName}</p>
+                  </div>
+                )}
+                {order.assignmentInfo?.lastRejectedAt && (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Declined At</p>
+                    <p className="text-sm font-medium text-slate-900">
+                      {new Date(order.assignmentInfo.lastRejectedAt).toLocaleString("en-GB", {
+                        day: "2-digit",
+                        month: "short",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      }).toUpperCase()}
+                    </p>
+                  </div>
+                )}
+                {order.assignmentInfo?.lastRejectionReason && (
+                  <div className="space-y-1 md:col-span-2">
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Decline Reason</p>
+                    <p className="text-sm font-medium text-slate-900">{order.assignmentInfo.lastRejectionReason}</p>
                   </div>
                 )}
               </div>
