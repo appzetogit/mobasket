@@ -293,6 +293,10 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
     console.log(`⚠️ Order ${order.orderId} is cancelled. Cannot notify delivery partner.`);
     return { success: false, reason: 'Order is cancelled' };
   }
+  const requestedNotificationPhase = String(order?.assignmentInfo?.notificationPhase || '').toLowerCase();
+  if (requestedNotificationPhase === 'manual_only') {
+    return { success: false, reason: 'manual_assignment_only' };
+  }
   try {
     const io = await getIOInstance();
     
@@ -305,14 +309,19 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
       const OrderModel = await import('../models/Order.js');
       const latestOrder = await OrderModel.default
         .findById(order?._id || order?.id || order?.orderMongoId)
-        .select('status deliveryPartnerId deliveryState')
+        .select('status deliveryPartnerId deliveryState assignmentInfo.notificationPhase')
         .lean();
 
       const latestStatus = String(latestOrder?.status || '').toLowerCase();
       const latestPhase = String(latestOrder?.deliveryState?.currentPhase || '').toLowerCase();
       const latestDeliveryStateStatus = String(latestOrder?.deliveryState?.status || '').toLowerCase();
       const latestAssignedDeliveryId = String(latestOrder?.deliveryPartnerId || '');
+      const latestNotificationPhase = String(latestOrder?.assignmentInfo?.notificationPhase || '').toLowerCase();
       const targetDeliveryId = String(deliveryPartnerId || '');
+
+      if (latestNotificationPhase === 'manual_only') {
+        return { success: false, reason: 'manual_assignment_only' };
+      }
 
       const isAlreadyInProgress =
         latestStatus === 'out_for_delivery' ||
@@ -651,18 +660,27 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
     if (!deliveryPartnerIds || deliveryPartnerIds.length === 0) {
       return { success: false, notified: 0 };
     }
+    const requestedNotificationPhase = String(order?.assignmentInfo?.notificationPhase || '').toLowerCase();
+    if (requestedNotificationPhase === 'manual_only') {
+      return { success: false, notified: 0, reason: 'manual_assignment_only' };
+    }
 
     // Do not notify multiple partners if this order is already accepted/assigned/in-progress.
     try {
       const OrderModel = await import('../models/Order.js');
       const latestOrder = await OrderModel.default
         .findById(order?._id || order?.id || order?.orderMongoId)
-        .select('status deliveryPartnerId deliveryState')
+        .select('status deliveryPartnerId deliveryState assignmentInfo.notificationPhase')
         .lean();
 
       const latestStatus = String(latestOrder?.status || '').toLowerCase();
       const latestPhase = String(latestOrder?.deliveryState?.currentPhase || '').toLowerCase();
       const latestDeliveryStateStatus = String(latestOrder?.deliveryState?.status || '').toLowerCase();
+      const latestNotificationPhase = String(latestOrder?.assignmentInfo?.notificationPhase || '').toLowerCase();
+
+      if (latestNotificationPhase === 'manual_only') {
+        return { success: false, notified: 0, reason: 'manual_assignment_only' };
+      }
 
       const isAlreadyAssignedOrInProgress =
         Boolean(latestOrder?.deliveryPartnerId) ||
@@ -994,6 +1012,26 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
  */
 export async function notifyDeliveryBoyOrderReady(order, deliveryPartnerId) {
   try {
+    const requestedNotificationPhase = String(order?.assignmentInfo?.notificationPhase || '').toLowerCase();
+    if (requestedNotificationPhase === 'manual_only') {
+      return { success: false, reason: 'manual_assignment_only' };
+    }
+
+    const OrderModel = await import('../models/Order.js');
+    const latestOrder = await OrderModel.default
+      .findById(order?._id || order?.id || order?.orderMongoId)
+      .select('deliveryPartnerId assignmentInfo.notificationPhase')
+      .lean();
+
+    if (!latestOrder?.deliveryPartnerId) {
+      return { success: false, reason: 'order_not_assigned' };
+    }
+
+    const latestNotificationPhase = String(latestOrder?.assignmentInfo?.notificationPhase || '').toLowerCase();
+    if (latestNotificationPhase === 'manual_only') {
+      return { success: false, reason: 'manual_assignment_only' };
+    }
+
     const io = await getIOInstance();
     
     if (!io) {

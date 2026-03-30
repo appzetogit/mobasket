@@ -411,8 +411,8 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
       await adminAPI.acceptStoreOrderFromAdmin(orderIdToUse)
       toast.success(
         activePlatform === "mogrocery"
-          ? `Order ${order.orderId} accepted by store and riders notified`
-          : `Order ${order.orderId} accepted by restaurant and riders notified`
+          ? `Order ${order.orderId} accepted by store`
+          : `Order ${order.orderId} accepted by restaurant`
       )
       await fetchOrders({ showLoader: false, force: true })
     } catch (error) {

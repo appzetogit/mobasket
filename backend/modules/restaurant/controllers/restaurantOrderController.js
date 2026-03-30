@@ -714,6 +714,44 @@ export const markOrderPreparing = asyncHandler(async (req, res) => {
       }
     }
 
+    const shouldSkipDeliveryAssignment =
+      req.body?.skipDeliveryAssignment === true ||
+      String(req.body?.skipDeliveryAssignment || '').toLowerCase() === 'true';
+
+    if (shouldSkipDeliveryAssignment) {
+      const finalOrder = await Order.findByIdAndUpdate(
+        order._id,
+        {
+          $set: {
+            deliveryPartnerId: null,
+            'assignmentInfo.notificationPhase': 'manual_only',
+            'assignmentInfo.acceptedFromNotification': false,
+            'deliveryState.status': 'pending',
+            'deliveryState.currentPhase': 'assigned',
+          },
+          $unset: {
+            'assignmentInfo.priorityDeliveryPartnerIds': '',
+            'assignmentInfo.expandedDeliveryPartnerIds': '',
+            'assignmentInfo.priorityNotifiedAt': '',
+            'assignmentInfo.expandedNotifiedAt': '',
+            'assignmentInfo.deliveryPartnerId': '',
+            'assignmentInfo.assignedAt': '',
+            'assignmentInfo.assignedBy': '',
+            'deliveryState.acceptedAt': '',
+            'deliveryState.reachedPickupAt': '',
+            'deliveryState.orderIdConfirmedAt': '',
+            'deliveryState.routeToPickup': '',
+            'deliveryState.routeToDelivery': '',
+          },
+        },
+        { new: true }
+      );
+      return successResponse(res, 200, 'Order marked as preparing', {
+        order: finalOrder,
+        deliveryAssignmentSkipped: true
+      });
+    }
+
     // CRITICAL: Don't assign delivery partner if order is cancelled
     if (false && freshOrder.status === 'cancelled') {
       console.log(`⚠️ Order ${freshOrder.orderId} is cancelled. Cannot assign delivery partner.`);

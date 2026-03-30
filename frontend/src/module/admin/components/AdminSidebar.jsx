@@ -292,6 +292,16 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     setIsCollapsed(prev => !prev)
   }
 
+  const getExpandableSectionKey = (item, parentLabel = "") => {
+    const normalizedParent = String(parentLabel || "").toLowerCase().replace(/[^a-z0-9]+/g, "")
+    const normalizedLabel = String(item?.label || "").toLowerCase().replace(/[^a-z0-9]+/g, "")
+    const firstSubPath = Array.isArray(item?.subItems) && item.subItems.length > 0
+      ? String(item.subItems[0]?.path || "").toLowerCase().replace(/[^a-z0-9]+/g, "")
+      : ""
+
+    return [normalizedParent, normalizedLabel, firstSubPath].filter(Boolean).join("-")
+  }
+
   useEffect(() => {
     const storageKey = "adminAllOrdersAttentionUntil"
     const countStorageKey = "adminAllOrdersAttentionState"
@@ -334,45 +344,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     }
   }, [])
 
-  // Generate initial expanded state from menu data
-  const getInitialExpandedState = () => {
-    const storageKey = `adminSidebarExpanded:${platform}`
-    try {
-      const saved = localStorage.getItem(storageKey)
-      if (saved) {
-        return JSON.parse(saved)
-      }
-    } catch (e) {
-      console.error('Error loading sidebar state:', e)
-    }
-    const state = {}
-    menuData.forEach((item) => {
-      if (item.type === "section") {
-        item.items.forEach((subItem) => {
-          if (subItem.type === "expandable") {
-            state[subItem.label.toLowerCase().replace(/\s+/g, "")] = false
-          }
-        })
-      }
-    })
-    return state
-  }
-
-  const [expandedSections, setExpandedSections] = useState(getInitialExpandedState)
-
-  const buildCollapsedSectionsState = () => {
-    const state = {}
-    menuData.forEach((entry) => {
-      if (entry.type === "section") {
-        entry.items.forEach((subItem) => {
-          if (subItem.type === "expandable") {
-            state[subItem.label.toLowerCase().replace(/\s+/g, "")] = false
-          }
-        })
-      }
-    })
-    return state
-  }
+  const [openSectionKey, setOpenSectionKey] = useState(null)
 
   // Filter menu items based on search query
   const filteredMenuData = useMemo(() => {
@@ -439,36 +411,55 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     return location.pathname.startsWith(path)
   }
 
-  useEffect(() => {
-    const storageKey = `adminSidebarExpanded:${platform}`
-    try {
-      localStorage.setItem(storageKey, JSON.stringify(expandedSections))
-    } catch (e) {
-      console.error('Error saving sidebar state:', e)
-    }
-  }, [expandedSections, platform])
+  const autoExpandedSectionKeys = useMemo(() => {
+    if (!searchQuery.trim()) return new Set()
 
-  const effectiveExpandedSections =
-    location.pathname === "/admin"
-      ? buildCollapsedSectionsState()
-      : expandedSections
+    const query = searchQuery.toLowerCase().trim()
+    const nextKeys = new Set()
+
+    menuData.forEach((entry) => {
+      if (entry.type !== "section") return
+
+      entry.items.forEach((subItem) => {
+        if (subItem.type !== "expandable") return
+
+        const matchesLabel = subItem.label.toLowerCase().includes(query)
+        const hasMatchingSubItems = subItem.subItems?.some(
+          (si) => si.label.toLowerCase().includes(query)
+        )
+
+        if (matchesLabel || hasMatchingSubItems) {
+          nextKeys.add(getExpandableSectionKey(subItem, entry.label))
+        }
+      })
+    })
+
+    return nextKeys
+  }, [searchQuery, menuData])
+
+  useEffect(() => {
+    if (!openSectionKey) return
+
+    const availableKeys = new Set()
+    menuData.forEach((entry) => {
+      if (entry.type !== "section") return
+      entry.items.forEach((subItem) => {
+        if (subItem.type === "expandable") {
+          availableKeys.add(getExpandableSectionKey(subItem, entry.label))
+        }
+      })
+    })
+
+    if (!availableKeys.has(openSectionKey)) {
+      setOpenSectionKey(null)
+    }
+  }, [menuData, openSectionKey])
 
   const toggleSection = (sectionKey) => {
-    // Only one section open at a time. clicking an already-open section will close it.
-    setExpandedSections(prev => {
-      const isCurrently = !!prev[sectionKey]
-      const newState = {}
-      Object.keys(prev).forEach(k => {
-        newState[k] = false
-      })
-      if (!isCurrently) {
-        newState[sectionKey] = true
-      }
-      return newState
-    })
+    setOpenSectionKey((prev) => (prev === sectionKey ? null : sectionKey))
   }
 
-  const renderMenuItem = (item, index, isInSection = false) => {
+  const renderMenuItem = (item, index, isInSection = false, parentLabel = "") => {
     if (item.type === "link") {
       const Icon = iconMap[item.icon] || Utensils
       const isOrdersAttentionItem = item.path === "/admin/all-orders" && ordersAttentionActive
@@ -521,8 +512,10 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
 
     if (item.type === "expandable") {
       const Icon = iconMap[item.icon] || Utensils
-      const sectionKey = item.label.toLowerCase().replace(/\s+/g, "")
-      const isExpanded = effectiveExpandedSections[sectionKey] || false
+      const sectionKey = getExpandableSectionKey(item, parentLabel)
+      const isExpanded = searchQuery.trim()
+        ? autoExpandedSectionKeys.has(sectionKey)
+        : openSectionKey === sectionKey
 
       if (isCollapsed) {
         return (
@@ -826,34 +819,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
               placeholder="Search Menu..."
               value={searchQuery}
               onChange={(e) => {
-                const nextValue = e.target.value
-                setSearchQuery(nextValue)
-
-                const query = nextValue.toLowerCase().trim()
-                if (!query) return
-
-                setExpandedSections((prev) => {
-                  const nextExpandedState = { ...prev }
-
-                  menuData.forEach((item) => {
-                    if (item.type !== "section") return
-                    item.items.forEach((subItem) => {
-                      if (subItem.type !== "expandable") return
-
-                      const matchesLabel = subItem.label.toLowerCase().includes(query)
-                      const hasMatchingSubItems = subItem.subItems?.some(
-                        (si) => si.label.toLowerCase().includes(query)
-                      )
-
-                      if (matchesLabel || hasMatchingSubItems) {
-                        const sectionKey = subItem.label.toLowerCase().replace(/\s+/g, "")
-                        nextExpandedState[sectionKey] = true
-                      }
-                    })
-                  })
-
-                  return nextExpandedState
-                })
+                setSearchQuery(e.target.value)
               }}
               className={cn(
                 "w-full pl-9 py-2 bg-neutral-900 border border-neutral-800 rounded-lg text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-white/40 focus:border-white/40 transition-all duration-200 text-left",
@@ -904,7 +870,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
                     </div>
                   )}
                   <div className="space-y-1">
-                    {item.items.map((subItem, subIndex) => renderMenuItem(subItem, `${index}-${subIndex}`, true))}
+                    {item.items.map((subItem, subIndex) => renderMenuItem(subItem, `${index}-${subIndex}`, true, item.label))}
                   </div>
                 </div>
               )

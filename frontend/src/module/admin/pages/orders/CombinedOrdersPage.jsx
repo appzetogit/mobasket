@@ -293,6 +293,8 @@ export default function CombinedOrdersPage() {
         audioRef.current.currentTime = 0
         audioRef.current.muted = false
         isAudioUnlockedRef.current = true
+        window.removeEventListener("pointerdown", unlockAudio)
+        window.removeEventListener("keydown", unlockAudio)
 
         if (pendingSoundRef.current) {
           ensureIncomingSound()
@@ -321,8 +323,8 @@ export default function CombinedOrdersPage() {
     audioRef.current.addEventListener("pause", handleAudioPaused)
     audioRef.current.addEventListener("ended", handleAudioEnded)
 
-    window.addEventListener("pointerdown", unlockAudio, { once: true })
-    window.addEventListener("keydown", unlockAudio, { once: true })
+    window.addEventListener("pointerdown", unlockAudio)
+    window.addEventListener("keydown", unlockAudio)
     unlockAudio()
 
     const retryPendingSound = () => {
@@ -403,8 +405,8 @@ export default function CombinedOrdersPage() {
       updateAlertStateFromHighlightedIds(nextHighlightedIds)
       toast.success(
         String(order.restaurantPlatform || "").toLowerCase() === "mogrocery"
-          ? `Order ${order.orderId} accepted by store and riders notified`
-          : `Order ${order.orderId} accepted by restaurant and riders notified`
+          ? `Order ${order.orderId} accepted by store`
+          : `Order ${order.orderId} accepted by restaurant`
       )
       await fetchOrders({ showLoader: false })
 

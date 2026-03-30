@@ -249,6 +249,11 @@ const deliverySchema = new mongoose.Schema(
     cod: codSchema,
     // Metrics
     metrics: metricsSchema,
+    currentAssignedOrders: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
     // Public rating field for parity with Restaurant model.
     rating: {
       type: Number,

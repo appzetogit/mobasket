@@ -556,6 +556,9 @@ export const getOrders = asyncHandler(async (req, res) => {
               ]
             },
             {
+              'assignmentInfo.notificationPhase': { $ne: 'manual_only' }
+            },
+            {
               $or: [
                 {
                   'assignmentInfo.priorityDeliveryPartnerIds': {
@@ -868,6 +871,8 @@ export const acceptOrder = asyncHandler(async (req, res) => {
       const normalizedRejectedIds = extractRejectedDeliveryIds(assignmentInfo);
       const hasExplicitNotificationLists =
         normalizedPriorityIds.length > 0 || normalizedExpandedIds.length > 0;
+      const notificationPhase = String(assignmentInfo?.notificationPhase || '').toLowerCase();
+      const isManualAssignmentOnly = notificationPhase === 'manual_only';
       const orderZoneId = normalizeZoneId(assignmentInfo?.zoneId);
       const currentZoneIds = await getCurrentDeliveryZoneIds(delivery._id);
       const isSameZoneEligible = Boolean(orderZoneId) && currentZoneIds.includes(orderZoneId);
@@ -885,6 +890,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
                          normalizedExpandedIds.includes(normalizedCurrentId);
       const wasRejectedByCurrent = normalizedRejectedIds.includes(normalizedCurrentId);
       const allowSameZoneFallback =
+        !isManualAssignmentOnly &&
         !hasExplicitNotificationLists &&
         isSameZoneEligible &&
         ['preparing', 'ready'].includes(String(order.status || '').toLowerCase());
@@ -1475,11 +1481,18 @@ export const rejectOrder = asyncHandler(async (req, res) => {
       return errorResponse(res, 409, terminalOrderActionMessage(order, 'deny this order'));
     }
 
+    const deliveryStateStatus = String(order?.deliveryState?.status || '').toLowerCase();
+    const hasAcceptedAssignment =
+      Boolean(order?.deliveryState?.acceptedAt) ||
+      ['accepted', 'en_route_to_pickup', 'at_pickup', 'en_route_to_delivery', 'at_delivery', 'completed'].includes(deliveryStateStatus) ||
+      String(order?.assignmentInfo?.assignedBy || '').toLowerCase() === 'delivery_accept' ||
+      ['out_for_delivery', 'delivered'].includes(String(order?.status || '').toLowerCase());
+
     if (order.deliveryPartnerId && String(order.deliveryPartnerId) !== deliveryIdString) {
       return errorResponse(res, 409, 'Order is already assigned to another delivery partner.');
     }
 
-    if (order.deliveryPartnerId && String(order.deliveryPartnerId) === deliveryIdString) {
+    if (order.deliveryPartnerId && String(order.deliveryPartnerId) === deliveryIdString && hasAcceptedAssignment) {
       return errorResponse(res, 400, 'Order is already accepted by you and cannot be denied.');
     }
 
@@ -1505,11 +1518,16 @@ export const rejectOrder = asyncHandler(async (req, res) => {
     }
 
     const pullValues = deliveryIdObject ? [deliveryIdString, deliveryIdObject] : [deliveryIdString];
+    const denyQuery =
+      order.deliveryPartnerId && String(order.deliveryPartnerId) === deliveryIdString
+        ? { _id: order._id, deliveryPartnerId: delivery._id }
+        : {
+            _id: order._id,
+            $or: [{ deliveryPartnerId: { $exists: false } }, { deliveryPartnerId: null }],
+          };
+
     await Order.updateOne(
-      {
-        _id: order._id,
-        $or: [{ deliveryPartnerId: { $exists: false } }, { deliveryPartnerId: null }],
-      },
+      denyQuery,
       {
         $pull: {
           'assignmentInfo.priorityDeliveryPartnerIds': { $in: pullValues },
@@ -1519,6 +1537,11 @@ export const rejectOrder = asyncHandler(async (req, res) => {
           'assignmentInfo.rejectedDeliveryPartnerIds': deliveryIdString,
         },
         $set: {
+          deliveryPartnerId: null,
+          'assignmentInfo.deliveryPartnerId': null,
+          'assignmentInfo.assignedAt': null,
+          'assignmentInfo.assignedBy': null,
+          'assignmentInfo.acceptedFromNotification': false,
           'assignmentInfo.lastRejectedBy': deliveryIdString,
           'assignmentInfo.lastRejectedAt': new Date(),
           ...(reason ? { 'assignmentInfo.lastRejectionReason': reason } : {}),

@@ -73,6 +73,16 @@ const isAwaitingAdminApproval = (order) =>
   (order?.status === "confirmed" || order?.status === "pending" || order?.status === "scheduled") &&
   (order?.adminApprovalStatus === "pending" || !order?.adminApprovalStatus)
 
+const hasRiderAcceptedOrder = (order) => {
+  const deliveryStateStatus = String(order?.deliveryState?.status || "").toLowerCase()
+  return Boolean(
+    order?.deliveryState?.acceptedAt ||
+    ["accepted", "en_route_to_pickup", "at_pickup", "en_route_to_delivery", "at_delivery", "completed"].includes(deliveryStateStatus) ||
+    String(order?.assignmentInfo?.assignedBy || "").toLowerCase() === "delivery_accept" ||
+    ["out_for_delivery", "delivered"].includes(String(order?.status || "").toLowerCase())
+  )
+}
+
 export default function OrdersTable({
   orders,
   visibleColumns,
@@ -342,6 +352,15 @@ export default function OrdersTable({
           <tbody className="bg-white divide-y divide-slate-100">
             {paginatedOrders.map((order, index) => {
               const isHighlighted = highlightedIdSet.has(String(order.id || order._id || order.orderId))
+              const hasAcceptedRider = hasRiderAcceptedOrder(order)
+              const assignedDeliveryPartnerId = String(order?.deliveryPartnerId || "")
+              const lastRejectedById = String(order?.assignmentInfo?.lastRejectedBy || "")
+              const wasDisplayedRiderLastRejected =
+                assignedDeliveryPartnerId &&
+                lastRejectedById &&
+                assignedDeliveryPartnerId === lastRejectedById
+              const showAcceptedRider = Boolean(order.deliveryPartnerName) && hasAcceptedRider && !wasDisplayedRiderLastRejected
+              const showAssignedRider = Boolean(order.deliveryPartnerName) && !hasAcceptedRider && !wasDisplayedRiderLastRejected
               const highlightedRowClass = blinkPhase
                 ? "bg-red-50 ring-2 ring-red-300 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.35)]"
                 : "bg-amber-50 ring-2 ring-amber-300 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.45)]"
@@ -522,17 +541,22 @@ export default function OrdersTable({
                           {order.cancellationReason}
                         </div>
                       )}
-                      {order.deliveryPartnerName && (
+                      {showAcceptedRider && (
                         <div className="text-[11px] font-medium text-emerald-700">
                           Accepted by: {order.deliveryPartnerName}
                         </div>
                       )}
-                      {!order.deliveryPartnerName && order.assignmentInfo?.lastRejectedByName && (
+                      {showAssignedRider && (
+                        <div className="text-[11px] font-medium text-sky-700">
+                          Assigned to: {order.deliveryPartnerName}
+                        </div>
+                      )}
+                      {!showAcceptedRider && order.assignmentInfo?.lastRejectedByName && (
                         <div className="text-[11px] font-medium text-amber-700">
                           Last declined by: {order.assignmentInfo.lastRejectedByName}
                         </div>
                       )}
-                      {!order.deliveryPartnerName &&
+                      {!showAcceptedRider &&
                         Array.isArray(order.assignmentInfo?.rejectedDeliveryPartnerIds) &&
                         order.assignmentInfo.rejectedDeliveryPartnerIds.length > 0 && (
                           <div className="text-[11px] text-slate-500">
@@ -552,7 +576,7 @@ export default function OrdersTable({
                             <button
                               onClick={() => onAdminStoreAccept(order)}
                               className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-green-700"
-                              title={isGrocery ? "Accept order as store and notify riders" : "Accept order as restaurant and notify riders"}
+                              title={isGrocery ? "Accept order as store" : "Accept order as restaurant"}
                             >
                               <CheckCircle2 className="h-4 w-4" />
                               <span>Accept</span>

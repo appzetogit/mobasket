@@ -74,6 +74,22 @@ const getPaymentStatusColor = (paymentStatus) => {
 export default function ViewOrderDialog({ isOpen, onOpenChange, order, isGrocery = false, isLoading = false }) {
   if (!order) return null
 
+  const deliveryStateStatus = String(order?.deliveryState?.status || "").toLowerCase()
+  const hasAcceptedRider = Boolean(
+    order?.deliveryState?.acceptedAt ||
+    ["accepted", "en_route_to_pickup", "at_pickup", "en_route_to_delivery", "at_delivery", "completed"].includes(deliveryStateStatus) ||
+    String(order?.assignmentInfo?.assignedBy || "").toLowerCase() === "delivery_accept" ||
+    ["out_for_delivery", "delivered"].includes(String(order?.status || "").toLowerCase())
+  )
+  const assignedDeliveryPartnerId = String(order?.deliveryPartnerId || "")
+  const lastRejectedById = String(order?.assignmentInfo?.lastRejectedBy || "")
+  const wasDisplayedRiderLastRejected =
+    assignedDeliveryPartnerId &&
+    lastRejectedById &&
+    assignedDeliveryPartnerId === lastRejectedById
+  const showAcceptedRider = Boolean(order?.deliveryPartnerName) && hasAcceptedRider && !wasDisplayedRiderLastRejected
+  const showAssignedRider = Boolean(order?.deliveryPartnerName) && !hasAcceptedRider && !wasDisplayedRiderLastRejected
+
   // Debug: Log order data to check billImageUrl
   if (order.billImageUrl) {
     console.log('📸 Bill Image URL found:', order.billImageUrl)
@@ -428,26 +444,28 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order, isGrocery
           )}
 
           {/* Delivery Partner Information */}
-          {(order.deliveryPartnerName || order.deliveryPartnerPhone || order.assignmentInfo?.lastRejectedByName) && (
+          {(showAcceptedRider || showAssignedRider || order.assignmentInfo?.lastRejectedByName) && (
             <div className="border-t border-slate-200 pt-4">
               <h3 className="text-sm font-semibold text-slate-700 mb-4 flex items-center gap-2">
                 <Truck className="w-4 h-4" />
                 Delivery Partner
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {order.deliveryPartnerName && (
+                {(showAcceptedRider || showAssignedRider) && (
                   <div className="space-y-1">
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Name</p>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      {showAcceptedRider ? "Accepted By" : "Assigned To"}
+                    </p>
                     <p className="text-sm font-medium text-slate-900">{order.deliveryPartnerName}</p>
                   </div>
                 )}
-                {order.deliveryPartnerPhone && (
+                {(showAcceptedRider || showAssignedRider) && order.deliveryPartnerPhone && (
                   <div className="space-y-1">
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Phone</p>
                     <p className="text-sm font-medium text-slate-900">{order.deliveryPartnerPhone}</p>
                   </div>
                 )}
-                {order.deliveryState?.acceptedAt && (
+                {showAcceptedRider && order.deliveryState?.acceptedAt && (
                   <div className="space-y-1">
                     <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Accepted At</p>
                     <p className="text-sm font-medium text-slate-900">

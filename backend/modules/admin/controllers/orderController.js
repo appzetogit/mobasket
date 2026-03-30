@@ -1467,8 +1467,6 @@ export const approveOrderRequest = asyncHandler(async (req, res) => {
       console.error(`Failed to emit preparing update for approved order ${order.orderId}:`, notifError);
     }
 
-    void triggerDeliveryBroadcastForApprovedOrder(order, restaurantDoc);
-
     return successResponse(res, 200, 'Order approved successfully', {
       orderId: order.orderId,
       orderMongoId: order._id,
@@ -1516,6 +1514,10 @@ export const acceptOrderFromAdmin = asyncHandler(async (req, res) => {
 
     req.params.id = order._id.toString();
     req.restaurant = storeDocument;
+    req.body = {
+      ...(req.body || {}),
+      skipDeliveryAssignment: true
+    };
 
     return restaurantAcceptOrder(req, res);
   } catch (error) {
@@ -1665,52 +1667,14 @@ export const resendRiderNotification = asyncHandler(async (req, res) => {
 
     const restaurantDoc = await resolveRestaurantForOrder(order);
     if (!isOrderAdminApprovalAllowed(restaurantDoc)) {
-      return errorResponse(res, 400, 'Rider resend is allowed only for MoGrocery orders');
+      return errorResponse(res, 400, 'Manual rider assignment is enabled only for MoGrocery orders');
     }
 
-    if (order.status === 'cancelled' || order.status === 'delivered') {
-      return errorResponse(res, 400, 'Cannot resend rider notification for cancelled or delivered order');
-    }
-
-    if (order.status !== 'preparing') {
-      return errorResponse(res, 400, 'Rider notification resend is allowed only when order is in processing state');
-    }
-
-    // If already accepted by a rider, return acceptance details instead of re-broadcasting.
-    const acceptedOrder = await Order.findById(order._id)
-      .populate('deliveryPartnerId', 'name phone deliveryId')
-      .lean();
-
-    if (acceptedOrder?.deliveryPartnerId) {
-      return successResponse(res, 200, 'Order already accepted by a rider', {
-        orderId: acceptedOrder.orderId,
-        accepted: true,
-        rider: {
-          id: acceptedOrder.deliveryPartnerId?._id?.toString?.() || acceptedOrder.deliveryPartnerId?._id || null,
-          name: acceptedOrder.deliveryPartnerId?.name || null,
-          phone: acceptedOrder.deliveryPartnerId?.phone || null,
-          deliveryId: acceptedOrder.deliveryPartnerId?.deliveryId || null
-        },
-        acceptedAt: acceptedOrder.deliveryState?.acceptedAt || acceptedOrder.assignmentInfo?.assignedAt || null,
-        currentPhase: acceptedOrder.deliveryState?.currentPhase || null,
-        deliveryStatus: acceptedOrder.deliveryState?.status || null
-      });
-    }
-
-    if (String(order.adminApproval?.status || 'pending') !== 'approved') {
-      return errorResponse(res, 400, 'Order must be approved before notifying riders');
-    }
-
-    await triggerDeliveryBroadcastForApprovedOrder(order, restaurantDoc);
-
-    const refreshed = await Order.findById(order._id).lean();
-    return successResponse(res, 200, 'Rider notifications resent successfully', {
-      orderId: refreshed?.orderId || order.orderId,
-      accepted: Boolean(refreshed?.deliveryPartnerId),
-      notificationPhase: refreshed?.assignmentInfo?.notificationPhase || null,
-      priorityNotifiedAt: refreshed?.assignmentInfo?.priorityNotifiedAt || null,
-      expandedNotifiedAt: refreshed?.assignmentInfo?.expandedNotifiedAt || null
-    });
+    return errorResponse(
+      res,
+      400,
+      'Automatic rider notifications are disabled. Please assign a delivery boy manually from admin.'
+    );
   } catch (error) {
     console.error('Error resending rider notification:', error);
     return errorResponse(res, 500, 'Failed to resend rider notification');
