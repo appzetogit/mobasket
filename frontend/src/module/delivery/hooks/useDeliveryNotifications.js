@@ -151,6 +151,14 @@ const formatPolledOrderForNotification = (orderData = {}) => {
     deliveryFee: orderData?.pricing?.deliveryFee || 0,
     paymentMethod: orderData?.payment?.method || 'cash',
     payment: orderData?.payment || null,
+    deliveryPartnerId:
+      orderData?.deliveryPartnerId?._id?.toString?.() ||
+      orderData?.deliveryPartnerId?.toString?.() ||
+      orderData?.assignmentInfo?.deliveryPartnerId ||
+      null,
+    assignmentInfo: orderData?.assignmentInfo || null,
+    deliveryState: orderData?.deliveryState || null,
+    phase: orderData?.phase || '',
     createdAt: orderData?.createdAt,
     estimatedDeliveryTime: orderData?.estimatedDeliveryTime || 30,
     note: orderData?.note || '',
@@ -349,6 +357,37 @@ export const useDeliveryNotifications = (options = {}) => {
     const ids = normalizeOrderIds(orderData);
     return ids.some((id) => suppressedOrderIdsRef.current.has(id));
   }, [normalizeOrderIds]);
+
+  const shouldReceiveAssignedOrderAlert = useCallback((orderData = {}) => {
+    const currentDeliveryId = String(deliveryPartnerId || '').trim();
+    if (!currentDeliveryId) return false;
+
+    const socketPhase = String(orderData?.phase || '').toLowerCase();
+    const notificationPhase = String(
+      orderData?.assignmentInfo?.notificationPhase || socketPhase
+    ).toLowerCase();
+
+    if (
+      notificationPhase === 'manual_only' ||
+      ['priority', 'expanded', 'immediate'].includes(notificationPhase)
+    ) {
+      return false;
+    }
+
+    const targetedDeliveryId = String(
+      orderData?.deliveryPartnerId ||
+      orderData?.assignmentInfo?.deliveryPartnerId ||
+      orderData?.fullOrder?.deliveryPartnerId?._id ||
+      orderData?.fullOrder?.deliveryPartnerId ||
+      ''
+    ).trim();
+
+    if (!targetedDeliveryId) {
+      return false;
+    }
+
+    return targetedDeliveryId === currentDeliveryId;
+  }, [deliveryPartnerId]);
 
   const isOrderAlreadyInProgress = (orderData = {}) => {
     const status = String(orderData?.status || '').toLowerCase();
@@ -631,7 +670,11 @@ export const useDeliveryNotifications = (options = {}) => {
       if (!canReceiveOrderAlerts()) {
         return;
       }
-      if (shouldIgnoreOrderNotification(orderData) || isOrderAlreadyInProgress(orderData)) {
+      if (
+        !shouldReceiveAssignedOrderAlert(orderData) ||
+        shouldIgnoreOrderNotification(orderData) ||
+        isOrderAlreadyInProgress(orderData)
+      ) {
         return;
       }
       setNewOrder(orderData);
@@ -648,40 +691,14 @@ export const useDeliveryNotifications = (options = {}) => {
 
     // Listen for priority-based order notifications (new_order_available)
     socketRef.current.on('new_order_available', (orderData) => {
-      if (!canReceiveOrderAlerts()) {
-        return;
-      }
-      if (isOrderAlreadyInProgress(orderData)) {
-        return;
-      }
-      // Resend/priority notifications should be able to re-open the popup even
-      // if the same order was previously suppressed on this device.
-      const incomingIds = normalizeOrderIds(orderData);
-      let suppressionChanged = false;
-      incomingIds.forEach((id) => {
-        if (suppressedOrderIdsRef.current.has(id)) {
-          suppressedOrderIdsRef.current.delete(id);
-          suppressionChanged = true;
-        }
-      });
-      if (suppressionChanged) {
-        persistSuppressedOrderIds(suppressedOrderIdsRef.current);
-      }
-      // Treat it the same as new_order for now - delivery boy can accept it
-      setNewOrder(orderData);
-      playNotificationSound();
-      triggerOrderBuzz();
-      if (enableBrowserNotificationRef.current && document.hidden) {
-        showBrowserNotification({
-          title: 'New delivery order',
-          body: `Order ${orderData?.orderId || ''} is waiting for you.`.trim(),
-          tag: `delivery-new-order-${orderData?.orderId || orderData?.orderMongoId || orderData?.mongoId || 'latest'}`,
-        });
-      }
+      return;
     });
 
     socketRef.current.on('play_notification_sound', (data) => {
       if (!canReceiveOrderAlerts()) {
+        return;
+      }
+      if (String(data?.type || '').toLowerCase() === 'new_order') {
         return;
       }
       playNotificationSound();
@@ -734,7 +751,7 @@ export const useDeliveryNotifications = (options = {}) => {
         socketRef.current = null;
       }
     };
-  }, [canReceiveOrderAlerts, deliveryPartnerId, enabled, isEligibleForOrders, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, suppressOrderNotifications, triggerOrderBuzz]);
+  }, [canReceiveOrderAlerts, deliveryPartnerId, enabled, isEligibleForOrders, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, shouldReceiveAssignedOrderAlert, suppressOrderNotifications, triggerOrderBuzz]);
 
   useEffect(() => {
     // Keep polling even when the socket is connected so the rider still gets
@@ -765,6 +782,9 @@ export const useDeliveryNotifications = (options = {}) => {
         const nextAvailableOrder = orders.find((orderData) => {
           if (!orderData) return false;
           if (!['preparing', 'ready'].includes(String(orderData.status || '').toLowerCase())) {
+            return false;
+          }
+          if (!shouldReceiveAssignedOrderAlert(orderData)) {
             return false;
           }
           if (isOrderAlreadyInProgress(orderData)) {
@@ -812,7 +832,7 @@ export const useDeliveryNotifications = (options = {}) => {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [deliveryPartnerId, enabled, isEligibleForOrders, isRiderOnlineForOrders, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, triggerOrderBuzz]);
+  }, [deliveryPartnerId, enabled, isEligibleForOrders, isRiderOnlineForOrders, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, shouldReceiveAssignedOrderAlert, triggerOrderBuzz]);
 
   // Helper functions
   const clearNewOrder = useCallback(() => {

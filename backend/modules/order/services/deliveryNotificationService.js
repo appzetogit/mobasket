@@ -475,6 +475,7 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
     const orderNotification = {
       orderId: order.orderId,
       orderMongoId: order._id.toString(),
+      deliveryPartnerId: normalizedDeliveryPartnerId,
       restaurantId: order.restaurantId,
       restaurantName: resolvedRestaurantName,
       restaurantAddress: resolvedRestaurantAddress,
@@ -501,6 +502,8 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
       createdAt: order.createdAt,
       estimatedDeliveryTime: order.estimatedDeliveryTime || 30,
       note: order.note || '',
+      assignmentInfo: order.assignmentInfo || null,
+      deliveryState: order.deliveryState || null,
       pickupDistance: pickupDistance ? `${pickupDistance.toFixed(2)} km` : 'Distance not available',
       deliveryDistance: resolvedDeliveryDistance > 0 ? `${resolvedDeliveryDistance.toFixed(2)} km` : 'Distance not available',
       deliveryDistanceRaw: resolvedDeliveryDistance, // Raw distance number for calculations

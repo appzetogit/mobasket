@@ -18,6 +18,13 @@ const GROCERY_ENTITY_OPTIONS = [
   { value: "products", label: "Products" },
 ]
 const DEFAULT_CATEGORY_IMAGE = buildImageFallback(40, "CAT")
+const normalizeImageValue = (value) => String(value || "").trim()
+const hasCustomImageValue = (value) => {
+  const normalized = normalizeImageValue(value)
+  return Boolean(normalized) && normalized !== DEFAULT_CATEGORY_IMAGE
+}
+const isPreviewableImageSource = (value) => /^(https?:\/\/|data:image\/|blob:)/i.test(normalizeImageValue(value))
+const normalizeEntityName = (value) => String(value || "").trim().toLowerCase()
 const createEmptyProductVariant = () => ({
   name: "",
   mrp: "",
@@ -116,6 +123,9 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
   const fileInputRef = useRef(null)
   const filterSectionRefs = useRef({})
   const rightContentRef = useRef(null)
+  const displayedImageSrc = selectedImageFile
+    ? imagePreview
+    : (hasCustomImageValue(formData.image) && isPreviewableImageSource(formData.image) ? formData.image : "")
 
   const categoryTypeOptions = useMemo(() => {
     if (!isGroceryScope) {
@@ -173,6 +183,25 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     }
     return grocerySubcategoryOptions.filter((item) => item.categoryId === formData.productCategory)
   }, [activeGroceryEntity, createProductCategoryInline, formData.productCategory, grocerySubcategoryOptions, isGroceryScope])
+
+  const findExistingCategoryOption = (name, excludeId = "") => {
+    const normalizedName = normalizeEntityName(name)
+    if (!normalizedName) return null
+    return groceryCategoryOptions.find((item) => (
+      normalizeEntityName(item?.name) === normalizedName &&
+      String(item?.id || "") !== String(excludeId || "")
+    )) || null
+  }
+
+  const findExistingSubcategoryOption = ({ name, categoryId, excludeId = "" }) => {
+    const normalizedName = normalizeEntityName(name)
+    if (!normalizedName) return null
+    return grocerySubcategoryOptions.find((item) => (
+      normalizeEntityName(item?.name) === normalizedName &&
+      String(item?.categoryId || "") === String(categoryId || "") &&
+      String(item?.id || "") !== String(excludeId || "")
+    )) || null
+  }
 
   const handleToggleProductSubcategory = (subcategoryId) => {
     setFormData((prev) => {
@@ -758,7 +787,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
       })
     }
     setSelectedImageFile(null)
-    setImagePreview(category.image || null)
+    setImagePreview(null)
     setIsModalOpen(true)
   }
 
@@ -893,6 +922,10 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
 
     // Set file and create preview
     setSelectedImageFile(file)
+    setFormData((prev) => ({
+      ...prev,
+      image: prev.image,
+    }))
     const reader = new FileReader()
     reader.onloadend = () => {
       setImagePreview(reader.result)
@@ -900,9 +933,29 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     reader.readAsDataURL(file)
   }
 
+  const handleImageUrlChange = (value) => {
+    const nextValue = normalizeImageValue(value)
+    setFormData((prev) => ({
+      ...prev,
+      image: nextValue || DEFAULT_CATEGORY_IMAGE,
+    }))
+
+    if (nextValue) {
+      setSelectedImageFile(null)
+      setImagePreview(null)
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
+    }
+  }
+
   const handleRemoveImage = () => {
     setSelectedImageFile(null)
     setImagePreview(null)
+    setFormData((prev) => ({
+      ...prev,
+      image: DEFAULT_CATEGORY_IMAGE,
+    }))
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -930,7 +983,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     try {
       setUploadingImage(true)
 
-      let resolvedImageValue = formData.image
+      let resolvedImageValue = normalizeImageValue(formData.image)
       if (isGroceryScope && selectedImageFile) {
         const uploadResponse = await uploadAPI.uploadMedia(selectedImageFile, {
           folder: "mobasket/grocery/categories",
@@ -946,7 +999,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
 
       const hasCategoryImage =
         Boolean(selectedImageFile) ||
-        (Boolean(resolvedImageValue) && resolvedImageValue !== DEFAULT_CATEGORY_IMAGE)
+        hasCustomImageValue(resolvedImageValue)
 
       const shouldRequireImage =
         !editingCategory && (!isGroceryScope || activeGroceryEntity !== "products")
@@ -972,7 +1025,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
         formDataToSend.append('status', formData.status.toString())
         if (selectedImageFile) {
           formDataToSend.append('image', selectedImageFile)
-        } else if (resolvedImageValue && resolvedImageValue !== DEFAULT_CATEGORY_IMAGE) {
+        } else if (hasCustomImageValue(resolvedImageValue)) {
           formDataToSend.append('image', resolvedImageValue)
         }
 
@@ -988,11 +1041,22 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
           }
         }
       } else if (activeGroceryEntity === "subcategories") {
+        const duplicateSubcategory = findExistingSubcategoryOption({
+          name: normalizedName,
+          categoryId: formData.parentCategory,
+          excludeId: editingCategory?.id,
+        })
+
+        if (duplicateSubcategory) {
+          toast.error("A subcategory with this name already exists in the selected category.")
+          return
+        }
+
         const payload = {
           category: formData.parentCategory,
           name: normalizedName,
           isActive: formData.status,
-          image: resolvedImageValue && resolvedImageValue !== DEFAULT_CATEGORY_IMAGE ? resolvedImageValue : "",
+          image: hasCustomImageValue(resolvedImageValue) ? resolvedImageValue : "",
         }
         if (editingCategory) {
           const response = await adminAPI.updateGrocerySubcategory(editingCategory.id, payload)
@@ -1023,18 +1087,24 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
             toast.error("Please enter a new category name.")
             return
           }
-          const categoryCreateResponse = await adminAPI.createGroceryCategory({
-            name: categoryName,
-            section: categoryName,
-            isActive: true,
-            image: "",
-          })
-          const createdCategoryId = parseEntityId(categoryCreateResponse)
-          if (!createdCategoryId) {
-            toast.error("Failed to create new category.")
-            return
+          const existingCategory = findExistingCategoryOption(categoryName)
+          if (existingCategory?.id) {
+            resolvedCategoryId = existingCategory.id
+            toast.success("Using the existing category with the same name.")
+          } else {
+            const categoryCreateResponse = await adminAPI.createGroceryCategory({
+              name: categoryName,
+              section: categoryName,
+              isActive: true,
+              image: "",
+            })
+            const createdCategoryId = parseEntityId(categoryCreateResponse)
+            if (!createdCategoryId) {
+              toast.error("Failed to create new category.")
+              return
+            }
+            resolvedCategoryId = createdCategoryId
           }
-          resolvedCategoryId = createdCategoryId
         }
 
         if (!resolvedCategoryId) {
@@ -1058,6 +1128,16 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
           }
 
           for (const subcategoryName of names) {
+            const existingSubcategory = findExistingSubcategoryOption({
+              name: subcategoryName,
+              categoryId: resolvedCategoryId,
+            })
+
+            if (existingSubcategory?.id) {
+              resolvedSubcategoryIds.push(String(existingSubcategory.id))
+              continue
+            }
+
             const subcategoryCreateResponse = await adminAPI.createGrocerySubcategory({
               category: resolvedCategoryId,
               name: subcategoryName,
@@ -1094,7 +1174,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
           inStock: Boolean(formData.inStock),
           variants: normalizedVariants,
           isActive: Boolean(formData.status),
-          images: resolvedImageValue && resolvedImageValue !== DEFAULT_CATEGORY_IMAGE ? [resolvedImageValue] : [],
+          images: hasCustomImageValue(resolvedImageValue) ? [resolvedImageValue] : [],
         }
         if (editingCategory) {
           if (normalizedStoreIds.length > 0) {
@@ -1115,11 +1195,17 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
         await fetchGroceryTypeOptions()
         await fetchGrocerySubcategoryOptions()
       } else {
+        const duplicateCategory = findExistingCategoryOption(normalizedName, editingCategory?.id)
+        if (duplicateCategory) {
+          toast.error("A category with this name already exists.")
+          return
+        }
+
         const payload = {
           name: normalizedName,
           section: normalizedName,
           isActive: Boolean(formData.status),
-          image: resolvedImageValue && resolvedImageValue !== DEFAULT_CATEGORY_IMAGE ? resolvedImageValue : "",
+          image: hasCustomImageValue(resolvedImageValue) ? resolvedImageValue : "",
         }
         if (editingCategory) {
           const response = await adminAPI.updateGroceryCategory(editingCategory.id, payload)
@@ -2235,18 +2321,33 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                         {activeEntitySingularLabel} Image
                       </label>
                       <div className="space-y-3">
+                        {isGroceryScope && (
+                          <div>
+                            <input
+                              type="url"
+                              value={hasCustomImageValue(formData.image) ? formData.image : ""}
+                              onChange={(e) => handleImageUrlChange(e.target.value)}
+                              placeholder={`Paste ${activeEntitySingularLabel.toLowerCase()} image URL (Unsplash, CDN, etc.)`}
+                              className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <p className="mt-1 text-xs text-slate-500">
+                              Paste a direct image link or upload a file below. If you use both, the latest one you choose will be used.
+                            </p>
+                          </div>
+                        )}
                         {/* Image Preview */}
-                        {(imagePreview || formData.image) && (
+                        {displayedImageSrc && (
                           <div className="relative w-32 h-32 rounded-lg overflow-hidden border border-slate-300">
                             <img
-                              src={imagePreview || formData.image}
+                              key={displayedImageSrc}
+                              src={displayedImageSrc}
                               alt="Category preview"
                               className="w-full h-full object-cover"
                               onError={(e) => {
                                 e.target.src = buildImageFallback(128, "CAT")
                               }}
                             />
-                            {imagePreview && (
+                            {(imagePreview || hasCustomImageValue(formData.image)) && (
                               <button
                                 type="button"
                                 onClick={handleRemoveImage}
@@ -2284,6 +2385,11 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                         <p className="text-xs text-slate-500">
                           Supported formats: PNG, JPG, JPEG, WEBP (Max 5MB)
                         </p>
+                        {isGroceryScope && hasCustomImageValue(formData.image) && !isPreviewableImageSource(formData.image) && !imagePreview && (
+                          <p className="text-xs text-amber-600">
+                            Preview appears after you paste a full direct image URL like `https://...`
+                          </p>
+                        )}
                       </div>
                     </div>
 
