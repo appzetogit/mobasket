@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { adminAPI, restaurantAPI } from "@/lib/api";
-import { Loader2, Pencil, Plus, Store } from "lucide-react";
+import { Loader2, Pencil, Plus, Store, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 function normalizeImage(value) {
@@ -99,6 +99,7 @@ export default function FoodMenuManager() {
   const [editSaving, setEditSaving] = useState(false);
   const [imagePreview, setImagePreview] = useState("");
   const [selectedSectionViewKey, setSelectedSectionViewKey] = useState("");
+  const [deletingItemId, setDeletingItemId] = useState("");
 
   const [form, setForm] = useState({
     sectionId: "",
@@ -479,6 +480,35 @@ export default function FoodMenuManager() {
     }
   };
 
+  const handleDeleteItem = async (item) => {
+    if (!selectedRestaurantId || !item?.id) {
+      toast.error("Unable to identify the dish.");
+      return;
+    }
+
+    const itemName = String(item?.name || "this dish").trim();
+    if (!window.confirm(`Delete "${itemName}" from this menu? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      setDeletingItemId(String(item.id));
+      await adminAPI.deleteRestaurantMenuItem(selectedRestaurantId, item.id);
+      await refreshCurrentMenuState(selectedRestaurantId);
+      toast.success("Dish deleted successfully");
+
+      if (editingItem?.id === item.id) {
+        setEditingItem(null);
+        setImagePreview("");
+      }
+    } catch (error) {
+      console.error("Failed to delete menu item:", error);
+      toast.error(error?.response?.data?.message || "Failed to delete dish");
+    } finally {
+      setDeletingItemId("");
+    }
+  };
+
   const renderItemRow = (item) => (
     <div key={item.id} className="px-4 py-2.5 flex items-center justify-between gap-3 text-sm">
       <div className="flex items-center gap-3 min-w-0">
@@ -494,6 +524,19 @@ export default function FoodMenuManager() {
       </div>
       <div className="flex items-center gap-3 shrink-0">
         <span className="font-medium text-slate-700">Rs {Number(item.price || 0).toFixed(2)}</span>
+        <button
+          type="button"
+          onClick={() => handleDeleteItem(item)}
+          disabled={deletingItemId === String(item.id)}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+          title="Delete dish"
+        >
+          {deletingItemId === String(item.id) ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <Trash2 className="w-4 h-4" />
+          )}
+        </button>
         <button
           type="button"
           onClick={() => openEditModal(item)}

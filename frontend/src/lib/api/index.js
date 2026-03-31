@@ -1322,6 +1322,9 @@ export const adminAPI = {
   updateRestaurantMenuItem: (restaurantId, itemId, payload) => {
     return apiClient.put(`/admin/restaurants/${restaurantId}/menu/items/${itemId}`, payload);
   },
+  deleteRestaurantMenuItem: (restaurantId, itemId) => {
+    return apiClient.delete(`/admin/restaurants/${restaurantId}/menu/items/${itemId}`);
+  },
 
   // Create restaurant
   createRestaurant: (data) => {

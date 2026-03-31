@@ -519,3 +519,50 @@ export const updateRestaurantMenuItemByAdmin = asyncHandler(async (req, res) => 
     }
   });
 });
+
+export const deleteRestaurantMenuItemByAdmin = asyncHandler(async (req, res) => {
+  const { restaurantId, itemId } = req.params;
+
+  if (!itemId) {
+    return errorResponse(res, 400, 'Item ID is required');
+  }
+
+  const restaurant = await findRestaurantByIdentifier(String(restaurantId || '').trim());
+  if (!restaurant) {
+    return errorResponse(res, 404, 'Restaurant not found');
+  }
+  if (!(await canAdminAccessRestaurant(req.user || req.admin, restaurant))) {
+    return errorResponse(res, 403, 'Access denied for restaurants outside your assigned zones');
+  }
+
+  const itemIdString = String(itemId);
+
+  const directResult = await Menu.updateOne(
+    { restaurant: restaurant._id, 'sections.items.id': itemIdString },
+    { $pull: { 'sections.$[].items': { id: itemIdString } } },
+  );
+
+  let matchedCount = Number(directResult?.matchedCount || 0);
+  if (matchedCount === 0) {
+    const nestedResult = await Menu.updateOne(
+      { restaurant: restaurant._id, 'sections.subsections.items.id': itemIdString },
+      { $pull: { 'sections.$[].subsections.$[].items': { id: itemIdString } } },
+    );
+    matchedCount = Number(nestedResult?.matchedCount || 0);
+  }
+
+  if (matchedCount === 0) {
+    return errorResponse(res, 404, 'Menu item not found');
+  }
+
+  return successResponse(res, 200, 'Menu item deleted successfully', {
+    restaurant: {
+      _id: restaurant._id,
+      name: restaurant.name,
+      restaurantId: restaurant.restaurantId
+    },
+    item: {
+      id: itemIdString
+    }
+  });
+});
