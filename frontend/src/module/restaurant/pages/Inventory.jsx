@@ -1180,6 +1180,8 @@ export default function Inventory() {
       // Update menu sections
       const updatedSections = sections.map(section => {
         if (section.id !== categoryId) return section
+        const sectionItems = Array.isArray(section.items) ? section.items : []
+        const sectionSubsections = Array.isArray(section.subsections) ? section.subsections : []
 
         // If updating category, set isEnabled
         if (itemId === null) {
@@ -1187,13 +1189,13 @@ export default function Inventory() {
             ...section,
             isEnabled: isEnabled,
             // Also update all items in the category
-            items: section.items.map(item => ({
+            items: sectionItems.map(item => ({
               ...item,
               isAvailable: isAvailable
             })),
-            subsections: section.subsections.map(subsection => ({
+            subsections: sectionSubsections.map(subsection => ({
               ...subsection,
-              items: subsection.items.map(item => ({
+              items: (Array.isArray(subsection.items) ? subsection.items : []).map(item => ({
                 ...item,
                 isAvailable: isAvailable
               }))
@@ -1201,14 +1203,14 @@ export default function Inventory() {
           }
         } else {
           // If updating item, update only that item
-          const updatedItems = section.items.map(item =>
+          const updatedItems = sectionItems.map(item =>
             item.id === String(itemId) ? { ...item, isAvailable: isAvailable } : item
           )
 
           // Update items in subsections too
-          const updatedSubsections = section.subsections.map(subsection => ({
+          const updatedSubsections = sectionSubsections.map(subsection => ({
             ...subsection,
-            items: subsection.items.map(item =>
+            items: (Array.isArray(subsection.items) ? subsection.items : []).map(item =>
               item.id === String(itemId) ? { ...item, isAvailable: isAvailable } : item
             )
           }))
@@ -1387,16 +1389,18 @@ export default function Inventory() {
       // Update menu sections
       const updatedSections = sections.map(section => {
         if (section.id !== categoryId) return section
+        const sectionItems = Array.isArray(section.items) ? section.items : []
+        const sectionSubsections = Array.isArray(section.subsections) ? section.subsections : []
 
         // Update item in direct items
-        const updatedItems = section.items.map(item =>
+        const updatedItems = sectionItems.map(item =>
           item.id === String(itemId) ? { ...item, isRecommended: isRecommended } : item
         )
 
         // Update item in subsections too
-        const updatedSubsections = section.subsections.map(subsection => ({
+        const updatedSubsections = sectionSubsections.map(subsection => ({
           ...subsection,
-          items: subsection.items.map(item =>
+          items: (Array.isArray(subsection.items) ? subsection.items : []).map(item =>
             item.id === String(itemId) ? { ...item, isRecommended: isRecommended } : item
           )
         }))
