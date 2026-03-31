@@ -84,10 +84,50 @@ function flattenApprovedItems(menuSections = [], restaurant = {}) {
   return rows;
 }
 
+function isMofoodRestaurant(restaurant = {}) {
+  const platform = String(restaurant?.platform || "").trim().toLowerCase();
+  return !platform || platform === "mofood" || platform === "food";
+}
+
+async function fetchAllAdminRestaurants() {
+  const pageSize = 500;
+  let page = 1;
+  let totalPages = 1;
+  const allRestaurants = [];
+
+  while (page <= totalPages) {
+    const response = await adminAPI.getRestaurants({ page, limit: pageSize });
+    const payload = response?.data?.data || response?.data || {};
+    const restaurants = Array.isArray(payload?.restaurants)
+      ? payload.restaurants
+      : Array.isArray(payload)
+        ? payload
+        : [];
+    const pagination = payload?.pagination || {};
+
+    allRestaurants.push(...restaurants);
+
+    totalPages = Math.max(Number(pagination?.pages) || 1, 1);
+    if (restaurants.length < pageSize && !pagination?.pages) break;
+    page += 1;
+  }
+
+  return Array.from(
+    new Map(
+      allRestaurants.map((restaurant) => [
+        String(restaurant?._id || restaurant?.restaurantId || restaurant?.id || ""),
+        restaurant,
+      ]),
+    ).values(),
+  );
+}
+
 export default function FoodsList() {
+  const pageSize = 25;
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedRestaurant, setSelectedRestaurant] = useState("all");
   const [selectedZone, setSelectedZone] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
   const [foods, setFoods] = useState([]);
   const [zoneOptions, setZoneOptions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -110,25 +150,19 @@ export default function FoodsList() {
         setLoading(true);
 
         const [restaurantResponse, zonesResponse] = await Promise.all([
-          adminAPI.getRestaurants({ limit: 1000, status: "active" }),
+          fetchAllAdminRestaurants(),
           adminAPI.getZones({ limit: 1000, platform: "mofood" }),
         ]);
 
         const restaurants =
-          restaurantResponse?.data?.data?.restaurants ||
-          restaurantResponse?.data?.data ||
-          restaurantResponse?.data?.restaurants ||
-          [];
+          Array.isArray(restaurantResponse) ? restaurantResponse : [];
 
         const zones =
           zonesResponse?.data?.data?.zones ||
           zonesResponse?.data?.zones ||
           [];
 
-        const mofoodRestaurants = (Array.isArray(restaurants) ? restaurants : []).filter((restaurant) => {
-          const platform = String(restaurant?.platform || "mofood").toLowerCase();
-          return platform === "mofood" && restaurant?.isActive !== false;
-        });
+        const mofoodRestaurants = (Array.isArray(restaurants) ? restaurants : []).filter(isMofoodRestaurant);
 
         setZoneOptions(
           (Array.isArray(zones) ? zones : [])
@@ -317,6 +351,26 @@ export default function FoodsList() {
     });
   }, [foods, searchQuery, selectedRestaurant, selectedZone]);
 
+  const totalPages = Math.max(Math.ceil(filteredFoods.length / pageSize), 1);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, selectedRestaurant, selectedZone]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+  const paginatedFoods = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize;
+    return filteredFoods.slice(startIndex, startIndex + pageSize);
+  }, [currentPage, filteredFoods]);
+
+  const pageStart = filteredFoods.length === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+  const pageEnd = filteredFoods.length === 0 ? 0 : Math.min(currentPage * pageSize, filteredFoods.length);
+
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
@@ -338,6 +392,12 @@ export default function FoodsList() {
             <span className="px-3 py-1 rounded-full text-sm font-semibold bg-emerald-100 text-emerald-700">
               {filteredFoods.length}
             </span>
+          </div>
+          <div className="flex flex-col gap-1 text-sm text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+            <span>
+              Showing {pageStart}-{pageEnd} of {filteredFoods.length}
+            </span>
+            <span>{pageSize} items per page</span>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(200px,0.7fr)_minmax(200px,0.7fr)] gap-3">
             <div className="relative min-w-[220px]">
@@ -411,9 +471,11 @@ export default function FoodsList() {
                   </td>
                 </tr>
               ) : (
-                filteredFoods.map((food, index) => (
+                paginatedFoods.map((food, index) => (
                   <tr key={String(food.id)} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 text-sm font-medium text-slate-700">{index + 1}</td>
+                    <td className="px-4 py-3 text-sm font-medium text-slate-700">
+                      {(currentPage - 1) * pageSize + index + 1}
+                    </td>
                     <td className="px-4 py-3">
                       <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center">
                         <img
@@ -469,6 +531,32 @@ export default function FoodsList() {
           </table>
         </div>
       </div>
+
+      {!loading && filteredFoods.length > 0 ? (
+        <div className="mt-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-slate-600">
+            Page {currentPage} of {totalPages}
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.max(page - 1, 1))}
+              disabled={currentPage === 1}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Previous
+            </button>
+            <button
+              type="button"
+              onClick={() => setCurrentPage((page) => Math.min(page + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {editOpen && selectedFood ? (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
