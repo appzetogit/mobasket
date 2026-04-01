@@ -9,6 +9,7 @@ import {
 export default function SettingsDialog({ isOpen, onOpenChange, visibleColumns, toggleColumn, resetColumns, columnsConfig }) {
   const defaultColumnsConfig = {
     si: "Serial Number",
+    zoneName: "Zone Name",
     orderId: "Order ID",
     orderDate: "Order Date",
     customer: "Customer Information",

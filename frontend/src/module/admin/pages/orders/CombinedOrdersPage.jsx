@@ -44,6 +44,7 @@ export default function CombinedOrdersPage() {
   const [deliveryPartnersLoading, setDeliveryPartnersLoading] = useState(false)
   const [deliverySearchQuery, setDeliverySearchQuery] = useState("")
   const [assigningDeliveryPartnerId, setAssigningDeliveryPartnerId] = useState("")
+  const [dismissedAssignmentOrderIds, setDismissedAssignmentOrderIds] = useState([])
   const knownOrderIdsRef = useRef(new Set())
   const isMountedRef = useRef(true)
   const audioRef = useRef(null)
@@ -462,6 +463,9 @@ export default function CombinedOrdersPage() {
       setAssigningDeliveryPartnerId(String(deliveryPartnerId))
       await adminAPI.assignOrderToDeliveryPartner(orderIdToUse, deliveryPartnerId)
       toast.success(`Assigned ${deliveryPartner.name || "delivery partner"} to order ${selectedOrderForAssignment?.orderId}`)
+      setDismissedAssignmentOrderIds((prev) =>
+        prev.filter((id) => id !== String(orderIdToUse))
+      )
       setIsAssignRiderOpen(false)
       setSelectedOrderForAssignment(null)
       setDeliveryPartners([])
@@ -579,6 +583,32 @@ export default function CombinedOrdersPage() {
     }
   }
 
+  const handleAssignRiderDialogOpenChange = (open) => {
+    if (!open && selectedOrderForAssignment) {
+      const orderIdToTrack = String(
+        selectedOrderForAssignment.id ||
+        selectedOrderForAssignment._id ||
+        selectedOrderForAssignment.orderId ||
+        ""
+      )
+
+      if (orderIdToTrack) {
+        setDismissedAssignmentOrderIds((prev) =>
+          prev.includes(orderIdToTrack) ? prev : [...prev, orderIdToTrack]
+        )
+      }
+    }
+
+    setIsAssignRiderOpen(open)
+
+    if (!open) {
+      setSelectedOrderForAssignment(null)
+      setDeliverySearchQuery("")
+      setAssigningDeliveryPartnerId("")
+      setDeliveryPartners([])
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="p-4 lg:p-6 bg-slate-50 min-h-screen w-full max-w-full overflow-x-hidden flex items-center justify-center">
@@ -645,16 +675,13 @@ export default function CombinedOrdersPage() {
       />
       <Dialog
         open={isAssignRiderOpen}
-        onOpenChange={(open) => {
-          setIsAssignRiderOpen(open)
-          if (!open) {
-            setSelectedOrderForAssignment(null)
-            setDeliverySearchQuery("")
-            setAssigningDeliveryPartnerId("")
-          }
-        }}
+        onOpenChange={handleAssignRiderDialogOpenChange}
       >
-        <DialogContent className="max-w-2xl bg-white p-0 overflow-hidden">
+        <DialogContent
+          className="max-w-2xl bg-white p-0 overflow-hidden"
+          onPointerDownOutside={(event) => event.preventDefault()}
+          onInteractOutside={(event) => event.preventDefault()}
+        >
           <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-200">
             <DialogTitle className="flex items-center gap-2 text-slate-900">
               <Bike className="w-5 h-5 text-violet-600" />
@@ -736,6 +763,7 @@ export default function CombinedOrdersPage() {
         enableDirectAcceptAction
         enableRiderActions
         onAssignRider={openAssignRiderDialog}
+        reassignableOrderIds={dismissedAssignmentOrderIds}
         onDeleteOrder={handleDeleteOrder}
         highlightedOrderIds={highlightedOrderIds}
       />

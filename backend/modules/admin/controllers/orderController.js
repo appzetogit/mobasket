@@ -569,6 +569,8 @@ export const getOrders = asyncHandler(async (req, res) => {
       'items.name': 1,
       'items.quantity': 1,
       deliveryPartnerId: 1,
+      'assignmentInfo.zoneId': 1,
+      'assignmentInfo.zoneName': 1,
       estimatedDeliveryTime: 1,
       deliveredAt: 1,
       cancellationReason: 1,
@@ -974,7 +976,11 @@ export const getOrders = asyncHandler(async (req, res) => {
         updatedAt: order.updatedAt,
         // Zone info from assignmentInfo
         zoneId: order.assignmentInfo?.zoneId || null,
-        zoneName: order.assignmentInfo?.zoneName || null,
+        zoneName:
+          order.assignmentInfo?.zoneName ||
+          order.zoneName ||
+          order.zone ||
+          null,
         // Refund status from settlement
         refundStatus: refundStatusMap.get(order._id.toString()) || null,
         // 2-minute edit/cancel window for customer (MoFood and MoGrocery)

@@ -83,6 +83,41 @@ const hasRiderAcceptedOrder = (order) => {
   )
 }
 
+const canShowRiderAssignmentAction = (order, isMarkedForReassign) => {
+  const backendStatus = String(order?.status || "").toLowerCase()
+  const displayStatus = String(order?.orderStatus || "").toLowerCase()
+  const adminApprovalStatus = String(order?.adminApprovalStatus || "").toLowerCase()
+  const hasZone = Boolean(order?.zoneId)
+  const hasAssignedPartner = Boolean(order?.deliveryPartnerId || order?.deliveryPartnerName)
+  const isClosedOrder =
+    ["cancelled", "canceled", "delivered", "payment_failed", "refunded"].includes(backendStatus) ||
+    ["canceled", "cancelled by restaurant", "cancelled by user", "delivered", "payment failed", "refunded"].includes(displayStatus)
+
+  if (!hasZone || hasAssignedPartner || isClosedOrder) return false
+  if (isMarkedForReassign) return true
+
+  return (
+    ["accepted", "confirmed", "preparing", "ready", "processing"].includes(backendStatus) ||
+    ["accepted", "processing", "store accepted", "packing"].includes(displayStatus) ||
+    adminApprovalStatus === "approved"
+  )
+}
+
+const getOrderZoneLabel = (order) => {
+  const candidates = [
+    order?.zoneName,
+    order?.zone,
+    order?.zoneId?.name,
+    order?.zoneId?.zoneName,
+    order?.zoneId?.displayName,
+    order?.restaurantZone,
+    order?.deliveryZone,
+  ]
+
+  const label = candidates.find((value) => String(value || "").trim())
+  return label ? String(label).trim() : ""
+}
+
 export default function OrdersTable({
   orders,
   visibleColumns,
@@ -99,6 +134,7 @@ export default function OrdersTable({
   onResendRiderNotification,
   onShowRiderDetails,
   onAssignRider,
+  reassignableOrderIds = [],
   onCancelOrder,
   onDeleteOrder,
   isGrocery = false,
@@ -115,6 +151,10 @@ export default function OrdersTable({
   const itemsPerPage = serverPagination ? externalItemsPerPage : 10
   const effectiveCurrentPage = serverPagination ? externalCurrentPage : currentPage
   const totalPages = Math.max(1, Math.ceil((serverPagination ? totalItems : orders.length) / Math.max(1, itemsPerPage)))
+  const reassignableOrderIdSet = useMemo(
+    () => new Set((reassignableOrderIds || []).map((id) => String(id))),
+    [reassignableOrderIds]
+  )
 
   // Reset to page 1 when orders change
   useEffect(() => {
@@ -142,6 +182,10 @@ export default function OrdersTable({
         case 'si':
           // Sort by index (already sorted by default)
           return sortConfig.direction === 'asc' ? 0 : 0
+        case 'zoneName':
+          aValue = getOrderZoneLabel(a).toLowerCase()
+          bValue = getOrderZoneLabel(b).toLowerCase()
+          break
         case 'orderId':
           aValue = a.orderId || ''
           bValue = b.orderId || ''
@@ -279,6 +323,13 @@ export default function OrdersTable({
                   </button>
                 </th>
               )}
+              {visibleColumns.zoneName && (
+                <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                  <button type="button" onClick={() => handleSort('zoneName')} className="flex items-center text-left">
+                    Zone Name
+                  </button>
+                </th>
+              )}
               {visibleColumns.orderId && (
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   <button type="button" onClick={() => handleSort('orderId')} className="flex items-center text-left">
@@ -351,8 +402,14 @@ export default function OrdersTable({
           </thead>
           <tbody className="bg-white divide-y divide-slate-100">
             {paginatedOrders.map((order, index) => {
+              const normalizedOrderId = String(order.id || order._id || order.orderId)
               const isHighlighted = highlightedIdSet.has(String(order.id || order._id || order.orderId))
               const hasAcceptedRider = hasRiderAcceptedOrder(order)
+              const isMarkedForReassign =
+                reassignableOrderIdSet.has(normalizedOrderId) ||
+                Boolean(order.assignmentInfo?.lastRejectedAt)
+              const canShowRiderAction = canShowRiderAssignmentAction(order, isMarkedForReassign)
+              const orderZoneLabel = getOrderZoneLabel(order)
               const assignedDeliveryPartnerId = String(order?.deliveryPartnerId || "")
               const lastRejectedById = String(order?.assignmentInfo?.lastRejectedBy || "")
               const wasDisplayedRiderLastRejected =
@@ -379,6 +436,11 @@ export default function OrdersTable({
                       {isHighlighted && <BellRing className={`w-4 h-4 ${blinkPhase ? "text-red-600" : "text-amber-600"}`} />}
                       <span className="text-sm font-medium text-slate-700">{(effectiveCurrentPage - 1) * itemsPerPage + index + 1}</span>
                     </div>
+                  </td>
+                )}
+                {visibleColumns.zoneName && (
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="text-sm font-medium text-slate-700">{orderZoneLabel || "N/A"}</span>
                   </td>
                 )}
                 {visibleColumns.orderId && (
@@ -415,6 +477,11 @@ export default function OrdersTable({
                       <span className="text-sm font-medium text-slate-700">{formatRestaurantName(order.restaurant)}</span>
                       {order.restaurantPhone && (
                         <span className="text-xs text-slate-500">{order.restaurantPhone}</span>
+                      )}
+                      {orderZoneLabel && (
+                        <span className="text-xs font-medium text-violet-700">
+                          Zone: {orderZoneLabel}
+                        </span>
                       )}
                       {order.restaurantPlatform && (
                         <span className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[10px] font-semibold ${String(order.restaurantPlatform).toLowerCase() === "mogrocery"
@@ -563,6 +630,24 @@ export default function OrdersTable({
                             Declined by {order.assignmentInfo.rejectedDeliveryPartnerIds.length} rider{order.assignmentInfo.rejectedDeliveryPartnerIds.length > 1 ? "s" : ""}
                           </div>
                         )}
+                      {!showAcceptedRider && isMarkedForReassign && !order.deliveryPartnerId && !order.deliveryPartnerName && (
+                        <div className="mt-1 flex flex-col items-start gap-2">
+                          <div className="text-[11px] font-medium text-violet-700">
+                            Ready to reassign rider
+                          </div>
+                          {enableRiderActions && typeof onAssignRider === "function" && (
+                            <button
+                              type="button"
+                              onClick={() => onAssignRider(order)}
+                              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-100 px-3 py-1.5 text-[11px] font-semibold text-amber-700 shadow-sm transition-colors hover:bg-amber-200"
+                              title="Reassign rider from this zone"
+                            >
+                              <Bike className="h-3.5 w-3.5" />
+                              <span>Reassign Rider</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </td>
                 )}
@@ -630,16 +715,18 @@ export default function OrdersTable({
                         )}
                       {enableRiderActions &&
                         typeof onAssignRider === "function" &&
-                        Boolean(order?.zoneId) &&
-                        !order.deliveryPartnerId &&
-                        !order.deliveryPartnerName &&
-                        ["preparing", "ready"].includes(String(order.status || "").toLowerCase()) && (
+                        canShowRiderAction && (
                           <button
                             onClick={() => onAssignRider(order)}
-                            className="p-1.5 rounded text-violet-600 hover:bg-violet-50 transition-colors"
-                            title={order.assignmentInfo?.lastRejectedAt ? "Reassign rider from this zone" : "Assign rider from this zone"}
+                            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold shadow-sm transition-colors ${
+                              isMarkedForReassign
+                                ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
+                                : "bg-violet-100 text-violet-700 hover:bg-violet-200"
+                            }`}
+                            title={isMarkedForReassign ? "Reassign rider from this zone" : "Assign rider from this zone"}
                           >
                             <Bike className="w-4 h-4" />
+                            <span>{isMarkedForReassign ? "Reassign" : "Assign Rider"}</span>
                           </button>
                         )}
                       {enableRiderActions &&

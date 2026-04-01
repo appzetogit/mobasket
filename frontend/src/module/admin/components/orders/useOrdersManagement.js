@@ -19,6 +19,7 @@ export function useOrdersManagement(orders, statusKey, title) {
   })
   const [visibleColumns, setVisibleColumns] = useState({
     si: true,
+    zoneName: true,
     orderId: true,
     orderDate: true,
     customer: true,
@@ -299,6 +300,7 @@ export function useOrdersManagement(orders, statusKey, title) {
   const resetColumns = () => {
     setVisibleColumns({
       si: true,
+      zoneName: true,
       orderId: true,
       orderDate: true,
       customer: true,
