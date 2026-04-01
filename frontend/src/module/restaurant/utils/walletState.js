@@ -1,6 +1,7 @@
 import { groceryStoreAPI, restaurantAPI } from "@/lib/api"
 
-const WALLET_STORAGE_KEY = "restaurant_wallet_state"
+const LEGACY_WALLET_STORAGE_KEY = "restaurant_wallet_state"
+const WALLET_STORAGE_KEY_PREFIX = `${LEGACY_WALLET_STORAGE_KEY}::`
 
 const DEFAULT_WALLET_STATE = {
   totalEarning: 0,
@@ -12,6 +13,52 @@ const DEFAULT_WALLET_STATE = {
   transactions: [],
   withdrawRequests: [],
   isBalanceAdjusted: false,
+}
+
+const getEntityIdentifier = (entity = {}) => {
+  const candidates = [
+    entity?._id,
+    entity?.id,
+    entity?.restaurantId,
+    entity?.storeId,
+    entity?.email,
+    entity?.phone,
+  ]
+
+  const match = candidates.find((value) => value !== undefined && value !== null && String(value).trim() !== "")
+  return match ? String(match) : null
+}
+
+const resolveModule = () => {
+  if (typeof window !== "undefined" && window.location.pathname.startsWith("/store")) {
+    return "grocery-store"
+  }
+  return "restaurant"
+}
+
+const resolveWalletStorageKey = () => {
+  if (typeof window === "undefined") return null
+
+  const module = resolveModule()
+  const rawEntity = localStorage.getItem(`${module}_user`)
+  if (!rawEntity) return null
+
+  try {
+    const entity = JSON.parse(rawEntity)
+    const entityId = getEntityIdentifier(entity)
+    if (!entityId) return null
+    return `${WALLET_STORAGE_KEY_PREFIX}${module}::${entityId}`
+  } catch {
+    return null
+  }
+}
+
+const clearLegacyWalletStorage = () => {
+  try {
+    localStorage.removeItem(LEGACY_WALLET_STORAGE_KEY)
+  } catch {
+    // Ignore storage errors.
+  }
 }
 
 const resolveApi = () => {
@@ -89,7 +136,11 @@ const mapWalletResponseToState = ({ wallet = {}, transactions = [], withdrawalRe
 
 export const getWalletState = () => {
   try {
-    const raw = localStorage.getItem(WALLET_STORAGE_KEY)
+    clearLegacyWalletStorage()
+    const storageKey = resolveWalletStorageKey()
+    if (!storageKey) return { ...DEFAULT_WALLET_STATE }
+
+    const raw = localStorage.getItem(storageKey)
     if (!raw) return { ...DEFAULT_WALLET_STATE }
     const parsed = JSON.parse(raw)
     return { ...DEFAULT_WALLET_STATE, ...(parsed || {}) }
@@ -100,7 +151,11 @@ export const getWalletState = () => {
 
 export const setWalletState = (state) => {
   try {
-    localStorage.setItem(WALLET_STORAGE_KEY, JSON.stringify({ ...DEFAULT_WALLET_STATE, ...(state || {}) }))
+    clearLegacyWalletStorage()
+    const storageKey = resolveWalletStorageKey()
+    if (!storageKey) return
+
+    localStorage.setItem(storageKey, JSON.stringify({ ...DEFAULT_WALLET_STATE, ...(state || {}) }))
     window.dispatchEvent(new CustomEvent("walletStateUpdated"))
   } catch {
     // Ignore storage errors.
@@ -204,4 +259,3 @@ export const getPaidOrderIds = () => {
     .filter((row) => row.type === "payment" && row.status === "Completed" && row.orderId)
     .map((row) => row.orderId)
 }
-

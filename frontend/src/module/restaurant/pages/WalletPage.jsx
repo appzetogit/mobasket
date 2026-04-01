@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { useLocation, useNavigate } from "react-router-dom"
+import { AnimatePresence } from "framer-motion"
+import { useLocation } from "react-router-dom"
 import Lenis from "lenis"
 import BottomNavbar from "../components/BottomNavbar"
 import BottomNavOrders from "../components/BottomNavOrders"
@@ -30,7 +30,6 @@ import {
 import { formatCurrency } from "../utils/currency"
 
 export default function WalletPage() {
-  const navigate = useNavigate()
   const location = useLocation()
   const isStore = location.pathname.startsWith("/store")
   const [showMenu, setShowMenu] = useState(false)
@@ -109,12 +108,52 @@ export default function WalletPage() {
     const handleWalletStateUpdated = () => {
       setWalletState(getWalletState())
     }
+    const handleAuthSync = () => {
+      setWalletState(getWalletState())
+      refreshWalletState()
+    }
+
     window.addEventListener('walletStateUpdated', handleWalletStateUpdated)
+    window.addEventListener('restaurantAuthChanged', handleAuthSync)
+    window.addEventListener('groceryStoreAuthChanged', handleAuthSync)
+    window.addEventListener('storage', handleAuthSync)
 
     return () => {
       window.removeEventListener('walletStateUpdated', handleWalletStateUpdated)
+      window.removeEventListener('restaurantAuthChanged', handleAuthSync)
+      window.removeEventListener('groceryStoreAuthChanged', handleAuthSync)
+      window.removeEventListener('storage', handleAuthSync)
     }
   }, [])
+
+  useEffect(() => {
+    const refreshWalletState = async () => {
+      try {
+        const latest = await syncWalletState()
+        setWalletState(latest)
+      } catch (error) {
+        console.error("Failed to refresh wallet state:", error)
+      }
+    }
+
+    const handleWindowFocus = () => {
+      refreshWalletState()
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshWalletState()
+      }
+    }
+
+    window.addEventListener('focus', handleWindowFocus)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener('focus', handleWindowFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [location.pathname])
 
   // Close payment dropdown when clicking outside
   useEffect(() => {

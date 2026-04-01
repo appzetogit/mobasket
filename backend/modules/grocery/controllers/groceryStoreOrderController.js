@@ -60,6 +60,7 @@ export const getGroceryStoreOrders = asyncHandler(async (req, res) => {
     const { status, page = 1, limit = 50 } = req.query;
     const includeItemImages = parseBooleanQuery(req.query.includeItemImages, true);
     const compact = parseBooleanQuery(req.query.compact, false);
+    const orderPlatformQuery = { restaurantPlatform: 'mogrocery' };
 
     // Get store ID - normalize to string (Order.restaurantId is String type)
     const storeIdString = store._id?.toString() ||
@@ -109,6 +110,7 @@ export const getGroceryStoreOrders = asyncHandler(async (req, res) => {
     // Build query - search for orders with any matching restaurantId variation
     // Use $in for multiple variations and also try direct match as fallback
     const query = {
+      ...orderPlatformQuery,
       $or: [
         { restaurantId: { $in: storeIdVariations } },
         // Direct match fallback
@@ -197,6 +199,7 @@ export const getGroceryStoreOrderById = asyncHandler(async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(id) && id.length === 24) {
       order = await Order.findOne({
         _id: id,
+        ...orderPlatformQuery,
         restaurantId: { $in: storeIdVariations }
       })
         .populate('userId', 'name email phone')
@@ -206,6 +209,7 @@ export const getGroceryStoreOrderById = asyncHandler(async (req, res) => {
     if (!order) {
       order = await Order.findOne({
         orderId: id,
+        ...orderPlatformQuery,
         restaurantId: { $in: storeIdVariations }
       })
         .populate('userId', 'name email phone')

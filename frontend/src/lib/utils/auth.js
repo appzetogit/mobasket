@@ -3,6 +3,28 @@
  * Decode and extract information from JWT tokens
  */
 
+const LEGACY_WALLET_CACHE_KEYS = ['restaurant_wallet_state'];
+const MODULE_WALLET_CACHE_PREFIXES = {
+  'restaurant': ['restaurant_wallet_state::restaurant::'],
+  'grocery-store': ['restaurant_wallet_state::grocery-store::'],
+};
+
+function clearModuleWalletCache(module) {
+  const prefixes = MODULE_WALLET_CACHE_PREFIXES[module] || [];
+  if (!prefixes.length) return;
+
+  try {
+    const keys = Object.keys(localStorage);
+    keys.forEach((key) => {
+      if (LEGACY_WALLET_CACHE_KEYS.includes(key) || prefixes.some((prefix) => key.startsWith(prefix))) {
+        localStorage.removeItem(key);
+      }
+    });
+  } catch (error) {
+    console.error(`Error clearing wallet cache for ${module}:`, error);
+  }
+}
+
 /**
  * Decode JWT token without verification (client-side only)
  * @param {string} token - JWT token
@@ -149,6 +171,9 @@ export function isModuleAuthenticated(module) {
  * @param {string} module - Module name (admin, restaurant, delivery, user)
  */
 export function clearModuleAuth(module) {
+  if (module === "restaurant" || module === "grocery-store") {
+    clearModuleWalletCache(module);
+  }
   localStorage.removeItem(`${module}_accessToken`);
   localStorage.removeItem(`${module}_refreshToken`);
   localStorage.removeItem(`${module}_authenticated`);
@@ -214,6 +239,10 @@ export function setAuthData(module, token, user, refreshToken) {
     const authKey = `${module}_authenticated`;
     const userKey = `${module}_user`;
 
+    if (module === "restaurant" || module === "grocery-store") {
+      clearModuleWalletCache(module);
+    }
+
     if (module === "user") {
       const getUserIdentifier = (value) =>
         value?._id || value?.id || value?.phone || value?.email || null;
@@ -221,7 +250,7 @@ export function setAuthData(module, token, user, refreshToken) {
       let previousUser = null;
       try {
         previousUser = JSON.parse(localStorage.getItem("user_user") || "null");
-      } catch (parseError) {
+      } catch {
         previousUser = null;
       }
 

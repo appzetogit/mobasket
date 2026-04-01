@@ -40,11 +40,10 @@ const getFcmPatchFromBody = (body = {}) => {
 const buildPhoneQuery = (normalizedPhone) => {
   if (!normalizedPhone) return null;
 
-  const buildPhoneFieldOr = (phoneValue) => ([
-    { phone: phoneValue },
-    { ownerPhone: phoneValue },
-    { primaryContactNumber: phoneValue }
-  ]);
+  // Phone auth must resolve only the store's login phone.
+  // Matching owner/contact numbers can accidentally attach a new store
+  // onboarding flow to an older outlet that shares the same owner details.
+  const buildPhoneFieldOr = (phoneValue) => ([{ phone: phoneValue }]);
 
   if (normalizedPhone.startsWith('91') && normalizedPhone.length === 12) {
     const phoneWithoutCountryCode = normalizedPhone.substring(2);

@@ -4,8 +4,34 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Bell, Menu, ChevronDown, Calendar, Download, ArrowRight, FileText, Wallet, X } from "lucide-react"
 import BottomNavOrders from "../components/BottomNavOrders"
 import { restaurantAPI } from "@/lib/api"
+import { syncWalletState } from "../utils/walletState"
+
+const getCurrentRestaurantCache = () => {
+  if (typeof window === "undefined") return null
+
+  try {
+    const raw = localStorage.getItem("restaurant_user")
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+const getRestaurantIdentity = (restaurant = {}) =>
+  String(restaurant?.id || restaurant?._id || restaurant?.restaurantId || "").trim()
+
+const mapRestaurantSummary = (restaurant = {}) => {
+  if (!restaurant) return null
+
+  return {
+    name: restaurant?.name || "Restaurant",
+    restaurantId: restaurant?.restaurantId || restaurant?._id || restaurant?.id || "",
+    address: restaurant?.address || restaurant?.location?.address || restaurant?.location?.formattedAddress || "",
+  }
+}
 
 export default function HubFinance() {
+  void motion
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState(() => {
@@ -21,50 +47,163 @@ export default function HubFinance() {
   const [loading, setLoading] = useState(true)
   const [pastCyclesData, setPastCyclesData] = useState(null)
   const [loadingPastCycles, setLoadingPastCycles] = useState(false)
-  const [restaurantData, setRestaurantData] = useState(null)
-  const [loadingRestaurant, setLoadingRestaurant] = useState(true)
+  const [restaurantData, setRestaurantData] = useState(() => mapRestaurantSummary(getCurrentRestaurantCache()))
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false)
   const [withdrawalAmount, setWithdrawalAmount] = useState('')
   const [submittingWithdrawal, setSubmittingWithdrawal] = useState(false)
+  const activeRequestRef = useRef(0)
+  const commissionConfigured = financeData?.commissionConfigured !== false
+  const commissionMessage =
+    financeData?.commissionMessage ||
+    "Restaurant commission is not configured yet. Please contact admin to enable payouts."
+  const displayCurrentCycleOrders = commissionConfigured ? (financeData?.currentCycle?.totalOrders || 0) : 0
 
-  // Fetch finance data on mount
-  useEffect(() => {
-    const fetchFinanceData = async () => {
-      try {
-        setLoading(true)
-        const response = await restaurantAPI.getFinance()
-        if (response.data?.success && response.data?.data) {
-          setFinanceData(response.data.data)
+  const clearFinanceState = () => {
+    setFinanceData(null)
+    setPastCyclesData(null)
+    setRestaurantData(mapRestaurantSummary(getCurrentRestaurantCache()))
+  }
+
+  const refreshPastCyclesData = async (dateRangeLabel = selectedDateRange) => {
+    const dateRange = parseDateRange(dateRangeLabel)
+    if (!dateRange?.startDate || !dateRange?.endDate) {
+      setPastCyclesData(null)
+      return
+    }
+
+    await fetchPastCyclesData(dateRange.startDate, dateRange.endDate)
+  }
+
+  const fetchFinanceData = async () => {
+    const requestId = Date.now()
+    activeRequestRef.current = requestId
+
+    try {
+      setLoading(true)
+      const currentRestaurantId = getRestaurantIdentity(getCurrentRestaurantCache())
+      if (!currentRestaurantId) {
+        clearFinanceState()
+        return
+      }
+
+      const response = await restaurantAPI.getFinance()
+      if (!response.data?.success || !response.data?.data) {
+        if (activeRequestRef.current === requestId) {
+          clearFinanceState()
         }
-      } catch (error) {
-        // Suppress 401 errors as they're handled by axios interceptor (token refresh/redirect)
-        if (error.response?.status !== 401) {
-          console.error('❌ Error fetching finance data:', error)
+        return
+      }
+
+      const nextFinanceData = response.data.data
+      const financeRestaurantId = getRestaurantIdentity(nextFinanceData?.restaurant)
+      if (financeRestaurantId && financeRestaurantId !== currentRestaurantId) {
+        if (activeRequestRef.current === requestId) {
+          clearFinanceState()
         }
-      } finally {
+        return
+      }
+
+      if (activeRequestRef.current === requestId) {
+        setPastCyclesData(null)
+        setFinanceData(nextFinanceData)
+        setRestaurantData(mapRestaurantSummary(nextFinanceData?.restaurant) || mapRestaurantSummary(getCurrentRestaurantCache()))
+      }
+    } catch (error) {
+      if (activeRequestRef.current === requestId) {
+        clearFinanceState()
+      }
+      // Suppress 401 errors as they're handled by axios interceptor (token refresh/redirect)
+      if (error.response?.status !== 401) {
+        console.error('❌ Error fetching finance data:', error)
+      }
+    } finally {
+      if (activeRequestRef.current === requestId) {
         setLoading(false)
       }
     }
+  }
 
-    fetchFinanceData()
+  const refreshFinanceScreen = async () => {
+    await Promise.allSettled([
+      fetchFinanceData(),
+      refreshPastCyclesData(),
+    ])
+  }
+
+  // Fetch finance data on mount and resync on auth changes.
+  useEffect(() => {
+    const handleAuthSync = () => {
+      clearFinanceState()
+      refreshFinanceScreen()
+    }
+
+    refreshFinanceScreen()
+
+    window.addEventListener("restaurantAuthChanged", handleAuthSync)
+    window.addEventListener("storage", handleAuthSync)
+    window.addEventListener("walletStateUpdated", handleAuthSync)
+
+    return () => {
+      window.removeEventListener("restaurantAuthChanged", handleAuthSync)
+      window.removeEventListener("storage", handleAuthSync)
+      window.removeEventListener("walletStateUpdated", handleAuthSync)
+    }
   }, [])
+
+  useEffect(() => {
+    const handleWindowFocus = () => {
+      refreshFinanceScreen()
+    }
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshFinanceScreen()
+      }
+    }
+
+    window.addEventListener("focus", handleWindowFocus)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    return () => {
+      window.removeEventListener("focus", handleWindowFocus)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
+    }
+  }, [selectedDateRange])
+
+  useEffect(() => {
+    const currentRestaurantId = getRestaurantIdentity(getCurrentRestaurantCache())
+    const financeRestaurantId = getRestaurantIdentity(financeData?.restaurant)
+
+    if (currentRestaurantId && financeRestaurantId && currentRestaurantId !== financeRestaurantId) {
+      clearFinanceState()
+      fetchFinanceData()
+    }
+  }, [financeData])
 
   // Fetch restaurant data for header display
   useEffect(() => {
     // Use restaurant data from financeData if available, otherwise fetch separately
     if (financeData?.restaurant) {
-      setRestaurantData(financeData.restaurant)
+      setRestaurantData(mapRestaurantSummary(financeData.restaurant))
     } else {
       const fetchRestaurantData = async () => {
         try {
+          const currentRestaurantId = getRestaurantIdentity(getCurrentRestaurantCache())
+          if (!currentRestaurantId) {
+            setRestaurantData(null)
+            return
+          }
+
           const response = await restaurantAPI.getRestaurantByOwner()
           const data = response?.data?.data?.restaurant || response?.data?.restaurant || response?.data?.data
+          const responseRestaurantId = getRestaurantIdentity(data)
+          if (responseRestaurantId && responseRestaurantId !== currentRestaurantId) {
+            setRestaurantData(mapRestaurantSummary(getCurrentRestaurantCache()))
+            return
+          }
+
           if (data) {
-            setRestaurantData({
-              name: data.name,
-              restaurantId: data.restaurantId || data._id,
-              address: data.location?.address || data.location?.formattedAddress || data.address || ''
-            })
+            setRestaurantData(mapRestaurantSummary(data))
           }
         } catch (error) {
           // Suppress 401 errors as they're handled by axios interceptor
@@ -160,10 +299,6 @@ export default function HubFinance() {
     }
   }, [financeData, pastCyclesData, selectedDateRange])
 
-  const handleViewDetails = () => {
-    navigate("/restaurant/finance-details")
-  }
-
   // Parse date range string to extract start and end dates
   const parseDateRange = (dateRangeStr) => {
     // Format: "14 Nov - 14 Dec'25"
@@ -240,6 +375,14 @@ export default function HubFinance() {
         startDate: startDateISO,
         endDate: endDateISO
       })
+      const currentRestaurantId = getRestaurantIdentity(getCurrentRestaurantCache())
+      const responseRestaurantId = getRestaurantIdentity(response?.data?.data?.restaurant)
+
+      if (currentRestaurantId && responseRestaurantId && currentRestaurantId !== responseRestaurantId) {
+        setPastCyclesData(null)
+        return
+      }
+
       if (response.data?.success && response.data?.data?.pastCycles) {
         setPastCyclesData(response.data.data.pastCycles)
       } else {
@@ -710,9 +853,14 @@ export default function HubFinance() {
                       ₹{(financeData?.currentCycle?.estimatedPayout || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                     <p className="text-sm text-gray-600 mb-4">
-                      {financeData?.currentCycle?.totalOrders || 0} {financeData?.currentCycle?.totalOrders === 1 ? 'order' : 'orders'}
+                      {displayCurrentCycleOrders} {displayCurrentCycleOrders === 1 ? 'order' : 'orders'}
                     </p>
-                    {(financeData?.currentCycle?.estimatedPayout || 0) > 0 && (
+                    {!commissionConfigured && (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                        {commissionMessage}
+                      </div>
+                    )}
+                    {commissionConfigured && (financeData?.currentCycle?.estimatedPayout || 0) > 0 && (
                       <button
                         onClick={() => setShowWithdrawalModal(true)}
                         className="w-full bg-black text-white py-3 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors mt-4"
@@ -921,8 +1069,13 @@ export default function HubFinance() {
                   </div>
                 ) : (
                   <>
+                    {!commissionConfigured && (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                        <p className="text-sm text-amber-800">{commissionMessage}</p>
+                      </div>
+                    )}
                     {/* Show past cycles orders if available */}
-                    {pastCyclesData && pastCyclesData.orders && pastCyclesData.orders.length > 0 && (
+                    {commissionConfigured && pastCyclesData && pastCyclesData.orders && pastCyclesData.orders.length > 0 && (
                       <div className="bg-white rounded-lg p-4 space-y-3">
                         {pastCyclesData.orders.map((order, index) => (
                           <div key={order.orderId || index} className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0">
@@ -949,7 +1102,7 @@ export default function HubFinance() {
                       </div>
                     )}
                     {/* Show current cycle orders if past cycles data is not available or has no orders */}
-                    {(!pastCyclesData || !pastCyclesData.orders || pastCyclesData.orders.length === 0) && !loadingPastCycles && financeData?.currentCycle?.orders && financeData.currentCycle.orders.length > 0 && (
+                    {commissionConfigured && (!pastCyclesData || !pastCyclesData.orders || pastCyclesData.orders.length === 0) && !loadingPastCycles && financeData?.currentCycle?.orders && financeData.currentCycle.orders.length > 0 && (
                       <div className="bg-white rounded-lg p-4 space-y-3">
                         {financeData.currentCycle.orders.map((order, index) => (
                           <div key={order.orderId || index} className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0">
@@ -1109,6 +1262,7 @@ export default function HubFinance() {
                     value={withdrawalAmount}
                     onChange={(e) => setWithdrawalAmount(e.target.value)}
                     placeholder="0.00"
+                    disabled={!commissionConfigured}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-black focus:border-transparent outline-none"
                   />
                   {withdrawalAmount && parseFloat(withdrawalAmount) > (financeData?.currentCycle?.estimatedPayout || 0) && (
@@ -1128,6 +1282,10 @@ export default function HubFinance() {
                   </button>
                   <button
                     onClick={async () => {
+                      if (!commissionConfigured) {
+                        alert(commissionMessage)
+                        return
+                      }
                       const amount = parseFloat(withdrawalAmount)
                       if (!amount || amount <= 0) {
                         alert('Please enter a valid amount')
@@ -1145,11 +1303,10 @@ export default function HubFinance() {
                           alert('Withdrawal request submitted successfully!')
                           setShowWithdrawalModal(false)
                           setWithdrawalAmount('')
-                          // Refresh finance data
-                          const financeResponse = await restaurantAPI.getFinance()
-                          if (financeResponse.data?.success && financeResponse.data?.data) {
-                            setFinanceData(financeResponse.data.data)
-                          }
+                          await Promise.allSettled([
+                            refreshFinanceScreen(),
+                            syncWalletState(),
+                          ])
                         } else {
                           alert(response.data?.message || 'Failed to submit withdrawal request')
                         }
@@ -1160,7 +1317,7 @@ export default function HubFinance() {
                         setSubmittingWithdrawal(false)
                       }
                     }}
-                    disabled={submittingWithdrawal || !withdrawalAmount || parseFloat(withdrawalAmount) <= 0 || parseFloat(withdrawalAmount) > (financeData?.currentCycle?.estimatedPayout || 0)}
+                    disabled={!commissionConfigured || submittingWithdrawal || !withdrawalAmount || parseFloat(withdrawalAmount) <= 0 || parseFloat(withdrawalAmount) > (financeData?.currentCycle?.estimatedPayout || 0)}
                     className="flex-1 px-4 py-3 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                   >
                     {submittingWithdrawal ? 'Submitting...' : 'Submit Request'}

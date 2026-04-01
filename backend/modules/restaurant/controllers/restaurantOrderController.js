@@ -145,6 +145,16 @@ export const getRestaurantOrders = asyncHandler(async (req, res) => {
     const { status, page = 1, limit = 50 } = req.query;
     const includeItemImages = parseBooleanQuery(req.query.includeItemImages, true);
     const compact = parseBooleanQuery(req.query.compact, false);
+    const orderPlatformQuery =
+      restaurant?.platform === 'mogrocery'
+        ? { restaurantPlatform: 'mogrocery' }
+        : {
+            $or: [
+              { restaurantPlatform: 'mofood' },
+              { restaurantPlatform: { $exists: false } },
+              { restaurantPlatform: null }
+            ]
+          };
 
     // Get restaurant ID - normalize to string (Order.restaurantId is String type)
     const restaurantIdString = restaurant._id?.toString() ||
@@ -188,6 +198,7 @@ export const getRestaurantOrders = asyncHandler(async (req, res) => {
     // Build query - search for orders with any matching restaurantId variation
     // Use $in for multiple variations and also try direct match as fallback
     const query = {
+      ...orderPlatformQuery,
       $or: [
         { restaurantId: { $in: restaurantIdVariations } },
         // Direct match fallback

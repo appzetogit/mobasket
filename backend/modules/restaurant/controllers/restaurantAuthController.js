@@ -10,17 +10,15 @@ import { isOpenFromOutletTimings } from '../utils/outletTimingStatus.js';
 import winston from 'winston';
 
 /**
- * Build phone query that searches in multiple formats (with/without country code)
- * This handles both old data (without country code) and new data (with country code)
+ * Build auth phone query that searches only the primary login phone field.
+ * Do not match owner/contact numbers here, otherwise a new outlet can inherit
+ * another outlet's session, orders, and wallet history just because they share
+ * an owner contact number.
  */
 const buildPhoneQuery = (normalizedPhone) => {
   if (!normalizedPhone) return null;
 
-  const buildPhoneFieldOr = (phoneValue) => ([
-    { phone: phoneValue },
-    { ownerPhone: phoneValue },
-    { primaryContactNumber: phoneValue }
-  ]);
+  const buildPhoneFieldOr = (phoneValue) => ([{ phone: phoneValue }]);
 
   // Check if normalized phone has country code (starts with 91 and is 12 digits)
   if (normalizedPhone.startsWith('91') && normalizedPhone.length === 12) {
@@ -966,8 +964,9 @@ const normalizeRestaurantOnboardingState = (restaurant) => {
 };
 
 /**
- * Find restaurant by phone deterministically across legacy formats.
- * Prioritizes exact normalized phone on the primary `phone` field to avoid ambiguity.
+ * Find restaurant by primary auth phone deterministically across legacy formats.
+ * This intentionally ignores owner/contact phone fields so phone-based auth only
+ * resolves the outlet account that actually owns the login identity.
  */
 const findRestaurantByNormalizedPhone = async (normalizedPhone) => {
   const phoneQuery = buildPhoneQuery(normalizedPhone);
@@ -979,13 +978,9 @@ const findRestaurantByNormalizedPhone = async (normalizedPhone) => {
   const scoreMatch = (restaurant) => {
     let score = 0;
     const phone = String(restaurant?.phone || '').trim();
-    const ownerPhone = String(restaurant?.ownerPhone || '').trim();
-    const primaryContactNumber = String(restaurant?.primaryContactNumber || '').trim();
 
     if (phone && normalizePhoneNumber(phone) === normalizedPhone) score += 100;
     if (phone === normalizedPhone) score += 120;
-    if (ownerPhone && normalizePhoneNumber(ownerPhone) === normalizedPhone) score += 60;
-    if (primaryContactNumber && normalizePhoneNumber(primaryContactNumber) === normalizedPhone) score += 40;
     if (restaurant?.phoneVerified) score += 10;
     if (restaurant?.status === 'active' || restaurant?.status === 'approved') score += 10;
     if (restaurant?.isActive) score += 5;

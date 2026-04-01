@@ -15,6 +15,16 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
   try {
     const restaurant = req.restaurant;
     const { startDate, endDate } = req.query;
+    const orderPlatformQuery =
+      restaurant?.platform === 'mogrocery'
+        ? { restaurantPlatform: 'mogrocery' }
+        : {
+            $or: [
+              { restaurantPlatform: 'mofood' },
+              { restaurantPlatform: { $exists: false } },
+              { restaurantPlatform: null }
+            ]
+          };
 
     // Get restaurant ID
     const restaurantId = restaurant._id?.toString() || restaurant.restaurantId || restaurant.id;
@@ -66,13 +76,14 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
     }
 
     // Helper function to calculate commission for an order
+    const commissionConfigured = Boolean(restaurantCommission?.status);
     const calculateCommissionForOrder = (orderAmount) => {
-      if (!restaurantCommission || !restaurantCommission.status) {
-        // Default 10% if no commission setup
+      if (!commissionConfigured) {
         return {
-          commission: (orderAmount * 10) / 100,
-          type: 'percentage',
-          value: 10
+          commission: 0,
+          type: null,
+          value: null,
+          configured: false
         };
       }
 
@@ -124,7 +135,8 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
       return {
         commission: Math.round(commission * 100) / 100,
         type: commissionType,
-        value: commissionValue
+        value: commissionValue,
+        configured: true
       };
     };
 
@@ -132,6 +144,7 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
     // Query orders that were delivered in the current cycle
     // First try with deliveredAt, if not found, use tracking.delivered.timestamp as fallback
     let currentCycleOrders = await Order.find({
+      ...orderPlatformQuery,
       ...restaurantIdQuery,
       status: 'delivered',
       $or: [
@@ -146,6 +159,7 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
     // If no orders found with deliveredAt/tracking, check by createdAt as last resort
     if (currentCycleOrders.length === 0) {
       currentCycleOrders = await Order.find({
+        ...orderPlatformQuery,
         ...restaurantIdQuery,
         status: 'delivered',
         createdAt: { $gte: currentCycleStart, $lte: currentCycleEnd }
@@ -210,7 +224,7 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
       // Food price = subtotal - discount (this is what commission is calculated on)
       const foodPrice = (order.pricing?.subtotal || 0) - (order.pricing?.discount || 0);
       const commissionData = calculateCommissionForOrder(foodPrice);
-      const payout = foodPrice - commissionData.commission;
+      const payout = commissionConfigured ? (foodPrice - commissionData.commission) : 0;
       
       currentCycleTotal += foodPrice; // Use food price, not total
       currentCycleCommission += commissionData.commission;
@@ -310,6 +324,7 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
         platformFee,
         deliveryFee,
         commission: commissionData.commission,
+        commissionConfigured,
         payout,
         deliveredAt: order.deliveredAt || order.createdAt,
         createdAt: order.createdAt,
@@ -346,6 +361,7 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
       // Query orders that were delivered in the past cycle
       // First try with deliveredAt, if not found, use tracking.delivered.timestamp as fallback
       let pastCycleOrders = await Order.find({
+        ...orderPlatformQuery,
         ...restaurantIdQuery,
         status: 'delivered',
         $or: [
@@ -359,6 +375,7 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
       // If no orders found with deliveredAt/tracking, check by createdAt as last resort
       if (pastCycleOrders.length === 0) {
         pastCycleOrders = await Order.find({
+          ...orderPlatformQuery,
           ...restaurantIdQuery,
           status: 'delivered',
           createdAt: { $gte: start, $lte: end }
@@ -412,7 +429,7 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
         // Food price = subtotal - discount (this is what commission is calculated on)
         const foodPrice = (order.pricing?.subtotal || 0) - (order.pricing?.discount || 0);
         const commissionData = calculateCommissionForOrder(foodPrice);
-        const payout = foodPrice - commissionData.commission;
+        const payout = commissionConfigured ? (foodPrice - commissionData.commission) : 0;
         
         pastCycleTotal += foodPrice; // Use food price, not total
         pastCycleCommission += commissionData.commission;
@@ -490,6 +507,7 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
           platformFee,
           deliveryFee,
           commission: commissionData.commission,
+          commissionConfigured,
           payout,
           deliveredAt: order.deliveredAt || order.createdAt,
           createdAt: order.createdAt,
@@ -505,6 +523,7 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
     }));
 
       pastCyclesData = {
+        commissionConfigured,
         dateRange: {
           start: formatCycleDate(start),
           end: formatCycleDate(end)
@@ -515,7 +534,9 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
         totalTax: Math.round(pastCycleTax * 100) / 100,
         totalPlatformFee: Math.round(pastCyclePlatformFee * 100) / 100,
         totalDeliveryFee: Math.round(pastCycleDeliveryFee * 100) / 100,
-        estimatedPayout: Math.round((pastCycleTotal - pastCycleCommission) * 100) / 100,
+        estimatedPayout: commissionConfigured
+          ? Math.round((pastCycleTotal - pastCycleCommission) * 100) / 100
+          : 0,
         orders: pastCycleOrdersData
       };
     }
@@ -534,7 +555,9 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
     
     // Subtract all withdrawals (pending + approved) from estimatedPayout to show available balance
     // This ensures end-to-end withdrawal calculation works correctly
-    const availablePayout = Math.max(0, Math.round((currentCyclePayout - totalWithdrawals) * 100) / 100);
+    const availablePayout = commissionConfigured
+      ? Math.max(0, Math.round((currentCyclePayout - totalWithdrawals) * 100) / 100)
+      : 0;
     
     console.log('💰 Finance Calculation:', {
       currentCyclePayout,
@@ -545,9 +568,15 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
     });
 
     return successResponse(res, 200, 'Finance data retrieved successfully', {
+      commissionConfigured,
+      commissionSetupRequired: !commissionConfigured,
+      commissionMessage: commissionConfigured
+        ? null
+        : 'Restaurant commission is not configured yet. Please ask admin to set commission before viewing payouts.',
       currentCycle: {
         start: currentCycleStartFormatted,
         end: currentCycleEndFormatted,
+        commissionConfigured,
         totalOrders: currentCycleOrders.length,
         totalOrderValue: Math.round(currentCycleTotal * 100) / 100,
         totalCommission: Math.round(currentCycleCommission * 100) / 100,
