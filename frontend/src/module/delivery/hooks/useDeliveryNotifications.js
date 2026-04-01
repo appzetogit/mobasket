@@ -191,6 +191,7 @@ export const useDeliveryNotifications = (options = {}) => {
   
   // Step 2: All state hooks (unconditional)
   const [newOrder, setNewOrder] = useState(null);
+  const [newOrderQueue, setNewOrderQueue] = useState([]);
   const [orderReady, setOrderReady] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [deliveryPartnerId, setDeliveryPartnerId] = useState(null);
@@ -258,6 +259,7 @@ export const useDeliveryNotifications = (options = {}) => {
       setIsConnected(false);
       setDeliveryPartnerId(null);
       setNewOrder(null);
+      setNewOrderQueue([]);
       setOrderReady(null);
       if (socketRef.current) {
         socketRef.current.disconnect();
@@ -353,6 +355,29 @@ export const useDeliveryNotifications = (options = {}) => {
       .filter(Boolean);
   }, []);
 
+  const isSameOrderPayload = useCallback((leftOrder = {}, rightOrder = {}) => {
+    const leftIds = normalizeOrderIds(leftOrder);
+    const rightIds = normalizeOrderIds(rightOrder);
+    if (leftIds.length === 0 || rightIds.length === 0) return false;
+    return leftIds.some((id) => rightIds.includes(id));
+  }, [normalizeOrderIds]);
+
+  const enqueueNewOrderNotification = useCallback((orderData = {}) => {
+    setNewOrderQueue((currentQueue) => {
+      const nextIds = normalizeOrderIds(orderData);
+      if (nextIds.length === 0) return currentQueue;
+
+      const existingIndex = currentQueue.findIndex((queuedOrder) => isSameOrderPayload(queuedOrder, orderData));
+      if (existingIndex >= 0) {
+        return currentQueue.map((queuedOrder, index) =>
+          index === existingIndex ? { ...queuedOrder, ...orderData } : queuedOrder
+        );
+      }
+
+      return [...currentQueue, orderData];
+    });
+  }, [isSameOrderPayload, normalizeOrderIds]);
+
   const suppressOrderNotifications = useCallback((...orderIds) => {
     let changed = false;
     orderIds
@@ -370,11 +395,12 @@ export const useDeliveryNotifications = (options = {}) => {
       persistSuppressedOrderIds(suppressedOrderIdsRef.current);
     }
 
-    setNewOrder((currentOrder) => {
-      if (!currentOrder) return currentOrder;
-      const currentIds = normalizeOrderIds(currentOrder);
-      return currentIds.some((id) => suppressedOrderIdsRef.current.has(id)) ? null : currentOrder;
-    });
+    setNewOrderQueue((currentQueue) =>
+      currentQueue.filter((queuedOrder) => {
+        const queuedIds = normalizeOrderIds(queuedOrder);
+        return !queuedIds.some((id) => suppressedOrderIdsRef.current.has(id));
+      })
+    );
     setOrderReady((currentOrder) => {
       if (!currentOrder) return currentOrder;
       const currentIds = normalizeOrderIds(currentOrder);
@@ -459,6 +485,17 @@ export const useDeliveryNotifications = (options = {}) => {
   const canReceiveOrderAlerts = useCallback(() => {
     return enabled && isEligibleForOrders && isRiderOnlineForOrders();
   }, [enabled, isEligibleForOrders, isRiderOnlineForOrders]);
+
+  useEffect(() => {
+    setNewOrder((currentOrder) => {
+      const queuedHead = newOrderQueue[0] || null;
+      if (!queuedHead) return null;
+      if (currentOrder && isSameOrderPayload(currentOrder, queuedHead)) {
+        return { ...currentOrder, ...queuedHead };
+      }
+      return queuedHead;
+    });
+  }, [isSameOrderPayload, newOrderQueue]);
 
   // Step 4: All effects (unconditional hook calls, conditional logic inside)
   useEffect(() => {
@@ -706,7 +743,7 @@ export const useDeliveryNotifications = (options = {}) => {
       ) {
         return;
       }
-      setNewOrder(orderData);
+      enqueueNewOrderNotification(orderData);
       playNotificationSound();
       triggerOrderBuzz();
       if (enableBrowserNotificationRef.current && document.hidden) {
@@ -780,7 +817,7 @@ export const useDeliveryNotifications = (options = {}) => {
         socketRef.current = null;
       }
     };
-  }, [canReceiveOrderAlerts, deliveryPartnerId, enabled, isEligibleForOrders, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, shouldReceiveAssignedOrderAlert, suppressOrderNotifications, triggerOrderBuzz]);
+  }, [canReceiveOrderAlerts, deliveryPartnerId, enabled, enqueueNewOrderNotification, isEligibleForOrders, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, shouldReceiveAssignedOrderAlert, suppressOrderNotifications, triggerOrderBuzz]);
 
   useEffect(() => {
     // Keep polling even when the socket is connected so the rider still gets
@@ -830,15 +867,13 @@ export const useDeliveryNotifications = (options = {}) => {
         const incomingIds = normalizeOrderIds(normalizedOrder);
         let shouldTriggerAlert = false;
 
-        setNewOrder((currentOrder) => {
-          const currentIds = normalizeOrderIds(currentOrder);
-          const isSameOrder =
-            currentIds.length > 0 &&
-            incomingIds.some((id) => currentIds.includes(id));
-
-          shouldTriggerAlert = !isSameOrder;
-          return isSameOrder ? currentOrder : normalizedOrder;
+        const isAlreadyQueued = newOrderQueue.some((queuedOrder) => {
+          const queuedIds = normalizeOrderIds(queuedOrder);
+          return queuedIds.length > 0 && incomingIds.some((id) => queuedIds.includes(id));
         });
+
+        shouldTriggerAlert = !isAlreadyQueued;
+        enqueueNewOrderNotification(normalizedOrder);
 
         if (shouldTriggerAlert) {
           playNotificationSound();
@@ -861,12 +896,35 @@ export const useDeliveryNotifications = (options = {}) => {
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [deliveryPartnerId, enabled, isEligibleForOrders, isRiderOnlineForOrders, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, shouldReceiveAssignedOrderAlert, triggerOrderBuzz]);
+  }, [deliveryPartnerId, enabled, enqueueNewOrderNotification, isEligibleForOrders, isRiderOnlineForOrders, newOrderQueue, normalizeOrderIds, playNotificationSound, shouldIgnoreOrderNotification, shouldReceiveAssignedOrderAlert, triggerOrderBuzz]);
 
   // Helper functions
   const clearNewOrder = useCallback(() => {
-    setNewOrder(null);
+    setNewOrderQueue((currentQueue) => currentQueue.slice(1));
   }, []);
+
+  const prioritizeNewOrderNotification = useCallback((targetOrder) => {
+    const targetIds =
+      typeof targetOrder === 'object' && targetOrder !== null
+        ? normalizeOrderIds(targetOrder)
+        : [targetOrder == null ? null : String(targetOrder)].filter(Boolean);
+
+    if (targetIds.length === 0) return;
+
+    setNewOrderQueue((currentQueue) => {
+      const targetIndex = currentQueue.findIndex((queuedOrder) => {
+        const queuedIds = normalizeOrderIds(queuedOrder);
+        return queuedIds.some((id) => targetIds.includes(id));
+      });
+
+      if (targetIndex <= 0) return currentQueue;
+
+      const nextQueue = currentQueue.slice();
+      const [targetItem] = nextQueue.splice(targetIndex, 1);
+      nextQueue.unshift(targetItem);
+      return nextQueue;
+    });
+  }, [normalizeOrderIds]);
 
   const clearOrderReady = useCallback(() => {
     setOrderReady(null);
@@ -874,6 +932,9 @@ export const useDeliveryNotifications = (options = {}) => {
 
   return {
     newOrder,
+    pendingNewOrders: newOrderQueue,
+    pendingNewOrdersCount: newOrderQueue.length,
+    prioritizeNewOrderNotification,
     clearNewOrder,
     orderReady,
     clearOrderReady,

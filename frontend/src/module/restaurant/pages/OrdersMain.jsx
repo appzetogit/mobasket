@@ -128,6 +128,14 @@ const resolveDeliveryAssignment = (order = {}) => {
   }
 }
 
+const resolveAcceptanceSummary = (order = {}, isGroceryStore = false) => {
+  const source = String(order?.acceptanceInfo?.source || "").trim().toLowerCase()
+
+  if (source === "admin") return "Accepted by admin"
+  if (source === "restaurant") return isGroceryStore ? "Accepted by store" : "Accepted by restaurant"
+  return ""
+}
+
 // Completed Orders List Component
 function NewOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 0 }) {
   const [orders, setOrders] = useState([])
@@ -2093,7 +2101,7 @@ export default function OrdersMain() {
       case "all":
         return <NewOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
       case "preparing":
-        return <PreparingOrders onSelectOrder={handleSelectOrder} onCancel={handleCancelClick} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
+        return <PreparingOrders onSelectOrder={handleSelectOrder} onCancel={handleCancelClick} orderAPI={orderAPI} isGroceryStore={isGroceryStore} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
       case "ready":
         return <ReadyOrders onSelectOrder={handleSelectOrder} orderAPI={orderAPI} searchQuery={searchQuery} refreshTick={ordersRefreshTick} />
       case "out-for-delivery":
@@ -3017,6 +3025,7 @@ function OrderCard({
   photoAlt,
   deliveryPartnerId,
   hasDeliveryAssignment,
+  acceptanceLabel,
   onSelect,
   onCancel,
   onMarkReady,
@@ -3057,6 +3066,7 @@ function OrderCard({
             itemsSummary,
             deliveryPartnerId,
             hasDeliveryAssignment,
+            acceptanceLabel,
           })
         }
         className={`w-full text-left flex gap-3 items-stretch cursor-pointer ${normalizedStatus === "preparing" ? "pr-8" : ""}`}
@@ -3089,6 +3099,11 @@ function OrderCard({
               <p className="text-[11px] text-gray-500 mt-1">
                 {customerName}
               </p>
+              {acceptanceLabel && (
+                <p className="text-[11px] text-green-700 mt-1 font-medium">
+                  {acceptanceLabel}
+                </p>
+              )}
             </div>
 
             <div className="flex flex-col items-end gap-1">
@@ -3172,7 +3187,7 @@ function OrderCard({
 }
 
 // Preparing Orders List
-function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "", refreshTick = 0 }) {
+function PreparingOrders({ onSelectOrder, onCancel, orderAPI, isGroceryStore = false, searchQuery = "", refreshTick = 0 }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
   const [currentTime, setCurrentTime] = useState(new Date())
@@ -3228,6 +3243,7 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "", 
               ? new Date(order.tracking.preparing.timestamp)
               : new Date(order.createdAt) // Fallback to createdAt if preparing timestamp not available
             const assignment = resolveDeliveryAssignment(order)
+            const acceptanceLabel = resolveAcceptanceSummary(order, isGroceryStore)
 
             return {
               orderId: order.orderId || order._id,
@@ -3244,6 +3260,7 @@ function PreparingOrders({ onSelectOrder, onCancel, orderAPI, searchQuery = "", 
               photoAlt: order.items?.[0]?.name || 'Order',
               deliveryPartnerId: assignment.deliveryPartnerId,
               hasDeliveryAssignment: assignment.hasDeliveryAssignment,
+              acceptanceLabel,
             }
           })
 

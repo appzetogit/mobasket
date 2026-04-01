@@ -14,6 +14,19 @@ import AuditLog from '../models/AuditLog.js';
 const normalizePlatform = (value) => (value === 'mogrocery' ? 'mogrocery' : 'mofood');
 const ORDER_SNAPSHOT_DIR = path.join(process.cwd(), 'cache');
 
+const hasAcceptedRider = (order = null) => {
+  const deliveryStateStatus = String(order?.deliveryState?.status || '').toLowerCase();
+  const notificationPhase = String(order?.assignmentInfo?.notificationPhase || '').toLowerCase();
+
+  return Boolean(
+    order?.deliveryState?.acceptedAt ||
+    ['accepted', 'en_route_to_pickup', 'at_pickup', 'en_route_to_delivery', 'at_delivery', 'completed'].includes(deliveryStateStatus) ||
+    String(order?.assignmentInfo?.assignedBy || '').toLowerCase() === 'delivery_accept' ||
+    notificationPhase === 'accepted' ||
+    ['out_for_delivery', 'delivered'].includes(String(order?.status || '').toLowerCase())
+  );
+};
+
 const getOrderSnapshotPath = (platform) =>
   path.join(ORDER_SNAPSHOT_DIR, `admin-orders-${normalizePlatform(platform)}.json`);
 
@@ -782,6 +795,7 @@ export const getOrders = asyncHandler(async (req, res) => {
         deliveryMap.get(String(order.assignmentInfo?.lastRejectedBy || '')) || null;
       const customerPhone = user?.phone || '';
       const restaurantPhone = restaurantContactMap.get(String(order.restaurantId || '')) || '';
+      const riderAccepted = hasAcceptedRider(order);
 
       // Map payment status
       const paymentMethod = String(order.payment?.method || '').toLowerCase();
@@ -951,8 +965,8 @@ export const getOrders = asyncHandler(async (req, res) => {
           notificationPhase: order.assignmentInfo?.notificationPhase || null,
           deliveryPartnerId: order.assignmentInfo?.deliveryPartnerId || null,
           acceptedFromNotification: Boolean(order.assignmentInfo?.acceptedFromNotification),
-          acceptedByName: assignmentDelivery?.name || delivery?.name || null,
-          acceptedByPhone: assignmentDelivery?.phone || delivery?.phone || null,
+          acceptedByName: riderAccepted ? (delivery?.name || assignmentDelivery?.name || null) : null,
+          acceptedByPhone: riderAccepted ? (delivery?.phone || assignmentDelivery?.phone || null) : null,
           lastRejectedBy: order.assignmentInfo?.lastRejectedBy || null,
           lastRejectedByName: lastRejectedDelivery?.name || null,
           lastRejectedByPhone: lastRejectedDelivery?.phone || null,
@@ -1459,6 +1473,11 @@ export const approveOrderRequest = asyncHandler(async (req, res) => {
       reviewedAt: new Date(),
       reviewedBy: adminId || null
     };
+    order.acceptanceInfo = {
+      source: 'admin',
+      acceptedAt: new Date(),
+      acceptedByAdmin: adminId || null
+    };
 
     order.status = 'preparing';
     if (!order.tracking?.confirmed?.status) {
@@ -1493,6 +1512,7 @@ export const approveOrderRequest = asyncHandler(async (req, res) => {
 export const acceptOrderFromAdmin = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
+    const adminId = req.user?._id || req.admin?._id;
 
     const order = await resolveAdminOrderById(id);
     if (!order) {
@@ -1520,6 +1540,10 @@ export const acceptOrderFromAdmin = asyncHandler(async (req, res) => {
 
     req.params.id = order._id.toString();
     req.restaurant = storeDocument;
+    req.acceptanceActor = {
+      source: 'admin',
+      adminId: adminId || null
+    };
     req.body = {
       ...(req.body || {}),
       skipDeliveryAssignment: true,
@@ -1713,7 +1737,7 @@ export const getRiderAssignmentDetails = asyncHandler(async (req, res) => {
       status: populated?.status || order.status,
       isMoGrocery,
       adminApprovalStatus: populated?.adminApproval?.status || null,
-      accepted: Boolean(populated?.deliveryPartnerId),
+      accepted: hasAcceptedRider(populated),
       rider: populated?.deliveryPartnerId
         ? {
             id: populated.deliveryPartnerId?._id?.toString?.() || populated.deliveryPartnerId?._id || null,
@@ -1722,7 +1746,7 @@ export const getRiderAssignmentDetails = asyncHandler(async (req, res) => {
             deliveryId: populated.deliveryPartnerId?.deliveryId || null
           }
         : null,
-      acceptedAt: populated?.deliveryState?.acceptedAt || populated?.assignmentInfo?.assignedAt || null,
+      acceptedAt: populated?.deliveryState?.acceptedAt || null,
       currentPhase: populated?.deliveryState?.currentPhase || null,
       deliveryStatus: populated?.deliveryState?.status || null,
       assignmentInfo: {

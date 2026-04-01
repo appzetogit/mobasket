@@ -228,6 +228,14 @@ const filterOptions = {
   ]
 }
 
+const getAcceptanceSummary = (order, isStore) => {
+  const source = String(order?.acceptanceInfo?.source || "").trim().toLowerCase()
+
+  if (source === "admin") return "Accepted by admin"
+  if (source === "restaurant") return isStore ? "Accepted by store" : "Accepted by restaurant"
+  return ""
+}
+
 export default function AllOrdersPage() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -361,6 +369,7 @@ export default function AllOrdersPage() {
       items,
       totalPrice: order.pricing?.total || 0,
       reason,
+      acceptanceLabel,
       tags: tags.length > 0 ? tags : undefined,
       createdAt: order.createdAt,
       mongoId: order._id?.toString()
@@ -765,6 +774,11 @@ export default function AllOrdersPage() {
             <p className="text-sm text-gray-600 mb-3">
               Ordered by {order.customer}
             </p>
+            {order.acceptanceLabel && (
+              <p className="text-sm text-green-700 mb-3 font-medium">
+                {order.acceptanceLabel}
+              </p>
+            )}
 
             {/* Divider */}
             <div className="border-t border-dashed border-gray-300 my-3"></div>

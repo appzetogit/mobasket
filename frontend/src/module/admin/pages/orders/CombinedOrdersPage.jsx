@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useRef } from "react"
+import { useMemo, useState, useEffect, useRef, useCallback } from "react"
 import { useLocation } from "react-router-dom"
 import { BellRing, Loader2, Search, Bike } from "lucide-react"
 import { adminAPI } from "@/lib/api"
@@ -28,6 +28,20 @@ const isAwaitingStoreDecision = (order) => {
   return ["pending", "confirmed", "scheduled"].includes(backendStatus)
 }
 
+const hasRiderAcceptedOrder = (order) => {
+  const deliveryStateStatus = String(order?.deliveryState?.status || "").toLowerCase()
+
+  return Boolean(
+    order?.deliveryState?.acceptedAt ||
+    ["accepted", "en_route_to_pickup", "at_pickup", "en_route_to_delivery", "at_delivery", "completed"].includes(deliveryStateStatus) ||
+    String(order?.assignmentInfo?.assignedBy || "").toLowerCase() === "delivery_accept" ||
+    ["out_for_delivery", "delivered"].includes(String(order?.status || "").toLowerCase())
+  )
+}
+
+const getOrderTrackingId = (order) =>
+  String(order?.id || order?._id || order?.orderId || "").trim()
+
 export default function CombinedOrdersPage() {
   const location = useLocation()
   const [orders, setOrders] = useState([])
@@ -45,6 +59,7 @@ export default function CombinedOrdersPage() {
   const [deliverySearchQuery, setDeliverySearchQuery] = useState("")
   const [assigningDeliveryPartnerId, setAssigningDeliveryPartnerId] = useState("")
   const [dismissedAssignmentOrderIds, setDismissedAssignmentOrderIds] = useState([])
+  const [assignmentOrderLoading, setAssignmentOrderLoading] = useState(false)
   const knownOrderIdsRef = useRef(new Set())
   const isMountedRef = useRef(true)
   const audioRef = useRef(null)
@@ -82,6 +97,11 @@ export default function CombinedOrdersPage() {
   const selectedOrderIsGrocery = useMemo(
     () => String(selectedOrder?.restaurantPlatform || "").toLowerCase() === "mogrocery",
     [selectedOrder]
+  )
+
+  const selectedAssignmentHasAcceptedRider = useMemo(
+    () => hasRiderAcceptedOrder(selectedOrderForAssignment),
+    [selectedOrderForAssignment]
   )
 
   const availableDeliveryPartnersForSelectedOrder = useMemo(() => {
@@ -262,6 +282,56 @@ export default function CombinedOrdersPage() {
     }
   }
 
+  const mergeOrderIntoCollections = useCallback((nextOrder) => {
+    if (!nextOrder) return
+
+    const trackingId = getOrderTrackingId(nextOrder)
+    if (!trackingId) return
+
+    setOrders((prev) =>
+      prev.map((order) =>
+        getOrderTrackingId(order) === trackingId
+          ? { ...order, ...nextOrder, restaurantPlatform: nextOrder.restaurantPlatform || order.restaurantPlatform }
+          : order
+      )
+    )
+
+    setSelectedOrder((prev) =>
+      prev && getOrderTrackingId(prev) === trackingId
+        ? { ...prev, ...nextOrder, restaurantPlatform: nextOrder.restaurantPlatform || prev.restaurantPlatform }
+        : prev
+    )
+
+    setSelectedOrderForAssignment((prev) =>
+      prev && getOrderTrackingId(prev) === trackingId
+        ? { ...prev, ...nextOrder, restaurantPlatform: nextOrder.restaurantPlatform || prev.restaurantPlatform }
+        : prev
+    )
+  }, [setSelectedOrder])
+
+  const refreshAssignmentOrderDetails = useCallback(async (orderLike, { silent = false } = {}) => {
+    const orderIdToUse = getOrderTrackingId(orderLike)
+    if (!orderIdToUse) return null
+
+    try {
+      if (!silent) setAssignmentOrderLoading(true)
+      const response = await adminAPI.getOrderById(orderIdToUse)
+      const nextOrder = response?.data?.data?.order
+      if (nextOrder) {
+        mergeOrderIntoCollections(nextOrder)
+        return nextOrder
+      }
+      return null
+    } catch (error) {
+      if (!silent) {
+        console.error("Error refreshing assignment order details:", error)
+      }
+      return null
+    } finally {
+      if (!silent) setAssignmentOrderLoading(false)
+    }
+  }, [mergeOrderIntoCollections])
+
   useEffect(() => {
     isMountedRef.current = true
     fetchOrders({ showLoader: true })
@@ -368,6 +438,17 @@ export default function CombinedOrdersPage() {
     setSearchQuery(String(prefillOrderSearch))
   }, [location.state, setSearchQuery])
 
+  useEffect(() => {
+    if (!isAssignRiderOpen || !selectedOrderForAssignment) return
+
+    refreshAssignmentOrderDetails(selectedOrderForAssignment)
+    const intervalId = window.setInterval(() => {
+      refreshAssignmentOrderDetails(selectedOrderForAssignment, { silent: true })
+    }, 5000)
+
+    return () => window.clearInterval(intervalId)
+  }, [isAssignRiderOpen, refreshAssignmentOrderDetails, selectedOrderForAssignment])
+
   const handleViewOrder = async (order) => {
     setSelectedOrder(order)
     setIsViewOrderOpen(true)
@@ -437,6 +518,7 @@ export default function CombinedOrdersPage() {
 
       const partners = response?.data?.data?.deliveryPartners || []
       setDeliveryPartners(Array.isArray(partners) ? partners : [])
+      await refreshAssignmentOrderDetails(order, { silent: true })
     } catch (error) {
       console.error("Error fetching delivery partners for manual assignment:", error)
       toast.error(error?.response?.data?.message || "Failed to load delivery partners")
@@ -461,16 +543,17 @@ export default function CombinedOrdersPage() {
 
     try {
       setAssigningDeliveryPartnerId(String(deliveryPartnerId))
-      await adminAPI.assignOrderToDeliveryPartner(orderIdToUse, deliveryPartnerId)
-      toast.success(`Assigned ${deliveryPartner.name || "delivery partner"} to order ${selectedOrderForAssignment?.orderId}`)
+      const response = await adminAPI.assignOrderToDeliveryPartner(orderIdToUse, deliveryPartnerId)
+      toast.success(
+        response?.data?.data?.reassigned
+          ? `Reassigned ${selectedOrderForAssignment?.orderId} to ${deliveryPartner.name || "delivery partner"}`
+          : `Assigned ${deliveryPartner.name || "delivery partner"} to order ${selectedOrderForAssignment?.orderId}`
+      )
       setDismissedAssignmentOrderIds((prev) =>
         prev.filter((id) => id !== String(orderIdToUse))
       )
-      setIsAssignRiderOpen(false)
-      setSelectedOrderForAssignment(null)
-      setDeliveryPartners([])
-      setDeliverySearchQuery("")
       await fetchOrders({ showLoader: false })
+      await refreshAssignmentOrderDetails(selectedOrderForAssignment, { silent: true })
     } catch (error) {
       console.error("Error assigning delivery partner manually:", error)
       toast.error(error?.response?.data?.message || "Failed to assign rider")
@@ -694,6 +777,34 @@ export default function CombinedOrdersPage() {
             </DialogDescription>
           </DialogHeader>
 
+          {selectedOrderForAssignment && (
+            <div className="px-6 py-4 border-b border-slate-200 bg-violet-50/60">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="inline-flex items-center rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 border border-slate-200">
+                  Order {selectedOrderForAssignment.orderId}
+                </span>
+                {selectedAssignmentHasAcceptedRider ? (
+                  <span className="inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                    Accepted by {selectedOrderForAssignment.deliveryPartnerName || "rider"}
+                  </span>
+                ) : selectedOrderForAssignment.deliveryPartnerName ? (
+                  <span className="inline-flex items-center rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-semibold text-sky-700">
+                    Waiting for {selectedOrderForAssignment.deliveryPartnerName}
+                  </span>
+                ) : selectedOrderForAssignment.assignmentInfo?.lastRejectedByName ? (
+                  <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                    Last declined by {selectedOrderForAssignment.assignmentInfo.lastRejectedByName}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center rounded-full bg-orange-100 px-2.5 py-1 text-[11px] font-semibold text-orange-700">
+                    No rider assigned yet
+                  </span>
+                )}
+                {assignmentOrderLoading && <Loader2 className="w-4 h-4 animate-spin text-violet-600" />}
+              </div>
+            </div>
+          )}
+
           <div className="px-6 py-4 border-b border-slate-200 bg-slate-50">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -721,6 +832,14 @@ export default function CombinedOrdersPage() {
               availableDeliveryPartnersForSelectedOrder.map((partner) => {
                 const partnerId = String(partner?._id || partner?.id || "")
                 const isAssigning = assigningDeliveryPartnerId === partnerId
+                const acceptedDeliveryPartnerId = String(selectedOrderForAssignment?.deliveryPartnerId || "")
+                const isAcceptedPartner =
+                  selectedAssignmentHasAcceptedRider &&
+                  acceptedDeliveryPartnerId &&
+                  acceptedDeliveryPartnerId === partnerId
+                const isCurrentAssignedPartner =
+                  String(selectedOrderForAssignment?.deliveryPartnerId || "") === partnerId &&
+                  !selectedAssignmentHasAcceptedRider
                 return (
                   <div
                     key={partnerId}
@@ -736,14 +855,30 @@ export default function CombinedOrdersPage() {
                       <p className="text-xs text-slate-500 mt-1">{partner?.phone || "No phone"}</p>
                       <p className="text-xs text-slate-500">{partner?.deliveryId || "No rider ID"}</p>
                       <p className="text-xs text-slate-500">{partner?.zone || "Zone not available"}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                          Active orders: {Number(partner?.assignedOrders || 0)}
+                        </span>
+                        <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                          Total orders: {Number(partner?.totalOrders || 0)}
+                        </span>
+                      </div>
                     </div>
                     <Button
                       type="button"
                       onClick={() => handleAssignRider(partner)}
-                      disabled={Boolean(assigningDeliveryPartnerId)}
+                      disabled={Boolean(assigningDeliveryPartnerId) || selectedAssignmentHasAcceptedRider || isCurrentAssignedPartner}
                       className="bg-violet-600 hover:bg-violet-700 text-white"
                     >
-                      {isAssigning ? <Loader2 className="w-4 h-4 animate-spin" /> : "Assign"}
+                      {isAssigning
+                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                        : selectedAssignmentHasAcceptedRider
+                          ? (isAcceptedPartner ? "Accepted" : "Locked")
+                          : isCurrentAssignedPartner
+                            ? "Assigned"
+                            : selectedOrderForAssignment?.deliveryPartnerId
+                              ? "Reassign"
+                              : "Assign"}
                     </Button>
                   </div>
                 )

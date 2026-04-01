@@ -105,6 +105,7 @@ const DELIVERY_LOCATION_DISTANCE_THRESHOLD_ACTIVE_KM = 0.01
 const DELIVERY_LOCATION_DISTANCE_THRESHOLD_IDLE_KM = 0.03
 const ROUTE_SIMULATION_TEST_PHONE = "7223077890"
 const DELIVERY_ALERT_AUDIO_CACHE_VERSION = "delivery-audio-v1"
+const DELIVERY_ACCEPTED_ADVANCE_ORDERS_KEY = "deliveryAcceptedAdvanceOrders"
 
 
 import BottomPopup from "../components/BottomPopup"
@@ -1924,7 +1925,17 @@ export default function DeliveryHome() {
   ].includes(deliveryStatusNormalized)
   const isDeliveryNotificationsEnabled = Boolean(deliveryStatusNormalized) && !isVerificationPendingLikeStatus
 
-  const { newOrder, clearNewOrder, orderReady, clearOrderReady, isConnected, suppressOrderNotifications } = useDeliveryNotifications({
+  const {
+    newOrder,
+    pendingNewOrders,
+    pendingNewOrdersCount,
+    prioritizeNewOrderNotification,
+    clearNewOrder,
+    orderReady,
+    clearOrderReady,
+    isConnected,
+    suppressOrderNotifications
+  } = useDeliveryNotifications({
     enabled: isDeliveryNotificationsEnabled,
     enableSound: false,
     enableBrowserNotification: false,
@@ -2903,6 +2914,15 @@ export default function DeliveryHome() {
 
 
   const [selectedRestaurant, setSelectedRestaurant] = useState(null)
+  const [acceptedAdvanceOrders, setAcceptedAdvanceOrders] = useState(() => {
+    try {
+      const raw = localStorage.getItem(DELIVERY_ACCEPTED_ADVANCE_ORDERS_KEY)
+      const parsed = raw ? JSON.parse(raw) : []
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  })
 
 
   const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false)
@@ -2964,6 +2984,7 @@ export default function DeliveryHome() {
 
 
   const [newOrderIsAnimatingToComplete, setNewOrderIsAnimatingToComplete] = useState(false)
+  const [showAdvancedOrdersPanel, setShowAdvancedOrdersPanel] = useState(false)
 
 
   const popupOrderId =
@@ -2973,6 +2994,64 @@ export default function DeliveryHome() {
     selectedRestaurant?.id ||
     null
 
+  const getQueuedOrderIdentity = useCallback((order) => {
+    if (!order) return null
+    return (
+      order.orderMongoId ||
+      order.mongoId ||
+      order._id ||
+      order.orderId ||
+      order.id ||
+      null
+    )
+  }, [])
+
+  const activeFlowOrderId = getQueuedOrderIdentity(selectedRestaurant)
+  const visiblePopupOrderId = getQueuedOrderIdentity(newOrder) || popupOrderId
+
+  const advancedOrders = useMemo(() => {
+    const blockedIds = new Set(
+      [activeFlowOrderId, visiblePopupOrderId]
+        .map((value) => (value == null ? null : String(value)))
+        .filter(Boolean)
+    )
+
+    return pendingNewOrders.filter((order) => {
+      const orderId = getQueuedOrderIdentity(order)
+      if (!orderId) return false
+      return !blockedIds.has(String(orderId))
+    })
+  }, [activeFlowOrderId, getQueuedOrderIdentity, pendingNewOrders, visiblePopupOrderId])
+
+  const totalAdvancedOrdersCount = advancedOrders.length + acceptedAdvanceOrders.length
+
+  const handleOpenAdvancedOrderFlow = useCallback((order) => {
+    const orderId = getQueuedOrderIdentity(order)
+    if (!orderId) return
+
+    prioritizeNewOrderNotification(order)
+    setShowAdvancedOrdersPanel(false)
+    setShowNewOrderPopup(true)
+    setIsNewOrderPopupMinimized(false)
+    setNewOrderDragY(0)
+  }, [getQueuedOrderIdentity, prioritizeNewOrderNotification])
+
+  useEffect(() => {
+    if (totalAdvancedOrdersCount === 0 && showAdvancedOrdersPanel) {
+      setShowAdvancedOrdersPanel(false)
+    }
+  }, [showAdvancedOrdersPanel, totalAdvancedOrdersCount])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        DELIVERY_ACCEPTED_ADVANCE_ORDERS_KEY,
+        JSON.stringify(acceptedAdvanceOrders)
+      )
+    } catch (error) {
+      console.warn("Failed to persist accepted advance orders:", error)
+    }
+  }, [acceptedAdvanceOrders])
 
   const newOrderPopupRef = useRef(null)
 
@@ -3105,6 +3184,7 @@ export default function DeliveryHome() {
 
 
   const [billImageUploaded, setBillImageUploaded] = useState(false)
+  const [billImageSkipped, setBillImageSkipped] = useState(false)
 
 
   const fileInputRef = useRef(null)
@@ -3227,6 +3307,13 @@ export default function DeliveryHome() {
             current.progress?.billImageUploaded ??
             current.billImageUploaded ??
             false,
+          billImageSkipped:
+            overrides.progress?.billImageSkipped ??
+            overrides.billImageSkipped ??
+            billImageSkipped ??
+            current.progress?.billImageSkipped ??
+            current.billImageSkipped ??
+            false,
           showreachedPickupPopup:
             overrides.progress?.showreachedPickupPopup ?? showreachedPickupPopup,
           showOrderIdConfirmationPopup:
@@ -3246,11 +3333,134 @@ export default function DeliveryHome() {
     selectedRestaurant,
     billImageUrl,
     billImageUploaded,
+    billImageSkipped,
     showreachedPickupPopup,
     showOrderIdConfirmationPopup,
     showReachedDropPopup,
     showOrderDeliveredAnimation
   ])
+
+  const hasBillProof = useMemo(() => {
+    return Boolean(
+      selectedRestaurant?.billImageUrl ||
+      selectedRestaurant?.deliveryState?.billImageUrl ||
+      billImageUploaded ||
+      billImageSkipped
+    )
+  }, [
+    selectedRestaurant?.billImageUrl,
+    selectedRestaurant?.deliveryState?.billImageUrl,
+    billImageUploaded,
+    billImageSkipped
+  ])
+
+  const handleSkipBillUpload = useCallback(() => {
+    setBillImageUrl(null)
+    setBillImageUploaded(false)
+    setBillImageSkipped(true)
+    persistDeliveryFlowProgress({
+      billImageUrl: null,
+      billImageUploaded: false,
+      billImageSkipped: true,
+      progress: {
+        billImageUrl: null,
+        billImageUploaded: false,
+        billImageSkipped: true
+      }
+    })
+    toast.success('Bill upload skipped')
+  }, [persistDeliveryFlowProgress])
+
+  const enqueueAcceptedAdvanceOrder = useCallback((nextOrder) => {
+    const nextOrderId = getQueuedOrderIdentity(nextOrder)
+    if (!nextOrderId) return
+
+    setAcceptedAdvanceOrders((currentOrders) => {
+      const existingIndex = currentOrders.findIndex((order) => {
+        const orderId = getQueuedOrderIdentity(order)
+        return orderId && String(orderId) === String(nextOrderId)
+      })
+
+      if (existingIndex >= 0) {
+        return currentOrders.map((order, index) =>
+          index === existingIndex ? { ...order, ...nextOrder } : order
+        )
+      }
+
+      return [...currentOrders, nextOrder]
+    })
+  }, [getQueuedOrderIdentity])
+
+  const removeAcceptedAdvanceOrder = useCallback((targetOrder) => {
+    const targetOrderId = getQueuedOrderIdentity(targetOrder)
+    if (!targetOrderId) return
+
+    setAcceptedAdvanceOrders((currentOrders) =>
+      currentOrders.filter((order) => {
+        const orderId = getQueuedOrderIdentity(order)
+        return !orderId || String(orderId) !== String(targetOrderId)
+      })
+    )
+  }, [getQueuedOrderIdentity])
+
+  const activateAcceptedAdvanceOrder = useCallback((nextOrder) => {
+    if (!nextOrder) return false
+
+    const normalizedOrder = {
+      ...nextOrder,
+      advanceAccepted: true,
+      advanceQueueState: 'active',
+      deliveryState: {
+        ...(nextOrder.deliveryState || {}),
+        status: nextOrder.deliveryState?.status || 'accepted',
+        currentPhase: nextOrder.deliveryState?.currentPhase || nextOrder.deliveryPhase || 'en_route_to_pickup'
+      },
+      deliveryPhase:
+        nextOrder.deliveryPhase ||
+        nextOrder.deliveryState?.currentPhase ||
+        'en_route_to_pickup'
+    }
+
+    setSelectedRestaurant(normalizedOrder)
+    selectedRestaurantRef.current = normalizedOrder
+    removeAcceptedAdvanceOrder(normalizedOrder)
+
+    setShowNewOrderPopup(false)
+    setShowreachedPickupPopup(true)
+    setShowOrderIdConfirmationPopup(false)
+    setShowReachedDropPopup(false)
+    setShowOrderDeliveredAnimation(false)
+    setShowCustomerReviewPopup(false)
+    setShowPaymentPage(false)
+    setNavigationMode('restaurant')
+    setBillImageUrl(normalizedOrder.billImageUrl || null)
+    setBillImageUploaded(Boolean(normalizedOrder.billImageUploaded || normalizedOrder.billImageUrl))
+    setBillImageSkipped(Boolean(normalizedOrder.billImageSkipped))
+
+    try {
+      localStorage.setItem('deliveryActiveOrder', JSON.stringify({
+        orderId: normalizedOrder.id || normalizedOrder.orderId,
+        restaurantInfo: normalizedOrder,
+        acceptedAt: normalizedOrder.advanceAcceptedAt || normalizedOrder.acceptedAt || new Date().toISOString(),
+        billImageUrl: normalizedOrder.billImageUrl || null,
+        billImageUploaded: Boolean(normalizedOrder.billImageUploaded || normalizedOrder.billImageUrl),
+        billImageSkipped: Boolean(normalizedOrder.billImageSkipped),
+        progress: {
+          billImageUrl: normalizedOrder.billImageUrl || null,
+          billImageUploaded: Boolean(normalizedOrder.billImageUploaded || normalizedOrder.billImageUrl),
+          billImageSkipped: Boolean(normalizedOrder.billImageSkipped),
+          showreachedPickupPopup: true,
+          showOrderIdConfirmationPopup: false,
+          showReachedDropPopup: false,
+          showOrderDeliveredAnimation: false
+        }
+      }))
+    } catch (error) {
+      console.warn('Failed to activate accepted advance order:', error)
+    }
+
+    return true
+  }, [removeAcceptedAdvanceOrder])
 
 
 
@@ -9205,13 +9415,48 @@ export default function DeliveryHome() {
 
 
 
-              console.log('[STORE] Updated restaurant info from backend:', restaurantInfo)
+              const currentActiveOrder = selectedRestaurantRef.current || selectedRestaurant
+              const currentActiveOrderId = getQueuedOrderIdentity(currentActiveOrder)
+              const acceptedOrderId = getQueuedOrderIdentity(restaurantInfo)
+              const shouldKeepAsAdvanceOrder =
+                Boolean(currentActiveOrderId) &&
+                Boolean(acceptedOrderId) &&
+                String(currentActiveOrderId) !== String(acceptedOrderId)
+
+              if (shouldKeepAsAdvanceOrder) {
+                enqueueAcceptedAdvanceOrder({
+                  ...restaurantInfo,
+                  advanceAccepted: true,
+                  advanceQueueState: 'accepted',
+                  advanceAcceptedAt: new Date().toISOString()
+                })
+                setShowNewOrderPopup(false)
+                setIsNewOrderPopupMinimized(false)
+                setNewOrderDragY(0)
+                toast.success('Advance order accepted. It will start right after the current delivery.')
+                markOrderAsAccepted(
+                  restaurantInfo?.id,
+                  restaurantInfo?.orderId,
+                  newOrder?.orderMongoId,
+                  newOrder?.orderId,
+                )
+                suppressOrderNotifications(
+                  restaurantInfo?.id,
+                  restaurantInfo?.orderId,
+                  newOrder?.orderMongoId,
+                  newOrder?.orderId,
+                )
+                clearNewOrder()
+                return
+              } else {
+                console.log('[STORE] Updated restaurant info from backend:', restaurantInfo)
 
 
-              // Update state immediately
+                // Update state immediately
 
 
-              setSelectedRestaurant(restaurantInfo)
+                setSelectedRestaurant(restaurantInfo)
+              }
 
 
             }
@@ -12587,12 +12832,15 @@ export default function DeliveryHome() {
 
 
           setBillImageUploaded(true)
+          setBillImageSkipped(false)
           persistDeliveryFlowProgress({
             billImageUrl: imageUrl,
             billImageUploaded: true,
+            billImageSkipped: false,
             progress: {
               billImageUrl: imageUrl,
-              billImageUploaded: true
+              billImageUploaded: true,
+              billImageSkipped: false
             }
           })
 
@@ -12722,13 +12970,13 @@ export default function DeliveryHome() {
 
 
 
-    // Disable swipe if bill image is not uploaded
+    // Disable swipe until the bill step is completed or intentionally skipped
 
 
-    if (!billImageUploaded) {
+    if (!hasBillProof) {
 
 
-      toast.error('Please upload bill image first')
+      toast.error('Please upload or skip the bill image step first')
 
 
       setOrderIdConfirmButtonProgress(0)
@@ -14965,7 +15213,15 @@ export default function DeliveryHome() {
       setNewOrderIsAnimatingToComplete(false)
 
 
-      setSelectedRestaurant(restaurantData)
+      const shouldPreserveCurrentOrder =
+        hasActiveOrderInProgress &&
+        Boolean(activeOrderId) &&
+        Boolean(orderId) &&
+        String(activeOrderId) !== String(orderId)
+
+      if (!shouldPreserveCurrentOrder) {
+        setSelectedRestaurant(restaurantData)
+      }
 
 
       setShowNewOrderPopup(true)
@@ -18852,13 +19108,6 @@ export default function DeliveryHome() {
 
 
 
-    const hasBillProof =
-      Boolean(selectedRestaurant?.billImageUrl) ||
-      Boolean(selectedRestaurant?.deliveryState?.billImageUrl) ||
-      Boolean(billImageUploaded)
-
-
-
     const isCustomerLeg =
 
 
@@ -18917,13 +19166,7 @@ export default function DeliveryHome() {
     selectedRestaurant?.deliveryState?.status,
 
 
-    selectedRestaurant?.billImageUrl,
-
-
-    selectedRestaurant?.deliveryState?.billImageUrl,
-
-
-    billImageUploaded,
+    hasBillProof,
 
 
     navigationMode
@@ -18989,11 +19232,6 @@ export default function DeliveryHome() {
       deliveryPhase === 'delivered' ||
       deliveryPhase === 'completed' ||
       deliveryStateStatus === 'delivered';
-
-    const hasBillProof =
-      Boolean(selectedRestaurant?.billImageUrl) ||
-      Boolean(selectedRestaurant?.deliveryState?.billImageUrl) ||
-      Boolean(billImageUploaded);
 
     const shouldShowCustomerMarker =
       (navigationMode === 'customer' || hasBillProof) &&
@@ -21874,8 +22112,13 @@ export default function DeliveryHome() {
             activeOrderData?.billImageUploaded ||
             restoredBillImageUrl
           )
+          const restoredBillImageSkipped = Boolean(
+            activeOrderData?.progress?.billImageSkipped ||
+            activeOrderData?.billImageSkipped
+          )
           setBillImageUrl(restoredBillImageUrl)
           setBillImageUploaded(restoredBillImageUploaded)
+          setBillImageSkipped(restoredBillImageSkipped)
 
 
 
@@ -21899,10 +22142,12 @@ export default function DeliveryHome() {
               acceptedAt: activeOrderData.acceptedAt || new Date().toISOString(),
               billImageUrl: restoredBillImageUrl,
               billImageUploaded: restoredBillImageUploaded,
+              billImageSkipped: restoredBillImageSkipped,
               progress: {
                 ...(activeOrderData.progress || {}),
                 billImageUrl: restoredBillImageUrl,
                 billImageUploaded: restoredBillImageUploaded,
+                billImageSkipped: restoredBillImageSkipped,
                 showreachedPickupPopup: shouldShowReachedPickup,
                 showOrderIdConfirmationPopup: shouldShowOrderIdConfirmation,
                 showReachedDropPopup: shouldShowReachedDrop,
@@ -25152,9 +25397,7 @@ export default function DeliveryHome() {
 
 
     selectedRestaurant?.routeToDelivery?.coordinates,
-    selectedRestaurant?.billImageUrl,
-    selectedRestaurant?.deliveryState?.billImageUrl,
-    billImageUploaded,
+    hasBillProof,
 
 
     riderLocation,
@@ -31626,6 +31869,186 @@ export default function DeliveryHome() {
 
       </BottomPopup>
 
+      <AnimatePresence>
+        {totalAdvancedOrdersCount > 0 && isOnline && (
+          <motion.button
+            initial={{ opacity: 0, scale: 0.9, y: -12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: -12 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setShowAdvancedOrdersPanel(true)}
+            className="fixed top-4 right-4 z-[96] flex items-center gap-3 rounded-full border border-orange-200 bg-white/95 px-3 py-2 shadow-[0_14px_40px_rgba(15,23,42,0.18)] backdrop-blur"
+          >
+            <div className="relative flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-orange-500 via-amber-500 to-yellow-400 text-white shadow-lg">
+              <span className="absolute inset-0 rounded-full bg-orange-300/50 animate-ping" />
+              <Bell className="h-5 w-5" />
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-black px-1 text-[10px] font-bold leading-none text-white">
+                {totalAdvancedOrdersCount}
+              </span>
+            </div>
+            <div className="text-left">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-500">Advance Orders</p>
+              <p className="text-sm font-semibold text-slate-900">
+                {acceptedAdvanceOrders.length > 0
+                  ? `${acceptedAdvanceOrders.length} accepted next`
+                  : `${advancedOrders.length} waiting`}
+              </p>
+              <p className="text-[11px] text-slate-500">
+                {advancedOrders.length > 0
+                  ? `${advancedOrders.length} to review`
+                  : 'Tap to view status'}
+              </p>
+            </div>
+          </motion.button>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showAdvancedOrdersPanel && totalAdvancedOrdersCount > 0 && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[104] bg-slate-950/45"
+              onClick={() => setShowAdvancedOrdersPanel(false)}
+            />
+
+            <motion.div
+              initial={{ opacity: 0, y: 32 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 32 }}
+              transition={{ type: "spring", damping: 24, stiffness: 260 }}
+              className="fixed inset-x-0 top-20 z-[105] mx-auto w-[calc(100%-24px)] max-w-sm overflow-hidden rounded-[28px] border border-orange-100 bg-white shadow-[0_22px_70px_rgba(15,23,42,0.28)]"
+            >
+              <div className="bg-gradient-to-r from-orange-500 via-amber-500 to-yellow-400 px-5 py-4 text-white">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/80">Advance Orders</p>
+                    <h3 className="mt-1 text-lg font-bold">Queued for you</h3>
+                    <p className="mt-1 text-sm text-white/90">
+                      Open any assigned order below to review and accept it without losing track of your current delivery.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowAdvancedOrdersPanel(false)}
+                    className="flex h-9 w-9 items-center justify-center rounded-full bg-white/18 text-white transition hover:bg-white/28"
+                    aria-label="Close advanced orders"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="max-h-[60vh] space-y-4 overflow-y-auto px-4 py-4">
+                {acceptedAdvanceOrders.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-600">Accepted Next</p>
+                      <span className="rounded-full bg-emerald-100 px-2 py-1 text-[11px] font-semibold text-emerald-700">
+                        Ready after current order
+                      </span>
+                    </div>
+
+                    {acceptedAdvanceOrders.map((order) => {
+                      const orderId = getQueuedOrderIdentity(order)
+                      const earnings = Number(order?.estimatedEarnings || order?.amount || order?.deliveryFee || 0)
+
+                      return (
+                        <div
+                          key={`accepted-${String(orderId)}`}
+                          className="w-full rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-left"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-600">Accepted in Advance</p>
+                              <h4 className="mt-1 text-base font-bold text-slate-900">
+                                {order?.restaurantName || order?.name || "Restaurant"}
+                              </h4>
+                              <p className="mt-1 text-xs text-slate-500">
+                                Order {order?.orderId || orderId || "Pending"}
+                              </p>
+                            </div>
+                            <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-emerald-700">
+                              Rs {Number.isFinite(earnings) ? earnings.toFixed(0) : "0"}
+                            </div>
+                          </div>
+
+                          <p className="mt-3 text-sm text-slate-600">
+                            This one is locked in and will become active automatically after the current delivery is completed.
+                          </p>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {advancedOrders.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-orange-500">Pending Review</p>
+                      <span className="rounded-full bg-orange-100 px-2 py-1 text-[11px] font-semibold text-orange-700">
+                        Tap any card to open
+                      </span>
+                    </div>
+
+                    {advancedOrders.map((order) => {
+                  const orderId = getQueuedOrderIdentity(order)
+                  const earnings = Number(order?.estimatedEarnings || order?.amount || order?.deliveryFee || 0)
+                  const pickupDistance = normalizeDistanceLabel(order?.pickupDistance) || "Pickup distance pending"
+                  const dropDistance = normalizeDistanceLabel(order?.deliveryDistance || order?.dropDistance) || "Drop distance pending"
+
+                  return (
+                    <button
+                      key={String(orderId)}
+                      onClick={() => handleOpenAdvancedOrderFlow(order)}
+                      className="w-full rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left transition hover:border-orange-300 hover:bg-orange-50"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-orange-500">Advance Slot</p>
+                          <h4 className="mt-1 text-base font-bold text-slate-900">
+                            {order?.restaurantName || order?.name || "Restaurant"}
+                          </h4>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Order {order?.orderId || orderId || "Pending"}
+                          </p>
+                        </div>
+                        <div className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">
+                          Rs {Number.isFinite(earnings) ? earnings.toFixed(0) : "0"}
+                        </div>
+                      </div>
+
+                      <p className="mt-3 text-sm text-slate-600">
+                        {normalizeAddressLabel(order?.restaurantLocation?.address || order?.restaurantAddress || order?.address, "Address not available")}
+                      </p>
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600">
+                          Pickup: {pickupDistance}
+                        </span>
+                        <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-600">
+                          Drop: {dropDistance}
+                        </span>
+                      </div>
+
+                      <div className="mt-4 flex items-center justify-between">
+                        <span className="text-xs font-medium text-slate-500">Tap to open this order flow</span>
+                        <span className="inline-flex items-center rounded-full bg-slate-900 px-3 py-1 text-xs font-semibold text-white">
+                          Open
+                        </span>
+                      </div>
+                    </button>
+                  )
+                    })}
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
 
 
 
@@ -32691,6 +33114,21 @@ export default function DeliveryHome() {
 
 
                     </p>
+
+
+                    {pendingNewOrdersCount > 1 && (
+
+
+                      <p className="mt-1 text-xs font-medium text-orange-600">
+
+
+                        {pendingNewOrdersCount - 1} more assigned order{pendingNewOrdersCount - 1 > 1 ? 's' : ''} waiting next
+
+
+                      </p>
+
+
+                    )}
 
 
                   </div>
@@ -34245,7 +34683,11 @@ export default function DeliveryHome() {
               <p className="text-gray-600 text-sm mb-3 text-center">
 
 
-                {billImageUploaded ? '[OK] Bill image uploaded' : 'Please capture bill image'}
+                {billImageUploaded
+                  ? '[OK] Bill image uploaded'
+                  : billImageSkipped
+                    ? '[OK] Bill upload skipped'
+                    : 'Please capture bill image'}
 
 
               </p>
@@ -34343,6 +34785,18 @@ export default function DeliveryHome() {
 
               </div>
 
+              {!billImageUploaded && (
+                <div className="flex justify-center mb-4">
+                  <button
+                    onClick={handleSkipBillUpload}
+                    disabled={isUploadingBill}
+                    className="text-sm font-medium text-gray-600 underline-offset-4 transition hover:text-gray-900 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Skip for now
+                  </button>
+                </div>
+              )}
+
 
 
 
@@ -34401,7 +34855,7 @@ export default function DeliveryHome() {
                   ? 'bg-gray-400 cursor-not-allowed'
 
 
-                  : (billImageUploaded ? 'bg-green-600' : 'bg-gray-400 cursor-not-allowed')
+                  : (hasBillProof ? 'bg-green-600' : 'bg-gray-400 cursor-not-allowed')
 
 
                   }`}
@@ -34410,25 +34864,25 @@ export default function DeliveryHome() {
                 style={{
 
 
-                  touchAction: billImageUploaded && !isOrderCancelledState(selectedRestaurant) ? 'pan-x' : 'none',
+                  touchAction: hasBillProof && !isOrderCancelledState(selectedRestaurant) ? 'pan-x' : 'none',
 
 
-                  opacity: billImageUploaded && !isOrderCancelledState(selectedRestaurant) ? 1 : 0.6
+                  opacity: hasBillProof && !isOrderCancelledState(selectedRestaurant) ? 1 : 0.6
 
 
                 }}
 
 
-                onTouchStart={billImageUploaded && !isOrderCancelledState(selectedRestaurant) ? handleOrderIdConfirmTouchStart : undefined}
+                onTouchStart={hasBillProof && !isOrderCancelledState(selectedRestaurant) ? handleOrderIdConfirmTouchStart : undefined}
 
 
-                onTouchMove={billImageUploaded && !isOrderCancelledState(selectedRestaurant) ? handleOrderIdConfirmTouchMove : undefined}
+                onTouchMove={hasBillProof && !isOrderCancelledState(selectedRestaurant) ? handleOrderIdConfirmTouchMove : undefined}
 
 
-                onTouchEnd={billImageUploaded && !isOrderCancelledState(selectedRestaurant) ? handleOrderIdConfirmTouchEnd : undefined}
+                onTouchEnd={hasBillProof && !isOrderCancelledState(selectedRestaurant) ? handleOrderIdConfirmTouchEnd : undefined}
 
 
-                whileTap={billImageUploaded && !isOrderCancelledState(selectedRestaurant) ? { scale: 0.98 } : {}}
+                whileTap={hasBillProof && !isOrderCancelledState(selectedRestaurant) ? { scale: 0.98 } : {}}
 
 
               >
@@ -34572,10 +35026,10 @@ export default function DeliveryHome() {
                         ? 'Order Cancelled'
 
 
-                        : !billImageUploaded
+                        : !hasBillProof
 
 
-                          ? 'Upload Bill First'
+                          ? 'Upload or Skip Bill'
 
 
                           : orderIdConfirmButtonProgress > 0.5
@@ -36120,6 +36574,7 @@ export default function DeliveryHome() {
 
 
                   setSelectedRestaurant(null)
+                  selectedRestaurantRef.current = null
 
 
 
@@ -36140,7 +36595,7 @@ export default function DeliveryHome() {
                   // Clear newOrder from notifications hook (if available)
 
 
-                  if (typeof clearNewOrder === 'function') {
+                  if (showNewOrderPopup && typeof clearNewOrder === 'function') {
 
 
                     clearNewOrder()
@@ -36156,6 +36611,13 @@ export default function DeliveryHome() {
 
 
                   acceptedOrderIdsRef.current.clear();
+
+                  const nextAcceptedAdvanceOrder = acceptedAdvanceOrders[0] || null
+                  if (nextAcceptedAdvanceOrder) {
+                    activateAcceptedAdvanceOrder(nextAcceptedAdvanceOrder)
+                    toast.success('Next accepted advance order is now live.')
+                    return
+                  }
 
 
 

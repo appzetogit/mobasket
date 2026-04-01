@@ -135,6 +135,14 @@ const formatPaymentStatusLabel = (rawMethod, rawStatus) => {
   return status === "completed" ? "PAID" : "PENDING"
 }
 
+const getAcceptanceSummary = (order, isStore) => {
+  const source = String(order?.acceptanceInfo?.source || "").trim().toLowerCase()
+
+  if (source === "admin") return "Accepted by admin"
+  if (source === "restaurant") return isStore ? "Accepted by store" : "Accepted by restaurant"
+  return ""
+}
+
 export default function OrderDetails() {
   const navigate = useNavigate()
   const location = useLocation()
@@ -163,6 +171,7 @@ export default function OrderDetails() {
         
         if (response.data?.success && response.data.data?.order) {
           const order = response.data.data.order
+          const acceptanceLabel = getAcceptanceSummary(order, isStore)
           
           // Transform API order data to match component structure
           const transformedOrder = {
@@ -191,9 +200,17 @@ export default function OrderDetails() {
               paymentStatus: formatPaymentStatusLabel(order.payment?.method || order.paymentMethod, order.payment?.status),
               paymentMode: formatPaymentModeLabel(order.payment?.method || order.paymentMethod)
             },
+            acceptanceLabel,
             reason: order.cancellationReason || '',
             timeline: [
               { event: 'Order placed', timestamp: new Date(order.createdAt).toLocaleString('en-GB'), status: 'completed' },
+              ...(acceptanceLabel ? [{
+                event: acceptanceLabel,
+                timestamp: order.acceptanceInfo?.acceptedAt
+                  ? new Date(order.acceptanceInfo.acceptedAt).toLocaleString('en-GB')
+                  : (order.tracking?.preparing?.timestamp ? new Date(order.tracking.preparing.timestamp).toLocaleString('en-GB') : ''),
+                status: 'completed'
+              }] : []),
               ...(order.status === 'confirmed' ? [{ event: 'Order confirmed', timestamp: order.tracking?.confirmed?.timestamp ? new Date(order.tracking.confirmed.timestamp).toLocaleString('en-GB') : '', status: 'completed' }] : []),
               ...(order.status === 'preparing' ? [{ event: 'Preparing', timestamp: order.tracking?.preparing?.timestamp ? new Date(order.tracking.preparing.timestamp).toLocaleString('en-GB') : '', status: 'completed' }] : []),
               ...(order.status === 'ready' ? [{ event: 'Ready for pickup', timestamp: order.tracking?.ready?.timestamp ? new Date(order.tracking.ready.timestamp).toLocaleString('en-GB') : '', status: 'completed' }] : []),
@@ -321,6 +338,14 @@ export default function OrderDetails() {
     doc.text(orderData.status, 50, yPosition)
     doc.setTextColor(0, 0, 0) // Reset to black
     yPosition += 10
+
+    if (orderData.acceptanceLabel) {
+      doc.setFont("helvetica", "bold")
+      doc.text("Accepted By:", 15, yPosition)
+      doc.setFont("helvetica", "normal")
+      doc.text(orderData.acceptanceLabel.replace(/^Accepted by\s+/i, ""), 50, yPosition)
+      yPosition += 8
+    }
 
     // Customer Details Section
     doc.setLineWidth(0.5)

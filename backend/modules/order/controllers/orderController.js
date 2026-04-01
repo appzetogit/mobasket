@@ -875,6 +875,11 @@ const applyPostEditAdminApprovalState = (order, { requiresAdminReapproval = fals
   }
 
   order.deliveryPartnerId = null;
+  order.acceptanceInfo = {
+    source: null,
+    acceptedAt: null,
+    acceptedByAdmin: null
+  };
 
   if (!order.assignmentInfo || typeof order.assignmentInfo !== 'object') {
     order.assignmentInfo = {};

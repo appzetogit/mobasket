@@ -89,12 +89,14 @@ const canShowRiderAssignmentAction = (order, isMarkedForReassign) => {
   const adminApprovalStatus = String(order?.adminApprovalStatus || "").toLowerCase()
   const hasZone = Boolean(order?.zoneId)
   const hasAssignedPartner = Boolean(order?.deliveryPartnerId || order?.deliveryPartnerName)
+  const hasAcceptedPartner = hasRiderAcceptedOrder(order)
   const isClosedOrder =
     ["cancelled", "canceled", "delivered", "payment_failed", "refunded"].includes(backendStatus) ||
     ["canceled", "cancelled by restaurant", "cancelled by user", "delivered", "payment failed", "refunded"].includes(displayStatus)
 
-  if (!hasZone || hasAssignedPartner || isClosedOrder) return false
+  if (!hasZone || isClosedOrder || hasAcceptedPartner) return false
   if (isMarkedForReassign) return true
+  if (hasAssignedPartner) return true
 
   return (
     ["accepted", "confirmed", "preparing", "ready", "processing"].includes(backendStatus) ||
@@ -418,6 +420,7 @@ export default function OrdersTable({
                 assignedDeliveryPartnerId === lastRejectedById
               const showAcceptedRider = Boolean(order.deliveryPartnerName) && hasAcceptedRider && !wasDisplayedRiderLastRejected
               const showAssignedRider = Boolean(order.deliveryPartnerName) && !hasAcceptedRider && !wasDisplayedRiderLastRejected
+              const hasPendingAssignedRider = Boolean(order.deliveryPartnerId || order.deliveryPartnerName) && !hasAcceptedRider
               const highlightedRowClass = blinkPhase
                 ? "bg-red-50 ring-2 ring-red-300 shadow-[inset_0_0_0_1px_rgba(248,113,113,0.35)]"
                 : "bg-amber-50 ring-2 ring-amber-300 shadow-[inset_0_0_0_1px_rgba(251,191,36,0.45)]"
@@ -720,13 +723,14 @@ export default function OrdersTable({
                             onClick={() => onAssignRider(order)}
                             className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold shadow-sm transition-colors ${
                               isMarkedForReassign
+                                || hasPendingAssignedRider
                                 ? "bg-amber-100 text-amber-700 hover:bg-amber-200"
                                 : "bg-violet-100 text-violet-700 hover:bg-violet-200"
                             }`}
-                            title={isMarkedForReassign ? "Reassign rider from this zone" : "Assign rider from this zone"}
+                            title={isMarkedForReassign || hasPendingAssignedRider ? "Reassign rider from this zone" : "Assign rider from this zone"}
                           >
                             <Bike className="w-4 h-4" />
-                            <span>{isMarkedForReassign ? "Reassign" : "Assign Rider"}</span>
+                            <span>{isMarkedForReassign || hasPendingAssignedRider ? "Reassign" : "Assign Rider"}</span>
                           </button>
                         )}
                       {enableRiderActions &&

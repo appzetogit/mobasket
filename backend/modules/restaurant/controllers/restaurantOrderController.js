@@ -362,6 +362,9 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     const restaurant = req.restaurant;
     const { id } = req.params;
     const { preparationTime } = req.body;
+    const acceptanceSource =
+      String(req.acceptanceActor?.source || '').toLowerCase() === 'admin' ? 'admin' : 'restaurant';
+    const acceptedByAdmin = req.acceptanceActor?.adminId || null;
     const deliveryNotificationStrategy =
       String(req.body?.deliveryNotificationStrategy || '').toLowerCase() === 'all_zone'
         ? 'all_zone'
@@ -420,6 +423,11 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     // Set status to 'preparing' when restaurant accepts
     order.status = 'preparing';
     order.tracking.preparing = { status: true, timestamp: new Date() };
+    order.acceptanceInfo = {
+      source: acceptanceSource,
+      acceptedAt: new Date(),
+      acceptedByAdmin: acceptanceSource === 'admin' ? acceptedByAdmin : null
+    };
 
     // Handle preparation time update from restaurant
     if (preparationTime) {
@@ -490,6 +498,14 @@ export const acceptOrder = asyncHandler(async (req, res) => {
         console.error('Error sending user accepted notification:', userNotifError);
       }
     } else {
+      if (!order.acceptanceInfo?.source) {
+        order.acceptanceInfo = {
+          source: acceptanceSource,
+          acceptedAt: order.tracking?.preparing?.timestamp || new Date(),
+          acceptedByAdmin: acceptanceSource === 'admin' ? acceptedByAdmin : null
+        };
+        await order.save();
+      }
       console.log(`ℹ️ Order ${order.orderId} already in accepted state (${order.status}), re-running rider dispatch sync.`);
     }
 

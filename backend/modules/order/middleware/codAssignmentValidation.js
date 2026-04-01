@@ -4,6 +4,18 @@ import Delivery from '../../delivery/models/Delivery.js';
 import { errorResponse } from '../../../shared/utils/response.js';
 import { validateCODLimitBeforeAssignment } from '../../delivery/services/codLimitService.js';
 
+const hasAcceptedRider = (order = null) => {
+  const deliveryStateStatus = String(order?.deliveryState?.status || '').toLowerCase();
+
+  return Boolean(
+    order?.deliveryState?.acceptedAt ||
+    ['accepted', 'reached_pickup', 'order_confirmed', 'en_route_to_delivery', 'delivered'].includes(deliveryStateStatus) ||
+    String(order?.assignmentInfo?.assignedBy || '').toLowerCase() === 'delivery_accept' ||
+    String(order?.assignmentInfo?.notificationPhase || '').toLowerCase() === 'accepted' ||
+    ['out_for_delivery', 'delivered'].includes(String(order?.status || '').toLowerCase())
+  );
+};
+
 export const validateOrderAssignmentPayload = async (req, res, next) => {
   try {
     const { orderId, deliveryPartnerId } = req.body || {};
@@ -27,6 +39,14 @@ export const validateOrderAssignmentPayload = async (req, res, next) => {
         res,
         400,
         `Order cannot be assigned. Current status: ${order.status}. Allowed: preparing, ready.`,
+      );
+    }
+
+    if (hasAcceptedRider(order)) {
+      return errorResponse(
+        res,
+        409,
+        'Order is already accepted by a delivery partner and cannot be reassigned.',
       );
     }
 

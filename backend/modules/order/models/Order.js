@@ -367,6 +367,22 @@ const orderSchema = new mongoose.Schema({
     enum: ['user', 'restaurant', 'admin'],
     default: null
   },
+  acceptanceInfo: {
+    source: {
+      type: String,
+      enum: ['restaurant', 'admin'],
+      default: null
+    },
+    acceptedAt: {
+      type: Date,
+      default: null
+    },
+    acceptedByAdmin: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Admin',
+      default: null
+    }
+  },
   adminApproval: {
     status: {
       type: String,
