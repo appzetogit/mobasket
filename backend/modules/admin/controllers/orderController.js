@@ -1522,7 +1522,8 @@ export const acceptOrderFromAdmin = asyncHandler(async (req, res) => {
     req.restaurant = storeDocument;
     req.body = {
       ...(req.body || {}),
-      skipDeliveryAssignment: true
+      skipDeliveryAssignment: true,
+      deliveryNotificationStrategy: 'all_zone'
     };
 
     return restaurantAcceptOrder(req, res);

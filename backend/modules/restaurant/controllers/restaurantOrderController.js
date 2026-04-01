@@ -351,6 +351,10 @@ export const acceptOrder = asyncHandler(async (req, res) => {
     const restaurant = req.restaurant;
     const { id } = req.params;
     const { preparationTime } = req.body;
+    const deliveryNotificationStrategy =
+      String(req.body?.deliveryNotificationStrategy || '').toLowerCase() === 'all_zone'
+        ? 'all_zone'
+        : 'priority';
 
     const restaurantId = restaurant._id?.toString() ||
       restaurant.restaurantId ||
@@ -513,6 +517,7 @@ export const acceptOrder = asyncHandler(async (req, res) => {
           order: latestOrderForNotify,
           restaurant,
           assignedBy: 'accept_auto_notify',
+          notificationStrategy: deliveryNotificationStrategy,
         });
       } catch (acceptDispatchError) {
         console.error(`Failed async accept dispatch for order ${acceptedOrderSnapshot.orderId || acceptedOrderSnapshot._id}:`, acceptDispatchError);

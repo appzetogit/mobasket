@@ -74,6 +74,7 @@ export const notifyDeliveryPartnersForOrder = async ({
   order,
   restaurant,
   assignedBy = 'manual_resend',
+  notificationStrategy = 'priority',
 }) => {
   if (!order?._id) {
     return { success: false, message: 'Order not found' };
@@ -108,6 +109,43 @@ export const notifyDeliveryPartnersForOrder = async ({
   }
 
   const now = new Date();
+  const normalizedStrategy =
+    String(notificationStrategy || '').toLowerCase() === 'all_zone'
+      ? 'all_zone'
+      : 'priority';
+
+  if (normalizedStrategy === 'all_zone') {
+    const zoneDeliveryBoys = await findNearestDeliveryBoys(
+      restaurantLat,
+      restaurantLng,
+      order.restaurantId,
+      1000,
+      { requiredZoneId, incomingCodAmount }
+    );
+
+    if (!zoneDeliveryBoys || zoneDeliveryBoys.length === 0) {
+      return { success: false, message: 'No delivery partners available in your area' };
+    }
+
+    const deliveryPartnerIds = zoneDeliveryBoys.map((db) => db.deliveryPartnerId);
+
+    await Order.findByIdAndUpdate(order._id, {
+      $set: {
+        'assignmentInfo.priorityDeliveryPartnerIds': deliveryPartnerIds,
+        'assignmentInfo.assignedBy': assignedBy,
+        'assignmentInfo.assignedAt': now,
+        'assignmentInfo.notificationPhase': 'priority',
+        'assignmentInfo.priorityNotifiedAt': now,
+      },
+      $unset: {
+        'assignmentInfo.expandedDeliveryPartnerIds': '',
+        'assignmentInfo.expandedNotifiedAt': '',
+      }
+    });
+
+    await notifyMultipleDeliveryBoys(populatedOrder, deliveryPartnerIds, 'priority');
+    return { success: true, notifiedCount: deliveryPartnerIds.length, phase: 'priority' };
+  }
 
   if (!priorityDeliveryBoys || priorityDeliveryBoys.length === 0) {
     const allDeliveryBoys = await findNearestDeliveryBoys(

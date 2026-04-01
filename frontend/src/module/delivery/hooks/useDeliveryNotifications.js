@@ -185,6 +185,9 @@ export const useDeliveryNotifications = (options = {}) => {
   const audioRef = useRef(null);
   const suppressedOrderIdsRef = useRef(readSuppressedOrderIds());
   const ordersPollBlockedUntilRef = useRef(0);
+  const userInteractedRef = useRef(
+    typeof document !== 'undefined' && Boolean(document.userActivation?.hasBeenActive)
+  );
   
   // Step 2: All state hooks (unconditional)
   const [newOrder, setNewOrder] = useState(null);
@@ -231,6 +234,26 @@ export const useDeliveryNotifications = (options = {}) => {
   }, [enableBrowserNotification]);
 
   useEffect(() => {
+    if (typeof document === 'undefined') {
+      return undefined;
+    }
+
+    const markUserInteraction = () => {
+      userInteractedRef.current = true;
+    };
+
+    document.addEventListener('pointerdown', markUserInteraction, { once: true });
+    document.addEventListener('touchstart', markUserInteraction, { once: true });
+    document.addEventListener('keydown', markUserInteraction, { once: true });
+
+    return () => {
+      document.removeEventListener('pointerdown', markUserInteraction);
+      document.removeEventListener('touchstart', markUserInteraction);
+      document.removeEventListener('keydown', markUserInteraction);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!enabled) {
       setIsConnected(false);
       setDeliveryPartnerId(null);
@@ -269,6 +292,9 @@ export const useDeliveryNotifications = (options = {}) => {
         if (!enableSoundRef.current) {
           return;
         }
+        if (!userInteractedRef.current && !document?.userActivation?.hasBeenActive) {
+          return;
+        }
 
         audioRef.current.currentTime = 0;
         audioRef.current.play().catch(error => {
@@ -302,6 +328,9 @@ export const useDeliveryNotifications = (options = {}) => {
   const triggerOrderBuzz = useCallback(() => {
     try {
       if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') {
+        return;
+      }
+      if (!userInteractedRef.current && !document?.userActivation?.hasBeenActive) {
         return;
       }
       // Two short pulses for new order alert.
