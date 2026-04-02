@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { adminAPI, restaurantAPI } from "@/lib/api";
+import { adminAPI, restaurantAPI, uploadAPI } from "@/lib/api";
 import { Loader2, Pencil, Plus, Store, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -37,6 +37,40 @@ function getEntityImage(entity = {}) {
   if (Array.isArray(entity?.menuImages)) {
     const image = entity.menuImages.map(normalizeImage).find(Boolean);
     if (image) return image;
+  }
+
+  return "";
+}
+
+function buildCategoriesFromSections(sections = []) {
+  return (Array.isArray(sections) ? sections : []).map((section, index) => ({
+    id: section?.id || "",
+    key: String(section?.id || section?.name || `section-${index}`),
+    name: section?.name || "Unnamed Section",
+  }));
+}
+
+function getSectionKey(section = {}, index = 0) {
+  return String(section?.id || section?.name || `section-${index}`);
+}
+
+function getSectionKeyForItem(sections = [], itemId) {
+  const targetItemId = String(itemId || "").trim();
+  if (!targetItemId) return "";
+
+  for (let index = 0; index < sections.length; index += 1) {
+    const section = sections[index];
+    const directItems = Array.isArray(section?.items) ? section.items : [];
+    if (directItems.some((item) => String(item?.id) === targetItemId)) {
+      return getSectionKey(section, index);
+    }
+
+    const subsectionItems = Array.isArray(section?.subsections)
+      ? section.subsections.flatMap((subsection) => (Array.isArray(subsection?.items) ? subsection.items : []))
+      : [];
+    if (subsectionItems.some((item) => String(item?.id) === targetItemId)) {
+      return getSectionKey(section, index);
+    }
   }
 
   return "";
@@ -98,6 +132,7 @@ export default function FoodMenuManager() {
   const [editForm, setEditForm] = useState({ name: "", image: "" });
   const [editSaving, setEditSaving] = useState(false);
   const [imagePreview, setImagePreview] = useState("");
+  const [imageUploading, setImageUploading] = useState(false);
   const [selectedSectionViewKey, setSelectedSectionViewKey] = useState("");
   const [deletingItemId, setDeletingItemId] = useState("");
   const [availabilitySavingItemId, setAvailabilitySavingItemId] = useState("");
@@ -191,7 +226,7 @@ export default function FoodMenuManager() {
         setLoadingCategories(true);
         setMenu({ sections: [] });
         const fullMenuResponse = await adminAPI.getRestaurantMenu(selectedRestaurantId, {
-          includeImages: true,
+          includeImages: false,
         });
         const fullMenuData =
           fullMenuResponse?.data?.data?.menu ||
@@ -406,10 +441,34 @@ export default function FoodMenuManager() {
         },
       };
 
-      await adminAPI.addRestaurantMenuItem(selectedRestaurantId, payload);
+      const response = await adminAPI.addRestaurantMenuItem(selectedRestaurantId, payload);
+      const returnedSections = response?.data?.data?.menu?.sections;
+      const createdItemId = response?.data?.data?.item?.id;
+
+      if (Array.isArray(returnedSections) && returnedSections.length > 0) {
+        const nextCategories = buildCategoriesFromSections(returnedSections);
+        const createdItemSectionKey = getSectionKeyForItem(returnedSections, createdItemId);
+        const activeSectionKey =
+          createdItemSectionKey ||
+          String(selectedSectionViewKey || form.sectionId || "");
+
+        setCategories(nextCategories);
+        setMenuSuggestionSource({ sections: returnedSections });
+
+        if (activeSectionKey) {
+          setSelectedSectionViewKey(activeSectionKey);
+          setMenu({
+            sections: returnedSections.filter(
+              (section, index) => getSectionKey(section, index) === activeSectionKey,
+            ),
+          });
+        } else {
+          setMenu({ sections: [] });
+        }
+      }
+
       toast.success("Menu item added");
       resetForm();
-      await refreshCurrentMenuState(selectedRestaurantId);
     } catch (error) {
       console.error("Failed to add menu item:", error);
       toast.error(error?.response?.data?.message || "Failed to add menu item");
@@ -429,25 +488,40 @@ export default function FoodMenuManager() {
     setImagePreview(initialImage);
   };
 
-  const handleImageFileChange = (event) => {
+  const handleImageFileChange = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
       toast.error("Please choose an image file.");
+      event.target.value = "";
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = typeof reader.result === "string" ? reader.result : "";
-      setEditForm((prev) => ({ ...prev, image: result }));
-      setImagePreview(result);
-    };
-    reader.onerror = () => {
-      toast.error("Failed to read the selected image.");
-    };
-    reader.readAsDataURL(file);
+    try {
+      setImageUploading(true);
+      const uploadResponse = await uploadAPI.uploadMedia(file, {
+        folder: "mobasket/restaurant/menu-items",
+      });
+      const uploadedUrl =
+        uploadResponse?.data?.data?.url ||
+        uploadResponse?.data?.url ||
+        "";
+
+      if (!uploadedUrl) {
+        throw new Error("Image upload did not return a URL.");
+      }
+
+      setEditForm((prev) => ({ ...prev, image: uploadedUrl }));
+      setImagePreview(uploadedUrl);
+      toast.success("Image uploaded");
+    } catch (error) {
+      console.error("Failed to upload menu image:", error);
+      toast.error(error?.response?.data?.message || error?.message || "Failed to upload image");
+    } finally {
+      setImageUploading(false);
+      event.target.value = "";
+    }
   };
 
   const handleSaveEdit = async () => {
@@ -1003,16 +1077,21 @@ export default function FoodMenuManager() {
                 In stock / available
               </label>
               <div className="flex items-center gap-3">
-                <label className="inline-flex cursor-pointer items-center rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
-                  Upload Image
+                <label
+                  className={`inline-flex cursor-pointer items-center rounded-md px-3 py-2 text-sm font-medium text-white ${
+                    imageUploading ? "bg-slate-500" : "bg-slate-900 hover:bg-slate-800"
+                  }`}
+                >
+                  {imageUploading ? "Uploading..." : "Upload Image"}
                   <input
                     type="file"
                     accept="image/*"
                     className="hidden"
                     onChange={handleImageFileChange}
+                    disabled={imageUploading}
                   />
                 </label>
-                <span className="text-xs text-slate-500">Choose an image to preview and save.</span>
+                <span className="text-xs text-slate-500">Choose an image to upload and save as a URL.</span>
               </div>
               <div className="h-40 w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center">
                 <MenuImage
@@ -1037,7 +1116,7 @@ export default function FoodMenuManager() {
               <button
                 type="button"
                 onClick={handleSaveEdit}
-                disabled={editSaving}
+                disabled={editSaving || imageUploading}
                 className="px-4 py-2 rounded-md bg-slate-900 text-white text-sm hover:bg-slate-800 disabled:opacity-50"
               >
                 {editSaving ? "Saving..." : "Save Changes"}
