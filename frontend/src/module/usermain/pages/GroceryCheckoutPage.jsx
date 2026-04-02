@@ -21,7 +21,7 @@ import { useCart } from "../../user/context/CartContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { useProfile } from "../../user/context/ProfileContext";
 import { useZone } from "../../user/hooks/useZone";
-import { adminAPI, orderAPI, restaurantAPI, userAPI } from "@/lib/api";
+import { adminAPI, orderAPI, restaurantAPI, userAPI, zoneAPI } from "@/lib/api";
 import { initRazorpayPayment } from "@/lib/utils/razorpay";
 import { toast } from "sonner";
 import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
@@ -63,6 +63,13 @@ const extractAddressCoordinates = (address) => {
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
   return { latitude, longitude };
 };
+
+const normalizeId = (value) => String(
+  value?._id ??
+  value?.id ??
+  value ??
+  "",
+).trim();
 
 const toLocalDateInputValue = (date) => {
   if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
@@ -138,11 +145,56 @@ export default function GroceryCheckoutPage() {
   const [calculatedPricing, setCalculatedPricing] = useState(null);
   const [loadingPricing, setLoadingPricing] = useState(false);
   const [resolvedRestaurant, setResolvedRestaurant] = useState(null);
+  const [storeZoneId, setStoreZoneId] = useState("");
+  const [selectedAddressZoneMessage, setSelectedAddressZoneMessage] = useState("");
+  const [newAddressZoneMessage, setNewAddressZoneMessage] = useState("");
   const [hasActivePlanSubscription, setHasActivePlanSubscription] = useState(false);
   const [storeAvailability, setStoreAvailability] = useState({
     isAvailable: true,
     reason: "",
   });
+
+  const validateAddressInStoreZone = useCallback(
+    async (address) => {
+      const coords = extractAddressCoordinates(address);
+      if (!coords) {
+        return {
+          ok: false,
+          message: "Pin your exact delivery location to verify the store zone.",
+        };
+      }
+
+      const zoneResponse = await zoneAPI.detectAllZones(
+        coords.latitude,
+        coords.longitude,
+        "mogrocery",
+      );
+
+      const zoneData = zoneResponse?.data?.data || {};
+      const detectedZoneIds = Array.isArray(zoneData?.zoneIds)
+        ? zoneData.zoneIds.map((value) => normalizeId(value)).filter(Boolean)
+        : [];
+      const inService = zoneData?.status === "IN_SERVICE" || detectedZoneIds.length > 0;
+      const requiredStoreZoneId = normalizeId(storeZoneId);
+
+      if (!inService) {
+        return {
+          ok: false,
+          message: "You are out of zone bro. Please choose an address inside the store's service area.",
+        };
+      }
+
+      if (requiredStoreZoneId && !detectedZoneIds.includes(requiredStoreZoneId)) {
+        return {
+          ok: false,
+          message: "You are out of the restaurant's zone bro. Choose an address inside this store's service area.",
+        };
+      }
+
+      return { ok: true, message: "" };
+    },
+    [storeZoneId],
+  );
 
   const formatStoreAddress = useCallback((store = {}) => {
     const addressFromPayload =
@@ -448,6 +500,20 @@ export default function GroceryCheckoutPage() {
       return;
     }
 
+    try {
+      const zoneValidation = await validateAddressInStoreZone(payload);
+      if (!zoneValidation.ok) {
+        setNewAddressZoneMessage(zoneValidation.message);
+        toast.error(zoneValidation.message);
+        return;
+      }
+      setNewAddressZoneMessage("");
+    } catch (error) {
+      console.error("Failed to validate new grocery address zone:", error);
+      toast.error("Unable to verify whether this address is in the store zone.");
+      return;
+    }
+
     setIsSavingAddress(true);
     try {
       const created = await addAddress(payload);
@@ -527,6 +593,25 @@ export default function GroceryCheckoutPage() {
   }, [normalizedSelectedAddress]);
 
   const { zoneId } = useZone(selectedAddressLocationForZone, "mogrocery");
+
+  const handleSelectAddress = useCallback(
+    async (address) => {
+      try {
+        const zoneValidation = await validateAddressInStoreZone(address);
+        if (!zoneValidation.ok) {
+          setSelectedAddressZoneMessage(zoneValidation.message);
+          toast.error(zoneValidation.message);
+          return;
+        }
+        setSelectedAddressZoneMessage("");
+        setSelectedAddress(address);
+      } catch (error) {
+        console.error("Failed to validate selected grocery address zone:", error);
+        toast.error("Unable to verify whether this address is in the store zone.");
+      }
+    },
+    [validateAddressInStoreZone],
+  );
 
   const formattedDeliveryAddress = useMemo(() => {
     if (!normalizedSelectedAddress) return deliveryAddress;
@@ -794,6 +879,13 @@ export default function GroceryCheckoutPage() {
         const storePlatform = String(
           store?.platform || resolvedRestaurant?.platform || "mogrocery",
         ).toLowerCase();
+        const resolvedStoreZoneId = normalizeId(
+          store?.zoneId ||
+          store?.storeZoneId ||
+          store?.restaurantZoneId ||
+          store?.assignmentInfo?.zoneId,
+        );
+        setStoreZoneId(resolvedStoreZoneId);
 
         // Keep checkout availability independent from restaurant outlet-timings endpoint.
         // Use store-level timing fields only.
@@ -814,11 +906,73 @@ export default function GroceryCheckoutPage() {
           isAvailable: true,
           reason: "",
         });
+        setStoreZoneId("");
       }
     };
 
     fetchStoreAvailability();
   }, [resolvedRestaurant?.restaurantId]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const verifySelectedAddressZone = async () => {
+      if (!normalizedSelectedAddress) {
+        if (isActive) setSelectedAddressZoneMessage("");
+        return;
+      }
+
+      try {
+        const zoneValidation = await validateAddressInStoreZone(normalizedSelectedAddress);
+        if (!isActive) return;
+        setSelectedAddressZoneMessage(zoneValidation.ok ? "" : zoneValidation.message);
+      } catch (error) {
+        console.error("Failed to verify selected grocery address zone:", error);
+        if (isActive) {
+          setSelectedAddressZoneMessage("Unable to verify whether this address is in the store zone.");
+        }
+      }
+    };
+
+    verifySelectedAddressZone();
+    return () => {
+      isActive = false;
+    };
+  }, [normalizedSelectedAddress, validateAddressInStoreZone]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const coords = extractAddressCoordinates(newAddress);
+    if (!showAddAddressForm || !coords) {
+      setNewAddressZoneMessage("");
+      return () => {
+        isActive = false;
+      };
+    }
+
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const zoneValidation = await validateAddressInStoreZone(newAddress);
+        if (!isActive) return;
+        setNewAddressZoneMessage(zoneValidation.ok ? "" : zoneValidation.message);
+      } catch (error) {
+        console.error("Failed to verify draft grocery address zone:", error);
+        if (isActive) {
+          setNewAddressZoneMessage("Unable to verify whether this address is in the store zone.");
+        }
+      }
+    }, 350);
+
+    return () => {
+      isActive = false;
+      clearTimeout(timeoutId);
+    };
+  }, [
+    newAddress,
+    showAddAddressForm,
+    validateAddressInStoreZone,
+  ]);
 
   useEffect(() => {
     const calculatePricingPreview = async () => {
@@ -1167,6 +1321,10 @@ export default function GroceryCheckoutPage() {
       navigate("/profile/addresses");
       return;
     }
+    if (selectedAddressZoneMessage) {
+      toast.error(selectedAddressZoneMessage);
+      return;
+    }
     if (deliveryOption === "schedule" && !scheduledTime) {
       toast.error("Please select a delivery time slot.");
       return;
@@ -1413,7 +1571,7 @@ export default function GroceryCheckoutPage() {
                       <button
                         key={String(addressId)}
                         type="button"
-                        onClick={() => setSelectedAddress(address)}
+                        onClick={() => handleSelectAddress(address)}
                         className={`w-full text-left rounded-xl border px-3 py-2 transition-colors ${isSelected
                           ? "border-[#ff8100] bg-orange-50 dark:bg-[#facd01]/10 dark:border-[#facd01]"
                           : "border-gray-200 bg-white dark:bg-[#1f1f1f] dark:border-gray-700"
@@ -1426,6 +1584,12 @@ export default function GroceryCheckoutPage() {
                       </button>
                     );
                   })
+                ) : null}
+
+                {selectedAddressZoneMessage ? (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+                    {selectedAddressZoneMessage}
+                  </div>
                 ) : null}
 
                 <button
@@ -1536,6 +1700,12 @@ export default function GroceryCheckoutPage() {
                       title="Exact address pin"
                       description="Drag the pin or use the typed address to lock your delivery point."
                     />
+
+                    {newAddressZoneMessage ? (
+                      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+                        {newAddressZoneMessage}
+                      </div>
+                    ) : null}
 
                     <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
                       <input

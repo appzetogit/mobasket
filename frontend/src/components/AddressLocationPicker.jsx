@@ -8,10 +8,42 @@ import { geocodeAddress } from "@/lib/utils/addressGeocoding";
 import { locationAPI } from "@/lib/api";
 
 const DEFAULT_CENTER = { lat: 22.7196, lng: 75.8577 };
+const DESIRED_GPS_ACCURACY_METERS = 30;
+const MAX_GPS_ACCURACY_METERS = 150;
+const GPS_WATCH_TIMEOUT_MS = 20000;
+const GPS_SETTLE_DELAY_MS = 4000;
 
 function toFiniteNumber(value) {
   const numeric = Number(value);
   return Number.isFinite(numeric) ? numeric : null;
+}
+
+function buildTypedAddressQuery(address = {}) {
+  const preferredFormattedAddress = String(address?.formattedAddress || "").trim();
+  if (preferredFormattedAddress && preferredFormattedAddress.length >= 8) {
+    return preferredFormattedAddress;
+  }
+
+  const street = String(address?.street || "").trim();
+  const additionalDetails = String(address?.additionalDetails || "").trim();
+  const city = String(address?.city || "").trim();
+  const state = String(address?.state || "").trim();
+  const zipCode = String(address?.zipCode || "").trim();
+
+  const parts = [
+    hasMeaningfulStreet(street) ? street : "",
+    hasMeaningfulStreet(additionalDetails) ? additionalDetails : "",
+    city,
+    state,
+    zipCode,
+  ]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean);
+
+  return [...new Set(parts.map((part) => part.toLowerCase()))]
+    .map((normalized) => parts.find((part) => part.toLowerCase() === normalized))
+    .filter(Boolean)
+    .join(", ");
 }
 
 function hasMeaningfulStreet(value) {
@@ -43,13 +75,29 @@ function resolveStreetForForm(...candidates) {
   return relaxed || "";
 }
 
-function pickBestGoogleResult(results = []) {
+function haversineDistanceMeters(lat1, lng1, lat2, lng2) {
+  const toRadians = (degrees) => (degrees * Math.PI) / 180;
+  const earthRadiusMeters = 6371000;
+  const dLat = toRadians(lat2 - lat1);
+  const dLng = toRadians(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(toRadians(lat1)) *
+      Math.cos(toRadians(lat2)) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusMeters * c;
+}
+
+function pickBestGoogleResult(results = [], latitude = null, longitude = null) {
   if (!Array.isArray(results) || results.length === 0) return null;
 
-  const score = (entry) => {
+  const score = (entry, latitude = null, longitude = null) => {
     const types = Array.isArray(entry?.types) ? entry.types : [];
     let value = 0;
     if (types.includes("street_address")) value += 100;
+    if (types.includes("intersection")) value += 90;
     if (types.includes("premise")) value += 80;
     if (types.includes("subpremise")) value += 70;
     if (types.includes("route")) value += 60;
@@ -57,6 +105,91 @@ function pickBestGoogleResult(results = []) {
     if (types.includes("establishment")) value += 30;
     if (types.includes("sublocality")) value += 20;
     if (types.includes("locality")) value += 10;
+    if (entry?.partial_match) value -= 40;
+
+    const locationType = String(entry?.geometry?.location_type || "").toUpperCase();
+    if (locationType === "ROOFTOP") value += 60;
+    if (locationType === "RANGE_INTERPOLATED") value += 35;
+    if (locationType === "GEOMETRIC_CENTER") value += 10;
+    if (locationType === "APPROXIMATE") value -= 10;
+
+    const resultLat = toFiniteNumber(
+      typeof entry?.geometry?.location?.lat === "function"
+        ? entry.geometry.location.lat()
+        : entry?.geometry?.location?.lat,
+    );
+    const resultLng = toFiniteNumber(
+      typeof entry?.geometry?.location?.lng === "function"
+        ? entry.geometry.location.lng()
+        : entry?.geometry?.location?.lng,
+    );
+
+    if (
+      latitude !== null &&
+      longitude !== null &&
+      resultLat !== null &&
+      resultLng !== null
+    ) {
+      const distanceMeters = haversineDistanceMeters(latitude, longitude, resultLat, resultLng);
+      value -= Math.min(distanceMeters / 5, 80);
+    }
+
+    return value;
+  };
+
+  const queryLat = toFiniteNumber(latitude);
+  const queryLng = toFiniteNumber(longitude);
+  return [...results].sort((a, b) => score(b, queryLat, queryLng) - score(a, queryLat, queryLng))[0] || results[0];
+}
+
+function pickBestBackendResult(results = [], latitude = null, longitude = null) {
+  if (!Array.isArray(results) || results.length === 0) return null;
+
+  const score = (entry) => {
+    const components = entry?.address_components || {};
+    const componentArray = Array.isArray(components) ? components : [];
+    const formattedAddress = String(entry?.formatted_address || entry?.formattedAddress || "").trim();
+    const types = Array.isArray(entry?.types) ? entry.types : [];
+    const route = Array.isArray(components)
+      ? components.find((c) => c.types?.includes("route"))?.long_name || ""
+      : components.route || "";
+    const postalCode = Array.isArray(components)
+      ? components.find((c) => c.types?.includes("postal_code"))?.long_name || ""
+      : components.postalCode || components.postal_code || components.zipCode || "";
+    const locality = Array.isArray(components)
+      ? components.find((c) => c.types?.includes("locality"))?.long_name || ""
+      : components.city || components.locality || "";
+    const premise = Array.isArray(components)
+      ? componentArray.find((c) => c.types?.includes("premise"))?.long_name || ""
+      : components.premise || "";
+
+    let value = 0;
+    if (hasMeaningfulStreet(route)) value += 40;
+    if (hasMeaningfulStreet(premise)) value += 30;
+    if (postalCode) value += 25;
+    if (locality) value += 20;
+    if (formattedAddress.split(",").filter(Boolean).length >= 4) value += 15;
+    if (types.includes("street_address")) value += 40;
+    if (types.includes("premise")) value += 30;
+    if (types.includes("route")) value += 20;
+
+    const resultLat = toFiniteNumber(
+      entry?.geometry?.location?.lat ?? entry?.location?.lat ?? entry?.latitude,
+    );
+    const resultLng = toFiniteNumber(
+      entry?.geometry?.location?.lng ?? entry?.location?.lng ?? entry?.longitude,
+    );
+
+    if (
+      latitude !== null &&
+      longitude !== null &&
+      resultLat !== null &&
+      resultLng !== null
+    ) {
+      const distanceMeters = haversineDistanceMeters(latitude, longitude, resultLat, resultLng);
+      value -= Math.min(distanceMeters / 5, 80);
+    }
+
     return value;
   };
 
@@ -150,7 +283,7 @@ function mergeAddressDetails(primary = null, secondary = null) {
 
 function extractReverseGeocodedAddress(response, latitude, longitude) {
   const results = response?.data?.data?.results || [];
-  const firstResult = results[0] || {};
+  const firstResult = pickBestBackendResult(results, latitude, longitude) || {};
   const components = firstResult?.address_components || {};
 
   const fromArray = Array.isArray(components)
@@ -211,7 +344,6 @@ function extractReverseGeocodedAddress(response, latitude, longitude) {
 export default function AddressLocationPicker({
   value,
   onChange,
-  fallbackLocation = null,
   className = "",
   title = "Set delivery location",
   description = "Drag the pin or tap on the map to lock the exact delivery point.",
@@ -220,14 +352,18 @@ export default function AddressLocationPicker({
   const mapRef = useRef(null);
   const markerRef = useRef(null);
   const dragListenerRef = useRef(null);
+  const dragStartListenerRef = useRef(null);
+  const dragMoveListenerRef = useRef(null);
   const clickListenerRef = useRef(null);
   const reverseGeocodeTimerRef = useRef(null);
   const typedAddressTimerRef = useRef(null);
   const lastTypedQueryRef = useRef("");
+  const reverseGeocodeRequestIdRef = useRef(0);
   const [mapsReady, setMapsReady] = useState(false);
   const [mapsLoading, setMapsLoading] = useState(false);
   const [isLocatingTypedAddress, setIsLocatingTypedAddress] = useState(false);
   const [isReadingMapLocation, setIsReadingMapLocation] = useState(false);
+  const [currentLocationAccuracy, setCurrentLocationAccuracy] = useState(null);
 
   const latitude = toFiniteNumber(value?.latitude);
   const longitude = toFiniteNumber(value?.longitude);
@@ -239,33 +375,10 @@ export default function AddressLocationPicker({
     return DEFAULT_CENTER;
   }, [latitude, longitude]);
 
-  const typedAddressQuery = useMemo(() => {
-    const preferredFormattedAddress = String(value?.formattedAddress || "").trim();
-    if (preferredFormattedAddress && preferredFormattedAddress.length >= 8) {
-      return preferredFormattedAddress;
-    }
-
-    const street = String(value?.street || "").trim();
-    const additionalDetails = String(value?.additionalDetails || "").trim();
-    const city = String(value?.city || "").trim();
-    const state = String(value?.state || "").trim();
-    const zipCode = String(value?.zipCode || "").trim();
-
-    const parts = [
-      hasMeaningfulStreet(street) ? street : "",
-      hasMeaningfulStreet(additionalDetails) ? additionalDetails : "",
-      city,
-      state,
-      zipCode,
-    ]
-      .map((part) => String(part || "").trim())
-      .filter(Boolean);
-
-    return [...new Set(parts.map((part) => part.toLowerCase()))]
-      .map((normalized) => parts.find((part) => part.toLowerCase() === normalized))
-      .filter(Boolean)
-      .join(", ");
-  }, [value?.formattedAddress, value?.street, value?.additionalDetails, value?.city, value?.state, value?.zipCode]);
+  const typedAddressQuery = useMemo(
+    () => buildTypedAddressQuery(value),
+    [value],
+  );
 
   const updateMarkerPosition = useCallback((position, shouldPan = true) => {
     if (!mapRef.current || !markerRef.current) return;
@@ -287,6 +400,8 @@ export default function AddressLocationPicker({
 
   const reverseGeocodeAt = useCallback(
     async (lat, lng) => {
+      const requestId = reverseGeocodeRequestIdRef.current + 1;
+      reverseGeocodeRequestIdRef.current = requestId;
       setIsReadingMapLocation(true);
       try {
         let googleParsed = null;
@@ -304,7 +419,7 @@ export default function AddressLocationPicker({
                     resolve(null);
                     return;
                   }
-                  resolve(pickBestGoogleResult(results));
+                  resolve(pickBestGoogleResult(results, lat, lng));
                 },
               );
             });
@@ -331,34 +446,52 @@ export default function AddressLocationPicker({
           parsed.longitude = String(lng);
         }
 
-        onChange((prev) => ({
-          ...prev,
-          ...parsed,
-          // Keep manually typed street if reverse geocode gives only coarse locality text.
-          street: parsed.street || prev?.street || "",
-          additionalDetails: parsed.additionalDetails || prev?.additionalDetails || "",
-          city: parsed.city || prev?.city || "",
-          state: parsed.state || prev?.state || "",
-          zipCode: parsed.zipCode || prev?.zipCode || "",
-        }));
+        if (reverseGeocodeRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        onChange((prev) => {
+          const nextValue = {
+            ...prev,
+            ...parsed,
+            // Marker-driven updates should reflect the current pin, not stale fields
+            // from a previous typed or selected address.
+            street: String(parsed.street || "").trim(),
+            additionalDetails: String(parsed.additionalDetails || "").trim(),
+            city: String(parsed.city || "").trim(),
+            state: String(parsed.state || "").trim(),
+            zipCode: String(parsed.zipCode || "").trim(),
+          };
+          // Prevent the auto-typed-address geocode effect from snapping the pin away
+          // right after a live GPS pick or manual map move.
+          lastTypedQueryRef.current = buildTypedAddressQuery(nextValue);
+          return nextValue;
+        });
       } catch (error) {
+        if (reverseGeocodeRequestIdRef.current !== requestId) {
+          return;
+        }
         console.error("Map reverse geocoding failed:", error);
         syncLocationFields({
           latitude: String(lat),
           longitude: String(lng),
         });
       } finally {
-        setIsReadingMapLocation(false);
+        if (reverseGeocodeRequestIdRef.current === requestId) {
+          setIsReadingMapLocation(false);
+        }
       }
     },
     [onChange, syncLocationFields],
   );
 
   const scheduleReverseGeocode = useCallback(
-    (lat, lng) => {
+    (lat, lng, options = {}) => {
+      const { delayMs = 350 } = options;
       const roundedLat = Number(lat.toFixed(6));
       const roundedLng = Number(lng.toFixed(6));
 
+      setCurrentLocationAccuracy(null);
       syncLocationFields({
         latitude: String(roundedLat),
         longitude: String(roundedLng),
@@ -370,7 +503,7 @@ export default function AddressLocationPicker({
 
       reverseGeocodeTimerRef.current = window.setTimeout(() => {
         reverseGeocodeAt(roundedLat, roundedLng);
-      }, 350);
+      }, delayMs);
     },
     [reverseGeocodeAt, syncLocationFields],
   );
@@ -418,10 +551,22 @@ export default function AddressLocationPicker({
           },
         });
 
+        dragStartListenerRef.current = google.maps.event.addListener(marker, "dragstart", () => {
+          if (reverseGeocodeTimerRef.current) {
+            clearTimeout(reverseGeocodeTimerRef.current);
+          }
+        });
+
+        dragMoveListenerRef.current = google.maps.event.addListener(marker, "drag", () => {
+          const next = marker.getPosition();
+          if (!next) return;
+          scheduleReverseGeocode(next.lat(), next.lng(), { delayMs: 120 });
+        });
+
         dragListenerRef.current = google.maps.event.addListener(marker, "dragend", () => {
           const next = marker.getPosition();
           if (!next) return;
-          scheduleReverseGeocode(next.lat(), next.lng());
+          scheduleReverseGeocode(next.lat(), next.lng(), { delayMs: 0 });
         });
 
         clickListenerRef.current = google.maps.event.addListener(map, "click", (event) => {
@@ -456,6 +601,12 @@ export default function AddressLocationPicker({
       }
       if (dragListenerRef.current && window.google?.maps?.event) {
         window.google.maps.event.removeListener(dragListenerRef.current);
+      }
+      if (dragStartListenerRef.current && window.google?.maps?.event) {
+        window.google.maps.event.removeListener(dragStartListenerRef.current);
+      }
+      if (dragMoveListenerRef.current && window.google?.maps?.event) {
+        window.google.maps.event.removeListener(dragMoveListenerRef.current);
       }
       if (clickListenerRef.current && window.google?.maps?.event) {
         window.google.maps.event.removeListener(clickListenerRef.current);
@@ -499,6 +650,7 @@ export default function AddressLocationPicker({
         return;
       }
 
+      setCurrentLocationAccuracy(null);
       syncLocationFields({
         latitude: String(nextPosition.lat),
         longitude: String(nextPosition.lng),
@@ -560,105 +712,130 @@ export default function AddressLocationPicker({
   }, [locateTypedAddress, mapsReady, typedAddressQuery, value?.city, value?.street, value?.zipCode]);
 
   const handleUseCurrentLocation = useCallback(async () => {
-    const parseFallbackCoordinates = (candidate) => {
-      if (!candidate || typeof candidate !== "object") return null;
-      const lat = toFiniteNumber(
-        candidate.latitude ??
-          candidate.lat ??
-          candidate.location?.latitude ??
-          candidate.location?.lat ??
-          (Array.isArray(candidate.location?.coordinates)
-            ? candidate.location.coordinates[1]
-            : undefined),
-      );
-      const lng = toFiniteNumber(
-        candidate.longitude ??
-          candidate.lng ??
-          candidate.location?.longitude ??
-          candidate.location?.lng ??
-          (Array.isArray(candidate.location?.coordinates)
-            ? candidate.location.coordinates[0]
-            : undefined),
-      );
-      if (lat === null || lng === null) return null;
-      return { lat, lng };
-    };
-
-    const applyCoordinates = async (nextLat, nextLng, successMessage) => {
+    const applyCoordinates = async (nextLat, nextLng, successMessage, accuracyMeters = null) => {
+      syncLocationFields({
+        latitude: String(nextLat),
+        longitude: String(nextLng),
+      });
       updateMarkerPosition({ lat: nextLat, lng: nextLng }, true);
       if (mapRef.current) {
         mapRef.current.setZoom(16);
       }
+      setCurrentLocationAccuracy(Number.isFinite(accuracyMeters) ? accuracyMeters : null);
       await reverseGeocodeAt(nextLat, nextLng);
       toast.success(successMessage);
     };
 
-    const tryFallbackCoordinates = () => {
-      const fromProp = parseFallbackCoordinates(fallbackLocation);
-      if (fromProp) return fromProp;
-      try {
-        const cached = JSON.parse(localStorage.getItem("userLocation") || "null");
-        const fromCache = parseFallbackCoordinates(cached);
-        if (fromCache) return fromCache;
-      } catch {
-        // ignore storage parsing failures
-      }
-      return null;
-    };
+    const resolveBestCurrentPosition = () => new Promise((resolve, reject) => {
+      let bestPosition = null;
+      let watchId = null;
+      let hardTimeoutId = null;
+      let settleTimeoutId = null;
+
+      const cleanup = () => {
+        if (watchId !== null) {
+          navigator.geolocation.clearWatch(watchId);
+        }
+        if (hardTimeoutId) {
+          clearTimeout(hardTimeoutId);
+        }
+        if (settleTimeoutId) {
+          clearTimeout(settleTimeoutId);
+        }
+      };
+
+      const finishWithBest = () => {
+        cleanup();
+        if (bestPosition) {
+          resolve(bestPosition);
+          return;
+        }
+        reject(new Error("Unable to resolve a valid live location."));
+      };
+
+      const handleCandidate = (position) => {
+        const nextLat = toFiniteNumber(position?.coords?.latitude);
+        const nextLng = toFiniteNumber(position?.coords?.longitude);
+        const nextAccuracy = toFiniteNumber(position?.coords?.accuracy);
+
+        if (nextLat === null || nextLng === null) {
+          return;
+        }
+
+        if (
+          !bestPosition ||
+          (Number.isFinite(nextAccuracy) &&
+            (!Number.isFinite(bestPosition.coords?.accuracy) ||
+              nextAccuracy < Number(bestPosition.coords.accuracy)))
+        ) {
+          bestPosition = position;
+        }
+
+        if (Number.isFinite(nextAccuracy) && nextAccuracy <= DESIRED_GPS_ACCURACY_METERS) {
+          cleanup();
+          resolve(position);
+          return;
+        }
+
+        if (settleTimeoutId) {
+          clearTimeout(settleTimeoutId);
+        }
+        settleTimeoutId = window.setTimeout(finishWithBest, GPS_SETTLE_DELAY_MS);
+      };
+
+      watchId = navigator.geolocation.watchPosition(
+        handleCandidate,
+        (error) => {
+          cleanup();
+          if (bestPosition) {
+            resolve(bestPosition);
+            return;
+          }
+          reject(error);
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: GPS_WATCH_TIMEOUT_MS,
+          maximumAge: 0,
+        },
+      );
+
+      hardTimeoutId = window.setTimeout(finishWithBest, GPS_WATCH_TIMEOUT_MS);
+    });
 
     if (!navigator.geolocation) {
-      const fallback = tryFallbackCoordinates();
-      if (fallback) {
-        setIsReadingMapLocation(true);
-        try {
-          await applyCoordinates(
-            fallback.lat,
-            fallback.lng,
-            "Using your last known location.",
-          );
-        } finally {
-          setIsReadingMapLocation(false);
-        }
-        return;
-      }
       toast.error("Geolocation is not supported on this device.");
       return;
     }
 
     setIsReadingMapLocation(true);
     try {
-      const position = await new Promise((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 15000,
-          maximumAge: 0,
-        });
-      });
+      const position = await resolveBestCurrentPosition();
 
       const nextLat = Number(position?.coords?.latitude);
       const nextLng = Number(position?.coords?.longitude);
+      const accuracyMeters = Number(position?.coords?.accuracy);
       if (!Number.isFinite(nextLat) || !Number.isFinite(nextLng)) {
         throw new Error("Invalid geolocation coordinates.");
       }
 
-      updateMarkerPosition({ lat: nextLat, lng: nextLng }, true);
-      if (mapRef.current) {
-        mapRef.current.setZoom(16);
-      }
+      await applyCoordinates(
+        nextLat,
+        nextLng,
+        Number.isFinite(accuracyMeters) && accuracyMeters > MAX_GPS_ACCURACY_METERS
+          ? "Live location found, but GPS accuracy is weak. Please drag the pin if needed."
+          : "Pinned to your current location.",
+        accuracyMeters,
+      );
 
-      await reverseGeocodeAt(nextLat, nextLng);
-      toast.success("Pinned to your current location.");
+      if (Number.isFinite(accuracyMeters) && accuracyMeters > MAX_GPS_ACCURACY_METERS) {
+        toast.warning(
+          `GPS accuracy is currently about ±${Math.round(accuracyMeters)}m. Double-check the pin before saving.`,
+        );
+      }
     } catch (error) {
       console.error("Current location pinning failed:", error);
-      const fallback = tryFallbackCoordinates();
-      if (fallback) {
-        await applyCoordinates(
-          fallback.lat,
-          fallback.lng,
-          "Using your last known location.",
-        );
-        return;
-      }
+      setCurrentLocationAccuracy(null);
       const code = Number(error?.code);
       if (code === 1) {
         toast.error("Location permission denied. Enable location permission and try again.");
@@ -667,12 +844,12 @@ export default function AddressLocationPicker({
       } else if (code === 3) {
         toast.error("Location request timed out. Please try again.");
       } else {
-        toast.error("Unable to fetch current location for the map.");
+        toast.error("Unable to fetch a reliable live location for the map.");
       }
     } finally {
       setIsReadingMapLocation(false);
     }
-  }, [fallbackLocation, reverseGeocodeAt, updateMarkerPosition]);
+  }, [reverseGeocodeAt, syncLocationFields, updateMarkerPosition]);
 
   return (
     <div className={`space-y-2 rounded-xl border border-gray-200 bg-white p-3 dark:border-white/10 dark:bg-[#0f172a] ${className}`}>
@@ -718,6 +895,11 @@ export default function AddressLocationPicker({
             ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`
             : "No coordinates pinned yet"}
         </span>
+        {currentLocationAccuracy !== null ? (
+          <span className="rounded-full bg-sky-50 px-2 py-1 text-sky-700 dark:bg-sky-500/10 dark:text-sky-300">
+            GPS accuracy ±{Math.round(currentLocationAccuracy)}m
+          </span>
+        ) : null}
         {mapsLoading ? <span>Loading map...</span> : null}
         {!mapsLoading && isReadingMapLocation ? <span>Updating address from map...</span> : null}
       </div>
