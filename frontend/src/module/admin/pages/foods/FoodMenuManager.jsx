@@ -100,6 +100,7 @@ export default function FoodMenuManager() {
   const [imagePreview, setImagePreview] = useState("");
   const [selectedSectionViewKey, setSelectedSectionViewKey] = useState("");
   const [deletingItemId, setDeletingItemId] = useState("");
+  const [availabilitySavingItemId, setAvailabilitySavingItemId] = useState("");
 
   const [form, setForm] = useState({
     sectionId: "",
@@ -423,6 +424,7 @@ export default function FoodMenuManager() {
     setEditForm({
       name: item?.name || "",
       image: initialImage,
+      isAvailable: item?.isAvailable !== false,
     });
     setImagePreview(initialImage);
   };
@@ -466,6 +468,7 @@ export default function FoodMenuManager() {
           name: String(editForm.name || "").trim(),
           image: String(editForm.image || "").trim(),
           images: String(editForm.image || "").trim() ? [String(editForm.image || "").trim()] : [],
+          isAvailable: editForm.isAvailable !== false,
         },
       });
       await refreshCurrentMenuState(selectedRestaurantId);
@@ -477,6 +480,57 @@ export default function FoodMenuManager() {
       toast.error(error?.response?.data?.message || "Failed to update dish");
     } finally {
       setEditSaving(false);
+    }
+  };
+
+  const handleToggleAvailability = async (item) => {
+    if (!selectedRestaurantId || !item?.id) {
+      toast.error("Unable to identify the dish.");
+      return;
+    }
+
+    const nextAvailability = item?.isAvailable === false;
+
+    try {
+      setAvailabilitySavingItemId(String(item.id));
+      await adminAPI.updateRestaurantMenuItem(selectedRestaurantId, item.id, {
+        item: {
+          ...item,
+          isAvailable: nextAvailability,
+        },
+      });
+
+      setMenu((prev) => ({
+        ...prev,
+        sections: (prev.sections || []).map((section) => ({
+          ...section,
+          items: (section.items || []).map((menuItem) =>
+            String(menuItem.id) === String(item.id)
+              ? { ...menuItem, isAvailable: nextAvailability }
+              : menuItem,
+          ),
+          subsections: (section.subsections || []).map((subsection) => ({
+            ...subsection,
+            items: (subsection.items || []).map((menuItem) =>
+              String(menuItem.id) === String(item.id)
+                ? { ...menuItem, isAvailable: nextAvailability }
+                : menuItem,
+            ),
+          })),
+        })),
+      }));
+
+      if (editingItem?.id === item.id) {
+        setEditingItem((prev) => (prev ? { ...prev, isAvailable: nextAvailability } : prev));
+        setEditForm((prev) => ({ ...prev, isAvailable: nextAvailability }));
+      }
+
+      toast.success(nextAvailability ? "Dish marked available" : "Dish marked unavailable");
+    } catch (error) {
+      console.error("Failed to update dish availability:", error);
+      toast.error(error?.response?.data?.message || "Failed to update dish availability");
+    } finally {
+      setAvailabilitySavingItemId("");
     }
   };
 
@@ -520,9 +574,33 @@ export default function FoodMenuManager() {
             fallback={<span className="text-[9px] font-medium uppercase text-slate-400">No image</span>}
           />
         </div>
-        <span className="text-slate-800 truncate">{item.name}</span>
+        <div className="min-w-0">
+          <p className="text-slate-800 truncate">{item.name}</p>
+          <p className="text-xs text-slate-500">
+            {item.isAvailable === false ? "Out of stock" : "In stock"}
+          </p>
+        </div>
       </div>
       <div className="flex items-center gap-3 shrink-0">
+        <button
+          type="button"
+          onClick={() => handleToggleAvailability(item)}
+          disabled={availabilitySavingItemId === String(item.id)}
+          className={`inline-flex min-w-[96px] items-center justify-center rounded-md px-3 py-1.5 text-xs font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+            item.isAvailable === false
+              ? "border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100"
+              : "border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+          }`}
+          title={item.isAvailable === false ? "Mark in stock" : "Mark out of stock"}
+        >
+          {availabilitySavingItemId === String(item.id) ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : item.isAvailable === false ? (
+            "Turn On Stock"
+          ) : (
+            "Turn Off Stock"
+          )}
+        </button>
         <span className="font-medium text-slate-700">Rs {Number(item.price || 0).toFixed(2)}</span>
         <button
           type="button"
@@ -914,6 +992,16 @@ export default function FoodMenuManager() {
                 placeholder="Image URL"
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
               />
+              <label className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={editForm.isAvailable !== false}
+                  onChange={(event) =>
+                    setEditForm((prev) => ({ ...prev, isAvailable: event.target.checked }))
+                  }
+                />
+                In stock / available
+              </label>
               <div className="flex items-center gap-3">
                 <label className="inline-flex cursor-pointer items-center rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
                   Upload Image
