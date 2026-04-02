@@ -33852,6 +33852,15 @@ export default function DeliveryHome() {
             </h2>
 
 
+            <p className="text-gray-700 text-sm font-semibold mb-2">
+
+
+              Customer: {selectedRestaurant?.customerName || 'Customer'}
+
+
+            </p>
+
+
             <p className="text-gray-600 mb-2 leading-relaxed">
 
 
@@ -33943,6 +33952,87 @@ export default function DeliveryHome() {
 
 
             </p>
+
+
+            {Array.isArray(selectedRestaurant?.items) && selectedRestaurant.items.length > 0 && (
+
+
+              <div className="mt-4 rounded-xl bg-gray-50 border border-gray-200 p-3">
+
+
+                <p className="text-sm font-semibold text-gray-900 mb-2">
+
+
+                  Ordered Items ({selectedRestaurant.items.length})
+
+
+                </p>
+
+
+                <div className="space-y-1.5">
+
+
+                  {selectedRestaurant.items.slice(0, 4).map((item, index) => {
+
+
+                    const itemName =
+
+
+                      item?.name ||
+
+
+                      item?.productName ||
+
+
+                      item?.title ||
+
+
+                      `Item ${index + 1}`
+
+
+                    const itemQuantity = item?.quantity || item?.qty || 1
+
+
+                    return (
+
+
+                      <p key={item?._id || item?.id || item?.itemId || `${itemName}-${index}`} className="text-sm text-gray-700">
+
+
+                        {itemQuantity} x {itemName}
+
+
+                      </p>
+
+
+                    )
+
+
+                  })}
+
+
+                  {selectedRestaurant.items.length > 4 && (
+
+
+                    <p className="text-xs font-medium text-gray-500">
+
+
+                      +{selectedRestaurant.items.length - 4} more item{selectedRestaurant.items.length - 4 > 1 ? 's' : ''}
+
+
+                    </p>
+
+
+                  )}
+
+
+                </div>
+
+
+              </div>
+
+
+            )}
 
 
             {isOrderCancelledState(selectedRestaurant) && (
