@@ -26,6 +26,55 @@ const buildStoreSearchOr = (search = '') => ([
   { email: { $regex: search, $options: 'i' } }
 ]);
 
+const applyStoreStatusFilter = (query = {}, status = '') => {
+  if (!query || typeof query !== 'object') return;
+  const normalizedStatus = String(status || '').trim().toLowerCase();
+  if (!normalizedStatus) return;
+
+  if (normalizedStatus === 'active') {
+    query.$and = [
+      ...(Array.isArray(query.$and) ? query.$and : []),
+      {
+        $or: [
+          { isActive: true },
+          { status: { $regex: /^active$/i } },
+          { status: { $regex: /^approved$/i } },
+          { approvedAt: { $ne: null } },
+        ],
+      },
+    ];
+    return;
+  }
+
+  if (normalizedStatus === 'inactive') {
+    query.$and = [
+      ...(Array.isArray(query.$and) ? query.$and : []),
+      {
+        $or: [
+          { isActive: false },
+          { status: { $regex: /^inactive$/i } },
+          { status: { $regex: /^rejected$/i } },
+          { status: { $regex: /^pending$/i } },
+          { approvedAt: null },
+        ],
+      },
+    ];
+  }
+};
+
+const applyStoreSearchFilter = (query = {}, search = '') => {
+  if (!query || typeof query !== 'object') return;
+  const normalizedSearch = String(search || '').trim();
+  if (!normalizedSearch) return;
+
+  query.$and = [
+    ...(Array.isArray(query.$and) ? query.$and : []),
+    {
+      $or: buildStoreSearchOr(normalizedSearch),
+    },
+  ];
+};
+
 const getAdminAssignedZoneIds = (admin = null) => {
   if (!admin || String(admin?.role || '').toLowerCase() === 'super_admin') return [];
   return Array.from(
@@ -64,16 +113,8 @@ const hydrateMissingLegacyGroceryStores = async ({ search, status }) => {
     const legacyQuery = {
       platform: { $in: ['mogrocery', 'grocery'] }
     };
-
-    if (status === 'inactive') {
-      legacyQuery.isActive = false;
-    } else if (status === 'active') {
-      legacyQuery.isActive = true;
-    }
-
-    if (search) {
-      legacyQuery.$or = buildStoreSearchOr(search);
-    }
+    applyStoreStatusFilter(legacyQuery, status);
+    applyStoreSearchFilter(legacyQuery, search);
 
     const legacyStores = await Restaurant.find(legacyQuery)
       .select('+password')
@@ -104,16 +145,8 @@ const hydrateMissingLegacyGroceryStores = async ({ search, status }) => {
       const orderLinkedQuery = {
         _id: { $in: normalizedOrderIds }
       };
-
-      if (status === 'inactive') {
-        orderLinkedQuery.isActive = false;
-      } else if (status === 'active') {
-        orderLinkedQuery.isActive = true;
-      }
-
-      if (search) {
-        orderLinkedQuery.$or = buildStoreSearchOr(search);
-      }
+      applyStoreStatusFilter(orderLinkedQuery, status);
+      applyStoreSearchFilter(orderLinkedQuery, search);
 
       orderLinkedStores = await Restaurant.find(orderLinkedQuery)
         .select('+password')
@@ -125,16 +158,8 @@ const hydrateMissingLegacyGroceryStores = async ({ search, status }) => {
       const productLinkedQuery = {
         _id: { $in: normalizedProductIds }
       };
-
-      if (status === 'inactive') {
-        productLinkedQuery.isActive = false;
-      } else if (status === 'active') {
-        productLinkedQuery.isActive = true;
-      }
-
-      if (search) {
-        productLinkedQuery.$or = buildStoreSearchOr(search);
-      }
+      applyStoreStatusFilter(productLinkedQuery, status);
+      applyStoreSearchFilter(productLinkedQuery, search);
 
       productLinkedStores = await Restaurant.find(productLinkedQuery)
         .select('+password')
@@ -237,15 +262,8 @@ export const getGroceryStores = asyncHandler(async (req, res) => {
     const query = {};
     const scopedZoneIds = await getScopedGroceryZoneIds(req.user || req.admin);
 
-    if (status === 'inactive') {
-      query.isActive = false;
-    } else if (status === 'active') {
-      query.isActive = true;
-    }
-
-    if (search) {
-      query.$or = buildStoreSearchOr(search);
-    }
+    applyStoreStatusFilter(query, status);
+    applyStoreSearchFilter(query, search);
     if (scopedZoneIds.length > 0) {
       query.zoneId = { $in: scopedZoneIds };
     }

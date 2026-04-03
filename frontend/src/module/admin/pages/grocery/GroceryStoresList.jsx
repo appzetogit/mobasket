@@ -100,9 +100,16 @@ export default function GroceryStoresList() {
       
       if (response.data && response.data.success && response.data.data) {
         const storesData = response.data.data.stores || []
-        const approvedStores = storesData.filter(
-          (store) => store?.isActive === true || String(store?.status || "").toLowerCase() === "active",
-        )
+        const approvedStores = storesData.filter((store) => {
+          const normalizedStatus = String(store?.status || "").toLowerCase()
+          const hasApprovalTimestamp = Boolean(store?.approvedAt)
+          return (
+            store?.isActive === true ||
+            normalizedStatus === "active" ||
+            normalizedStatus === "approved" ||
+            hasApprovalTimestamp
+          )
+        })
         
         const mappedStores = approvedStores.map((store, index) => ({
           id: store._id || store.id || index + 1,
