@@ -583,14 +583,16 @@ export default function OrdersTable({
                   </td>
                 )}
                 {visibleColumns.orderStatus && (
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4">
                     <div className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.orderStatus, isGrocery)}`}>
                           {isGrocery ? getGroceryStatusLabel(order.orderStatus) : order.orderStatus}
                         </span>
-                        <span className="text-xs text-slate-500">{order.deliveryType}</span>
                       </div>
+                      {order.deliveryType ? (
+                        <span className="text-xs text-slate-500">{order.deliveryType}</span>
+                      ) : null}
                       {isAwaitingAdminApproval(order) && (
                         <div className="text-[11px] font-semibold text-amber-700">
                           Awaiting Admin Approval
@@ -602,13 +604,13 @@ export default function OrdersTable({
                         </div>
                       )}
                       {order.cancellationReason && (
-                        <div className="text-xs text-red-600 mt-1">
-                          <span className="font-medium">
+                        <div className="text-xs text-red-600 mt-1 max-w-[28rem] break-words">
+                          <span className="font-medium block">
                             {order.cancelledBy === 'user' ? 'Cancelled by User - ' :
                               order.cancelledBy === 'restaurant' ? (isGrocery ? 'Cancelled by Store - ' : 'Cancelled by Restaurant - ') :
                                 'Reason: '}
                           </span>
-                          {order.cancellationReason}
+                          <span className="block">{order.cancellationReason}</span>
                         </div>
                       )}
                       {showAcceptedRider && (
