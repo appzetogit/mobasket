@@ -17,17 +17,35 @@ const getCurrentRestaurantCache = () => {
   }
 }
 
-const getRestaurantIdentity = (restaurant = {}) =>
-  String(restaurant?.id || restaurant?._id || restaurant?.restaurantId || "").trim()
-
 const mapRestaurantSummary = (restaurant = {}) => {
   if (!restaurant) return null
 
+  const resolvedName = String(
+    restaurant?.name ||
+    restaurant?.restaurantName ||
+    restaurant?.ownerName ||
+    ""
+  ).trim()
+
   return {
-    name: restaurant?.name || "Restaurant",
+    name: resolvedName || "Restaurant",
     restaurantId: restaurant?.restaurantId || restaurant?._id || restaurant?.id || "",
     address: restaurant?.address || restaurant?.location?.address || restaurant?.location?.formattedAddress || "",
   }
+}
+
+const formatDateForRangeLabel = (date) => {
+  const day = date.getDate()
+  const month = date.toLocaleString('en-US', { month: 'short' })
+  const year = date.getFullYear().toString().slice(-2)
+  return `${day} ${month}'${year}`
+}
+
+const getCurrentMonthDateRangeLabel = () => {
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), 1)
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+  return `${formatDateForRangeLabel(start)} - ${formatDateForRangeLabel(end)}`
 }
 
 export default function HubFinance() {
@@ -38,7 +56,7 @@ export default function HubFinance() {
     const tabParam = searchParams.get("tab")
     return tabParam === "invoices" ? "invoices" : "payouts"
   })
-  const [selectedDateRange, setSelectedDateRange] = useState("14 Nov - 14 Dec'25")
+  const [selectedDateRange, setSelectedDateRange] = useState(() => getCurrentMonthDateRangeLabel())
   const [showDownloadMenu, setShowDownloadMenu] = useState(false)
   const [showDateRangePicker, setShowDateRangePicker] = useState(false)
   const downloadMenuRef = useRef(null)
@@ -47,6 +65,7 @@ export default function HubFinance() {
   const [loading, setLoading] = useState(true)
   const [pastCyclesData, setPastCyclesData] = useState(null)
   const [loadingPastCycles, setLoadingPastCycles] = useState(false)
+  const [walletBalance, setWalletBalance] = useState(0)
   const [restaurantData, setRestaurantData] = useState(() => mapRestaurantSummary(getCurrentRestaurantCache()))
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false)
   const [withdrawalAmount, setWithdrawalAmount] = useState('')
@@ -56,7 +75,9 @@ export default function HubFinance() {
   const commissionMessage =
     financeData?.commissionMessage ||
     "Restaurant commission is not configured yet. Please contact admin to enable payouts."
-  const displayCurrentCycleOrders = commissionConfigured ? (financeData?.currentCycle?.totalOrders || 0) : 0
+  const displayCurrentCycleOrders = financeData?.currentCycle?.totalOrders || 0
+  const financeCycleBalance = Number(financeData?.currentCycle?.estimatedPayout) || 0
+  const currentCycleBalance = financeCycleBalance > 0 ? financeCycleBalance : (Number(walletBalance) || 0)
 
   const clearFinanceState = () => {
     setFinanceData(null)
@@ -80,29 +101,16 @@ export default function HubFinance() {
 
     try {
       setLoading(true)
-      const currentRestaurantId = getRestaurantIdentity(getCurrentRestaurantCache())
-      if (!currentRestaurantId) {
-        clearFinanceState()
-        return
-      }
-
       const response = await restaurantAPI.getFinance()
       if (!response.data?.success || !response.data?.data) {
         if (activeRequestRef.current === requestId) {
-          clearFinanceState()
+          setFinanceData(null)
+          setPastCyclesData(null)
         }
         return
       }
 
       const nextFinanceData = response.data.data
-      const financeRestaurantId = getRestaurantIdentity(nextFinanceData?.restaurant)
-      if (financeRestaurantId && financeRestaurantId !== currentRestaurantId) {
-        if (activeRequestRef.current === requestId) {
-          clearFinanceState()
-        }
-        return
-      }
-
       if (activeRequestRef.current === requestId) {
         setPastCyclesData(null)
         setFinanceData(nextFinanceData)
@@ -110,7 +118,8 @@ export default function HubFinance() {
       }
     } catch (error) {
       if (activeRequestRef.current === requestId) {
-        clearFinanceState()
+        setFinanceData(null)
+        setPastCyclesData(null)
       }
       // Suppress 401 errors as they're handled by axios interceptor (token refresh/redirect)
       if (error.response?.status !== 401) {
@@ -123,9 +132,23 @@ export default function HubFinance() {
     }
   }
 
+  const fetchWalletBalance = async () => {
+    try {
+      const response = await restaurantAPI.getWallet()
+      const balance = Number(response?.data?.data?.wallet?.totalBalance) || 0
+      setWalletBalance(balance)
+    } catch (error) {
+      if (error.response?.status !== 401) {
+        console.error('Error fetching wallet balance:', error)
+      }
+      setWalletBalance(0)
+    }
+  }
+
   const refreshFinanceScreen = async () => {
     await Promise.allSettled([
       fetchFinanceData(),
+      fetchWalletBalance(),
       refreshPastCyclesData(),
     ])
   }
@@ -170,16 +193,6 @@ export default function HubFinance() {
     }
   }, [selectedDateRange])
 
-  useEffect(() => {
-    const currentRestaurantId = getRestaurantIdentity(getCurrentRestaurantCache())
-    const financeRestaurantId = getRestaurantIdentity(financeData?.restaurant)
-
-    if (currentRestaurantId && financeRestaurantId && currentRestaurantId !== financeRestaurantId) {
-      clearFinanceState()
-      fetchFinanceData()
-    }
-  }, [financeData])
-
   // Fetch restaurant data for header display
   useEffect(() => {
     // Use restaurant data from financeData if available, otherwise fetch separately
@@ -188,22 +201,12 @@ export default function HubFinance() {
     } else {
       const fetchRestaurantData = async () => {
         try {
-          const currentRestaurantId = getRestaurantIdentity(getCurrentRestaurantCache())
-          if (!currentRestaurantId) {
-            setRestaurantData(null)
-            return
-          }
-
           const response = await restaurantAPI.getRestaurantByOwner()
           const data = response?.data?.data?.restaurant || response?.data?.restaurant || response?.data?.data
-          const responseRestaurantId = getRestaurantIdentity(data)
-          if (responseRestaurantId && responseRestaurantId !== currentRestaurantId) {
-            setRestaurantData(mapRestaurantSummary(getCurrentRestaurantCache()))
-            return
-          }
-
           if (data) {
             setRestaurantData(mapRestaurantSummary(data))
+          } else {
+            setRestaurantData(mapRestaurantSummary(getCurrentRestaurantCache()))
           }
         } catch (error) {
           // Suppress 401 errors as they're handled by axios interceptor
@@ -301,39 +304,50 @@ export default function HubFinance() {
 
   // Parse date range string to extract start and end dates
   const parseDateRange = (dateRangeStr) => {
-    // Format: "14 Nov - 14 Dec'25"
+    // Supports labels like:
+    // "14 Nov - 14 Dec'25"
+    // "1 Mar'26 - 31 Mar'26"
+    // "28 Mar'26 - 4 Apr'26"
     try {
       const parts = dateRangeStr.split(' - ')
       if (parts.length !== 2) return null
-      
-      const startStr = parts[0].trim() // "14 Nov"
-      const endStr = parts[1].trim().replace("'", " ") // "14 Dec 25"
-      
-      const currentYear = new Date().getFullYear()
-      const startParts = startStr.split(' ')
-      const endParts = endStr.split(' ')
-      
-      if (startParts.length < 2 || endParts.length < 2) return null
-      
+
       const monthMap = {
         'Jan': 0, 'Feb': 1, 'Mar': 2, 'Apr': 3, 'May': 4, 'Jun': 5,
         'Jul': 6, 'Aug': 7, 'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dec': 11
       }
-      
-      const startDay = parseInt(startParts[0])
-      const startMonth = monthMap[startParts[1]]
-      const endDay = parseInt(endParts[0])
-      const endMonth = monthMap[endParts[1]]
-      const year = endParts.length > 2 ? parseInt('20' + endParts[2]) : currentYear
-      
+
+      const parseSingleDate = (value, fallbackYear) => {
+        const normalized = String(value || '').trim().replace("'", " ")
+        const dateParts = normalized.split(/\s+/).filter(Boolean)
+
+        if (dateParts.length < 2) return null
+
+        const day = parseInt(dateParts[0], 10)
+        const month = monthMap[dateParts[1]]
+        const year = dateParts.length > 2
+          ? parseInt(`20${dateParts[2]}`, 10)
+          : fallbackYear
+
+        if (month === undefined || Number.isNaN(day) || Number.isNaN(year)) {
+          return null
+        }
+
+        return { day, month, year }
+      }
+
+      const currentYear = new Date().getFullYear()
+      const endParts = parseSingleDate(parts[1], currentYear)
+      const startParts = parseSingleDate(parts[0], endParts?.year || currentYear)
+
       // Validate month values
-      if (startMonth === undefined || endMonth === undefined || isNaN(startDay) || isNaN(endDay)) {
-        console.error('Invalid date components:', { startMonth, endMonth, startDay, endDay, dateRangeStr })
+      if (!startParts || !endParts) {
+        console.error('Invalid date components:', { startParts, endParts, dateRangeStr })
         return null
       }
-      
-      const startDate = new Date(year, startMonth, startDay)
-      const endDate = new Date(year, endMonth, endDay)
+
+      const startDate = new Date(startParts.year, startParts.month, startParts.day)
+      const endDate = new Date(endParts.year, endParts.month, endParts.day)
       
       // Validate dates
       if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
@@ -375,13 +389,6 @@ export default function HubFinance() {
         startDate: startDateISO,
         endDate: endDateISO
       })
-      const currentRestaurantId = getRestaurantIdentity(getCurrentRestaurantCache())
-      const responseRestaurantId = getRestaurantIdentity(response?.data?.data?.restaurant)
-
-      if (currentRestaurantId && responseRestaurantId && currentRestaurantId !== responseRestaurantId) {
-        setPastCyclesData(null)
-        return
-      }
 
       if (response.data?.success && response.data?.data?.pastCycles) {
         setPastCyclesData(response.data.data.pastCycles)
@@ -850,7 +857,7 @@ export default function HubFinance() {
                 ) : (
                   <>
                     <p className="text-4xl font-bold text-gray-900 mb-2">
-                      ₹{(financeData?.currentCycle?.estimatedPayout || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ₹{currentCycleBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                     <p className="text-sm text-gray-600 mb-4">
                       {displayCurrentCycleOrders} {displayCurrentCycleOrders === 1 ? 'order' : 'orders'}
@@ -860,7 +867,7 @@ export default function HubFinance() {
                         {commissionMessage}
                       </div>
                     )}
-                    {commissionConfigured && (financeData?.currentCycle?.estimatedPayout || 0) > 0 && (
+                    {currentCycleBalance > 0 && (
                       <button
                         onClick={() => setShowWithdrawalModal(true)}
                         className="w-full bg-black text-white py-3 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-gray-800 transition-colors mt-4"
@@ -1075,7 +1082,7 @@ export default function HubFinance() {
                       </div>
                     )}
                     {/* Show past cycles orders if available */}
-                    {commissionConfigured && pastCyclesData && pastCyclesData.orders && pastCyclesData.orders.length > 0 && (
+                    {pastCyclesData && pastCyclesData.orders && pastCyclesData.orders.length > 0 && (
                       <div className="bg-white rounded-lg p-4 space-y-3">
                         {pastCyclesData.orders.map((order, index) => (
                           <div key={order.orderId || index} className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0">
@@ -1090,7 +1097,7 @@ export default function HubFinance() {
                               </div>
                               <div className="text-right ml-4">
                                 <p className="text-sm font-bold text-gray-900">
-                                  ₹{(order.payout || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  ₹{(Number(order?.payout) || Number(order?.orderTotal) || Number(order?.totalAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
                                 <p className="text-xs text-gray-500">
                                   Earning
@@ -1102,7 +1109,7 @@ export default function HubFinance() {
                       </div>
                     )}
                     {/* Show current cycle orders if past cycles data is not available or has no orders */}
-                    {commissionConfigured && (!pastCyclesData || !pastCyclesData.orders || pastCyclesData.orders.length === 0) && !loadingPastCycles && financeData?.currentCycle?.orders && financeData.currentCycle.orders.length > 0 && (
+                    {(!pastCyclesData || !pastCyclesData.orders || pastCyclesData.orders.length === 0) && !loadingPastCycles && financeData?.currentCycle?.orders && financeData.currentCycle.orders.length > 0 && (
                       <div className="bg-white rounded-lg p-4 space-y-3">
                         {financeData.currentCycle.orders.map((order, index) => (
                           <div key={order.orderId || index} className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0">
@@ -1117,7 +1124,7 @@ export default function HubFinance() {
                               </div>
                               <div className="text-right ml-4">
                                 <p className="text-sm font-bold text-gray-900">
-                                  ₹{(order.payout || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  ₹{(Number(order?.payout) || Number(order?.orderTotal) || Number(order?.totalAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
                                 <p className="text-xs text-gray-500">
                                   Earning
@@ -1249,7 +1256,7 @@ export default function HubFinance() {
                 
                 <div className="mb-4">
                   <p className="text-sm text-gray-600 mb-2">
-                    Available Balance: <span className="font-semibold text-gray-900">₹{(financeData?.currentCycle?.estimatedPayout || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    Available Balance: <span className="font-semibold text-gray-900">₹{currentCycleBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   </p>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Enter Amount to Withdraw
@@ -1257,15 +1264,14 @@ export default function HubFinance() {
                   <input
                     type="number"
                     min="0.01"
-                    max={financeData?.currentCycle?.estimatedPayout || 0}
+                    max={currentCycleBalance}
                     step="0.01"
                     value={withdrawalAmount}
                     onChange={(e) => setWithdrawalAmount(e.target.value)}
                     placeholder="0.00"
-                    disabled={!commissionConfigured}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-black focus:border-transparent outline-none"
                   />
-                  {withdrawalAmount && parseFloat(withdrawalAmount) > (financeData?.currentCycle?.estimatedPayout || 0) && (
+                  {withdrawalAmount && parseFloat(withdrawalAmount) > currentCycleBalance && (
                     <p className="text-sm text-red-600 mt-1">Amount cannot exceed available balance</p>
                   )}
                 </div>
@@ -1282,16 +1288,12 @@ export default function HubFinance() {
                   </button>
                   <button
                     onClick={async () => {
-                      if (!commissionConfigured) {
-                        alert(commissionMessage)
-                        return
-                      }
                       const amount = parseFloat(withdrawalAmount)
                       if (!amount || amount <= 0) {
                         alert('Please enter a valid amount')
                         return
                       }
-                      if (amount > (financeData?.currentCycle?.estimatedPayout || 0)) {
+                      if (amount > currentCycleBalance) {
                         alert('Amount cannot exceed available balance')
                         return
                       }
@@ -1317,7 +1319,7 @@ export default function HubFinance() {
                         setSubmittingWithdrawal(false)
                       }
                     }}
-                    disabled={!commissionConfigured || submittingWithdrawal || !withdrawalAmount || parseFloat(withdrawalAmount) <= 0 || parseFloat(withdrawalAmount) > (financeData?.currentCycle?.estimatedPayout || 0)}
+                    disabled={submittingWithdrawal || !withdrawalAmount || parseFloat(withdrawalAmount) <= 0 || parseFloat(withdrawalAmount) > currentCycleBalance}
                     className="flex-1 px-4 py-3 bg-black text-white rounded-lg font-medium hover:bg-gray-800 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed"
                   >
                     {submittingWithdrawal ? 'Submitting...' : 'Submit Request'}

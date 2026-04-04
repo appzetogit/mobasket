@@ -4,19 +4,13 @@ import { motion, AnimatePresence } from "framer-motion"
 import { ArrowLeft, ChevronDown, ChevronUp, Download, Mail, X, Info } from "lucide-react"
 import { restaurantAPI } from "@/lib/api"
 
-const getCurrentRestaurantCache = () => {
-  if (typeof window === "undefined") return null
-
-  try {
-    const raw = localStorage.getItem("restaurant_user")
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
-
-const getRestaurantIdentity = (restaurant = {}) =>
-  String(restaurant?.id || restaurant?._id || restaurant?.restaurantId || "").trim()
+const getRestaurantName = (restaurant = {}) =>
+  String(
+    restaurant?.name ||
+    restaurant?.restaurantName ||
+    restaurant?.ownerName ||
+    "Restaurant"
+  ).trim() || "Restaurant"
 
 export default function FinanceDetailsPage() {
   void motion
@@ -77,20 +71,9 @@ export default function FinanceDetailsPage() {
     const fetchFinanceData = async () => {
       try {
         setLoadingFinance(true)
-        const currentRestaurantId = getRestaurantIdentity(getCurrentRestaurantCache())
-        if (!currentRestaurantId) {
-          if (isMounted) setFinanceData(null)
-          return
-        }
-
         const response = await restaurantAPI.getFinance()
         if (isMounted && response?.data?.success && response?.data?.data) {
           const nextFinanceData = response.data.data
-          const financeRestaurantId = getRestaurantIdentity(nextFinanceData?.restaurant)
-          if (financeRestaurantId && financeRestaurantId !== currentRestaurantId) {
-            setFinanceData(null)
-            return
-          }
           setFinanceData(nextFinanceData)
         }
       } catch (error) {
@@ -109,15 +92,6 @@ export default function FinanceDetailsPage() {
       isMounted = false
     }
   }, [location.state?.financeData])
-
-  useEffect(() => {
-    const currentRestaurantId = getRestaurantIdentity(getCurrentRestaurantCache())
-    const financeRestaurantId = getRestaurantIdentity(financeData?.restaurant)
-
-    if (currentRestaurantId && financeRestaurantId && currentRestaurantId !== financeRestaurantId) {
-      setFinanceData(null)
-    }
-  }, [financeData])
 
   const handleDownload = () => {
     setShowDownloadPopup(true)
@@ -208,7 +182,7 @@ export default function FinanceDetailsPage() {
           </button>
           <div className="flex-1 min-w-0">
             <h1 className="text-lg font-bold text-gray-900 truncate">
-              {restaurant?.name || "Restaurant"}
+              {getRestaurantName(restaurant)}
             </h1>
             <p className="text-xs text-gray-600 mt-0.5">
               ID: 20959122 • By Pass Road (South), Indore
