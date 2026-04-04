@@ -72,6 +72,7 @@ import MenuDiscountTiming from "@/module/restaurant/pages/MenuDiscountTiming";
 import HubMenu from "@/module/restaurant/pages/HubMenu";
 import ItemDetailsPage from "@/module/restaurant/pages/ItemDetailsPage";
 import HubFinance from "@/module/restaurant/pages/HubFinance";
+import CommissionDetailsPage from "@/module/restaurant/pages/CommissionDetailsPage";
 import FinanceDetailsPage from "@/module/restaurant/pages/FinanceDetailsPage";
 import WithdrawalHistoryPage from "@/module/restaurant/pages/WithdrawalHistoryPage";
 import PhoneNumbersPage from "@/module/restaurant/pages/PhoneNumbersPage";
@@ -165,6 +166,7 @@ export default function RestaurantAppRoutes() {
       <Route path="hub-menu" element={<ProtectedRoute requiredRole="restaurant" loginPath="/restaurant/login"><HubMenu /></ProtectedRoute>} />
       <Route path="hub-menu/item/:id" element={<ProtectedRoute requiredRole="restaurant" loginPath="/restaurant/login"><ItemDetailsPage /></ProtectedRoute>} />
       <Route path="hub-finance" element={<ProtectedRoute requiredRole="restaurant" loginPath="/restaurant/login"><HubFinance /></ProtectedRoute>} />
+      <Route path="commission-details" element={<ProtectedRoute requiredRole="restaurant" loginPath="/restaurant/login"><CommissionDetailsPage /></ProtectedRoute>} />
       <Route path="withdrawal-history" element={<ProtectedRoute requiredRole="restaurant" loginPath="/restaurant/login"><WithdrawalHistoryPage /></ProtectedRoute>} />
       <Route path="finance-details" element={<ProtectedRoute requiredRole="restaurant" loginPath="/restaurant/login"><FinanceDetailsPage /></ProtectedRoute>} />
       <Route path="phone" element={<ProtectedRoute requiredRole="restaurant" loginPath="/restaurant/login"><PhoneNumbersPage /></ProtectedRoute>} />

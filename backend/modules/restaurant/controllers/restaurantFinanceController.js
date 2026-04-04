@@ -140,6 +140,37 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
       };
     };
 
+    const activeCommissionRules = [...(restaurantCommission?.commissionRules || [])]
+      .filter((rule) => Boolean(rule?.isActive))
+      .sort((a, b) => {
+        if ((b?.priority || 0) !== (a?.priority || 0)) {
+          return (b?.priority || 0) - (a?.priority || 0);
+        }
+        return (a?.minOrderAmount || 0) - (b?.minOrderAmount || 0);
+      })
+      .map((rule) => ({
+        minOrderAmount: Number(rule?.minOrderAmount || 0),
+        maxOrderAmount: rule?.maxOrderAmount === null || rule?.maxOrderAmount === undefined
+          ? null
+          : Number(rule.maxOrderAmount),
+        type: rule?.type || 'percentage',
+        value: Number(rule?.value || 0),
+        priority: Number(rule?.priority || 0),
+      }));
+
+    const defaultCommissionConfig = restaurantCommission?.defaultCommission
+      ? {
+          type: restaurantCommission.defaultCommission.type || 'percentage',
+          value: Number(restaurantCommission.defaultCommission.value || 0),
+        }
+      : null;
+
+    const commissionConfig = {
+      configured: commissionConfigured,
+      defaultCommission: defaultCommissionConfig,
+      rules: activeCommissionRules,
+    };
+
     // Get current cycle orders (delivered orders in current week)
     // Query orders that were delivered in the current cycle
     // First try with deliveredAt, if not found, use tracking.delivered.timestamp as fallback
@@ -569,6 +600,7 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
 
     return successResponse(res, 200, 'Finance data retrieved successfully', {
       commissionConfigured,
+      commissionConfig,
       commissionSetupRequired: !commissionConfigured,
       commissionMessage: commissionConfigured
         ? null

@@ -6,21 +6,27 @@ import { ArrowLeft, Truck, X, CheckCircle, AlertCircle } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent } from "@/components/ui/card"
 import { restaurantAPI, groceryStoreAPI } from "@/lib/api"
+import { isOpenFromOutletTimingsMap, normalizeOutletTimingsMap } from "@/lib/utils/outletTimingsStatus"
 
-const STORAGE_KEY = "restaurant_outlet_timings"
+const RESTAURANT_STORAGE_KEY = "restaurant_outlet_timings"
+const GROCERY_STORAGE_KEY = "grocery_store_outlet_timings"
 
 export default function DeliverySettings() {
   const navigate = useNavigate()
   const location = useLocation()
   const isGroceryStore = location.pathname.startsWith("/store")
+  const storageKey = isGroceryStore ? GROCERY_STORAGE_KEY : RESTAURANT_STORAGE_KEY
   const statusStorageKey = isGroceryStore ? "grocery-store_online_status" : "restaurant_online_status"
   const statusEventName = isGroceryStore ? "storeStatusChanged" : "restaurantStatusChanged"
+  const outletTimingsAPI = isGroceryStore ? groceryStoreAPI : restaurantAPI
   const [deliveryStatus, setDeliveryStatus] = useState(false)
   const [showWarning, setShowWarning] = useState(false)
   const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [pendingStatus, setPendingStatus] = useState(false)
   const [showSuccessToast, setShowSuccessToast] = useState(false)
   const [toastMessage, setToastMessage] = useState("")
+  const [outletTimings, setOutletTimings] = useState(null)
+  const [currentTime, setCurrentTime] = useState(() => new Date())
 
   const normalizeStatusValue = (value) => {
     if (typeof value === "boolean") return value
@@ -51,6 +57,14 @@ export default function DeliverySettings() {
     return () => {
       lenis.destroy()
     }
+  }, [])
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date())
+    }, 60000)
+
+    return () => clearInterval(interval)
   }, [])
 
   // Load delivery status from localStorage on mount, fallback to backend value.
@@ -114,84 +128,53 @@ export default function DeliverySettings() {
     }
   }, [showConfirmDialog])
 
-  // Check if current time is within outlet timings
-  const isWithinOutletTimings = () => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY)
-      if (!saved) return false
-
-      const days = JSON.parse(saved)
-      const now = new Date()
-      const currentDay = now.toLocaleDateString('en-US', { weekday: 'long' })
-      const currentHour = now.getHours()
-      const currentMinute = now.getMinutes()
-      const currentTimeInMinutes = currentHour * 60 + currentMinute
-
-      const dayData = days[currentDay]
-      if (!dayData || !dayData.isOpen) {
-        return false
-      }
-
-      const parseTimeToMinutes = (timeStr) => {
-        if (!timeStr || typeof timeStr !== "string") return null
-        const normalized = timeStr.trim().toUpperCase()
-        const match = normalized.match(/^(\d{1,2}):(\d{2})(?:\s*(AM|PM))?$/)
-        if (!match) return null
-        let hours = Number(match[1])
-        const minutes = Number(match[2])
-        const period = match[3] || null
-        if (!Number.isInteger(hours) || !Number.isInteger(minutes)) return null
-        if (minutes < 0 || minutes > 59) return null
-        if (period) {
-          if (hours < 1 || hours > 12) return null
-          if (period === "PM" && hours !== 12) hours += 12
-          if (period === "AM" && hours === 12) hours = 0
-        } else if (hours < 0 || hours > 23) {
-          return null
+  useEffect(() => {
+    const loadOutletTimings = async () => {
+      try {
+        const response = await outletTimingsAPI.getOutletTimings()
+        const apiTimings =
+          response?.data?.data?.outletTimings?.timings ||
+          response?.data?.outletTimings?.timings ||
+          []
+        const normalizedApi = normalizeOutletTimingsMap(apiTimings)
+        if (normalizedApi) {
+          setOutletTimings(normalizedApi)
+          localStorage.setItem(storageKey, JSON.stringify(normalizedApi))
+          return
         }
-        return hours * 60 + minutes
+      } catch (error) {
+        console.error("Error loading outlet timings from API:", error)
       }
 
-      const isWithinWindow = (startMinutes, endMinutes) => {
-        if (!Number.isFinite(startMinutes) || !Number.isFinite(endMinutes)) return false
-        if (endMinutes < startMinutes) {
-          return currentTimeInMinutes >= startMinutes || currentTimeInMinutes <= endMinutes
+      try {
+        const saved = localStorage.getItem(storageKey)
+        if (!saved) return
+        const normalizedSaved = normalizeOutletTimingsMap(JSON.parse(saved))
+        if (normalizedSaved) {
+          setOutletTimings(normalizedSaved)
         }
-        return currentTimeInMinutes >= startMinutes && currentTimeInMinutes <= endMinutes
+      } catch (error) {
+        console.error("Error loading outlet timings from storage:", error)
       }
-
-      if (!dayData.slots || dayData.slots.length === 0) {
-        const start = parseTimeToMinutes(dayData.openingTime)
-        const end = parseTimeToMinutes(dayData.closingTime)
-        return isWithinWindow(start, end)
-      }
-
-      // Check if current time falls within any slot for today
-      return dayData.slots.some(slot => {
-        if (!slot || !slot.start || !slot.end) return false
-
-        const parseTime = (timeStr, period) => {
-          if (!timeStr || !timeStr.includes(":")) return 0
-          const [hours, minutes] = timeStr.split(":")
-          let hour = parseInt(hours) || 0
-          const mins = parseInt(minutes) || 0
-          if (period === "pm" && hour !== 12) hour += 12
-          if (period === "am" && hour === 12) hour = 0
-          return hour * 60 + mins
-        }
-
-        const startMinutes = parseTime(slot.start, slot.startPeriod || "am")
-        const endMinutes = parseTime(slot.end, slot.endPeriod || "pm")
-        
-        return isWithinWindow(startMinutes, endMinutes)
-      })
-    } catch (error) {
-      console.error("Error checking outlet timings:", error)
-      return false
     }
-  }
 
-  const canEnableDelivery = isWithinOutletTimings()
+    loadOutletTimings()
+    window.addEventListener("outletTimingsUpdated", loadOutletTimings)
+
+    const handleStorageChange = (event) => {
+      if (event.key === storageKey) {
+        loadOutletTimings()
+      }
+    }
+    window.addEventListener("storage", handleStorageChange)
+
+    return () => {
+      window.removeEventListener("outletTimingsUpdated", loadOutletTimings)
+      window.removeEventListener("storage", handleStorageChange)
+    }
+  }, [outletTimingsAPI, storageKey])
+
+  const canEnableDelivery = isOpenFromOutletTimingsMap(outletTimings, currentTime) === true
 
   const showToast = (message) => {
     setToastMessage(message)

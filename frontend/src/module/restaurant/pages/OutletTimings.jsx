@@ -9,7 +9,7 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider"
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 import { groceryStoreAPI, restaurantAPI } from "@/lib/api"
-import { normalizeTimeTo24Hour } from "@/lib/utils/outletTimingsStatus"
+import { normalizeOutletTimingsMap, normalizeTimeTo24Hour } from "@/lib/utils/outletTimingsStatus"
 import { toast } from "sonner"
 
 const RESTAURANT_STORAGE_KEY = "restaurant_outlet_timings"
@@ -64,16 +64,16 @@ const normalizeTime = (value, fallback) => {
 
 const mapApiTimingsToDays = (timings) => {
   const next = getDefaultDays()
-  if (!Array.isArray(timings)) return next
+  const normalized = normalizeOutletTimingsMap(timings)
+  if (!normalized) return next
 
-  timings.forEach((entry) => {
-    const day = entry?.day
-    if (!DAY_NAMES.includes(day)) return
+  DAY_NAMES.forEach((day) => {
+    if (!normalized[day]) return
     next[day] = {
-      isOpen: entry?.isOpen !== false,
-      openingTime: normalizeTime(entry?.openingTime, "09:00"),
-      closingTime: normalizeTime(entry?.closingTime, "22:00"),
-      slots: Array.isArray(entry?.slots) ? entry.slots : [],
+      isOpen: normalized[day].isOpen !== false,
+      openingTime: normalizeTime(normalized[day].openingTime, "09:00"),
+      closingTime: normalizeTime(normalized[day].closingTime, "22:00"),
+      slots: Array.isArray(normalized[day].slots) ? normalized[day].slots : [],
     }
   })
 
@@ -105,42 +105,7 @@ export default function OutletTimings() {
     try {
       const saved = localStorage.getItem(storageKey)
       if (saved) {
-        const parsed = JSON.parse(saved)
-        // Validate and ensure all days have proper structure
-        const validated = {}
-        DAY_NAMES.forEach(day => {
-          if (parsed[day]) {
-            // Migrate from old slot-based format to new time-based format
-            if (parsed[day].slots && Array.isArray(parsed[day].slots) && parsed[day].slots.length > 0) {
-              const firstSlot = parsed[day].slots[0]
-              // Convert slot format to time format
-              const parseSlotTime = (time, period) => {
-                if (!time) return "09:00"
-                const [hours, minutes] = time.split(":").map(Number)
-                let hour24 = hours || 9
-                if (period === "pm" && hour24 !== 12) hour24 += 12
-                if (period === "am" && hour24 === 12) hour24 = 0
-                return `${hour24.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`
-              }
-              validated[day] = {
-                isOpen: parsed[day].isOpen !== undefined ? parsed[day].isOpen : true,
-                openingTime: parseSlotTime(firstSlot.start, firstSlot.startPeriod || "am"),
-                closingTime: parseSlotTime(firstSlot.end, firstSlot.endPeriod || "pm"),
-                slots: parsed[day].slots,
-              }
-            } else {
-              validated[day] = {
-                isOpen: parsed[day].isOpen !== undefined ? parsed[day].isOpen : true,
-                openingTime: parsed[day].openingTime || "09:00",
-                closingTime: parsed[day].closingTime || "22:00",
-                slots: Array.isArray(parsed[day].slots) ? parsed[day].slots : [],
-              }
-            }
-          } else {
-            validated[day] = { isOpen: true, openingTime: "09:00", closingTime: "22:00", slots: [] }
-          }
-        })
-        return validated
+        return mapApiTimingsToDays(JSON.parse(saved))
       }
     } catch (error) {
       console.error("Error loading outlet timings:", error)

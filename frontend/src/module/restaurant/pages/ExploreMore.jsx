@@ -725,6 +725,7 @@ export default function ExploreMore() {
   ] : [
     { id: 1, label: "Payout", icon: IndianRupee, route: "/restaurant/hub-finance" },
     { id: 2, label: "Invoices", icon: Receipt, route: "/restaurant/hub-finance?tab=invoices" },
+    { id: 3, label: "Commission details", icon: FileCheck, route: "/restaurant/commission-details" },
   ]
 
   const growthItems = isGroceryStore ? [] : [

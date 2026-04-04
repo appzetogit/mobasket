@@ -46,15 +46,34 @@ const slotTo24Hour = (time, period) => {
   return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
 };
 
+const minutesToSlotParts = (totalMinutes) => {
+  if (!Number.isFinite(totalMinutes)) return null;
+  const normalizedMinutes = ((totalMinutes % (24 * 60)) + (24 * 60)) % (24 * 60);
+  const hours24 = Math.floor(normalizedMinutes / 60);
+  const minutes = normalizedMinutes % 60;
+  return {
+    time: `${hours24 % 12 || 12}:${String(minutes).padStart(2, '0')}`,
+    period: hours24 >= 12 ? 'pm' : 'am',
+  };
+};
+
+const normalizeSlotTime = (time, period) => {
+  const normalized24 = slotTo24Hour(time, period) || normalizeTimeTo24Hour(time, null);
+  if (!normalized24) return null;
+  return minutesToSlotParts(parseTimeToMinutes(normalized24));
+};
+
 const normalizeSlot = (slot) => {
   if (!slot || typeof slot !== 'object') return null;
-  const start = String(slot.start || '').trim();
-  const end = String(slot.end || '').trim();
-  const startPeriod = String(slot.startPeriod || '').toLowerCase();
-  const endPeriod = String(slot.endPeriod || '').toLowerCase();
+  const start = normalizeSlotTime(slot.start, slot.startPeriod);
+  const end = normalizeSlotTime(slot.end, slot.endPeriod);
   if (!start || !end) return null;
-  if (!['am', 'pm'].includes(startPeriod) || !['am', 'pm'].includes(endPeriod)) return null;
-  return { start, end, startPeriod, endPeriod };
+  return {
+    start: start.time,
+    end: end.time,
+    startPeriod: start.period,
+    endPeriod: end.period,
+  };
 };
 
 const isWithinWindow = (currentMinutes, openingMinutes, closingMinutes) => {
@@ -79,9 +98,10 @@ export const normalizeOutletTimingsMap = (raw) => {
   const assignDay = (day, value) => {
     if (!DAY_NAMES_MONDAY_FIRST.includes(day) || !value || typeof value !== 'object') return;
     const slots = Array.isArray(value?.slots) ? value.slots.map(normalizeSlot).filter(Boolean) : [];
-    const slot = slots.length > 0 ? slots[0] : null;
-    const openingFromSlot = slot ? slotTo24Hour(slot.start, slot.startPeriod) : null;
-    const closingFromSlot = slot ? slotTo24Hour(slot.end, slot.endPeriod) : null;
+    const firstSlot = slots.length > 0 ? slots[0] : null;
+    const lastSlot = slots.length > 0 ? slots[slots.length - 1] : null;
+    const openingFromSlot = firstSlot ? slotTo24Hour(firstSlot.start, firstSlot.startPeriod) : null;
+    const closingFromSlot = lastSlot ? slotTo24Hour(lastSlot.end, lastSlot.endPeriod) : null;
 
     next[day] = {
       isOpen: value.isOpen !== false,

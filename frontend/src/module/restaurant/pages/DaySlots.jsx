@@ -26,6 +26,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
+import { normalizeOutletTimingsMap } from "@/lib/utils/outletTimingsStatus"
 import { groceryStoreAPI, restaurantAPI } from "@/lib/api"
 
 const RESTAURANT_STORAGE_KEY = "restaurant_outlet_timings"
@@ -33,8 +34,33 @@ const GROCERY_STORAGE_KEY = "grocery_store_outlet_timings"
 
 const getDefaultDayData = () => ({
   isOpen: true,
-  slots: [{ id: Date.now(), start: "03:45", end: "02:15", startPeriod: "am", endPeriod: "pm" }]
+  slots: [{ id: Date.now(), start: "9:00", end: "10:00", startPeriod: "am", endPeriod: "pm" }]
 })
+
+const buildDayStateFromNormalized = (normalizedDayData) => {
+  if (!normalizedDayData || normalizedDayData.isOpen === false) {
+    return {
+      isOpen: normalizedDayData?.isOpen !== false,
+      slots: [],
+    }
+  }
+
+  const rawSlots = Array.isArray(normalizedDayData.slots) ? normalizedDayData.slots : []
+  const slots = rawSlots
+    .map((slot, index) => ({
+      id: slot?.id || `${Date.now()}-${index}-${Math.random()}`,
+      start: slot?.start || "9:00",
+      end: slot?.end || "10:00",
+      startPeriod: slot?.startPeriod || "am",
+      endPeriod: slot?.endPeriod || "pm",
+    }))
+    .slice(0, 3)
+
+  return {
+    isOpen: normalizedDayData?.isOpen !== false,
+    slots: slots.length > 0 ? slots : getDefaultDayData().slots,
+  }
+}
 
 // Time Picker Wheel Component
 function TimePickerWheel({ 
@@ -394,22 +420,10 @@ export default function DaySlots() {
     try {
       const saved = localStorage.getItem(storageKey)
       if (saved) {
-        const allDays = JSON.parse(saved)
-        const dayData = allDays[dayName]
-        if (dayData && dayData.slots && Array.isArray(dayData.slots) && dayData.slots.length > 0) {
-          // Ensure slots have proper structure
-          return {
-            isOpen: dayData.isOpen !== undefined ? dayData.isOpen : true,
-            slots: dayData.slots.map(slot => ({
-              id: slot.id || Date.now() + Math.random(),
-              start: slot.start || "09:00",
-              end: slot.end || "05:00",
-              startPeriod: slot.startPeriod || "am",
-              endPeriod: slot.endPeriod || "pm"
-            }))
-          }
+        const normalized = normalizeOutletTimingsMap(JSON.parse(saved))
+        if (normalized?.[dayName]) {
+          return buildDayStateFromNormalized(normalized[dayName])
         }
-        return getDefaultDayData()
       }
     } catch (error) {
       console.error("Error loading day slots:", error)
@@ -472,6 +486,26 @@ export default function DaySlots() {
       lenis.destroy()
     }
   }, [])
+
+  useEffect(() => {
+    const loadDayFromApi = async () => {
+      try {
+        const response = await outletTimingsAPI.getOutletTimings()
+        const apiTimings =
+          response?.data?.data?.outletTimings?.timings ||
+          response?.data?.outletTimings?.timings ||
+          []
+        const normalized = normalizeOutletTimingsMap(apiTimings)
+        if (!normalized?.[dayName]) return
+        localStorage.setItem(storageKey, JSON.stringify(normalized))
+        setDayData(buildDayStateFromNormalized(normalized[dayName]))
+      } catch (error) {
+        console.error("Error loading day slots from backend:", error)
+      }
+    }
+
+    loadDayFromApi()
+  }, [dayName, outletTimingsAPI, storageKey])
 
   // Calculate duration for a slot
   const calculateSlotDuration = (start, end, startPeriod, endPeriod) => {
