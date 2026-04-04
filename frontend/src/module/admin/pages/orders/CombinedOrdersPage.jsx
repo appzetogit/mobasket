@@ -42,8 +42,31 @@ const hasRiderAcceptedOrder = (order) => {
 const getOrderTrackingId = (order) =>
   String(order?.id || order?._id || order?.orderId || "").trim()
 
+const isOrderFromToday = (order) => {
+  const orderDate = new Date(
+    order?.createdAt ||
+    order?.orderCreatedAt ||
+    order?.orderDate ||
+    order?.date ||
+    order?.updatedAt ||
+    0
+  )
+
+  if (Number.isNaN(orderDate.getTime())) {
+    return false
+  }
+
+  const today = new Date()
+  return (
+    orderDate.getFullYear() === today.getFullYear() &&
+    orderDate.getMonth() === today.getMonth() &&
+    orderDate.getDate() === today.getDate()
+  )
+}
+
 export default function CombinedOrdersPage() {
   const location = useLocation()
+  const [activeTab, setActiveTab] = useState("today")
   const [orders, setOrders] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
@@ -83,7 +106,6 @@ export default function CombinedOrdersPage() {
     setFilters,
     visibleColumns,
     filteredOrders,
-    count,
     activeFiltersCount,
     restaurants,
     handleApplyFilters,
@@ -93,6 +115,14 @@ export default function CombinedOrdersPage() {
     toggleColumn,
     resetColumns,
   } = useOrdersManagement(orders, "all", "All Platform Orders")
+
+  const displayedOrders = useMemo(() => {
+    if (activeTab === "today") {
+      return filteredOrders.filter(isOrderFromToday)
+    }
+
+    return filteredOrders
+  }, [activeTab, filteredOrders])
 
   const selectedOrderIsGrocery = useMemo(
     () => String(selectedOrder?.restaurantPlatform || "").toLowerCase() === "mogrocery",
@@ -707,7 +737,7 @@ export default function CombinedOrdersPage() {
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen w-full max-w-full overflow-x-hidden">
       <OrdersTopbar
         title="All Platform Orders"
-        count={count}
+        count={displayedOrders.length}
         searchQuery={searchQuery}
         setSearchQuery={setSearchQuery}
         onFilterClick={() => setIsFilterOpen(true)}
@@ -725,6 +755,25 @@ export default function CombinedOrdersPage() {
         <div className="text-sm text-blue-900">
           This list combines MoFoods and MoGrocery orders, auto-refreshes every 10 seconds, and keeps new orders blinking until they are accepted or rejected.
         </div>
+      </div>
+      <div className="mb-4 flex items-center gap-2">
+        {[
+          { key: "today", label: "Today" },
+          { key: "all", label: "All" },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            type="button"
+            onClick={() => setActiveTab(tab.key)}
+            className={`rounded-full px-4 py-2 text-sm font-semibold transition-all ${
+              activeTab === tab.key
+                ? "bg-slate-900 text-white shadow-sm"
+                : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
       <FilterPanel
         isOpen={isFilterOpen}
@@ -888,7 +937,7 @@ export default function CombinedOrdersPage() {
         </DialogContent>
       </Dialog>
       <OrdersTable
-        orders={filteredOrders}
+        orders={displayedOrders}
         visibleColumns={visibleColumns}
         onViewOrder={handleViewOrder}
         onPrintOrder={handlePrintOrder}
