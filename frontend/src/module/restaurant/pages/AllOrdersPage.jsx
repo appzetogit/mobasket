@@ -357,6 +357,7 @@ export default function AllOrdersPage() {
     // Check if all items are veg
     const allVeg = items.every(item => item.isVeg !== false)
     if (allVeg && items.length > 0) tags.push('VEG ONLY')
+    const acceptanceLabel = getAcceptanceSummary(order, isStore)
     
     return {
       id: order.orderId || order._id?.toString() || '',
