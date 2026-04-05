@@ -10,10 +10,7 @@ import { isOpenFromOutletTimings } from '../utils/outletTimingStatus.js';
 import winston from 'winston';
 
 /**
- * Build auth phone query that searches only the primary login phone field.
- * Do not match owner/contact numbers here, otherwise a new outlet can inherit
- * another outlet's session, orders, and wallet history just because they share
- * an owner contact number.
+ * Build auth phone query that searches the primary login phone field.
  */
 const buildPhoneQuery = (normalizedPhone) => {
   if (!normalizedPhone) return null;
@@ -42,6 +39,32 @@ const buildPhoneQuery = (normalizedPhone) => {
       ...buildPhoneFieldOr(`+91${normalizedPhone}`),
       ...buildPhoneFieldOr(`+${normalizedPhone}`)
     ]
+  };
+};
+
+/**
+ * Legacy fallback query for outlets whose login number was saved only in
+ * owner/contact fields before phone auth was standardized.
+ * This should be used only after direct phone matching fails.
+ */
+const buildLegacyPhoneFallbackQuery = (normalizedPhone) => {
+  if (!normalizedPhone) return null;
+
+  const variants = new Set([normalizedPhone]);
+  if (normalizedPhone.startsWith('91') && normalizedPhone.length === 12) {
+    const withoutCountryCode = normalizedPhone.substring(2);
+    variants.add(withoutCountryCode);
+    variants.add(`+${normalizedPhone}`);
+    variants.add(`+91${withoutCountryCode}`);
+  } else {
+    variants.add(`91${normalizedPhone}`);
+    variants.add(`+91${normalizedPhone}`);
+    variants.add(`+${normalizedPhone}`);
+  }
+
+  const legacyFields = ['ownerPhone', 'primaryContactNumber'];
+  return {
+    $or: [...variants].flatMap((phoneValue) => legacyFields.map((field) => ({ [field]: phoneValue })))
   };
 };
 
@@ -645,19 +668,7 @@ export const verifyOTP = asyncHandler(async (req, res) => {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       needsSignup,
-      restaurant: {
-        id: restaurant._id,
-        restaurantId: restaurant.restaurantId,
-        name: restaurant.name,
-        email: restaurant.email,
-        phone: restaurant.phone,
-        phoneVerified: restaurant.phoneVerified,
-        signupMethod: restaurant.signupMethod,
-        profileImage: restaurant.profileImage,
-        isActive: restaurant.isActive,
-        status: restaurant.status,
-        onboarding: restaurant.onboarding
-      }
+      restaurant: serializeRestaurantAuthPayload(restaurant)
     });
   } catch (error) {
     logger.error(`Error verifying OTP: ${error.message}`);
@@ -743,17 +754,7 @@ export const register = asyncHandler(async (req, res) => {
   return successResponse(res, 201, 'Registration successful', {
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
-    restaurant: {
-      id: restaurant._id,
-      restaurantId: restaurant.restaurantId,
-      name: restaurant.name,
-      email: restaurant.email,
-      phone: restaurant.phone,
-      phoneVerified: restaurant.phoneVerified,
-      signupMethod: restaurant.signupMethod,
-      profileImage: restaurant.profileImage,
-      isActive: restaurant.isActive
-    }
+    restaurant: serializeRestaurantAuthPayload(restaurant)
   });
 });
 
@@ -817,18 +818,7 @@ export const login = asyncHandler(async (req, res) => {
   return successResponse(res, 200, 'Login successful', {
     accessToken: tokens.accessToken,
     refreshToken: tokens.refreshToken,
-    restaurant: {
-      id: restaurant._id,
-      restaurantId: restaurant.restaurantId,
-      name: restaurant.name,
-      email: restaurant.email,
-      phone: restaurant.phone,
-      phoneVerified: restaurant.phoneVerified,
-      signupMethod: restaurant.signupMethod,
-      profileImage: restaurant.profileImage,
-      isActive: restaurant.isActive,
-      onboarding: restaurant.onboarding
-    }
+    restaurant: serializeRestaurantAuthPayload(restaurant)
   });
 });
 
@@ -963,6 +953,45 @@ const normalizeRestaurantOnboardingState = (restaurant) => {
   return onboarding;
 };
 
+const serializeRestaurantAuthPayload = (restaurant) => ({
+  id: restaurant._id,
+  restaurantId: restaurant.restaurantId,
+  name: restaurant.name,
+  email: restaurant.email,
+  phone: restaurant.phone,
+  phoneVerified: restaurant.phoneVerified,
+  signupMethod: restaurant.signupMethod,
+  profileImage: restaurant.profileImage,
+  isActive: restaurant.isActive,
+  status: restaurant.status,
+  onboarding: normalizeRestaurantOnboardingState(restaurant),
+  ownerName: restaurant.ownerName,
+  ownerEmail: restaurant.ownerEmail,
+  ownerPhone: restaurant.ownerPhone,
+  cuisines: restaurant.cuisines,
+  openDays: restaurant.openDays,
+  location: restaurant.location,
+  primaryContactNumber: restaurant.primaryContactNumber,
+  deliveryTimings: restaurant.deliveryTimings,
+  menuImages: restaurant.menuImages,
+  slug: restaurant.slug,
+  rejectionReason: String(restaurant.rejectionReason || '').trim() || null,
+  approvedAt: restaurant.approvedAt || null,
+  rejectedAt: restaurant.rejectedAt || null
+});
+
+const isProvisionedRestaurant = (restaurant) => {
+  const status = String(restaurant?.status || '').trim().toLowerCase();
+  return (
+    restaurant?.isActive === true ||
+    Boolean(restaurant?.approvedAt) ||
+    Boolean(restaurant?.rejectedAt) ||
+    Boolean(String(restaurant?.rejectionReason || '').trim()) ||
+    (status && status !== 'onboarding') ||
+    Number(restaurant?.onboarding?.completedSteps || 0) >= 4
+  );
+};
+
 /**
  * Find restaurant by primary auth phone deterministically across legacy formats.
  * This intentionally ignores owner/contact phone fields so phone-based auth only
@@ -973,23 +1002,68 @@ const findRestaurantByNormalizedPhone = async (normalizedPhone) => {
   if (!phoneQuery) return null;
 
   const matches = await Restaurant.find(withRestaurantPlatformFilter(phoneQuery));
-  if (!matches || matches.length === 0) return null;
+  const legacyQuery = buildLegacyPhoneFallbackQuery(normalizedPhone);
+  const legacyMatches = legacyQuery
+    ? await Restaurant.find(withRestaurantPlatformFilter(legacyQuery))
+        .sort({ isActive: -1, approvedAt: -1, updatedAt: -1, createdAt: -1 })
+        .limit(10)
+    : [];
 
   const scoreMatch = (restaurant) => {
     let score = 0;
     const phone = String(restaurant?.phone || '').trim();
+    const ownerPhone = String(restaurant?.ownerPhone || '').trim();
+    const primaryContactNumber = String(restaurant?.primaryContactNumber || '').trim();
+    const normalizedStatus = String(restaurant?.status || '').trim().toLowerCase();
 
     if (phone && normalizePhoneNumber(phone) === normalizedPhone) score += 100;
     if (phone === normalizedPhone) score += 120;
+    if (ownerPhone && normalizePhoneNumber(ownerPhone) === normalizedPhone) score += 95;
+    if (primaryContactNumber && normalizePhoneNumber(primaryContactNumber) === normalizedPhone) score += 90;
     if (restaurant?.phoneVerified) score += 10;
-    if (restaurant?.status === 'active' || restaurant?.status === 'approved') score += 10;
-    if (restaurant?.isActive) score += 5;
+    if (normalizedStatus === 'active' || normalizedStatus === 'approved') score += 300;
+    if (restaurant?.isActive) score += 250;
+    if (restaurant?.approvedAt) score += 250;
+    if (Number(restaurant?.onboarding?.completedSteps || 0) >= 4) score += 200;
+    if (isProvisionedRestaurant(restaurant)) score += 400;
+    if (!restaurant?.email && normalizedStatus === 'onboarding' && !restaurant?.isActive) score -= 200;
 
     return score;
   };
 
-  matches.sort((a, b) => scoreMatch(b) - scoreMatch(a));
-  return matches[0];
+  const candidateMap = new Map();
+  [...(matches || []), ...(legacyMatches || [])].forEach((restaurant) => {
+    const id = String(restaurant?._id || '').trim();
+    if (id) candidateMap.set(id, restaurant);
+  });
+
+  const candidates = [...candidateMap.values()];
+  if (candidates.length === 0) return null;
+
+  candidates.sort((a, b) => scoreMatch(b) - scoreMatch(a));
+  const restaurant = candidates[0];
+
+  // Self-heal legacy records so future phone logins resolve directly.
+  if (!String(restaurant?.phone || '').trim() && isProvisionedRestaurant(restaurant)) {
+    restaurant.phone = normalizedPhone;
+    if (!restaurant.phoneVerified) {
+      restaurant.phoneVerified = true;
+    }
+    if (!String(restaurant?.ownerPhone || '').trim()) {
+      restaurant.ownerPhone = normalizedPhone;
+    }
+    try {
+      await restaurant.save();
+    } catch (error) {
+      logger.warn('Failed to backfill primary phone during legacy restaurant login fallback', {
+        restaurantId: restaurant?._id?.toString?.(),
+        normalizedPhone,
+        error: error?.message
+      });
+    }
+  }
+
+  return restaurant;
 };
 
 /**
@@ -1262,18 +1336,7 @@ export const firebaseGoogleLogin = asyncHandler(async (req, res) => {
     return successResponse(res, 200, 'Firebase Google authentication successful', {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
-      restaurant: {
-        id: restaurant._id,
-        restaurantId: restaurant.restaurantId,
-        name: restaurant.name,
-        email: restaurant.email,
-        phone: restaurant.phone,
-        phoneVerified: restaurant.phoneVerified,
-        signupMethod: restaurant.signupMethod,
-        profileImage: restaurant.profileImage,
-        isActive: restaurant.isActive,
-        onboarding: restaurant.onboarding
-      }
+      restaurant: serializeRestaurantAuthPayload(restaurant)
     });
   } catch (error) {
     logger.error(`Error in Firebase Google login: ${error.message}`);

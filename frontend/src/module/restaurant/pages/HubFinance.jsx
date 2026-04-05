@@ -48,6 +48,25 @@ const getCurrentMonthDateRangeLabel = () => {
   return `${formatDateForRangeLabel(start)} - ${formatDateForRangeLabel(end)}`
 }
 
+const getDisplayedOrderEarning = (order) => {
+  const payout = Number(order?.payout)
+  if (Number.isFinite(payout)) {
+    return Math.max(0, payout)
+  }
+
+  const orderTotal = Number(order?.orderTotal)
+  if (Number.isFinite(orderTotal)) {
+    return Math.max(0, orderTotal)
+  }
+
+  const totalAmount = Number(order?.totalAmount)
+  if (Number.isFinite(totalAmount)) {
+    return Math.max(0, totalAmount)
+  }
+
+  return 0
+}
+
 export default function HubFinance() {
   void motion
   const navigate = useNavigate()
@@ -76,8 +95,11 @@ export default function HubFinance() {
     financeData?.commissionMessage ||
     "Restaurant commission is not configured yet. Please contact admin to enable payouts."
   const displayCurrentCycleOrders = financeData?.currentCycle?.totalOrders || 0
-  const financeCycleBalance = Number(financeData?.currentCycle?.estimatedPayout) || 0
-  const currentCycleBalance = financeCycleBalance > 0 ? financeCycleBalance : (Number(walletBalance) || 0)
+  const rawFinanceCycleBalance = financeData?.currentCycle?.estimatedPayout
+  const financeCycleBalance = Number(rawFinanceCycleBalance)
+  const currentCycleBalance = Number.isFinite(financeCycleBalance)
+    ? Math.max(0, financeCycleBalance)
+    : (Number(walletBalance) || 0)
 
   const clearFinanceState = () => {
     setFinanceData(null)
@@ -1097,7 +1119,7 @@ export default function HubFinance() {
                               </div>
                               <div className="text-right ml-4">
                                 <p className="text-sm font-bold text-gray-900">
-                                  ₹{(Number(order?.payout) || Number(order?.orderTotal) || Number(order?.totalAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  ₹{getDisplayedOrderEarning(order).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
                                 <p className="text-xs text-gray-500">
                                   Earning
@@ -1124,7 +1146,7 @@ export default function HubFinance() {
                               </div>
                               <div className="text-right ml-4">
                                 <p className="text-sm font-bold text-gray-900">
-                                  ₹{(Number(order?.payout) || Number(order?.orderTotal) || Number(order?.totalAmount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                  ₹{getDisplayedOrderEarning(order).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
                                 <p className="text-xs text-gray-500">
                                   Earning

@@ -1,6 +1,37 @@
 import { Navigate, useLocation } from "react-router-dom";
 import { isModuleAuthenticated } from "@/lib/utils/auth";
 
+const hasProvisionedPartnerProfile = (user) => {
+  if (!user || typeof user !== "object") return false;
+  if (user.isActive === true) return true;
+
+  const normalizedStatus = String(user.status || "").trim().toLowerCase();
+  if (normalizedStatus && normalizedStatus !== "onboarding") return true;
+
+  if (user.approvedAt || user.rejectedAt || String(user.rejectionReason || "").trim()) {
+    return true;
+  }
+
+  if (Number(user?.onboarding?.completedSteps || 0) >= 4) {
+    return true;
+  }
+
+  const hasBasicInfo = Boolean(
+    user.name &&
+    user.ownerName &&
+    user.ownerEmail &&
+    (user.ownerPhone || user.phone || user.primaryContactNumber),
+  );
+  const hasLocation = Boolean(user.location?.area || user.location?.city);
+  const hasCatalogSignals = Boolean(
+    (Array.isArray(user.cuisines) && user.cuisines.length > 0) ||
+    (Array.isArray(user.menuImages) && user.menuImages.length > 0) ||
+    user.profileImage,
+  );
+
+  return hasBasicInfo && hasLocation && hasCatalogSignals;
+};
+
 /**
  * Role-based Protected Route Component
  * Only allows access if user is authenticated for the specific module
@@ -115,7 +146,7 @@ export default function ProtectedRoute({ children, requiredRole, loginPath, modu
 
       // Handle onboarding status
       if (!isApprovedAndActive && normalizedStatus === 'onboarding') {
-        if (completedOnboardingSteps >= 4) {
+        if (completedOnboardingSteps >= 4 || hasProvisionedPartnerProfile(user)) {
           // Let onboarding-complete accounts render and self-resolve with fresh backend
           // state instead of forcing a pending redirect from possibly stale cached auth data.
         }

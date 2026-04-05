@@ -6,6 +6,19 @@ import { successResponse, errorResponse } from '../../../shared/utils/response.j
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 import mongoose from 'mongoose';
 
+const buildRestaurantIdVariations = (restaurant) => {
+  const variations = new Set();
+
+  [restaurant?._id, restaurant?.restaurantId, restaurant?.id, restaurant?.slug].forEach((value) => {
+    const normalized = String(value || '').trim();
+    if (normalized) {
+      variations.add(normalized);
+    }
+  });
+
+  return Array.from(variations);
+};
+
 /**
  * Get restaurant finance/payout data
  * GET /api/restaurant/finance
@@ -49,19 +62,18 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
     currentCycleEnd.setHours(23, 59, 59, 999);
 
     // Query for restaurant orders - handle multiple restaurantId formats
-    // Some order flows persist restaurant._id while others persist restaurant.restaurantId.
-    const restaurantIdVariations = new Set([
-      String(restaurantId || '').trim(),
-      String(restaurant?._id || '').trim(),
-      String(restaurant?.id || '').trim(),
-      String(restaurant?.restaurantId || '').trim(),
-    ].filter(Boolean));
+    // Some order flows persist restaurant._id while others persist restaurant.restaurantId or slug.
+    const restaurantIdVariations = new Set(buildRestaurantIdVariations(restaurant));
 
     for (const idValue of [...restaurantIdVariations]) {
       if (mongoose.Types.ObjectId.isValid(idValue)) {
         restaurantIdVariations.add(new mongoose.Types.ObjectId(idValue).toString());
       }
     }
+
+    const commissionRestaurantIds = [...restaurantIdVariations]
+      .filter((value) => mongoose.Types.ObjectId.isValid(value))
+      .map((value) => new mongoose.Types.ObjectId(value));
 
     const restaurantIdQuery = {
       restaurantId: { $in: [...restaurantIdVariations] }
@@ -71,8 +83,11 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
     let restaurantCommission = null;
     try {
       restaurantCommission = await RestaurantCommission.findOne({
-        restaurant: restaurant._id || restaurantId,
-        status: true
+        status: true,
+        $or: [
+          ...(commissionRestaurantIds.length > 0 ? [{ restaurant: { $in: commissionRestaurantIds } }] : []),
+          { restaurantId: { $in: [...restaurantIdVariations] } }
+        ]
       }).lean();
     } catch (commissionError) {
       console.warn('⚠️ Could not fetch commission setup:', commissionError.message);
@@ -258,7 +273,9 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
       // Food price = subtotal - discount (this is what commission is calculated on)
       const foodPrice = (order.pricing?.subtotal || 0) - (order.pricing?.discount || 0);
       const commissionData = calculateCommissionForOrder(foodPrice);
-      const payout = foodPrice - commissionData.commission;
+      const payout = commissionConfigured
+        ? Math.max(0, Math.round((foodPrice - commissionData.commission) * 100) / 100)
+        : 0;
       
       currentCycleTotal += foodPrice; // Use food price, not total
       currentCycleCommission += commissionData.commission;
@@ -463,7 +480,9 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
         // Food price = subtotal - discount (this is what commission is calculated on)
         const foodPrice = (order.pricing?.subtotal || 0) - (order.pricing?.discount || 0);
         const commissionData = calculateCommissionForOrder(foodPrice);
-        const payout = foodPrice - commissionData.commission;
+        const payout = commissionConfigured
+          ? Math.max(0, Math.round((foodPrice - commissionData.commission) * 100) / 100)
+          : 0;
         
         pastCycleTotal += foodPrice; // Use food price, not total
         pastCycleCommission += commissionData.commission;
@@ -568,13 +587,17 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
         totalTax: Math.round(pastCycleTax * 100) / 100,
         totalPlatformFee: Math.round(pastCyclePlatformFee * 100) / 100,
         totalDeliveryFee: Math.round(pastCycleDeliveryFee * 100) / 100,
-        estimatedPayout: Math.round((pastCycleTotal - pastCycleCommission) * 100) / 100,
+        estimatedPayout: commissionConfigured
+          ? Math.round((pastCycleTotal - pastCycleCommission) * 100) / 100
+          : 0,
         orders: pastCycleOrdersData
       };
     }
 
     // Calculate current cycle payout (total - commission)
-    const currentCyclePayout = Math.round((currentCycleTotal - currentCycleCommission) * 100) / 100;
+    const currentCyclePayout = commissionConfigured
+      ? Math.round((currentCycleTotal - currentCycleCommission) * 100) / 100
+      : 0;
 
     // Get all withdrawal requests (pending + approved) to subtract from estimatedPayout
     // This ensures that once a withdrawal is made, it's immediately reflected in the available balance
@@ -587,7 +610,9 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
     
     // Subtract all withdrawals (pending + approved) from estimatedPayout to show available balance
     // This ensures end-to-end withdrawal calculation works correctly
-    const availablePayout = Math.max(0, Math.round((currentCyclePayout - totalWithdrawals) * 100) / 100);
+    const availablePayout = commissionConfigured
+      ? Math.max(0, Math.round((currentCyclePayout - totalWithdrawals) * 100) / 100)
+      : 0;
     
     console.log('💰 Finance Calculation:', {
       currentCyclePayout,
