@@ -349,6 +349,7 @@ export const setupWebPushForCurrentSession = async (pathname = "", options = {})
 
   setupInFlightPromise = (async () => {
   if (typeof window === "undefined") return;
+  if (isEmbeddedFlutterWebView()) return;
   if (!window.isSecureContext || !("serviceWorker" in navigator) || !("Notification" in window)) return;
 
   const moduleName = getModuleFromPathname(pathname);

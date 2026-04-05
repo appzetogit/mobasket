@@ -50,36 +50,34 @@ const getDeliveryRecipients = async () => {
   return Delivery.find({}).select('_id fcmTokenWeb fcmTokenMobile').lean();
 };
 
-const getTokens = (recipients) => {
-  const tokens = new Set();
-
-  for (const recipient of recipients || []) {
-    const webToken = typeof recipient?.fcmTokenWeb === 'string' ? recipient.fcmTokenWeb.trim() : '';
-    const mobileToken = typeof recipient?.fcmTokenMobile === 'string' ? recipient.fcmTokenMobile.trim() : '';
-
-    if (webToken) tokens.add(webToken);
-    if (mobileToken) tokens.add(mobileToken);
-  }
-
-  return Array.from(tokens);
-};
-
-const getTokenChannelMap = (recipients) => {
+const collectPushTargets = (recipients) => {
   const tokenChannelMap = new Map();
+  let suppressedWebTokenCount = 0;
 
   for (const recipient of recipients || []) {
     const webToken = typeof recipient?.fcmTokenWeb === 'string' ? recipient.fcmTokenWeb.trim() : '';
     const mobileToken = typeof recipient?.fcmTokenMobile === 'string' ? recipient.fcmTokenMobile.trim() : '';
+
+    if (mobileToken) {
+      if (webToken && webToken !== mobileToken) {
+        suppressedWebTokenCount += 1;
+      }
+      if (!tokenChannelMap.has(mobileToken)) {
+        tokenChannelMap.set(mobileToken, 'mobile');
+      }
+      continue;
+    }
 
     if (webToken && !tokenChannelMap.has(webToken)) {
       tokenChannelMap.set(webToken, 'web');
     }
-    if (mobileToken && !tokenChannelMap.has(mobileToken)) {
-      tokenChannelMap.set(mobileToken, 'mobile');
-    }
   }
 
-  return tokenChannelMap;
+  return {
+    tokens: Array.from(tokenChannelMap.keys()),
+    tokenChannelMap,
+    suppressedWebTokenCount,
+  };
 };
 
 const chunkArray = (arr, size) => {
@@ -642,8 +640,11 @@ export const createPushNotification = asyncHandler(async (req, res) => {
   }
 
   const allRecipients = [...customerRecipients, ...businessRecipients, ...deliveryRecipients];
-  const pushTokens = getTokens(allRecipients);
-  const tokenChannelMap = getTokenChannelMap(allRecipients);
+  const {
+    tokens: pushTokens,
+    tokenChannelMap,
+    suppressedWebTokenCount,
+  } = collectPushTargets(allRecipients);
   const dispatchResult = await dispatchFirebasePush({
     tokens: pushTokens,
     title: safeTitle,
@@ -662,7 +663,10 @@ export const createPushNotification = asyncHandler(async (req, res) => {
   return successResponse(res, 201, 'Push notification sent successfully', {
     notification: pushRecord,
     recipientCount,
-    pushDelivery: dispatchResult,
+    pushDelivery: {
+      ...dispatchResult,
+      suppressedWebTokenCount,
+    },
   });
 });
   const toHttpV1Message = (sdkMessage = {}) => {

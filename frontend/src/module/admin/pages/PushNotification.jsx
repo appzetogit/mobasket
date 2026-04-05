@@ -149,6 +149,9 @@ export default function PushNotification() {
       }
 
       if (pushDelivery) {
+        const suppressedWebText = Number(pushDelivery.suppressedWebTokenCount || 0) > 0
+          ? `, suppressed duplicate web endpoints: ${pushDelivery.suppressedWebTokenCount}`
+          : ""
         if (!pushDelivery.initialized && pushDelivery.reason === "no_tokens") {
           toast.warning("No device tokens found. Popup notification cannot be shown until users log in and allow notifications.")
         } else if (!pushDelivery.initialized) {
@@ -171,12 +174,12 @@ export default function PushNotification() {
             ? `, cleaned invalid tokens: ${pushDelivery.invalidTokenCount}`
             : ""
           const reasonText = topFailureCodes ? `, reasons: ${topFailureCodes}` : ""
-          toast.warning(`Sent to ${recipientCount} recipients. Push delivered: ${pushDelivery.successCount} (web: ${deliveredWeb}, mobile: ${deliveredMobile}), failed: ${pushDelivery.failureCount}${cleanedText}${reasonText}${sampleMessage}${transportMessage}${engine}`)
+          toast.warning(`Sent to ${recipientCount} recipients. Push delivered: ${pushDelivery.successCount} (web: ${deliveredWeb}, mobile: ${deliveredMobile}), failed: ${pushDelivery.failureCount}${cleanedText}${reasonText}${sampleMessage}${transportMessage}${suppressedWebText}${engine}`)
         } else if (pushDelivery.successCount > 0) {
           const deliveredWeb = Number(pushDelivery.successWebCount || 0)
           const deliveredMobile = Number(pushDelivery.successMobileCount || 0)
           const engine = pushDelivery.engine ? `, engine: ${pushDelivery.engine}` : ""
-          toast.success(`Sent to ${recipientCount} recipients. Push delivered: ${pushDelivery.successCount} (web: ${deliveredWeb}, mobile: ${deliveredMobile})${engine}`)
+          toast.success(`Sent to ${recipientCount} recipients. Push delivered: ${pushDelivery.successCount} (web: ${deliveredWeb}, mobile: ${deliveredMobile})${suppressedWebText}${engine}`)
         } else {
           toast.success(`Notification sent to ${recipientCount} ${formData.sendTo.toLowerCase()} recipient(s)`)
         }
