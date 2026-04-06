@@ -129,7 +129,7 @@ export default function FoodMenuManager() {
   const [addonsRequested, setAddonsRequested] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
-  const [editForm, setEditForm] = useState({ name: "", image: "" });
+  const [editForm, setEditForm] = useState({ name: "", price: "", image: "" });
   const [editSaving, setEditSaving] = useState(false);
   const [imagePreview, setImagePreview] = useState("");
   const [imageUploading, setImageUploading] = useState(false);
@@ -482,6 +482,7 @@ export default function FoodMenuManager() {
     setEditingItem(item);
     setEditForm({
       name: item?.name || "",
+      price: String(item?.price ?? ""),
       image: initialImage,
       isAvailable: item?.isAvailable !== false,
     });
@@ -533,6 +534,10 @@ export default function FoodMenuManager() {
       toast.error("Dish name is required.");
       return;
     }
+    if (editForm.price === "" || Number.isNaN(Number(editForm.price))) {
+      toast.error("Valid dish price is required.");
+      return;
+    }
 
     try {
       setEditSaving(true);
@@ -540,6 +545,7 @@ export default function FoodMenuManager() {
         item: {
           ...editingItem,
           name: String(editForm.name || "").trim(),
+          price: Number(editForm.price),
           image: String(editForm.image || "").trim(),
           images: String(editForm.image || "").trim() ? [String(editForm.image || "").trim()] : [],
           isAvailable: editForm.isAvailable !== false,
@@ -1046,7 +1052,7 @@ export default function FoodMenuManager() {
           <div className="w-full max-w-md rounded-lg bg-white shadow-xl border border-slate-200">
             <div className="px-5 py-4 border-b border-slate-200">
               <h3 className="text-lg font-semibold text-slate-900">Edit Dish</h3>
-              <p className="text-sm text-slate-500 mt-1">Update dish name and image.</p>
+              <p className="text-sm text-slate-500 mt-1">Update dish name, price, image, and availability.</p>
             </div>
             <div className="p-5 space-y-3">
               <input
@@ -1054,6 +1060,15 @@ export default function FoodMenuManager() {
                 value={editForm.name}
                 onChange={(event) => setEditForm((prev) => ({ ...prev, name: event.target.value }))}
                 placeholder="Dish name"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+              />
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={editForm.price}
+                onChange={(event) => setEditForm((prev) => ({ ...prev, price: event.target.value }))}
+                placeholder="Dish price"
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
               />
               <input
