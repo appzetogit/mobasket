@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import pushTokenSubSchema from '../../../shared/models/pushTokenSubSchema.js';
 
 const GROCERY_PLATFORM = 'mogrocery';
 const GROCERY_STORE_COLLECTION = process.env.GROCERY_STORE_COLLECTION || 'grocery_stores';
@@ -110,6 +111,10 @@ const groceryStoreSchema = new mongoose.Schema({
     type: String,
     trim: true,
     default: ''
+  },
+  pushTokens: {
+    type: [pushTokenSubSchema],
+    default: []
   },
   signupMethod: {
     type: String,

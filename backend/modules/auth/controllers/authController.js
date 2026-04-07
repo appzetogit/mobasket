@@ -6,6 +6,11 @@ import googleAuthService from '../services/googleAuthService.js';
 import firebaseAuthService from '../services/firebaseAuthService.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
+import {
+  maskPushToken,
+  removePushTokenFromEntity,
+  upsertPushTokenOnEntity,
+} from '../../../shared/utils/pushTokenRegistry.js';
 import winston from 'winston';
 
 const logger = winston.createLogger({
@@ -620,24 +625,72 @@ export const getCurrentUser = asyncHandler(async (req, res) => {
  * POST /api/auth/fcm-token
  */
 export const updateFcmToken = asyncHandler(async (req, res) => {
-  const { token, platform } = req.body;
-
-  if (!token || typeof token !== 'string' || !token.trim()) {
-    return errorResponse(res, 400, 'FCM token is required');
-  }
-
+  const { token, platform, deviceId, deviceType, appContext, userAgent, source, isWebView, clear } = req.body;
   const normalizedPlatform = String(platform || '').toLowerCase();
+  const normalizedToken = typeof token === 'string' ? token.trim() : '';
+  const shouldClear = clear === true || clear === 'true' || (!normalizedToken && normalizedPlatform === 'web' && isWebView === true);
+
   if (!['web', 'mobile'].includes(normalizedPlatform)) {
     return errorResponse(res, 400, "Platform must be 'web' or 'mobile'");
   }
 
-  const field = normalizedPlatform === 'web' ? 'fcmTokenWeb' : 'fcmTokenMobile';
-  req.user[field] = token.trim();
+  if (!shouldClear && !normalizedToken) {
+    return errorResponse(res, 400, 'FCM token is required');
+  }
+
+  if (shouldClear) {
+    removePushTokenFromEntity(req.user, {
+      token: normalizedToken,
+      platform: normalizedPlatform,
+      deviceId,
+      removeAllForPlatform: normalizedPlatform === 'web' && isWebView === true,
+    });
+    if (normalizedPlatform === 'web') req.user.fcmTokenWeb = '';
+    if (normalizedPlatform === 'mobile') req.user.fcmTokenMobile = '';
+    await req.user.save();
+
+    logger.info('User FCM token cleared', {
+      userId: req.user?._id?.toString?.() || '',
+      platform: normalizedPlatform,
+      deviceId: String(deviceId || ''),
+      isWebView: Boolean(isWebView),
+    });
+
+    return successResponse(res, 200, 'FCM token cleared successfully', {
+      fcmTokenWeb: req.user.fcmTokenWeb || '',
+      fcmTokenMobile: req.user.fcmTokenMobile || '',
+      pushTokens: req.user.pushTokens || [],
+    });
+  }
+
+  upsertPushTokenOnEntity(req.user, {
+    token: normalizedToken,
+    platform: normalizedPlatform,
+    deviceId,
+    deviceType,
+    appContext,
+    userAgent,
+    source,
+    isWebView,
+  });
   await req.user.save();
+
+  logger.info('User FCM token updated successfully', {
+    userId: req.user?._id?.toString?.() || '',
+    platform: normalizedPlatform,
+    deviceId: String(deviceId || ''),
+    deviceType: String(deviceType || ''),
+    appContext: String(appContext || ''),
+    tokenPreview: maskPushToken(normalizedToken),
+    hasWebToken: Boolean(req.user.fcmTokenWeb),
+    hasMobileToken: Boolean(req.user.fcmTokenMobile),
+    pushTokenCount: Array.isArray(req.user.pushTokens) ? req.user.pushTokens.length : 0,
+  });
 
   return successResponse(res, 200, 'FCM token updated successfully', {
     fcmTokenWeb: req.user.fcmTokenWeb || '',
-    fcmTokenMobile: req.user.fcmTokenMobile || ''
+    fcmTokenMobile: req.user.fcmTokenMobile || '',
+    pushTokens: req.user.pushTokens || [],
   });
 });
 

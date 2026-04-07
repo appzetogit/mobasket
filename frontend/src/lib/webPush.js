@@ -9,6 +9,7 @@ import {
 
 const FCM_TOKEN_CACHE_KEY = "fcm_web_token";
 const MOBILE_FCM_TOKEN_CACHE_KEY = "fcm_mobile_token";
+const PUSH_DEVICE_ID_KEY = "push_device_id";
 const PUSH_DEDUPE_WINDOW_MS = 10000;
 const PUSH_DEDUPE_STORAGE_PREFIX = "push_seen_";
 
@@ -175,6 +176,80 @@ const getFlutterHandler = () => {
   return typeof handler === "function" ? handler.bind(window.flutter_inappwebview) : null;
 };
 
+const getNavigatorUserAgent = () =>
+  typeof navigator !== "undefined" ? String(navigator.userAgent || "").trim() : "";
+
+const getOrCreatePushDeviceId = () => {
+  if (typeof window === "undefined") return "";
+
+  const cached = normalizePossibleToken(localStorage.getItem(PUSH_DEVICE_ID_KEY));
+  if (cached) return cached;
+
+  const generated =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `push-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+  localStorage.setItem(PUSH_DEVICE_ID_KEY, generated);
+  return generated;
+};
+
+const readInjectedMobileDeviceId = (moduleName) => {
+  if (typeof window === "undefined") return "";
+
+  const candidateKeys = [
+    `${moduleName}_deviceId`,
+    `${moduleName}_device_id`,
+    `${moduleName}DeviceId`,
+    "deviceId",
+    "device_id",
+    "mobileDeviceId",
+    "flutterDeviceId",
+  ];
+
+  for (const key of candidateKeys) {
+    const localValue = normalizePossibleToken(localStorage.getItem(key));
+    if (localValue) return localValue;
+
+    const sessionValue = normalizePossibleToken(sessionStorage.getItem(key));
+    if (sessionValue) return sessionValue;
+  }
+
+  return normalizePossibleToken(
+    window.__PUBLIC_ENV?.DEVICE_ID ||
+    window.__DEVICE_ID ||
+    window.deviceId ||
+    window.flutterDeviceId ||
+    window.__APP_STATE__?.deviceId ||
+    window.__MOBASKET__?.deviceId
+  );
+};
+
+const fetchFlutterDeviceId = async () => {
+  const callHandler = getFlutterHandler();
+  if (!callHandler) return "";
+
+  const handlerNames = [
+    "getDeviceId",
+    "getdeviceId",
+    "getDeviceID",
+    "getNativeDeviceId",
+    "getUniqueDeviceId",
+  ];
+
+  for (const handlerName of handlerNames) {
+    try {
+      const result = await callHandler(handlerName);
+      const deviceId = extractTokenFromValue(result) || normalizePossibleToken(result);
+      if (deviceId) return deviceId;
+    } catch {
+      // Ignore unsupported handlers.
+    }
+  }
+
+  return "";
+};
+
 const fetchFlutterMobileToken = async () => {
   const callHandler = getFlutterHandler();
   if (!callHandler) return "";
@@ -339,7 +414,69 @@ let setupInFlightPromise = null;
 
 const isEmbeddedFlutterWebView = () => {
   if (typeof window === "undefined") return false;
-  return Boolean(window.flutter_inappwebview);
+  const userAgent = getNavigatorUserAgent();
+  return Boolean(
+    window.flutter_inappwebview ||
+    window.flutterInAppWebView ||
+    window.ReactNativeWebView ||
+    window.__MOBASKET_WEBVIEW__ ||
+    /\bwv\b/i.test(userAgent) ||
+    /flutter/i.test(userAgent)
+  );
+};
+
+const buildPushClientMeta = async (pathname = "", platform = "web", overrides = {}) => {
+  const moduleName = getModuleFromPathname(pathname);
+  const isWebView = isEmbeddedFlutterWebView();
+  const nativeDeviceId = platform === "mobile"
+    ? readInjectedMobileDeviceId(moduleName) || await fetchFlutterDeviceId()
+    : "";
+
+  return {
+    deviceId: nativeDeviceId || getOrCreatePushDeviceId(),
+    deviceType: platform === "mobile" ? "flutter-webview" : "browser",
+    appContext: moduleName,
+    userAgent: getNavigatorUserAgent(),
+    source: platform === "mobile" ? "native_bridge" : "web_fcm",
+    isWebView,
+    ...overrides,
+  };
+};
+
+const disableBrowserPushForEmbeddedWebView = async (pathname = "") => {
+  if (typeof window === "undefined") return;
+
+  const moduleName = getModuleFromPathname(pathname);
+  const updater = moduleToUpdater[moduleName];
+  if (updater && hasAuthTokenForModule(moduleName)) {
+    try {
+      await updater("", "web", {
+        ...(await buildPushClientMeta(pathname, "web", { source: "webview_cleanup" })),
+        clear: true,
+      });
+    } catch (error) {
+      const status = Number(error?.response?.status || 0);
+      if (status !== 401 && status !== 403) {
+        // eslint-disable-next-line no-console
+        console.warn("Web push cleanup failed inside WebView:", error?.message || error);
+      }
+    }
+  }
+
+  if (!("serviceWorker" in navigator)) return;
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  await Promise.all(
+    registrations.map(async (registration) => {
+      const scriptUrl =
+        registration?.active?.scriptURL ||
+        registration?.installing?.scriptURL ||
+        registration?.waiting?.scriptURL ||
+        "";
+      if (scriptUrl.includes("firebase-messaging-sw.js")) {
+        await registration.unregister();
+      }
+    })
+  );
 };
 
 export const setupWebPushForCurrentSession = async (pathname = "", options = {}) => {
@@ -349,7 +486,10 @@ export const setupWebPushForCurrentSession = async (pathname = "", options = {})
 
   setupInFlightPromise = (async () => {
   if (typeof window === "undefined") return;
-  if (isEmbeddedFlutterWebView()) return;
+  if (isEmbeddedFlutterWebView()) {
+    await disableBrowserPushForEmbeddedWebView(pathname);
+    return;
+  }
   if (!window.isSecureContext || !("serviceWorker" in navigator) || !("Notification" in window)) return;
 
   const moduleName = getModuleFromPathname(pathname);
@@ -408,7 +548,7 @@ export const setupWebPushForCurrentSession = async (pathname = "", options = {})
   if (!forceSync && cachedToken === token) return;
 
   try {
-    await updater(token, "web");
+    await updater(token, "web", await buildPushClientMeta(pathname, "web"));
   } catch (error) {
     const status = Number(error?.response?.status || 0);
     if (status === 401 || status === 403) {
@@ -443,7 +583,7 @@ export const syncNativeMobilePushForCurrentSession = async (pathname = "", optio
   if (!forceSync && cachedToken === token) return;
 
   try {
-    await updater(token, "mobile");
+    await updater(token, "mobile", await buildPushClientMeta(pathname, "mobile"));
   } catch (error) {
     const status = Number(error?.response?.status || 0);
     if (status === 401 || status === 403) {

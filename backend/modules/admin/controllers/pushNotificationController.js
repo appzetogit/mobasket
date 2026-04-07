@@ -8,6 +8,11 @@ import Delivery from '../../delivery/models/Delivery.js';
 import User from '../../auth/models/User.js';
 import { initializeFirebaseAdmin, admin } from '../../../shared/services/firebaseAdminService.js';
 import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
+import {
+  cleanupInvalidPushTokensAcrossModels,
+  collectRecipientPushTargets,
+  maskPushToken,
+} from '../../../shared/utils/pushTokenRegistry.js';
 
 const normalizePlatform = (value) => {
   const normalized = String(value || '').toLowerCase().trim();
@@ -27,57 +32,27 @@ const getRestaurantRecipients = async (platform) => {
   if (platform === 'mofood') {
     return Restaurant.find({
       $or: [{ platform: 'mofood' }, { platform: { $exists: false } }, { platform: null }, { platform: '' }],
-    }).select('_id fcmTokenWeb fcmTokenMobile').lean();
+    }).select('_id fcmTokenWeb fcmTokenMobile pushTokens').lean();
   }
 
   if (platform === 'mogrocery') {
-    return GroceryStore.find({ platform: 'mogrocery' }).select('_id fcmTokenWeb fcmTokenMobile').lean();
+    return GroceryStore.find({ platform: 'mogrocery' }).select('_id fcmTokenWeb fcmTokenMobile pushTokens').lean();
   }
 
   const [restaurants, groceryStores] = await Promise.all([
-    Restaurant.find({}).select('_id fcmTokenWeb fcmTokenMobile').lean(),
-    GroceryStore.find({}).select('_id fcmTokenWeb fcmTokenMobile').lean(),
+    Restaurant.find({}).select('_id fcmTokenWeb fcmTokenMobile pushTokens').lean(),
+    GroceryStore.find({}).select('_id fcmTokenWeb fcmTokenMobile pushTokens').lean(),
   ]);
 
   return [...restaurants, ...groceryStores];
 };
 
 const getCustomerRecipients = async () => {
-  return User.find({ role: 'user' }).select('_id fcmTokenWeb fcmTokenMobile').lean();
+  return User.find({ role: 'user' }).select('_id fcmTokenWeb fcmTokenMobile pushTokens').lean();
 };
 
 const getDeliveryRecipients = async () => {
-  return Delivery.find({}).select('_id fcmTokenWeb fcmTokenMobile').lean();
-};
-
-const collectPushTargets = (recipients) => {
-  const tokenChannelMap = new Map();
-  let suppressedWebTokenCount = 0;
-
-  for (const recipient of recipients || []) {
-    const webToken = typeof recipient?.fcmTokenWeb === 'string' ? recipient.fcmTokenWeb.trim() : '';
-    const mobileToken = typeof recipient?.fcmTokenMobile === 'string' ? recipient.fcmTokenMobile.trim() : '';
-
-    if (mobileToken) {
-      if (webToken && webToken !== mobileToken) {
-        suppressedWebTokenCount += 1;
-      }
-      if (!tokenChannelMap.has(mobileToken)) {
-        tokenChannelMap.set(mobileToken, 'mobile');
-      }
-      continue;
-    }
-
-    if (webToken && !tokenChannelMap.has(webToken)) {
-      tokenChannelMap.set(webToken, 'web');
-    }
-  }
-
-  return {
-    tokens: Array.from(tokenChannelMap.keys()),
-    tokenChannelMap,
-    suppressedWebTokenCount,
-  };
+  return Delivery.find({}).select('_id fcmTokenWeb fcmTokenMobile pushTokens').lean();
 };
 
 const chunkArray = (arr, size) => {
@@ -89,54 +64,15 @@ const chunkArray = (arr, size) => {
 };
 
 const cleanupInvalidTokens = async (invalidTokens = []) => {
-  if (!Array.isArray(invalidTokens) || invalidTokens.length === 0) {
-    return { removedCount: 0 };
-  }
-
-  const tokenSet = Array.from(new Set(invalidTokens.filter(Boolean)));
-  if (tokenSet.length === 0) {
-    return { removedCount: 0 };
-  }
-
-  await Promise.all([
-    User.updateMany(
-      { fcmTokenWeb: { $in: tokenSet } },
-      { $set: { fcmTokenWeb: '' } }
-    ),
-    User.updateMany(
-      { fcmTokenMobile: { $in: tokenSet } },
-      { $set: { fcmTokenMobile: '' } }
-    ),
-    Restaurant.updateMany(
-      { fcmTokenWeb: { $in: tokenSet } },
-      { $set: { fcmTokenWeb: '' } }
-    ),
-    Restaurant.updateMany(
-      { fcmTokenMobile: { $in: tokenSet } },
-      { $set: { fcmTokenMobile: '' } }
-    ),
-    GroceryStore.updateMany(
-      { fcmTokenWeb: { $in: tokenSet } },
-      { $set: { fcmTokenWeb: '' } }
-    ),
-    GroceryStore.updateMany(
-      { fcmTokenMobile: { $in: tokenSet } },
-      { $set: { fcmTokenMobile: '' } }
-    ),
-    Delivery.updateMany(
-      { fcmTokenWeb: { $in: tokenSet } },
-      { $set: { fcmTokenWeb: '' } }
-    ),
-    Delivery.updateMany(
-      { fcmTokenMobile: { $in: tokenSet } },
-      { $set: { fcmTokenMobile: '' } }
-    ),
-  ]);
-
-  return { removedCount: tokenSet.length };
+  return cleanupInvalidPushTokensAcrossModels(
+    [User, Restaurant, GroceryStore, Delivery],
+    invalidTokens
+  );
 };
 
-const dispatchFirebasePush = async ({ tokens, title, description, sendTo, zone, platform, pushId, image = '', tokenChannelMap = new Map() }) => {
+const dispatchFirebasePush = async ({ tokenTargets, title, description, sendTo, zone, platform, pushId, image = '' }) => {
+  const tokens = Array.isArray(tokenTargets) ? tokenTargets.map((item) => item.token).filter(Boolean) : [];
+  const tokenTargetMap = new Map((tokenTargets || []).map((item) => [item.token, item]));
   if (!Array.isArray(tokens) || tokens.length === 0) {
     return {
       initialized: false,
@@ -144,6 +80,7 @@ const dispatchFirebasePush = async ({ tokens, title, description, sendTo, zone, 
       attempted: 0,
       successCount: 0,
       failureCount: 0,
+      selectedTargets: [],
     };
   }
 
@@ -155,6 +92,7 @@ const dispatchFirebasePush = async ({ tokens, title, description, sendTo, zone, 
       attempted: tokens.length,
       successCount: 0,
       failureCount: tokens.length,
+      selectedTargets: tokenTargets || [],
     };
   }
 
@@ -447,7 +385,7 @@ const dispatchFirebasePush = async ({ tokens, title, description, sendTo, zone, 
     const responses = Array.isArray(result?.responses) ? result.responses : [];
     responses.forEach((response, index) => {
       const token = tokenChunk[index] || '';
-      const channel = tokenChannelMap.get(token) || 'unknown';
+      const channel = tokenTargetMap.get(token)?.platform || 'unknown';
 
       if (response?.success) {
         if (channel === 'web') successWebCount += 1;
@@ -513,6 +451,14 @@ const dispatchFirebasePush = async ({ tokens, title, description, sendTo, zone, 
     failureSamples,
     invalidTokenCount: cleanupResult.removedCount || 0,
     transportWarnings,
+    selectedTargets: (tokenTargets || []).map((item) => ({
+      platform: item.platform,
+      deviceId: item.deviceId || '',
+      recipientId: item.recipientId || '',
+      source: item.source || '',
+      isWebView: Boolean(item.isWebView),
+      tokenPreview: maskPushToken(item.token),
+    })),
   };
 };
 
@@ -640,13 +586,32 @@ export const createPushNotification = asyncHandler(async (req, res) => {
   }
 
   const allRecipients = [...customerRecipients, ...businessRecipients, ...deliveryRecipients];
-  const {
-    tokens: pushTokens,
-    tokenChannelMap,
-    suppressedWebTokenCount,
-  } = collectPushTargets(allRecipients);
+  const { targets: pushTargets, summary: pushTargetSummary } = collectRecipientPushTargets(allRecipients);
+
+  console.info('Admin push notification recipient selection', {
+    pushId: pushRecord._id.toString(),
+    sendTo: safeSendTo,
+    platform: safePlatform,
+    zone: safeZone || 'All',
+    recipientCount,
+    selectedTokenCount: pushTargetSummary.selectedCount,
+    selectedWebCount: pushTargetSummary.selectedWebCount,
+    selectedMobileCount: pushTargetSummary.selectedMobileCount,
+    suppressedCount: pushTargetSummary.suppressedCount,
+    suppressedSameDeviceCount: pushTargetSummary.suppressedSameDeviceCount,
+    suppressedDuplicateTokenCount: pushTargetSummary.suppressedDuplicateTokenCount,
+    targetPreview: pushTargets.slice(0, 10).map((item) => ({
+      recipientId: item.recipientId || '',
+      platform: item.platform,
+      deviceId: item.deviceId || '',
+      source: item.source || '',
+      isWebView: Boolean(item.isWebView),
+      tokenPreview: maskPushToken(item.token),
+    })),
+  });
+
   const dispatchResult = await dispatchFirebasePush({
-    tokens: pushTokens,
+    tokenTargets: pushTargets,
     title: safeTitle,
     description: safeDescription,
     sendTo: safeSendTo,
@@ -654,7 +619,6 @@ export const createPushNotification = asyncHandler(async (req, res) => {
     platform: safePlatform,
     pushId: pushRecord._id,
     image,
-    tokenChannelMap,
   });
 
   pushRecord.recipientCount = recipientCount;
@@ -665,7 +629,8 @@ export const createPushNotification = asyncHandler(async (req, res) => {
     recipientCount,
     pushDelivery: {
       ...dispatchResult,
-      suppressedWebTokenCount,
+      suppressedWebTokenCount: pushTargetSummary.suppressedSameDeviceCount,
+      dedupeSummary: pushTargetSummary,
     },
   });
 });

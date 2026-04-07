@@ -82,8 +82,15 @@ const firebaseGoogleLoginSchema = Joi.object({
 });
 
 const updateFcmTokenSchema = Joi.object({
-  token: Joi.string().trim().required(),
-  platform: Joi.string().valid('web', 'mobile').required()
+  token: Joi.string().trim().allow('').optional(),
+  platform: Joi.string().valid('web', 'mobile').required(),
+  deviceId: Joi.string().trim().max(200).optional(),
+  deviceType: Joi.string().trim().max(100).optional(),
+  appContext: Joi.string().trim().max(100).optional(),
+  userAgent: Joi.string().trim().max(1000).optional(),
+  source: Joi.string().trim().max(100).optional(),
+  isWebView: Joi.boolean().optional(),
+  clear: Joi.boolean().optional()
 });
 
 // Public routes

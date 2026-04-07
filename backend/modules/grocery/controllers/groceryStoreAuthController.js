@@ -5,6 +5,11 @@ import firebaseAuthService from '../../auth/services/firebaseAuthService.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
+import {
+  maskPushToken,
+  removePushTokenFromEntity,
+  upsertPushTokenOnEntity,
+} from '../../../shared/utils/pushTokenRegistry.js';
 import winston from 'winston';
 
 const logger = winston.createLogger({
@@ -680,24 +685,72 @@ export const updateStoreDeliveryStatus = asyncHandler(async (req, res) => {
  * POST /api/grocery/store/auth/fcm-token
  */
 export const updateFcmToken = asyncHandler(async (req, res) => {
-  const { token, platform } = req.body;
-
-  if (!token || typeof token !== 'string' || !token.trim()) {
-    return errorResponse(res, 400, 'FCM token is required');
-  }
-
+  const { token, platform, deviceId, deviceType, appContext, userAgent, source, isWebView, clear } = req.body;
   const normalizedPlatform = String(platform || '').toLowerCase();
+  const normalizedToken = typeof token === 'string' ? token.trim() : '';
+  const shouldClear = clear === true || clear === 'true' || (!normalizedToken && normalizedPlatform === 'web' && isWebView === true);
+
   if (!['web', 'mobile'].includes(normalizedPlatform)) {
     return errorResponse(res, 400, "Platform must be 'web' or 'mobile'");
   }
 
-  const field = normalizedPlatform === 'web' ? 'fcmTokenWeb' : 'fcmTokenMobile';
-  req.store[field] = token.trim();
+  if (!shouldClear && !normalizedToken) {
+    return errorResponse(res, 400, 'FCM token is required');
+  }
+
+  if (shouldClear) {
+    removePushTokenFromEntity(req.store, {
+      token: normalizedToken,
+      platform: normalizedPlatform,
+      deviceId,
+      removeAllForPlatform: normalizedPlatform === 'web' && isWebView === true,
+    });
+    if (normalizedPlatform === 'web') req.store.fcmTokenWeb = '';
+    if (normalizedPlatform === 'mobile') req.store.fcmTokenMobile = '';
+    await req.store.save();
+
+    logger.info('Grocery store FCM token cleared', {
+      storeId: req.store?._id?.toString?.() || '',
+      platform: normalizedPlatform,
+      deviceId: String(deviceId || ''),
+      isWebView: Boolean(isWebView),
+    });
+
+    return successResponse(res, 200, 'FCM token cleared successfully', {
+      fcmTokenWeb: req.store.fcmTokenWeb || '',
+      fcmTokenMobile: req.store.fcmTokenMobile || '',
+      pushTokens: req.store.pushTokens || [],
+    });
+  }
+
+  upsertPushTokenOnEntity(req.store, {
+    token: normalizedToken,
+    platform: normalizedPlatform,
+    deviceId,
+    deviceType,
+    appContext,
+    userAgent,
+    source,
+    isWebView,
+  });
   await req.store.save();
+
+  logger.info('Grocery store FCM token updated successfully', {
+    storeId: req.store?._id?.toString?.() || '',
+    platform: normalizedPlatform,
+    deviceId: String(deviceId || ''),
+    deviceType: String(deviceType || ''),
+    appContext: String(appContext || ''),
+    tokenPreview: maskPushToken(normalizedToken),
+    hasWebToken: Boolean(req.store.fcmTokenWeb),
+    hasMobileToken: Boolean(req.store.fcmTokenMobile),
+    pushTokenCount: Array.isArray(req.store.pushTokens) ? req.store.pushTokens.length : 0,
+  });
 
   return successResponse(res, 200, 'FCM token updated successfully', {
     fcmTokenWeb: req.store.fcmTokenWeb || '',
-    fcmTokenMobile: req.store.fcmTokenMobile || ''
+    fcmTokenMobile: req.store.fcmTokenMobile || '',
+    pushTokens: req.store.pushTokens || [],
   });
 });
 

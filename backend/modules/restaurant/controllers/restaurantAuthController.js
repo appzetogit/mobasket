@@ -7,6 +7,11 @@ import { successResponse, errorResponse } from '../../../shared/utils/response.j
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
 import { isOpenFromOutletTimings } from '../utils/outletTimingStatus.js';
+import {
+  maskPushToken,
+  removePushTokenFromEntity,
+  upsertPushTokenOnEntity,
+} from '../../../shared/utils/pushTokenRegistry.js';
 import winston from 'winston';
 
 /**
@@ -1120,24 +1125,72 @@ export const getCurrentRestaurant = asyncHandler(async (req, res) => {
  * POST /api/restaurant/auth/fcm-token
  */
 export const updateFcmToken = asyncHandler(async (req, res) => {
-  const { token, platform } = req.body;
-
-  if (!token || typeof token !== 'string' || !token.trim()) {
-    return errorResponse(res, 400, 'FCM token is required');
-  }
-
+  const { token, platform, deviceId, deviceType, appContext, userAgent, source, isWebView, clear } = req.body;
   const normalizedPlatform = String(platform || '').toLowerCase();
+  const normalizedToken = typeof token === 'string' ? token.trim() : '';
+  const shouldClear = clear === true || clear === 'true' || (!normalizedToken && normalizedPlatform === 'web' && isWebView === true);
+
   if (!['web', 'mobile'].includes(normalizedPlatform)) {
     return errorResponse(res, 400, "Platform must be 'web' or 'mobile'");
   }
 
-  const field = normalizedPlatform === 'web' ? 'fcmTokenWeb' : 'fcmTokenMobile';
-  req.restaurant[field] = token.trim();
+  if (!shouldClear && !normalizedToken) {
+    return errorResponse(res, 400, 'FCM token is required');
+  }
+
+  if (shouldClear) {
+    removePushTokenFromEntity(req.restaurant, {
+      token: normalizedToken,
+      platform: normalizedPlatform,
+      deviceId,
+      removeAllForPlatform: normalizedPlatform === 'web' && isWebView === true,
+    });
+    if (normalizedPlatform === 'web') req.restaurant.fcmTokenWeb = '';
+    if (normalizedPlatform === 'mobile') req.restaurant.fcmTokenMobile = '';
+    await req.restaurant.save();
+
+    logger.info('Restaurant FCM token cleared', {
+      restaurantId: req.restaurant?._id?.toString?.() || '',
+      platform: normalizedPlatform,
+      deviceId: String(deviceId || ''),
+      isWebView: Boolean(isWebView),
+    });
+
+    return successResponse(res, 200, 'FCM token cleared successfully', {
+      fcmTokenWeb: req.restaurant.fcmTokenWeb || '',
+      fcmTokenMobile: req.restaurant.fcmTokenMobile || '',
+      pushTokens: req.restaurant.pushTokens || [],
+    });
+  }
+
+  upsertPushTokenOnEntity(req.restaurant, {
+    token: normalizedToken,
+    platform: normalizedPlatform,
+    deviceId,
+    deviceType,
+    appContext,
+    userAgent,
+    source,
+    isWebView,
+  });
   await req.restaurant.save();
+
+  logger.info('Restaurant FCM token updated successfully', {
+    restaurantId: req.restaurant?._id?.toString?.() || '',
+    platform: normalizedPlatform,
+    deviceId: String(deviceId || ''),
+    deviceType: String(deviceType || ''),
+    appContext: String(appContext || ''),
+    tokenPreview: maskPushToken(normalizedToken),
+    hasWebToken: Boolean(req.restaurant.fcmTokenWeb),
+    hasMobileToken: Boolean(req.restaurant.fcmTokenMobile),
+    pushTokenCount: Array.isArray(req.restaurant.pushTokens) ? req.restaurant.pushTokens.length : 0,
+  });
 
   return successResponse(res, 200, 'FCM token updated successfully', {
     fcmTokenWeb: req.restaurant.fcmTokenWeb || '',
-    fcmTokenMobile: req.restaurant.fcmTokenMobile || ''
+    fcmTokenMobile: req.restaurant.fcmTokenMobile || '',
+    pushTokens: req.restaurant.pushTokens || [],
   });
 });
 

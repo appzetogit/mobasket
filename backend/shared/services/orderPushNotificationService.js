@@ -2,31 +2,17 @@ import { initializeFirebaseAdmin, admin } from './firebaseAdminService.js';
 import Restaurant from '../../modules/restaurant/models/Restaurant.js';
 import GroceryStore from '../../modules/grocery/models/GroceryStore.js';
 import Delivery from '../../modules/delivery/models/Delivery.js';
+import {
+  cleanupInvalidPushTokensAcrossModels,
+  collectRecipientPushTargets,
+  maskPushToken,
+} from '../utils/pushTokenRegistry.js';
 
 const INVALID_TOKEN_CODES = new Set([
   'messaging/registration-token-not-registered',
   'messaging/invalid-registration-token',
   'messaging/mismatched-credential',
 ]);
-
-const normalizeToken = (value) => {
-  if (typeof value !== 'string') return '';
-  return value.trim();
-};
-
-const collectRecipientTokens = (recipients = []) => {
-  const tokenSet = new Set();
-
-  for (const recipient of recipients) {
-    const webToken = normalizeToken(recipient?.fcmTokenWeb);
-    const mobileToken = normalizeToken(recipient?.fcmTokenMobile);
-
-    if (webToken) tokenSet.add(webToken);
-    if (mobileToken) tokenSet.add(mobileToken);
-  }
-
-  return Array.from(tokenSet);
-};
 
 const sanitizeDataPayload = (payload = {}) => {
   const entries = Object.entries(payload || {})
@@ -37,17 +23,7 @@ const sanitizeDataPayload = (payload = {}) => {
 };
 
 const cleanupInvalidTokens = async (invalidTokens = [], cleanupModels = []) => {
-  const tokenSet = Array.from(new Set(invalidTokens.map(normalizeToken).filter(Boolean)));
-  if (tokenSet.length === 0 || !Array.isArray(cleanupModels) || cleanupModels.length === 0) {
-    return;
-  }
-
-  await Promise.all(
-    cleanupModels.flatMap((Model) => [
-      Model.updateMany({ fcmTokenWeb: { $in: tokenSet } }, { $set: { fcmTokenWeb: '' } }),
-      Model.updateMany({ fcmTokenMobile: { $in: tokenSet } }, { $set: { fcmTokenMobile: '' } }),
-    ])
-  );
+  await cleanupInvalidPushTokensAcrossModels(cleanupModels, invalidTokens);
 };
 
 export const pushCleanupModels = {
@@ -71,7 +47,8 @@ export async function sendOrderPushNotification({
   zone = '',
 }) {
   const normalizedRecipients = Array.isArray(recipients) ? recipients.filter(Boolean) : [recipients].filter(Boolean);
-  const tokens = collectRecipientTokens(normalizedRecipients);
+  const { targets, summary } = collectRecipientPushTargets(normalizedRecipients);
+  const tokens = targets.map((item) => item.token);
 
   if (tokens.length === 0) {
     return {
@@ -173,6 +150,16 @@ export async function sendOrderPushNotification({
     attempted: tokens.length,
     tag: resolvedTag,
     dataKeys: Object.keys(payload.data || {}),
+    selectedWebCount: summary.selectedWebCount,
+    selectedMobileCount: summary.selectedMobileCount,
+    suppressedCount: summary.suppressedCount,
+    targetPreview: targets.slice(0, 10).map((item) => ({
+      recipientId: item.recipientId || '',
+      platform: item.platform,
+      deviceId: item.deviceId || '',
+      source: item.source || '',
+      tokenPreview: maskPushToken(item.token),
+    })),
   });
 
   for (const token of tokens) {

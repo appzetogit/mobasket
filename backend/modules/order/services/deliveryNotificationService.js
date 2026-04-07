@@ -366,7 +366,7 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
 
     // Get delivery partner details
     const deliveryPartner = await Delivery.findById(deliveryPartnerId)
-      .select('name phone availability.currentLocation availability.isOnline status isActive fcmTokenWeb fcmTokenMobile')
+      .select('name phone availability.currentLocation availability.isOnline status isActive fcmTokenWeb fcmTokenMobile pushTokens')
       .lean();
 
     if (!deliveryPartner) {
@@ -910,7 +910,7 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
     for (const deliveryPartnerId of deliveryPartnerIds) {
       try {
         const deliveryPartner = await Delivery.findById(deliveryPartnerId)
-          .select('name phoneVerified status isActive availability.currentLocation availability.zones fcmTokenWeb fcmTokenMobile')
+          .select('name phoneVerified status isActive availability.currentLocation availability.zones fcmTokenWeb fcmTokenMobile pushTokens')
           .lean();
         if (!isDeliveryEligibleForOrders(deliveryPartner)) {
           console.warn(`⚠️ Skipping ineligible delivery partner ${deliveryPartnerId} for order ${order.orderId}`);

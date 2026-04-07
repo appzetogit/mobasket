@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import pushTokenSubSchema from '../../../shared/models/pushTokenSubSchema.js';
 
 const locationSchema = new mongoose.Schema({
   latitude: Number,
@@ -208,6 +209,10 @@ const deliverySchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: ''
+    },
+    pushTokens: {
+      type: [pushTokenSubSchema],
+      default: []
     },
     signupMethod: {
       type: String,

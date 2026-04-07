@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
+import pushTokenSubSchema from '../../../shared/models/pushTokenSubSchema.js';
 
 const userSchema = new mongoose.Schema({
   name: {
@@ -44,6 +45,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     trim: true,
     default: ''
+  },
+  pushTokens: {
+    type: [pushTokenSubSchema],
+    default: []
   },
   role: {
     type: String,

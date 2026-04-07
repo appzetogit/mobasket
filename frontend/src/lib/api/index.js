@@ -127,8 +127,8 @@ export const authAPI = {
     return apiClient.get(API_ENDPOINTS.AUTH.ME);
   },
 
-  updateFcmToken: (token, platform) => {
-    return apiClient.post(API_ENDPOINTS.AUTH.FCM_TOKEN, { token, platform });
+  updateFcmToken: (token, platform, meta = {}) => {
+    return apiClient.post(API_ENDPOINTS.AUTH.FCM_TOKEN, { token, platform, ...meta });
   },
 };
 
@@ -345,8 +345,8 @@ export const restaurantAPI = {
   getCurrentRestaurant: () => {
     return apiClient.get(API_ENDPOINTS.RESTAURANT.AUTH.ME);
   },
-  updateFcmToken: (token, platform) => {
-    return apiClient.post(API_ENDPOINTS.RESTAURANT.AUTH.FCM_TOKEN, { token, platform });
+  updateFcmToken: (token, platform, meta = {}) => {
+    return apiClient.post(API_ENDPOINTS.RESTAURANT.AUTH.FCM_TOKEN, { token, platform, ...meta });
   },
 
   reverify: () => {
@@ -798,8 +798,8 @@ export const groceryStoreAPI = {
   updateOutletDayTiming: (day, payload) => {
     return apiClient.patch(API_ENDPOINTS.GROCERY_STORE.OUTLET_TIMINGS_DAY.replace(':day', day), payload);
   },
-  updateFcmToken: (token, platform) => {
-    return apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.FCM_TOKEN, { token, platform });
+  updateFcmToken: (token, platform, meta = {}) => {
+    return apiClient.post(API_ENDPOINTS.GROCERY_STORE.AUTH.FCM_TOKEN, { token, platform, ...meta });
   },
 
   reverify: async () => {
@@ -1012,8 +1012,8 @@ export const deliveryAPI = {
   getCurrentDelivery: () => {
     return apiClient.get(API_ENDPOINTS.DELIVERY.AUTH.ME);
   },
-  updateFcmToken: (token, platform) => {
-    return apiClient.post(API_ENDPOINTS.DELIVERY.AUTH.FCM_TOKEN, { token, platform });
+  updateFcmToken: (token, platform, meta = {}) => {
+    return apiClient.post(API_ENDPOINTS.DELIVERY.AUTH.FCM_TOKEN, { token, platform, ...meta });
   },
 
   // Dashboard
