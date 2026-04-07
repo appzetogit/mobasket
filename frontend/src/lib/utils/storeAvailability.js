@@ -7,6 +7,24 @@ const WEEK_DAYS = [
   "Friday",
   "Saturday",
 ];
+const BUSINESS_TIME_ZONE = import.meta.env.VITE_BUSINESS_TIME_ZONE || "Asia/Kolkata";
+
+const getBusinessNowParts = (at = new Date()) => {
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: BUSINESS_TIME_ZONE,
+    weekday: "long",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+
+  const parts = formatter.formatToParts(at);
+  const weekday = parts.find((part) => part.type === "weekday")?.value;
+  const hour = Number(parts.find((part) => part.type === "hour")?.value);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value);
+
+  return { weekday, hour, minute };
+};
 
 export const parseTimeToMinutes = (timeText) => {
   if (!timeText || typeof timeText !== "string") return null;
@@ -80,8 +98,15 @@ export const evaluateStoreAvailability = ({
     return { isAvailable: false, reason: `${label} is offline and not accepting orders.` };
   }
 
-  const currentDayName = WEEK_DAYS[at.getDay()];
-  const currentMinutes = at.getHours() * 60 + at.getMinutes();
+  const zonedNow = getBusinessNowParts(at);
+  const currentDayName =
+    zonedNow.weekday && WEEK_DAYS.includes(zonedNow.weekday)
+      ? zonedNow.weekday
+      : WEEK_DAYS[at.getDay()];
+  const currentMinutes =
+    Number.isFinite(zonedNow.hour) && Number.isFinite(zonedNow.minute)
+      ? zonedNow.hour * 60 + zonedNow.minute
+      : at.getHours() * 60 + at.getMinutes();
 
   const timings = normalizeOutletTimings(outletTimings);
   const dayTiming = timings.find(

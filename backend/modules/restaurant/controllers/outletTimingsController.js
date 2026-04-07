@@ -66,8 +66,7 @@ const syncRestaurantTimingFields = async (restaurantId, timings) => {
 
   const updateData = {
     openDays,
-    // Outlet timings are the source of truth for online/offline state.
-    isAcceptingOrders: isOpenFromOutletTimings(timings),
+    isAcceptingOrders: true,
   };
   if (openingMinutes.length > 0 && closingMinutes.length > 0) {
     updateData.deliveryTimings = {

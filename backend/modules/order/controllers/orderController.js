@@ -384,9 +384,7 @@ const evaluateRestaurantAvailabilityAt = async (restaurant, atDate = new Date())
     return { isAvailable: false, reason: 'Restaurant is currently inactive' };
   }
 
-  if (restaurant.isAcceptingOrders === false) {
-    return { isAvailable: false, reason: 'Restaurant is currently offline and not accepting orders' };
-  }
+  restaurant.isAcceptingOrders = true;
 
   const dayName = atDate.toLocaleDateString('en-US', { weekday: 'long' });
   const currentMinutes = atDate.getHours() * 60 + atDate.getMinutes();

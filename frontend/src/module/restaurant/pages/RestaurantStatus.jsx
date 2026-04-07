@@ -5,7 +5,7 @@ import { ArrowLeft, Settings, ChevronRight } from "lucide-react"
 import { Switch } from "@/components/ui/switch"
 import { Card, CardContent } from "@/components/ui/card"
 import { groceryStoreAPI, restaurantAPI } from "@/lib/api"
-import { parseTimeToMinutes, isOpenFromOutletTimingsMap, normalizeOutletTimingsMap } from "@/lib/utils/outletTimingsStatus"
+import { parseTimeToMinutes, isOpenFromOutletTimingsMap, normalizeOutletTimingsMap, getOutletTimingNowParts } from "@/lib/utils/outletTimingsStatus"
 import { toast } from "sonner"
 import {
   Dialog,
@@ -137,10 +137,11 @@ export default function RestaurantStatus() {
 
     const checkIfOpen = () => {
       const now = new Date()
-      const currentDayFull = now.toLocaleDateString('en-US', { weekday: 'long' }) // "Monday", "Tuesday", etc.
-      const currentDay = now.toLocaleDateString('en-US', { weekday: 'short' }) // "Mon", "Tue", etc.
-      const currentHour = now.getHours()
-      const currentMinute = now.getMinutes()
+      const zonedNow = getOutletTimingNowParts(now)
+      const currentDayFull = zonedNow.weekday || now.toLocaleDateString('en-US', { weekday: 'long' }) // "Monday", "Tuesday", etc.
+      const currentDay = currentDayFull.slice(0, 3) // "Mon", "Tue", etc.
+      const currentHour = Number.isFinite(zonedNow.hour) ? zonedNow.hour : now.getHours()
+      const currentMinute = Number.isFinite(zonedNow.minute) ? zonedNow.minute : now.getMinutes()
       const currentTimeInMinutes = currentHour * 60 + currentMinute
 
       // For restaurant, outlet timings are the only source of truth.

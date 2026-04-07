@@ -361,6 +361,7 @@ export default function RestaurantsList() {
               ? restaurant.cuisines[0] 
               : (restaurant.cuisine || "N/A"),
             status: restaurant.isActive !== false, // Default to true if not set (matches backend behavior)
+            isAcceptingOrders: Boolean(restaurant.isAcceptingOrders),
             rating: restaurant.ratings?.average || restaurant.rating || 0,
             logo: restaurant.profileImage?.url || restaurant.logo || buildImageFallback(40, "RES"),
             address: formatRestaurantAddress(restaurant),
@@ -779,6 +780,55 @@ export default function RestaurantsList() {
     if (raw.startsWith("+")) return `+${digits}`
 
     return raw
+  }
+
+  const handleToggleAcceptingOrders = async (restaurantId) => {
+    const restaurant = restaurants.find((item) => item._id === restaurantId || item.id === restaurantId)
+    if (!restaurant) {
+      console.error("Restaurant not found for accepting-orders toggle")
+      return
+    }
+
+    const currentValue = Boolean(restaurant.isAcceptingOrders)
+    const nextValue = !currentValue
+
+    setRestaurants((prev) =>
+      prev.map((item) =>
+        item._id === restaurantId || item.id === restaurantId
+          ? {
+              ...item,
+              isAcceptingOrders: nextValue,
+              originalData: {
+                ...(item.originalData || {}),
+                isAcceptingOrders: nextValue,
+              },
+            }
+          : item,
+      ),
+    )
+
+    try {
+      await adminAPI.updateRestaurant(restaurant._id || restaurant.id, {
+        isAcceptingOrders: nextValue,
+      })
+    } catch (err) {
+      console.error("Error updating accepting orders:", err)
+      setRestaurants((prev) =>
+        prev.map((item) =>
+          item._id === restaurantId || item.id === restaurantId
+            ? {
+                ...item,
+                isAcceptingOrders: currentValue,
+                originalData: {
+                  ...(item.originalData || {}),
+                  isAcceptingOrders: currentValue,
+                },
+              }
+            : item,
+        ),
+      )
+      alert(err?.response?.data?.message || "Failed to update accepting orders. Please try again.")
+    }
   }
 
   const renderStars = (rating) => {
@@ -1374,6 +1424,11 @@ export default function RestaurantsList() {
                     </th>
                     <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-1">
+                        <span>Accepting Orders</span>
+                      </div>
+                    </th>
+                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                      <div className="flex items-center gap-1">
                         <span>Status</span>
                       </div>
                     </th>
@@ -1383,7 +1438,7 @@ export default function RestaurantsList() {
                 <tbody className="bg-white divide-y divide-slate-100">
                   {filteredRestaurants.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-6 py-20 text-center">
+                      <td colSpan={9} className="px-6 py-20 text-center">
                         <div className="flex flex-col items-center justify-center">
                           <p className="text-lg font-semibold text-slate-700 mb-1">No Data Found</p>
                           <p className="text-sm text-slate-500">No restaurants match your search</p>
@@ -1451,6 +1506,32 @@ export default function RestaurantsList() {
                           <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
                             {formatCurrency(getRestaurantPocketBalance(restaurant))}
                           </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-3">
+                            <span
+                              className={`inline-flex min-w-[64px] items-center justify-center rounded-full px-3 py-1 text-xs font-semibold ${
+                                restaurant.isAcceptingOrders
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : "bg-rose-50 text-rose-700"
+                              }`}
+                            >
+                              {restaurant.isAcceptingOrders ? "Online" : "Offline"}
+                            </span>
+                            <button
+                              onClick={() => handleToggleAcceptingOrders(restaurant._id || restaurant.id)}
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
+                                restaurant.isAcceptingOrders ? "bg-emerald-600" : "bg-slate-300"
+                              }`}
+                              title={restaurant.isAcceptingOrders ? "Turn accepting orders off" : "Turn accepting orders on"}
+                            >
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                  restaurant.isAcceptingOrders ? "translate-x-6" : "translate-x-1"
+                                }`}
+                              />
+                            </button>
+                          </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <button

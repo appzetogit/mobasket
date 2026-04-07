@@ -1687,6 +1687,7 @@ export const getRestaurants = asyncHandler(async (req, res) => {
 
     const normalizedRestaurants = restaurants.map((restaurant) => ({
       ...normalizeRestaurantAddressRecord(restaurant),
+      isAcceptingOrders: restaurant.isAcceptingOrders !== false,
       wallet: walletByRestaurantId.get(String(restaurant._id)) || {
         totalBalance: 0,
         totalEarned: 0,
@@ -1735,6 +1736,7 @@ export const getRestaurantById = asyncHandler(async (req, res) => {
     return successResponse(res, 200, 'Restaurant retrieved successfully', {
       restaurant: {
         ...normalizeRestaurantAddressRecord(restaurant),
+        isAcceptingOrders: restaurant.isAcceptingOrders !== false,
         outletTimings: outletTimingsDoc?.timings || [],
       },
     });
@@ -1802,6 +1804,7 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
       ownerPhone,
       ownerEmail,
       primaryContactNumber,
+      isAcceptingOrders,
       location,
       profileImage,
       outletTimings
@@ -1849,6 +1852,9 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
     if (ownerEmail !== undefined) updateData.ownerEmail = String(ownerEmail || '').trim();
     if (primaryContactNumber !== undefined) {
       updateData.primaryContactNumber = String(primaryContactNumber || '').trim();
+    }
+    if (typeof isAcceptingOrders === 'boolean') {
+      updateData.isAcceptingOrders = isAcceptingOrders;
     }
 
     if (location && typeof location === 'object') {
@@ -1913,7 +1919,6 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
       const derived = deriveRestaurantTimingFieldsFromOutletTimings(normalizedOutletTimings);
       updateData.openDays = derived.openDays;
       updateData.deliveryTimings = derived.deliveryTimings;
-      updateData.isAcceptingOrders = derived.openDays.length > 0;
     }
 
     const updatedRestaurant = await Restaurant.findByIdAndUpdate(
@@ -2789,7 +2794,7 @@ export const createRestaurant = asyncHandler(async (req, res) => {
         $set: {
           openDays: derivedOutletTimingFields.openDays,
           deliveryTimings: derivedOutletTimingFields.deliveryTimings,
-          isAcceptingOrders: derivedOutletTimingFields.openDays.length > 0,
+          isAcceptingOrders: true,
         },
       },
       { runValidators: true }

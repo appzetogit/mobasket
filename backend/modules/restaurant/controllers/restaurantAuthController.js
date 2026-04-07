@@ -1072,14 +1072,7 @@ const findRestaurantByNormalizedPhone = async (normalizedPhone) => {
  */
 export const getCurrentRestaurant = asyncHandler(async (req, res) => {
   const normalizedOnboarding = normalizeRestaurantOnboardingState(req.restaurant);
-  const outletTimings = await OutletTimings.findOne({
-    restaurantId: req.restaurant._id,
-    isActive: true,
-  }).lean();
-  const isAcceptingOrdersFromTimings = outletTimings?.timings
-    ? isOpenFromOutletTimings(outletTimings.timings)
-    : true;
-  const isAcceptingOrders = Boolean(req.restaurant.isAcceptingOrders !== false) && isAcceptingOrdersFromTimings;
+  const isAcceptingOrders = true;
   // Restaurant is attached by authenticate middleware
   return successResponse(res, 200, 'Restaurant retrieved successfully', {
     restaurant: {
