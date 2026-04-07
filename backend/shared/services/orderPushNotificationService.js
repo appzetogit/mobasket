@@ -78,12 +78,7 @@ export async function sendOrderPushNotification({
   const resolvedTag = String(tag || 'order_notification').trim() || 'order_notification';
   const resolvedLink = String(link || '/').trim() || '/';
 
-  const payload = {
-    notification: {
-      title: String(title || 'New Order').trim(),
-      body: String(body || '').trim(),
-    },
-    data: sanitizeDataPayload({
+  const baseDataPayload = sanitizeDataPayload({
       title: String(title || 'New Order').trim(),
       body: String(body || '').trim(),
       pushId: resolvedTag,
@@ -98,41 +93,69 @@ export async function sendOrderPushNotification({
       playSound: 'true',
       vibrate: 'true',
       ...data,
-    }),
-    android: {
-      priority: 'high',
-      notification: {
-        channelId: 'delivery_order_alerts_alert',
-        sound: 'alert',
-        defaultSound: true,
-        defaultVibrateTimings: true,
-        priority: 'max',
-      },
-    },
-    apns: {
-      headers: {
-        'apns-priority': '10',
-      },
-      payload: {
-        aps: {
-          sound: 'default',
+    });
+
+  const buildPayloadForChannel = (channel = 'unknown') => {
+    if (channel === 'mobile') {
+      return {
+        data: baseDataPayload,
+        android: {
+          priority: 'high',
         },
-      },
-    },
-    webpush: {
-      headers: {
-        Urgency: 'high',
-      },
-      fcmOptions: {
-        link: resolvedLink,
-      },
+        apns: {
+          headers: {
+            'apns-priority': '10',
+          },
+          payload: {
+            aps: {
+              contentAvailable: true,
+            },
+          },
+        },
+      };
+    }
+
+    return {
       notification: {
         title: String(title || 'New Order').trim(),
         body: String(body || '').trim(),
-        tag: resolvedTag,
-        requireInteraction: true,
       },
-    },
+      data: baseDataPayload,
+      android: {
+        priority: 'high',
+        notification: {
+          channelId: 'delivery_order_alerts_alert',
+          sound: 'alert',
+          defaultSound: true,
+          defaultVibrateTimings: true,
+          priority: 'max',
+        },
+      },
+      apns: {
+        headers: {
+          'apns-priority': '10',
+        },
+        payload: {
+          aps: {
+            sound: 'default',
+          },
+        },
+      },
+      webpush: {
+        headers: {
+          Urgency: 'high',
+        },
+        fcmOptions: {
+          link: resolvedLink,
+        },
+        notification: {
+          title: String(title || 'New Order').trim(),
+          body: String(body || '').trim(),
+          tag: resolvedTag,
+          requireInteraction: true,
+        },
+      },
+    };
   };
 
   let successCount = 0;
@@ -149,7 +172,7 @@ export async function sendOrderPushNotification({
     link: resolvedLink,
     attempted: tokens.length,
     tag: resolvedTag,
-    dataKeys: Object.keys(payload.data || {}),
+    dataKeys: Object.keys(baseDataPayload || {}),
     selectedWebCount: summary.selectedWebCount,
     selectedMobileCount: summary.selectedMobileCount,
     suppressedCount: summary.suppressedCount,
@@ -164,8 +187,9 @@ export async function sendOrderPushNotification({
 
   for (const token of tokens) {
     try {
+      const channel = targets.find((item) => item.token === token)?.platform || 'unknown';
       await messaging.send({
-        ...payload,
+        ...buildPayloadForChannel(channel),
         token,
       });
       successCount += 1;

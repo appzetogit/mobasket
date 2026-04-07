@@ -281,51 +281,65 @@ const dispatchFirebasePush = async ({ tokenTargets, title, description, sendTo, 
     });
   };
 
-  const buildBaseMessage = () => {
+  const buildBaseMessage = (channel = 'unknown') => {
     const link = getPushLinkForTarget(sendTo);
-    return ({
-    notification: {
-      title,
-      body: description,
-      ...(image ? { imageUrl: image } : {}),
-    },
-    data: {
+    const baseData = {
       source: 'admin_push',
       pushId: String(pushId || ''),
+      title: String(title || ''),
+      body: String(description || ''),
       sendTo: String(sendTo || ''),
       platform: String(platform || ''),
       zone: String(zone || 'All'),
       link,
       click_action: link,
       ...(image ? { image: String(image) } : {}),
-    },
-    webpush: {
-      fcmOptions: {
-        link,
-      },
+    };
+
+    if (channel === 'mobile') {
+      return {
+        data: baseData,
+        android: {
+          priority: 'high',
+        },
+      };
+    }
+
+    return ({
       notification: {
         title,
         body: description,
-        ...(image ? { image } : {}),
+        ...(image ? { imageUrl: image } : {}),
       },
-    },
-    ...(image ? {
       android: {
+        priority: 'high',
+        ...(image ? {
+          notification: {
+            imageUrl: image,
+          },
+        } : {}),
+      },
+      data: baseData,
+      webpush: {
+        fcmOptions: {
+          link,
+        },
         notification: {
-          imageUrl: image,
+          title,
+          body: description,
+          ...(image ? { image } : {}),
         },
       },
-    } : {}),
-  });
+    });
   };
 
   const sendChunkIndividually = async (tokenChunk) => {
-    const baseMessage = buildBaseMessage();
     const responses = [];
 
     for (const token of tokenChunk) {
+      const channel = tokenTargetMap.get(token)?.platform || 'unknown';
       const messagePayload = {
-        ...baseMessage,
+        ...buildBaseMessage(channel),
         token,
       };
 
