@@ -11,6 +11,7 @@ import { isFlutterWebViewBridgeAvailable, signInWithFlutterNativeGoogle } from "
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 import { loadBusinessSettings } from "@/lib/utils/businessSettings"
 import PolicyModal from "@/components/legal/PolicyModal"
+import { syncPushAfterAuth } from "@/lib/pushAuthSync"
 import { redirectRestaurantAfterAuth } from "../../utils/onboardingUtils"
 
 const INDIA_COUNTRY = { code: "+91", country: "IN", flag: "IN" }
@@ -365,6 +366,7 @@ export default function RestaurantLogin() {
 
       // Notify any listeners that auth state has changed
       window.dispatchEvent(new Event("restaurantAuthChanged"))
+      await syncPushAfterAuth("restaurant")
 
       await redirectRestaurantAfterAuth(navigate, { replace: true })
     } catch (error) {
@@ -403,6 +405,7 @@ export default function RestaurantLogin() {
 
       setAuthData("restaurant", accessToken, restaurant, refreshToken)
       window.dispatchEvent(new Event("restaurantAuthChanged"))
+      await syncPushAfterAuth("restaurant")
       await redirectRestaurantAfterAuth(navigate, { replace: true })
     } catch (error) {
       googleAuthHandledRef.current = false

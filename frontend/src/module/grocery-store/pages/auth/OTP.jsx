@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { groceryStoreAPI } from "@/lib/api"
 import { setAuthData } from "@/lib/utils/auth"
+import { syncPushAfterAuth } from "@/lib/pushAuthSync"
 import { redirectGroceryStoreAfterAuth } from "../../utils/onboardingUtils"
 
 export default function GroceryStoreOTP() {
@@ -146,6 +147,7 @@ export default function GroceryStoreOTP() {
 
       setAuthData("grocery-store", accessToken, store, refreshToken)
       window.dispatchEvent(new Event("groceryStoreAuthChanged"))
+      await syncPushAfterAuth("grocery-store")
 
       sessionStorage.removeItem("groceryStoreAuthData")
       const from = location.state?.from?.pathname || location.state?.from || null

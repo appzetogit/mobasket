@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { restaurantAPI } from "@/lib/api"
 import { setAuthData as setRestaurantAuthData, clearRestaurantSignupSession } from "@/lib/utils/auth"
+import { syncPushAfterAuth } from "@/lib/pushAuthSync"
 import { redirectRestaurantAfterAuth } from "../../utils/onboardingUtils"
 
 export default function RestaurantOTP() {
@@ -196,6 +197,7 @@ export default function RestaurantOTP() {
         if (registerAccessToken && registerRestaurant) {
           setRestaurantAuthData("restaurant", registerAccessToken, registerRestaurant, registerRefreshToken)
           window.dispatchEvent(new Event("restaurantAuthChanged"))
+          await syncPushAfterAuth("restaurant")
           sessionStorage.removeItem("restaurantAuthData")
           setTimeout(async () => {
             await redirectRestaurantAfterAuth(navigate, { replace: true })
@@ -214,6 +216,7 @@ export default function RestaurantOTP() {
 
         // Dispatch custom event for same-tab updates
         window.dispatchEvent(new Event("restaurantAuthChanged"))
+        await syncPushAfterAuth("restaurant")
 
         sessionStorage.removeItem("restaurantAuthData")
 

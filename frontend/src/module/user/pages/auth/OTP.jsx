@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { authAPI } from "@/lib/api"
 import { setAuthData as setUserAuthData } from "@/lib/utils/auth"
+import { syncPushAfterAuth } from "@/lib/pushAuthSync"
 
 export default function OTP() {
   const navigate = useNavigate()
@@ -258,6 +259,7 @@ export default function OTP() {
 
       // Dispatch custom event for same-tab updates
       window.dispatchEvent(new Event("userAuthChanged"))
+      await syncPushAfterAuth("user")
 
       setSuccess(true)
 
@@ -328,6 +330,7 @@ export default function OTP() {
 
       // Dispatch custom event for same-tab updates
       window.dispatchEvent(new Event("userAuthChanged"))
+      await syncPushAfterAuth("user")
 
       setSuccess(true)
 

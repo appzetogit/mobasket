@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { restaurantAPI } from "@/lib/api"
 import { setAuthData } from "@/lib/utils/auth"
+import { syncPushAfterAuth } from "@/lib/pushAuthSync"
 import { Mail, Lock, EyeOff, Eye, CheckSquare, UtensilsCrossed } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -45,6 +46,7 @@ export default function RestaurantSignIn() {
         
         // Dispatch custom event for same-tab updates
         window.dispatchEvent(new Event('restaurantAuthChanged'))
+        await syncPushAfterAuth("restaurant")
 
         await redirectRestaurantAfterAuth(navigate, { replace: true })
       } else {

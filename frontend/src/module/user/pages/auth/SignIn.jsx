@@ -18,6 +18,7 @@ import { firebaseAuth, googleProvider, ensureFirebaseAuthInitialized } from "@/l
 import { isFlutterSignInCancelled, isFlutterWebViewBridgeAvailable, signInWithFlutterNativeGoogle } from "@/lib/utils/flutterGoogleSignIn"
 import { setAuthData } from "@/lib/utils/auth"
 import { loadBusinessSettings } from "@/lib/utils/businessSettings"
+import { syncPushAfterAuth } from "@/lib/pushAuthSync"
 import loginBanner from "@/assets/loginbanner.png"
 import PolicyModal from "@/components/legal/PolicyModal"
 
@@ -115,6 +116,7 @@ export default function SignIn() {
       if (accessToken && appUser) {
         setAuthData("user", accessToken, appUser, refreshToken)
         window.dispatchEvent(new Event("userAuthChanged"))
+        await syncPushAfterAuth("user")
 
         // Clear any URL hash or params
         const hasHash = window.location.hash.length > 0

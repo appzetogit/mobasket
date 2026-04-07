@@ -11,6 +11,7 @@ import { isFlutterWebViewBridgeAvailable, signInWithFlutterNativeGoogle } from "
 import { useCompanyName } from "@/lib/hooks/useCompanyName"
 import { loadBusinessSettings } from "@/lib/utils/businessSettings"
 import { isModuleAuthenticated } from "@/lib/utils/auth"
+import { syncPushAfterAuth } from "@/lib/pushAuthSync"
 import PolicyModal from "@/components/legal/PolicyModal"
 import { redirectGroceryStoreAfterAuth } from "../../utils/onboardingUtils"
 
@@ -325,6 +326,7 @@ export default function GroceryStoreLogin() {
 
       setAuthData("grocery-store", accessToken, store, refreshToken)
       window.dispatchEvent(new Event("groceryStoreAuthChanged"))
+      await syncPushAfterAuth("grocery-store")
 
       const from = location.state?.from?.pathname || location.state?.from || null
       await redirectGroceryStoreAfterAuth(navigate, { replace: true, redirectTo: from })
@@ -364,6 +366,7 @@ export default function GroceryStoreLogin() {
 
       setAuthData("grocery-store", accessToken, store, refreshToken)
       window.dispatchEvent(new Event("groceryStoreAuthChanged"))
+      await syncPushAfterAuth("grocery-store")
 
       const from = location.state?.from?.pathname || location.state?.from || null
       await redirectGroceryStoreAfterAuth(navigate, { replace: true, redirectTo: from })
