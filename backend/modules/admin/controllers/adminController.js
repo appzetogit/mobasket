@@ -17,6 +17,7 @@ import mongoose from 'mongoose';
 import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
 import { initializeCloudinary } from '../../../config/cloudinary.js';
 import { DEFAULT_IMAGE_FALLBACK_40 } from '../../../shared/utils/imageFallback.js';
+import { isOpenFromOutletTimings } from '../../restaurant/utils/outletTimingStatus.js';
 
 const logger = winston.createLogger({
   level: 'info',
@@ -1673,6 +1674,14 @@ export const getRestaurants = asyncHandler(async (req, res) => {
         .select('restaurantId totalBalance totalEarned totalWithdrawn')
         .lean()
       : [];
+    const outletTimingDocs = restaurantIds.length > 0
+      ? await OutletTimings.find({
+        restaurantId: { $in: restaurantIds },
+        isActive: true,
+      })
+        .select('restaurantId timings')
+        .lean()
+      : [];
 
     const walletByRestaurantId = new Map(
       wallets.map((wallet) => [
@@ -1684,10 +1693,17 @@ export const getRestaurants = asyncHandler(async (req, res) => {
         },
       ])
     );
+    const timingByRestaurantId = new Map(
+      outletTimingDocs.map((doc) => [String(doc.restaurantId), doc.timings || []])
+    );
 
     const normalizedRestaurants = restaurants.map((restaurant) => ({
       ...normalizeRestaurantAddressRecord(restaurant),
-      isAcceptingOrders: restaurant.isAcceptingOrders !== false,
+      isWithinOutletSlot: isOpenFromOutletTimings(timingByRestaurantId.get(String(restaurant._id)) || []),
+      manualIsAcceptingOrders: restaurant.isAcceptingOrders !== false,
+      isAcceptingOrders:
+        restaurant.isAcceptingOrders !== false &&
+        isOpenFromOutletTimings(timingByRestaurantId.get(String(restaurant._id)) || []),
       wallet: walletByRestaurantId.get(String(restaurant._id)) || {
         totalBalance: 0,
         totalEarned: 0,
@@ -1736,7 +1752,11 @@ export const getRestaurantById = asyncHandler(async (req, res) => {
     return successResponse(res, 200, 'Restaurant retrieved successfully', {
       restaurant: {
         ...normalizeRestaurantAddressRecord(restaurant),
-        isAcceptingOrders: restaurant.isAcceptingOrders !== false,
+        isWithinOutletSlot: isOpenFromOutletTimings(outletTimingsDoc?.timings || []),
+        manualIsAcceptingOrders: restaurant.isAcceptingOrders !== false,
+        isAcceptingOrders:
+          restaurant.isAcceptingOrders !== false &&
+          isOpenFromOutletTimings(outletTimingsDoc?.timings || []),
         outletTimings: outletTimingsDoc?.timings || [],
       },
     });

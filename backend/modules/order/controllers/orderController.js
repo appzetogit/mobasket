@@ -26,6 +26,7 @@ import GroceryPlan from '../../grocery/models/GroceryPlan.js';
 import GroceryPlanOffer from '../../grocery/models/GroceryPlanOffer.js';
 import FeeSettings from '../../admin/models/FeeSettings.js';
 import { reduceGroceryStockForOrder, restoreGroceryStockForOrder } from '../services/groceryStockService.js';
+import { isOpenFromOutletTimings } from '../../restaurant/utils/outletTimingStatus.js';
 import {
   getDefaultPendingCartEdit,
   sanitizePendingCartEdit,
@@ -384,10 +385,9 @@ const evaluateRestaurantAvailabilityAt = async (restaurant, atDate = new Date())
     return { isAvailable: false, reason: 'Restaurant is currently inactive' };
   }
 
-  restaurant.isAcceptingOrders = true;
-
-  const dayName = atDate.toLocaleDateString('en-US', { weekday: 'long' });
-  const currentMinutes = atDate.getHours() * 60 + atDate.getMinutes();
+  if (restaurant.isAcceptingOrders === false) {
+    return { isAvailable: false, reason: 'Restaurant is not accepting orders right now' };
+  }
 
   const outletTimings = await OutletTimings.findOne({
     restaurantId: restaurant._id,
@@ -397,40 +397,14 @@ const evaluateRestaurantAvailabilityAt = async (restaurant, atDate = new Date())
     .lean();
 
   const timings = Array.isArray(outletTimings?.timings) ? outletTimings.timings : [];
-  const dayTiming = timings.find(
-    (entry) => String(entry?.day || '').toLowerCase() === String(dayName).toLowerCase()
-  );
-
-  if (dayTiming) {
-    if (dayTiming.isOpen === false) {
-      return { isAvailable: false, reason: 'Restaurant is closed today' };
-    }
-
-    const slots = Array.isArray(dayTiming?.slots) ? dayTiming.slots : [];
-    if (slots.length > 0) {
-      const hasActiveSlot = slots.some((slot) => {
-        const startMinutes = parseSlotTimeToMinutes(slot?.start, slot?.startPeriod);
-        const endMinutes = parseSlotTimeToMinutes(slot?.end, slot?.endPeriod);
-        return isWithinTimeWindow(currentMinutes, startMinutes, endMinutes);
-      });
-      if (!hasActiveSlot) {
-        return { isAvailable: false, reason: 'Restaurant is currently closed' };
-      }
-      return { isAvailable: true, reason: '' };
-    }
-
-    const openingMinutes = parseTimeToMinutes(dayTiming.openingTime);
-    const closingMinutes = parseTimeToMinutes(dayTiming.closingTime);
-    if (
-      Number.isFinite(openingMinutes) &&
-      Number.isFinite(closingMinutes) &&
-      !isWithinTimeWindow(currentMinutes, openingMinutes, closingMinutes)
-    ) {
-      return { isAvailable: false, reason: 'Restaurant is currently closed' };
-    }
-
-    return { isAvailable: true, reason: '' };
+  if (timings.length > 0) {
+    return isOpenFromOutletTimings(timings, atDate)
+      ? { isAvailable: true, reason: '' }
+      : { isAvailable: false, reason: 'Restaurant is currently closed' };
   }
+
+  const dayName = atDate.toLocaleDateString('en-US', { weekday: 'long' });
+  const currentMinutes = atDate.getHours() * 60 + atDate.getMinutes();
 
   const openDays = Array.isArray(restaurant.openDays) ? restaurant.openDays : [];
   if (openDays.length > 0) {

@@ -515,10 +515,16 @@ export const getRestaurants = async (req, res) => {
 
         restaurants = restaurants.map((restaurant) => {
           const timing = timingByRestaurantId.get(String(restaurant._id));
-          if (!timing) return { ...restaurant, isAcceptingOrders: true };
+          const manuallyAcceptingOrders = restaurant.isAcceptingOrders !== false;
+          if (!timing) {
+            return {
+              ...restaurant,
+              isAcceptingOrders: manuallyAcceptingOrders,
+            };
+          }
           return {
             ...restaurant,
-            isAcceptingOrders: true,
+            isAcceptingOrders: manuallyAcceptingOrders && isOpenFromOutletTimings(timing),
           };
         });
       }
@@ -662,7 +668,16 @@ export const getRestaurantById = async (req, res) => {
     }
 
     if (isRestaurantEntity && restaurant?._id) {
-      restaurant.isAcceptingOrders = true;
+      const outletTimings = await OutletTimings.findOne({
+        restaurantId: restaurant._id,
+        isActive: true,
+      })
+        .select('timings')
+        .lean();
+
+      restaurant.isAcceptingOrders =
+        restaurant.isAcceptingOrders !== false &&
+        isOpenFromOutletTimings(outletTimings?.timings || []);
     }
 
     // Calculate rating from reviews in orders
@@ -718,7 +733,16 @@ export const getRestaurantByOwner = async (req, res) => {
       return errorResponse(res, 404, 'Restaurant not found');
     }
 
-    restaurant.isAcceptingOrders = true;
+    const outletTimings = await OutletTimings.findOne({
+      restaurantId,
+      isActive: true,
+    })
+      .select('timings')
+      .lean();
+
+    restaurant.isAcceptingOrders =
+      restaurant.isAcceptingOrders !== false &&
+      isOpenFromOutletTimings(outletTimings?.timings || []);
 
     return successResponse(res, 200, 'Restaurant retrieved successfully', {
       restaurant,
@@ -815,7 +839,6 @@ export const createRestaurantFromOnboarding = async (onboardingData, restaurantI
     }
 
     existing.isActive = true; // Ensure it's active
-    existing.isAcceptingOrders = true; // Ensure it's accepting orders
 
     try {
       await existing.save();
@@ -1131,9 +1154,13 @@ export const updateDeliveryStatus = asyncHandler(async (req, res) => {
     const restaurantId = req.restaurant._id;
     const { isAcceptingOrders } = req.body;
 
+    if (typeof isAcceptingOrders !== 'boolean') {
+      return errorResponse(res, 400, 'isAcceptingOrders must be a boolean value');
+    }
+
     const restaurant = await Restaurant.findByIdAndUpdate(
       restaurantId,
-      { isAcceptingOrders: true },
+      { isAcceptingOrders },
       { new: true }
     ).select('-password');
 

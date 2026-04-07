@@ -362,6 +362,11 @@ export default function RestaurantsList() {
               : (restaurant.cuisine || "N/A"),
             status: restaurant.isActive !== false, // Default to true if not set (matches backend behavior)
             isAcceptingOrders: Boolean(restaurant.isAcceptingOrders),
+            isWithinOutletSlot: Boolean(restaurant.isWithinOutletSlot),
+            manualIsAcceptingOrders:
+              typeof restaurant.manualIsAcceptingOrders === "boolean"
+                ? restaurant.manualIsAcceptingOrders
+                : Boolean(restaurant.isAcceptingOrders),
             rating: restaurant.ratings?.average || restaurant.rating || 0,
             logo: restaurant.profileImage?.url || restaurant.logo || buildImageFallback(40, "RES"),
             address: formatRestaurantAddress(restaurant),
@@ -789,7 +794,10 @@ export default function RestaurantsList() {
       return
     }
 
-    const currentValue = Boolean(restaurant.isAcceptingOrders)
+    const currentValue =
+      typeof restaurant.manualIsAcceptingOrders === "boolean"
+        ? restaurant.manualIsAcceptingOrders
+        : Boolean(restaurant.isAcceptingOrders)
     const nextValue = !currentValue
 
     setRestaurants((prev) =>
@@ -797,9 +805,12 @@ export default function RestaurantsList() {
         item._id === restaurantId || item.id === restaurantId
           ? {
               ...item,
-              isAcceptingOrders: nextValue,
+              manualIsAcceptingOrders: nextValue,
+              isAcceptingOrders: nextValue && Boolean(item.isWithinOutletSlot),
               originalData: {
                 ...(item.originalData || {}),
+                isWithinOutletSlot: item.isWithinOutletSlot,
+                manualIsAcceptingOrders: nextValue,
                 isAcceptingOrders: nextValue,
               },
             }
@@ -818,9 +829,12 @@ export default function RestaurantsList() {
           item._id === restaurantId || item.id === restaurantId
             ? {
                 ...item,
-                isAcceptingOrders: currentValue,
+                manualIsAcceptingOrders: currentValue,
+                isAcceptingOrders: currentValue && Boolean(item.isWithinOutletSlot),
                 originalData: {
                   ...(item.originalData || {}),
+                  isWithinOutletSlot: item.isWithinOutletSlot,
+                  manualIsAcceptingOrders: currentValue,
                   isAcceptingOrders: currentValue,
                 },
               }
@@ -909,7 +923,11 @@ export default function RestaurantsList() {
   const handleEditRestaurant = async (restaurant) => {
     try {
       let restaurantData = restaurant?.originalData
-      if (!restaurantData?._id) {
+      const hasFullOutletTimings =
+        Array.isArray(restaurantData?.outletTimings) &&
+        restaurantData.outletTimings.length > 0
+
+      if (!restaurantData?._id || !hasFullOutletTimings) {
         const response = await adminAPI.getRestaurantById(restaurant._id || restaurant.id)
         restaurantData = response?.data?.data?.restaurant || response?.data?.data || restaurant
       }
@@ -1011,6 +1029,7 @@ export default function RestaurantsList() {
     try {
       setSavingEditRestaurant(true)
       let uploadedProfileImage = null
+      const outletTimingsPayload = buildOutletTimingsPayloadFromEditor(editForm.outletTimings)
 
       if (editRestaurantImageFile) {
         setUploadingRestaurantImage(true)
@@ -1049,7 +1068,6 @@ export default function RestaurantsList() {
           longitude: lng,
           coordinates: [lng, lat],
         },
-        outletTimings: buildOutletTimingsPayloadFromEditor(editForm.outletTimings),
       }
       const selectedZoneOption = zoneOptions.find((zone) => zone.id === String(editForm.zoneId || "").trim())
       if (selectedZoneOption?.name) {
@@ -1063,7 +1081,11 @@ export default function RestaurantsList() {
         }
       }
 
-      const response = await adminAPI.updateRestaurant(editingRestaurant._id, payload)
+      await adminAPI.updateRestaurant(editingRestaurant._id, payload)
+      await adminAPI.updateRestaurant(editingRestaurant._id, {
+        outletTimings: outletTimingsPayload,
+      })
+      const response = await adminAPI.getRestaurantById(editingRestaurant._id)
       const updatedRestaurant = response?.data?.data?.restaurant || response?.data?.data
 
       setRestaurants((prev) =>
@@ -1521,13 +1543,13 @@ export default function RestaurantsList() {
                             <button
                               onClick={() => handleToggleAcceptingOrders(restaurant._id || restaurant.id)}
                               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 ${
-                                restaurant.isAcceptingOrders ? "bg-emerald-600" : "bg-slate-300"
+                                restaurant.manualIsAcceptingOrders ? "bg-emerald-600" : "bg-slate-300"
                               }`}
-                              title={restaurant.isAcceptingOrders ? "Turn accepting orders off" : "Turn accepting orders on"}
+                              title={restaurant.manualIsAcceptingOrders ? "Turn accepting orders off" : "Turn accepting orders on"}
                             >
                               <span
                                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                  restaurant.isAcceptingOrders ? "translate-x-6" : "translate-x-1"
+                                  restaurant.manualIsAcceptingOrders ? "translate-x-6" : "translate-x-1"
                                 }`}
                               />
                             </button>

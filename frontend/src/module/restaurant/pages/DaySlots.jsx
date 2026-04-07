@@ -615,7 +615,7 @@ export default function DaySlots() {
     }
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     try {
       const saved = localStorage.getItem(storageKey)
       let allDays = saved ? JSON.parse(saved) : {}
@@ -679,14 +679,17 @@ export default function DaySlots() {
         }
       })
 
-      outletTimingsAPI
-        .upsertOutletTimings({
+      const response = await outletTimingsAPI.upsertOutletTimings({
           outletType: "MoBasket delivery",
           timings: timingsPayload,
         })
-        .catch((error) => {
-          console.error("Error syncing day slots to backend:", error)
-        })
+      const persistedTimings =
+        response?.data?.data?.outletTimings?.timings ||
+        response?.data?.outletTimings?.timings ||
+        timingsPayload
+      const normalizedPersisted = normalizeOutletTimingsMap(persistedTimings)
+      localStorage.setItem(storageKey, JSON.stringify(normalizedPersisted))
+      window.dispatchEvent(new Event("outletTimingsUpdated"))
 
       navigate(`${baseRoute}/outlet-timings`)
     } catch (error) {
