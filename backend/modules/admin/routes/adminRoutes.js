@@ -52,6 +52,7 @@ import {
   approveDeliveryPartner,
   rejectDeliveryPartner,
   getDeliveryPartners,
+  updateDeliveryPartnerProfile,
   updateDeliveryPartnerStatus,
   updateDeliveryPartnerZones,
   deleteDeliveryPartner,
@@ -375,6 +376,7 @@ router.get('/delivery-partners/:id', getDeliveryPartnerById);
 router.post('/delivery-partners/:id/approve', approveDeliveryPartner);
 router.post('/delivery-partners/:id/reject', rejectDeliveryPartner);
 router.post('/delivery-partners/:id/reverify', reverifyDeliveryPartner);
+router.patch('/delivery-partners/:id/profile', updateDeliveryPartnerProfile);
 router.patch('/delivery-partners/:id/status', updateDeliveryPartnerStatus);
 router.patch('/delivery-partners/:id/zones', updateDeliveryPartnerZones);
 router.delete('/delivery-partners/:id', deleteDeliveryPartner);

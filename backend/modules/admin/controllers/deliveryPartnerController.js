@@ -1,5 +1,7 @@
 import Delivery from '../../delivery/models/Delivery.js';
+import DeliveryWallet from '../../delivery/models/DeliveryWallet.js';
 import Zone from '../models/Zone.js';
+import BusinessSettings from '../models/BusinessSettings.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import mongoose from 'mongoose';
@@ -195,6 +197,14 @@ const getZoneNamesById = async (zoneIds = []) => {
     .filter((zone) => Boolean(zone.name));
 };
 
+const getResolvedCashLimit = (delivery, globalCashLimit) => {
+  const override = Number(delivery?.cod?.limitOverride);
+  if (Number.isFinite(override) && override > 0) {
+    return override;
+  }
+  return globalCashLimit;
+};
+
 /**
  * Get Delivery Partner by ID
  * GET /api/admin/delivery-partners/:id
@@ -203,20 +213,39 @@ export const getDeliveryPartnerById = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
 
-    const delivery = await Delivery.findById(id)
-      .select('-password -refreshToken')
-      .lean();
+    const [delivery, settings] = await Promise.all([
+      Delivery.findById(id)
+        .select('-password -refreshToken')
+        .lean(),
+      BusinessSettings.getSettings().catch(() => null)
+    ]);
 
     if (!delivery) {
       return errorResponse(res, 404, 'Delivery partner not found');
     }
 
-    const assignedZones = await getZoneNamesById(delivery?.availability?.zones || []);
+    const [assignedZones, wallet] = await Promise.all([
+      getZoneNamesById(delivery?.availability?.zones || []),
+      DeliveryWallet.findOrCreateByDeliveryId(id)
+    ]);
+    const globalCashLimit = Number(settings?.deliveryCashLimit);
+    const fallbackCashLimit = Number.isFinite(globalCashLimit) && globalCashLimit >= 0 ? globalCashLimit : 750;
+    const cashLimit = getResolvedCashLimit(delivery, fallbackCashLimit);
+    const pocketBalance = Math.max(0, Number(wallet?.totalBalance) || 0);
+    const cashCollected = Math.max(0, Number(wallet?.codCashCollected ?? wallet?.cashInHand ?? 0) || 0);
+    const availableCashLimit = Math.max(0, Number(cashLimit) - cashCollected);
 
     return successResponse(res, 200, 'Delivery partner retrieved successfully', {
       delivery: {
         ...delivery,
-        assignedZones
+        assignedZones,
+        pocketBalance,
+        cashCollected,
+        cashLimit,
+        cashLimitOverride: Number.isFinite(Number(delivery?.cod?.limitOverride))
+          ? Number(delivery.cod.limitOverride)
+          : null,
+        availableCashLimit
       }
     });
   } catch (error) {
@@ -394,12 +423,15 @@ export const getDeliveryPartners = asyncHandler(async (req, res) => {
     let selectFields = '-password -refreshToken';
 
     // Fetch delivery partners
-    const deliveries = await Delivery.find(query)
-      .select(selectFields)
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit))
-      .lean();
+    const [deliveries, settings] = await Promise.all([
+      Delivery.find(query)
+        .select(selectFields)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      BusinessSettings.getSettings().catch(() => null)
+    ]);
 
     // Log for debugging
     if (includeAvailability === 'true' || includeAvailability === true) {
@@ -415,6 +447,16 @@ export const getDeliveryPartners = asyncHandler(async (req, res) => {
 
     // Get order statistics for each delivery partner
     const deliveryIds = deliveries.map(d => d._id);
+    const walletDocs = deliveryIds.length > 0
+      ? await DeliveryWallet.find({ deliveryId: { $in: deliveryIds } })
+          .select('deliveryId totalBalance cashInHand codCashCollected')
+          .lean()
+      : [];
+    const walletMap = new Map(
+      walletDocs.map((wallet) => [String(wallet.deliveryId), wallet])
+    );
+    const globalCashLimit = Number(settings?.deliveryCashLimit);
+    const fallbackCashLimit = Number.isFinite(globalCashLimit) && globalCashLimit >= 0 ? globalCashLimit : 750;
 
     // Get order counts for each delivery partner
     const orderStats = await Order.aggregate([
@@ -480,6 +522,11 @@ export const getDeliveryPartners = asyncHandler(async (req, res) => {
       // Get availability status
       const isOnline = delivery.availability?.isOnline || false;
       const availabilityStatus = isOnline ? 'Online' : 'Offline';
+      const wallet = walletMap.get(String(delivery._id));
+      const pocketBalance = Math.max(0, Number(wallet?.totalBalance) || 0);
+      const cashCollected = Math.max(0, Number(wallet?.codCashCollected ?? wallet?.cashInHand ?? 0) || 0);
+      const cashLimit = getResolvedCashLimit(delivery, fallbackCashLimit);
+      const availableCashLimit = Math.max(0, Number(cashLimit) - cashCollected);
 
       return {
         _id: delivery._id.toString(),
@@ -495,6 +542,13 @@ export const getDeliveryPartners = asyncHandler(async (req, res) => {
         deliveryId: delivery.deliveryId || 'N/A',
         isActive: delivery.isActive !== false,
         profileImage: delivery.profileImage?.url || null,
+        cashLimit,
+        cashLimitOverride: Number.isFinite(Number(delivery?.cod?.limitOverride))
+          ? Number(delivery.cod.limitOverride)
+          : null,
+        availableCashLimit,
+        cashCollected,
+        pocketBalance,
         assignedZones,
         // Include availability data when requested
         ...(includeAvailability === 'true' || includeAvailability === true ? {
@@ -695,6 +749,113 @@ export const updateDeliveryPartnerStatus = asyncHandler(async (req, res) => {
   } catch (error) {
     logger.error(`Error updating delivery partner status: ${error.message}`, { error: error.stack });
     return errorResponse(res, 500, 'Failed to update delivery partner status');
+  }
+});
+
+/**
+ * Update Delivery Partner profile fields for admin list management
+ * PATCH /api/admin/delivery-partners/:id/profile
+ */
+export const updateDeliveryPartnerProfile = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, cashLimit, availableCashLimit } = req.body || {};
+
+    const delivery = await Delivery.findById(id);
+
+    if (!delivery) {
+      return errorResponse(res, 404, 'Delivery partner not found');
+    }
+
+    let hasChanges = false;
+
+    if (name !== undefined) {
+      const trimmedName = String(name || '').trim();
+      if (!trimmedName) {
+        return errorResponse(res, 400, 'Name is required');
+      }
+      delivery.name = trimmedName;
+      hasChanges = true;
+    }
+
+    let wallet = null;
+
+    if (cashLimit !== undefined || availableCashLimit !== undefined) {
+      wallet = await DeliveryWallet.findOrCreateByDeliveryId(delivery._id);
+    }
+
+    if (cashLimit !== undefined && availableCashLimit !== undefined) {
+      return errorResponse(res, 400, 'Provide either cashLimit or availableCashLimit, not both');
+    }
+
+    if (cashLimit !== undefined) {
+      const parsedCashLimit = Number(cashLimit);
+      if (!Number.isFinite(parsedCashLimit) || parsedCashLimit < 0) {
+        return errorResponse(res, 400, 'Cash limit must be a valid non-negative number');
+      }
+
+      if (!delivery.cod) {
+        delivery.cod = {};
+      }
+
+      delivery.cod.limitOverride = parsedCashLimit > 0 ? parsedCashLimit : null;
+      hasChanges = true;
+    }
+
+    if (availableCashLimit !== undefined) {
+      const parsedAvailableCashLimit = Number(availableCashLimit);
+      if (!Number.isFinite(parsedAvailableCashLimit) || parsedAvailableCashLimit < 0) {
+        return errorResponse(res, 400, 'Available cash limit must be a valid non-negative number');
+      }
+
+      if (!delivery.cod) {
+        delivery.cod = {};
+      }
+
+      const cashCollected = Math.max(0, Number(wallet?.codCashCollected ?? wallet?.cashInHand ?? 0) || 0);
+      const resolvedLimit = parsedAvailableCashLimit + cashCollected;
+      delivery.cod.limitOverride = resolvedLimit > 0 ? resolvedLimit : null;
+      hasChanges = true;
+    }
+
+    if (!hasChanges) {
+      return errorResponse(res, 400, 'No valid profile changes provided');
+    }
+
+    await delivery.save();
+
+    const [settings, latestWallet] = await Promise.all([
+      BusinessSettings.getSettings().catch(() => null),
+      wallet ? Promise.resolve(wallet) : DeliveryWallet.findOrCreateByDeliveryId(delivery._id)
+    ]);
+    const globalCashLimit = Number(settings?.deliveryCashLimit);
+    const fallbackCashLimit = Number.isFinite(globalCashLimit) && globalCashLimit >= 0 ? globalCashLimit : 750;
+    const resolvedCashLimit = getResolvedCashLimit(delivery, fallbackCashLimit);
+    const cashCollected = Math.max(0, Number(latestWallet?.codCashCollected ?? latestWallet?.cashInHand ?? 0) || 0);
+    const pocketBalance = Math.max(0, Number(latestWallet?.totalBalance) || 0);
+
+    logger.info(`Delivery partner profile updated: ${id}`, {
+      updatedBy: req.user?._id,
+      name: delivery.name,
+      cashLimit: resolvedCashLimit
+    });
+
+    return successResponse(res, 200, 'Delivery partner profile updated successfully', {
+      delivery: {
+        _id: delivery._id.toString(),
+        name: delivery.name,
+        cashLimit: resolvedCashLimit,
+        cashLimitOverride: Number.isFinite(Number(delivery?.cod?.limitOverride))
+          ? Number(delivery.cod.limitOverride)
+          : null,
+        cashCollected,
+        availableCashLimit: Math.max(0, Number(resolvedCashLimit) - cashCollected),
+        pocketBalance
+      }
+    });
+  } catch (error) {
+    logger.error(`Error updating delivery partner profile: ${error.message}`, { error: error.stack });
+    return errorResponse(res, 500, 'Failed to update delivery partner profile');
   }
 });
 

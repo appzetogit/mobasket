@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react"
 import { useSearchParams } from "react-router-dom"
-import { Search, Download, ChevronDown, Eye, Trash2, User, Star, Settings, FileText, FileSpreadsheet, Loader2, Check, Columns, ExternalLink, Calendar, MapPin, CreditCard, Mail, Phone, Bike, FileCheck } from "lucide-react"
+import { Search, ChevronDown, Eye, Trash2, User, Star, Settings, FileText, FileSpreadsheet, Loader2, Check, Columns, ExternalLink, Calendar, MapPin, CreditCard, Mail, Phone, Bike, FileCheck, Pencil, X } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { DropdownMenu, DropdownMenuCheckboxItem, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
@@ -24,12 +24,16 @@ export default function DeliverymanList() {
   const [zonesLoading, setZonesLoading] = useState(false)
   const [availableZones, setAvailableZones] = useState([])
   const [selectedZoneIds, setSelectedZoneIds] = useState([])
+  const [rowEdits, setRowEdits] = useState({})
+  const [savingRowId, setSavingRowId] = useState("")
+  const [editingRowId, setEditingRowId] = useState("")
   const [visibleColumns, setVisibleColumns] = useState({
     si: true,
     name: true,
     contact: true,
     zone: true,
     totalOrders: true,
+    wallet: true,
     availabilityStatus: true,
     actions: true,
   })
@@ -150,6 +154,113 @@ export default function DeliverymanList() {
     // Backend already handles search, but we can do client-side filtering if needed
     return deliverymen
   }, [deliverymen])
+
+  const formatCurrency = (amount) => `Rs ${Number(amount || 0).toFixed(2)}`
+
+  const getRowEditValues = (deliveryman) => {
+    const currentEdit = rowEdits[deliveryman._id] || {}
+    return {
+      name: currentEdit.name ?? deliveryman.name ?? "",
+      availableCashLimit: currentEdit.availableCashLimit ?? String(deliveryman.availableCashLimit ?? ""),
+    }
+  }
+
+  const updateRowEdit = (deliveryId, field, value) => {
+    setRowEdits((prev) => ({
+      ...prev,
+      [deliveryId]: {
+        ...(prev[deliveryId] || {}),
+        [field]: value,
+      },
+    }))
+  }
+
+  const handleSaveRow = async (deliveryman) => {
+    const values = getRowEditValues(deliveryman)
+    const trimmedName = values.name.trim()
+    const parsedAvailableCashLimit = Number(values.availableCashLimit)
+
+    if (!trimmedName) {
+      alert("Name is required")
+      return
+    }
+
+    if (!Number.isFinite(parsedAvailableCashLimit) || parsedAvailableCashLimit < 0) {
+      alert("Available cash limit must be a valid non-negative number")
+      return
+    }
+
+    try {
+      setSavingRowId(deliveryman._id)
+      const response = await adminAPI.updateDeliveryPartnerProfile(deliveryman._id, {
+        name: trimmedName,
+        availableCashLimit: parsedAvailableCashLimit,
+      })
+      const updatedDelivery = response?.data?.data?.delivery
+
+      setDeliverymen((prev) =>
+        prev.map((item) =>
+          item._id === deliveryman._id
+            ? {
+                ...item,
+                name: updatedDelivery?.name ?? trimmedName,
+                cashLimit: updatedDelivery?.cashLimit ?? item.cashLimit,
+                cashLimitOverride: updatedDelivery?.cashLimitOverride ?? null,
+                availableCashLimit: updatedDelivery?.availableCashLimit ?? parsedAvailableCashLimit,
+                cashCollected: updatedDelivery?.cashCollected ?? item.cashCollected,
+                pocketBalance: updatedDelivery?.pocketBalance ?? item.pocketBalance,
+              }
+            : item
+        )
+      )
+
+      if (String(viewDetails?._id || "") === String(deliveryman._id || "")) {
+        setViewDetails((prev) => prev ? {
+          ...prev,
+          name: updatedDelivery?.name ?? trimmedName,
+          cashLimit: updatedDelivery?.cashLimit ?? prev.cashLimit,
+          cashLimitOverride: updatedDelivery?.cashLimitOverride ?? null,
+          availableCashLimit: updatedDelivery?.availableCashLimit ?? parsedAvailableCashLimit,
+          cashCollected: updatedDelivery?.cashCollected ?? prev.cashCollected,
+          pocketBalance: updatedDelivery?.pocketBalance ?? prev.pocketBalance,
+        } : prev)
+      }
+
+      setRowEdits((prev) => {
+        const next = { ...prev }
+        delete next[deliveryman._id]
+        return next
+      })
+      setEditingRowId("")
+
+      alert(`Updated ${updatedDelivery?.name || trimmedName}`)
+    } catch (err) {
+      console.error("Error updating delivery partner profile:", err)
+      alert(err.response?.data?.message || "Failed to update delivery partner")
+    } finally {
+      setSavingRowId("")
+    }
+  }
+
+  const handleStartEdit = (deliveryman) => {
+    setEditingRowId(deliveryman._id)
+    setRowEdits((prev) => ({
+      ...prev,
+      [deliveryman._id]: {
+        name: deliveryman.name ?? "",
+        availableCashLimit: String(deliveryman.availableCashLimit ?? ""),
+      },
+    }))
+  }
+
+  const handleCancelEdit = (deliveryId) => {
+    setEditingRowId((prev) => (prev === deliveryId ? "" : prev))
+    setRowEdits((prev) => {
+      const next = { ...prev }
+      delete next[deliveryId]
+      return next
+    })
+  }
 
   const handleView = async (deliveryman) => {
     try {
@@ -304,6 +415,7 @@ export default function DeliverymanList() {
       contact: true,
       zone: true,
       totalOrders: true,
+      wallet: true,
       availabilityStatus: true,
       actions: true,
     })
@@ -315,6 +427,7 @@ export default function DeliverymanList() {
     contact: "Contact",
     zone: "Zone",
     totalOrders: "Total Orders",
+    wallet: "Wallet",
     availabilityStatus: "Availability Status",
     actions: "Actions",
   }
@@ -434,6 +547,13 @@ export default function DeliverymanList() {
                         </div>
                       </th>
                     )}
+                    {visibleColumns.wallet && (
+                      <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                        <div className="flex items-center gap-2">
+                          <span>Wallet</span>
+                        </div>
+                      </th>
+                    )}
                     {visibleColumns.availabilityStatus && (
                       <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                         <div className="flex items-center gap-2">
@@ -463,28 +583,54 @@ export default function DeliverymanList() {
                         )}
                         {visibleColumns.name && (
                           <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              {dm.profileImage ? (
-                                <img
-                                  src={dm.profileImage}
-                                  alt={dm.name}
-                                  className="w-10 h-10 rounded-full object-cover flex-shrink-0"
-                                />
-                              ) : (
-                                <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
-                                  <span className="text-sm">👤</span>
-                                </div>
-                              )}
-                              <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium text-slate-900">{dm.name}</span>
-                                {dm.rating > 0 && (
-                                  <div className="flex items-center gap-1">
-                                    <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                                    <span className="text-xs text-slate-600">{dm.rating.toFixed(1)}</span>
+                            {(() => {
+                              const editValues = getRowEditValues(dm)
+                              const isEditing = editingRowId === dm._id
+                              const isSaving = savingRowId === dm._id
+                              const isDirty =
+                                editValues.name.trim() !== String(dm.name || "").trim() ||
+                                Number(editValues.availableCashLimit) !== Number(dm.availableCashLimit ?? 0)
+
+                              return (
+                                <div className="flex items-center gap-3">
+                                  {dm.profileImage ? (
+                                    <img
+                                      src={dm.profileImage}
+                                      alt={dm.name}
+                                      className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                                    />
+                                  ) : (
+                                    <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
+                                      <span className="text-sm">DB</span>
+                                    </div>
+                                  )}
+                                  <div className="min-w-[240px]">
+                                    <div className="flex items-center gap-2">
+                                      {isEditing ? (
+                                        <input
+                                          type="text"
+                                          value={editValues.name}
+                                          onChange={(e) => updateRowEdit(dm._id, "name", e.target.value)}
+                                          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
+                                          placeholder="Delivery partner name"
+                                        />
+                                      ) : (
+                                        <span className="text-sm font-medium text-slate-900">{dm.name}</span>
+                                      )}
+                                    </div>
+                                    <div className="mt-1 flex items-center gap-2">
+                                      <span className="text-xs text-slate-500">{dm.deliveryId}</span>
+                                      {dm.rating > 0 && (
+                                        <div className="flex items-center gap-1">
+                                          <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
+                                          <span className="text-xs text-slate-600">{dm.rating.toFixed(1)}</span>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
-                                )}
-                              </div>
-                            </div>
+                                </div>
+                              )
+                            })()}
                           </td>
                         )}
                         {visibleColumns.contact && (
@@ -518,6 +664,49 @@ export default function DeliverymanList() {
                             <span className="text-sm text-slate-700">{dm.totalOrders || 0}</span>
                           </td>
                         )}
+                        {visibleColumns.wallet && (
+                          <td className="px-6 py-4">
+                            {(() => {
+                              const editValues = getRowEditValues(dm)
+                              const isEditing = editingRowId === dm._id
+                              return (
+                                <div className="min-w-[220px] space-y-2">
+                                  <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                    <div className="text-xs text-slate-500">Pocket Balance</div>
+                                    <div className="text-sm font-semibold text-slate-900">{formatCurrency(dm.pocketBalance)}</div>
+                                  </div>
+                                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+                                    <div className="text-xs text-emerald-700">Available Cash Limit</div>
+                                    <div className="text-sm font-semibold text-emerald-900">{formatCurrency(dm.availableCashLimit)}</div>
+                                    <div className="mt-1 text-[11px] text-emerald-800">
+                                      Collected: {formatCurrency(dm.cashCollected)}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                      Available Cash Limit
+                                    </label>
+                                    {isEditing ? (
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={editValues.availableCashLimit}
+                                        onChange={(e) => updateRowEdit(dm._id, "availableCashLimit", e.target.value)}
+                                        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
+                                        placeholder="Available cash limit"
+                                      />
+                                    ) : (
+                                      <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700">
+                                        {formatCurrency(dm.availableCashLimit)}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )
+                            })()}
+                          </td>
+                        )}
                         {visibleColumns.availabilityStatus && (
                           <td className="px-6 py-4">
                             <div className="flex flex-col">
@@ -530,6 +719,34 @@ export default function DeliverymanList() {
                         {visibleColumns.actions && (
                           <td className="px-6 py-4 whitespace-nowrap text-center">
                             <div className="flex items-center justify-center gap-2">
+                              {editingRowId === dm._id ? (
+                                <>
+                                  <button
+                                    onClick={() => handleSaveRow(dm)}
+                                    disabled={savingRowId === dm._id}
+                                    className="p-1.5 rounded bg-slate-900 text-white hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Save"
+                                  >
+                                    {savingRowId === dm._id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                                  </button>
+                                  <button
+                                    onClick={() => handleCancelEdit(dm._id)}
+                                    disabled={savingRowId === dm._id}
+                                    className="p-1.5 rounded bg-slate-100 text-slate-700 hover:bg-slate-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    title="Cancel"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => handleStartEdit(dm)}
+                                  className="p-1.5 rounded bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors"
+                                  title="Edit details"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                </button>
+                              )}
                               <DropdownMenu
                                 open={openZoneMenuForId === String(dm._id)}
                                 onOpenChange={(open) => handleZoneMenuOpenChange(dm, open)}
@@ -718,6 +935,10 @@ export default function DeliverymanList() {
                       <p className="text-sm font-medium text-slate-900 mt-1">{viewDetails.deliveryId || "N/A"}</p>
                     </div>
                     <div>
+                      <label className="text-xs font-semibold text-slate-500 uppercase">Pocket Balance</label>
+                      <p className="text-sm font-medium text-slate-900 mt-1">{formatCurrency(viewDetails.pocketBalance)}</p>
+                    </div>
+                    <div>
                       <label className="text-xs font-semibold text-slate-500 uppercase">Status</label>
                       <span className={`inline-block px-2 py-1 rounded-full text-xs font-medium mt-1 ${viewDetails.status === 'pending' ? 'bg-blue-100 text-blue-700' :
                           viewDetails.status === 'approved' || viewDetails.status === 'active' ? 'bg-green-100 text-green-700' :
@@ -726,6 +947,13 @@ export default function DeliverymanList() {
                         }`}>
                         {viewDetails.status === 'blocked' ? 'Rejected' : (viewDetails.status?.charAt(0).toUpperCase() + viewDetails.status?.slice(1) || "N/A")}
                       </span>
+                    </div>
+                    <div>
+                      <label className="text-xs font-semibold text-slate-500 uppercase">Available Cash Limit</label>
+                      <p className="text-sm font-medium text-slate-900 mt-1">{formatCurrency(viewDetails.availableCashLimit)}</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Configured limit: {formatCurrency(viewDetails.cashLimit)} | Collected: {formatCurrency(viewDetails.cashCollected)}
+                      </p>
                     </div>
                     {viewDetails.rejectionReason && (
                       <div className="col-span-2">

@@ -1561,6 +1561,10 @@ export const adminAPI = {
     return apiClient.patch(API_ENDPOINTS.ADMIN.DELIVERY_PARTNER_STATUS.replace(':id', id), payload);
   },
 
+  updateDeliveryPartnerProfile: (id, data = {}) => {
+    return apiClient.patch(`/admin/delivery-partners/${id}/profile`, data);
+  },
+
   updateDeliveryPartnerZones: (id, zoneIds = []) => {
     return apiClient.patch(`/admin/delivery-partners/${id}/zones`, { zoneIds });
   },
