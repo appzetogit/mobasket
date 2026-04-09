@@ -3,12 +3,14 @@ import Zone from '../models/Zone.js';
 import Order from '../../order/models/Order.js';
 import Restaurant from '../../restaurant/models/Restaurant.js';
 import RestaurantWallet from '../../restaurant/models/RestaurantWallet.js';
+import RestaurantCommission from '../models/RestaurantCommission.js';
 import GroceryStore from '../../grocery/models/GroceryStore.js';
 import OutletTimings from '../../restaurant/models/OutletTimings.js';
 import Offer from '../../restaurant/models/Offer.js';
 import AdminCommission from '../models/AdminCommission.js';
 import OrderSettlement from '../../order/models/OrderSettlement.js';
 import AdminWallet from '../models/AdminWallet.js';
+import WithdrawalRequest from '../../restaurant/models/WithdrawalRequest.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
@@ -40,6 +42,153 @@ const buildCityRegex = (value = '') => {
   if (!trimmed) return null;
   const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(escaped, 'i');
+};
+
+const buildRestaurantFinanceIdVariations = (restaurant = null) => {
+  const variations = new Set();
+
+  [restaurant?._id, restaurant?.restaurantId, restaurant?.id, restaurant?.slug].forEach((value) => {
+    const normalized = String(value || '').trim();
+    if (normalized) {
+      variations.add(normalized);
+    }
+  });
+
+  return Array.from(variations);
+};
+
+const calculateCommissionAmountForRestaurantOrder = (commissionDoc = null, orderAmount = 0) => {
+  const normalizedAmount = Number(orderAmount) || 0;
+
+  if (!commissionDoc?.status) {
+    return 0;
+  }
+
+  const sortedRules = [...(commissionDoc.commissionRules || [])]
+    .filter((rule) => Boolean(rule?.isActive))
+    .sort((a, b) => {
+      if ((b?.priority || 0) !== (a?.priority || 0)) {
+        return (b?.priority || 0) - (a?.priority || 0);
+      }
+      return (a?.minOrderAmount || 0) - (b?.minOrderAmount || 0);
+    });
+
+  const matchingRule = sortedRules.find((rule) => {
+    if (normalizedAmount < Number(rule?.minOrderAmount || 0)) return false;
+    if (rule?.maxOrderAmount === null || rule?.maxOrderAmount === undefined) return true;
+    return normalizedAmount <= Number(rule.maxOrderAmount || 0);
+  });
+
+  const commissionType = matchingRule?.type || commissionDoc?.defaultCommission?.type || 'percentage';
+  const commissionValue = Number(matchingRule?.value ?? commissionDoc?.defaultCommission?.value ?? 10) || 0;
+
+  if (commissionType === 'amount') {
+    return Math.round(commissionValue * 100) / 100;
+  }
+
+  return Math.round(((normalizedAmount * commissionValue) / 100) * 100) / 100;
+};
+
+const buildRestaurantOrderPlatformQuery = (restaurant = null) =>
+  restaurant?.platform === 'mogrocery'
+    ? { restaurantPlatform: 'mogrocery' }
+    : {
+        $or: [
+          { restaurantPlatform: 'mofood' },
+          { restaurantPlatform: { $exists: false } },
+          { restaurantPlatform: null }
+        ]
+      };
+
+const calculateRestaurantCurrentCycleFinance = async (restaurant = null, cycleStart = null, cycleEnd = null) => {
+  const restaurantKey = String(restaurant?._id || '').trim();
+  if (!restaurantKey || !cycleStart || !cycleEnd) {
+    return {
+      totalOrderValue: 0,
+      totalCommission: 0,
+      estimatedPayout: 0,
+    };
+  }
+
+  const restaurantIdVariations = buildRestaurantFinanceIdVariations(restaurant);
+  if (restaurantIdVariations.length === 0) {
+    return {
+      totalOrderValue: 0,
+      totalCommission: 0,
+      estimatedPayout: 0,
+    };
+  }
+
+  const orderPlatformQuery = buildRestaurantOrderPlatformQuery(restaurant);
+  const commissionRestaurantIds = restaurantIdVariations
+    .filter((value) => mongoose.Types.ObjectId.isValid(value))
+    .map((value) => new mongoose.Types.ObjectId(value));
+
+  const [restaurantCommission, activeWithdrawals] = await Promise.all([
+    RestaurantCommission.findOne({
+      status: true,
+      $or: [
+        ...(commissionRestaurantIds.length > 0 ? [{ restaurant: { $in: commissionRestaurantIds } }] : []),
+        { restaurantId: { $in: restaurantIdVariations } }
+      ]
+    }).lean(),
+    WithdrawalRequest.find({
+      restaurantId: restaurant._id,
+      status: { $in: ['Pending', 'Approved'] }
+    })
+      .select('amount')
+      .lean(),
+  ]);
+
+  let currentCycleOrders = await Order.find({
+    ...orderPlatformQuery,
+    restaurantId: { $in: restaurantIdVariations },
+    status: 'delivered',
+    $or: [
+      { deliveredAt: { $gte: cycleStart, $lte: cycleEnd } },
+      { 'tracking.delivered.timestamp': { $gte: cycleStart, $lte: cycleEnd } }
+    ]
+  })
+    .select('pricing')
+    .lean();
+
+  if (currentCycleOrders.length === 0) {
+    currentCycleOrders = await Order.find({
+      ...orderPlatformQuery,
+      restaurantId: { $in: restaurantIdVariations },
+      status: 'delivered',
+      createdAt: { $gte: cycleStart, $lte: cycleEnd }
+    })
+      .select('pricing')
+      .lean();
+  }
+
+  const commissionConfigured = Boolean(restaurantCommission?.status);
+  let totalOrderValue = 0;
+  let totalCommission = 0;
+
+  currentCycleOrders.forEach((order) => {
+    const foodPrice = (Number(order?.pricing?.subtotal) || 0) - (Number(order?.pricing?.discount) || 0);
+    totalOrderValue += foodPrice;
+    totalCommission += calculateCommissionAmountForRestaurantOrder(restaurantCommission, foodPrice);
+  });
+
+  const totalWithdrawals = activeWithdrawals.reduce(
+    (sum, entry) => sum + (Number(entry?.amount) || 0),
+    0
+  );
+  const currentCyclePayout = commissionConfigured
+    ? Math.round((totalOrderValue - totalCommission) * 100) / 100
+    : 0;
+  const estimatedPayout = commissionConfigured
+    ? Math.max(0, Math.round((currentCyclePayout - totalWithdrawals) * 100) / 100)
+    : 0;
+
+  return {
+    totalOrderValue: Math.round(totalOrderValue * 100) / 100,
+    totalCommission: Math.round(totalCommission * 100) / 100,
+    estimatedPayout,
+  };
 };
 
 const isSuperAdmin = (admin = null) =>
@@ -1668,20 +1817,39 @@ export const getRestaurants = asyncHandler(async (req, res) => {
     const restaurantIds = restaurants
       .map((restaurant) => restaurant?._id)
       .filter(Boolean);
+    const currentCycleNow = new Date();
+    const currentCycleDay = currentCycleNow.getDay();
+    const currentCycleDaysFromMonday = currentCycleDay === 0 ? 6 : currentCycleDay - 1;
+    const currentCycleStart = new Date(currentCycleNow);
+    currentCycleStart.setDate(currentCycleNow.getDate() - currentCycleDaysFromMonday);
+    currentCycleStart.setHours(0, 0, 0, 0);
+    const currentCycleEnd = new Date(currentCycleStart);
+    currentCycleEnd.setDate(currentCycleStart.getDate() + 6);
+    currentCycleEnd.setHours(23, 59, 59, 999);
 
-    const wallets = restaurantIds.length > 0
-      ? await RestaurantWallet.find({ restaurantId: { $in: restaurantIds } })
-        .select('restaurantId totalBalance totalEarned totalWithdrawn')
-        .lean()
-      : [];
-    const outletTimingDocs = restaurantIds.length > 0
-      ? await OutletTimings.find({
-        restaurantId: { $in: restaurantIds },
-        isActive: true,
-      })
-        .select('restaurantId timings')
-        .lean()
-      : [];
+    const [wallets, outletTimingDocs, financeSummaries] = await Promise.all([
+      restaurantIds.length > 0
+        ? RestaurantWallet.find({ restaurantId: { $in: restaurantIds } })
+          .select('restaurantId totalBalance totalEarned totalWithdrawn')
+          .lean()
+        : [],
+      restaurantIds.length > 0
+        ? OutletTimings.find({
+          restaurantId: { $in: restaurantIds },
+          isActive: true,
+        })
+          .select('restaurantId timings')
+          .lean()
+        : [],
+      restaurants.length > 0
+        ? Promise.all(
+          restaurants.map(async (restaurant) => ([
+            String(restaurant?._id || ''),
+            await calculateRestaurantCurrentCycleFinance(restaurant, currentCycleStart, currentCycleEnd),
+          ]))
+        )
+        : []
+    ]);
 
     const walletByRestaurantId = new Map(
       wallets.map((wallet) => [
@@ -1696,6 +1864,7 @@ export const getRestaurants = asyncHandler(async (req, res) => {
     const timingByRestaurantId = new Map(
       outletTimingDocs.map((doc) => [String(doc.restaurantId), doc.timings || []])
     );
+    const financeSummaryByRestaurantId = new Map(financeSummaries);
 
     const normalizedRestaurants = restaurants.map((restaurant) => ({
       ...normalizeRestaurantAddressRecord(restaurant),
@@ -1708,6 +1877,11 @@ export const getRestaurants = asyncHandler(async (req, res) => {
         totalBalance: 0,
         totalEarned: 0,
         totalWithdrawn: 0,
+      },
+      finance: financeSummaryByRestaurantId.get(String(restaurant._id)) || {
+        totalOrderValue: 0,
+        totalCommission: 0,
+        estimatedPayout: 0,
       },
     }));
 
@@ -1723,6 +1897,46 @@ export const getRestaurants = asyncHandler(async (req, res) => {
   } catch (error) {
     logger.error(`Error fetching restaurants: ${error.message}`, { error: error.stack });
     return errorResponse(res, 500, 'Failed to fetch restaurants');
+  }
+});
+
+export const getRestaurantFinanceForAdmin = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const restaurant = await Restaurant.findById(id).lean();
+
+    if (!restaurant) {
+      return errorResponse(res, 404, 'Restaurant not found');
+    }
+
+    const scopedZones = await getAdminScopedZones(req.user, 'mofood');
+    if (!canAdminAccessEntity(req.user, restaurant, scopedZones)) {
+      return errorResponse(res, 403, 'Access denied for restaurants outside your assigned zones');
+    }
+
+    const currentCycleNow = new Date();
+    const currentCycleDay = currentCycleNow.getDay();
+    const currentCycleDaysFromMonday = currentCycleDay === 0 ? 6 : currentCycleDay - 1;
+    const currentCycleStart = new Date(currentCycleNow);
+    currentCycleStart.setDate(currentCycleNow.getDate() - currentCycleDaysFromMonday);
+    currentCycleStart.setHours(0, 0, 0, 0);
+    const currentCycleEnd = new Date(currentCycleStart);
+    currentCycleEnd.setDate(currentCycleStart.getDate() + 6);
+    currentCycleEnd.setHours(23, 59, 59, 999);
+
+    const finance = await calculateRestaurantCurrentCycleFinance(
+      restaurant,
+      currentCycleStart,
+      currentCycleEnd
+    );
+
+    return successResponse(res, 200, 'Restaurant finance retrieved successfully', {
+      restaurantId: String(restaurant._id),
+      finance,
+    });
+  } catch (error) {
+    logger.error(`Error fetching restaurant finance for admin: ${error.message}`, { error: error.stack });
+    return errorResponse(res, 500, 'Failed to fetch restaurant finance');
   }
 });
 
@@ -1825,6 +2039,8 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
       ownerEmail,
       primaryContactNumber,
       isAcceptingOrders,
+      zoneId,
+      zoneRank,
       location,
       profileImage,
       outletTimings
@@ -1875,6 +2091,32 @@ export const updateRestaurant = asyncHandler(async (req, res) => {
     }
     if (typeof isAcceptingOrders === 'boolean') {
       updateData.isAcceptingOrders = isAcceptingOrders;
+    }
+
+    if (zoneId !== undefined) {
+      const normalizedZoneId = String(zoneId || '').trim();
+      updateData.zoneId = mongoose.Types.ObjectId.isValid(normalizedZoneId)
+        ? new mongoose.Types.ObjectId(normalizedZoneId)
+        : null;
+    }
+
+    if (zoneRank !== undefined) {
+      const effectiveZoneId = String(zoneId || restaurant.zoneId || '').trim();
+      const parsedZoneRank = Number(zoneRank);
+
+      if (effectiveZoneId && mongoose.Types.ObjectId.isValid(effectiveZoneId) && Number.isFinite(parsedZoneRank) && parsedZoneRank >= 0) {
+        const normalizedZoneRanks = Array.isArray(restaurant.zoneRanks) ? [...restaurant.zoneRanks] : [];
+        const nextZoneRanks = normalizedZoneRanks.filter(
+          (entry) => String(entry?.zoneId || '') !== effectiveZoneId
+        );
+
+        nextZoneRanks.push({
+          zoneId: new mongoose.Types.ObjectId(effectiveZoneId),
+          rank: parsedZoneRank,
+        });
+
+        updateData.zoneRanks = nextZoneRanks;
+      }
     }
 
     if (location && typeof location === 'object') {

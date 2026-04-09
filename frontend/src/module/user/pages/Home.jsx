@@ -105,7 +105,7 @@ const INITIAL_TOP_BRAND_RENDER_COUNT = 8;
 const INITIAL_RESTAURANT_RENDER_COUNT = 6;
 const EARLY_RESTAURANT_PREFETCH_COUNT = 16;
 const HOME_RESTAURANTS_CACHE_TTL_MS = 3 * 60 * 1000;
-const HOME_RESTAURANTS_CACHE_VERSION = "v1";
+const HOME_RESTAURANTS_CACHE_VERSION = "v3";
 const HOME_ZONE_SELECTION_STORAGE_KEY = "user.home.selectedZoneId.v1";
 
 const isUsableCityValue = (value) => {
@@ -1775,6 +1775,7 @@ export default function Home() {
                 offer: restaurant.offer || "Flat ₹50 OFF above ₹199", // Use from API or default
                 slug: restaurant.slug,
                 restaurantId: restaurant.restaurantId,
+                zoneRank: Number(restaurant.zoneRank || 0),
                 location: restaurant.location, // Store location for distance recalculation
                 isActive:
                   resolveBooleanLike(restaurant.isActive, restaurant.status) !== false,
@@ -1794,12 +1795,19 @@ export default function Home() {
           // Sort restaurants by distance (nearby first) - only if user location is available
           if (userLat && userLng) {
             transformedRestaurants.sort((a, b) => {
-              // Available restaurants first, then unavailable
               const aAvailable = a.isActive && a.isAcceptingOrders;
               const bAvailable = b.isActive && b.isAcceptingOrders;
 
               if (aAvailable !== bAvailable) {
-                return aAvailable ? -1 : 1; // Available restaurants come first
+                return aAvailable ? -1 : 1;
+              }
+
+              const aZoneRank = Number(a.zoneRank || 0);
+              const bZoneRank = Number(b.zoneRank || 0);
+              if (aZoneRank !== bZoneRank) {
+                if (aZoneRank <= 0) return 1;
+                if (bZoneRank <= 0) return -1;
+                return aZoneRank - bZoneRank;
               }
 
               // If both have same availability, sort by distance
@@ -2124,15 +2132,21 @@ export default function Home() {
     } else if (sortBy === "rating-low") {
       filtered.sort((a, b) => a.rating - b.rating);
     } else {
-      // Default sorting: Available restaurants first, then by distance (nearby first)
-      // This ensures all restaurants in zone are shown, but nearby ones appear first
+      // Default sorting: online restaurants first, then zone rank, then nearby first.
       filtered.sort((a, b) => {
-        // Available restaurants first, then unavailable
         const aAvailable = a.isActive && a.isAcceptingOrders;
         const bAvailable = b.isActive && b.isAcceptingOrders;
 
         if (aAvailable !== bAvailable) {
-          return aAvailable ? -1 : 1; // Available restaurants come first
+          return aAvailable ? -1 : 1;
+        }
+
+        const aZoneRank = Number(a.zoneRank || 0);
+        const bZoneRank = Number(b.zoneRank || 0);
+        if (aZoneRank !== bZoneRank) {
+          if (aZoneRank <= 0) return 1;
+          if (bZoneRank <= 0) return -1;
+          return aZoneRank - bZoneRank;
         }
 
         // If both have same availability, sort by distance

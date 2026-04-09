@@ -48,6 +48,31 @@ const getCurrentMonthDateRangeLabel = () => {
   return `${formatDateForRangeLabel(start)} - ${formatDateForRangeLabel(end)}`
 }
 
+const getLastWeekDateRange = () => {
+  const today = new Date()
+  today.setHours(23, 59, 59, 999)
+
+  const currentDay = today.getDay()
+  const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1
+  const thisWeekStart = new Date(today)
+  thisWeekStart.setDate(today.getDate() - daysFromMonday)
+  thisWeekStart.setHours(0, 0, 0, 0)
+
+  const lastWeekStart = new Date(thisWeekStart)
+  lastWeekStart.setDate(thisWeekStart.getDate() - 7)
+  lastWeekStart.setHours(0, 0, 0, 0)
+
+  const lastWeekEnd = new Date(lastWeekStart)
+  lastWeekEnd.setDate(lastWeekStart.getDate() + 6)
+  lastWeekEnd.setHours(23, 59, 59, 999)
+
+  return {
+    start: lastWeekStart,
+    end: lastWeekEnd,
+    label: `${formatDateForRangeLabel(lastWeekStart)} - ${formatDateForRangeLabel(lastWeekEnd)}`,
+  }
+}
+
 const getDisplayedOrderEarning = (order) => {
   const payout = Number(order?.payout)
   if (Number.isFinite(payout)) {
@@ -75,7 +100,7 @@ export default function HubFinance() {
     const tabParam = searchParams.get("tab")
     return tabParam === "invoices" ? "invoices" : "payouts"
   })
-  const [selectedDateRange, setSelectedDateRange] = useState(() => getCurrentMonthDateRangeLabel())
+  const [selectedDateRange, setSelectedDateRange] = useState(() => getLastWeekDateRange().label)
   const [showDownloadMenu, setShowDownloadMenu] = useState(false)
   const [showDateRangePicker, setShowDateRangePicker] = useState(false)
   const downloadMenuRef = useRef(null)
@@ -323,6 +348,9 @@ export default function HubFinance() {
       periodLabel: usePastOrders ? selectedDateRange : "Current cycle",
     }
   }, [financeData, pastCyclesData, selectedDateRange])
+
+  const displayedPastCycleOrders = Array.isArray(pastCyclesData?.orders) ? pastCyclesData.orders : []
+  const displayedCurrentCycleOrders = Array.isArray(financeData?.currentCycle?.orders) ? financeData.currentCycle.orders : []
 
   // Parse date range string to extract start and end dates
   const parseDateRange = (dateRangeStr) => {
@@ -1092,6 +1120,20 @@ export default function HubFinance() {
                     </AnimatePresence>
                   </div>
                 </div>
+                {!loadingPastCycles && (
+                  <div className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
+                    <div>
+                      <p className="text-xs text-gray-500">Selected range</p>
+                      <p className="text-sm font-medium text-gray-900">{selectedDateRange}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500">Orders in range</p>
+                      <p className="text-sm font-semibold text-gray-900">
+                        {pastCyclesData?.totalOrders || displayedPastCycleOrders.length || 0}
+                      </p>
+                    </div>
+                  </div>
+                )}
                 {loadingPastCycles ? (
                   <div className="bg-white rounded-lg p-4">
                     <p className="text-sm text-gray-600 text-center">Loading past cycles...</p>
@@ -1106,6 +1148,12 @@ export default function HubFinance() {
                     {/* Show past cycles orders if available */}
                     {pastCyclesData && pastCyclesData.orders && pastCyclesData.orders.length > 0 && (
                       <div className="bg-white rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between border-b border-gray-200 pb-3">
+                          <p className="text-sm font-semibold text-gray-900">Orders in selected past cycle</p>
+                          <p className="text-xs text-gray-500">
+                            {pastCyclesData.totalOrders || displayedPastCycleOrders.length} orders
+                          </p>
+                        </div>
                         {pastCyclesData.orders.map((order, index) => (
                           <div key={order.orderId || index} className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0">
                             <div className="flex justify-between items-start">
@@ -1133,6 +1181,12 @@ export default function HubFinance() {
                     {/* Show current cycle orders if past cycles data is not available or has no orders */}
                     {(!pastCyclesData || !pastCyclesData.orders || pastCyclesData.orders.length === 0) && !loadingPastCycles && financeData?.currentCycle?.orders && financeData.currentCycle.orders.length > 0 && (
                       <div className="bg-white rounded-lg p-4 space-y-3">
+                        <div className="flex items-center justify-between border-b border-gray-200 pb-3">
+                          <p className="text-sm font-semibold text-gray-900">Current cycle orders</p>
+                          <p className="text-xs text-gray-500">
+                            {financeData.currentCycle.totalOrders || displayedCurrentCycleOrders.length} orders
+                          </p>
+                        </div>
                         {financeData.currentCycle.orders.map((order, index) => (
                           <div key={order.orderId || index} className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0">
                             <div className="flex justify-between items-start">

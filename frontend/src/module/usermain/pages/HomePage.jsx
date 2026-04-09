@@ -27,7 +27,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { API_BASE_URL } from "@/lib/api/config";
 
-const HOME_CACHE_VERSION = "v1";
+const HOME_CACHE_VERSION = "v2";
 const ZONE_CACHE_TTL_MS = 5 * 60 * 1000;
 const RESTAURANT_CACHE_TTL_MS = 3 * 60 * 1000;
 

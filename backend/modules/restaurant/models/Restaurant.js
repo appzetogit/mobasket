@@ -32,6 +32,22 @@ const deliveryTimingsSchema = new mongoose.Schema({
   closingTime: String,
 });
 
+const zoneRankSchema = new mongoose.Schema(
+  {
+    zoneId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Zone',
+      required: true,
+    },
+    rank: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+  },
+  { _id: false }
+);
+
 const restaurantSchema = new mongoose.Schema(
   {
     restaurantId: {
@@ -125,6 +141,16 @@ const restaurantSchema = new mongoose.Schema(
     },
     primaryContactNumber: String,
     location: locationSchema,
+    zoneId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Zone',
+      default: null,
+      index: true,
+    },
+    zoneRanks: {
+      type: [zoneRankSchema],
+      default: [],
+    },
     profileImage: {
       url: String,
       publicId: String,
@@ -317,6 +343,7 @@ restaurantSchema.index(
   }
 );
 restaurantSchema.index({ googleId: 1 }, { unique: true, sparse: true });
+restaurantSchema.index({ zoneId: 1, isActive: 1 });
 
 // Hash password before saving
 restaurantSchema.pre('save', async function (next) {

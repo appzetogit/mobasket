@@ -1,6 +1,17 @@
 import { X } from "lucide-react"
 
-export default function FilterPanel({ isOpen, onClose, filters, setFilters, onApply, onReset, restaurants = [] }) {
+export default function FilterPanel({
+  isOpen,
+  onClose,
+  filters,
+  setFilters,
+  onApply,
+  onReset,
+  restaurants = [],
+  deliveryPartners = [],
+  deliveryStatuses = [],
+  zones = [],
+}) {
   if (!isOpen) return null
 
   return (
@@ -63,6 +74,60 @@ export default function FilterPanel({ isOpen, onClose, filters, setFilters, onAp
               ))}
             </div>
           </div>
+
+          {deliveryPartners.length > 0 && (
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Delivery Partner
+              </label>
+              <select
+                value={filters.deliveryPartner || ""}
+                onChange={(e) => setFilters(prev => ({ ...prev, deliveryPartner: e.target.value }))}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="">All Delivery Partners</option>
+                {deliveryPartners.map((partner) => (
+                  <option key={partner} value={partner}>{partner}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {deliveryStatuses.length > 0 && (
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Delivery Status
+              </label>
+              <select
+                value={filters.deliveryStatus || ""}
+                onChange={(e) => setFilters(prev => ({ ...prev, deliveryStatus: e.target.value }))}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="">All Delivery Statuses</option>
+                {deliveryStatuses.map((status) => (
+                  <option key={status} value={status}>{status}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {zones.length > 0 && (
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Zone
+              </label>
+              <select
+                value={filters.zone || ""}
+                onChange={(e) => setFilters(prev => ({ ...prev, zone: e.target.value }))}
+                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="">All Zones</option>
+                {zones.map((zone) => (
+                  <option key={zone} value={zone}>{zone}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Amount Range */}
           <div className="grid grid-cols-2 gap-4">

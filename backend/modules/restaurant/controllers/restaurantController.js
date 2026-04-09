@@ -207,6 +207,7 @@ const RESTAURANT_LIST_LITE_SELECT = [
   'featuredDish',
   'featuredPrice',
   'zoneId',
+  'zoneRanks',
   'isActive',
   'isAcceptingOrders',
 ].join(' ');
@@ -491,8 +492,12 @@ export const getRestaurants = async (req, res) => {
         (userZoneIdNormalized && restaurantZoneIds.includes(userZoneIdNormalized) && userZoneIdNormalized) ||
         restaurantZoneIds[0] ||
         null;
+      const matchedZoneRank = Array.isArray(restaurant.zoneRanks)
+        ? restaurant.zoneRanks.find((entry) => String(entry?.zoneId || '') === String(preferredZoneId || ''))
+        : null;
       restaurant.zoneId = preferredZoneId;
       restaurant.zoneIds = restaurantZoneIds;
+      restaurant.zoneRank = Number(matchedZoneRank?.rank || 0);
 
       return true;
     });
@@ -598,6 +603,17 @@ export const getRestaurants = async (req, res) => {
     if (liteResponse) {
       restaurants = restaurants.map(sanitizeRestaurantListEntry);
     }
+
+    restaurants.sort((a, b) => {
+      const aRank = Number(a?.zoneRank || 0);
+      const bRank = Number(b?.zoneRank || 0);
+      if (aRank !== bRank) {
+        if (aRank <= 0) return 1;
+        if (bRank <= 0) return -1;
+        return aRank - bRank;
+      }
+      return 0;
+    });
 
     // Get total count (before filtering by string fields)
     const total = restaurants.length;

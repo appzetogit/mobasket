@@ -309,6 +309,7 @@ export const API_ENDPOINTS = {
     USER_STATUS: '/admin/users/:id/status',
     RESTAURANTS: '/admin/restaurants',
     RESTAURANT_BY_ID: '/admin/restaurants/:id',
+    RESTAURANT_FINANCE: '/admin/restaurants/:id/finance',
     RESTAURANT_ANALYTICS: '/admin/restaurant-analytics/:restaurantId',
     RESTAURANT_ADDON_DELETE: '/admin/restaurants/:restaurantId/addons/:addonId',
     RESTAURANT_STATUS: '/admin/restaurants/:id/status',

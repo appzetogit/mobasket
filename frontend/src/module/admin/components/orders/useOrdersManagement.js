@@ -2,6 +2,82 @@ import { useState, useMemo } from "react"
 import { exportToCSV, exportToExcel, exportToPDF, exportToJSON } from "./ordersExportUtils"
 import { downloadOrderInvoicePdf } from "./invoicePdfUtils"
 
+const normalizeValue = (value) => String(value || "").toLowerCase().replace(/[\s_-]+/g, " ").trim()
+
+const toTitleCase = (value) =>
+  String(value || "")
+    .split(" ")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
+
+const getOrderZoneLabel = (order) => {
+  const candidates = [
+    order?.zoneName,
+    order?.zone,
+    order?.zoneId?.name,
+    order?.zoneId?.zoneName,
+    order?.zoneId?.displayName,
+    order?.restaurantZone,
+    order?.deliveryZone,
+  ]
+
+  const label = candidates.find((value) => String(value || "").trim())
+  return label ? String(label).trim() : ""
+}
+
+const getOrderDeliveryPartnerLabel = (order) => {
+  const candidates = [
+    order?.deliveryPartnerName,
+    order?.assignmentInfo?.acceptedByName,
+    order?.deliveryPartner?.name,
+    order?.deliveryBoy?.name,
+  ]
+
+  const label = candidates.find((value) => String(value || "").trim())
+  return label ? String(label).trim() : ""
+}
+
+const getOrderDeliveryStatusLabel = (order) => {
+  const rawStatus = String(
+    order?.deliveryState?.status ||
+    order?.deliveryStatus ||
+    ""
+  ).trim()
+
+  const rawPhase = String(order?.deliveryState?.currentPhase || "").trim()
+  const backendOrderStatus = String(order?.status || "").trim().toLowerCase()
+
+  const explicitState = rawStatus || rawPhase
+  if (explicitState) {
+    const normalized = normalizeValue(explicitState)
+    const labelMap = {
+      pending: "Pending",
+      assigned: "Assigned",
+      accepted: "Accepted",
+      "en route to pickup": "En Route To Pickup",
+      "at pickup": "At Pickup",
+      "reached pickup": "At Pickup",
+      "en route to delivery": "Out for Delivery",
+      "at delivery": "At Delivery",
+      "reached drop": "At Delivery",
+      completed: "Delivered",
+      delivered: "Delivered",
+      cancelled: "Cancelled",
+      canceled: "Cancelled",
+      "order confirmed": "Accepted",
+    }
+
+    return labelMap[normalized] || toTitleCase(normalized)
+  }
+
+  if (backendOrderStatus === "out_for_delivery") return "Out for Delivery"
+  if (backendOrderStatus === "delivered") return "Delivered"
+  if (getOrderDeliveryPartnerLabel(order)) return "Assigned"
+
+  return ""
+}
+
 export function useOrdersManagement(orders, statusKey, title) {
   const [searchQuery, setSearchQuery] = useState("")
   const [isFilterOpen, setIsFilterOpen] = useState(false)
@@ -11,6 +87,9 @@ export function useOrdersManagement(orders, statusKey, title) {
   const [filters, setFilters] = useState({
     paymentStatus: "",
     deliveryType: "",
+    deliveryPartner: "",
+    deliveryStatus: "",
+    zone: "",
     minAmount: "",
     maxAmount: "",
     fromDate: "",
@@ -37,10 +116,33 @@ export function useOrdersManagement(orders, statusKey, title) {
     return [...new Set(orders.map(o => o.restaurant))]
   }, [orders])
 
+  const zones = useMemo(() => {
+    return [...new Set(
+      orders
+        .map((order) => getOrderZoneLabel(order))
+        .filter(Boolean)
+    )].sort((a, b) => a.localeCompare(b))
+  }, [orders])
+
+  const deliveryPartners = useMemo(() => {
+    return [...new Set(
+      orders
+        .map((order) => getOrderDeliveryPartnerLabel(order))
+        .filter(Boolean)
+    )].sort((a, b) => a.localeCompare(b))
+  }, [orders])
+
+  const deliveryStatuses = useMemo(() => {
+    return [...new Set(
+      orders
+        .map((order) => getOrderDeliveryStatusLabel(order))
+        .filter(Boolean)
+    )].sort((a, b) => a.localeCompare(b))
+  }, [orders])
+
   // Apply search and filters
   const filteredOrders = useMemo(() => {
     let result = [...orders]
-    const normalize = (value) => String(value || "").toLowerCase().replace(/[\s_-]+/g, " ").trim()
 
     // Apply search query
     if (searchQuery.trim()) {
@@ -51,12 +153,16 @@ export function useOrdersManagement(orders, statusKey, title) {
         const restaurant = (order.restaurant || '').toLowerCase()
         const customerPhone = (order.customerPhone || '').toString()
         const totalAmount = (order.totalAmount || 0).toString()
+        const zoneName = getOrderZoneLabel(order).toLowerCase()
+        const deliveryPartner = getOrderDeliveryPartnerLabel(order).toLowerCase()
         
         return orderId.includes(query) ||
                customerName.includes(query) ||
                restaurant.includes(query) ||
                customerPhone.includes(query) ||
-               totalAmount.includes(query)
+               totalAmount.includes(query) ||
+               zoneName.includes(query) ||
+               deliveryPartner.includes(query)
       })
     }
 
@@ -125,13 +231,13 @@ export function useOrdersManagement(orders, statusKey, title) {
     if (filters.paymentStatus && filters.paymentStatus.trim() !== '') {
       result = result.filter(order => {
         // Check multiple possible payment status fields
-        const orderPaymentStatus = normalize(
+        const orderPaymentStatus = normalizeValue(
           order.paymentStatus || 
           order.payment?.status || 
           order.paymentStatus || 
           ''
         )
-        const filterPaymentStatus = normalize(filters.paymentStatus)
+        const filterPaymentStatus = normalizeValue(filters.paymentStatus)
         if (filterPaymentStatus === "all") return true
         if (filterPaymentStatus === "unpaid") return orderPaymentStatus.includes("unpaid") || orderPaymentStatus.includes("not paid")
         if (filterPaymentStatus === "paid") return orderPaymentStatus.includes("paid") || orderPaymentStatus.includes("success") || orderPaymentStatus.includes("collected")
@@ -140,19 +246,43 @@ export function useOrdersManagement(orders, statusKey, title) {
     }
 
     if (filters.deliveryType && filters.deliveryType.trim() !== '') {
-      result = result.filter(order => {
-        // Check multiple possible delivery type fields
-        const orderDeliveryType = normalize(
+        result = result.filter(order => {
+          // Check multiple possible delivery type fields
+        const orderDeliveryType = normalizeValue(
           order.deliveryType || 
           order.delivery?.type || 
           order.orderType ||
           ''
         )
-        const filterDeliveryType = normalize(filters.deliveryType)
+        const filterDeliveryType = normalizeValue(filters.deliveryType)
         if (filterDeliveryType === "all") return true
         if (filterDeliveryType === "home delivery") return orderDeliveryType.includes("delivery")
         if (filterDeliveryType === "take away") return orderDeliveryType.includes("take away") || orderDeliveryType.includes("takeaway") || orderDeliveryType.includes("pickup")
         return orderDeliveryType === filterDeliveryType || orderDeliveryType.includes(filterDeliveryType)
+      })
+    }
+
+    if (filters.deliveryPartner && filters.deliveryPartner.trim() !== '') {
+      result = result.filter(order => {
+        const orderDeliveryPartner = normalizeValue(getOrderDeliveryPartnerLabel(order))
+        const filterDeliveryPartner = normalizeValue(filters.deliveryPartner)
+        return orderDeliveryPartner.includes(filterDeliveryPartner)
+      })
+    }
+
+    if (filters.deliveryStatus && filters.deliveryStatus.trim() !== '') {
+      result = result.filter(order => {
+        const orderDeliveryStatus = normalizeValue(getOrderDeliveryStatusLabel(order))
+        const filterDeliveryStatus = normalizeValue(filters.deliveryStatus)
+        return orderDeliveryStatus === filterDeliveryStatus || orderDeliveryStatus.includes(filterDeliveryStatus)
+      })
+    }
+
+    if (filters.zone && filters.zone.trim() !== '') {
+      result = result.filter(order => {
+        const orderZone = normalizeValue(getOrderZoneLabel(order))
+        const filterZone = normalizeValue(filters.zone)
+        return orderZone.includes(filterZone)
       })
     }
 
@@ -193,13 +323,13 @@ export function useOrdersManagement(orders, statusKey, title) {
     if (filters.restaurant && filters.restaurant.trim() !== '') {
       result = result.filter(order => {
         // Check multiple possible restaurant fields
-        const orderRestaurant = normalize(
+        const orderRestaurant = normalizeValue(
           order.restaurant || 
           order.restaurantName || 
           order.restaurant?.name ||
           ''
         )
-        const filterRestaurant = normalize(filters.restaurant)
+        const filterRestaurant = normalizeValue(filters.restaurant)
         return orderRestaurant.includes(filterRestaurant)
       })
     }
@@ -248,6 +378,9 @@ export function useOrdersManagement(orders, statusKey, title) {
     setFilters({
       paymentStatus: "",
       deliveryType: "",
+      deliveryPartner: "",
+      deliveryStatus: "",
+      zone: "",
       minAmount: "",
       maxAmount: "",
       fromDate: "",
@@ -332,6 +465,9 @@ export function useOrdersManagement(orders, statusKey, title) {
     count,
     activeFiltersCount,
     restaurants,
+    zones,
+    deliveryPartners,
+    deliveryStatuses,
     handleApplyFilters,
     handleResetFilters,
     handleExport,

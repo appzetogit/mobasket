@@ -153,6 +153,8 @@ export default function RestaurantsList() {
   const [editingRestaurant, setEditingRestaurant] = useState(null)
   const [savingEditRestaurant, setSavingEditRestaurant] = useState(false)
   const [updatingZoneFor, setUpdatingZoneFor] = useState("")
+  const [updatingZoneRankFor, setUpdatingZoneRankFor] = useState("")
+  const [zoneRankDrafts, setZoneRankDrafts] = useState({})
   const [uploadingRestaurantImage, setUploadingRestaurantImage] = useState(false)
   const [editMapLoading, setEditMapLoading] = useState(false)
   const [editMapError, setEditMapError] = useState("")
@@ -246,6 +248,13 @@ export default function RestaurantsList() {
         restaurant?.originalData?.wallet?.pocketBalance ??
         restaurant?.wallet?.totalBalance ??
         restaurant?.wallet?.pocketBalance ??
+        0,
+    ) || 0
+
+  const getRestaurantFinanceBalance = (restaurant = {}) =>
+    Number(
+      restaurant?.originalData?.finance?.estimatedPayout ??
+        restaurant?.finance?.estimatedPayout ??
         0,
     ) || 0
 
@@ -371,12 +380,68 @@ export default function RestaurantsList() {
             logo: restaurant.profileImage?.url || restaurant.logo || buildImageFallback(40, "RES"),
             address: formatRestaurantAddress(restaurant),
             pocketBalance: Number(restaurant?.wallet?.totalBalance) || 0,
+            zoneRank:
+              Number(
+                (Array.isArray(restaurant?.zoneRanks) ? restaurant.zoneRanks : []).find(
+                  (entry) =>
+                    String(entry?.zoneId || "") ===
+                    String(
+                      restaurant?.zoneId?._id ||
+                        restaurant?.zoneId?.id ||
+                        restaurant?.zoneId ||
+                        "",
+                    ),
+                )?.rank,
+              ) || 0,
             // Preserve original restaurant data for details modal
             originalData: normalizeRestaurantRecord(restaurant),
           }
         })
           
           setRestaurants(mappedRestaurants)
+
+          const financeResults = await Promise.allSettled(
+            mappedRestaurants.map(async (restaurant) => {
+              const restaurantId = String(restaurant?._id || restaurant?.id || "").trim()
+              if (!restaurantId) return null
+              const financeResponse = await adminAPI.getRestaurantFinance(restaurantId)
+              const finance =
+                financeResponse?.data?.data?.finance ||
+                financeResponse?.data?.finance ||
+                null
+
+              return finance
+                ? {
+                    restaurantId,
+                    finance,
+                  }
+                : null
+            }),
+          )
+
+          const financeByRestaurantId = new Map(
+            financeResults
+              .filter((result) => result.status === "fulfilled" && result.value?.restaurantId)
+              .map((result) => [result.value.restaurantId, result.value.finance]),
+          )
+
+          if (financeByRestaurantId.size > 0) {
+            setRestaurants((prev) =>
+              prev.map((restaurant) => {
+                const restaurantId = String(restaurant?._id || restaurant?.id || "").trim()
+                const finance = financeByRestaurantId.get(restaurantId)
+                if (!finance) return restaurant
+
+                return {
+                  ...restaurant,
+                  originalData: {
+                    ...(restaurant.originalData || {}),
+                    finance,
+                  },
+                }
+              }),
+            )
+          }
         } else {
           setRestaurants([])
         }
@@ -730,6 +795,12 @@ export default function RestaurantsList() {
         return {
           ...item,
           zone: selectedZoneOption?.name || "N/A",
+          zoneRank:
+            Number(
+              (Array.isArray(item?.originalData?.zoneRanks) ? item.originalData.zoneRanks : []).find(
+                (entry) => String(entry?.zoneId || "") === nextZoneId,
+              )?.rank,
+            ) || 0,
           originalData: {
             ...(item.originalData || {}),
             zoneId: nextZoneId || null,
@@ -756,6 +827,19 @@ export default function RestaurantsList() {
               updatedRestaurant?.zone?.name ||
               updatedRestaurant?.zoneName ||
               item.zone,
+            zoneRank:
+              Number(
+                (Array.isArray(updatedRestaurant?.zoneRanks) ? updatedRestaurant.zoneRanks : []).find(
+                  (entry) =>
+                    String(entry?.zoneId || "") ===
+                    String(
+                      updatedRestaurant?.zoneId?._id ||
+                        updatedRestaurant?.zoneId?.id ||
+                        updatedRestaurant?.zoneId ||
+                        nextZoneId,
+                    ),
+                )?.rank,
+              ) || item.zoneRank || 0,
             originalData: updatedRestaurant || item.originalData,
           }
         }),
@@ -842,6 +926,102 @@ export default function RestaurantsList() {
         ),
       )
       alert(err?.response?.data?.message || "Failed to update accepting orders. Please try again.")
+    }
+  }
+
+  const getRestaurantZoneRank = (restaurant) => {
+    const assignedZoneId = getRestaurantAssignedZoneId(restaurant)
+    if (!assignedZoneId) return 0
+
+    const zoneRanks = Array.isArray(restaurant?.originalData?.zoneRanks)
+      ? restaurant.originalData.zoneRanks
+      : []
+
+    return Number(
+      zoneRanks.find((entry) => String(entry?.zoneId || "") === assignedZoneId)?.rank,
+    ) || Number(restaurant?.zoneRank || 0) || 0
+  }
+
+  const getZoneRankDraftValue = (restaurant) => {
+    const restaurantId = String(restaurant?._id || restaurant?.id || "")
+    if (Object.prototype.hasOwnProperty.call(zoneRankDrafts, restaurantId)) {
+      return zoneRankDrafts[restaurantId]
+    }
+    const currentRank = getRestaurantZoneRank(restaurant)
+    return currentRank > 0 ? String(currentRank) : ""
+  }
+
+  const handleInlineZoneRankSave = async (restaurant) => {
+    const restaurantId = String(restaurant?._id || restaurant?.id || "")
+    const assignedZoneId = getRestaurantAssignedZoneId(restaurant)
+    const rawDraft = String(zoneRankDrafts[restaurantId] ?? getRestaurantZoneRank(restaurant) ?? "").trim()
+    const nextRank = rawDraft === "" ? 0 : Number(rawDraft)
+    const previousRank = getRestaurantZoneRank(restaurant)
+
+    if (!assignedZoneId || !Number.isFinite(nextRank) || nextRank < 0 || nextRank === previousRank) {
+      return
+    }
+
+    setUpdatingZoneRankFor(restaurantId)
+    setRestaurants((prev) =>
+      prev.map((item) =>
+        String(item?._id || item?.id || "") === restaurantId
+          ? {
+              ...item,
+              zoneRank: nextRank,
+              originalData: {
+                ...(item.originalData || {}),
+                zoneRanks: [
+                  ...((Array.isArray(item?.originalData?.zoneRanks) ? item.originalData.zoneRanks : []).filter(
+                    (entry) => String(entry?.zoneId || "") !== assignedZoneId,
+                  )),
+                  { zoneId: assignedZoneId, rank: nextRank },
+                ],
+              },
+            }
+          : item,
+      ),
+    )
+
+    try {
+      const response = await adminAPI.updateRestaurant(restaurantId, {
+        zoneId: assignedZoneId,
+        zoneRank: nextRank,
+      })
+      const updatedRestaurant = response?.data?.data?.restaurant || response?.data?.data
+
+      setRestaurants((prev) =>
+        prev.map((item) =>
+          String(item?._id || item?.id || "") === restaurantId
+            ? {
+                ...item,
+                zoneRank:
+                  Number(
+                    (Array.isArray(updatedRestaurant?.zoneRanks) ? updatedRestaurant.zoneRanks : []).find(
+                      (entry) => String(entry?.zoneId || "") === assignedZoneId,
+                    )?.rank,
+                  ) || nextRank,
+                originalData: updatedRestaurant || item.originalData,
+              }
+            : item,
+        ),
+      )
+    } catch (err) {
+      console.error("Error updating restaurant zone rank:", err)
+      setRestaurants((prev) =>
+        prev.map((item) =>
+          String(item?._id || item?.id || "") === restaurantId
+            ? {
+                ...item,
+                zoneRank: previousRank,
+              }
+            : item,
+        ),
+      )
+      setZoneRankDrafts((prev) => ({ ...prev, [restaurantId]: previousRank > 0 ? String(previousRank) : "" }))
+      alert(err?.response?.data?.message || "Failed to update zone rank. Please try again.")
+    } finally {
+      setUpdatingZoneRankFor("")
     }
   }
 
@@ -1411,50 +1591,50 @@ export default function RestaurantsList() {
                 <p className="text-sm text-slate-500">{error}</p>
               </div>
             ) : (
-              <table className="w-full">
+              <table className="w-full min-w-[1500px] table-fixed">
                 <thead className="bg-slate-50 border-b border-slate-200">
                   <tr>
-                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                    <th className="w-16 px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-1">
                         <span>SL</span>
                       </div>
                     </th>
-                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                    <th className="w-[280px] px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-1">
                         <span>Restaurant Info</span>
                       </div>
                     </th>
-                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                    <th className="w-[220px] px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-1">
                         <span>Owner Info</span>
                       </div>
                     </th>
-                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                    <th className="w-[360px] px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-1">
                         <span>Zone</span>
                       </div>
                     </th>
-                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                    <th className="w-[180px] px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-1">
                         <span>Cuisine</span>
                       </div>
                     </th>
-                    <th className="px-6 py-4 text-right text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                    <th className="w-[220px] px-6 py-4 text-right text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center justify-end gap-1">
                         <span>Pocket Balance</span>
                       </div>
                     </th>
-                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                    <th className="w-[170px] px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-1">
                         <span>Accepting Orders</span>
                       </div>
                     </th>
-                    <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                    <th className="w-[120px] px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                       <div className="flex items-center gap-1">
                         <span>Status</span>
                       </div>
                     </th>
-                    <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-700 uppercase tracking-wider">Action</th>
+                    <th className="w-[140px] px-6 py-4 text-center text-[10px] font-bold text-slate-700 uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-slate-100">
@@ -1476,7 +1656,7 @@ export default function RestaurantsList() {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className="text-sm font-medium text-slate-700">{index + 1}</span>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-6 py-4 align-top">
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center flex-shrink-0">
                               <img
@@ -1495,14 +1675,14 @@ export default function RestaurantsList() {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4">
+                        <td className="px-6 py-4 align-top">
                           <div className="flex flex-col">
                             <span className="text-sm font-medium text-slate-900">{restaurant.ownerName}</span>
                             <span className="text-xs text-slate-500">{formatPhone(restaurant.ownerPhone)}</span>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="min-w-[180px]">
+                        <td className="px-6 py-4 align-top">
+                          <div className="w-full max-w-[320px] space-y-2">
                             <select
                               value={getRestaurantAssignedZoneId(restaurant)}
                               onChange={(e) => handleInlineZoneAssign(restaurant, e.target.value)}
@@ -1516,20 +1696,57 @@ export default function RestaurantsList() {
                                 </option>
                               ))}
                             </select>
+                            <input
+                              type="number"
+                              min="0"
+                              placeholder="Zone rank"
+                              value={getZoneRankDraftValue(restaurant)}
+                              onChange={(e) =>
+                                setZoneRankDrafts((prev) => ({
+                                  ...prev,
+                                  [String(restaurant._id || restaurant.id)]: e.target.value,
+                                }))
+                              }
+                              onBlur={() => handleInlineZoneRankSave(restaurant)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                  e.preventDefault()
+                                  e.currentTarget.blur()
+                                }
+                              }}
+                              disabled={
+                                !getRestaurantAssignedZoneId(restaurant) ||
+                                updatingZoneRankFor === String(restaurant._id || restaurant.id)
+                              }
+                              className="w-full px-2.5 py-1.5 text-sm rounded-md border border-slate-300 bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-500"
+                            />
                             {updatingZoneFor === String(restaurant._id || restaurant.id) ? (
                               <p className="mt-1 text-[11px] text-blue-600">Saving...</p>
-                            ) : null}
+                            ) : updatingZoneRankFor === String(restaurant._id || restaurant.id) ? (
+                              <p className="mt-1 text-[11px] text-blue-600">Saving rank...</p>
+                            ) : getRestaurantAssignedZoneId(restaurant) ? (
+                              <p className="mt-1 text-[11px] text-slate-500">Lower rank shows earlier on the home page for this zone.</p>
+                            ) : (
+                              <p className="mt-1 text-[11px] text-slate-500">Assign a zone first, then set its rank.</p>
+                            )}
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm text-slate-700">{restaurant.cuisine}</span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
-                            {formatCurrency(getRestaurantPocketBalance(restaurant))}
+                        <td className="px-6 py-4 align-top">
+                          <span className="block max-w-[150px] text-sm leading-5 text-slate-700 break-words">
+                            {restaurant.cuisine}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4 whitespace-nowrap text-right align-top">
+                          <div className="flex flex-col items-end gap-2">
+                            <span className="inline-flex items-center rounded-full bg-emerald-50 px-3 py-1 text-sm font-semibold text-emerald-700">
+                              Pocket: {formatCurrency(getRestaurantPocketBalance(restaurant))}
+                            </span>
+                            <span className="inline-flex items-center rounded-full bg-blue-50 px-3 py-1 text-sm font-semibold text-blue-700">
+                              Finance: {formatCurrency(getRestaurantFinanceBalance(restaurant))}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap align-top">
                           <div className="flex items-center gap-3">
                             <span
                               className={`inline-flex min-w-[64px] items-center justify-center rounded-full px-3 py-1 text-xs font-semibold ${
@@ -1555,7 +1772,7 @@ export default function RestaurantsList() {
                             </button>
                           </div>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
+                        <td className="px-6 py-4 whitespace-nowrap align-top">
                           <button
                             onClick={() => handleToggleStatus(restaurant.id)}
                             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${

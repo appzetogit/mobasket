@@ -19,6 +19,12 @@ const AUTO_REFRESH_MS = 10000
 const SIDEBAR_ALERT_KEY = "adminAllOrdersAttentionUntil"
 const ORDERS_ALERT_COUNT_KEY = "adminAllOrdersAttentionState"
 
+const currencyFormatter = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  maximumFractionDigits: 2,
+})
+
 const isAwaitingStoreDecision = (order) => {
   const backendStatus = String(order?.status || "").toLowerCase()
 
@@ -108,6 +114,9 @@ export default function CombinedOrdersPage() {
     filteredOrders,
     activeFiltersCount,
     restaurants,
+    zones,
+    deliveryPartners: orderDeliveryPartners,
+    deliveryStatuses,
     handleApplyFilters,
     handleResetFilters,
     handleExport,
@@ -123,6 +132,31 @@ export default function CombinedOrdersPage() {
 
     return filteredOrders
   }, [activeTab, filteredOrders])
+
+  const todayOrdersSummary = useMemo(() => {
+    const todayOrders = orders.filter(isOrderFromToday)
+    const totalValue = todayOrders.reduce(
+      (sum, order) => sum + (Number(order?.totalAmount) || 0),
+      0
+    )
+
+    return {
+      count: todayOrders.length,
+      totalValue,
+    }
+  }, [orders])
+
+  const displayedOrdersSummary = useMemo(() => {
+    const totalValue = displayedOrders.reduce(
+      (sum, order) => sum + (Number(order?.totalAmount) || 0),
+      0
+    )
+
+    return {
+      count: displayedOrders.length,
+      totalValue,
+    }
+  }, [displayedOrders])
 
   const selectedOrderIsGrocery = useMemo(
     () => String(selectedOrder?.restaurantPlatform || "").toLowerCase() === "mogrocery",
@@ -775,6 +809,28 @@ export default function CombinedOrdersPage() {
           </button>
         ))}
       </div>
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Daily Orders</p>
+          <p className="mt-2 text-2xl font-bold text-slate-900">{todayOrdersSummary.count}</p>
+          <p className="mt-1 text-sm text-slate-500">Total orders placed today</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Daily Order Value</p>
+          <p className="mt-2 text-2xl font-bold text-slate-900">{currencyFormatter.format(todayOrdersSummary.totalValue)}</p>
+          <p className="mt-1 text-sm text-slate-500">Combined value of today&apos;s orders</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Visible Order Count</p>
+          <p className="mt-2 text-2xl font-bold text-slate-900">{displayedOrdersSummary.count}</p>
+          <p className="mt-1 text-sm text-slate-500">Based on selected tab and filters</p>
+        </div>
+        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Visible Total Value</p>
+          <p className="mt-2 text-2xl font-bold text-slate-900">{currencyFormatter.format(displayedOrdersSummary.totalValue)}</p>
+          <p className="mt-1 text-sm text-slate-500">Based on selected tab and filters</p>
+        </div>
+      </div>
       <FilterPanel
         isOpen={isFilterOpen}
         onClose={() => setIsFilterOpen(false)}
@@ -783,6 +839,9 @@ export default function CombinedOrdersPage() {
         onApply={handleApplyFilters}
         onReset={handleResetFilters}
         restaurants={restaurants}
+        deliveryPartners={orderDeliveryPartners}
+        deliveryStatuses={deliveryStatuses}
+        zones={zones}
       />
       <SettingsDialog
         isOpen={isSettingsOpen}
