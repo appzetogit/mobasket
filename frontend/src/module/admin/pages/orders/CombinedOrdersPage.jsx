@@ -82,6 +82,30 @@ const isOrderIncludedInValueSummary = (order) => {
   return true
 }
 
+const dedupeOrdersByTrackingId = (orders = []) => {
+  const deduped = new Map()
+
+  for (const order of Array.isArray(orders) ? orders : []) {
+    const key = getOrderTrackingId(order)
+    if (!key) continue
+
+    const existing = deduped.get(key)
+    if (!existing) {
+      deduped.set(key, order)
+      continue
+    }
+
+    const existingUpdatedAt = new Date(existing.updatedAt || existing.createdAt || 0).getTime()
+    const nextUpdatedAt = new Date(order.updatedAt || order.createdAt || 0).getTime()
+
+    if (nextUpdatedAt >= existingUpdatedAt) {
+      deduped.set(key, order)
+    }
+  }
+
+  return Array.from(deduped.values())
+}
+
 export default function CombinedOrdersPage() {
   const location = useLocation()
   const [activeTab, setActiveTab] = useState("today")
@@ -318,7 +342,7 @@ export default function CombinedOrdersPage() {
 
       const mofoodOrders = mofoodResponse?.data?.data?.orders || []
       const mogroceryOrders = mogroceryResponse?.data?.data?.orders || []
-      const combinedOrders = [...mofoodOrders, ...mogroceryOrders].sort(
+      const combinedOrders = dedupeOrdersByTrackingId([...mofoodOrders, ...mogroceryOrders]).sort(
         (a, b) => new Date(b.createdAt || b.updatedAt || 0).getTime() - new Date(a.createdAt || a.updatedAt || 0).getTime()
       )
 

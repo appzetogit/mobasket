@@ -44,8 +44,107 @@ const logger = winston.createLogger({
 });
 
 const ORDER_MODIFICATION_WINDOW_MS = 2 * 60 * 1000;
+const ONLINE_ORDER_REUSE_WINDOW_MS = 30 * 60 * 1000;
 
 const normalizePlatform = (value) => (value === 'mogrocery' ? 'mogrocery' : 'mofood');
+
+const safeString = (value) => String(value ?? '').trim();
+
+const buildOrderItemsFingerprint = (items = []) =>
+  (Array.isArray(items) ? items : [])
+    .map((item) => ({
+      itemId: safeString(item?.itemId || item?.id || item?._id),
+      name: safeString(item?.name).toLowerCase(),
+      quantity: Number(item?.quantity || 0),
+      price: Number(item?.price || 0),
+      variant: safeString(item?.variant || item?.variation || '').toLowerCase(),
+      addOnIds: Array.isArray(item?.addOns)
+        ? item.addOns
+            .map((addOn) => safeString(addOn?.id || addOn?._id || addOn?.addOnId || addOn))
+            .filter(Boolean)
+            .sort()
+        : []
+    }))
+    .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+
+const buildAddressFingerprint = (address = {}) => ({
+  latitude: Number(address?.latitude || address?.location?.coordinates?.[1] || 0),
+  longitude: Number(address?.longitude || address?.location?.coordinates?.[0] || 0),
+  street: safeString(address?.street).toLowerCase(),
+  city: safeString(address?.city).toLowerCase(),
+  state: safeString(address?.state).toLowerCase(),
+  zipCode: safeString(address?.zipCode).toLowerCase(),
+  formattedAddress: safeString(address?.formattedAddress).toLowerCase()
+});
+
+const buildPendingOnlineOrderFingerprint = ({
+  items,
+  address,
+  restaurantId,
+  platform,
+  deliveryFleet,
+  couponCode,
+  deliveryOption,
+  scheduledFor,
+  deliveryTimeSlot,
+  pricingTotal
+}) => {
+  const payload = {
+    restaurantId: safeString(restaurantId),
+    platform: normalizePlatform(platform),
+    deliveryFleet: safeString(deliveryFleet || 'standard').toLowerCase(),
+    couponCode: safeString(couponCode).toLowerCase(),
+    deliveryOption: safeString(deliveryOption || 'now').toLowerCase(),
+    scheduledFor: scheduledFor ? new Date(scheduledFor).toISOString() : '',
+    deliveryTimeSlot: safeString(deliveryTimeSlot).toLowerCase(),
+    pricingTotal: Number(pricingTotal || 0),
+    items: buildOrderItemsFingerprint(items),
+    address: buildAddressFingerprint(address)
+  };
+
+  return crypto.createHash('sha256').update(JSON.stringify(payload)).digest('hex');
+};
+
+const findReusablePendingOnlineOrder = async ({
+  userId,
+  restaurantId,
+  platform,
+  fingerprint
+}) => {
+  const cutoff = new Date(Date.now() - ONLINE_ORDER_REUSE_WINDOW_MS);
+  const candidates = await Order.find({
+    userId,
+    restaurantId: safeString(restaurantId),
+    restaurantPlatform: normalizePlatform(platform),
+    'payment.method': 'razorpay',
+    'payment.status': 'pending',
+    status: { $in: ['pending', 'scheduled'] },
+    createdAt: { $gte: cutoff }
+  })
+    .sort({ createdAt: -1 })
+    .limit(10);
+
+  for (const candidate of candidates) {
+    const candidateFingerprint = buildPendingOnlineOrderFingerprint({
+      items: candidate.items,
+      address: candidate.address,
+      restaurantId: candidate.restaurantId,
+      platform: candidate.restaurantPlatform,
+      deliveryFleet: candidate.deliveryFleet,
+      couponCode: candidate.pricing?.couponCode,
+      deliveryOption: candidate.scheduledDelivery?.isScheduled ? 'scheduled' : 'now',
+      scheduledFor: candidate.scheduledDelivery?.scheduledFor,
+      deliveryTimeSlot: candidate.scheduledDelivery?.timeSlot,
+      pricingTotal: candidate.pricing?.total
+    });
+
+    if (candidateFingerprint === fingerprint) {
+      return candidate;
+    }
+  }
+
+  return null;
+};
 
 const findRestaurantOrStoreByIdentifier = async (identifier) => {
   const normalized = String(identifier || '').trim();
@@ -1488,6 +1587,21 @@ export const createOrder = async (req, res) => {
     // Ensure couponCode is included in pricing
     const persistedCouponCode = pricing?.couponCode || pricing?.appliedCoupon?.code || couponCode || null;
 
+    const pendingOnlineOrderFingerprint = normalizedPaymentMethod === 'razorpay'
+      ? buildPendingOnlineOrderFingerprint({
+          items,
+          address: normalizedAddress,
+          restaurantId: assignedRestaurantId,
+          platform: pricingPlatform,
+          deliveryFleet: deliveryFleet || 'standard',
+          couponCode: persistedCouponCode,
+          deliveryOption: isFutureScheduledOrder ? 'scheduled' : 'now',
+          scheduledFor: isFutureScheduledOrder ? scheduledForDate : null,
+          deliveryTimeSlot: isFutureScheduledOrder ? deliveryTimeSlot : '',
+          pricingTotal: pricing?.total
+        })
+      : null;
+
     if (normalizedPaymentMethod === 'cash') {
       const minimumCodOrderValue = await getMinimumCodOrderValueForPlatform(pricingPlatform);
       const orderTotal = Math.max(0, Number(pricing?.total || 0));
@@ -1498,6 +1612,75 @@ export const createOrder = async (req, res) => {
           data: {
             minimumCodOrderValue,
             orderTotal
+          }
+        });
+      }
+    }
+
+    if (normalizedPaymentMethod === 'razorpay' && pendingOnlineOrderFingerprint) {
+      const reusableOrder = await findReusablePendingOnlineOrder({
+        userId,
+        restaurantId: assignedRestaurantId,
+        platform: pricingPlatform,
+        fingerprint: pendingOnlineOrderFingerprint
+      });
+
+      if (reusableOrder) {
+        let razorpayOrderId = reusableOrder.payment?.razorpayOrderId || null;
+        let razorpayAmount = Math.round(Number(reusableOrder.pricing?.total || pricing?.total || 0) * 100);
+        let razorpayCurrency = 'INR';
+
+        if (!razorpayOrderId) {
+          const recreatedRazorpayOrder = await createRazorpayOrder({
+            amount: razorpayAmount,
+            currency: razorpayCurrency,
+            receipt: reusableOrder.orderId,
+            notes: {
+              orderId: reusableOrder.orderId,
+              userId: userId.toString(),
+              restaurantId: assignedRestaurantId || 'unknown'
+            }
+          });
+
+          razorpayOrderId = recreatedRazorpayOrder.id;
+          razorpayAmount = recreatedRazorpayOrder.amount;
+          razorpayCurrency = recreatedRazorpayOrder.currency || 'INR';
+          reusableOrder.payment.razorpayOrderId = razorpayOrderId;
+          await saveOrderWithIdRetry(reusableOrder);
+        }
+
+        let razorpayKeyId = '';
+        try {
+          const credentials = await getRazorpayCredentials();
+          razorpayKeyId = credentials.keyId || '';
+        } catch (error) {
+          logger.warn(`Failed to get Razorpay key ID for reused order: ${error.message}`);
+        }
+
+        logger.info('Reusing existing pending online order instead of creating a duplicate', {
+          orderId: reusableOrder.orderId,
+          orderMongoId: reusableOrder._id?.toString(),
+          userId,
+          restaurantId: assignedRestaurantId
+        });
+
+        return res.status(200).json({
+          success: true,
+          data: {
+            order: {
+              id: reusableOrder._id.toString(),
+              orderId: reusableOrder.orderId,
+              status: reusableOrder.status,
+              total: reusableOrder.pricing?.total || pricing.total,
+              scheduledDelivery: reusableOrder.scheduledDelivery
+            },
+            razorpay: {
+              orderId: razorpayOrderId,
+              amount: razorpayAmount,
+              currency: razorpayCurrency,
+              key: razorpayKeyId
+            },
+            reusedExistingOrder: true
           }
         });
       }
@@ -2250,6 +2433,45 @@ export const verifyOrderPayment = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: 'Order not found'
+      });
+    }
+
+    const existingCompletedPayment = await Payment.findOne({
+      orderId: order._id,
+      status: 'completed',
+      $or: [
+        { transactionId: razorpayPaymentId },
+        { 'razorpay.paymentId': razorpayPaymentId },
+        { 'razorpay.orderId': razorpayOrderId }
+      ]
+    }).lean();
+
+    if (
+      order.payment?.status === 'completed' ||
+      existingCompletedPayment
+    ) {
+      return res.status(200).json({
+        success: true,
+        message: 'Payment already verified',
+        data: {
+          order: {
+            id: order._id.toString(),
+            orderId: order.orderId,
+            status: order.status,
+            paymentStatus: order.payment?.status || 'completed'
+          },
+          alreadyVerified: true
+        }
+      });
+    }
+
+    if (
+      order.payment?.razorpayOrderId &&
+      String(order.payment.razorpayOrderId) !== String(razorpayOrderId)
+    ) {
+      return res.status(409).json({
+        success: false,
+        message: 'Payment attempt does not match the pending order'
       });
     }
 
