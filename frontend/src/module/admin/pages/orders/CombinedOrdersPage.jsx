@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from "react"
 import { useLocation } from "react-router-dom"
-import { BellRing, Loader2, Search, Bike } from "lucide-react"
+import { BellRing, Loader2, Search, Bike, Volume2, VolumeX } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
 import alertSound from "@/assets/audio/alert.mp3"
@@ -18,6 +18,7 @@ import { useOrdersManagement } from "../../components/orders/useOrdersManagement
 const AUTO_REFRESH_MS = 10000
 const SIDEBAR_ALERT_KEY = "adminAllOrdersAttentionUntil"
 const ORDERS_ALERT_COUNT_KEY = "adminAllOrdersAttentionState"
+const ORDER_SOUND_MUTED_KEY = "adminAllOrdersSoundMuted"
 
 const currencyFormatter = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -70,9 +71,27 @@ const isOrderFromToday = (order) => {
   )
 }
 
+const isOrderIncludedInValueSummary = (order) => {
+  const backendStatus = String(order?.status || "").toLowerCase()
+  const adminApprovalStatus = String(order?.adminApprovalStatus || "").toLowerCase()
+
+  if (order?.timedOutByRestaurant) return false
+  if (["cancelled", "canceled"].includes(backendStatus)) return false
+  if (adminApprovalStatus === "rejected") return false
+
+  return true
+}
+
 export default function CombinedOrdersPage() {
   const location = useLocation()
   const [activeTab, setActiveTab] = useState("today")
+  const [isSoundMuted, setIsSoundMuted] = useState(() => {
+    try {
+      return localStorage.getItem(ORDER_SOUND_MUTED_KEY) === "true"
+    } catch {
+      return false
+    }
+  })
   const [orders, setOrders] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
@@ -96,6 +115,8 @@ export default function CombinedOrdersPage() {
   const isAudioUnlockedRef = useRef(false)
   const highlightedOrderIdsRef = useRef([])
   const isStoppingAudioRef = useRef(false)
+  const isSoundMutedRef = useRef(isSoundMuted)
+  const ensureIncomingSoundRef = useRef(() => {})
 
   const {
     searchQuery,
@@ -135,10 +156,12 @@ export default function CombinedOrdersPage() {
 
   const todayOrdersSummary = useMemo(() => {
     const todayOrders = orders.filter(isOrderFromToday)
-    const totalValue = todayOrders.reduce(
+    const totalValue = todayOrders
+      .filter(isOrderIncludedInValueSummary)
+      .reduce(
       (sum, order) => sum + (Number(order?.totalAmount) || 0),
       0
-    )
+      )
 
     return {
       count: todayOrders.length,
@@ -147,10 +170,12 @@ export default function CombinedOrdersPage() {
   }, [orders])
 
   const displayedOrdersSummary = useMemo(() => {
-    const totalValue = displayedOrders.reduce(
+    const totalValue = displayedOrders
+      .filter(isOrderIncludedInValueSummary)
+      .reduce(
       (sum, order) => sum + (Number(order?.totalAmount) || 0),
       0
-    )
+      )
 
     return {
       count: displayedOrders.length,
@@ -229,6 +254,12 @@ export default function CombinedOrdersPage() {
   }
 
   const playIncomingSound = async () => {
+    if (isSoundMuted) {
+      pendingSoundRef.current = false
+      stopIncomingSound()
+      return
+    }
+
     if (!audioRef.current) {
       pendingSoundRef.current = true
       return
@@ -248,6 +279,11 @@ export default function CombinedOrdersPage() {
   }
 
   const ensureIncomingSound = async () => {
+    if (isSoundMuted) {
+      stopIncomingSound()
+      return
+    }
+
     if (!highlightedOrderIdsRef.current.length) {
       stopIncomingSound()
       return
@@ -256,10 +292,12 @@ export default function CombinedOrdersPage() {
     await playIncomingSound()
   }
 
+  ensureIncomingSoundRef.current = ensureIncomingSound
+
   const updateAlertStateFromHighlightedIds = (ids = []) => {
     const alertCount = Array.isArray(ids) ? ids.length : 0
 
-    if (alertCount > 0) {
+    if (alertCount > 0 && !isSoundMuted) {
       ensureIncomingSound()
     } else {
       stopIncomingSound()
@@ -415,6 +453,29 @@ export default function CombinedOrdersPage() {
   }, [highlightedOrderIds])
 
   useEffect(() => {
+    isSoundMutedRef.current = isSoundMuted
+
+    try {
+      localStorage.setItem(ORDER_SOUND_MUTED_KEY, String(isSoundMuted))
+    } catch {
+      // Ignore storage persistence failures.
+    }
+
+    if (audioRef.current) {
+      audioRef.current.muted = isSoundMuted
+    }
+
+    if (isSoundMuted) {
+      stopIncomingSound()
+      return
+    }
+
+    if (highlightedOrderIdsRef.current.length > 0) {
+      ensureIncomingSoundRef.current()
+    }
+  }, [isSoundMuted])
+
+  useEffect(() => {
     audioRef.current = new Audio(alertSound)
     audioRef.current.preload = "auto"
     audioRef.current.volume = 0.85
@@ -426,13 +487,13 @@ export default function CombinedOrdersPage() {
         await audioRef.current.play()
         audioRef.current.pause()
         audioRef.current.currentTime = 0
-        audioRef.current.muted = false
+        audioRef.current.muted = isSoundMutedRef.current
         isAudioUnlockedRef.current = true
         window.removeEventListener("pointerdown", unlockAudio)
         window.removeEventListener("keydown", unlockAudio)
 
         if (pendingSoundRef.current) {
-          ensureIncomingSound()
+          ensureIncomingSoundRef.current()
         }
       } catch {
         // browser still waiting for a direct user gesture
@@ -463,18 +524,18 @@ export default function CombinedOrdersPage() {
     unlockAudio()
 
     const retryPendingSound = () => {
-      if (pendingSoundRef.current && highlightedOrderIdsRef.current.length > 0) {
-        ensureIncomingSound()
+      if (!isSoundMutedRef.current && pendingSoundRef.current && highlightedOrderIdsRef.current.length > 0) {
+        ensureIncomingSoundRef.current()
       }
     }
 
     window.addEventListener("focus", retryPendingSound)
     document.addEventListener("visibilitychange", retryPendingSound)
     const watchdogId = window.setInterval(() => {
-      if (highlightedOrderIdsRef.current.length > 0) {
+      if (!isSoundMutedRef.current && highlightedOrderIdsRef.current.length > 0) {
         const audioIsPaused = !audioRef.current || audioRef.current.paused || audioRef.current.ended
         if (pendingSoundRef.current || audioIsPaused) {
-          ensureIncomingSound()
+          ensureIncomingSoundRef.current()
         }
       }
     }, 2500)
@@ -784,11 +845,27 @@ export default function CombinedOrdersPage() {
           {loadError}
         </div>
       ) : null}
-      <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 flex items-center gap-3">
-        <BellRing className="w-5 h-5 text-blue-700 shrink-0" />
-        <div className="text-sm text-blue-900">
-          This list combines MoFoods and MoGrocery orders, auto-refreshes every 10 seconds, and keeps new orders blinking until they are accepted or rejected.
+      <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <BellRing className="w-5 h-5 text-blue-700 shrink-0" />
+          <div className="text-sm text-blue-900">
+            This list combines MoFoods and MoGrocery orders, auto-refreshes every 10 seconds, and keeps new orders blinking until they are accepted or rejected.
+          </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setIsSoundMuted((prev) => !prev)}
+          className={`inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-sm font-semibold transition-colors ${
+            isSoundMuted
+              ? "border-slate-300 bg-white text-slate-700 hover:bg-slate-100"
+              : "border-blue-300 bg-blue-600 text-white hover:bg-blue-700"
+          }`}
+          aria-pressed={isSoundMuted}
+          aria-label={isSoundMuted ? "Unmute new order alert sound" : "Mute new order alert sound"}
+        >
+          {isSoundMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+          {isSoundMuted ? "Unmute Alert" : "Mute Alert"}
+        </button>
       </div>
       <div className="mb-4 flex items-center gap-2">
         {[
