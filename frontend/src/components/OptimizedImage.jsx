@@ -1,6 +1,65 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
 
+const IMAGE_CACHE_STORAGE_KEY = 'optimized-image-cache.v1'
+const MAX_CACHED_IMAGE_COUNT = 200
+const loadedImageCache = new Set()
+let loadedImageCacheHydrated = false
+
+const normalizeCachedImageSrc = (value = '') => String(value || '').trim()
+
+const hydrateLoadedImageCache = () => {
+  if (loadedImageCacheHydrated || typeof window === 'undefined') return
+  loadedImageCacheHydrated = true
+
+  try {
+    const raw = window.sessionStorage.getItem(IMAGE_CACHE_STORAGE_KEY)
+    if (!raw) return
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return
+    parsed
+      .map((entry) => normalizeCachedImageSrc(entry))
+      .filter(Boolean)
+      .slice(-MAX_CACHED_IMAGE_COUNT)
+      .forEach((entry) => loadedImageCache.add(entry))
+  } catch {
+    // Ignore session cache read failures.
+  }
+}
+
+const persistLoadedImageCache = () => {
+  if (typeof window === 'undefined') return
+
+  try {
+    const values = Array.from(loadedImageCache).slice(-MAX_CACHED_IMAGE_COUNT)
+    window.sessionStorage.setItem(IMAGE_CACHE_STORAGE_KEY, JSON.stringify(values))
+  } catch {
+    // Ignore session cache write failures.
+  }
+}
+
+const hasLoadedImageCached = (src) => {
+  const normalized = normalizeCachedImageSrc(src)
+  if (!normalized) return false
+  hydrateLoadedImageCache()
+  return loadedImageCache.has(normalized)
+}
+
+const markImageAsCached = (src) => {
+  const normalized = normalizeCachedImageSrc(src)
+  if (!normalized) return
+  hydrateLoadedImageCache()
+  if (loadedImageCache.has(normalized)) return
+  loadedImageCache.add(normalized)
+  if (loadedImageCache.size > MAX_CACHED_IMAGE_COUNT) {
+    const oldest = loadedImageCache.values().next().value
+    if (oldest) {
+      loadedImageCache.delete(oldest)
+    }
+  }
+  persistLoadedImageCache()
+}
+
 /**
  * OptimizedImage Component
  * 
@@ -26,16 +85,17 @@ const OptimizedImage = ({
   onError,
   ...props
 }) => {
-  const [isLoaded, setIsLoaded] = useState(false)
+  const [isLoaded, setIsLoaded] = useState(() => hasLoadedImageCached(src))
   const [hasError, setHasError] = useState(false)
-  const [isInView, setIsInView] = useState(priority) // Start visible if priority
+  const [isInView, setIsInView] = useState(() => priority || hasLoadedImageCached(src))
   const imgRef = useRef(null)
   const observerRef = useRef(null)
 
   useEffect(() => {
-    setIsLoaded(false)
+    const cached = hasLoadedImageCached(src)
+    setIsLoaded(cached)
     setHasError(false)
-    setIsInView(priority)
+    setIsInView(priority || cached)
   }, [src, priority])
 
   const isCloudinaryUrl = (imageSrc) => {
@@ -153,6 +213,7 @@ const OptimizedImage = ({
   }, [priority, src])
 
   const handleLoad = (e) => {
+    markImageAsCached(src)
     setIsLoaded(true)
     if (onLoad) onLoad(e)
   }
