@@ -574,6 +574,7 @@ export const detectUserZone = asyncHandler(async (req, res) => {
         _id: userZone._id.toString(),
         name: userZone.name || userZone.zoneName,
         zoneName: userZone.zoneName || userZone.name,
+        platform: userZone.platform || 'mofood',
         country: userZone.country,
         unit: userZone.unit
       },
@@ -666,6 +667,7 @@ export const detectAllUserZones = asyncHandler(async (req, res) => {
         _id: zone._id.toString(),
         name: zone.name || zone.zoneName,
         zoneName: zone.zoneName || zone.name,
+        platform: zone.platform || 'mofood',
         country: zone.country,
         unit: zone.unit
       })),

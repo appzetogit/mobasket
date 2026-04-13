@@ -245,6 +245,30 @@ const sanitizeRestaurantListEntry = (restaurant = {}) => ({
   storeImage: sanitizeImageValue(restaurant.storeImage),
 });
 
+const under250Cache = new Map();
+const UNDER_250_CACHE_TTL_MS = 2 * 60 * 1000;
+
+function getUnder250Cache(cacheKey) {
+  const cached = under250Cache.get(cacheKey);
+  if (!cached) return null;
+  if (Date.now() - cached.timestamp > UNDER_250_CACHE_TTL_MS) {
+    under250Cache.delete(cacheKey);
+    return null;
+  }
+  return cached.payload;
+}
+
+function setUnder250Cache(cacheKey, payload) {
+  if (under250Cache.size > 80) {
+    const firstKey = under250Cache.keys().next().value;
+    if (firstKey) under250Cache.delete(firstKey);
+  }
+  under250Cache.set(cacheKey, {
+    timestamp: Date.now(),
+    payload,
+  });
+}
+
 function getActiveZoneQueryByPlatform(platform = 'mofood') {
   return platform === 'mogrocery'
     ? { isActive: true, platform: 'mogrocery' }
@@ -1263,6 +1287,20 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
   try {
     const { zoneId } = req.query; // User's zone ID (optional - if provided, filters by zone)
     const maxRestaurants = Math.max(0, Number(req.query?.maxRestaurants) || 0);
+    const pageLimit = Math.min(12, Math.max(1, Number(req.query?.limit) || 4));
+    const startOffset = Math.max(0, Number(req.query?.offset) || 0);
+    const maxScan = Math.min(120, Math.max(pageLimit, Number(req.query?.maxScan) || 80));
+    const cacheKey = JSON.stringify({
+      zoneId: String(zoneId || ''),
+      limit: pageLimit,
+      offset: startOffset,
+      maxScan,
+      price: 250,
+    });
+    const cachedPayload = getUnder250Cache(cacheKey);
+    if (cachedPayload) {
+      return successResponse(res, 200, 'Restaurants with dishes under ₹250 retrieved successfully', cachedPayload);
+    }
 
     // Optional: Zone-based filtering - if zoneId is provided, validate and filter by zone
     let userZone = null;
@@ -1275,6 +1313,7 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
     }
 
     const MAX_PRICE = 250;
+    const MAX_ITEMS_PER_RESTAURANT = 8;
 
     // Helper function to calculate final price after discount
     const getFinalPrice = (item) => {
@@ -1295,50 +1334,140 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
     };
 
     // Helper function to filter items under ₹250
-    const filterItemsUnder250 = (items) => {
-      return items.filter(item => {
-        if (item.isAvailable === false) return false;
-        const finalPrice = getFinalPrice(item);
-        return finalPrice <= MAX_PRICE;
-      });
+    const resolvePublicImage = (...values) => {
+      for (const value of values) {
+        const sanitized = sanitizeImageValue(value);
+        if (typeof sanitized === 'string' && sanitized) return sanitized;
+        if (Array.isArray(sanitized) && sanitized.length > 0) {
+          const nestedImage = resolvePublicImage(...sanitized);
+          if (nestedImage) return nestedImage;
+        }
+        if (sanitized && typeof sanitized === 'object') {
+          const imageUrl = sanitized.url || sanitized.image || sanitized.imageUrl || sanitized.secure_url || sanitized.src;
+          if (typeof imageUrl === 'string' && imageUrl) return imageUrl;
+        }
+      }
+      return '';
+    };
+
+    const getZoneCoordinateBounds = (zone) => {
+      const coords = Array.isArray(zone?.coordinates) ? zone.coordinates : [];
+      const points = coords
+        .map((coord) => ({
+          lat: Number(coord?.latitude ?? coord?.lat),
+          lng: Number(coord?.longitude ?? coord?.lng),
+        }))
+        .filter((coord) => Number.isFinite(coord.lat) && Number.isFinite(coord.lng));
+
+      if (points.length === 0) return null;
+
+      return points.reduce(
+        (bounds, coord) => ({
+          minLat: Math.min(bounds.minLat, coord.lat),
+          maxLat: Math.max(bounds.maxLat, coord.lat),
+          minLng: Math.min(bounds.minLng, coord.lng),
+          maxLng: Math.max(bounds.maxLng, coord.lng),
+        }),
+        {
+          minLat: points[0].lat,
+          maxLat: points[0].lat,
+          minLng: points[0].lng,
+          maxLng: points[0].lng,
+        }
+      );
+    };
+
+    const matchesRequestedZone = (restaurant, zone) => {
+      const requestedZoneId = String(zone?._id || '').trim();
+      if (!requestedZoneId) return false;
+
+      const directZoneId = String(
+        restaurant?.zoneId?._id ||
+        restaurant?.zoneId?.id ||
+        restaurant?.zoneId ||
+        ''
+      ).trim();
+      if (directZoneId && directZoneId === requestedZoneId) {
+        return true;
+      }
+
+      const rankedZoneIds = Array.isArray(restaurant?.zoneRanks)
+        ? restaurant.zoneRanks
+          .map((entry) => String(entry?.zoneId?._id || entry?.zoneId || '').trim())
+          .filter(Boolean)
+        : [];
+      if (rankedZoneIds.includes(requestedZoneId)) {
+        return true;
+      }
+
+      const linkedRestaurantId = String(zone?.restaurantId?._id || zone?.restaurantId || '').trim();
+      if (linkedRestaurantId) {
+        const restaurantIdCandidates = [
+          String(restaurant?._id || '').trim(),
+          String(restaurant?.restaurantId || '').trim(),
+        ].filter(Boolean);
+        if (restaurantIdCandidates.includes(linkedRestaurantId)) {
+          return true;
+        }
+      }
+
+      const lat = Number(restaurant?.location?.latitude ?? restaurant?.location?.coordinates?.[1]);
+      const lng = Number(restaurant?.location?.longitude ?? restaurant?.location?.coordinates?.[0]);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return false;
+      }
+
+      return isPointInZone(lat, lng, zone?.coordinates || []);
     };
 
     // Helper function to process a single restaurant
-    const processRestaurant = async (restaurant) => {
+    const processRestaurant = (restaurant, menu) => {
       try {
-        // Get menu for this restaurant
-        const menu = await Menu.findOne({
-          restaurant: restaurant._id,
-          isActive: true
-        }).lean();
-
         if (!menu || !menu.sections || menu.sections.length === 0) {
           return null; // Skip restaurants without menus
         }
 
         // Collect all dishes under ₹250 from all sections
         const dishesUnder250 = [];
+        const pushEligibleItem = (item, sectionName = '') => {
+          if (!item || item.isAvailable === false || dishesUnder250.length >= MAX_ITEMS_PER_RESTAURANT) {
+            return;
+          }
 
-        menu.sections.forEach(section => {
-          if (section.isEnabled === false) return;
+          const finalPrice = getFinalPrice(item);
+          if (finalPrice > MAX_PRICE) return;
 
-          // Filter direct items in section
-          const sectionItems = filterItemsUnder250(section.items || []);
-          dishesUnder250.push(...sectionItems.map(item => ({
-            ...item,
-            sectionName: section.name
-          })));
-
-          // Filter items in subsections
-          (section.subsections || []).forEach(subsection => {
-            const subsectionItems = filterItemsUnder250(subsection.items || []);
-            dishesUnder250.push(...subsectionItems.map(item => ({
-              ...item,
-              sectionName: section.name,
-              subsectionName: subsection.name
-            })));
+          dishesUnder250.push({
+            id: String(item.id || item._id || ''),
+            name: item.name,
+            price: finalPrice,
+            originalPrice: item.originalPrice || item.price,
+            image: resolvePublicImage(item.image, item.images?.[0], item.images),
+            isVeg: item.foodType === 'Veg',
+            bestPrice: item.discountAmount > 0 || (item.originalPrice && item.originalPrice > finalPrice),
+            description: item.description || "",
+            category: item.category || sectionName || "",
           });
-        });
+        };
+
+        for (const section of menu.sections) {
+          if (!section || section.isEnabled === false) continue;
+
+          for (const item of section.items || []) {
+            pushEligibleItem(item, section.name);
+            if (dishesUnder250.length >= MAX_ITEMS_PER_RESTAURANT) break;
+          }
+          if (dishesUnder250.length >= MAX_ITEMS_PER_RESTAURANT) break;
+
+          for (const subsection of section.subsections || []) {
+            for (const item of subsection.items || []) {
+              pushEligibleItem(item, section.name || subsection.name);
+              if (dishesUnder250.length >= MAX_ITEMS_PER_RESTAURANT) break;
+            }
+            if (dishesUnder250.length >= MAX_ITEMS_PER_RESTAURANT) break;
+          }
+          if (dishesUnder250.length >= MAX_ITEMS_PER_RESTAURANT) break;
+        }
 
         // Only include restaurant if it has at least one dish under ₹250
         if (dishesUnder250.length > 0) {
@@ -1357,18 +1486,8 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
             price: typeof restaurant.priceRange === 'string'
               ? restaurant.priceRange.replace(/\$/g, '₹')
               : (restaurant.priceRange || "₹₹"),
-            image: restaurant.profileImage?.url || restaurant.menuImages?.[0]?.url || "",
-            menuItems: dishesUnder250.map(item => ({
-              id: item.id,
-              name: item.name,
-              price: getFinalPrice(item),
-              originalPrice: item.originalPrice || item.price,
-              image: item.image || (item.images && item.images.length > 0 ? item.images[0] : ""),
-              isVeg: item.foodType === 'Veg',
-              bestPrice: item.discountAmount > 0 || (item.originalPrice && item.originalPrice > getFinalPrice(item)),
-              description: item.description || "",
-              category: item.category || item.sectionName || "",
-            }))
+            image: resolvePublicImage(restaurant.profileImage, restaurant.menuImages?.[0]),
+            menuItems: dishesUnder250
           };
         }
         return null;
@@ -1379,35 +1498,143 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
     };
 
     const userZoneIdNormalized = userZone?._id ? userZone._id.toString() : null;
-    const activeZones = await Zone.find(getActiveZoneQueryByPlatform('mofood')).lean();
+    const activeZones = userZoneIdNormalized
+      ? []
+      : await Zone.find(getActiveZoneQueryByPlatform('mofood')).lean();
 
     // Get all active restaurants
-    let restaurantsQuery = Restaurant.find({ isActive: true })
-      .select('-owner -createdAt -updatedAt')
-      .lean();
+    const restaurantFindQuery = {
+      isActive: true,
+      $or: [{ platform: 'mofood' }, { platform: { $exists: false } }]
+    };
 
-    // Optional safety cap from query param; by default we return all eligible restaurants.
-    if (maxRestaurants > 0) {
-      restaurantsQuery = restaurantsQuery.limit(maxRestaurants);
+    if (userZoneIdNormalized) {
+      const zoneObjectId = new mongoose.Types.ObjectId(userZoneIdNormalized);
+      const linkedRestaurantId = String(userZone?.restaurantId?._id || userZone?.restaurantId || '').trim();
+      const zoneBounds = getZoneCoordinateBounds(userZone);
+      const zoneClauses = [
+        { zoneId: zoneObjectId },
+        { 'zoneRanks.zoneId': zoneObjectId },
+      ];
+
+      if (linkedRestaurantId) {
+        if (mongoose.Types.ObjectId.isValid(linkedRestaurantId)) {
+          zoneClauses.push({ _id: new mongoose.Types.ObjectId(linkedRestaurantId) });
+        }
+        zoneClauses.push({ restaurantId: linkedRestaurantId });
+      }
+
+      if (zoneBounds) {
+        zoneClauses.push({
+          'location.latitude': { $gte: zoneBounds.minLat, $lte: zoneBounds.maxLat },
+          'location.longitude': { $gte: zoneBounds.minLng, $lte: zoneBounds.maxLng },
+        });
+        zoneClauses.push({
+          'location.coordinates.1': { $gte: zoneBounds.minLat, $lte: zoneBounds.maxLat },
+          'location.coordinates.0': { $gte: zoneBounds.minLng, $lte: zoneBounds.maxLng },
+        });
+      }
+
+      restaurantFindQuery.$and = [{ $or: zoneClauses }];
     }
+
+    const candidateRestaurantLimit = Math.max(pageLimit, startOffset + maxScan + pageLimit + 1);
+
+    let restaurantsQuery = Restaurant.find(restaurantFindQuery)
+      .select(RESTAURANT_LIST_LITE_SELECT)
+      .sort({ rating: -1, name: 1 })
+      .limit(maxRestaurants > 0 ? Math.min(maxRestaurants, candidateRestaurantLimit) : candidateRestaurantLimit)
+      .lean();
 
     let restaurants = await restaurantsQuery;
 
     restaurants = restaurants.filter((restaurant) => {
+      if (userZoneIdNormalized) {
+        return matchesRequestedZone(restaurant, userZone);
+      }
+
       const restaurantZoneIds = getNormalizedEntityZoneIds(restaurant, activeZones);
-      if (restaurantZoneIds.length === 0) return false;
-      if (userZoneIdNormalized && !restaurantZoneIds.includes(userZoneIdNormalized)) return false;
-      return true;
+      return restaurantZoneIds.length > 0;
     });
 
-    // Process restaurants in parallel (batch processing for better performance)
-    const batchSize = 10; // Process 10 restaurants at a time
-    const restaurantsWithDishes = [];
+    const menuProjection = [
+      'restaurant',
+      'sections.name',
+      'sections.isEnabled',
+      'sections.items._id',
+      'sections.items.id',
+      'sections.items.name',
+      'sections.items.image',
+      'sections.items.images',
+      'sections.items.price',
+      'sections.items.originalPrice',
+      'sections.items.discountAmount',
+      'sections.items.discountType',
+      'sections.items.isAvailable',
+      'sections.items.foodType',
+      'sections.items.description',
+      'sections.items.category',
+      'sections.subsections.name',
+      'sections.subsections.items._id',
+      'sections.subsections.items.id',
+      'sections.subsections.items.name',
+      'sections.subsections.items.image',
+      'sections.subsections.items.images',
+      'sections.subsections.items.price',
+      'sections.subsections.items.originalPrice',
+      'sections.subsections.items.discountAmount',
+      'sections.subsections.items.discountType',
+      'sections.subsections.items.isAvailable',
+      'sections.subsections.items.foodType',
+      'sections.subsections.items.description',
+      'sections.subsections.items.category'
+    ].join(' ');
 
-    for (let i = 0; i < restaurants.length; i += batchSize) {
-      const batch = restaurants.slice(i, i + batchSize);
-      const results = await Promise.all(batch.map(processRestaurant));
-      restaurantsWithDishes.push(...results.filter(r => r !== null));
+    const restaurantsWithDishes = [];
+    let cursor = startOffset;
+    let scanned = 0;
+
+    while (
+      cursor < restaurants.length &&
+      restaurantsWithDishes.length < pageLimit &&
+      scanned < maxScan
+    ) {
+      const remainingScan = maxScan - scanned;
+      const batchSize = Math.min(Math.max(pageLimit * 2, 8), remainingScan, restaurants.length - cursor);
+      const batchStart = cursor;
+      const batch = restaurants.slice(cursor, cursor + batchSize);
+      scanned += batch.length;
+
+      const restaurantIds = batch.map((restaurant) => restaurant._id).filter(Boolean);
+      const menus = restaurantIds.length > 0
+        ? await Menu.find({
+          restaurant: { $in: restaurantIds },
+          isActive: true
+        })
+          .select(menuProjection)
+          .lean()
+        : [];
+
+      const menuByRestaurantId = new Map(
+        menus.map((menu) => [String(menu.restaurant || ''), menu])
+      );
+
+      let consumedBatchCount = batch.length;
+      for (let index = 0; index < batch.length; index += 1) {
+        const restaurant = batch[index];
+        const processedRestaurant = processRestaurant(
+          restaurant,
+          menuByRestaurantId.get(String(restaurant._id || ''))
+        );
+        if (processedRestaurant) {
+          restaurantsWithDishes.push(processedRestaurant);
+        }
+        if (restaurantsWithDishes.length >= pageLimit) {
+          consumedBatchCount = index + 1;
+          break;
+        }
+      }
+      cursor = batchStart + consumedBatchCount;
     }
 
     // Sort by rating (highest first) or by number of dishes
@@ -1418,15 +1645,107 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       return b.menuItems.length - a.menuItems.length;
     });
 
-    return successResponse(res, 200, 'Restaurants with dishes under ₹250 retrieved successfully', {
+    const responsePayload = {
       restaurants: restaurantsWithDishes,
       total: restaurantsWithDishes.length,
-    });
+      limit: pageLimit,
+      offset: startOffset,
+      nextOffset: cursor,
+      hasMore: cursor < restaurants.length || restaurants.length >= candidateRestaurantLimit,
+    };
+
+    setUnder250Cache(cacheKey, responsePayload);
+
+    return successResponse(res, 200, 'Restaurants with dishes under ₹250 retrieved successfully', responsePayload);
   } catch (error) {
     console.error('Error fetching restaurants with dishes under ₹250:', error);
     return errorResponse(res, 500, 'Failed to fetch restaurants with dishes under ₹250');
   }
 };
 
+export const getUnder250ItemImages = async (req, res) => {
+  try {
+    const resolvePublicImage = (...values) => {
+      for (const value of values) {
+        const sanitized = sanitizeImageValue(value);
+        if (typeof sanitized === 'string' && sanitized) return sanitized;
+        if (Array.isArray(sanitized) && sanitized.length > 0) {
+          const nestedImage = resolvePublicImage(...sanitized);
+          if (nestedImage) return nestedImage;
+        }
+        if (sanitized && typeof sanitized === 'object') {
+          const imageUrl = sanitized.url || sanitized.image || sanitized.imageUrl || sanitized.secure_url || sanitized.src;
+          if (typeof imageUrl === 'string' && imageUrl) return imageUrl;
+        }
+      }
+      return '';
+    };
 
+    const restaurantId = String(req.query?.restaurantId || '').trim();
+    const itemIds = String(req.query?.itemIds || '')
+      .split(',')
+      .map((itemId) => itemId.trim())
+      .filter(Boolean)
+      .slice(0, 12);
 
+    if (!restaurantId || itemIds.length === 0) {
+      return successResponse(res, 200, 'Under ₹250 item images retrieved successfully', {
+        images: {},
+      });
+    }
+
+    const restaurantLookup = mongoose.Types.ObjectId.isValid(restaurantId)
+      ? { _id: new mongoose.Types.ObjectId(restaurantId) }
+      : { restaurantId };
+    const restaurant = await Restaurant.findOne(restaurantLookup)
+      .select('_id restaurantId')
+      .lean();
+
+    if (!restaurant?._id) {
+      return successResponse(res, 200, 'Under ₹250 item images retrieved successfully', {
+        images: {},
+      });
+    }
+
+    const menu = await Menu.findOne({
+      restaurant: restaurant._id,
+      isActive: true,
+    })
+      .select([
+        'sections.items.id',
+        'sections.items._id',
+        'sections.items.image',
+        'sections.items.images',
+        'sections.subsections.items.id',
+        'sections.subsections.items._id',
+        'sections.subsections.items.image',
+        'sections.subsections.items.images',
+      ].join(' '))
+      .lean();
+
+    const wantedItemIds = new Set(itemIds);
+    const images = {};
+    const setImageIfPresent = (item) => {
+      const itemId = String(item?.id || item?._id || '').trim();
+      if (!itemId || !wantedItemIds.has(itemId)) return;
+      const image = resolvePublicImage(item.image, item.images?.[0], item.images);
+      if (image) {
+        images[itemId] = image;
+      }
+    };
+
+    (menu?.sections || []).forEach((section) => {
+      (section.items || []).forEach(setImageIfPresent);
+      (section.subsections || []).forEach((subsection) => {
+        (subsection.items || []).forEach(setImageIfPresent);
+      });
+    });
+
+    return successResponse(res, 200, 'Under ₹250 item images retrieved successfully', {
+      images,
+    });
+  } catch (error) {
+    console.error('Error fetching under ₹250 item images:', error);
+    return errorResponse(res, 500, 'Failed to fetch under ₹250 item images');
+  }
+};

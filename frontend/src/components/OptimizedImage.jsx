@@ -32,12 +32,28 @@ const OptimizedImage = ({
   const imgRef = useRef(null)
   const observerRef = useRef(null)
 
-  // Check if image URL supports optimization (external URLs)
+  useEffect(() => {
+    setIsLoaded(false)
+    setHasError(false)
+    setIsInView(priority)
+  }, [src, priority])
+
+  const isCloudinaryUrl = (imageSrc) => {
+    if (!imageSrc || typeof imageSrc !== 'string') return false
+
+    try {
+      const url = new URL(imageSrc)
+      return url.hostname.includes('res.cloudinary.com')
+    } catch {
+      return false
+    }
+  }
+
+  // Check if image URL supports optimization transforms
   const supportsOptimization = (imageSrc) => {
     if (!imageSrc || typeof imageSrc !== 'string' || imageSrc === '') return false
     if (imageSrc.startsWith('data:') || imageSrc.startsWith('/')) return false
-    // Check if it's an external URL (http/https)
-    return /^https?:\/\//.test(imageSrc)
+    return isCloudinaryUrl(imageSrc)
   }
 
   // Generate responsive srcset
@@ -118,7 +134,7 @@ const OptimizedImage = ({
         observerRef.current.unobserve(imgRef.current)
       }
     }
-  }, [priority, isInView])
+  }, [priority, isInView, src])
 
   // Preload critical images
   useEffect(() => {
@@ -208,6 +224,7 @@ const OptimizedImage = ({
             loading={priority ? 'eager' : 'lazy'}
             decoding="async"
             fetchPriority={priority ? 'high' : 'auto'}
+            referrerPolicy="no-referrer"
             onLoad={handleLoad}
             onError={handleError}
             {...props}

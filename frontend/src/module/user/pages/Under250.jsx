@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom"
+import { Link } from "react-router-dom"
 import { useState, useMemo, useCallback, useEffect, useRef } from "react"
 import { Star, Clock, MapPin, ArrowDownUp, Timer, ArrowRight, ChevronDown, Bookmark, Share2, Plus, Minus, X } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
@@ -6,7 +6,6 @@ import { toast } from "sonner"
 import AnimatedPage from "../components/AnimatedPage"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { useLocationSelector } from "../components/UserLayout"
 import { useLocation } from "../hooks/useLocation"
 import { useZone } from "../hooks/useZone"
 import { useCart } from "../context/CartContext"
@@ -21,10 +20,55 @@ import OptimizedImage from "@/components/OptimizedImage"
 import api from "@/lib/api"
 import { restaurantAPI } from "@/lib/api"
 
+const Motion = motion
+const UNDER_250_PAGE_SIZE = 4
+const UNDER_250_REQUEST_CACHE_TTL_MS = 30 * 1000
+const under250RequestCache = new Map()
+const getUnder250ItemImageKey = (restaurantId, itemId) => `${restaurantId || ""}:${itemId || ""}`
+const getUnder250ItemId = (item) => String(item?.id || item?._id || "")
+const getUnder250RequestKey = (zoneId, offset = 0, limit = UNDER_250_PAGE_SIZE) =>
+  `${zoneId || "all"}:${offset}:${limit}`
+
+const mergeUnder250Restaurants = (currentRestaurants = [], nextRestaurants = []) => {
+  const seen = new Set()
+  return [...currentRestaurants, ...nextRestaurants].filter((restaurant) => {
+    const id = String(restaurant?.id || restaurant?._id || restaurant?.restaurantId || "")
+    if (!id || seen.has(id)) return false
+    seen.add(id)
+    return true
+  })
+}
+
+const getUnder250Payload = (zoneId, offset = 0, limit = UNDER_250_PAGE_SIZE) => {
+  const requestKey = getUnder250RequestKey(zoneId, offset, limit)
+  const cachedRequest = under250RequestCache.get(requestKey)
+  const now = Date.now()
+
+  if (cachedRequest && now - cachedRequest.timestamp < UNDER_250_REQUEST_CACHE_TTL_MS) {
+    return cachedRequest.promise
+  }
+
+  const promise = restaurantAPI.getRestaurantsUnder250(zoneId || undefined, {
+    timeout: 45000,
+    params: {
+      limit,
+      offset,
+    },
+  }).then((response) => response?.data?.data || {})
+
+  under250RequestCache.set(requestKey, { timestamp: now, promise })
+  promise.catch(() => {
+    if (under250RequestCache.get(requestKey)?.promise === promise) {
+      under250RequestCache.delete(requestKey)
+    }
+  })
+
+  return promise
+}
+
 export default function Under250() {
   const { location } = useLocation()
-  const { zoneId, loading: zoneLoading, isOutOfService } = useZone(location)
-  const navigate = useNavigate()
+  const { zoneId, loading: zoneLoading, isOutOfService, zoneStatus } = useZone(location)
   const { addToCart, updateQuantity, removeFromCart, getCartItem, cart } = useCart()
   const [activeCategory, setActiveCategory] = useState(null)
   const [showSortPopup, setShowSortPopup] = useState(false)
@@ -47,7 +91,15 @@ export default function Under250() {
   const [loadingCategories, setLoadingCategories] = useState(true)
   const [under250Restaurants, setUnder250Restaurants] = useState([])
   const [loadingRestaurants, setLoadingRestaurants] = useState(true)
+  const [hasMoreRestaurantsPage, setHasMoreRestaurantsPage] = useState(false)
+  const [nextRestaurantsOffset, setNextRestaurantsOffset] = useState(0)
+  const [loadingMoreRestaurants, setLoadingMoreRestaurants] = useState(false)
+  const [under250RequestZoneId, setUnder250RequestZoneId] = useState(undefined)
+  const [lazyItemImages, setLazyItemImages] = useState({})
+  const [visibleItemImageKeys, setVisibleItemImageKeys] = useState({})
   const under250RequestRef = useRef(0)
+  const loadMoreTriggerRef = useRef(null)
+  const requestedItemImageKeysRef = useRef(new Set())
 
   const sortOptions = [
     { id: null, label: 'Relevance' },
@@ -232,71 +284,249 @@ export default function Under250() {
     }
 
     return filtered
-  }, [under250Restaurants, selectedSort, under30MinsFilter, activeCategory, categories, priceRange, isRestaurantAvailable])
+  }, [under250Restaurants, selectedSort, under30MinsFilter, activeCategory, categories, priceRange])
+  const visibleRestaurants = useMemo(
+    () => sortedAndFilteredRestaurants,
+    [sortedAndFilteredRestaurants]
+  )
+  const hasMoreRestaurants = hasMoreRestaurantsPage
+
+  const getLazyItemImage = useCallback((restaurant, item) => {
+    const restaurantId = restaurant?.id || restaurant?._id || restaurant?.restaurantId || ""
+    const itemId = getUnder250ItemId(item)
+    return item?.image || lazyItemImages[getUnder250ItemImageKey(restaurantId, itemId)] || ""
+  }, [lazyItemImages])
+
+  useEffect(() => {
+    const itemCards = Array.from(document.querySelectorAll("[data-under250-item-key]"))
+    if (itemCards.length === 0) return undefined
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const nextVisibleKeys = {}
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            const imageKey = entry.target.getAttribute("data-under250-item-key")
+            if (imageKey) {
+              nextVisibleKeys[imageKey] = true
+              observer.unobserve(entry.target)
+            }
+          }
+        })
+
+        if (Object.keys(nextVisibleKeys).length > 0) {
+          setVisibleItemImageKeys((current) => ({ ...current, ...nextVisibleKeys }))
+        }
+      },
+      { rootMargin: "120px 0px", threshold: 0.01 }
+    )
+
+    itemCards.forEach((card) => observer.observe(card))
+    return () => observer.disconnect()
+  }, [visibleRestaurants])
+
+  useEffect(() => {
+    const imageRequests = []
+
+    visibleRestaurants.forEach((restaurant) => {
+      const restaurantId = restaurant?.id || restaurant?._id || restaurant?.restaurantId
+      if (!restaurantId) return
+
+      const itemIds = (restaurant.menuItems || [])
+        .map((item) => {
+          const itemId = getUnder250ItemId(item)
+          const imageKey = getUnder250ItemImageKey(restaurantId, itemId)
+          if (
+            !itemId ||
+            !visibleItemImageKeys[imageKey] ||
+            item?.image ||
+            lazyItemImages[imageKey] ||
+            requestedItemImageKeysRef.current.has(imageKey)
+          ) {
+            return null
+          }
+          requestedItemImageKeysRef.current.add(imageKey)
+          return itemId
+        })
+        .filter(Boolean)
+
+      if (itemIds.length === 0) return
+
+      imageRequests.push(
+        restaurantAPI
+          .getUnder250ItemImages(restaurantId, itemIds)
+          .then((response) => ({
+            restaurantId,
+            itemIds,
+            images: response?.data?.data?.images || {},
+          }))
+          .catch((error) => ({
+            restaurantId,
+            itemIds,
+            error,
+            images: {},
+          }))
+      )
+    })
+
+    if (imageRequests.length === 0) {
+      return undefined
+    }
+
+    Promise.allSettled(imageRequests).then((results) => {
+      const nextImages = {}
+      results.forEach((result) => {
+        if (result.status !== "fulfilled") return
+        const { restaurantId, itemIds, images, error } = result.value
+        if (error) {
+          itemIds.forEach((itemId) => {
+            requestedItemImageKeysRef.current.delete(getUnder250ItemImageKey(restaurantId, itemId))
+          })
+          return
+        }
+        Object.entries(images).forEach(([itemId, image]) => {
+          if (typeof image === "string" && image) {
+            nextImages[getUnder250ItemImageKey(restaurantId, itemId)] = image
+          }
+        })
+        itemIds.forEach((itemId) => {
+          const imageKey = getUnder250ItemImageKey(restaurantId, itemId)
+          if (!images?.[itemId]) {
+            requestedItemImageKeysRef.current.delete(imageKey)
+          }
+        })
+      })
+
+      if (Object.keys(nextImages).length > 0) {
+        setLazyItemImages((current) => ({ ...current, ...nextImages }))
+      }
+    })
+  }, [lazyItemImages, visibleItemImageKeys, visibleRestaurants])
+
+  const loadMoreRestaurants = useCallback(async () => {
+    if (loadingMoreRestaurants || !hasMoreRestaurantsPage) return
+
+    try {
+      setLoadingMoreRestaurants(true)
+      const payload = await getUnder250Payload(
+        under250RequestZoneId,
+        nextRestaurantsOffset,
+        UNDER_250_PAGE_SIZE
+      )
+      const restaurants = Array.isArray(payload.restaurants) ? payload.restaurants : []
+      setUnder250Restaurants((current) => mergeUnder250Restaurants(current, restaurants))
+      setNextRestaurantsOffset(Number(payload.nextOffset) || nextRestaurantsOffset)
+      setHasMoreRestaurantsPage(Boolean(payload.hasMore))
+    } catch (error) {
+      const isAbort = error?.name === "CanceledError" || error?.code === "ERR_CANCELED"
+      if (!isAbort) {
+        console.error("Error loading more under 250 restaurants:", error)
+      }
+      setHasMoreRestaurantsPage(false)
+    } finally {
+      setLoadingMoreRestaurants(false)
+    }
+  }, [hasMoreRestaurantsPage, loadingMoreRestaurants, nextRestaurantsOffset, under250RequestZoneId])
+
+  useEffect(() => {
+    const trigger = loadMoreTriggerRef.current
+    if (!trigger || !hasMoreRestaurants) return undefined
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          loadMoreRestaurants()
+        }
+      },
+      { rootMargin: "500px 0px", threshold: 0.01 }
+    )
+
+    observer.observe(trigger)
+    return () => observer.disconnect()
+  }, [hasMoreRestaurants, loadMoreRestaurants])
 
   // Fetch restaurants with dishes under ₹250 from backend
   useEffect(() => {
-    const abortController = new AbortController()
-    const requestTimeoutMs = 12000
+    let isEffectActive = true
 
     const fetchRestaurantsUnder250 = async () => {
       const requestId = under250RequestRef.current + 1
       under250RequestRef.current = requestId
-      const timeoutId = window.setTimeout(() => {
-        try {
-          abortController.abort("under-250-request-timeout")
-        } catch {
-          // Ignore abort errors.
-        }
-      }, requestTimeoutMs)
       try {
         setLoadingRestaurants(true)
+        setLazyItemImages({})
+        setVisibleItemImageKeys({})
+        requestedItemImageKeysRef.current.clear()
         // Primary: zone-aware fetch (when zone exists)
         // Fallback: no-zone fetch to avoid blank page when zone detection is delayed/missing.
-        let response = await restaurantAPI.getRestaurantsUnder250(zoneId || undefined, {
-          signal: abortController.signal,
-        })
-        let restaurants = response?.data?.data?.restaurants
+        const fetchUnder250 = (requestedZoneId, offset = 0) =>
+          getUnder250Payload(requestedZoneId, offset, UNDER_250_PAGE_SIZE)
 
-        if (zoneId && (!Array.isArray(restaurants) || restaurants.length === 0)) {
-          response = await restaurantAPI.getRestaurantsUnder250(undefined, {
-            signal: abortController.signal,
-          })
-          restaurants = response?.data?.data?.restaurants
+        let payload
+        let resolvedRequestZoneId = zoneId || undefined
+        try {
+          payload = await fetchUnder250(zoneId)
+        } catch (error) {
+          const isAbort = error?.name === "CanceledError" || error?.code === "ERR_CANCELED"
+          if (!zoneId || isAbort) {
+            throw error
+          }
+          // Cached/manual zone IDs can go stale or belong to the other platform. Retry
+          // without zone scope so the page does not render empty for valid locations.
+          payload = await fetchUnder250(undefined)
+          resolvedRequestZoneId = undefined
         }
 
-        if (under250RequestRef.current !== requestId) return
-        setUnder250Restaurants(Array.isArray(restaurants) ? restaurants : [])
+        let restaurants = Array.isArray(payload.restaurants) ? payload.restaurants : []
+        if (zoneId && restaurants.length === 0 && !payload.hasMore) {
+          payload = await fetchUnder250(undefined)
+          restaurants = Array.isArray(payload.restaurants) ? payload.restaurants : []
+          resolvedRequestZoneId = undefined
+        }
+
+        if (!isEffectActive || under250RequestRef.current !== requestId) return
+        setUnder250Restaurants(restaurants)
+        setNextRestaurantsOffset(Number(payload.nextOffset) || restaurants.length)
+        setHasMoreRestaurantsPage(Boolean(payload.hasMore))
+        setUnder250RequestZoneId(resolvedRequestZoneId)
       } catch (error) {
         const isAbort = error?.name === "CanceledError" || error?.code === "ERR_CANCELED"
         if (!isAbort) {
           console.error('Error fetching restaurants under 250:', error)
         }
-        if (under250RequestRef.current !== requestId) return
+        if (!isEffectActive || under250RequestRef.current !== requestId) return
         setUnder250Restaurants([])
+        setNextRestaurantsOffset(0)
+        setHasMoreRestaurantsPage(false)
+        setUnder250RequestZoneId(undefined)
+        setLazyItemImages({})
+        setVisibleItemImageKeys({})
+        requestedItemImageKeysRef.current.clear()
       } finally {
-        window.clearTimeout(timeoutId)
-        if (under250RequestRef.current !== requestId) return
-        setLoadingRestaurants(false)
+        if (isEffectActive && under250RequestRef.current === requestId) {
+          setLoadingRestaurants(false)
+        }
       }
     }
 
-    if (zoneLoading) return
+    if (zoneLoading || zoneStatus === "loading") return
     if (isOutOfService) {
       setUnder250Restaurants([])
+      setNextRestaurantsOffset(0)
+      setHasMoreRestaurantsPage(false)
+      setUnder250RequestZoneId(undefined)
+      setLazyItemImages({})
+      setVisibleItemImageKeys({})
+      requestedItemImageKeysRef.current.clear()
       setLoadingRestaurants(false)
       return
     }
 
     fetchRestaurantsUnder250()
     return () => {
-      try {
-        abortController.abort("under-250-effect-cleanup")
-      } catch {
-        // Ignore abort errors.
-      }
+      isEffectActive = false
     }
-  }, [zoneId, zoneLoading, isOutOfService, isRestaurantAvailable])
+  }, [zoneId, zoneLoading, zoneStatus, isOutOfService])
 
   // Fetch categories from admin API
   useEffect(() => {
@@ -350,7 +580,10 @@ export default function Under250() {
   useEffect(() => {
     const cartQuantities = {}
     cart.forEach((item) => {
-      cartQuantities[item.id] = item.quantity || 0
+      const itemId = getUnder250ItemId(item)
+      if (itemId) {
+        cartQuantities[itemId] = item.quantity || 0
+      }
     })
     setQuantities(cartQuantities)
   }, [cart])
@@ -390,10 +623,13 @@ export default function Under250() {
       return
     }
 
+    const itemId = getUnder250ItemId(item)
+    if (!itemId) return
+
     // Update local state
     setQuantities((prev) => ({
       ...prev,
-      [item.id]: newQuantity,
+      [itemId]: newQuantity,
     }))
 
     // Find restaurant name from the item or use provided parameter
@@ -401,7 +637,7 @@ export default function Under250() {
 
     // Prepare cart item with all required properties
     const cartItem = {
-      id: item.id,
+      id: itemId,
       name: item.name,
       price: item.price,
       image: item.image,
@@ -430,7 +666,7 @@ export default function Under250() {
           viewportY: rect.top + rect.height / 2,
           scrollX: scrollX,
           scrollY: scrollY,
-          itemId: item.id,
+          itemId,
         }
       }
     }
@@ -438,16 +674,16 @@ export default function Under250() {
     // Update cart context
     if (newQuantity <= 0) {
       const productInfo = {
-        id: item.id,
+        id: itemId,
         name: item.name,
         imageUrl: item.image,
       }
-      removeFromCart(item.id, sourcePosition, productInfo)
+      removeFromCart(itemId, sourcePosition, productInfo)
     } else {
-      const existingCartItem = getCartItem(item.id)
+      const existingCartItem = getCartItem(itemId)
       if (existingCartItem) {
         const productInfo = {
-          id: item.id,
+          id: itemId,
           name: item.name,
           imageUrl: item.image,
         }
@@ -455,27 +691,45 @@ export default function Under250() {
         if (newQuantity > existingCartItem.quantity && sourcePosition) {
           addToCart(cartItem, sourcePosition)
           if (newQuantity > existingCartItem.quantity + 1) {
-            updateQuantity(item.id, newQuantity)
+            updateQuantity(itemId, newQuantity)
           }
         } else if (newQuantity < existingCartItem.quantity && sourcePosition) {
-          updateQuantity(item.id, newQuantity, sourcePosition, productInfo)
+          updateQuantity(itemId, newQuantity, sourcePosition, productInfo)
         } else {
-          updateQuantity(item.id, newQuantity)
+          updateQuantity(itemId, newQuantity)
         }
       } else {
         addToCart(cartItem, sourcePosition)
         if (newQuantity > 1) {
-          updateQuantity(item.id, newQuantity)
+          updateQuantity(itemId, newQuantity)
         }
       }
     }
   }
+
+  useEffect(() => {
+    if (!selectedItem || selectedItem.image) return
+
+    const selectedItemId = getUnder250ItemId(selectedItem)
+    const image = lazyItemImages[getUnder250ItemImageKey(selectedItem.restaurantId, selectedItemId)]
+    if (!image) return
+
+    setSelectedItem((current) => {
+      if (!current || current.image || getUnder250ItemId(current) !== selectedItemId) {
+        return current
+      }
+      return { ...current, image }
+    })
+  }, [lazyItemImages, selectedItem])
 
   const handleItemClick = (item, restaurant) => {
     // Add restaurant info to item for display
     const itemWithRestaurant = {
       ...item,
       restaurant: restaurant.name,
+      restaurantId: restaurant.id || restaurant._id || restaurant.restaurantId,
+      restaurantSlug: restaurant.slug,
+      restaurantName: restaurant.name,
       description: item.description || `${item.name} from ${restaurant.name}`,
       customisable: item.customisable || false,
       notEligibleForCoupons: item.notEligibleForCoupons || false,
@@ -487,7 +741,7 @@ export default function Under250() {
   const handleBookmarkClick = (item) => {
     if (!item) return;
 
-    const dishId = item.id || item._id;
+    const dishId = getUnder250ItemId(item);
     const restaurantId = item.restaurantId || item.restaurant_id || item.restaurant?.id || "unknown";
     const restaurantName = item.restaurantName || item.restaurant?.name || "Restaurant";
     const restaurantSlug = item.restaurantSlug || item.restaurant?.slug || "";
@@ -517,7 +771,7 @@ export default function Under250() {
     if (!item) return;
     
     const companyName = await getCompanyNameAsync();
-    const dishId = item.id || item._id;
+    const dishId = getUnder250ItemId(item);
     const restaurantSlug = item.restaurantSlug || item.restaurant?.slug || "";
     
     const shareUrl = `${window.location.origin}/user/restaurants/${restaurantSlug}?dish=${dishId}`;
@@ -545,7 +799,7 @@ export default function Under250() {
     try {
       await navigator.clipboard.writeText(text);
       toast.success("Link copied to clipboard!");
-    } catch (error) {
+    } catch {
       toast.error("Failed to copy link");
     }
   }
@@ -590,7 +844,7 @@ export default function Under250() {
               <>
                 {/* All Button */}
                 <div className="flex-shrink-0">
-                  <motion.div
+                  <Motion.div
                     className="flex flex-col items-center gap-2 w-[62px] sm:w-24 md:w-28"
                     onClick={() => setActiveCategory(null)}
                     whileHover={{ scale: 1.1, y: -4 }}
@@ -610,13 +864,13 @@ export default function Under250() {
                     <span className="text-xs sm:text-sm md:text-base font-semibold text-gray-800 dark:text-gray-200 text-center pb-1">
                       All
                     </span>
-                  </motion.div>
+                  </Motion.div>
                 </div>
                 {categories.map((category, index) => {
                   const isActive = activeCategory === category.id
                   return (
                     <div key={category.id || category.slug || `under250-cat-${index}`} className="flex-shrink-0">
-                      <motion.div
+                      <Motion.div
                         className="flex flex-col items-center gap-2 w-[62px] sm:w-24 md:w-28"
                         onClick={() =>
                           setActiveCategory((prev) => (prev === category.id ? null : category.id))
@@ -638,7 +892,7 @@ export default function Under250() {
                         <span className={`text-xs sm:text-sm md:text-base font-semibold text-gray-800 dark:text-gray-200 text-center pb-1 ${isActive ? 'border-b-2 border-green-600' : ''}`}>
                           {category.name.length > 7 ? `${category.name.slice(0, 7)}...` : category.name}
                         </span>
-                      </motion.div>
+                      </Motion.div>
                     </div>
                   )
                 })}
@@ -740,7 +994,8 @@ export default function Under250() {
             </div>
           </div>
         ) : (
-          sortedAndFilteredRestaurants.map((restaurant) => {
+          <>
+            {visibleRestaurants.map((restaurant, restaurantIndex) => {
             const restaurantSlug = restaurant.slug || restaurant.name.toLowerCase().replace(/\s+/g, "-")
             const isRestaurantOffline = !isRestaurantAvailable(restaurant)
             return (
@@ -787,14 +1042,20 @@ export default function Under250() {
                       }}
                     >
                       {restaurant.menuItems.map((item, itemIndex) => {
-                        const quantity = quantities[item.id] || 0
+                        const itemId = getUnder250ItemId(item)
+                        const quantity = quantities[itemId] || 0
+                        const restaurantImageKeyId = restaurant?.id || restaurant?._id || restaurant?.restaurantId || ""
+                        const itemImageKey = getUnder250ItemImageKey(restaurantImageKeyId, itemId)
+                        const itemImage = getLazyItemImage(restaurant, item)
+                        const itemWithLazyImage = { ...item, id: itemId, image: itemImage }
                         return (
-                          <motion.div
-                            key={item.id}
+                          <Motion.div
+                            key={itemId}
+                            data-under250-item-key={itemImageKey}
                             className={`flex-shrink-0 w-[200px] sm:w-[220px] md:w-full bg-white dark:bg-[#1a1a1a] rounded-lg md:rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden ${isRestaurantOffline ? "cursor-not-allowed" : "cursor-pointer"}`}
                             onClick={() => {
                               if (!isRestaurantOffline) {
-                                handleItemClick(item, restaurant)
+                                handleItemClick(itemWithLazyImage, restaurant)
                               }
                             }}
                             initial={{ opacity: 0, y: 20 }}
@@ -806,23 +1067,23 @@ export default function Under250() {
                           >
                             {/* Item Image */}
                             <div className="relative w-full h-32 sm:h-36 md:h-40 lg:h-48 xl:h-52 overflow-hidden">
-                              <motion.div
+                              <Motion.div
                                 className="absolute inset-0"
                                 whileHover={isRestaurantOffline ? undefined : { scale: 1.1 }}
                                 transition={{ duration: 0.5, ease: "easeOut" }}
                               >
                                 <OptimizedImage
-                                  src={item.image}
+                                  src={itemImage}
                                   alt={item.name}
                                   className="w-full h-full"
                                   objectFit="cover"
                                   sizes="(max-width: 640px) 200px, (max-width: 768px) 220px, 100vw"
                                   placeholder="blur"
-                                  priority={itemIndex < 4}
+                                  priority={restaurantIndex === 0 && itemIndex < 2}
                                 />
-                              </motion.div>
+                              </Motion.div>
                               {/* Gradient Overlay on Hover */}
-                              <motion.div
+                              <Motion.div
                                 className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent"
                                 initial={{ opacity: 0 }}
                                 whileHover={{ opacity: 1 }}
@@ -830,13 +1091,13 @@ export default function Under250() {
                               />
                               {/* Veg Indicator */}
                               {item.isVeg && (
-                                <motion.div
+                                <Motion.div
                                   className="absolute top-2 left-2 md:top-3 md:left-3 h-4 w-4 md:h-5 md:w-5 lg:h-6 lg:w-6 rounded border-2 border-green-600 bg-white flex items-center justify-center z-10"
                                   whileHover={{ scale: 1.2, rotate: 5 }}
                                   transition={{ duration: 0.2 }}
                                 >
                                   <div className="h-2 w-2 md:h-2.5 md:w-2.5 lg:h-3 lg:w-3 rounded-full bg-green-600" />
-                                </motion.div>
+                                </Motion.div>
                               )}
                             </div>
 
@@ -887,7 +1148,7 @@ export default function Under250() {
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       if (!shouldShowGrayscale && !isRestaurantOffline) {
-                                        handleItemClick(item, restaurant)
+                                        handleItemClick(itemWithLazyImage, restaurant)
                                       }
                                     }}
                                   >
@@ -896,7 +1157,7 @@ export default function Under250() {
                                 )}
                               </div>
                             </div>
-                          </motion.div>
+                          </Motion.div>
                         )
                       })}
                     </div>
@@ -926,7 +1187,24 @@ export default function Under250() {
                 )}
               </section>
             )
-          }))}
+            })}
+            {hasMoreRestaurants && (
+              <div ref={loadMoreTriggerRef} className="flex justify-center py-6">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={loadingMoreRestaurants}
+                  onClick={() => {
+                    loadMoreRestaurants()
+                  }}
+                  className="rounded-full border-gray-200 bg-white px-5 text-sm text-gray-700 shadow-sm dark:border-gray-800 dark:bg-[#1a1a1a] dark:text-gray-200"
+                >
+                  {loadingMoreRestaurants ? "Loading more deals..." : "Load more deals"}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* Sort Popup - Bottom Sheet */}
@@ -934,7 +1212,7 @@ export default function Under250() {
         {showSortPopup && (
           <>
             {/* Backdrop */}
-            <motion.div
+            <Motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -944,7 +1222,7 @@ export default function Under250() {
             />
 
             {/* Bottom Sheet */}
-            <motion.div
+            <Motion.div
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
@@ -1009,7 +1287,7 @@ export default function Under250() {
                   Apply
                 </button>
               </div>
-            </motion.div>
+            </Motion.div>
           </>
         )}
       </AnimatePresence>
@@ -1019,7 +1297,7 @@ export default function Under250() {
         {showItemDetail && selectedItem && (
           <>
             {/* Backdrop */}
-            <motion.div
+            <Motion.div
               className="fixed inset-0 bg-black/40 z-[9999]"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1029,7 +1307,7 @@ export default function Under250() {
             />
 
             {/* Item Detail Bottom Sheet */}
-            <motion.div
+            <Motion.div
               className="fixed left-0 right-0 bottom-0 md:left-1/2 md:right-auto md:-translate-x-1/2 md:max-w-2xl lg:max-w-4xl xl:max-w-5xl z-[10000] bg-white dark:bg-[#1a1a1a] rounded-t-3xl shadow-2xl max-h-[90vh] md:max-h-[85vh] flex flex-col"
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
@@ -1039,7 +1317,7 @@ export default function Under250() {
             >
               {/* Close Button - Top Center Above Popup with 4px gap */}
               <div className="absolute -top-[44px] left-1/2 -translate-x-1/2 z-[10001]">
-                <motion.button
+                <Motion.button
                   onClick={() => setShowItemDetail(false)}
                   className="h-10 w-10 md:h-12 md:w-12 rounded-full bg-gray-800 dark:bg-gray-700 flex items-center justify-center hover:bg-gray-900 dark:hover:bg-gray-600 transition-colors shadow-lg"
                   initial={{ opacity: 0, y: -10 }}
@@ -1048,7 +1326,7 @@ export default function Under250() {
                   transition={{ duration: 0.2 }}
                 >
                   <X className="h-5 w-5 md:h-6 md:w-6 text-white" />
-                </motion.button>
+                </Motion.button>
               </div>
 
               {/* Image Section */}
@@ -1231,7 +1509,7 @@ export default function Under250() {
                   </Button>
                 </div>
               </div>
-            </motion.div>
+            </Motion.div>
           </>
         )}
       </AnimatePresence>
@@ -1241,6 +1519,9 @@ export default function Under250() {
     </div>
   )
 }
+
+
+
 
 
 

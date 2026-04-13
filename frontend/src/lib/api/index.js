@@ -534,8 +534,16 @@ export const restaurantAPI = {
 
   // Get restaurants with dishes under ₹250
   getRestaurantsUnder250: (zoneId, config = {}) => {
-    const params = zoneId ? { zoneId } : {};
+    const params = { ...(config.params || {}), ...(zoneId ? { zoneId } : {}) };
     return apiClient.get(API_ENDPOINTS.RESTAURANT.UNDER_250, { ...config, params });
+  },
+  getUnder250ItemImages: (restaurantId, itemIds = [], config = {}) => {
+    const params = {
+      ...(config.params || {}),
+      restaurantId,
+      itemIds: Array.isArray(itemIds) ? itemIds.join(",") : itemIds,
+    };
+    return apiClient.get(`${API_ENDPOINTS.RESTAURANT.UNDER_250}/item-images`, { ...config, params });
   },
 
   // Get restaurant by ID or slug
