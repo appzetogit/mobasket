@@ -269,6 +269,147 @@ function setUnder250Cache(cacheKey, payload) {
   });
 }
 
+async function getMenuWithSanitizedItemImages(restaurantId) {
+  const menuResult = await Menu.aggregate([
+    {
+      $match: {
+        restaurant: restaurantId,
+        isActive: true,
+      },
+    },
+    {
+      $project: {
+        restaurant: 1,
+        isActive: 1,
+        sections: {
+          $map: {
+            input: { $ifNull: ['$sections', []] },
+            as: 'section',
+            in: {
+              $mergeObjects: [
+                '$$section',
+                {
+                  items: {
+                    $map: {
+                      input: { $ifNull: ['$$section.items', []] },
+                      as: 'item',
+                      in: {
+                        $mergeObjects: [
+                          '$$item',
+                          {
+                            image: {
+                              $let: {
+                                vars: { img: { $ifNull: ['$$item.image', ''] } },
+                                in: {
+                                  $cond: [
+                                    {
+                                      $regexMatch: {
+                                        input: '$$img',
+                                        regex: '^data:',
+                                        options: 'i',
+                                      },
+                                    },
+                                    '',
+                                    '$$img',
+                                  ],
+                                },
+                              },
+                            },
+                            images: {
+                              $filter: {
+                                input: { $ifNull: ['$$item.images', []] },
+                                as: 'img',
+                                cond: {
+                                  $not: [
+                                    {
+                                      $regexMatch: {
+                                        input: { $ifNull: ['$$img', ''] },
+                                        regex: '^data:',
+                                        options: 'i',
+                                      },
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                  subsections: {
+                    $map: {
+                      input: { $ifNull: ['$$section.subsections', []] },
+                      as: 'subsection',
+                      in: {
+                        $mergeObjects: [
+                          '$$subsection',
+                          {
+                            items: {
+                              $map: {
+                                input: { $ifNull: ['$$subsection.items', []] },
+                                as: 'item',
+                                in: {
+                                  $mergeObjects: [
+                                    '$$item',
+                                    {
+                                      image: {
+                                        $let: {
+                                          vars: { img: { $ifNull: ['$$item.image', ''] } },
+                                          in: {
+                                            $cond: [
+                                              {
+                                                $regexMatch: {
+                                                  input: '$$img',
+                                                  regex: '^data:',
+                                                  options: 'i',
+                                                },
+                                              },
+                                              '',
+                                              '$$img',
+                                            ],
+                                          },
+                                        },
+                                      },
+                                      images: {
+                                        $filter: {
+                                          input: { $ifNull: ['$$item.images', []] },
+                                          as: 'img',
+                                          cond: {
+                                            $not: [
+                                              {
+                                                $regexMatch: {
+                                                  input: { $ifNull: ['$$img', ''] },
+                                                  regex: '^data:',
+                                                  options: 'i',
+                                                },
+                                              },
+                                            ],
+                                          },
+                                        },
+                                      },
+                                    },
+                                  ],
+                                },
+                              },
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        },
+      },
+    },
+  ]);
+
+  return menuResult[0] || null;
+}
+
 function getActiveZoneQueryByPlatform(platform = 'mofood') {
   return platform === 'mogrocery'
     ? { isActive: true, platform: 'mogrocery' }
@@ -1442,7 +1583,7 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
             name: item.name,
             price: finalPrice,
             originalPrice: item.originalPrice || item.price,
-            image: resolvePublicImage(item.image, item.images?.[0], item.images),
+            image: '',
             isVeg: item.foodType === 'Veg',
             bestPrice: item.discountAmount > 0 || (item.originalPrice && item.originalPrice > finalPrice),
             description: item.description || "",
@@ -1564,8 +1705,6 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       'sections.items._id',
       'sections.items.id',
       'sections.items.name',
-      'sections.items.image',
-      'sections.items.images',
       'sections.items.price',
       'sections.items.originalPrice',
       'sections.items.discountAmount',
@@ -1578,8 +1717,6 @@ export const getRestaurantsWithDishesUnder250 = async (req, res) => {
       'sections.subsections.items._id',
       'sections.subsections.items.id',
       'sections.subsections.items.name',
-      'sections.subsections.items.image',
-      'sections.subsections.items.images',
       'sections.subsections.items.price',
       'sections.subsections.items.originalPrice',
       'sections.subsections.items.discountAmount',
@@ -1707,21 +1844,7 @@ export const getUnder250ItemImages = async (req, res) => {
       });
     }
 
-    const menu = await Menu.findOne({
-      restaurant: restaurant._id,
-      isActive: true,
-    })
-      .select([
-        'sections.items.id',
-        'sections.items._id',
-        'sections.items.image',
-        'sections.items.images',
-        'sections.subsections.items.id',
-        'sections.subsections.items._id',
-        'sections.subsections.items.image',
-        'sections.subsections.items.images',
-      ].join(' '))
-      .lean();
+    const menu = await getMenuWithSanitizedItemImages(restaurant._id);
 
     const wantedItemIds = new Set(itemIds);
     const images = {};
