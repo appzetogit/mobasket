@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   Search,
   Mic,
@@ -12,6 +12,45 @@ import api, { restaurantAPI } from "@/lib/api";
 import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
 
+const FALLBACK_IMAGE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
+const MAX_INLINE_IMAGE_BYTES = 80_000;
+
+const isLikelyOversizedInlineImage = (value) => {
+  if (typeof value !== "string") return false;
+  const trimmed = value.trim();
+  if (!trimmed.startsWith("data:image")) return false;
+  return trimmed.length > MAX_INLINE_IMAGE_BYTES;
+};
+
+const extractImage = (product) => {
+  const images = Array.isArray(product?.images) ? product.images : [];
+  const normalizedImages = images
+    .filter((img) => typeof img === "string" && img.trim())
+    .map((img) => img.trim());
+
+  const firstRemoteImage = normalizedImages.find(
+    (img) => img.startsWith("http://") || img.startsWith("https://")
+  );
+  if (firstRemoteImage) return firstRemoteImage;
+
+  const firstInlineImage = normalizedImages.find((img) => !isLikelyOversizedInlineImage(img));
+  if (firstInlineImage) return firstInlineImage;
+
+  if (typeof product?.image === "string" && product.image.trim()) {
+    const singleImage = product.image.trim();
+    if (!isLikelyOversizedInlineImage(singleImage)) return singleImage;
+  }
+
+  return FALLBACK_IMAGE;
+};
+
+const extractId = (value) => {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "object") return value?._id || value?.id || "";
+  return "";
+};
+
 export default function CategoryDirectoryPage() {
   const navigate = useNavigate();
   const { location: userLocation } = useUserLocation();
@@ -21,6 +60,44 @@ export default function CategoryDirectoryPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+
+  const buildProductDetailState = (product) => {
+    const price = Number(product?.sellingPrice ?? product?.price ?? 0);
+    const mrp = Number(product?.mrp ?? price);
+    const unit = String(product?.weight || product?.unit || "").trim();
+    const storeId = String(
+      product?.storeId?._id || product?.storeId?.id || product?.storeId || ""
+    ).trim();
+    const storeName = String(product?.storeId?.name || product?.storeName || "").trim();
+    const storeAddress = String(
+      product?.storeAddress ||
+      product?.storeId?.address ||
+      product?.storeId?.location?.formattedAddress ||
+      product?.storeId?.location?.address ||
+      ""
+    ).trim();
+
+    return {
+      id: product?._id || product?.id,
+      name: product?.name || "Product",
+      description: product?.description || "",
+      weight: unit,
+      unit,
+      price,
+      mrp,
+      image: extractImage(product),
+      variants: Array.isArray(product?.variants) ? product.variants : [],
+      categoryId: extractId(product?.category),
+      subcategoryId:
+        extractId(product?.subcategory) ||
+        extractId(Array.isArray(product?.subcategories) ? product.subcategories[0] : ""),
+      storeId,
+      storeName,
+      storeAddress,
+      storeLocation: product?.storeLocation || product?.storeId?.location || null,
+      platform: "mogrocery",
+    };
+  };
 
   const getStoreCoordinates = (store) => {
     const geoCoordinates = store?.location?.coordinates;
@@ -118,17 +195,12 @@ export default function CategoryDirectoryPage() {
           return productStoreId && allowedStoreIds.has(productStoreId);
         });
 
-        const availableCategoryIds = new Set();
         const availableSubcategoryIds = new Set();
 
         zoneScopedProducts.forEach((product) => {
-          const categoryId = String(
-            product?.category?._id || product?.category?.id || product?.category || ""
-          ).trim();
           const subcategoryId = String(
             product?.subcategory?._id || product?.subcategory?.id || product?.subcategory || ""
           ).trim();
-          if (categoryId) availableCategoryIds.add(categoryId);
           if (subcategoryId) availableSubcategoryIds.add(subcategoryId);
         });
 
@@ -139,15 +211,20 @@ export default function CategoryDirectoryPage() {
             const filteredSubcategories = subcategories.filter((subcategory) =>
               availableSubcategoryIds.has(String(subcategory?._id || "").trim())
             );
+            const products = zoneScopedProducts.filter((product) => {
+              const productCategoryId = String(
+                product?.category?._id || product?.category?.id || product?.category || ""
+              ).trim();
+              return categoryId && productCategoryId === categoryId;
+            });
 
             return {
               ...category,
               subcategories: filteredSubcategories,
-              __hasDirectProducts: availableCategoryIds.has(categoryId),
+              products,
             };
           })
-          .filter((category) => category.subcategories.length > 0 || category.__hasDirectProducts)
-          .map(({ __hasDirectProducts, ...category }) => category);
+          .filter((category) => category.products.length > 0 || category.subcategories.length > 0);
 
         setCategories(filteredCategories);
       } catch (err) {
@@ -282,18 +359,23 @@ export default function CategoryDirectoryPage() {
 
           if (query) {
             isSectionMatch = (rawSection.name || "").toLowerCase().includes(query);
-            const matchingSubcategories = (rawSection.subcategories || []).filter((sub) =>
-              (sub.name || "").toLowerCase().includes(query)
-            );
+            const matchingProducts = (rawSection.products || []).filter((product) => {
+              const productName = (product?.name || "").toLowerCase();
+              const subcategoryName = (
+                product?.subcategory?.name ||
+                (Array.isArray(product?.subcategories) ? product.subcategories[0]?.name : "") ||
+                ""
+              ).toLowerCase();
+              return productName.includes(query) || subcategoryName.includes(query);
+            });
 
-            if (!isSectionMatch && matchingSubcategories.length === 0) {
+            if (!isSectionMatch && matchingProducts.length === 0) {
               return null; // Skip this section fully if nothing matched
             }
 
             section = {
               ...rawSection,
-              // If the main section name matches, show all its subcategories. Otherwise, show only matching subcategories.
-              subcategories: isSectionMatch ? rawSection.subcategories : matchingSubcategories,
+              products: isSectionMatch ? rawSection.products : matchingProducts,
             };
           }
 
@@ -302,34 +384,38 @@ export default function CategoryDirectoryPage() {
               <h2 className="text-[15px] font-[800] text-slate-800 dark:text-slate-100 mb-3 ml-1">
                 {section.name}
               </h2>
-              <div className="grid grid-cols-4 gap-x-2 gap-y-6 md:grid-cols-6 lg:grid-cols-8 md:gap-6">
-                {(section.subcategories || []).map((item) => (
-                  <Link
-                    key={item._id}
-                    to={`/grocery/subcategory/${item._id}`}
-                    className="flex flex-col items-center gap-2 cursor-pointer group"
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-5">
+                {(section.products || []).map((product) => (
+                  <div
+                    key={product._id || product.id}
+                    className="rounded-2xl border border-slate-200 dark:border-slate-700/80 bg-white dark:bg-[#111a28] p-3 shadow-sm dark:shadow-black/20 cursor-pointer"
+                    onClick={() =>
+                      navigate(`/food/${product?._id || product?.id}`, {
+                        state: { item: buildProductDetailState(product) },
+                      })
+                    }
                   >
-                    <div className="w-full aspect-square bg-[#e6f7f5] dark:bg-[#0f172a] rounded-2xl p-2.5 flex items-center justify-center relative overflow-hidden group-hover:bg-[#d8edd6] dark:group-hover:bg-[#122238] transition-colors">
-                      {item.image ? (
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="w-full h-full object-contain drop-shadow-[0_10px_8px_rgba(0,0,0,0.2)]"
-                        />
-                      ) : (
-                        <div className="w-full h-full rounded-xl bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-200 flex items-center justify-center text-2xl font-black">
-                          {(item.name || "?").slice(0, 1).toUpperCase()}
-                        </div>
-                      )}
+                    <div className="w-full aspect-square bg-slate-50 dark:bg-[#0d1624] rounded-xl overflow-hidden mb-2 flex items-center justify-center">
+                      <img
+                        src={extractImage(product)}
+                        alt={product?.name || "Product"}
+                        className="w-full h-full object-contain scale-110"
+                      />
                     </div>
-                    <span className="text-[10px] font-bold text-center text-slate-800 dark:text-slate-200 leading-tight px-1 break-words w-full">
-                      {item.name}
-                    </span>
-                  </Link>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 line-clamp-2">
+                      {product?.name || "Product"}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 line-clamp-1">
+                      {product?.unit || product?.weight || "Unit not specified"}
+                    </p>
+                    <p className="text-sm font-bold text-slate-900 dark:text-slate-100 mt-1">
+                      Rs {Number(product?.sellingPrice || product?.price || 0)}
+                    </p>
+                  </div>
                 ))}
               </div>
-              {(!section.subcategories || section.subcategories.length === 0) && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 ml-1">No subcategories available.</p>
+              {(!section.products || section.products.length === 0) && (
+                <p className="text-xs text-slate-500 dark:text-slate-400 ml-1">No products available.</p>
               )}
             </div>
           );

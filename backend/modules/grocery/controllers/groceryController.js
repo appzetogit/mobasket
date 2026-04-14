@@ -531,7 +531,7 @@ export const getSubcategories = async (req, res) => {
 
 export const getProducts = async (req, res) => {
   try {
-    const { categoryId, subcategoryId, limit, activeOnly = 'true', zoneId, storeId } = req.query;
+    const { categoryId, subcategoryId, limit, page, activeOnly = 'true', zoneId, storeId } = req.query;
     const filter = {
       approvalStatus: 'approved', // Only show approved products on public /grocery page
     };
@@ -552,10 +552,6 @@ export const getProducts = async (req, res) => {
         });
       }
     }
-
-    const activeGroceryZones = await Zone.find({ isActive: true, platform: 'mogrocery' })
-      .select('_id coordinates restaurantId')
-      .lean();
 
     if (activeOnly !== 'false') {
       filter.isActive = true;
@@ -588,36 +584,56 @@ export const getProducts = async (req, res) => {
           message: 'Invalid storeId',
         });
       }
-      filter.storeId = storeId;
     }
 
     const parsedLimit = Number.parseInt(limit, 10);
+    const parsedPage = Math.max(1, Number.parseInt(page, 10) || 1);
+    const safeLimit = Number.isInteger(parsedLimit) && parsedLimit > 0 ? parsedLimit : null;
+
+    if (userZone?._id) {
+      const zoneStoreQuery = {
+        platform: 'mogrocery',
+        isActive: true,
+        zoneId: userZone._id,
+      };
+
+      if (storeId) {
+        zoneStoreQuery._id = storeId;
+      }
+
+      const zoneStoreIds = await GroceryStore.find(zoneStoreQuery).distinct('_id');
+      if (zoneStoreIds.length === 0) {
+        return res.status(200).json({
+          success: true,
+          count: 0,
+          data: [],
+        });
+      }
+
+      filter.storeId = zoneStoreIds.length === 1 ? zoneStoreIds[0] : { $in: zoneStoreIds };
+    } else if (storeId) {
+      filter.storeId = storeId;
+    }
+
     const query = GroceryProduct.find(filter)
+      .select('category subcategories subcategory name slug images description mrp sellingPrice unit variants isActive inStock stockQuantity order storeId createdAt')
       .populate('category', 'name slug section')
       .populate('subcategories', 'name slug')
       .populate('subcategory', 'name slug')
       .populate('storeId', 'name location address platform isActive zoneId restaurantId')
       .sort({ order: 1, createdAt: -1 });
 
-    if (Number.isInteger(parsedLimit) && parsedLimit > 0) {
-      query.limit(parsedLimit);
+    if (safeLimit) {
+      query.limit(safeLimit);
+      query.skip((parsedPage - 1) * safeLimit);
     }
 
     let products = await query.lean();
 
-    const userZoneId = userZone?._id ? userZone._id.toString() : null;
     products = products.filter((product) => {
       const store = product?.storeId;
       if (!store || typeof store !== 'object') return false;
       if (store?.isActive === false) return false;
-
-      // Only enforce strict zone match when client sends a resolved user zone.
-      // Without a zone hint, do not hide approved products.
-      if (userZoneId) {
-        const storeZoneId = resolveStoreZoneId(store, activeGroceryZones);
-        if (!storeZoneId) return false;
-        if (storeZoneId !== userZoneId) return false;
-      }
       return true;
     });
 

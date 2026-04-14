@@ -44,7 +44,15 @@ const INITIAL_GROCERY_LAYOUT_PRODUCT_COUNT = 8;
 const INITIAL_GROCERY_SEARCH_PRODUCT_COUNT = 8;
 const INITIAL_GROCERY_CATEGORY_SECTION_COUNT = 1;
 const INITIAL_GROCERY_BESTSELLER_SECTION_COUNT = 2;
-const GROCERY_PRODUCTS_PAGE_SIZE = 120;
+const GROCERY_PRODUCTS_PAGE_SIZE = 24;
+const STATIC_GROCERY_CACHE_TTL_MS = 10 * 60 * 1000;
+const ZONE_GROCERY_CACHE_TTL_MS = 2 * 60 * 1000;
+const GROCERY_PERSISTED_CACHE_PREFIX = "mogrocery:cache";
+const groceryBannerCache = new Map();
+const groceryCategoryCache = new Map();
+const groceryBestSellerCache = new Map();
+const groceryProductsPageCache = new Map();
+const groceryStoreCache = new Map();
 
 const normalizeAddressText = (value) =>
   String(value || "")
@@ -176,6 +184,54 @@ const mergeUniqueProducts = (existingProducts, incomingProducts) => {
   return Array.from(mergedMap.values());
 };
 
+const getPersistentCacheKey = (cacheName, key) =>
+  `${GROCERY_PERSISTED_CACHE_PREFIX}:${String(cacheName || "default")}:${String(key || "")}`;
+
+const getFreshCacheEntry = (cache, cacheName, key, ttlMs) => {
+  const cached = cache.get(key);
+  if (cached && Date.now() - Number(cached.ts || 0) <= ttlMs) {
+    return cached.data;
+  }
+
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = localStorage.getItem(getPersistentCacheKey(cacheName, key));
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (Date.now() - Number(parsed?.ts || 0) > ttlMs) {
+      localStorage.removeItem(getPersistentCacheKey(cacheName, key));
+      return null;
+    }
+
+    cache.set(key, {
+      data: parsed?.data,
+      ts: Number(parsed?.ts || Date.now()),
+    });
+    return parsed?.data ?? null;
+  } catch {
+    return null;
+  }
+};
+
+const setCacheEntry = (cache, cacheName, key, data) => {
+  const payload = {
+    data,
+    ts: Date.now(),
+  };
+
+  cache.set(key, payload);
+
+  if (typeof window === "undefined") return;
+
+  try {
+    localStorage.setItem(getPersistentCacheKey(cacheName, key), JSON.stringify(payload));
+  } catch {
+    // Ignore storage quota/private mode failures and keep in-memory cache.
+  }
+};
+
 const GroceryPage = () => {
   const FALLBACK_IMAGE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
   const navigate = useNavigate();
@@ -280,6 +336,11 @@ const GroceryPage = () => {
   const searchProductsLoadMoreRef = useRef(null);
   const homepageCategoryLoadMoreRef = useRef(null);
   const bestSellerSectionsLoadMoreRef = useRef(null);
+  const bannerRequestIdRef = useRef(0);
+  const categoryRequestIdRef = useRef(0);
+  const bestSellerRequestIdRef = useRef(0);
+  const productRequestIdRef = useRef(0);
+  const storeRequestIdRef = useRef(0);
   const isAnySheetOpen = showCategorySheet || showCollectionSheet || showWishlistSheet;
   const collectionHandleStartYRef = useRef(null);
   const wishlistHandleStartYRef = useRef(null);
@@ -861,6 +922,17 @@ const GroceryPage = () => {
   // Load dynamic grocery banners
   useEffect(() => {
     const fetchGroceryBanners = async () => {
+      const requestId = ++bannerRequestIdRef.current;
+      const cacheKey = `banners::${String(effectiveZoneId || "all")}`;
+      const cached = getFreshCacheEntry(groceryBannerCache, "banners", cacheKey, ZONE_GROCERY_CACHE_TTL_MS);
+      if (cached) {
+        setBannerImages(Array.isArray(cached) ? cached : []);
+        setCurrentBanner(0);
+        setIsBannersLoading(false);
+      } else {
+        setIsBannersLoading(true);
+      }
+
       try {
         const response = await api.get("/hero-banners/public", {
           params: {
@@ -877,13 +949,22 @@ const GroceryPage = () => {
           .map((item) => item?.imageUrl)
           .filter((url) => typeof url === "string" && url.trim() !== "");
 
+        if (requestId !== bannerRequestIdRef.current) return;
+
         if (dynamicImages.length > 0) {
+          setCacheEntry(groceryBannerCache, "banners", cacheKey, dynamicImages);
           setBannerImages(dynamicImages);
           setCurrentBanner(0);
+        } else if (!cached) {
+          setBannerImages([]);
         }
       } catch {
+        if (requestId !== bannerRequestIdRef.current || cached) return;
+        setBannerImages([]);
       } finally {
-        setIsBannersLoading(false);
+        if (requestId === bannerRequestIdRef.current) {
+          setIsBannersLoading(false);
+        }
       }
     };
 
@@ -892,16 +973,31 @@ const GroceryPage = () => {
 
   useEffect(() => {
     const fetchHomepageCategories = async () => {
+      const requestId = ++categoryRequestIdRef.current;
+      const cacheKey = "homepage-categories";
+      const cached = getFreshCacheEntry(groceryCategoryCache, "categories", cacheKey, STATIC_GROCERY_CACHE_TTL_MS);
+      if (cached) {
+        setHomepageCategories(Array.isArray(cached) ? cached : []);
+        setIsCategoriesLoading(false);
+      } else {
+        setIsCategoriesLoading(true);
+      }
+
       try {
         const response = await api.get("/grocery/categories", {
           params: { includeSubcategories: true },
         });
         const categories = Array.isArray(response?.data?.data) ? response.data.data : [];
+        if (requestId !== categoryRequestIdRef.current) return;
+        setCacheEntry(groceryCategoryCache, "categories", cacheKey, categories);
         setHomepageCategories(categories);
       } catch {
+        if (requestId !== categoryRequestIdRef.current || cached) return;
         setHomepageCategories([]);
       } finally {
-        setIsCategoriesLoading(false);
+        if (requestId === categoryRequestIdRef.current) {
+          setIsCategoriesLoading(false);
+        }
       }
     };
 
@@ -910,19 +1006,35 @@ const GroceryPage = () => {
 
   useEffect(() => {
     const fetchBestSellers = async () => {
+      const requestId = ++bestSellerRequestIdRef.current;
+      const cacheKey = "best-sellers";
+      const cached = getFreshCacheEntry(groceryBestSellerCache, "best-sellers", cacheKey, STATIC_GROCERY_CACHE_TTL_MS);
+      if (cached) {
+        setBestSellerItems(Array.isArray(cached?.items) ? cached.items : []);
+        setBestSellerSections(Array.isArray(cached?.sections) ? cached.sections : []);
+        setIsBestSellersLoading(false);
+      } else {
+        setIsBestSellersLoading(true);
+      }
+
       try {
         const response = await api.get("/hero-banners/grocery-best-sellers/public", {
           params: { platform: "mogrocery" },
         });
         const items = Array.isArray(response?.data?.data?.items) ? response.data.data.items : [];
         const sections = Array.isArray(response?.data?.data?.sections) ? response.data.data.sections : [];
+        if (requestId !== bestSellerRequestIdRef.current) return;
+        setCacheEntry(groceryBestSellerCache, "best-sellers", cacheKey, { items, sections });
         setBestSellerItems(items);
         setBestSellerSections(sections);
       } catch {
+        if (requestId !== bestSellerRequestIdRef.current || cached) return;
         setBestSellerItems([]);
         setBestSellerSections([]);
       } finally {
-        setIsBestSellersLoading(false);
+        if (requestId === bestSellerRequestIdRef.current) {
+          setIsBestSellersLoading(false);
+        }
       }
     };
 
@@ -931,6 +1043,7 @@ const GroceryPage = () => {
 
   const loadProductsPage = useCallback(
     async (pageToLoad, { replace = false } = {}) => {
+      const requestId = ++productRequestIdRef.current;
       if ((locationLoading || zoneLoading) && !effectiveZoneId) {
         return false;
       }
@@ -952,10 +1065,31 @@ const GroceryPage = () => {
       }
 
       try {
+        const cacheKey = `products::${String(effectiveZoneId || "no-zone")}::${String(pageToLoad)}`;
+        const cachedPage = getFreshCacheEntry(groceryProductsPageCache, "products", cacheKey, ZONE_GROCERY_CACHE_TTL_MS);
+        if (cachedPage) {
+          if (requestId !== productRequestIdRef.current) return false;
+          const cachedProducts = Array.isArray(cachedPage?.products) ? cachedPage.products : [];
+          setRawProducts((previousProducts) =>
+            replace
+              ? mergeUniqueProducts([], cachedProducts)
+              : mergeUniqueProducts(previousProducts, cachedProducts)
+          );
+          setProductsPage(pageToLoad);
+          setHasMoreProducts(Boolean(cachedPage?.hasMore));
+          zoneRecoveryAttemptedRef.current = false;
+          return cachedProducts.length > 0;
+        }
+
         const response = await api.get("/grocery/products", {
           params: { page: pageToLoad, limit: GROCERY_PRODUCTS_PAGE_SIZE, zoneId: effectiveZoneId },
         });
         const products = Array.isArray(response?.data?.data) ? response.data.data : [];
+        if (requestId !== productRequestIdRef.current) return false;
+        setCacheEntry(groceryProductsPageCache, "products", cacheKey, {
+          products,
+          hasMore: products.length >= GROCERY_PRODUCTS_PAGE_SIZE,
+        });
         setRawProducts((previousProducts) =>
           replace
             ? mergeUniqueProducts([], products)
@@ -970,6 +1104,8 @@ const GroceryPage = () => {
         const message = String(error?.response?.data?.message || "").toLowerCase();
         const isZoneValidationError =
           statusCode === 400 && (message.includes("zone") || message.includes("inactive"));
+
+        if (requestId !== productRequestIdRef.current) return false;
 
         if (isZoneValidationError && !zoneRecoveryAttemptedRef.current) {
           zoneRecoveryAttemptedRef.current = true;
@@ -987,10 +1123,12 @@ const GroceryPage = () => {
         setHasMoreProducts(false);
         return false;
       } finally {
-        if (replace) {
-          setIsProductsLoading(false);
-        } else {
-          setIsLoadingMoreProducts(false);
+        if (requestId === productRequestIdRef.current) {
+          if (replace) {
+            setIsProductsLoading(false);
+          } else {
+            setIsLoadingMoreProducts(false);
+          }
         }
       }
     },
@@ -1009,16 +1147,6 @@ const GroceryPage = () => {
       return;
     }
 
-    const allowedStoreIds = new Set(
-      groceryStores
-        .flatMap((store) => getStoreIdCandidates(store)),
-    );
-
-    if (allowedStoreIds.size === 0) {
-      setAllProducts([]);
-      return;
-    }
-
     const zoneScopedProducts = (Array.isArray(rawProducts) ? rawProducts : []).filter((product) => {
       const productZoneId = String(
         product?.zoneId?._id ||
@@ -1029,6 +1157,23 @@ const GroceryPage = () => {
         product?.storeId?.zoneId ||
         "",
       ).trim();
+      if (effectiveZoneId && productZoneId && productZoneId !== String(effectiveZoneId)) return false;
+      return true;
+    });
+
+    const allowedStoreIds = new Set(
+      groceryStores
+        .flatMap((store) => getStoreIdCandidates(store)),
+    );
+
+    if (allowedStoreIds.size === 0) {
+      // Do not block initial product rendering on the store list request.
+      // The products endpoint is already zone-aware, so we can render immediately.
+      setAllProducts(zoneScopedProducts);
+      return;
+    }
+
+    const storeScopedProducts = zoneScopedProducts.filter((product) => {
       const productStoreId = String(
         product?.storeId?._id ||
         product?.storeId?.id ||
@@ -1039,12 +1184,11 @@ const GroceryPage = () => {
         "",
       ).trim();
       const productStoreCandidates = getStoreIdCandidates(product);
-      if (effectiveZoneId && productZoneId && productZoneId !== String(effectiveZoneId)) return false;
       if (productStoreId && allowedStoreIds.has(productStoreId)) return true;
       return productStoreCandidates.some((candidateId) => allowedStoreIds.has(candidateId));
     });
 
-    setAllProducts(zoneScopedProducts);
+    setAllProducts(storeScopedProducts);
   }, [effectiveZoneId, rawProducts, groceryStores]);
 
   useEffect(() => {
@@ -1059,14 +1203,21 @@ const GroceryPage = () => {
 
   useEffect(() => {
     const fetchGroceryStores = async () => {
+      const requestId = ++storeRequestIdRef.current;
       if ((locationLoading || zoneLoading) && !effectiveZoneId) {
         setIsStoresLoading(true);
         return;
       }
 
-      setIsStoresLoading(true);
-      setGroceryStores([]);
-      setHasActiveGroceryStore(false);
+      const cacheKey = `stores::${String(effectiveZoneId || "no-zone")}`;
+      const cached = getFreshCacheEntry(groceryStoreCache, "stores", cacheKey, ZONE_GROCERY_CACHE_TTL_MS);
+      if (cached) {
+        setGroceryStores(Array.isArray(cached?.stores) ? cached.stores : []);
+        setHasActiveGroceryStore(Boolean(cached?.hasActiveStore));
+        setIsStoresLoading(false);
+      } else {
+        setIsStoresLoading(true);
+      }
 
       try {
         const response = await restaurantAPI.getRestaurants({
@@ -1111,6 +1262,11 @@ const GroceryPage = () => {
         const storesForBrowsing =
           currentlyAvailableStores.length > 0 ? currentlyAvailableStores : zoneMappedMoGroceryStores;
 
+        if (requestId !== storeRequestIdRef.current) return;
+        setCacheEntry(groceryStoreCache, "stores", cacheKey, {
+          stores: storesForBrowsing,
+          hasActiveStore: zoneMappedMoGroceryStores.length > 0,
+        });
         setGroceryStores(storesForBrowsing);
         setHasActiveGroceryStore(zoneMappedMoGroceryStores.length > 0);
       } catch (error) {
@@ -1118,6 +1274,8 @@ const GroceryPage = () => {
         const message = String(error?.response?.data?.message || "").toLowerCase();
         const isZoneValidationError =
           statusCode === 400 && (message.includes("zone") || message.includes("inactive"));
+
+        if (requestId !== storeRequestIdRef.current) return;
 
         if (isZoneValidationError && !zoneRecoveryAttemptedRef.current) {
           zoneRecoveryAttemptedRef.current = true;
@@ -1128,10 +1286,14 @@ const GroceryPage = () => {
           }
         }
 
-        setGroceryStores([]);
-        setHasActiveGroceryStore(false);
+        if (!cached) {
+          setGroceryStores([]);
+          setHasActiveGroceryStore(false);
+        }
       } finally {
-        setIsStoresLoading(false);
+        if (requestId === storeRequestIdRef.current) {
+          setIsStoresLoading(false);
+        }
       }
     };
 
@@ -1261,8 +1423,16 @@ const GroceryPage = () => {
 
   const canResolveStoreAvailability = Boolean(effectiveZoneId) || (!locationLoading && !zoneLoading);
   const isGroceryUnavailable = canResolveStoreAvailability && !hasActiveGroceryStore && !isStoresLoading;
+  const hasInitialRenderableContent =
+    bannerImages.length > 0 ||
+    homepageCategories.length > 0 ||
+    bestSellerItems.length > 0 ||
+    bestSellerSections.length > 0 ||
+    rawProducts.length > 0 ||
+    groceryStores.length > 0;
   const shouldShowShimmer =
     !hasActiveSearch &&
+    !hasInitialRenderableContent &&
     (isCategoriesLoading || isProductsLoading || isBestSellersLoading || isBannersLoading || isStoresLoading);
   const shouldShowUnavailableMap = !shouldShowShimmer && isGroceryUnavailable;
 
@@ -1605,57 +1775,42 @@ const GroceryPage = () => {
   }, [activeTab, homepageCategories, searchQuery, selectedStoreId, selectedStoreCategoryMeta]);
 
   const homepageCategoryDisplaySections = useMemo(() => {
-    return homepageCategorySections.map((category) => {
-      const categoryId = String(category?._id || category?.slug || category?.name || "");
-      const subcategories = Array.isArray(category?.subcategories) ? category.subcategories : [];
+    return homepageCategorySections
+      .map((category) => {
+        const categoryId = String(category?._id || category?.slug || category?.name || "");
 
-      const baseCards = subcategories.map((subcategory, subIndex) => {
+        const productCards = storeFilteredProducts
+          .filter((product) => {
+            const productCategoryId = String(
+              product?.category?._id || product?.category?.id || product?.category || ""
+            );
+            return categoryId && productCategoryId === categoryId;
+          })
+          .slice(0, 60)
+          .map((product, productIndex) => {
+            const firstSubcategoryId =
+              (Array.isArray(product?.subcategories) && product.subcategories[0]?._id) ||
+              product?.subcategory?._id ||
+              null;
+            const productId = String(product?._id || product?.id || productIndex);
+
+            return {
+              _id: `product-card-${productId}`,
+              productId,
+              name: product?.name || "Product",
+              image: getProductImage(product),
+              __kind: "product",
+              targetSubcategoryId: firstSubcategoryId ? String(firstSubcategoryId) : null,
+            };
+          });
+
         return {
-          _id: String(subcategory?._id || `${categoryId}-subcategory-${subIndex}`),
-          name: subcategory?.name || "Subcategory",
-          image: subcategory?.image || FALLBACK_IMAGE,
-          __kind: "subcategory",
-          targetSubcategoryId: subcategory?._id ? String(subcategory._id) : null,
+          ...category,
+          homepageCards: productCards.slice(0, 40),
         };
-      });
-
-      const productCards = storeFilteredProducts
-        .filter((product) => {
-          const productCategoryId = String(
-            product?.category?._id || product?.category?.id || product?.category || ""
-          );
-          return categoryId && productCategoryId === categoryId;
-        })
-        .slice(0, 60)
-        .map((product, productIndex) => {
-          const firstSubcategoryId =
-            (Array.isArray(product?.subcategories) && product.subcategories[0]?._id) ||
-            product?.subcategory?._id ||
-            null;
-          const productId = String(product?._id || product?.id || productIndex);
-
-          return {
-            _id: `product-card-${productId}`,
-            productId,
-            name: product?.name || "Product",
-            image: getProductImage(product),
-            __kind: "product",
-            targetSubcategoryId: firstSubcategoryId ? String(firstSubcategoryId) : null,
-          };
-        });
-
-      const cards = [...baseCards];
-      for (const productCard of productCards) {
-        if (cards.length >= 40) break;
-        cards.push(productCard);
-      }
-
-      return {
-        ...category,
-        homepageCards: cards,
-      };
-    });
-  }, [homepageCategorySections, storeFilteredProducts]);
+      })
+      .filter((category) => Array.isArray(category.homepageCards) && category.homepageCards.length > 0);
+  }, [getProductImage, homepageCategorySections, storeFilteredProducts]);
 
   const visibleSearchProducts = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
@@ -2942,6 +3097,8 @@ const GroceryPage = () => {
                       <img
                         src={cat.img}
                         alt={cat.name}
+                        loading="lazy"
+                        decoding="async"
                         className="w-10 h-10 object-contain drop-shadow-md rounded-full"
                       />
                     </div>
@@ -2976,6 +3133,8 @@ const GroceryPage = () => {
                 <img
                   src={cat.img}
                   alt={cat.name}
+                  loading="lazy"
+                  decoding="async"
                   className="w-12 h-12 object-contain drop-shadow-sm rounded-full"
                 />
               </div>
@@ -3049,6 +3208,8 @@ const GroceryPage = () => {
                   <img
                     src={store.image}
                     alt={store.name}
+                    loading="lazy"
+                    decoding="async"
                     className="w-full h-full rounded-full object-cover border border-slate-200 dark:border-slate-700"
                   />
                   {store.count > 0 && (
@@ -3180,7 +3341,10 @@ const GroceryPage = () => {
       )}
 
       {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && displayedBestSellers.length > 0 && (
-        <div className="px-4 pt-4 pb-2 relative z-10 md:max-w-6xl md:mx-auto">
+        <div
+          className="px-4 pt-4 pb-2 relative z-10 md:max-w-6xl md:mx-auto"
+          style={{ contentVisibility: "auto", containIntrinsicSize: "480px" }}
+        >
           <h3 className="text-lg font-[800] text-[#3e2723] dark:text-slate-100 mb-4">Bestsellers</h3>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 md:gap-6">
@@ -3202,7 +3366,13 @@ const GroceryPage = () => {
                         key={`${item.id}-${imageIdx}`}
                         className="aspect-square rounded-xl bg-white dark:bg-[#0d1624] border border-[#eceff3] dark:border-[#2a3a51] overflow-hidden flex items-center justify-center p-0.5 transition-all duration-300 md:group-hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] md:group-hover:border-slate-200 dark:md:group-hover:border-cyan-400/40"
                       >
-                        <img src={imageSrc} alt={item.name} className="w-full h-full object-contain scale-115 md:scale-[0.85] md:group-hover:scale-100 transition-transform duration-500" />
+                        <img
+                          src={imageSrc}
+                          alt={item.name}
+                          loading="lazy"
+                          decoding="async"
+                          className="w-full h-full object-contain scale-115 md:scale-[0.85] md:group-hover:scale-100 transition-transform duration-500"
+                        />
                       </div>
                     ))}
                     {item.countLabel ? (
@@ -3219,12 +3389,11 @@ const GroceryPage = () => {
             })}
           </div>
           {visibleBestSellers.length > displayedBestSellers.length && (
-            <p
+            <div
               ref={bestSellerLoadMoreRef}
-              className="pt-3 text-center text-sm text-slate-500 dark:text-slate-400"
-            >
-              Loading more bestsellers...
-            </p>
+              aria-hidden="true"
+              className="h-px w-full opacity-0 pointer-events-none"
+            />
           )}
         </div>
       )}
@@ -3257,6 +3426,8 @@ const GroceryPage = () => {
                     <img
                       src={subcategory.image}
                       alt={subcategory.name}
+                      loading="lazy"
+                      decoding="async"
                       className="w-10 h-10 rounded-full object-cover bg-slate-50 dark:bg-slate-800"
                     />
                     <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-200 leading-tight line-clamp-2">
@@ -3313,6 +3484,8 @@ const GroceryPage = () => {
                           <img
                             src={getProductImage(product)}
                             alt={product?.name || "Product"}
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-contain scale-110"
                           />
                         </div>
@@ -3403,12 +3576,11 @@ const GroceryPage = () => {
                 </div>
               )}
               {visibleLayoutProducts.length > displayedLayoutProducts.length && (
-                <p
+                <div
                   ref={layoutProductsLoadMoreRef}
-                  className="px-1 pt-3 text-sm text-slate-500 dark:text-slate-400"
-                >
-                  Loading more products...
-                </p>
+                  aria-hidden="true"
+                  className="h-px w-full opacity-0 pointer-events-none"
+                />
               )}
             </section>
           </div>
@@ -3445,7 +3617,7 @@ const GroceryPage = () => {
                         key={`${item.id}-search-${imageIdx}`}
                         className="h-10 rounded-[8px] bg-white dark:bg-[#0d1624] border border-[#eceff3] dark:border-[#2a3a51] overflow-hidden flex items-center justify-center p-1"
                       >
-                        <img src={imageSrc} alt={item.name} className="w-full h-full object-contain" />
+                        <img src={imageSrc} alt={item.name} loading="lazy" decoding="async" className="w-full h-full object-contain" />
                       </div>
                     ))}
                   </div>
@@ -3467,11 +3639,6 @@ const GroceryPage = () => {
           <h4 className="text-base font-[800] text-[#3e2723] dark:text-slate-100 mb-3">Products</h4>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {displayedSearchProducts.map((product) => {
-              const primarySubcategory =
-                (Array.isArray(product?.subcategories) && product.subcategories[0]?._id) ||
-                product?.subcategory?._id ||
-                null;
-
               return (
                 <div
                   key={`search-product-${product._id}`}
@@ -3496,6 +3663,8 @@ const GroceryPage = () => {
                     <img
                       src={getProductImage(product)}
                       alt={product?.name || "Product"}
+                      loading="lazy"
+                      decoding="async"
                       className="w-full h-full object-contain scale-110"
                     />
                   </div>
@@ -3507,12 +3676,11 @@ const GroceryPage = () => {
             })}
           </div>
           {visibleSearchProducts.length > displayedSearchProducts.length && (
-            <p
+            <div
               ref={searchProductsLoadMoreRef}
-              className="pt-3 text-sm text-slate-500 dark:text-slate-400"
-            >
-              Loading more search results...
-            </p>
+              aria-hidden="true"
+              className="h-px w-full opacity-0 pointer-events-none"
+            />
           )}
         </div>
       )}
@@ -3528,17 +3696,17 @@ const GroceryPage = () => {
           key={category._id || category.slug || category.name}
           className={`px-4 relative z-10 md:max-w-6xl md:mx-auto ${sectionIndex === displayedHomepageCategorySections.length - 1 ? "pb-8" : "pb-6"
             }`}
+          style={{ contentVisibility: "auto", containIntrinsicSize: "520px" }}
         >
           <h3 className="text-lg font-[800] text-[#3e2723] dark:text-slate-100 mb-4">{category.name}</h3>
           {(!category.homepageCards || category.homepageCards.length === 0) && (
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">No subcategories available.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">No products available.</p>
           )}
           <div className="grid grid-cols-4 md:grid-cols-5 gap-x-2 md:gap-x-4 gap-y-2 md:gap-y-4">
-            {(category.homepageCards || []).map((card, cardIndex) => (
+            {(category.homepageCards || []).map((card) => (
               <div
                 key={card._id}
-                className={`flex flex-col items-center gap-1.5 cursor-pointer active:scale-95 transition-transform md:hover:-translate-y-1 duration-300 ${cardIndex === 0 ? "col-span-2 md:col-span-1" : "col-span-1"
-                  }`}
+                className="col-span-1 flex flex-col items-center gap-1.5 cursor-pointer active:scale-95 transition-transform md:hover:-translate-y-1 duration-300"
                 onClick={() => {
                   if (card.__kind === "product") {
                     const matchedProduct = allProducts.find(
@@ -3576,15 +3744,11 @@ const GroceryPage = () => {
                     alt={card.name}
                     loading="lazy"
                     decoding="async"
-                    className={`w-full h-full object-contain transition-transform duration-300 drop-shadow-[0_12px_10px_rgba(0,0,0,0.22)] md:hover:scale-110 ${cardIndex === 0 ? "scale-110 md:scale-100" : ""
-                      }`}
+                    className="w-full h-full object-contain transition-transform duration-300 drop-shadow-[0_12px_10px_rgba(0,0,0,0.22)] md:hover:scale-110"
                   />
                 </div>
                 <div className="h-7 flex items-start justify-center w-full">
-                  <p
-                    className={`${cardIndex === 0 ? "text-[12px]" : "text-[11px]"
-                      } font-[700] text-center text-[#2b2b2b] dark:text-slate-200 leading-tight px-0.5 line-clamp-2`}
-                  >
+                  <p className="text-[11px] font-[700] text-center text-[#2b2b2b] dark:text-slate-200 leading-tight px-0.5 line-clamp-2">
                     {card.name}
                   </p>
                 </div>
@@ -3596,17 +3760,19 @@ const GroceryPage = () => {
 
       {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && homepageCategoryDisplaySections.length > displayedHomepageCategorySections.length && (
         <div className="px-4 pb-4 relative z-10 md:max-w-6xl md:mx-auto">
-          <p
+          <div
             ref={homepageCategoryLoadMoreRef}
-            className="text-sm text-slate-500 dark:text-slate-400"
-          >
-            Loading more categories...
-          </p>
+            aria-hidden="true"
+            className="h-px w-full opacity-0 pointer-events-none"
+          />
         </div>
       )}
 
       {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && displayedBestSellerProductSections.length > 0 && (
-        <div className="px-4 pb-24 relative z-10 md:max-w-6xl md:mx-auto space-y-6">
+        <div
+          className="px-4 pb-24 relative z-10 md:max-w-6xl md:mx-auto space-y-6"
+          style={{ contentVisibility: "auto", containIntrinsicSize: "640px" }}
+        >
           {displayedBestSellerProductSections.map((section) => (
             <div key={section.id}>
               <div className="flex items-center justify-between mb-3">
@@ -3630,6 +3796,8 @@ const GroceryPage = () => {
                         <img
                           src={getProductImage(product)}
                           alt={product?.name || "Product"}
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-contain"
                         />
                       </div>
@@ -3716,12 +3884,11 @@ const GroceryPage = () => {
             </div>
           ))}
           {orderedBestSellerProductSections.length > displayedBestSellerProductSections.length && (
-            <p
+            <div
               ref={bestSellerSectionsLoadMoreRef}
-              className="text-sm text-slate-500 dark:text-slate-400"
-            >
-              Loading more curated sections...
-            </p>
+              aria-hidden="true"
+              className="h-px w-full opacity-0 pointer-events-none"
+            />
           )}
         </div>
       )}

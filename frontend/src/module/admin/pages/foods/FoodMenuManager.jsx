@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { adminAPI, restaurantAPI, uploadAPI } from "@/lib/api";
-import { Loader2, Pencil, Plus, Store, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Plus, Store, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 function normalizeImage(value) {
@@ -40,6 +40,50 @@ function getEntityImage(entity = {}) {
   }
 
   return "";
+}
+
+function collectMenuImageOptions(sections = [], targetSectionName = "", targetSubsectionName = "") {
+  const normalizedTarget = String(targetSectionName || "").trim().toLowerCase();
+  const normalizedSubsectionTarget = String(targetSubsectionName || "").trim().toLowerCase();
+  if (!normalizedTarget && !normalizedSubsectionTarget) return [];
+
+  const matchedSection = (Array.isArray(sections) ? sections : []).find(
+    (section) =>
+      !normalizedTarget ||
+      String(section?.name || "").trim().toLowerCase() === normalizedTarget,
+  );
+  if (!matchedSection) return [];
+
+  const directItems = normalizedSubsectionTarget
+    ? []
+    : Array.isArray(matchedSection?.items)
+      ? matchedSection.items
+      : [];
+
+  const subsectionItems = Array.isArray(matchedSection?.subsections)
+    ? matchedSection.subsections
+        .filter((subsection) =>
+          !normalizedSubsectionTarget ||
+          String(subsection?.name || "").trim().toLowerCase() === normalizedSubsectionTarget,
+        )
+        .flatMap((subsection) => (Array.isArray(subsection?.items) ? subsection.items : []))
+    : [];
+
+  const items = [...directItems, ...subsectionItems];
+
+  const seenImages = new Set();
+  return items
+    .map((item) => {
+      const image = getEntityImage(item);
+      const normalizedImage = normalizeImage(image);
+      if (!normalizedImage || seenImages.has(normalizedImage)) return null;
+      seenImages.add(normalizedImage);
+      return {
+        image: normalizedImage,
+        name: String(item?.name || "Dish").trim() || "Dish",
+      };
+    })
+    .filter(Boolean);
 }
 
 function buildCategoriesFromSections(sections = []) {
@@ -129,8 +173,11 @@ export default function FoodMenuManager() {
   const [addonsRequested, setAddonsRequested] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
+  const [editingSectionName, setEditingSectionName] = useState("");
+  const [editingSubsectionName, setEditingSubsectionName] = useState("");
   const [editForm, setEditForm] = useState({ name: "", price: "", image: "" });
   const [editSaving, setEditSaving] = useState(false);
+  const [addImageUploading, setAddImageUploading] = useState(false);
   const [imagePreview, setImagePreview] = useState("");
   const [imageUploading, setImageUploading] = useState(false);
   const [selectedSectionViewKey, setSelectedSectionViewKey] = useState("");
@@ -226,7 +273,7 @@ export default function FoodMenuManager() {
         setLoadingCategories(true);
         setMenu({ sections: [] });
         const fullMenuResponse = await adminAPI.getRestaurantMenu(selectedRestaurantId, {
-          includeImages: false,
+          includeImages: true,
         });
         const fullMenuData =
           fullMenuResponse?.data?.data?.menu ||
@@ -394,6 +441,29 @@ export default function FoodMenuManager() {
     };
   }, [categories, form.sectionId, form.sectionName, menuSuggestionSource]);
 
+  const activeFormSectionName = useMemo(() => {
+    const activeSectionId = String(form.sectionId || "").trim();
+    const matchedCategory = categories.find(
+      (category) => String(category?.id || category?.key || "") === activeSectionId,
+    );
+    return String(matchedCategory?.name || form.sectionName || "").trim();
+  }, [categories, form.sectionId, form.sectionName]);
+
+  const activeFormSubsectionName = useMemo(
+    () => String(form.subsectionName || "").trim(),
+    [form.subsectionName],
+  );
+
+  const addFormExistingImageOptions = useMemo(
+    () => collectMenuImageOptions(menuSuggestionSource?.sections, activeFormSectionName, activeFormSubsectionName),
+    [activeFormSectionName, activeFormSubsectionName, menuSuggestionSource?.sections],
+  );
+
+  const editFormExistingImageOptions = useMemo(
+    () => collectMenuImageOptions(menuSuggestionSource?.sections, editingSectionName, editingSubsectionName),
+    [editingSectionName, editingSubsectionName, menuSuggestionSource?.sections],
+  );
+
   const resetForm = () => {
     setForm((prev) => ({
       ...prev,
@@ -404,6 +474,19 @@ export default function FoodMenuManager() {
       image: "",
     }));
   };
+
+  useEffect(() => {
+    if (String(form.image || "").trim()) return;
+    if (addFormExistingImageOptions.length === 0) return;
+
+    setForm((prev) => {
+      if (String(prev.image || "").trim()) return prev;
+      return {
+        ...prev,
+        image: addFormExistingImageOptions[0].image,
+      };
+    });
+  }, [addFormExistingImageOptions]);
 
   const handleAddItem = async (event) => {
     event.preventDefault();
@@ -477,9 +560,11 @@ export default function FoodMenuManager() {
     }
   };
 
-  const openEditModal = (item) => {
+  const openEditModal = (item, sectionName = "", subsectionName = "") => {
     const initialImage = getEntityImage(item);
     setEditingItem(item);
+    setEditingSectionName(String(sectionName || "").trim());
+    setEditingSubsectionName(String(subsectionName || "").trim());
     setEditForm({
       name: item?.name || "",
       price: String(item?.price ?? ""),
@@ -525,6 +610,41 @@ export default function FoodMenuManager() {
     }
   };
 
+  const handleAddFormImageFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please choose an image file.");
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      setAddImageUploading(true);
+      const uploadResponse = await uploadAPI.uploadMedia(file, {
+        folder: "mobasket/restaurant/menu-items",
+      });
+      const uploadedUrl =
+        uploadResponse?.data?.data?.url ||
+        uploadResponse?.data?.url ||
+        "";
+
+      if (!uploadedUrl) {
+        throw new Error("Image upload did not return a URL.");
+      }
+
+      setForm((prev) => ({ ...prev, image: uploadedUrl }));
+      toast.success("Image uploaded");
+    } catch (error) {
+      console.error("Failed to upload add-form menu image:", error);
+      toast.error(error?.response?.data?.message || error?.message || "Failed to upload image");
+    } finally {
+      setAddImageUploading(false);
+      event.target.value = "";
+    }
+  };
+
   const handleSaveEdit = async () => {
     if (!selectedRestaurantId || !editingItem?.id) {
       toast.error("Unable to identify the dish.");
@@ -554,6 +674,8 @@ export default function FoodMenuManager() {
       await refreshCurrentMenuState(selectedRestaurantId);
       toast.success("Dish updated successfully");
       setEditingItem(null);
+      setEditingSectionName("");
+      setEditingSubsectionName("");
       setImagePreview("");
     } catch (error) {
       console.error("Failed to update menu item:", error);
@@ -633,6 +755,8 @@ export default function FoodMenuManager() {
 
       if (editingItem?.id === item.id) {
         setEditingItem(null);
+        setEditingSectionName("");
+        setEditingSubsectionName("");
         setImagePreview("");
       }
     } catch (error) {
@@ -643,7 +767,7 @@ export default function FoodMenuManager() {
     }
   };
 
-  const renderItemRow = (item) => (
+  const renderItemRow = (item, sectionName = "", subsectionName = "") => (
     <div key={item.id} className="px-4 py-2.5 flex items-center justify-between gap-3 text-sm">
       <div className="flex items-center gap-3 min-w-0">
         <div className="h-10 w-10 overflow-hidden rounded-lg bg-slate-100 flex items-center justify-center shrink-0">
@@ -697,7 +821,7 @@ export default function FoodMenuManager() {
         </button>
         <button
           type="button"
-          onClick={() => openEditModal(item)}
+          onClick={() => openEditModal(item, sectionName, subsectionName)}
           className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-slate-900 text-white hover:bg-slate-800"
         >
           <Pencil className="w-4 h-4" />
@@ -891,6 +1015,63 @@ export default function FoodMenuManager() {
                 onChange={(event) => setForm((prev) => ({ ...prev, image: event.target.value }))}
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
               />
+              <div className="mt-2 flex items-center gap-3">
+                <label
+                  className={`inline-flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-white ${
+                    addImageUploading ? "bg-slate-500" : "bg-slate-900 hover:bg-slate-800"
+                  }`}
+                >
+                  <Upload className="w-4 h-4" />
+                  {addImageUploading ? "Uploading..." : "Upload Image"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleAddFormImageFileChange}
+                    disabled={addImageUploading}
+                  />
+                </label>
+                <span className="text-xs text-slate-500">
+                  Upload directly or reuse an existing image below.
+                </span>
+              </div>
+              {addFormExistingImageOptions.length > 0 ? (
+                <div className="mt-2">
+                  <p className="text-xs font-medium text-slate-600 mb-2">
+                    Reuse existing images from this category
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {addFormExistingImageOptions.slice(0, 6).map((option) => {
+                      const isSelected = normalizeImage(form.image) === normalizeImage(option.image);
+                      return (
+                        <button
+                          key={`${option.name}-${option.image}`}
+                          type="button"
+                          onClick={() => setForm((prev) => ({ ...prev, image: option.image }))}
+                          className={`rounded-lg border p-1.5 text-left ${
+                            isSelected
+                              ? "border-slate-900 bg-slate-100"
+                              : "border-slate-200 hover:border-slate-300"
+                          }`}
+                        >
+                          <div className="aspect-square overflow-hidden rounded-md bg-slate-100">
+                            <img src={option.image} alt={option.name} className="h-full w-full object-cover" />
+                          </div>
+                          <p className="mt-1 text-[10px] text-slate-600 line-clamp-2">{option.name}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+              <div className="mt-3 h-32 w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center">
+                <MenuImage
+                  src={form.image}
+                  alt={form.name || "Dish preview"}
+                  className="h-full w-full object-cover"
+                  fallback={<span className="text-sm text-slate-400">No image selected</span>}
+                />
+              </div>
             </div>
             <div className="md:col-span-2">
               <textarea
@@ -969,12 +1150,12 @@ export default function FoodMenuManager() {
                   <h3 className="text-sm font-semibold text-slate-800">{section.name || "Unnamed Section"}</h3>
                 </div>
                 <div className="divide-y divide-slate-100">
-                  {(section.items || []).map(renderItemRow)}
+                  {(section.items || []).map((item) => renderItemRow(item, section.name || "", ""))}
                   {(section.subsections || []).map((subsection, subsectionIndex) => (
                     <div key={subsection.id || `${sectionIndex}-${subsectionIndex}`} className="px-4 py-2.5 bg-slate-50/40">
                       <p className="text-xs font-semibold text-slate-600 mb-2">{subsection.name}</p>
                       <div className="space-y-1">
-                        {(subsection.items || []).map(renderItemRow)}
+                        {(subsection.items || []).map((item) => renderItemRow(item, section.name || "", subsection.name || ""))}
                       </div>
                     </div>
                   ))}
@@ -1081,6 +1262,38 @@ export default function FoodMenuManager() {
                 placeholder="Image URL"
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
               />
+              {editFormExistingImageOptions.length > 0 ? (
+                <div>
+                  <p className="text-xs font-medium text-slate-600 mb-2">
+                    Reuse existing images from this category
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {editFormExistingImageOptions.slice(0, 6).map((option) => {
+                      const isSelected = normalizeImage(editForm.image) === normalizeImage(option.image);
+                      return (
+                        <button
+                          key={`${option.name}-${option.image}`}
+                          type="button"
+                          onClick={() => {
+                            setEditForm((prev) => ({ ...prev, image: option.image }));
+                            setImagePreview(option.image);
+                          }}
+                          className={`rounded-lg border p-1.5 text-left ${
+                            isSelected
+                              ? "border-slate-900 bg-slate-100"
+                              : "border-slate-200 hover:border-slate-300"
+                          }`}
+                        >
+                          <div className="aspect-square overflow-hidden rounded-md bg-slate-100">
+                            <img src={option.image} alt={option.name} className="h-full w-full object-cover" />
+                          </div>
+                          <p className="mt-1 text-[10px] text-slate-600 line-clamp-2">{option.name}</p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
               <label className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700">
                 <input
                   type="checkbox"
@@ -1122,6 +1335,8 @@ export default function FoodMenuManager() {
                 type="button"
                 onClick={() => {
                   setEditingItem(null);
+                  setEditingSectionName("");
+                  setEditingSubsectionName("");
                   setImagePreview("");
                 }}
                 className="px-4 py-2 rounded-md border border-slate-300 text-slate-700 text-sm hover:bg-slate-50"

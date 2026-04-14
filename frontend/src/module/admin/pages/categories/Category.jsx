@@ -25,6 +25,20 @@ const hasCustomImageValue = (value) => {
 }
 const isPreviewableImageSource = (value) => /^(https?:\/\/|data:image\/|blob:)/i.test(normalizeImageValue(value))
 const normalizeEntityName = (value) => String(value || "").trim().toLowerCase()
+const extractImageFromValue = (value) => {
+  if (typeof value === "string") return value.trim()
+  if (value && typeof value === "object") {
+    return String(value.url || value.image || value.imageUrl || value.secure_url || value.src || "").trim()
+  }
+  return ""
+}
+const getProductImageCandidates = (item) => {
+  const fromImages = Array.isArray(item?.images)
+    ? item.images.map(extractImageFromValue).filter(Boolean)
+    : []
+  const directImage = extractImageFromValue(item?.image)
+  return [...new Set([...fromImages, ...(directImage ? [directImage] : [])])]
+}
 const createEmptyProductVariant = () => ({
   name: "",
   mrp: "",
@@ -121,6 +135,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     }
   }, [defaultGroceryEntity, isGroceryScope])
   const fileInputRef = useRef(null)
+  const lastAutoAssignedImageRef = useRef("")
   const filterSectionRefs = useRef({})
   const rightContentRef = useRef(null)
   const displayedImageSrc = selectedImageFile
@@ -183,6 +198,49 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     }
     return grocerySubcategoryOptions.filter((item) => item.categoryId === formData.productCategory)
   }, [activeGroceryEntity, createProductCategoryInline, formData.productCategory, grocerySubcategoryOptions, isGroceryScope])
+
+  const existingSubcategoryImageOptions = useMemo(() => {
+    if (!isGroceryScope || activeGroceryEntity !== "products") return []
+
+    const selectedSubcategoryIds = Array.isArray(formData.productSubcategories)
+      ? formData.productSubcategories.map((id) => String(id || "").trim()).filter(Boolean)
+      : []
+
+    if (selectedSubcategoryIds.length === 0) return []
+
+    const selectedSet = new Set(selectedSubcategoryIds)
+    const seenImages = new Set()
+
+    return categories
+      .filter((item) => {
+        if (!item?.id) return false
+        if (editingCategory?.id && String(item.id) === String(editingCategory.id)) return false
+        const itemSubcategoryIds = Array.isArray(item?.productSubcategoryIds)
+          ? item.productSubcategoryIds.map((id) => String(id || "").trim()).filter(Boolean)
+          : []
+        return itemSubcategoryIds.some((id) => selectedSet.has(id))
+      })
+      .flatMap((item) => {
+        const matchingSubcategoryNames = filteredSubcategoryOptions
+          .filter((sub) => Array.isArray(item?.productSubcategoryIds) && item.productSubcategoryIds.includes(sub.id))
+          .map((sub) => sub.name)
+          .filter(Boolean)
+
+        return getProductImageCandidates(item)
+          .filter((image) => {
+            const normalized = normalizeImageValue(image)
+            if (!normalized || seenImages.has(normalized)) return false
+            seenImages.add(normalized)
+            return true
+          })
+          .map((image) => ({
+            image,
+            productId: String(item.id || ""),
+            productName: item.name || "Product",
+            subcategoryNames: matchingSubcategoryNames,
+          }))
+      })
+  }, [activeGroceryEntity, categories, editingCategory?.id, filteredSubcategoryOptions, formData.productSubcategories, isGroceryScope])
 
   const findExistingCategoryOption = (name, excludeId = "") => {
     const normalizedName = normalizeEntityName(name)
@@ -681,6 +739,49 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     }
   }, [currentPage, totalPages])
 
+  useEffect(() => {
+    if (!isModalOpen || !isGroceryScope || activeGroceryEntity !== "products") return
+    if (selectedImageFile) return
+
+    const currentImage = normalizeImageValue(formData.image)
+    const availableImages = existingSubcategoryImageOptions
+      .map((item) => normalizeImageValue(item.image))
+      .filter(Boolean)
+    const hasCurrentSuggestedImage = currentImage && availableImages.includes(currentImage)
+
+    if (!hasCustomImageValue(currentImage)) {
+      const nextImage = availableImages[0] || DEFAULT_CATEGORY_IMAGE
+      if (normalizeImageValue(nextImage) !== currentImage) {
+        setFormData((prev) => ({ ...prev, image: nextImage }))
+      }
+      lastAutoAssignedImageRef.current = normalizeImageValue(nextImage)
+      return
+    }
+
+    if (
+      currentImage &&
+      lastAutoAssignedImageRef.current &&
+      currentImage === lastAutoAssignedImageRef.current &&
+      !hasCurrentSuggestedImage
+    ) {
+      const nextImage = availableImages[0] || DEFAULT_CATEGORY_IMAGE
+      setFormData((prev) => ({ ...prev, image: nextImage }))
+      lastAutoAssignedImageRef.current = normalizeImageValue(nextImage)
+      return
+    }
+
+    if (hasCurrentSuggestedImage) {
+      lastAutoAssignedImageRef.current = currentImage
+    }
+  }, [
+    activeGroceryEntity,
+    existingSubcategoryImageOptions,
+    formData.image,
+    isGroceryScope,
+    isModalOpen,
+    selectedImageFile,
+  ])
+
   const handleToggleStatus = async (id) => {
     try {
       const currentCategory = categories.find(cat => cat.id === id)
@@ -788,6 +889,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     }
     setSelectedImageFile(null)
     setImagePreview(null)
+    lastAutoAssignedImageRef.current = normalizeImageValue(category.image || DEFAULT_CATEGORY_IMAGE)
     setIsModalOpen(true)
   }
 
@@ -802,6 +904,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     setCustomTypeValue("")
     setSelectedImageFile(null)
     setImagePreview(null)
+    lastAutoAssignedImageRef.current = ""
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -935,6 +1038,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
 
   const handleImageUrlChange = (value) => {
     const nextValue = normalizeImageValue(value)
+    lastAutoAssignedImageRef.current = nextValue
     setFormData((prev) => ({
       ...prev,
       image: nextValue || DEFAULT_CATEGORY_IMAGE,
@@ -952,6 +1056,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
   const handleRemoveImage = () => {
     setSelectedImageFile(null)
     setImagePreview(null)
+    lastAutoAssignedImageRef.current = ""
     setFormData((prev) => ({
       ...prev,
       image: DEFAULT_CATEGORY_IMAGE,
@@ -972,6 +1077,7 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
     setCustomTypeValue("")
     setSelectedImageFile(null)
     setImagePreview(null)
+    lastAutoAssignedImageRef.current = ""
     setFormData(getInitialFormData())
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
@@ -2333,6 +2439,66 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                             <p className="mt-1 text-xs text-slate-500">
                               Paste a direct image link or upload a file below. If you use both, the latest one you choose will be used.
                             </p>
+                          </div>
+                        )}
+                        {isGroceryScope && activeGroceryEntity === "products" && existingSubcategoryImageOptions.length > 0 && (
+                          <div>
+                            <p className="text-sm font-medium text-slate-700 mb-2">
+                              Reuse Existing Subcategory Images
+                            </p>
+                            <p className="text-xs text-slate-500 mb-3">
+                              Pick an existing product image from the selected subcategory to avoid uploading duplicate files.
+                            </p>
+                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+                              {existingSubcategoryImageOptions.map((option) => {
+                                const isSelected =
+                                  !selectedImageFile &&
+                                  normalizeImageValue(formData.image) === normalizeImageValue(option.image)
+
+                                return (
+                                  <button
+                                    key={`${option.productId}-${option.image}`}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedImageFile(null)
+                                      setImagePreview(null)
+                                      lastAutoAssignedImageRef.current = normalizeImageValue(option.image)
+                                      setFormData((prev) => ({
+                                        ...prev,
+                                        image: option.image,
+                                      }))
+                                      if (fileInputRef.current) {
+                                        fileInputRef.current.value = ""
+                                      }
+                                    }}
+                                    className={`rounded-xl border p-2 text-left transition-colors ${
+                                      isSelected
+                                        ? "border-blue-500 bg-blue-50"
+                                        : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                                    }`}
+                                  >
+                                    <div className="w-full aspect-square rounded-lg overflow-hidden bg-slate-100 mb-2">
+                                      <img
+                                        src={option.image}
+                                        alt={option.productName}
+                                        className="w-full h-full object-cover"
+                                        onError={(e) => {
+                                          e.target.src = buildImageFallback(120, "IMG")
+                                        }}
+                                      />
+                                    </div>
+                                    <p className="text-xs font-medium text-slate-800 line-clamp-2">
+                                      {option.productName}
+                                    </p>
+                                    {option.subcategoryNames.length > 0 && (
+                                      <p className="text-[11px] text-slate-500 mt-1 line-clamp-2">
+                                        {option.subcategoryNames.join(", ")}
+                                      </p>
+                                    )}
+                                  </button>
+                                )
+                              })}
+                            </div>
                           </div>
                         )}
                         {/* Image Preview */}
