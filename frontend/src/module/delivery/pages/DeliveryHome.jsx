@@ -81,6 +81,7 @@ import {
 
 
   Camera,
+  Upload,
 
 
   AlertCircle,
@@ -106,6 +107,16 @@ const DELIVERY_LOCATION_DISTANCE_THRESHOLD_IDLE_KM = 0.03
 const ROUTE_SIMULATION_TEST_PHONE = "7223077890"
 const DELIVERY_ALERT_AUDIO_CACHE_VERSION = "delivery-audio-v1"
 const DELIVERY_ACCEPTED_ADVANCE_ORDERS_KEY = "deliveryAcceptedAdvanceOrders"
+const BILL_IMAGE_MAX_SIZE_BYTES = 5 * 1024 * 1024
+const BILL_IMAGE_ACCEPT = "image/png,image/jpeg,image/jpg,image/webp,image/heic,image/heif"
+const BILL_IMAGE_EXTENSION_MIME_MAP = {
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+  ".heic": "image/heic",
+  ".heif": "image/heif",
+}
 
 
 import BottomPopup from "../components/BottomPopup"
@@ -12408,390 +12419,159 @@ export default function DeliveryHome() {
 
 
 
-  /**
-
-
-   * Handle camera capture for bill image - Flutter InAppWebView compatible
-
-
-   * 
-
-
-   * Flutter Handler Requirements:
-
-
-   * Handler name: 'openCamera'
-
-
-   * Expected response format:
-
-
-   * {
-
-
-   *   success: true,
-
-
-   *   file?: File,              // Preferred: JavaScript File object
-
-
-   *   base64?: string,          // Alternative: Base64 encoded image (with or without data:image/jpeg;base64, prefix)
-
-
-   *   mimeType?: string,        // MIME type (e.g., 'image/jpeg', 'image/png')
-
-
-   *   fileName?: string,        // File name (e.g., 'bill-image.jpg')
-
-
-   *   filePath?: string         // Not recommended: File path (requires additional handler to read)
-
-
-   * }
-
-
-   * 
-
-
-   * If user cancels:
-
-
-   * { success: false } or null
-
-
-   */
-
-
-  const handleCameraCapture = async () => {
-
-
-    try {
-
-
-      // Check if Flutter InAppWebView handler is available
-
-
-      if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === 'function') {
-
-
-        console.log('[CAM] Using Flutter InAppWebView camera handler')
-
-
-
-
-
-        // Call Flutter handler to open camera
-
-
-        const result = await window.flutter_inappwebview.callHandler('openCamera', {
-
-
-          source: 'camera', // 'camera' for camera, 'gallery' for file picker
-
-
-          accept: 'image/*',
-
-
-          multiple: false,
-
-
-          quality: 0.8 // Image quality (0.0 to 1.0)
-
-
-        })
-
-
-
-
-
-        console.log('[CAM] Flutter handler response:', result)
-
-
-
-
-
-        if (result && result.success) {
-
-
-          // Handle the result - could be base64, file path, or file object
-
-
-          let file = null
-
-
-
-
-
-          if (result.file) {
-
-
-            // If Flutter returns a File object (preferred method)
-
-
-            file = result.file
-
-
-            console.log('[OK] Received File object from Flutter')
-
-
-          } else if (result.base64) {
-
-
-            // If Flutter returns base64, convert to File
-
-
-            console.log('[CAM] Converting base64 to File object')
-
-
-            let base64Data = result.base64
-
-
-
-
-
-            // Remove data URL prefix if present
-
-
-            if (base64Data.includes(',')) {
-
-
-              base64Data = base64Data.split(',')[1]
-
-
-            }
-
-
-
-
-
-            try {
-
-
-              const byteCharacters = atob(base64Data)
-
-
-              const byteNumbers = new Array(byteCharacters.length)
-
-
-              for (let i = 0; i < byteCharacters.length; i++) {
-
-
-                byteNumbers[i] = byteCharacters.charCodeAt(i)
-
-
-              }
-
-
-              const byteArray = new Uint8Array(byteNumbers)
-
-
-              const mimeType = result.mimeType || 'image/jpeg'
-
-
-              const blob = new Blob([byteArray], { type: mimeType })
-
-
-              file = new File([blob], result.fileName || `bill-image-${Date.now()}.jpg`, { type: mimeType })
-
-
-              console.log('[OK] Converted base64 to File:', { name: file.name, size: file.size, type: file.type })
-
-
-            } catch (base64Error) {
-
-
-              console.error('[ERROR] Error converting base64 to File:', base64Error)
-
-
-              toast.error('Failed to process image. Please try again.')
-
-
-              return
-
-
-            }
-
-
-          } else if (result.filePath) {
-
-
-            // If Flutter returns file path, we need to fetch it
-
-
-            // This would require additional Flutter handler to read file
-
-
-            console.warn('[WARN] File path returned, but file reading not implemented')
-
-
-            toast.error('File path handling not implemented. Please use base64 or File object.')
-
-
-            return
-
-
-          }
-
-
-
-
-
-          if (file) {
-
-
-            // Process the file the same way as handleBillImageSelect
-
-
-            await processBillImageFile(file)
-
-
-          } else {
-
-
-            console.error('[ERROR] No file data in Flutter response:', result)
-
-
-            toast.error('Failed to get image from camera')
-
-
-          }
-
-
-        } else {
-
-
-          console.log('[INFO] Camera cancelled by user or failed')
-
-
-        }
-
-
-      } else {
-
-
-        // Fallback to standard file input for web browsers
-
-
-        console.log('[CAM] Flutter handler not available, using standard file input')
-
-
-        if (cameraInputRef.current) {
-
-
-          cameraInputRef.current.click()
-
-
-        }
-
-
-      }
-
-
-    } catch (error) {
-
-
-      console.error('[ERROR] Error opening camera:', error)
-
-
-      toast.error('Failed to open camera. Please try again.')
-
-
-
-
-
-      // Fallback to standard file input
-
-
-      if (cameraInputRef.current) {
-
-
-        cameraInputRef.current.click()
-
-
-      }
-
-
+  const openBillImagePicker = (inputRef) => {
+    const input = inputRef?.current
+    if (!input) return
+    input.value = ""
+    if (typeof input.showPicker === "function") {
+      input.showPicker()
+      return
     }
-
-
+    input.click()
   }
 
+  const getMimeTypeFromFileName = (fileName = "") => {
+    const normalizedName = String(fileName).toLowerCase().trim()
+    const matchedExtension = Object.keys(BILL_IMAGE_EXTENSION_MIME_MAP).find((extension) =>
+      normalizedName.endsWith(extension)
+    )
+    return matchedExtension ? BILL_IMAGE_EXTENSION_MIME_MAP[matchedExtension] : ""
+  }
 
+  const buildImageFileFromBase64 = (base64, fileName, mimeType) => {
+    if (!base64) {
+      throw new Error("Invalid image data")
+    }
 
+    const cleanedBase64 = base64.includes(",") ? base64.split(",")[1] : base64
+    const binaryString = window.atob(cleanedBase64)
+    const bytes = new Uint8Array(binaryString.length)
 
+    for (let index = 0; index < binaryString.length; index += 1) {
+      bytes[index] = binaryString.charCodeAt(index)
+    }
 
-  // Process bill image file (extracted from handleBillImageSelect for reuse)
+    return new File([bytes], fileName, { type: mimeType })
+  }
 
+  const normalizeBillImageFile = (rawFile, fallbackFileNamePrefix = "bill-image") => {
+    if (!rawFile) {
+      return null
+    }
+
+    if (rawFile instanceof File) {
+      const inferredMimeType = rawFile.type || getMimeTypeFromFileName(rawFile.name)
+      if (!rawFile.type && inferredMimeType) {
+        return new File([rawFile], rawFile.name || `${fallbackFileNamePrefix}-${Date.now()}.jpg`, {
+          type: inferredMimeType,
+          lastModified: rawFile.lastModified || Date.now(),
+        })
+      }
+      return rawFile
+    }
+
+    if (rawFile instanceof Blob) {
+      return new File([rawFile], `${fallbackFileNamePrefix}-${Date.now()}.jpg`, {
+        type: rawFile.type || "image/jpeg",
+        lastModified: Date.now(),
+      })
+    }
+
+    if (typeof rawFile === "object" && rawFile.base64) {
+      const fileName =
+        rawFile.fileName ||
+        rawFile.name ||
+        `${fallbackFileNamePrefix}-${Date.now()}.jpg`
+      const mimeType =
+        rawFile.mimeType ||
+        rawFile.type ||
+        getMimeTypeFromFileName(fileName) ||
+        "image/jpeg"
+      return buildImageFileFromBase64(rawFile.base64, fileName, mimeType)
+    }
+
+    return null
+  }
+
+  const extractBridgeImageResult = (result) => {
+    if (!result) {
+      return null
+    }
+
+    if (Array.isArray(result)) {
+      return extractBridgeImageResult(result[0])
+    }
+
+    if (Array.isArray(result.files) && result.files.length > 0) {
+      return extractBridgeImageResult(result.files[0])
+    }
+
+    if (result.success === false) {
+      return null
+    }
+
+    return result.file || result
+  }
+
+  const handleBillImageCapture = async (source = "camera") => {
+    try {
+      if (window.flutter_inappwebview && typeof window.flutter_inappwebview.callHandler === "function") {
+        const result = await window.flutter_inappwebview.callHandler("openCamera", {
+          source,
+          accept: BILL_IMAGE_ACCEPT,
+          multiple: false,
+          quality: 0.8,
+        })
+
+        const pickedImage = extractBridgeImageResult(result)
+        const file = normalizeBillImageFile(
+          pickedImage,
+          source === "gallery" ? "bill-gallery" : "bill-camera"
+        )
+
+        if (file) {
+          await processBillImageFile(file)
+          return
+        }
+      }
+    } catch (error) {
+      console.error(`[ERROR] Error opening ${source}:`, error)
+      toast.error(`Failed to open ${source}. Please try again.`)
+    }
+
+    if (source === "gallery") {
+      openBillImagePicker(fileInputRef)
+      return
+    }
+
+    openBillImagePicker(cameraInputRef)
+  }
 
   const processBillImageFile = async (file) => {
+    const normalizedFile = normalizeBillImageFile(file)
 
+    if (!normalizedFile) return
 
-    if (!file) return
+    const normalizedMimeType =
+      normalizedFile.type || getMimeTypeFromFileName(normalizedFile.name)
 
-
-
-
-
-    // Validate file type
-
-
-    if (!file.type.startsWith('image/')) {
-
-
-      toast.error('Please select an image file')
-
-
+    if (!normalizedMimeType.startsWith("image/")) {
+      toast.error("Please select an image file")
       return
-
-
     }
 
-
-
-
-
-    // Validate file size (max 5MB)
-
-
-    if (file.size > 5 * 1024 * 1024) {
-
-
-      toast.error('Image size should be less than 5MB')
-
-
+    if (normalizedFile.size > BILL_IMAGE_MAX_SIZE_BYTES) {
+      toast.error("Image size should be less than 5MB")
       return
-
-
     }
-
-
-
-
 
     setIsUploadingBill(true)
 
-
-
-
-
     try {
+      console.log("[CAM] Uploading bill image to Cloudinary...")
 
-
-      console.log('[CAM] Uploading bill image to Cloudinary...')
-
-
-
-
-
-      // Upload to Cloudinary via backend
-
-
-      const uploadResponse = await uploadAPI.uploadMedia(file, {
-
-
-        folder: 'mobasket/delivery/bills'
-
-
+      const uploadResponse = await uploadAPI.uploadMedia(normalizedFile, {
+        folder: "mobasket/delivery/bills"
       })
 
 
@@ -12802,12 +12582,6 @@ export default function DeliveryHome() {
 
 
         const imageUrl = uploadResponse.data.data.url || uploadResponse.data.data.secure_url
-
-
-        const publicId = uploadResponse.data.data.publicId || uploadResponse.data.data.public_id
-
-
-
 
 
         if (imageUrl) {
@@ -12889,6 +12663,12 @@ export default function DeliveryHome() {
 
       // Reset file input
 
+
+      if (fileInputRef.current) {
+
+        fileInputRef.current.value = ''
+
+      }
 
       if (cameraInputRef.current) {
 
@@ -34795,7 +34575,7 @@ export default function DeliveryHome() {
                 <button
 
 
-                  onClick={handleCameraCapture}
+                  onClick={() => handleBillImageCapture("camera")}
 
 
                   disabled={isUploadingBill}
@@ -34876,7 +34656,15 @@ export default function DeliveryHome() {
               </div>
 
               {!billImageUploaded && (
-                <div className="flex justify-center mb-4">
+                <div className="flex items-center justify-center gap-3 mb-4">
+                  <button
+                    onClick={() => handleBillImageCapture("gallery")}
+                    disabled={isUploadingBill}
+                    className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition hover:border-gray-300 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Gallery</span>
+                  </button>
                   <button
                     onClick={handleSkipBillUpload}
                     disabled={isUploadingBill}
@@ -34895,6 +34683,15 @@ export default function DeliveryHome() {
 
 
               <input
+                id="bill-gallery-input"
+                ref={fileInputRef}
+                type="file"
+                accept={BILL_IMAGE_ACCEPT}
+                onChange={handleBillImageSelect}
+                className="sr-only"
+              />
+
+              <input
 
 
                 id="bill-camera-input"
@@ -34906,7 +34703,7 @@ export default function DeliveryHome() {
                 type="file"
 
 
-                accept="image/*"
+                accept={BILL_IMAGE_ACCEPT}
 
 
                 capture="environment"
