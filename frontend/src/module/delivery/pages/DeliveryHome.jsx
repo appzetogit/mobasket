@@ -1108,6 +1108,7 @@ export default function DeliveryHome() {
     pendingNewOrdersCount,
     prioritizeNewOrderNotification,
     clearNewOrder,
+    removeQueuedOrderNotification,
     orderReady,
     clearOrderReady,
     isConnected,
@@ -2266,6 +2267,74 @@ export default function DeliveryHome() {
       );
     },
     [getQueuedOrderIdentity],
+  );
+
+  const removeOrderFromRiderFlow = useCallback(
+    (targetOrder, options = {}) => {
+      const targetOrderId = getQueuedOrderIdentity(targetOrder);
+      if (!targetOrderId) return false;
+
+      const normalizedTargetOrderId = String(targetOrderId);
+      let removed = false;
+
+      removeQueuedOrderNotification(targetOrder);
+
+      setAcceptedAdvanceOrders((currentOrders) => {
+        const nextOrders = currentOrders.filter((order) => {
+          const orderId = getQueuedOrderIdentity(order);
+          return !orderId || String(orderId) !== normalizedTargetOrderId;
+        });
+
+        if (nextOrders.length !== currentOrders.length) {
+          removed = true;
+        }
+
+        return nextOrders;
+      });
+
+      setPreviewAdvanceOrder((currentPreview) => {
+        const previewId = getQueuedOrderIdentity(currentPreview);
+        if (previewId && String(previewId) === normalizedTargetOrderId) {
+          removed = true;
+          return null;
+        }
+        return currentPreview;
+      });
+
+      setSelectedRestaurant((currentOrder) => {
+        const currentOrderId = getQueuedOrderIdentity(currentOrder);
+        if (currentOrderId && String(currentOrderId) === normalizedTargetOrderId) {
+          removed = true;
+          selectedRestaurantRef.current = null;
+
+          setShowNewOrderPopup(false);
+          setShowreachedPickupPopup(false);
+          setShowOrderIdConfirmationPopup(false);
+          setShowReachedDropPopup(false);
+          setShowOrderDeliveredAnimation(false);
+          setShowCustomerReviewPopup(false);
+          setShowPaymentPage(false);
+          setShowDirectionsMap(false);
+
+          try {
+            localStorage.removeItem("deliveryActiveOrder");
+            localStorage.removeItem("activeOrder");
+          } catch (error) {
+            console.warn("Failed to clear removed rider flow order:", error);
+          }
+
+          if (options.toastMessage) {
+            toast.error(options.toastMessage);
+          }
+
+          return null;
+        }
+        return currentOrder;
+      });
+
+      return removed;
+    },
+    [getQueuedOrderIdentity, removeQueuedOrderNotification],
   );
 
   const activateAcceptedAdvanceOrder = useCallback(
@@ -9521,6 +9590,51 @@ export default function DeliveryHome() {
 
         if (response?.data?.success && response?.data?.data?.orders) {
           const orders = response.data.data.orders;
+          const assignedOrderIds = new Set(
+            orders
+              .flatMap((order) => {
+                const values = [
+                  order?._id?.toString?.(),
+                  order?._id,
+                  order?.orderId,
+                ];
+                return values
+                  .map((value) => (value == null ? null : String(value)))
+                  .filter(Boolean);
+              }),
+          );
+
+          const currentActiveOrder = selectedRestaurantRef.current;
+          const currentActiveOrderId = getQueuedOrderIdentity(currentActiveOrder);
+          if (
+            currentActiveOrderId &&
+            !assignedOrderIds.has(String(currentActiveOrderId))
+          ) {
+            removeOrderFromRiderFlow(currentActiveOrder, {
+              toastMessage:
+                "This order was reassigned to another delivery partner.",
+            });
+          }
+
+          setAcceptedAdvanceOrders((currentOrders) =>
+            currentOrders.filter((order) => {
+              const orderId = getQueuedOrderIdentity(order);
+              return orderId && assignedOrderIds.has(String(orderId));
+            }),
+          );
+
+          setPreviewAdvanceOrder((currentPreview) => {
+            const previewId = getQueuedOrderIdentity(currentPreview);
+            if (!previewId) return currentPreview;
+            return assignedOrderIds.has(String(previewId)) ? currentPreview : null;
+          });
+
+          pendingNewOrders.forEach((order) => {
+            const orderId = getQueuedOrderIdentity(order);
+            if (orderId && !assignedOrderIds.has(String(orderId))) {
+              removeQueuedOrderNotification(order);
+            }
+          });
 
           // Restore only when the rider has already accepted and moved into active delivery flow.
           // Assigned/preparing-ready orders must still show the accept slider.
@@ -9961,6 +10075,10 @@ export default function DeliveryHome() {
       isCashInHandLimitReached,
       calculateTimeAway,
       isOrderAlreadyAccepted,
+      getQueuedOrderIdentity,
+      pendingNewOrders,
+      removeOrderFromRiderFlow,
+      removeQueuedOrderNotification,
     ],
   );
 
@@ -18575,23 +18693,31 @@ export default function DeliveryHome() {
               <span className="absolute inset-0 rounded-full bg-orange-300/50 animate-ping" />
               <Bell className="h-5 w-5" />
               <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-black px-1 text-[10px] font-bold leading-none text-white">
-                {totalAdvancedOrdersCount}
+                {totalBellOrdersCount}
               </span>
             </div>
             <div className="text-left">
               <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-orange-500">
-                Advance Orders
+                Order Queue
               </p>
               <p className="text-sm font-semibold text-slate-900">
-                {totalAdvancedOrdersCount === 0
-                  ? "No queued orders"
+                {totalBellOrdersCount === 0
+                  ? "No active or queued orders"
+                  : currentBellOrder && totalAdvancedOrdersCount > 0
+                  ? "Live order + queued next"
+                  : currentBellOrder
+                  ? "Current order live"
                   : acceptedAdvanceOrders.length > 0
                   ? `${acceptedAdvanceOrders.length} accepted next`
                   : `${advancedOrders.length} waiting`}
               </p>
               <p className="text-[11px] text-slate-500">
-                {totalAdvancedOrdersCount === 0
+                {totalBellOrdersCount === 0
                   ? "Bell stays here for upcoming slots"
+                  : currentBellOrder && totalAdvancedOrdersCount > 0
+                  ? `${totalBellOrdersCount} orders in your flow`
+                  : currentBellOrder
+                  ? "Tap to reopen current delivery"
                   : advancedOrders.length > 0
                   ? `${advancedOrders.length} to review`
                   : "Tap to view status"}
@@ -18623,12 +18749,12 @@ export default function DeliveryHome() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/80">
-                      Advance Orders
+                      Order Queue
                     </p>
-                    <h3 className="mt-1 text-lg font-bold">Queued for you</h3>
+                    <h3 className="mt-1 text-lg font-bold">Live plus queued</h3>
                     <p className="mt-1 text-sm text-white/90">
-                      Open any assigned order below to review and accept it
-                      without losing track of your current delivery.
+                      Open your current order or any advance assignment below
+                      without losing track of the delivery flow.
                     </p>
                   </div>
                   <button
@@ -18642,18 +18768,68 @@ export default function DeliveryHome() {
               </div>
 
               <div className="max-h-[60vh] space-y-4 overflow-y-auto px-4 py-4">
-                {totalAdvancedOrdersCount === 0 && (
+                {totalBellOrdersCount === 0 && (
                   <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center">
                     <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-white shadow-sm">
                       <Bell className="h-5 w-5 text-orange-500" />
                     </div>
                     <h4 className="mt-3 text-sm font-semibold text-slate-900">
-                      No advance orders right now
+                      No live or queued orders right now
                     </h4>
                     <p className="mt-1 text-xs leading-5 text-slate-500">
                       This bell stays visible so you can always check future
                       slots as soon as they get assigned.
                     </p>
+                  </div>
+                )}
+
+                {currentBellOrder && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-600">
+                        Current Order
+                      </p>
+                      <span className="rounded-full bg-sky-100 px-2 py-1 text-[11px] font-semibold text-sky-700">
+                        Live now
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAdvancedOrdersPanel(false);
+                        setPreviewAdvanceOrder(null);
+                        restoreCurrentOrderFlowPopup();
+                      }}
+                      className="w-full rounded-2xl border border-sky-200 bg-sky-50 p-4 text-left transition hover:border-sky-300 hover:bg-sky-100/80"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-600">
+                            In Progress
+                          </p>
+                          <h4 className="mt-1 text-base font-bold text-slate-900">
+                            {currentBellOrder?.name ||
+                              currentBellOrder?.restaurantName ||
+                              "Current order"}
+                          </h4>
+                          <p className="mt-1 text-xs text-slate-500">
+                            Order{" "}
+                            {currentBellOrder?.orderId ||
+                              currentBellOrder?.id ||
+                              "Pending"}
+                          </p>
+                        </div>
+                        <div className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-sky-700">
+                          {currentBellOrderStatusLabel}
+                        </div>
+                      </div>
+
+                      <p className="mt-3 text-sm text-slate-600">
+                        Tap to reopen the current delivery slider and continue
+                        from where you left off.
+                      </p>
+                    </button>
                   </div>
                 )}
 

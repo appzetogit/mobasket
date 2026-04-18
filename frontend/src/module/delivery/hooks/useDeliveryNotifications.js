@@ -903,6 +903,28 @@ export const useDeliveryNotifications = (options = {}) => {
     setNewOrderQueue((currentQueue) => currentQueue.slice(1));
   }, []);
 
+  const removeQueuedOrderNotification = useCallback((targetOrder) => {
+    const targetIds =
+      typeof targetOrder === 'object' && targetOrder !== null
+        ? normalizeOrderIds(targetOrder)
+        : [targetOrder == null ? null : String(targetOrder)].filter(Boolean);
+
+    if (targetIds.length === 0) return;
+
+    setNewOrderQueue((currentQueue) =>
+      currentQueue.filter((queuedOrder) => {
+        const queuedIds = normalizeOrderIds(queuedOrder);
+        return !queuedIds.some((id) => targetIds.includes(id));
+      })
+    );
+
+    setOrderReady((currentOrder) => {
+      if (!currentOrder) return currentOrder;
+      const currentIds = normalizeOrderIds(currentOrder);
+      return currentIds.some((id) => targetIds.includes(id)) ? null : currentOrder;
+    });
+  }, [normalizeOrderIds]);
+
   const prioritizeNewOrderNotification = useCallback((targetOrder) => {
     const targetIds =
       typeof targetOrder === 'object' && targetOrder !== null
@@ -936,6 +958,7 @@ export const useDeliveryNotifications = (options = {}) => {
     pendingNewOrdersCount: newOrderQueue.length,
     prioritizeNewOrderNotification,
     clearNewOrder,
+    removeQueuedOrderNotification,
     orderReady,
     clearOrderReady,
     isConnected,
