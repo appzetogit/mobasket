@@ -26,6 +26,18 @@ const currencyFormatter = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 })
 
+const getOrderAmount = (order) => {
+  const amount = Number(
+    order?.totalAmount ??
+    order?.pricing?.total ??
+    order?.total ??
+    order?.amount ??
+    0
+  )
+
+  return Number.isFinite(amount) ? amount : 0
+}
+
 const isAwaitingStoreDecision = (order) => {
   const backendStatus = String(order?.status || "").toLowerCase()
 
@@ -108,7 +120,9 @@ const dedupeOrdersByTrackingId = (orders = []) => {
 
 export default function CombinedOrdersPage() {
   const location = useLocation()
-  const [activeTab, setActiveTab] = useState("today")
+  const [activeTab, setActiveTab] = useState(() =>
+    location.pathname.includes("/all-orders") ? "all" : "today"
+  )
   const [isSoundMuted, setIsSoundMuted] = useState(() => {
     try {
       return localStorage.getItem(ORDER_SOUND_MUTED_KEY) === "true"
@@ -141,6 +155,10 @@ export default function CombinedOrdersPage() {
   const isStoppingAudioRef = useRef(false)
   const isSoundMutedRef = useRef(isSoundMuted)
   const ensureIncomingSoundRef = useRef(() => {})
+
+  useEffect(() => {
+    setActiveTab(location.pathname.includes("/all-orders") ? "all" : "today")
+  }, [location.pathname])
 
   const {
     searchQuery,
@@ -183,7 +201,7 @@ export default function CombinedOrdersPage() {
     const totalValue = todayOrders
       .filter(isOrderIncludedInValueSummary)
       .reduce(
-      (sum, order) => sum + (Number(order?.totalAmount) || 0),
+      (sum, order) => sum + getOrderAmount(order),
       0
       )
 
@@ -197,7 +215,7 @@ export default function CombinedOrdersPage() {
     const totalValue = displayedOrders
       .filter(isOrderIncludedInValueSummary)
       .reduce(
-      (sum, order) => sum + (Number(order?.totalAmount) || 0),
+      (sum, order) => sum + getOrderAmount(order),
       0
       )
 

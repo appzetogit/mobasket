@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react"
 import { AnimatePresence, motion } from "framer-motion"
 import { ArrowRight, Clock, MapPin } from "lucide-react"
+import DeliveryCodCollectionNotice from "./DeliveryCodCollectionNotice"
 
 export default function DeliveryHomeNewOrderPopup({
   isVisible,
@@ -109,11 +110,19 @@ export default function DeliveryHomeNewOrderPopup({
   const pickupDistanceLabel =
     normalizeDistanceLabel(newOrder?.pickupDistance) ||
     normalizeDistanceLabel(selectedRestaurant?.pickupDistance) ||
+    normalizeDistanceLabel(selectedRestaurant?.distance) ||
     "Distance not available"
   const dropDistanceLabel =
     normalizeDistanceLabel(newOrder?.deliveryDistance) ||
+    normalizeDistanceLabel(newOrder?.dropDistance) ||
     normalizeDistanceLabel(selectedRestaurant?.dropDistance) ||
     "Distance not available"
+  const pickupTimeAway =
+    normalizeDistanceLabel(newOrder?.pickupDistance)
+      ? calculateTimeAway(newOrder.pickupDistance)
+      : selectedRestaurant?.timeAway && selectedRestaurant.timeAway !== "Calculating..."
+        ? selectedRestaurant.timeAway
+        : null
 
   return (
     <AnimatePresence>
@@ -124,7 +133,7 @@ export default function DeliveryHomeNewOrderPopup({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-black/50 z-[100]"
+            className="fixed inset-0 bg-black/55 z-[180]"
           />
         )}
 
@@ -134,7 +143,7 @@ export default function DeliveryHomeNewOrderPopup({
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 100, opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="fixed bottom-16 left-0 right-0 z-[115] flex justify-center pb-2"
+            className="fixed bottom-16 left-0 right-0 z-[195] flex justify-center pb-2"
             onTouchStart={handleNewOrderPopupTouchStart}
             onTouchMove={handleNewOrderPopupTouchMove}
             onTouchEnd={handleNewOrderPopupTouchEnd}
@@ -175,7 +184,7 @@ export default function DeliveryHomeNewOrderPopup({
           onTouchStart={handleNewOrderPopupTouchStart}
           onTouchMove={handleNewOrderPopupTouchMove}
           onTouchEnd={handleNewOrderPopupTouchEnd}
-          className="fixed bottom-0 left-0 right-0 bg-transparent rounded-t-3xl z-[110] overflow-visible"
+          className="fixed bottom-0 left-0 right-0 bg-transparent rounded-t-3xl z-[190] overflow-visible"
           style={{ touchAction: "none" }}
         >
           <div className="flex justify-center pt-4 pb-2 cursor-grab active:cursor-grabbing">
@@ -277,6 +286,8 @@ export default function DeliveryHomeNewOrderPopup({
                 )}
               </div>
 
+              <DeliveryCodCollectionNotice order={newOrder || selectedRestaurant} className="mb-4" />
+
               <div className="bg-gray-50 rounded-xl p-4 mb-6">
                 <div className="mb-3">
                   <span className="bg-gray-200 text-gray-700 text-xs font-medium px-2 py-1 rounded-lg">
@@ -294,22 +305,16 @@ export default function DeliveryHomeNewOrderPopup({
                 <div className="flex items-center gap-1.5 text-gray-500 text-sm mb-2">
                   <Clock className="w-4 h-4" />
                   <span>
-                    {selectedRestaurant?.timeAway && selectedRestaurant.timeAway !== "Calculating..."
-                      ? `${selectedRestaurant.timeAway} away`
-                      : normalizeDistanceLabel(newOrder?.pickupDistance)
-                        ? `${calculateTimeAway(newOrder.pickupDistance)} away`
-                        : "N/A"}
+                    {pickupTimeAway ? `${pickupTimeAway} away` : "N/A"}
                   </span>
                 </div>
 
                 <div className="flex items-center gap-1.5 text-gray-500 text-sm">
                   <MapPin className="w-4 h-4" />
                   <span>
-                    {normalizeDistanceLabel(selectedRestaurant?.distance)
-                      ? `${selectedRestaurant.distance} away`
-                      : normalizeDistanceLabel(newOrder?.pickupDistance)
-                        ? `${newOrder.pickupDistance} away`
-                        : "Distance not available"}
+                    {pickupDistanceLabel !== "Distance not available"
+                      ? `${pickupDistanceLabel} away`
+                      : pickupDistanceLabel}
                   </span>
                 </div>
               </div>

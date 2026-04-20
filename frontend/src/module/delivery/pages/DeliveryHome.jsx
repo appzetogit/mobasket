@@ -69,6 +69,7 @@ import BottomPopup from "../components/BottomPopup";
 import DeliveryHomeNewOrderPopup from "../components/DeliveryHomeNewOrderPopup";
 import DeliveryHomeRejectPopup from "../components/DeliveryHomeRejectPopup";
 import DeliveryHomeReachedPickupPopup from "../components/DeliveryHomeReachedPickupPopup";
+import DeliveryCodCollectionNotice from "../components/DeliveryCodCollectionNotice";
 
 import FeedNavbar from "../components/FeedNavbar";
 
@@ -1906,6 +1907,7 @@ export default function DeliveryHome() {
 
   const totalBellOrdersCount =
     totalAdvancedOrdersCount + (currentBellOrder ? 1 : 0);
+  const newOrdersBellCount = totalAdvancedOrdersCount;
 
   const currentBellOrderStatusLabel = useMemo(() => {
     if (!currentBellOrder) return "";
@@ -2214,6 +2216,134 @@ export default function DeliveryHome() {
     billImageSkipped,
   ]);
 
+  const clearOrderMapArtifacts = useCallback(() => {
+    try {
+      if (restaurantMarkerRef.current) {
+        restaurantMarkerRef.current.setMap(null);
+        restaurantMarkerRef.current = null;
+      }
+
+      if (customerMarkerRef.current) {
+        customerMarkerRef.current.setMap(null);
+        customerMarkerRef.current = null;
+      }
+
+      if (directionsRendererRef.current) {
+        directionsRendererRef.current.setMap(null);
+      }
+
+      if (routePolylineRef.current) {
+        routePolylineRef.current.setMap(null);
+        routePolylineRef.current = null;
+      }
+
+      if (liveTrackingPolylineRef.current) {
+        liveTrackingPolylineRef.current.setMap(null);
+        liveTrackingPolylineRef.current = null;
+      }
+
+      setDirectionsResponse(null);
+      directionsResponseRef.current = null;
+      setRoutePolyline([]);
+      setShowRoutePath(false);
+      pickupRouteDistanceRef.current = 0;
+      pickupRouteTimeRef.current = 0;
+      deliveryRouteDistanceRef.current = 0;
+      deliveryRouteTimeRef.current = 0;
+    } catch (error) {
+      console.warn("[MAP] Failed to clear previous order artifacts:", error);
+    }
+  }, []);
+
+  const syncActiveOrderMapPins = useCallback((order) => {
+    if (!order || !window.google?.maps || !window.deliveryMapInstance) {
+      return;
+    }
+
+    const map = window.deliveryMapInstance;
+    const restaurantLat = Number(order.lat);
+    const restaurantLng = Number(order.lng);
+    const hasRestaurantCoords =
+      Number.isFinite(restaurantLat) &&
+      Number.isFinite(restaurantLng) &&
+      !(restaurantLat === 0 && restaurantLng === 0);
+
+    if (hasRestaurantCoords) {
+      const restaurantLocation = { lat: restaurantLat, lng: restaurantLng };
+
+      const restaurantIcon = {
+        url:
+          "data:image/svg+xml;charset=UTF-8," +
+          encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="11" fill="#FF6B35" stroke="#FFFFFF" stroke-width="2"/>
+              <path d="M8 10c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v6H8v-6z" fill="#FFFFFF"/>
+              <path d="M7 16h10M10 12h4M9 14h6" stroke="#FF6B35" stroke-width="1.5" stroke-linecap="round"/>
+              <path d="M10 8h4v2h-4z" fill="#FFFFFF" opacity="0.7"/>
+            </svg>
+          `),
+        scaledSize: new window.google.maps.Size(48, 48),
+        anchor: new window.google.maps.Point(24, 48),
+      };
+
+      if (!restaurantMarkerRef.current) {
+        restaurantMarkerRef.current = new window.google.maps.Marker({
+          position: restaurantLocation,
+          map,
+          icon: restaurantIcon,
+          title: order.name || order.restaurantName || "Restaurant",
+          zIndex: 10,
+        });
+      } else {
+        restaurantMarkerRef.current.setPosition(restaurantLocation);
+        restaurantMarkerRef.current.setIcon(restaurantIcon);
+        restaurantMarkerRef.current.setTitle(
+          order.name || order.restaurantName || "Restaurant",
+        );
+        restaurantMarkerRef.current.setMap(map);
+      }
+    }
+
+    const customerLat = Number(order.customerLat);
+    const customerLng = Number(order.customerLng);
+    const hasCustomerCoords =
+      Number.isFinite(customerLat) &&
+      Number.isFinite(customerLng) &&
+      !(customerLat === 0 && customerLng === 0);
+
+    if (hasCustomerCoords) {
+      const customerLocation = { lat: customerLat, lng: customerLng };
+      const customerIcon = {
+        url:
+          "data:image/svg+xml;charset=UTF-8," +
+          encodeURIComponent(`
+            <svg xmlns="http://www.w3.org/2000/svg" width="36" height="46" viewBox="0 0 36 46">
+              <path d="M18 0 C8.06 0 0 8.06 0 18 C0 30.5 18 46 18 46 C18 46 36 30.5 36 18 C36 8.06 27.94 0 18 0 Z" fill="#2563eb" stroke="#ffffff" stroke-width="2"/>
+              <circle cx="18" cy="14" r="4.2" fill="white"/>
+              <path d="M10.5 24 C11.8 20.6 14.6 18.8 18 18.8 C21.4 18.8 24.2 20.6 25.5 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+          `),
+        scaledSize: new window.google.maps.Size(36, 46),
+        anchor: new window.google.maps.Point(18, 46),
+      };
+
+      if (!customerMarkerRef.current) {
+        customerMarkerRef.current = new window.google.maps.Marker({
+          position: customerLocation,
+          map,
+          icon: customerIcon,
+          title: order.customerName || "Customer",
+          zIndex: 25,
+        });
+      } else {
+        customerMarkerRef.current.setPosition(customerLocation);
+        customerMarkerRef.current.setIcon(customerIcon);
+        customerMarkerRef.current.setTitle(order.customerName || "Customer");
+        customerMarkerRef.current.setMap(map);
+      }
+    }
+  }, []);
+
   const handleSkipBillUpload = useCallback(() => {
     setBillImageUrl(null);
     setBillImageUploaded(false);
@@ -2359,6 +2489,7 @@ export default function DeliveryHome() {
           "en_route_to_pickup",
       };
 
+      clearOrderMapArtifacts();
       setSelectedRestaurant(normalizedOrder);
       selectedRestaurantRef.current = normalizedOrder;
       removeAcceptedAdvanceOrder(normalizedOrder);
@@ -2412,9 +2543,24 @@ export default function DeliveryHome() {
         console.warn("Failed to activate accepted advance order:", error);
       }
 
+      const syncPinsWhenReady = () => {
+        if (!window.deliveryMapInstance || !window.google?.maps) {
+          setTimeout(syncPinsWhenReady, 200);
+          return;
+        }
+
+        syncActiveOrderMapPins(normalizedOrder);
+      };
+
+      syncPinsWhenReady();
+
       return true;
     },
-    [removeAcceptedAdvanceOrder],
+    [
+      clearOrderMapArtifacts,
+      removeAcceptedAdvanceOrder,
+      syncActiveOrderMapPins,
+    ],
   );
 
   const stopNewOrderAlertSound = useCallback((reason = "unknown") => {
@@ -3726,12 +3872,19 @@ export default function DeliveryHome() {
   // Global watchdog: sound must stop unless order is in active new-order stage.
 
   useEffect(() => {
+    const popupTargetId = getQueuedOrderIdentity(newOrder);
+    const activeTargetId = getQueuedOrderIdentity(selectedRestaurant);
+    const popupIsForCurrentOrder =
+      Boolean(popupTargetId) &&
+      Boolean(activeTargetId) &&
+      String(popupTargetId) === String(activeTargetId);
+
     const shouldForceStop =
       !showNewOrderPopup ||
       !isOnline ||
       isActiveOrderCancelled ||
       shouldStopAlertForOrderState(newOrder) ||
-      shouldStopAlertForOrderState(selectedRestaurant);
+      (popupIsForCurrentOrder && shouldStopAlertForOrderState(selectedRestaurant));
 
     if (shouldForceStop) {
       stopNewOrderAlertSound("watchdog force stop");
@@ -3740,7 +3893,7 @@ export default function DeliveryHome() {
         showNewOrderPopup &&
         (isActiveOrderCancelled ||
           shouldStopAlertForOrderState(newOrder) ||
-          shouldStopAlertForOrderState(selectedRestaurant))
+          (popupIsForCurrentOrder && shouldStopAlertForOrderState(selectedRestaurant)))
       ) {
         setShowNewOrderPopup(false);
       }
@@ -3755,6 +3908,8 @@ export default function DeliveryHome() {
     newOrder,
 
     selectedRestaurant,
+
+    getQueuedOrderIdentity,
 
     shouldStopAlertForOrderState,
 
@@ -3778,6 +3933,13 @@ export default function DeliveryHome() {
   // This guarantees buzzer doesn't continue due any race/retry path.
 
   useEffect(() => {
+    const popupTargetId = getQueuedOrderIdentity(newOrder);
+    const activeTargetId = getQueuedOrderIdentity(selectedRestaurant);
+    const popupIsForCurrentOrder =
+      Boolean(popupTargetId) &&
+      Boolean(activeTargetId) &&
+      String(popupTargetId) === String(activeTargetId);
+
     const deliveryStatus = selectedRestaurant?.deliveryState?.status;
 
     const deliveryPhase =
@@ -3795,9 +3957,11 @@ export default function DeliveryHome() {
       orderStatus === "out_for_delivery";
 
     if (isAcceptedByDelivery) {
-      stopNewOrderAlertSound("order accepted by delivery");
+      if (!showNewOrderPopup || popupIsForCurrentOrder) {
+        stopNewOrderAlertSound("order accepted by delivery");
+      }
 
-      if (showNewOrderPopup) {
+      if (showNewOrderPopup && popupIsForCurrentOrder) {
         setShowNewOrderPopup(false);
       }
     }
@@ -3813,6 +3977,10 @@ export default function DeliveryHome() {
     selectedRestaurant?.status,
 
     showNewOrderPopup,
+
+    newOrder,
+
+    getQueuedOrderIdentity,
 
     stopNewOrderAlertSound,
   ]);
@@ -3889,15 +4057,20 @@ export default function DeliveryHome() {
       // Never fallback to accepted/active order state, otherwise backend returns
       // "already accepted by you".
       const orderId = newOrder?.orderMongoId || newOrder?.orderId || null;
+      const activeOrderId = getQueuedOrderIdentity(
+        selectedRestaurantRef.current || selectedRestaurant,
+      );
+      const rejectTargetsCurrentOrder =
+        Boolean(activeOrderId) &&
+        Boolean(orderId) &&
+        String(activeOrderId) === String(orderId);
 
       if (!orderId) {
         setShowRejectPopup(false);
         setShowNewOrderPopup(false);
-        setShowreachedPickupPopup(false);
-        setShowOrderIdConfirmationPopup(false);
-        setShowReachedDropPopup(false);
-        setShowOrderDeliveredAnimation(false);
-        setSelectedRestaurant(null);
+        setIsNewOrderPopupMinimized(false);
+        setNewOrderDragY(0);
+        restoreCurrentOrderFlowPopup();
         toast.error("This order is no longer available to deny.");
         return;
       }
@@ -3926,19 +4099,23 @@ export default function DeliveryHome() {
           selectedRestaurant?.orderId,
         );
         clearNewOrder();
-        localStorage.removeItem("deliveryActiveOrder");
-        localStorage.removeItem("activeOrder");
         stopNewOrderAlertSound("order rejected");
         setShowRejectPopup(false);
         setShowNewOrderPopup(false);
-        setShowreachedPickupPopup(false);
-        setShowOrderIdConfirmationPopup(false);
-        setShowReachedDropPopup(false);
-        setSelectedRestaurant(null);
         setIsNewOrderPopupMinimized(false);
         setNewOrderDragY(0);
         setRejectReason("");
         setCountdownSeconds(300);
+        if (rejectTargetsCurrentOrder) {
+          localStorage.removeItem("deliveryActiveOrder");
+          localStorage.removeItem("activeOrder");
+          setShowreachedPickupPopup(false);
+          setShowOrderIdConfirmationPopup(false);
+          setShowReachedDropPopup(false);
+          setSelectedRestaurant(null);
+        } else {
+          restoreCurrentOrderFlowPopup();
+        }
         toast.success("Order denied");
       } catch (error) {
         const statusCode = Number(error?.response?.status || 0);
@@ -3963,18 +4140,22 @@ export default function DeliveryHome() {
             selectedRestaurant?.orderId,
           );
           clearNewOrder();
-          localStorage.removeItem("deliveryActiveOrder");
-          localStorage.removeItem("activeOrder");
           setShowRejectPopup(false);
           setShowNewOrderPopup(false);
-          setShowreachedPickupPopup(false);
-          setShowOrderIdConfirmationPopup(false);
-          setShowReachedDropPopup(false);
-          setShowOrderDeliveredAnimation(false);
-          setSelectedRestaurant(null);
           setIsNewOrderPopupMinimized(false);
           setNewOrderDragY(0);
           setRejectReason("");
+          if (rejectTargetsCurrentOrder) {
+            localStorage.removeItem("deliveryActiveOrder");
+            localStorage.removeItem("activeOrder");
+            setShowreachedPickupPopup(false);
+            setShowOrderIdConfirmationPopup(false);
+            setShowReachedDropPopup(false);
+            setShowOrderDeliveredAnimation(false);
+            setSelectedRestaurant(null);
+          } else {
+            restoreCurrentOrderFlowPopup();
+          }
           toast.success("Order is no longer available");
           return;
         }
@@ -5210,15 +5391,23 @@ export default function DeliveryHome() {
       const acceptOrderAndShowRoute = async () => {
         // Get order ID from selectedRestaurant or newOrder (define outside try-catch for error handling)
 
+        const popupOrder =
+          showNewOrderPopup && newOrder ? newOrder : selectedRestaurant;
+
         const orderId =
-          selectedRestaurant?.id ||
-          selectedRestaurant?._id ||
-          selectedRestaurant?.orderId ||
+          popupOrder?.orderMongoId ||
+          popupOrder?.mongoId ||
+          popupOrder?._id ||
+          popupOrder?.id ||
+          popupOrder?.orderId ||
           newOrder?.orderMongoId ||
           newOrder?.mongoId ||
           newOrder?._id ||
           newOrder?.id ||
           newOrder?.orderId ||
+          selectedRestaurant?.id ||
+          selectedRestaurant?._id ||
+          selectedRestaurant?.orderId ||
           (() => {
             try {
               const raw = localStorage.getItem("deliveryActiveOrder");
@@ -5242,6 +5431,8 @@ export default function DeliveryHome() {
           newOrderMongoId: newOrder?.orderMongoId,
 
           newOrderId: newOrder?.orderId,
+
+          popupOrderId: popupOrder?.orderId || popupOrder?.id,
 
           finalOrderId: orderId,
         });
@@ -5378,13 +5569,17 @@ export default function DeliveryHome() {
               const restaurantLngFromFields =
                 order.restaurantId?.location?.longitude;
 
+              const orderStoreCoords = resolveStoreCoordsFromOrder(order);
+
               const restaurantLat = Number.isFinite(
                 Number(restaurantLatFromCoords),
               )
                 ? Number(restaurantLatFromCoords)
                 : Number.isFinite(Number(restaurantLatFromFields))
                   ? Number(restaurantLatFromFields)
-                  : null;
+                  : Number.isFinite(Number(orderStoreCoords?.lat))
+                    ? Number(orderStoreCoords.lat)
+                    : null;
 
               const restaurantLng = Number.isFinite(
                 Number(restaurantLngFromCoords),
@@ -5392,7 +5587,9 @@ export default function DeliveryHome() {
                 ? Number(restaurantLngFromCoords)
                 : Number.isFinite(Number(restaurantLngFromFields))
                   ? Number(restaurantLngFromFields)
-                  : null;
+                  : Number.isFinite(Number(orderStoreCoords?.lng))
+                    ? Number(orderStoreCoords.lng)
+                    : null;
 
               // Format restaurant address - check multiple possible locations
 
@@ -5752,6 +5949,7 @@ export default function DeliveryHome() {
               });
 
               const customerCoords = extractCustomerCoordsFromOrder(order);
+              const orderUiFallback = newOrder || selectedRestaurant;
 
               restaurantInfo = {
                 id: order._id || order.orderId,
@@ -5765,28 +5963,28 @@ export default function DeliveryHome() {
                   "Restaurant address not available",
                 ), // Restaurant address from backend
 
-                lat: restaurantLat ?? selectedRestaurant?.lat,
+                lat: restaurantLat ?? orderUiFallback?.lat,
 
-                lng: restaurantLng ?? selectedRestaurant?.lng,
+                lng: restaurantLng ?? orderUiFallback?.lng,
 
-                distance: selectedRestaurant?.distance || "0 km",
+                distance: orderUiFallback?.distance || "0 km",
 
-                timeAway: selectedRestaurant?.timeAway || "0 mins",
+                timeAway: orderUiFallback?.timeAway || "0 mins",
 
-                dropDistance: selectedRestaurant?.dropDistance || "0 km",
+                dropDistance: orderUiFallback?.dropDistance || "0 km",
 
-                pickupDistance: selectedRestaurant?.pickupDistance || "0 km",
+                pickupDistance: orderUiFallback?.pickupDistance || "0 km",
 
                 estimatedEarnings:
-                  backendEarnings || selectedRestaurant?.estimatedEarnings || 0,
+                  backendEarnings || orderUiFallback?.estimatedEarnings || 0,
 
                 amount: earningsValue, // Also set amount for compatibility
 
                 customerName:
-                  order.userId?.name || selectedRestaurant?.customerName,
+                  order.userId?.name || orderUiFallback?.customerName,
                 customerPhone:
                   order.userId?.phone ||
-                  selectedRestaurant?.customerPhone ||
+                  orderUiFallback?.customerPhone ||
                   null,
 
                 customerAddress:
@@ -5794,13 +5992,13 @@ export default function DeliveryHome() {
                   (order.address?.street
                     ? `${order.address.street}, ${order.address.city || ""}, ${order.address.state || ""}`.trim()
                     : "") ||
-                  selectedRestaurant?.customerAddress,
+                  orderUiFallback?.customerAddress,
 
                 customerLat:
-                  customerCoords?.lat ?? selectedRestaurant?.customerLat,
+                  customerCoords?.lat ?? orderUiFallback?.customerLat,
 
                 customerLng:
-                  customerCoords?.lng ?? selectedRestaurant?.customerLng,
+                  customerCoords?.lng ?? orderUiFallback?.customerLng,
 
                 items: order.items || [],
 
@@ -9112,6 +9310,11 @@ export default function DeliveryHome() {
         items: newOrder.items || [],
 
         total: newOrder.total || 0,
+        paymentMethod:
+          newOrder.paymentMethod ??
+          newOrder.payment?.method ??
+          newOrder.payment ??
+          "razorpay",
         orderStatus:
           newOrder.status ||
           currentSelectedOrder?.orderStatus ||
@@ -9755,6 +9958,7 @@ export default function DeliveryHome() {
               items: activeAssignedOrder.items || [],
               total: activeAssignedOrder.pricing?.total || 0,
               payment: activeAssignedOrder.payment?.method || "COD",
+              paymentMethod: activeAssignedOrder.payment?.method || "COD",
               amount: estimatedEarningValue,
               orderStatus: activeAssignedOrder.status || "",
               status: activeAssignedOrder.status || "",
@@ -10044,6 +10248,7 @@ export default function DeliveryHome() {
               total: firstOrder.pricing?.total || 0,
 
               payment: firstOrder.payment?.method || "COD",
+              paymentMethod: firstOrder.payment?.method || "COD",
 
               amount: estimatedEarningValue,
             };
@@ -11472,7 +11677,7 @@ export default function DeliveryHome() {
       deliveryStateStatus === "delivered";
 
     const shouldShowCustomerMarker =
-      (navigationMode === "customer" || hasBillProof) &&
+      Boolean(selectedRestaurant) &&
       hasCustomerCoords &&
       !isDeliveredOrCompleted;
 
@@ -12877,6 +13082,7 @@ export default function DeliveryHome() {
           const restaurantCoords = restaurant?.location?.coordinates || [];
 
           const customerCoords = extractCustomerCoordsFromOrder(order);
+          const restoredStoreCoords = resolveStoreCoordsFromOrder(order);
 
           const restoredRestaurant = {
             ...savedRestaurant,
@@ -12899,11 +13105,15 @@ export default function DeliveryHome() {
 
             lat: Number.isFinite(Number(restaurantCoords?.[1]))
               ? Number(restaurantCoords[1])
-              : savedRestaurant?.lat,
+              : Number.isFinite(Number(restoredStoreCoords?.lat))
+                ? Number(restoredStoreCoords.lat)
+                : savedRestaurant?.lat,
 
             lng: Number.isFinite(Number(restaurantCoords?.[0]))
               ? Number(restaurantCoords[0])
-              : savedRestaurant?.lng,
+              : Number.isFinite(Number(restoredStoreCoords?.lng))
+                ? Number(restoredStoreCoords.lng)
+                : savedRestaurant?.lng,
 
             customerName: order?.userId?.name || savedRestaurant?.customerName,
             customerPhone:
@@ -12938,6 +13148,24 @@ export default function DeliveryHome() {
               order?.deliveryState?.currentPhase ||
               savedRestaurant?.deliveryPhase ||
               savedRestaurant?.deliveryState?.currentPhase,
+
+            total:
+              order?.pricing?.total ??
+              order?.total ??
+              savedRestaurant?.total ??
+              0,
+
+            payment:
+              order?.payment?.method ??
+              order?.paymentMethod ??
+              savedRestaurant?.payment ??
+              savedRestaurant?.paymentMethod,
+
+            paymentMethod:
+              order?.paymentMethod ??
+              order?.payment?.method ??
+              savedRestaurant?.paymentMethod ??
+              savedRestaurant?.payment,
           };
 
           setSelectedRestaurant(restoredRestaurant);
@@ -13137,6 +13365,8 @@ export default function DeliveryHome() {
             selectedRestaurantRef.current ||
             activeOrderData.restaurantInfo ||
             {};
+
+          syncActiveOrderMapPins(restoredOrder);
 
           const restoredOrderStatus = String(
             restoredOrder?.orderStatus || restoredOrder?.status || "",
@@ -15654,6 +15884,7 @@ export default function DeliveryHome() {
     longitude,
     heading = null,
     shouldCenterMap = false,
+    options = {},
   ) => {
     if (!window.google || !window.google.maps || !window.deliveryMapInstance) {
       return;
@@ -15673,6 +15904,8 @@ export default function DeliveryHome() {
     }
 
     const previousMarkerPosition = bikeMarkerRef.current?.getPosition?.();
+    const forceUpdate = Boolean(options?.forceUpdate);
+    const shouldForceCenter = Boolean(options?.centerMap);
 
     if (previousMarkerPosition) {
       const jumpDistance = haversineDistance(
@@ -15685,7 +15918,7 @@ export default function DeliveryHome() {
         longitude,
       );
 
-      if (jumpDistance > MAX_REASONABLE_MARKER_JUMP_METERS) {
+      if (jumpDistance > MAX_REASONABLE_MARKER_JUMP_METERS && !forceUpdate) {
         console.warn("Ignoring outlier bike jump to keep map in scope:", {
           jumpDistanceMeters: Math.round(jumpDistance),
 
@@ -15698,6 +15931,17 @@ export default function DeliveryHome() {
         });
 
         return;
+      }
+
+      if (jumpDistance > MAX_REASONABLE_MARKER_JUMP_METERS && forceUpdate) {
+        console.warn("Applying forced fresh GPS update despite large jump:", {
+          jumpDistanceMeters: Math.round(jumpDistance),
+          previous: {
+            lat: previousMarkerPosition.lat(),
+            lng: previousMarkerPosition.lng(),
+          },
+          next: { lat: latitude, lng: longitude },
+        });
       }
     }
 
@@ -15865,6 +16109,22 @@ export default function DeliveryHome() {
 
       if (bikeMarkerRef.current.getMap() === null) {
         bikeMarkerRef.current.setMap(map);
+      }
+    }
+
+    if (shouldForceCenter || (shouldCenterMap && options?.allowLegacyCenter)) {
+      try {
+        isUserPanningRef.current = false;
+        map.panTo(position);
+
+        const targetZoom = Number(options?.zoom);
+        const minimumZoom = Number.isFinite(targetZoom) ? targetZoom : 17;
+
+        if ((map.getZoom?.() || 0) < minimumZoom) {
+          map.setZoom(minimumZoom);
+        }
+      } catch (error) {
+        console.warn("[MAP] Failed to recenter on rider marker:", error);
       }
     }
   };
@@ -17797,6 +18057,7 @@ export default function DeliveryHome() {
                       // Save location to localStorage (for refresh handling)
 
                       saveCachedDeliveryLocation(newLocation);
+                      setRiderLocation(newLocation);
 
                       // Update route history
 
@@ -17820,34 +18081,21 @@ export default function DeliveryHome() {
                         ];
                       }
 
+                      lastLocationRef.current = newLocation;
+
                       // Update bike marker (only if online - blue dot नहीं, bike icon)
 
                       if (window.deliveryMapInstance) {
-                        // Recenter button should reset manual pan lock and reframe route like Google Maps.
+                        // Recenter button must trust this fresh GPS read even if old state is stale.
 
                         isUserPanningRef.current = false;
+                        window.deliveryMapInstance.panTo({
+                          lat: latitude,
+                          lng: longitude,
+                        });
 
-                        // Always show bike marker on map (both offline and online)
-
-                        // Active order: fit full route, otherwise center rider.
-
-                        if (selectedRestaurantRef.current) {
-                          const fitted = fitMapToActiveRoute(
-                            window.deliveryMapInstance,
-                          );
-
-                          if (!fitted) {
-                            window.deliveryMapInstance.panTo({
-                              lat: latitude,
-                              lng: longitude,
-                            });
-
-                            if (
-                              (window.deliveryMapInstance.getZoom?.() || 0) < 16
-                            ) {
-                              window.deliveryMapInstance.setZoom(16);
-                            }
-                          }
+                        if ((window.deliveryMapInstance.getZoom?.() || 0) < 18) {
+                          window.deliveryMapInstance.setZoom(18);
                         }
 
                         createOrUpdateBikeMarker(
@@ -17855,14 +18103,15 @@ export default function DeliveryHome() {
                           longitude,
                           heading,
                           true,
+                          {
+                            forceUpdate: true,
+                            centerMap: true,
+                            zoom: 18,
+                          },
                         );
 
                         updateRoutePolyline();
                       }
-
-                      setRiderLocation(newLocation);
-
-                      lastLocationRef.current = newLocation;
 
                       console.log("[LOC] Location refreshed:", {
                         latitude,
@@ -18693,7 +18942,7 @@ export default function DeliveryHome() {
               <span className="absolute inset-0 rounded-full bg-orange-300/50 animate-ping" />
               <Bell className="h-5 w-5" />
               <span className="absolute -right-1 -top-1 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-black px-1 text-[10px] font-bold leading-none text-white">
-                {totalBellOrdersCount}
+                {newOrdersBellCount}
               </span>
             </div>
             <div className="text-left">
@@ -18701,8 +18950,10 @@ export default function DeliveryHome() {
                 Order Queue
               </p>
               <p className="text-sm font-semibold text-slate-900">
-                {totalBellOrdersCount === 0
-                  ? "No active or queued orders"
+                {newOrdersBellCount === 0
+                  ? currentBellOrder
+                    ? "Current order live"
+                    : "No new orders"
                   : currentBellOrder && totalAdvancedOrdersCount > 0
                   ? "Live order + queued next"
                   : currentBellOrder
@@ -18712,10 +18963,12 @@ export default function DeliveryHome() {
                   : `${advancedOrders.length} waiting`}
               </p>
               <p className="text-[11px] text-slate-500">
-                {totalBellOrdersCount === 0
-                  ? "Bell stays here for upcoming slots"
+                {newOrdersBellCount === 0
+                  ? currentBellOrder
+                    ? "No new assignments waiting"
+                    : "Bell stays here for upcoming slots"
                   : currentBellOrder && totalAdvancedOrdersCount > 0
-                  ? `${totalBellOrdersCount} orders in your flow`
+                  ? `${newOrdersBellCount} new order${newOrdersBellCount > 1 ? "s" : ""} waiting`
                   : currentBellOrder
                   ? "Tap to reopen current delivery"
                   : advancedOrders.length > 0
@@ -19209,6 +19462,7 @@ export default function DeliveryHome() {
 
       <DeliveryHomeRejectPopup
         isOpen={showRejectPopup}
+        order={newOrder || selectedRestaurant}
         rejectReasons={rejectReasons}
         rejectReason={rejectReason}
         setRejectReason={setRejectReason}
@@ -19589,6 +19843,8 @@ export default function DeliveryHome() {
             )}
           </div>
 
+          <DeliveryCodCollectionNotice order={selectedRestaurant} className="mb-6" />
+
           {/* Action Buttons */}
 
           <div className="flex gap-3 mb-6">
@@ -19879,48 +20135,7 @@ export default function DeliveryHome() {
             </div>
           </div>
 
-          {/* Payment info: Online = amount paid, COD = collect from customer */}
-
-          {selectedRestaurant?.total != null &&
-            (() => {
-              const m = (selectedRestaurant.paymentMethod || "").toLowerCase();
-
-              const isCod = m === "cash" || m === "cod";
-
-              const total = Number(selectedRestaurant.total) || 0;
-
-              return (
-                <div
-                  className={`rounded-xl p-4 mb-6 ${isCod ? "bg-amber-50 border border-amber-200" : "bg-emerald-50 border border-emerald-200"}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <IndianRupee
-                        className={`w-4 h-4 ${isCod ? "text-amber-600" : "text-emerald-600"}`}
-                      />
-
-                      <span
-                        className={`text-sm font-medium ${isCod ? "text-amber-800" : "text-emerald-800"}`}
-                      >
-                        {isCod
-                          ? "Collect from customer (COD)"
-                          : "Amount paid (Online)"}
-                      </span>
-                    </div>
-
-                    <span
-                      className={`text-lg font-bold ${isCod ? "text-amber-700" : "text-emerald-700"}`}
-                    >
-                      &#8377;
-                      {total.toLocaleString("en-IN", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </span>
-                  </div>
-                </div>
-              );
-            })()}
+          <DeliveryCodCollectionNotice order={selectedRestaurant} className="mb-6" />
 
           {/* Order Delivered Button with Swipe */}
 
@@ -20045,6 +20260,8 @@ export default function DeliveryHome() {
             <p className="text-gray-600 text-sm mb-6">
               How was your delivery experience?
             </p>
+
+            <DeliveryCodCollectionNotice order={selectedRestaurant} className="mb-6 text-left" />
 
             {/* Star Rating */}
 
@@ -20375,6 +20592,8 @@ export default function DeliveryHome() {
                   setShowCustomerReviewPopup(false);
 
                   // Clear selected restaurant/order to prevent showing popups for delivered order
+
+                  clearOrderMapArtifacts();
 
                   setSelectedRestaurant(null);
                   selectedRestaurantRef.current = null;

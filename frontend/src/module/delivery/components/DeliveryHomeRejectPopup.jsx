@@ -1,7 +1,9 @@
 import { AnimatePresence, motion } from "framer-motion"
+import DeliveryCodCollectionNotice from "./DeliveryCodCollectionNotice"
 
 export default function DeliveryHomeRejectPopup({
   isOpen,
+  order,
   rejectReasons,
   rejectReason,
   setRejectReason,
@@ -35,6 +37,8 @@ export default function DeliveryHomeRejectPopup({
           </div>
 
           <div className="px-4 py-4 max-h-[60vh] overflow-y-auto">
+            <DeliveryCodCollectionNotice order={order} className="mb-4" />
+
             <div className="space-y-2">
               {rejectReasons.map((reason) => (
                 <button

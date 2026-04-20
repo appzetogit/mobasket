@@ -3,6 +3,7 @@ import { motion } from "framer-motion"
 import { ArrowRight, MapPin, Phone } from "lucide-react"
 
 import BottomPopup from "./BottomPopup"
+import DeliveryCodCollectionNotice from "./DeliveryCodCollectionNotice"
 
 function resolvePickupAddress(selectedRestaurant) {
   const address = selectedRestaurant?.address
@@ -128,6 +129,8 @@ export default function DeliveryHomeReachedPickupPopup({
 
           {isCancelled && <p className="mt-2 text-sm font-semibold text-red-600">Order cancelled by user</p>}
         </div>
+
+        <DeliveryCodCollectionNotice order={selectedRestaurant} className="mb-6" />
 
         <div className="flex gap-3 mb-6">
           <button
