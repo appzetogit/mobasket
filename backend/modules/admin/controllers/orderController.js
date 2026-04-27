@@ -945,7 +945,7 @@ export const getOrders = asyncHandler(async (req, res) => {
         })(),
         paymentCollectionStatus: (order.payment?.method === 'cash' || order.payment?.method === 'cod')
           ? (order.status === 'delivered' ? 'Collected' : 'Not Collected')
-          : 'Collected',
+          : (String(order.payment?.status || '').toLowerCase() === 'completed' ? 'Collected' : 'Not Collected'),
         orderStatus: orderStatusDisplay,
         status: order.status, // Backend status
         adminApprovalStatus: order.adminApproval?.status || null,
@@ -1235,7 +1235,7 @@ export const getOrderById = asyncHandler(async (req, res) => {
         paymentType: isCodPayment ? 'Cash on Delivery' : (paymentMethod === 'wallet' ? 'Wallet' : 'Online'),
         paymentCollectionStatus: isCodPayment
           ? (order.status === 'delivered' ? 'Collected' : 'Not Collected')
-          : 'Collected',
+          : (String(order.payment?.status || '').toLowerCase() === 'completed' ? 'Collected' : 'Not Collected'),
         orderStatus: orderStatusDisplay,
         deliveryType: order.deliveryFleet === 'fast' ? 'Fast Delivery' : 'Home Delivery',
         totalItemAmount: order.pricing?.subtotal || 0,

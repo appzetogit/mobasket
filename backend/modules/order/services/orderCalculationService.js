@@ -190,22 +190,26 @@ export const calculateDeliveryFee = async (
   restaurant,
   deliveryAddress = null,
   platform = 'mofood',
-  zoneId = null
+  zoneId = null,
+  options = {}
 ) => {
   const requestedPlatform = platform === 'mogrocery' ? 'mogrocery' : 'mofood';
   const restaurantPlatform = restaurant?.platform === 'mogrocery' ? 'mogrocery' : 'mofood';
   // Respect explicit grocery pricing requests even when restaurant/store platform in DB is stale.
   const pricingPlatform = requestedPlatform === 'mogrocery' ? 'mogrocery' : restaurantPlatform;
-  const feeSettings = await getFeeSettings(pricingPlatform);
+  const feeSettings = options.feeSettings || await getFeeSettings(pricingPlatform);
 
   // Zone layers: delivery charge by layer (inner/outer/outermost) - platform-scoped.
   // If a matching layer exists, layer charge takes precedence over generic threshold/range fees.
   const { lat, lng } = getDeliveryCoordinates(deliveryAddress);
-  if (lat != null && lng != null) {
-    const zoneResult = await getZoneLayerDeliveryChargeAndType(lat, lng, pricingPlatform, zoneId);
-    if (zoneResult !== null) {
-      return zoneResult.deliveryCharge;
-    }
+  const zoneResult =
+    options.zoneResult !== undefined
+      ? options.zoneResult
+      : lat != null && lng != null
+        ? await getZoneLayerDeliveryChargeAndType(lat, lng, pricingPlatform, zoneId)
+        : null;
+  if (zoneResult !== null) {
+    return zoneResult.deliveryCharge;
   }
 
   // Generic free delivery/range rules apply only when no layer-based zone charge matched.
@@ -237,8 +241,8 @@ export const calculateDeliveryFee = async (
 /**
  * Calculate platform fee
  */
-export const calculatePlatformFee = async (platform = 'mofood') => {
-  const feeSettings = await getFeeSettings(platform);
+export const calculatePlatformFee = async (platform = 'mofood', feeSettingsOverride = null) => {
+  const feeSettings = feeSettingsOverride || await getFeeSettings(platform);
   return feeSettings.platformFee ?? 5;
 };
 
@@ -246,9 +250,9 @@ export const calculatePlatformFee = async (platform = 'mofood') => {
  * Calculate GST (Goods and Services Tax)
  * GST is calculated on subtotal after discounts
  */
-export const calculateGST = async (subtotal, discount = 0, platform = 'mofood') => {
+export const calculateGST = async (subtotal, discount = 0, platform = 'mofood', feeSettingsOverride = null) => {
   const taxableAmount = subtotal - discount;
-  const feeSettings = await getFeeSettings(platform);
+  const feeSettings = feeSettingsOverride || await getFeeSettings(platform);
   const gstRate = (feeSettings.gstRate ?? 5) / 100; // Convert percentage to decimal
   return Math.round(taxableAmount * gstRate);
 };
@@ -632,6 +636,7 @@ const getPlanBenefitAdjustment = async ({ userId, items, subtotal }) => {
 export const calculateOrderPricing = async ({
   items,
   restaurantId,
+  restaurantEntity = null,
   deliveryAddress = null,
   couponCode = null,
   deliveryFleet = 'standard',
@@ -650,9 +655,9 @@ export const calculateOrderPricing = async ({
     }
     
     // Get restaurant details
-    let restaurant = null;
-    let offerRestaurantObjectId = null;
-    if (restaurantId) {
+    let restaurant = restaurantEntity || null;
+    let offerRestaurantObjectId = restaurantEntity?._id || null;
+    if (!restaurant && restaurantId) {
       const resolvedContext = await resolveOfferRestaurantContext(restaurantId);
       restaurant = resolvedContext.restaurant;
       offerRestaurantObjectId = resolvedContext.offerRestaurantObjectId;
@@ -775,8 +780,9 @@ export const calculateOrderPricing = async ({
         // Continue without coupon if there's an error
       }
     }
-    
+
     const pricingPlatform = restaurant?.platform === 'mogrocery' ? 'mogrocery' : (platform === 'mogrocery' ? 'mogrocery' : 'mofood');
+    const feeSettings = await getFeeSettings(pricingPlatform);
 
     const planBenefits = pricingPlatform === 'mogrocery'
       ? await getPlanBenefitAdjustment({
@@ -792,8 +798,9 @@ export const calculateOrderPricing = async ({
     // Delivery fee: use zone layer (inner/outer/outermost) when address has coordinates; platform-scoped (mofood vs mogrocery)
     let deliveryLayerType = null;
     const { lat: deliveryLat, lng: deliveryLng } = getDeliveryCoordinates(deliveryAddress);
+    let zoneResult = null;
     if (deliveryLat != null && deliveryLng != null) {
-      const zoneResult = await getZoneLayerDeliveryChargeAndType(
+      zoneResult = await getZoneLayerDeliveryChargeAndType(
         deliveryLat,
         deliveryLng,
         pricingPlatform,
@@ -808,7 +815,11 @@ export const calculateOrderPricing = async ({
       restaurant,
       deliveryAddress,
       pricingPlatform,
-      zoneId
+      zoneId,
+      {
+        feeSettings,
+        zoneResult
+      }
     );
     
     // Apply free delivery from coupon or active plan.
@@ -816,10 +827,10 @@ export const calculateOrderPricing = async ({
     const finalDeliveryFee = isFreeDeliveryApplied ? 0 : deliveryFee;
     
     // Calculate platform fee
-    const platformFee = await calculatePlatformFee(pricingPlatform);
-    
+    const platformFee = await calculatePlatformFee(pricingPlatform, feeSettings);
+
     // Calculate GST on subtotal after discount
-    const gst = await calculateGST(subtotal, totalDiscount, pricingPlatform);
+    const gst = await calculateGST(subtotal, totalDiscount, pricingPlatform, feeSettings);
     
     // Calculate total
     const total = subtotal - totalDiscount + finalDeliveryFee + platformFee + gst;

@@ -17,6 +17,7 @@ export const saveOrderEditSession = (session) => {
     restaurantId: session.restaurantId ? String(session.restaurantId) : "",
     restaurantSlug: session.restaurantSlug ? String(session.restaurantSlug) : "",
     restaurantName: session.restaurantName ? String(session.restaurantName) : "",
+    paymentMethod: session.paymentMethod ? String(session.paymentMethod) : "",
     expiresAt: toSafeNumber(session.expiresAt, 0),
     items: Array.isArray(session.items) ? session.items : [],
     deliveryAddress: isObject(session.deliveryAddress) ? session.deliveryAddress : null,

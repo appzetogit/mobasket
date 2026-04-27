@@ -74,6 +74,41 @@ const getPreferredAddressDetail = ({ street = "", area = "", city = "", state = 
   return [normalizeAddressText(city), normalizeAddressText(state)].filter(Boolean).join(", ")
 }
 
+const buildAddressFormPatch = (locationData = {}, previousValues = {}) => {
+  const street = normalizeAddressText(locationData?.street || "")
+  const area = normalizeAddressText(locationData?.area || "")
+  const city = normalizeAddressText(locationData?.city || "")
+  const state = normalizeAddressText(locationData?.state || "")
+  const zipCode = normalizeAddressText(locationData?.postalCode || locationData?.zipCode || "")
+  const formattedAddress = normalizeAddressText(
+    locationData?.formattedAddress || locationData?.address || ""
+  )
+  const formattedParts = formattedAddress.split(",").map((part) => part.trim()).filter(Boolean)
+  const firstFormattedPart = formattedParts[0] || ""
+  const fallbackLocalityLine = [city, state].filter(Boolean).join(", ")
+
+  const resolvedStreet =
+    resolveStreetCandidate(
+      street,
+      area,
+      firstFormattedPart,
+      fallbackLocalityLine
+    ) || normalizeAddressText(previousValues?.street || "")
+
+  const resolvedAdditionalDetails =
+    formattedAddress ||
+    getPreferredAddressDetail({ street, area, city, state }) ||
+    normalizeAddressText(previousValues?.additionalDetails || "")
+
+  return {
+    street: resolvedStreet,
+    city: city || normalizeAddressText(previousValues?.city || ""),
+    state: state || normalizeAddressText(previousValues?.state || ""),
+    zipCode: zipCode || normalizeAddressText(previousValues?.zipCode || ""),
+    additionalDetails: resolvedAdditionalDetails,
+  }
+}
+
 const hasMeaningfulStreet = (value) => {
   const text = normalizeAddressText(value)
   if (!text) return false
@@ -1032,11 +1067,14 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
         setAddressFormData((prev) => ({
           ...prev,
-          street: parsed?.street || parsed?.area || prev.street,
-          city: parsed?.city || prev.city,
-          state: parsed?.state || prev.state,
-          zipCode: parsed?.postalCode || prev.zipCode,
-          additionalDetails: nextAddress || prev.additionalDetails,
+          ...buildAddressFormPatch(
+            {
+              ...parsed,
+              formattedAddress: nextAddress || parsed?.formattedAddress || prediction.description || "",
+              address: nextAddress || parsed?.address || prediction.description || "",
+            },
+            prev,
+          ),
         }))
 
         await handleMapMoveEnd(lat, lng)
@@ -1994,14 +2032,27 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
             !isGenericLocalityText(previousDetails, prev.city, prev.state)
               ? previousDetails
               : ""
+          const nextPatch = buildAddressFormPatch(
+            {
+              street,
+              area,
+              city,
+              state,
+              postalCode,
+              formattedAddress,
+              address: formattedAddress,
+            },
+            {
+              ...prev,
+              additionalDetails: safePreviousDetails || prev.additionalDetails,
+            },
+          )
 
           return {
             ...prev,
-            street: normalizeAddressText(street) || prev.street,
-            city: normalizeAddressText(city) || prev.city,
-            state: normalizeAddressText(state) || prev.state,
-            zipCode: normalizeAddressText(postalCode) || prev.zipCode,
+            ...nextPatch,
             additionalDetails:
+              nextPatch.additionalDetails ||
               (isCompleteMapAddress
                 ? formattedAddress
                 : getPreferredAddressDetail({ street, area, city, state }) || safePreviousDetails),

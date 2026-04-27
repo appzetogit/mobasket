@@ -2327,6 +2327,8 @@ export default function OrderTracking() {
 
       restaurantName: order?.restaurant || order?.restaurantId?.name || "",
 
+      paymentMethod: String(order?.payment?.method || "").trim().toLowerCase(),
+
       expiresAt,
 
       items: initialEditableItems.map((item) => ({

@@ -244,6 +244,57 @@ const updateRestaurantAggregateRating = async (restaurantIdentifier, newRating) 
   };
 };
 
+const finalizeVerifiedOnlineOrder = async (order, userId, paymentAmount = null) => {
+  const isFutureScheduledOrder =
+    Boolean(order?.scheduledDelivery?.isScheduled) &&
+    Boolean(order?.scheduledDelivery?.scheduledFor) &&
+    new Date(order.scheduledDelivery.scheduledFor).getTime() > Date.now();
+  const isPlanSubscriptionOrder = Boolean(order?.planSubscription?.planId);
+  const requiresAdminApproval = false;
+
+  order.payment.status = 'completed';
+
+  if (isFutureScheduledOrder) {
+    order.status = 'scheduled';
+  } else if (requiresAdminApproval) {
+    order.status = 'pending';
+  } else {
+    order.status = 'confirmed';
+    order.tracking.confirmed = { status: true, timestamp: new Date() };
+    startOrderModificationWindow(order);
+  }
+
+  await saveOrderWithIdRetry(order);
+
+  try {
+    await calculateOrderSettlement(order._id);
+    await holdEscrow(order._id, userId, Number(paymentAmount || order.pricing?.total || 0));
+  } catch (settlementError) {
+    logger.error(`Error calculating settlement for verified order ${order.orderId}: ${settlementError.message}`, {
+      error: settlementError.message,
+      stack: settlementError.stack
+    });
+  }
+
+  if (!isFutureScheduledOrder && !isPlanSubscriptionOrder && !requiresAdminApproval) {
+    try {
+      const restaurantId = order.restaurantId?.toString() || order.restaurantId;
+      await notifyRestaurantNewOrder(order, restaurantId);
+    } catch (notificationError) {
+      logger.error(`Error notifying restaurant for verified order ${order.orderId}: ${notificationError.message}`, {
+        error: notificationError.message,
+        stack: notificationError.stack
+      });
+    }
+  }
+
+  return {
+    isFutureScheduledOrder,
+    isPlanSubscriptionOrder,
+    requiresAdminApproval
+  };
+};
+
 const updateDeliveryAggregateRating = async (deliveryId, newRating) => {
   if (!deliveryId) return null;
 
@@ -1617,6 +1668,30 @@ export const createOrder = async (req, res) => {
       }
     }
 
+    if (normalizedPaymentMethod === 'razorpay') {
+      try {
+        const credentials = await getRazorpayCredentials();
+        const keyId = String(credentials?.keyId || '').trim();
+        const keySecret = String(credentials?.keySecret || '').trim();
+
+        if (!keyId || !keySecret) {
+          return res.status(400).json({
+            success: false,
+            message: 'Online payment is currently unavailable because Razorpay is not configured in admin settings.'
+          });
+        }
+      } catch (credentialsError) {
+        logger.error(`Error validating Razorpay configuration before order creation: ${credentialsError.message}`, {
+          error: credentialsError.message,
+          stack: credentialsError.stack
+        });
+        return res.status(400).json({
+          success: false,
+          message: 'Online payment is currently unavailable. Please try Cash on Delivery or contact support.'
+        });
+      }
+    }
+
     if (normalizedPaymentMethod === 'razorpay' && pendingOnlineOrderFingerprint) {
       const reusableOrder = await findReusablePendingOnlineOrder({
         userId,
@@ -1631,16 +1706,28 @@ export const createOrder = async (req, res) => {
         let razorpayCurrency = 'INR';
 
         if (!razorpayOrderId) {
-          const recreatedRazorpayOrder = await createRazorpayOrder({
-            amount: razorpayAmount,
-            currency: razorpayCurrency,
-            receipt: reusableOrder.orderId,
-            notes: {
-              orderId: reusableOrder.orderId,
-              userId: userId.toString(),
-              restaurantId: assignedRestaurantId || 'unknown'
-            }
-          });
+          let recreatedRazorpayOrder;
+          try {
+            recreatedRazorpayOrder = await createRazorpayOrder({
+              amount: razorpayAmount,
+              currency: razorpayCurrency,
+              receipt: reusableOrder.orderId,
+              notes: {
+                orderId: reusableOrder.orderId,
+                userId: userId.toString(),
+                restaurantId: assignedRestaurantId || 'unknown'
+              }
+            });
+          } catch (razorpayError) {
+            logger.error(`Error recreating Razorpay order for reusable order ${reusableOrder.orderId}: ${razorpayError.message}`, {
+              error: razorpayError.message,
+              stack: razorpayError.stack
+            });
+            return res.status(400).json({
+              success: false,
+              message: razorpayError.message || 'Online payment is currently unavailable. Please try again later.'
+            });
+          }
 
           razorpayOrderId = recreatedRazorpayOrder.id;
           razorpayAmount = recreatedRazorpayOrder.amount;
@@ -1816,6 +1903,36 @@ export const createOrder = async (req, res) => {
       logger.error('❌ Error calculating ETA:', etaError);
       // Continue with order creation even if ETA calculation fails
     }
+
+    let razorpayOrder = null;
+    if (normalizedPaymentMethod === 'razorpay' || !normalizedPaymentMethod) {
+      try {
+        razorpayOrder = await createRazorpayOrder({
+          amount: Math.round(pricing.total * 100), // Convert to paise
+          currency: 'INR',
+          receipt: order.orderId,
+          notes: {
+            orderId: order.orderId,
+            userId: userId.toString(),
+            restaurantId: restaurantId || 'unknown'
+          }
+        });
+
+        order.payment.razorpayOrderId = razorpayOrder.id;
+      } catch (razorpayError) {
+        logger.error(`Error creating Razorpay order before saving order: ${razorpayError.message}`, {
+          error: razorpayError.message,
+          stack: razorpayError.stack,
+          orderId: order.orderId,
+          userId
+        });
+        return res.status(400).json({
+          success: false,
+          message: razorpayError.message || 'Online payment is currently unavailable. Please try again later.'
+        });
+      }
+    }
+
     await saveOrderWithIdRetry(order);
 
     // Log order creation for debugging
@@ -2074,31 +2191,6 @@ export const createOrder = async (req, res) => {
     // after payment verification in verifyOrderPayment. This ensures restaurant
     // only receives prepaid orders after successful payment.
 
-    // Create Razorpay order for online payments
-    let razorpayOrder = null;
-    if (normalizedPaymentMethod === 'razorpay' || !normalizedPaymentMethod) {
-      try {
-        razorpayOrder = await createRazorpayOrder({
-          amount: Math.round(pricing.total * 100), // Convert to paise
-          currency: 'INR',
-          receipt: order.orderId,
-          notes: {
-            orderId: order.orderId,
-            userId: userId.toString(),
-            restaurantId: restaurantId || 'unknown'
-          }
-        });
-
-        // Update order with Razorpay order ID
-        order.payment.razorpayOrderId = razorpayOrder.id;
-        await saveOrderWithIdRetry(order);
-      } catch (razorpayError) {
-        logger.error(`Error creating Razorpay order: ${razorpayError.message}`);
-        // Continue with order creation even if Razorpay fails
-        // Payment can be handled later
-      }
-    }
-
     logger.info(`Order created: ${order.orderId}`, {
       orderId: order.orderId,
       userId,
@@ -2299,7 +2391,6 @@ export const switchOrderToCash = async (req, res) => {
     }
 
     await reduceGroceryStockForOrder(order);
-
     await saveOrderWithIdRetry(order);
 
     try {
@@ -2450,6 +2541,25 @@ export const verifyOrderPayment = async (req, res) => {
       order.payment?.status === 'completed' ||
       existingCompletedPayment
     ) {
+      const requiresFinalization =
+        order.payment?.status !== 'completed' ||
+        !['confirmed', 'scheduled'].includes(String(order.status || '').toLowerCase()) ||
+        !order?.tracking?.confirmed?.status;
+
+      if (requiresFinalization) {
+        order.payment = order.payment || {};
+        order.payment.razorpayOrderId = order.payment.razorpayOrderId || razorpayOrderId;
+        order.payment.razorpayPaymentId = order.payment.razorpayPaymentId || razorpayPaymentId;
+        order.payment.razorpaySignature = order.payment.razorpaySignature || razorpaySignature;
+        order.payment.transactionId = order.payment.transactionId || razorpayPaymentId;
+
+        await finalizeVerifiedOnlineOrder(
+          order,
+          userId,
+          existingCompletedPayment?.amount || order.pricing?.total || 0
+        );
+      }
+
       return res.status(200).json({
         success: true,
         message: 'Payment already verified',
@@ -2458,7 +2568,12 @@ export const verifyOrderPayment = async (req, res) => {
             id: order._id.toString(),
             orderId: order.orderId,
             status: order.status,
-            paymentStatus: order.payment?.status || 'completed'
+            paymentStatus: order.payment?.status || 'completed',
+            modificationWindow: getOrderModificationWindow(order),
+            scheduledDelivery: order.scheduledDelivery
+          },
+          payment: {
+            status: order.payment?.status || 'completed'
           },
           alreadyVerified: true
         }
@@ -2521,42 +2636,18 @@ export const verifyOrderPayment = async (req, res) => {
 
     await payment.save();
 
-    const isFutureScheduledOrder =
-      Boolean(order?.scheduledDelivery?.isScheduled) &&
-      Boolean(order?.scheduledDelivery?.scheduledFor) &&
-      new Date(order.scheduledDelivery.scheduledFor).getTime() > Date.now();
-
-    // Update order status
-    order.payment.status = 'completed';
     order.payment.razorpayPaymentId = razorpayPaymentId;
     order.payment.razorpaySignature = razorpaySignature;
     order.payment.transactionId = razorpayPaymentId;
-    const isPlanSubscriptionOrder = Boolean(order?.planSubscription?.planId);
-    const orderPlatform = await resolveOrderPlatform(order.restaurantId);
-    // Align MoGrocery with restaurant flow: verify payment should confirm and notify store directly.
-    const requiresAdminApproval = false;
+    const {
+      isFutureScheduledOrder,
+      isPlanSubscriptionOrder,
+      requiresAdminApproval
+    } = await finalizeVerifiedOnlineOrder(order, userId, order.pricing.total);
 
-    if (isFutureScheduledOrder) {
-      order.status = 'scheduled';
-    } else {
-      if (requiresAdminApproval) {
-        order.status = 'pending';
-      } else {
-        order.status = 'confirmed';
-        order.tracking.confirmed = { status: true, timestamp: new Date() };
-        startOrderModificationWindow(order);
-      }
-    }
-
-    await saveOrderWithIdRetry(order);
-
-    // Calculate order settlement and hold escrow
     try {
-      // Calculate settlement breakdown
-      await calculateOrderSettlement(order._id);
 
-      // Hold funds in escrow
-      await holdEscrow(order._id, userId, order.pricing.total);
+
 
       logger.info(`✅ Order settlement calculated and escrow held for order ${order.orderId}`);
     } catch (settlementError) {
@@ -3686,30 +3777,32 @@ export const calculateOrder = async (req, res) => {
       });
     }
 
-    const availability = await evaluateRestaurantAvailabilityAt(restaurant, new Date());
-    if (!availability.isAvailable) {
-      return res.status(403).json({
-        success: false,
-        message: availability.reason || 'Restaurant is currently unavailable'
-      });
-    }
-
     // Respect client-requested platform for grocery cart previews.
     // Some stores may be missing/incorrect platform flag in DB, which would otherwise force mofood menu validation.
     const platformForValidation =
       requestedPlatform === 'mogrocery'
         ? 'mogrocery'
         : (restaurant.platform === 'mogrocery' ? 'mogrocery' : 'mofood');
-    const singleSourceValidation = await validateSingleSourceOrderItems({
-      items,
-      platform: platformForValidation,
-      expectedRestaurant: {
-        _id: restaurant._id,
-        restaurantId: restaurant.restaurantId,
-        providedRestaurantId: normalizedRestaurantId,
-        slug: restaurant.slug
-      }
-    });
+    const [availability, singleSourceValidation] = await Promise.all([
+      evaluateRestaurantAvailabilityAt(restaurant, new Date()),
+      validateSingleSourceOrderItems({
+        items,
+        platform: platformForValidation,
+        expectedRestaurant: {
+          _id: restaurant._id,
+          restaurantId: restaurant.restaurantId,
+          providedRestaurantId: normalizedRestaurantId,
+          slug: restaurant.slug
+        }
+      })
+    ]);
+
+    if (!availability.isAvailable) {
+      return res.status(403).json({
+        success: false,
+        message: availability.reason || 'Restaurant is currently unavailable'
+      });
+    }
     if (!singleSourceValidation.valid) {
       return res.status(400).json({
         success: false,
@@ -3721,6 +3814,7 @@ export const calculateOrder = async (req, res) => {
     const pricing = await calculateOrderPricing({
       items,
       restaurantId: restaurant._id?.toString() || restaurant.restaurantId || restaurantId,
+      restaurantEntity: restaurant,
       deliveryAddress,
       couponCode,
       deliveryFleet: deliveryFleet || 'standard',

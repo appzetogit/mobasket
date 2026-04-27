@@ -72,7 +72,7 @@ export default function CheckoutPage() {
     reason: "",
   });
   const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
-  const [selectedAddress, setSelectedAddress] = useState(null);
+  const [selectedAddress, setSelectedAddress] = useState(() => getDefaultAddress() || null);
   const [orderingForSomeoneElse, setOrderingForSomeoneElse] = useState(false);
   const [showRecipientMap, setShowRecipientMap] = useState(false);
   const [recipientDetails, setRecipientDetails] = useState({
@@ -115,7 +115,48 @@ export default function CheckoutPage() {
   const suggestionsDebounceRef = useRef(null);
   const pricingPreviewSignatureRef = useRef(null);
   const pricingPreviewCacheRef = useRef({ signature: null, pricing: null });
+  const pricingPreviewInFlightSignatureRef = useRef(null);
   const recipientZoneCheckCacheRef = useRef({ key: null, inService: null });
+
+  const normalizeEditPaymentMethod = useCallback((value) => {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (normalized === "cash" || normalized === "cod" || normalized === "cash_on_delivery") {
+      return "cash";
+    }
+    if (normalized === "wallet") {
+      return "wallet";
+    }
+    if (normalized === "upi") {
+      return "upi";
+    }
+    if (normalized === "card") {
+      return "card";
+    }
+    if (normalized === "razorpay") {
+      return "card";
+    }
+    return "card";
+  }, []);
+
+  const getEditPaymentMethodLabel = useCallback((value) => {
+    const normalized = String(value || "").trim().toLowerCase();
+    if (normalized === "cash" || normalized === "cod" || normalized === "cash_on_delivery") {
+      return "Cash on Delivery";
+    }
+    if (normalized === "wallet") {
+      return "MoBasket Wallet";
+    }
+    if (normalized === "upi") {
+      return "UPI";
+    }
+    if (normalized === "card") {
+      return "Credit/Debit Card";
+    }
+    if (normalized === "razorpay") {
+      return "Online Payment";
+    }
+    return "Online Payment";
+  }, []);
 
   const hasHydratedEditableAddress = useCallback((address) => {
     if (!address || typeof address !== "object") return false;
@@ -179,6 +220,12 @@ export default function CheckoutPage() {
       const saved = saveOrderEditSession(incomingSession);
       setOrderEditSession(saved);
       setEditSecondsLeft(getOrderEditRemainingSeconds(saved));
+      setPaymentMethod(normalizeEditPaymentMethod(saved?.paymentMethod));
+      setOrderingForSomeoneElse(Boolean(saved?.orderingForSomeoneElse));
+      setRecipientDetails((prev) => ({
+        ...prev,
+        ...(saved?.recipientDetails || {}),
+      }));
       if (hasHydratedEditableAddress(saved?.deliveryAddress)) {
         setSelectedAddress(saved.deliveryAddress);
       }
@@ -188,10 +235,18 @@ export default function CheckoutPage() {
     const saved = getOrderEditSession();
     setOrderEditSession(saved);
     setEditSecondsLeft(getOrderEditRemainingSeconds(saved));
+    if (saved?.orderRouteId) {
+      setPaymentMethod(normalizeEditPaymentMethod(saved?.paymentMethod));
+      setOrderingForSomeoneElse(Boolean(saved?.orderingForSomeoneElse));
+      setRecipientDetails((prev) => ({
+        ...prev,
+        ...(saved?.recipientDetails || {}),
+      }));
+    }
     if (hasHydratedEditableAddress(saved?.deliveryAddress)) {
       setSelectedAddress(saved.deliveryAddress);
     }
-  }, [hasHydratedEditableAddress, location.state]);
+  }, [hasHydratedEditableAddress, location.state, normalizeEditPaymentMethod]);
 
   useEffect(() => {
     const tick = () => {
@@ -461,6 +516,21 @@ export default function CheckoutPage() {
     ]
       .filter(Boolean)
       .join(", ");
+
+  const lockedEditAddressLine = useMemo(() => {
+    if (!isOrderEditMode) return "";
+    const editAddress = orderEditSession?.deliveryAddress || selectedAddress;
+    return (
+      String(editAddress?.formattedAddress || "").trim() ||
+      formatAddressLine(editAddress) ||
+      "Using the address from your original order"
+    );
+  }, [formatAddressLine, isOrderEditMode, orderEditSession?.deliveryAddress, selectedAddress]);
+
+  const lockedEditPaymentLabel = useMemo(
+    () => getEditPaymentMethodLabel(orderEditSession?.paymentMethod || paymentMethod),
+    [getEditPaymentMethodLabel, orderEditSession?.paymentMethod, paymentMethod],
+  );
 
   const hasValidAddressCoordinates = useCallback((address) => {
     const lng = Number(address?.location?.coordinates?.[0]);
@@ -805,6 +875,13 @@ export default function CheckoutPage() {
   useEffect(() => {
     const fetchPricingPreview = async () => {
       if (!restaurantId || foodItems.length === 0) {
+        setLoadingPricing(false);
+        setCalculatedPricing(null);
+        return;
+      }
+
+      if (!pricingDeliveryAddress) {
+        setLoadingPricing(false);
         setCalculatedPricing(null);
         return;
       }
@@ -829,11 +906,23 @@ export default function CheckoutPage() {
           address: pricingDeliveryAddress,
           couponCode: appliedCouponCode || undefined,
         });
+        if (pricingPreviewCacheRef.current?.signature === signatureBeforeGeocoding) {
+          setCalculatedPricing(pricingPreviewCacheRef.current?.pricing || null);
+          setLoadingPricing(false);
+          pricingPreviewSignatureRef.current = signatureBeforeGeocoding;
+          return;
+        }
+        if (pricingPreviewInFlightSignatureRef.current === signatureBeforeGeocoding) {
+          setLoadingPricing(true);
+          return;
+        }
         if (pricingPreviewSignatureRef.current === signatureBeforeGeocoding) {
+          setLoadingPricing(false);
           return;
         }
 
         setLoadingPricing(true);
+        pricingPreviewInFlightSignatureRef.current = signatureBeforeGeocoding;
 
         // Ensure delivery address has valid coordinates so that
         // pricing preview matches the final order calculation
@@ -878,6 +967,7 @@ export default function CheckoutPage() {
         console.error("Failed to calculate pricing preview:", error);
         setCalculatedPricing(null);
       } finally {
+        pricingPreviewInFlightSignatureRef.current = null;
         setLoadingPricing(false);
       }
     };
@@ -1483,12 +1573,26 @@ export default function CheckoutPage() {
           },
           handler: async (response) => {
             try {
-              await orderAPI.verifyPayment({
+              const verifyResponse = await orderAPI.verifyPayment({
                 orderId: order?.id,
                 razorpayOrderId: response.razorpay_order_id,
                 razorpayPaymentId: response.razorpay_payment_id,
                 razorpaySignature: response.razorpay_signature,
               });
+              const verifiedOrder = verifyResponse?.data?.data?.order || null;
+              const verifiedPayment = verifyResponse?.data?.data?.payment || null;
+              const verifiedOrderStatus = String(verifiedOrder?.status || "").toLowerCase();
+              const verifiedPaymentStatus = String(
+                verifiedPayment?.status || verifiedOrder?.paymentStatus || "",
+              ).toLowerCase();
+
+              if (
+                verifiedPaymentStatus !== "completed" ||
+                !["confirmed", "scheduled"].includes(verifiedOrderStatus)
+              ) {
+                throw new Error("Payment is not fully confirmed yet.");
+              }
+
               setPostOrderRedirecting(true);
               clearCart("mofood");
               setPendingOnlineOrder(null);
@@ -1505,13 +1609,20 @@ export default function CheckoutPage() {
               reject(verifyError);
             }
           },
-          modal: {
-            ondismiss: () => {
-              toast.info("Payment cancelled.");
-              reject(new Error("Payment cancelled"));
-            },
+          onError: (paymentError) => {
+            reject(
+              new Error(
+                paymentError?.description ||
+                paymentError?.message ||
+                "Payment failed.",
+              ),
+            );
           },
-        });
+          onClose: () => {
+            toast.info("Payment cancelled.");
+            reject(new Error("Payment cancelled"));
+          },
+        }).catch(reject);
       });
     } catch (error) {
       const isPaymentCancelled =
@@ -1528,6 +1639,319 @@ export default function CheckoutPage() {
       setIsPlacingOrder(false);
     }
   };
+
+  const deliveryAddressSection = (
+    <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
+      <div className="bg-white rounded-2xl p-4 shadow-sm border border-yellow-100 dark:bg-[#151a23] dark:border-white/10">
+        <div className="flex items-start gap-3">
+          <div className="bg-yellow-500 rounded-xl p-2">
+            <MapPin className="w-5 h-5 text-white" />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-sm font-bold text-gray-900 mb-1 dark:text-gray-100">Delivery Address</h3>
+            <p className="text-xs text-gray-600 dark:text-gray-400">{orderSummary.deliveryAddress}</p>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setOrderingForSomeoneElse(false)}
+                className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${!orderingForSomeoneElse
+                    ? "border-yellow-500 bg-yellow-50 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-200"
+                    : "border-gray-200 bg-white text-gray-700 dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-200"
+                  }`}
+              >
+                For Me
+              </button>
+              <button
+                type="button"
+                onClick={() => setOrderingForSomeoneElse(true)}
+                className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${orderingForSomeoneElse
+                    ? "border-yellow-500 bg-yellow-50 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-200"
+                    : "border-gray-200 bg-white text-gray-700 dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-200"
+                  }`}
+              >
+                Order For Someone Else
+              </button>
+            </div>
+            <div className="mt-3 space-y-2">
+              {orderingForSomeoneElse ? (
+                <div className="rounded-xl border border-yellow-200 p-2.5 space-y-2 bg-yellow-50/60 dark:border-yellow-500/30 dark:bg-yellow-500/10">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="relative">
+                      <User className="absolute left-2 top-2 h-3.5 w-3.5 text-gray-400" />
+                      <input
+                        type="text"
+                        value={recipientDetails.name}
+                        onChange={(e) =>
+                          setRecipientDetails((prev) => ({ ...prev, name: e.target.value }))
+                        }
+                        placeholder="Recipient name"
+                        className="h-8 w-full rounded-lg border border-gray-200 bg-white pl-7 pr-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                      />
+                    </div>
+                    <div className="relative">
+                      <Phone className="absolute left-2 top-2 h-3.5 w-3.5 text-gray-400" />
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={10}
+                        value={recipientDetails.phone}
+                        onChange={(e) =>
+                          setRecipientDetails((prev) => ({
+                            ...prev,
+                            phone: e.target.value.replace(/\D/g, "").slice(0, 10),
+                          }))
+                        }
+                        placeholder="Recipient phone"
+                        className="h-8 w-full rounded-lg border border-gray-200 bg-white pl-7 pr-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                      />
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    value={recipientDetails.street}
+                    onChange={(e) =>
+                      setRecipientDetails((prev) => ({ ...prev, street: e.target.value }))
+                    }
+                    placeholder="Full address (House/Flat, Street)"
+                    className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                  />
+                  <input
+                    type="text"
+                    value={recipientDetails.additionalDetails}
+                    onChange={(e) =>
+                      setRecipientDetails((prev) => ({ ...prev, additionalDetails: e.target.value }))
+                    }
+                    placeholder="Landmark / Delivery note"
+                    className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <input
+                      type="text"
+                      value={recipientDetails.city}
+                      onChange={(e) =>
+                        setRecipientDetails((prev) => ({ ...prev, city: e.target.value }))
+                      }
+                      placeholder="City"
+                      className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                    />
+                    <input
+                      type="text"
+                      value={recipientDetails.state}
+                      onChange={(e) =>
+                        setRecipientDetails((prev) => ({ ...prev, state: e.target.value }))
+                      }
+                      placeholder="State"
+                      className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                    />
+                  </div>
+                  <input
+                    type="text"
+                    value={recipientDetails.zipCode}
+                    onChange={(e) =>
+                      setRecipientDetails((prev) => ({ ...prev, zipCode: e.target.value }))
+                    }
+                    placeholder="Pincode"
+                    className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                  />
+                  <div className="rounded-lg border border-yellow-200 bg-white p-2 dark:border-yellow-500/30 dark:bg-[#0f172a]">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[11px] font-medium text-gray-700 dark:text-gray-300">
+                        {hasRecipientCoordinates ? "Pin set for recipient address" : "Recipient pin not set"}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setShowRecipientMap((prev) => !prev)}
+                        className="text-[11px] font-semibold text-yellow-700 hover:text-yellow-800 dark:text-yellow-300"
+                      >
+                        {showRecipientMap ? "Hide Map" : hasRecipientCoordinates ? "Update Pin" : "Set Pin"}
+                      </button>
+                    </div>
+                    <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                      Address must be inside an active delivery zone.
+                    </p>
+                    {hasRecipientCoordinates ? (
+                      <p className="mt-1 text-[11px] text-yellow-700 dark:text-yellow-300">
+                        {Number(recipientDetails.latitude).toFixed(5)}, {Number(recipientDetails.longitude).toFixed(5)}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {showRecipientMap ? (
+                    <AddressLocationPicker
+                      value={recipientDetails}
+                      onChange={setRecipientDetails}
+                      fallbackLocation={liveLocation}
+                      title="Recipient exact delivery pin"
+                      description="Set exact pin. Address must be inside any active delivery zone."
+                    />
+                  ) : null}
+                </div>
+              ) : (
+                <>
+                  {Array.isArray(addresses) && addresses.length > 0 ? (
+                    addresses.map((address) => {
+                      const addressId = address.id || address._id;
+                      const selectedId = selectedAddress?.id || selectedAddress?._id;
+                      const isSelected =
+                        selectedId && addressId && String(selectedId) === String(addressId);
+                      return (
+                        <button
+                          key={String(addressId)}
+                          type="button"
+                          onClick={() => setSelectedAddress(address)}
+                          className={`w-full text-left rounded-xl border px-3 py-2 transition-colors ${isSelected
+                              ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-500/10"
+                              : "border-gray-200 bg-white hover:border-yellow-300 dark:border-white/10 dark:bg-[#0f172a] dark:hover:border-yellow-500/60"
+                            }`}
+                        >
+                          <p className="text-xs font-semibold text-gray-900 dark:text-gray-100">
+                            {address.label || "Address"} {address.isDefault ? "(Default)" : ""}
+                          </p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">{formatAddressLine(address)}</p>
+                        </button>
+                      );
+                    })
+                  ) : null}
+
+                  <button
+                    type="button"
+                    onClick={() => setShowAddAddressForm((prev) => !prev)}
+                    className="text-xs font-semibold text-yellow-700 dark:text-yellow-300"
+                  >
+                    {showAddAddressForm ? "Close Add Address" : "+ Add New Address"}
+                  </button>
+
+                  {showAddAddressForm ? (
+                    <div className="rounded-xl border border-gray-200 p-3 space-y-2 bg-gray-50 dark:border-white/10 dark:bg-[#0f172a]">
+                      <div className="grid grid-cols-3 gap-2">
+                        {["Home", "Office", "Other"].map((label) => (
+                          <button
+                            key={label}
+                            type="button"
+                            onClick={() => setNewAddress((prev) => ({ ...prev, label }))}
+                            className={`h-8 rounded-lg text-xs font-semibold border ${newAddress.label === label
+                              ? "border-yellow-500 bg-yellow-100 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-200"
+                              : "border-gray-200 bg-white text-gray-700 dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-200"
+                              }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={newAddress.street}
+                          onChange={(e) => handleStreetInputChange(e.target.value)}
+                          onFocus={() => {
+                            if (newAddress.street.trim().length >= 3) {
+                              setShowAddressSuggestions(true);
+                              fetchAddressSuggestions(newAddress.street);
+                            }
+                          }}
+                          onBlur={() => {
+                            setTimeout(() => setShowAddressSuggestions(false), 150);
+                          }}
+                          placeholder="Street / House No."
+                          className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                        />
+                        {showAddressSuggestions && (
+                          <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg dark:border-white/10 dark:bg-[#0f172a]">
+                            {loadingAddressSuggestions ? (
+                              <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Loading suggestions...</p>
+                            ) : addressSuggestions.length > 0 ? (
+                              addressSuggestions.map((suggestion) => (
+                                <button
+                                  key={suggestion.place_id}
+                                  type="button"
+                                  onMouseDown={(e) => e.preventDefault()}
+                                  onClick={() => handleAddressSuggestionSelect(suggestion)}
+                                  className="block w-full border-b border-gray-100 px-3 py-2 text-left text-xs text-gray-700 hover:bg-yellow-50 last:border-b-0 dark:border-white/10 dark:text-gray-200 dark:hover:bg-yellow-500/10"
+                                >
+                                  {suggestion.description}
+                                </button>
+                              ))
+                            ) : (
+                              <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
+                                {googlePlacesReady
+                                  ? "No address suggestions found."
+                                  : "Preparing suggestions..."}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <input
+                        type="text"
+                        value={newAddress.additionalDetails}
+                        onChange={(e) =>
+                          setNewAddress((prev) => ({ ...prev, additionalDetails: e.target.value }))
+                        }
+                        placeholder="Area / Landmark"
+                        className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={newAddress.city}
+                          onChange={(e) => setNewAddress((prev) => ({ ...prev, city: e.target.value }))}
+                          placeholder="City"
+                          className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                        />
+                        <input
+                          type="text"
+                          value={newAddress.state}
+                          onChange={(e) => setNewAddress((prev) => ({ ...prev, state: e.target.value }))}
+                          placeholder="State"
+                          className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                        />
+                      </div>
+                      <input
+                        type="text"
+                        value={newAddress.zipCode}
+                        onChange={(e) => setNewAddress((prev) => ({ ...prev, zipCode: e.target.value }))}
+                        placeholder="Pincode"
+                        className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                      />
+
+                      <AddressLocationPicker
+                        value={newAddress}
+                        onChange={setNewAddress}
+                        fallbackLocation={liveLocation}
+                        title="Exact delivery location"
+                        description="For family or out-of-station orders, drag the pin to the exact drop point before saving."
+                      />
+
+                      <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                        <input
+                          type="checkbox"
+                          checked={newAddress.isDefault}
+                          onChange={(e) =>
+                            setNewAddress((prev) => ({ ...prev, isDefault: e.target.checked }))
+                          }
+                        />
+                        Set as default
+                      </label>
+
+                      <Button
+                        type="button"
+                        className="w-full h-8 text-xs bg-yellow-500 hover:bg-yellow-600 text-white"
+                        onClick={handleSaveNewAddress}
+                        disabled={isSavingAddress}
+                      >
+                        {isSavingAddress ? "Saving..." : "Save Address"}
+                      </Button>
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-[#fff7ed] text-gray-900 md:pt-20 dark:bg-[#0b0b0b] dark:text-gray-100">
@@ -1583,315 +2007,6 @@ export default function CheckoutPage() {
             </p>
           </div>
         )}
-
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-yellow-100 dark:bg-[#151a23] dark:border-white/10">
-          <div className="flex items-start gap-3">
-            <div className="bg-yellow-500 rounded-xl p-2">
-              <MapPin className="w-5 h-5 text-white" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-sm font-bold text-gray-900 mb-1 dark:text-gray-100">Delivery Address</h3>
-              <p className="text-xs text-gray-600 dark:text-gray-400">{orderSummary.deliveryAddress}</p>
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setOrderingForSomeoneElse(false)}
-                  className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${!orderingForSomeoneElse
-                      ? "border-yellow-500 bg-yellow-50 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-200"
-                      : "border-gray-200 bg-white text-gray-700 dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-200"
-                    }`}
-                >
-                  For Me
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOrderingForSomeoneElse(true)}
-                  className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${orderingForSomeoneElse
-                      ? "border-yellow-500 bg-yellow-50 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-200"
-                      : "border-gray-200 bg-white text-gray-700 dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-200"
-                    }`}
-                >
-                  Order For Someone Else
-                </button>
-              </div>
-              <div className="mt-3 space-y-2">
-                {orderingForSomeoneElse ? (
-                  <div className="rounded-xl border border-yellow-200 p-2.5 space-y-2 bg-yellow-50/60 dark:border-yellow-500/30 dark:bg-yellow-500/10">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="relative">
-                        <User className="absolute left-2 top-2 h-3.5 w-3.5 text-gray-400" />
-                        <input
-                          type="text"
-                          value={recipientDetails.name}
-                          onChange={(e) =>
-                            setRecipientDetails((prev) => ({ ...prev, name: e.target.value }))
-                          }
-                          placeholder="Recipient name"
-                          className="h-8 w-full rounded-lg border border-gray-200 bg-white pl-7 pr-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
-                        />
-                      </div>
-                      <div className="relative">
-                        <Phone className="absolute left-2 top-2 h-3.5 w-3.5 text-gray-400" />
-                        <input
-                          type="text"
-                          inputMode="numeric"
-                          maxLength={10}
-                          value={recipientDetails.phone}
-                          onChange={(e) =>
-                            setRecipientDetails((prev) => ({
-                              ...prev,
-                              phone: e.target.value.replace(/\D/g, "").slice(0, 10),
-                            }))
-                          }
-                          placeholder="Recipient phone"
-                          className="h-8 w-full rounded-lg border border-gray-200 bg-white pl-7 pr-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
-                        />
-                      </div>
-                    </div>
-                    <input
-                      type="text"
-                      value={recipientDetails.street}
-                      onChange={(e) =>
-                        setRecipientDetails((prev) => ({ ...prev, street: e.target.value }))
-                      }
-                      placeholder="Full address (House/Flat, Street)"
-                      className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
-                    />
-                    <input
-                      type="text"
-                      value={recipientDetails.additionalDetails}
-                      onChange={(e) =>
-                        setRecipientDetails((prev) => ({ ...prev, additionalDetails: e.target.value }))
-                      }
-                      placeholder="Landmark / Delivery note"
-                      className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        value={recipientDetails.city}
-                        onChange={(e) =>
-                          setRecipientDetails((prev) => ({ ...prev, city: e.target.value }))
-                        }
-                        placeholder="City"
-                        className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
-                      />
-                      <input
-                        type="text"
-                        value={recipientDetails.state}
-                        onChange={(e) =>
-                          setRecipientDetails((prev) => ({ ...prev, state: e.target.value }))
-                        }
-                        placeholder="State"
-                        className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
-                      />
-                    </div>
-                    <input
-                      type="text"
-                      value={recipientDetails.zipCode}
-                      onChange={(e) =>
-                        setRecipientDetails((prev) => ({ ...prev, zipCode: e.target.value }))
-                      }
-                      placeholder="Pincode"
-                      className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
-                    />
-                    <div className="rounded-lg border border-yellow-200 bg-white p-2 dark:border-yellow-500/30 dark:bg-[#0f172a]">
-                      <div className="flex items-center justify-between gap-2">
-                        <p className="text-[11px] font-medium text-gray-700 dark:text-gray-300">
-                          {hasRecipientCoordinates ? "Pin set for recipient address" : "Recipient pin not set"}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => setShowRecipientMap((prev) => !prev)}
-                          className="text-[11px] font-semibold text-yellow-700 hover:text-yellow-800 dark:text-yellow-300"
-                        >
-                          {showRecipientMap ? "Hide Map" : hasRecipientCoordinates ? "Update Pin" : "Set Pin"}
-                        </button>
-                      </div>
-                      <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
-                        Address must be inside an active delivery zone.
-                      </p>
-                      {hasRecipientCoordinates ? (
-                        <p className="mt-1 text-[11px] text-yellow-700 dark:text-yellow-300">
-                          {Number(recipientDetails.latitude).toFixed(5)}, {Number(recipientDetails.longitude).toFixed(5)}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    {showRecipientMap ? (
-                      <AddressLocationPicker
-                        value={recipientDetails}
-                        onChange={setRecipientDetails}
-                        fallbackLocation={liveLocation}
-                        title="Recipient exact delivery pin"
-                        description="Set exact pin. Address must be inside any active delivery zone."
-                      />
-                    ) : null}
-                  </div>
-                ) : (
-                  <>
-                    {Array.isArray(addresses) && addresses.length > 0 ? (
-                      addresses.map((address) => {
-                        const addressId = address.id || address._id;
-                        const selectedId = selectedAddress?.id || selectedAddress?._id;
-                        const isSelected =
-                          selectedId && addressId && String(selectedId) === String(addressId);
-                        return (
-                          <button
-                            key={String(addressId)}
-                            type="button"
-                            onClick={() => setSelectedAddress(address)}
-                            className={`w-full text-left rounded-xl border px-3 py-2 transition-colors ${isSelected
-                                ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-500/10"
-                                : "border-gray-200 bg-white hover:border-yellow-300 dark:border-white/10 dark:bg-[#0f172a] dark:hover:border-yellow-500/60"
-                              }`}
-                          >
-                            <p className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-                              {address.label || "Address"} {address.isDefault ? "(Default)" : ""}
-                            </p>
-                            <p className="text-xs text-gray-600 dark:text-gray-400">{formatAddressLine(address)}</p>
-                          </button>
-                        );
-                      })
-                    ) : null}
-
-                    <button
-                      type="button"
-                      onClick={() => setShowAddAddressForm((prev) => !prev)}
-                      className="text-xs font-semibold text-yellow-700 dark:text-yellow-300"
-                    >
-                      {showAddAddressForm ? "Close Add Address" : "+ Add New Address"}
-                    </button>
-
-                    {showAddAddressForm ? (
-                      <div className="rounded-xl border border-gray-200 p-3 space-y-2 bg-gray-50 dark:border-white/10 dark:bg-[#0f172a]">
-                        <div className="grid grid-cols-3 gap-2">
-                          {["Home", "Office", "Other"].map((label) => (
-                            <button
-                              key={label}
-                              type="button"
-                              onClick={() => setNewAddress((prev) => ({ ...prev, label }))}
-                              className={`h-8 rounded-lg text-xs font-semibold border ${newAddress.label === label
-                                ? "border-yellow-500 bg-yellow-100 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-200"
-                                : "border-gray-200 bg-white text-gray-700 dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-200"
-                                }`}
-                            >
-                              {label}
-                            </button>
-                          ))}
-                        </div>
-
-                        <div className="relative">
-                          <input
-                            type="text"
-                            value={newAddress.street}
-                            onChange={(e) => handleStreetInputChange(e.target.value)}
-                            onFocus={() => {
-                              if (newAddress.street.trim().length >= 3) {
-                                setShowAddressSuggestions(true);
-                                fetchAddressSuggestions(newAddress.street);
-                              }
-                            }}
-                            onBlur={() => {
-                              setTimeout(() => setShowAddressSuggestions(false), 150);
-                            }}
-                            placeholder="Street / House No."
-                            className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
-                          />
-                          {showAddressSuggestions && (
-                            <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg dark:border-white/10 dark:bg-[#0f172a]">
-                              {loadingAddressSuggestions ? (
-                                <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Loading suggestions...</p>
-                              ) : addressSuggestions.length > 0 ? (
-                                addressSuggestions.map((suggestion) => (
-                                  <button
-                                    key={suggestion.place_id}
-                                    type="button"
-                                    onMouseDown={(e) => e.preventDefault()}
-                                    onClick={() => handleAddressSuggestionSelect(suggestion)}
-                                    className="block w-full border-b border-gray-100 px-3 py-2 text-left text-xs text-gray-700 hover:bg-yellow-50 last:border-b-0 dark:border-white/10 dark:text-gray-200 dark:hover:bg-yellow-500/10"
-                                  >
-                                    {suggestion.description}
-                                  </button>
-                                ))
-                              ) : (
-                                <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
-                                  {googlePlacesReady
-                                    ? "No address suggestions found."
-                                    : "Preparing suggestions..."}
-                                </p>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <input
-                          type="text"
-                          value={newAddress.additionalDetails}
-                          onChange={(e) =>
-                            setNewAddress((prev) => ({ ...prev, additionalDetails: e.target.value }))
-                          }
-                          placeholder="Area / Landmark"
-                          className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
-                        />
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            type="text"
-                            value={newAddress.city}
-                            onChange={(e) => setNewAddress((prev) => ({ ...prev, city: e.target.value }))}
-                            placeholder="City"
-                            className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
-                          />
-                          <input
-                            type="text"
-                            value={newAddress.state}
-                            onChange={(e) => setNewAddress((prev) => ({ ...prev, state: e.target.value }))}
-                            placeholder="State"
-                            className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
-                          />
-                        </div>
-                        <input
-                          type="text"
-                          value={newAddress.zipCode}
-                          onChange={(e) => setNewAddress((prev) => ({ ...prev, zipCode: e.target.value }))}
-                          placeholder="Pincode"
-                          className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
-                        />
-
-                        <AddressLocationPicker
-                          value={newAddress}
-                          onChange={setNewAddress}
-                          fallbackLocation={liveLocation}
-                          title="Exact delivery location"
-                          description="For family or out-of-station orders, drag the pin to the exact drop point before saving."
-                        />
-
-                        <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
-                          <input
-                            type="checkbox"
-                            checked={newAddress.isDefault}
-                            onChange={(e) =>
-                              setNewAddress((prev) => ({ ...prev, isDefault: e.target.checked }))
-                            }
-                          />
-                          Set as default
-                        </label>
-
-                        <Button
-                          type="button"
-                          className="w-full h-8 text-xs bg-yellow-500 hover:bg-yellow-600 text-white"
-                          onClick={handleSaveNewAddress}
-                          disabled={isSavingAddress}
-                        >
-                          {isSavingAddress ? "Saving..." : "Save Address"}
-                        </Button>
-                      </div>
-                    ) : null}
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
@@ -2164,6 +2279,33 @@ export default function CheckoutPage() {
         </div>
       </div>
 
+      {!isOrderEditMode && deliveryAddressSection}
+
+      {isOrderEditMode && (
+        <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
+          <div className="bg-white rounded-2xl p-4 shadow-sm border border-yellow-100 dark:bg-[#151a23] dark:border-white/10">
+            <h3 className="text-sm font-bold text-gray-900 mb-3 dark:text-gray-100">Editing Existing Order</h3>
+            <div className="space-y-3">
+              <div className="rounded-xl border border-yellow-200 bg-yellow-50/70 px-3 py-2 dark:border-yellow-500/30 dark:bg-yellow-500/10">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-yellow-700 dark:text-yellow-300">
+                  Delivery Address Locked
+                </p>
+                <p className="mt-1 text-sm text-gray-700 dark:text-gray-200">{lockedEditAddressLine}</p>
+              </div>
+              <div className="rounded-xl border border-yellow-200 bg-yellow-50/70 px-3 py-2 dark:border-yellow-500/30 dark:bg-yellow-500/10">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-yellow-700 dark:text-yellow-300">
+                  Payment Method Locked
+                </p>
+                <p className="mt-1 text-sm text-gray-700 dark:text-gray-200">{lockedEditPaymentLabel}</p>
+              </div>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                Your changes will be applied to the same order without asking for address or payment again.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {!isOrderEditMode && (
         <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
           <div className="bg-white rounded-2xl p-4 shadow-sm border border-yellow-100 dark:bg-[#151a23] dark:border-white/10">
@@ -2267,8 +2409,9 @@ export default function CheckoutPage() {
           disabled={
             isPlacingOrder ||
             !restaurantAvailability.isAvailable ||
-            (paymentMethod === "wallet" && !walletLoading && !hasSufficientWalletBalance) ||
-            (paymentMethod === "cash" && !isCodEligible)
+            (!isOrderEditMode &&
+              ((paymentMethod === "wallet" && !walletLoading && !hasSufficientWalletBalance) ||
+                (paymentMethod === "cash" && !isCodEligible)))
           }
         >
           {isPlacingOrder
