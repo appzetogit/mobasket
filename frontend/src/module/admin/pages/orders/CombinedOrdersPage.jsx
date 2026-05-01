@@ -19,6 +19,8 @@ const AUTO_REFRESH_MS = 10000
 const SIDEBAR_ALERT_KEY = "adminAllOrdersAttentionUntil"
 const ORDERS_ALERT_COUNT_KEY = "adminAllOrdersAttentionState"
 const ORDER_SOUND_MUTED_KEY = "adminAllOrdersSoundMuted"
+const PLATFORM_PAGE_SIZE = 250
+const MAX_PLATFORM_SYNC_PAGES = 40
 
 const currencyFormatter = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -118,6 +120,14 @@ const dedupeOrdersByTrackingId = (orders = []) => {
   return Array.from(deduped.values())
 }
 
+const getOrdersPayload = (response) => {
+  const data = response?.data?.data
+  return {
+    orders: Array.isArray(data?.orders) ? data.orders : [],
+    pagination: data?.pagination || {},
+  }
+}
+
 export default function CombinedOrdersPage() {
   const location = useLocation()
   const [activeTab, setActiveTab] = useState(() =>
@@ -147,6 +157,7 @@ export default function CombinedOrdersPage() {
   const [dismissedAssignmentOrderIds, setDismissedAssignmentOrderIds] = useState([])
   const [assignmentOrderLoading, setAssignmentOrderLoading] = useState(false)
   const knownOrderIdsRef = useRef(new Set())
+  const ordersRef = useRef([])
   const isMountedRef = useRef(true)
   const audioRef = useRef(null)
   const pendingSoundRef = useRef(false)
@@ -353,14 +364,53 @@ export default function CombinedOrdersPage() {
         setIsLoading(true)
       }
 
-      const [mofoodResponse, mogroceryResponse] = await Promise.all([
-        adminAPI.getOrders({ platform: "mofood", page: 1, limit: 100 }),
-        adminAPI.getOrders({ platform: "mogrocery", page: 1, limit: 100 }),
+      const shouldFullSync = showLoader || knownOrderIdsRef.current.size === 0
+
+      const fetchPlatformOrders = async (platform) => {
+        const firstResponse = await adminAPI.getOrders({
+          platform,
+          page: 1,
+          limit: PLATFORM_PAGE_SIZE,
+        })
+        const firstPayload = getOrdersPayload(firstResponse)
+
+        if (!shouldFullSync) {
+          return firstPayload.orders
+        }
+
+        const totalPages = Math.min(
+          Number(firstPayload.pagination?.pages || 1),
+          MAX_PLATFORM_SYNC_PAGES
+        )
+
+        if (totalPages <= 1) {
+          return firstPayload.orders
+        }
+
+        const remainingResponses = await Promise.all(
+          Array.from({ length: totalPages - 1 }, (_, index) =>
+            adminAPI.getOrders({
+              platform,
+              page: index + 2,
+              limit: PLATFORM_PAGE_SIZE,
+            })
+          )
+        )
+
+        const remainingOrders = remainingResponses.flatMap((response) => getOrdersPayload(response).orders)
+        return [...firstPayload.orders, ...remainingOrders]
+      }
+
+      const [mofoodOrders, mogroceryOrders] = await Promise.all([
+        fetchPlatformOrders("mofood"),
+        fetchPlatformOrders("mogrocery"),
       ])
 
-      const mofoodOrders = mofoodResponse?.data?.data?.orders || []
-      const mogroceryOrders = mogroceryResponse?.data?.data?.orders || []
-      const combinedOrders = dedupeOrdersByTrackingId([...mofoodOrders, ...mogroceryOrders]).sort(
+      const nextOrders = shouldFullSync
+        ? [...mofoodOrders, ...mogroceryOrders]
+        : [...mofoodOrders, ...mogroceryOrders, ...ordersRef.current]
+
+      const combinedOrders = dedupeOrdersByTrackingId(nextOrders).sort(
         (a, b) => new Date(b.createdAt || b.updatedAt || 0).getTime() - new Date(a.createdAt || a.updatedAt || 0).getTime()
       )
 
@@ -493,6 +543,10 @@ export default function CombinedOrdersPage() {
   useEffect(() => {
     highlightedOrderIdsRef.current = Array.isArray(highlightedOrderIds) ? highlightedOrderIds : []
   }, [highlightedOrderIds])
+
+  useEffect(() => {
+    ordersRef.current = Array.isArray(orders) ? orders : []
+  }, [orders])
 
   useEffect(() => {
     isSoundMutedRef.current = isSoundMuted

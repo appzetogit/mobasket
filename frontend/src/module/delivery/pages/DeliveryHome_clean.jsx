@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo, useCallback } from "react"
+eimport { useEffect, useState, useRef, useMemo, useCallback } from "react"
 import { useNavigate, useLocation } from "react-router-dom"
 
 
@@ -6447,7 +6447,7 @@ export default function DeliveryHome() {
           // Validate coordinates are reasonable for India (basic sanity check)
 
 
-          // India: Latitude 8.4° to 37.6°, Longitude 68.7° to 97.25°
+          // India: Latitude 8.4ï¿½ to 37.6ï¿½, Longitude 68.7ï¿½ to 97.25ï¿½
 
 
           const isInIndiaRange = latitude >= 8 && latitude <= 38 && longitude >= 68 && longitude <= 98
