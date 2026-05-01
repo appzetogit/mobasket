@@ -13,6 +13,7 @@ import AuditLog from '../models/AuditLog.js';
 
 const normalizePlatform = (value) => (value === 'mogrocery' ? 'mogrocery' : 'mofood');
 const ORDER_SNAPSHOT_DIR = path.join(process.cwd(), 'cache');
+const ORDER_DELETE_ALLOWED_ADMIN_EMAIL = 'emmanuel@mobasket.in';
 
 const hasAcceptedRider = (order = null) => {
   const deliveryStateStatus = String(order?.deliveryState?.status || '').toLowerCase();
@@ -1039,6 +1040,11 @@ export const deleteOrderPermanently = asyncHandler(async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
+    const requesterEmail = String(req.user?.email || '').trim().toLowerCase();
+    if (requesterEmail !== ORDER_DELETE_ALLOWED_ADMIN_EMAIL) {
+      return errorResponse(res, 403, 'Only the authorized admin account can permanently delete orders');
+    }
+
     const orderIdentifier = String(req.params.id || '').trim();
     if (!orderIdentifier) {
       return errorResponse(res, 400, 'Order ID is required');

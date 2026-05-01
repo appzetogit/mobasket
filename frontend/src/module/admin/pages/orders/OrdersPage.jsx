@@ -17,6 +17,7 @@ import { usePlatform } from "../../context/PlatformContext"
 const AUTO_REFRESH_MS = 10000
 const ORDER_ALERT_STORAGE_KEY = "adminAllOrdersAlertEvent"
 const ORDER_ALERT_CHANNEL_NAME = "admin-all-orders-alerts"
+const ORDER_DELETE_ALLOWED_ADMIN_EMAIL = "emmanuel@mobasket.in"
 
 // Status configuration with titles, colors, and icons
 const statusConfig = {
@@ -38,6 +39,14 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
   const config = statusConfig[statusKey] || statusConfig["all"]
   const { platform } = usePlatform()
   const location = useLocation()
+  const currentAdmin = useMemo(() => {
+    try {
+      const raw = localStorage.getItem("admin_user")
+      return raw ? JSON.parse(raw) : null
+    } catch {
+      return null
+    }
+  }, [])
   const activePlatform = platformOverride || platform || "mofood"
   const [orders, setOrders] = useState([])
   const [isLoading, setIsLoading] = useState(true)
@@ -698,6 +707,11 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
     ).length
   }, [filteredOrders, activePlatform])
 
+  const canDeleteOrders = useMemo(
+    () => String(currentAdmin?.email || "").trim().toLowerCase() === ORDER_DELETE_ALLOWED_ADMIN_EMAIL,
+    [currentAdmin]
+  )
+
   if (isLoading) {
     return (
       <div className="p-4 lg:p-6 bg-slate-50 min-h-screen w-full max-w-full overflow-x-hidden flex items-center justify-center">
@@ -781,6 +795,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
         onShowRiderDetails={handleShowRiderDetails}
         onCancelOrder={handleCancelApprovedOrder}
         onDeleteOrder={handleDeleteOrder}
+        canDeleteOrder={canDeleteOrders}
         isGrocery={activePlatform === "mogrocery"}
         serverPagination
         currentPage={currentPage}

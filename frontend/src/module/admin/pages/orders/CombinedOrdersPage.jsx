@@ -21,6 +21,7 @@ const ORDERS_ALERT_COUNT_KEY = "adminAllOrdersAttentionState"
 const ORDER_SOUND_MUTED_KEY = "adminAllOrdersSoundMuted"
 const PLATFORM_PAGE_SIZE = 250
 const MAX_PLATFORM_SYNC_PAGES = 40
+const ORDER_DELETE_ALLOWED_ADMIN_EMAIL = "emmanuel@mobasket.in"
 
 const currencyFormatter = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -128,8 +129,18 @@ const getOrdersPayload = (response) => {
   }
 }
 
+const getStoredAdminUser = () => {
+  try {
+    const raw = localStorage.getItem("admin_user")
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
 export default function CombinedOrdersPage() {
   const location = useLocation()
+  const currentAdmin = useMemo(() => getStoredAdminUser(), [])
   const [activeTab, setActiveTab] = useState(() =>
     location.pathname.includes("/all-orders") ? "all" : "today"
   )
@@ -239,6 +250,11 @@ export default function CombinedOrdersPage() {
   const selectedOrderIsGrocery = useMemo(
     () => String(selectedOrder?.restaurantPlatform || "").toLowerCase() === "mogrocery",
     [selectedOrder]
+  )
+
+  const canDeleteOrders = useMemo(
+    () => String(currentAdmin?.email || "").trim().toLowerCase() === ORDER_DELETE_ALLOWED_ADMIN_EMAIL,
+    [currentAdmin]
   )
 
   const selectedAssignmentHasAcceptedRider = useMemo(
@@ -1181,6 +1197,7 @@ export default function CombinedOrdersPage() {
         onAssignRider={openAssignRiderDialog}
         reassignableOrderIds={dismissedAssignmentOrderIds}
         onDeleteOrder={handleDeleteOrder}
+        canDeleteOrder={canDeleteOrders}
         highlightedOrderIds={highlightedOrderIds}
       />
     </div>
