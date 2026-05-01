@@ -1,0 +1,39 @@
+{
+  "generatedAt": "2026-05-01T14:35:38.938Z",
+  "outputDir": "Z:\\projects\\mo-basket\\exports\\restaurant-assets-backup-2026-05-01",
+  "totalAssets": 190,
+  "byCategory": {
+    "restaurant-profile": 28,
+    "restaurant-banner": 16,
+    "grocery-store-profile": 13,
+    "grocery-store-banner": 6,
+    "grocery-store-menu": 1,
+    "restaurant-menu-item-image": 57,
+    "restaurant-addon-image": 6,
+    "admin-category-image": 6,
+    "restaurant-category-image": 3,
+    "grocery-category-image": 12,
+    "grocery-subcategory-image": 36,
+    "hero-banner": 6
+  },
+  "byPlatform": {
+    "mofood": 118,
+    "mogrocery": 72
+  },
+  "bySourceModel": {
+    "Restaurant": 44,
+    "GroceryStore": 20,
+    "Menu": 63,
+    "AdminCategoryManagement": 6,
+    "RestaurantCategory": 3,
+    "GroceryCategory": 12,
+    "GrocerySubcategory": 36,
+    "HeroBanner": 6
+  },
+  "excluded": [
+    "Order.billImageUrl",
+    "Restaurant.onboarding.step3.pan.image",
+    "Restaurant.onboarding.step3.gst.image",
+    "Restaurant.onboarding.step3.fssai.image"
+  ]
+}

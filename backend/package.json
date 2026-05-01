@@ -12,6 +12,7 @@
     "fix:hero-banner-swap": "node scripts/swap-hero-banner-platform-data.js",
     "fix:move-mogrocery-banners-to-mofood": "node scripts/move-mogrocery-banners-to-mofood.js",
     "fix:restore-mofood-banners": "node scripts/restore-mofood-banners-from-cloudinary.js",
+    "export:restaurant-assets": "node scripts/export-cloudinary-restaurant-assets.js",
     "seed:grocery-plans": "node scripts/seed-grocery-plans.js",
     "seed:grocery-demo-catalog": "node scripts/seed-grocery-catalog-demo.js",
     "reset:grocery-demo-catalog": "node scripts/reset-grocery-demo-catalog.js",
