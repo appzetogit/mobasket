@@ -36,11 +36,21 @@ export function useZone(location, platform = 'mofood') {
       return
     }
 
+    // Safety timeout: if zone detection takes longer than 10 seconds, abort and
+    // fall back to cached zone or OUT_OF_SERVICE. This prevents the loading state
+    // from getting stuck indefinitely (especially in Flutter WebView environments
+    // where network requests can occasionally hang).
+    const abortController = new AbortController()
+    const abortTimer = setTimeout(() => abortController.abort(), 10000)
+
     try {
       setLoading(true)
       setError(null)
 
       const response = await zoneAPI.detectZone(lat, lng, platform)
+      clearTimeout(abortTimer)
+
+      if (abortController.signal.aborted) return
 
       if (response.data?.success) {
         const data = response.data.data
@@ -59,6 +69,9 @@ export function useZone(location, platform = 'mofood') {
           const selectedPlatform = normalizePlatform(platform)
           const fallbackPlatform = selectedPlatform === 'mofood' ? 'mogrocery' : 'mofood'
           const fallbackResponse = await zoneAPI.detectZone(lat, lng, fallbackPlatform)
+
+          if (abortController.signal.aborted) return
+
           const fallbackData = fallbackResponse?.data?.data
 
           if (
@@ -88,7 +101,15 @@ export function useZone(location, platform = 'mofood') {
         throw new Error(response.data?.message || 'Failed to detect zone')
       }
     } catch (err) {
-      console.error('Error detecting zone:', err)
+      clearTimeout(abortTimer)
+
+      // If aborted by our safety timeout, log it clearly
+      if (abortController.signal.aborted || err?.name === 'AbortError') {
+        console.warn('Zone detection timed out after 10s, falling back to cache')
+      } else {
+        console.error('Error detecting zone:', err)
+      }
+
       setError(err.response?.data?.message || err.message || 'Failed to detect zone')
       setZoneStatus('OUT_OF_SERVICE')
       setZoneId(null)

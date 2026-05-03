@@ -1465,14 +1465,17 @@ export default function Home() {
       const requestId = restaurantsRequestRef.current + 1;
       restaurantsRequestRef.current = requestId;
 
+      // Prefer strict same-zone listing on Home.
+      // If zone detection is unavailable, gracefully fall back to non-zone listing.
+      // IMPORTANT: This guard must be BEFORE setLoadingRestaurants(true) to avoid
+      // leaving the loading state stuck at true (the early return would skip the
+      // finally block). This was causing intermittent empty pages in Flutter WebView.
+      if (zoneLoading) {
+        return;
+      }
+
       try {
         setLoadingRestaurants(true);
-
-        // Prefer strict same-zone listing on Home.
-        // If zone detection is unavailable, gracefully fall back to non-zone listing.
-        if (zoneLoading) {
-          return;
-        }
 
         // Build query parameters from filters
         const params = {};
@@ -1853,6 +1856,26 @@ export default function Home() {
   useEffect(() => {
     fetchRestaurants(appliedFilters);
   }, [appliedFilters, fetchRestaurants, locationRefreshTick]);
+
+  // Safety net: If the page has been loading restaurants for too long (e.g. zone
+  // detection stuck in Flutter WebView), retry the fetch without waiting for zone.
+  // This prevents the intermittent empty-page bug in WebView environments.
+  useEffect(() => {
+    // Only activate safety net when restaurants are loading and we have no data yet
+    if (!loadingRestaurants || restaurantsData.length > 0) return;
+
+    const safetyTimer = setTimeout(() => {
+      // If still loading after 6 seconds with no data, force a retry.
+      // The zoneLoading guard in fetchRestaurants will prevent the call if zone
+      // is still loading, but by this point zone should have resolved or timed out.
+      if (loadingRestaurants && restaurantsData.length === 0) {
+        console.warn("[Home] Safety net: restaurants still loading after 6s, forcing retry");
+        fetchRestaurants(appliedFilters);
+      }
+    }, 6000);
+
+    return () => clearTimeout(safetyTimer);
+  }, [loadingRestaurants, restaurantsData.length, fetchRestaurants, appliedFilters]);
 
   useEffect(() => {
     const refresh = () => {
