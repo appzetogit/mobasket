@@ -418,6 +418,17 @@ function getActiveZoneQueryByPlatform(platform = 'mofood') {
 
 // Get all restaurants (for user module)
 export const getRestaurants = async (req, res) => {
+  const start = Date.now();
+  console.log('🔥 [Home] /restaurant/list hit', {
+    at: new Date().toISOString(),
+    platform: req.query?.platform || '',
+    zoneId: req.query?.zoneId || '',
+    onlyZone: req.query?.onlyZone || '',
+    city: req.query?.city || '',
+    lite: req.query?.lite || '',
+    limit: req.query?.limit || '',
+  });
+
   try {
     const {
       limit = 50,
@@ -799,6 +810,8 @@ export const getRestaurants = async (req, res) => {
   } catch (error) {
     console.error('Error fetching restaurants:', error);
     return errorResponse(res, 500, 'Failed to fetch restaurants');
+  } finally {
+    console.log('⏱️ [Home] /restaurant/list took:', Date.now() - start, 'ms');
   }
 };
 

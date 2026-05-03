@@ -684,6 +684,12 @@ export const detectAllUserZones = asyncHandler(async (req, res) => {
  * GET /api/zones/active?platform=mofood|mogrocery
  */
 export const getActiveZonesPublic = asyncHandler(async (req, res) => {
+  const start = Date.now();
+  console.log('🔥 [Home] /zones/active hit', {
+    at: new Date().toISOString(),
+    platform: req.query?.platform || 'mofood',
+  });
+
   try {
     const { platform } = req.query;
     const zones = await Zone.find({
@@ -723,14 +729,16 @@ export const getActiveZonesPublic = asyncHandler(async (req, res) => {
         : []
     }));
 
-    return successResponse(res, 200, 'Active zones retrieved successfully', {
-      zones: normalizedZones
-    });
-  } catch (error) {
-    console.error('Error fetching active zones:', error);
-    return errorResponse(res, 500, 'Failed to fetch active zones');
-  }
-});
+      return successResponse(res, 200, 'Active zones retrieved successfully', {
+        zones: normalizedZones
+      });
+    } catch (error) {
+      console.error('Error fetching active zones:', error);
+      return errorResponse(res, 500, 'Failed to fetch active zones');
+    } finally {
+      console.log('⏱️ [Home] /zones/active took:', Date.now() - start, 'ms');
+    }
+  });
 
 /**
  * Calculate zone centroid (average of all coordinates)

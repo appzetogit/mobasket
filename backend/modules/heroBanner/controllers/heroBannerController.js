@@ -98,6 +98,13 @@ const GROCERY_BEST_SELLER_DB_MODEL_BY_TYPE = {
  * Get all active hero banners (public endpoint)
  */
 export const getHeroBanners = async (req, res) => {
+  const start = Date.now();
+  console.log('🔥 [Home] /hero-banners/public hit', {
+    at: new Date().toISOString(),
+    platform: req.query?.platform || 'mofood',
+    zoneId: req.query?.zoneId || '',
+  });
+
   try {
     const platform = getPlatformFromRequest(req);
     const { zoneId } = req.query;
@@ -107,17 +114,19 @@ export const getHeroBanners = async (req, res) => {
       .select('imageUrl order linkedRestaurants')
       .lean();
 
-    return successResponse(res, 200, 'Hero banners retrieved successfully', {
-      banners: banners.map(b => ({
-        imageUrl: b.imageUrl,
-        linkedRestaurants: b.linkedRestaurants || []
-      }))
-    });
-  } catch (error) {
-    console.error('Error fetching hero banners:', error);
-    return errorResponse(res, 500, 'Failed to fetch hero banners');
-  }
-};
+      return successResponse(res, 200, 'Hero banners retrieved successfully', {
+        banners: banners.map(b => ({
+          imageUrl: b.imageUrl,
+          linkedRestaurants: b.linkedRestaurants || []
+        }))
+      });
+    } catch (error) {
+      console.error('Error fetching hero banners:', error);
+      return errorResponse(res, 500, 'Failed to fetch hero banners');
+    } finally {
+      console.log('⏱️ [Home] /hero-banners/public took:', Date.now() - start, 'ms');
+    }
+  };
 
 /**
  * Get all hero banners (admin endpoint)
