@@ -107,6 +107,13 @@ const EARLY_RESTAURANT_PREFETCH_COUNT = 4;
 const HOME_RESTAURANTS_CACHE_TTL_MS = 3 * 60 * 1000;
 const HOME_RESTAURANTS_CACHE_VERSION = "v3";
 const HOME_ZONE_SELECTION_STORAGE_KEY = "user.home.selectedZoneId.v1";
+const HOME_PERSISTENT_CACHE_PREFIX = "user.home.cache";
+const HOME_HERO_BANNERS_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+const HOME_PERSISTENT_RESTAURANTS_CACHE_TTL_MS = 30 * 60 * 1000;
+const HOME_ACTIVE_ZONES_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const HOME_LATEST_RESTAURANTS_CACHE_KEY = `${HOME_PERSISTENT_CACHE_PREFIX}.restaurants.latest.v1`;
+const HOME_LATEST_BANNERS_CACHE_KEY = `${HOME_PERSISTENT_CACHE_PREFIX}.banners.latest.v1`;
+const HOME_ACTIVE_ZONES_CACHE_KEY = `${HOME_PERSISTENT_CACHE_PREFIX}.zones.mofood.v1`;
 
 const isUsableCityValue = (value) => {
   const normalized = normalizeCityName(value);
@@ -391,9 +398,9 @@ const getSelectedSavedAddressCity = () => {
   }
 };
 
-const readHomeSessionCache = (key, ttlMs) => {
+const readStorageCacheEntry = (storage, key, ttlMs) => {
   try {
-    const raw = sessionStorage.getItem(key);
+    const raw = storage?.getItem(key);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed?.timestamp || !("data" in parsed)) return null;
@@ -404,9 +411,9 @@ const readHomeSessionCache = (key, ttlMs) => {
   }
 };
 
-const writeHomeSessionCache = (key, data) => {
+const writeStorageCacheEntry = (storage, key, data) => {
   try {
-    sessionStorage.setItem(
+    storage?.setItem(
       key,
       JSON.stringify({
         timestamp: Date.now(),
@@ -416,6 +423,80 @@ const writeHomeSessionCache = (key, data) => {
   } catch {
     // Ignore cache write errors.
   }
+};
+
+const readHomeSessionCache = (key, ttlMs) => {
+  return readStorageCacheEntry(sessionStorage, key, ttlMs);
+};
+
+const readHomePersistentCache = (key, ttlMs) => {
+  return readStorageCacheEntry(localStorage, key, ttlMs);
+};
+
+const readHomeCache = (key, ttlMs, persistentTtlMs = ttlMs) => {
+  return (
+    readHomeSessionCache(key, ttlMs) ||
+    readHomePersistentCache(key, persistentTtlMs)
+  );
+};
+
+const writeHomeSessionCache = (key, data) => {
+  writeStorageCacheEntry(sessionStorage, key, data);
+};
+
+const writeHomePersistentCache = (key, data) => {
+  writeStorageCacheEntry(localStorage, key, data);
+};
+
+const writeHomeCache = (key, data, latestKey = "") => {
+  writeHomeSessionCache(key, data);
+  writeHomePersistentCache(key, data);
+  if (latestKey) {
+    writeHomePersistentCache(latestKey, data);
+  }
+};
+
+const buildHomeHeroBannerCacheKey = (zoneId) =>
+  `${HOME_PERSISTENT_CACHE_PREFIX}.banners.mofood.${String(zoneId || "all").trim() || "all"}.v1`;
+
+const isNonEmptyArray = (value) => Array.isArray(value) && value.length > 0;
+
+const applyCachedHomeRestaurantPayload = (cachedRestaurants, setters = {}) => {
+  if (!isNonEmptyArray(cachedRestaurants)) return false;
+  setters.setRestaurantsData?.(cachedRestaurants);
+  setters.setLoadingRestaurants?.(false);
+  return true;
+};
+
+const applyCachedHomeBannerPayload = (cachedBanners, setters = {}) => {
+  if (!isNonEmptyArray(cachedBanners)) return false;
+  setters.setHeroBannersData?.(cachedBanners);
+  setters.setHeroBannerImages?.(cachedBanners.map((banner) => banner.imageUrl || banner));
+  setters.setCurrentBannerIndex?.((prev) => (cachedBanners.length > 0 ? prev % cachedBanners.length : 0));
+  setters.setLoadingBanners?.(false);
+  return true;
+};
+
+const readLatestHomeRestaurantsCache = () =>
+  readHomePersistentCache(
+    HOME_LATEST_RESTAURANTS_CACHE_KEY,
+    HOME_PERSISTENT_RESTAURANTS_CACHE_TTL_MS,
+  );
+
+const readLatestHomeBannersCache = () =>
+  readHomePersistentCache(
+    HOME_LATEST_BANNERS_CACHE_KEY,
+    HOME_HERO_BANNERS_CACHE_TTL_MS,
+  );
+
+const readCachedActiveZones = () =>
+  readHomePersistentCache(
+    HOME_ACTIVE_ZONES_CACHE_KEY,
+    HOME_ACTIVE_ZONES_CACHE_TTL_MS,
+  );
+
+const writeCachedActiveZones = (zones) => {
+  writeHomePersistentCache(HOME_ACTIVE_ZONES_CACHE_KEY, zones);
 };
 
 // Restaurant Image Carousel Component
@@ -1277,12 +1358,57 @@ export default function Home() {
     selectedHomeZoneId && selectedHomeZoneId !== "auto" ? selectedHomeZoneId : zoneId;
   const hasManualZoneSelection =
     Boolean(selectedHomeZoneId) && selectedHomeZoneId !== "auto";
+  const heroBannerCacheKey = useMemo(
+    () => buildHomeHeroBannerCacheKey(effectiveHomeZoneId),
+    [effectiveHomeZoneId],
+  );
+
+  useEffect(() => {
+    if (heroBannerImages.length > 0) return;
+    const cachedBanners =
+      readHomeCache(
+        heroBannerCacheKey,
+        HOME_HERO_BANNERS_CACHE_TTL_MS,
+        HOME_HERO_BANNERS_CACHE_TTL_MS,
+      ) || readLatestHomeBannersCache();
+    if (!cachedBanners) return;
+
+    const applied = applyCachedHomeBannerPayload(cachedBanners, {
+      setHeroBannersData,
+      setHeroBannerImages,
+      setCurrentBannerIndex,
+      setLoadingBanners,
+    });
+    if (applied) {
+      hasLoadedHeroBannersRef.current = true;
+    }
+  }, [heroBannerCacheKey, heroBannerImages.length]);
 
   const fetchHeroBanners = useCallback(async ({ showLoader = false } = {}) => {
     const requestId = heroBannerRequestRef.current + 1;
     heroBannerRequestRef.current = requestId;
 
     try {
+      if (!hasLoadedHeroBannersRef.current) {
+        const cachedBanners =
+          readHomeCache(
+            heroBannerCacheKey,
+            HOME_HERO_BANNERS_CACHE_TTL_MS,
+            HOME_HERO_BANNERS_CACHE_TTL_MS,
+          ) || readLatestHomeBannersCache();
+        if (cachedBanners) {
+          const applied = applyCachedHomeBannerPayload(cachedBanners, {
+            setHeroBannersData,
+            setHeroBannerImages,
+            setCurrentBannerIndex,
+            setLoadingBanners,
+          });
+          if (applied) {
+            hasLoadedHeroBannersRef.current = true;
+          }
+        }
+      }
+
       if (showLoader) {
         setLoadingBanners(true);
       }
@@ -1302,6 +1428,7 @@ export default function Home() {
         setHeroBannerImages(banners.map((b) => b.imageUrl || b));
         setCurrentBannerIndex((prev) => (banners.length > 0 ? prev % banners.length : 0));
         hasLoadedHeroBannersRef.current = true;
+        writeHomeCache(heroBannerCacheKey, banners, HOME_LATEST_BANNERS_CACHE_KEY);
       }
     } catch (error) {
       if (heroBannerRequestRef.current !== requestId) return;
@@ -1315,7 +1442,7 @@ export default function Home() {
         setLoadingBanners(false);
       }
     }
-  }, [effectiveHomeZoneId]);
+  }, [effectiveHomeZoneId, heroBannerCacheKey]);
 
   useEffect(() => {
     fetchHeroBanners({ showLoader: true });
@@ -1398,6 +1525,11 @@ export default function Home() {
 
   useEffect(() => {
     const fetchActiveZones = async () => {
+      const cachedZones = readCachedActiveZones();
+      if (Array.isArray(cachedZones) && cachedZones.length > 0) {
+        setAvailableZones(cachedZones);
+      }
+
       try {
         const response = await zoneAPI.getActiveZones("mofood");
         const zoneList = response?.data?.data?.zones || response?.data?.zones || response?.data?.data || [];
@@ -1408,8 +1540,13 @@ export default function Home() {
           }))
           .filter((zone) => zone.id && zone.name);
         setAvailableZones(normalizedZones);
+        if (normalizedZones.length > 0) {
+          writeCachedActiveZones(normalizedZones);
+        }
       } catch {
-        setAvailableZones([]);
+        if (!Array.isArray(cachedZones) || cachedZones.length === 0) {
+          setAvailableZones([]);
+        }
       }
     };
 
@@ -1484,6 +1621,68 @@ export default function Home() {
     async (filters = {}) => {
       const requestId = restaurantsRequestRef.current + 1;
       restaurantsRequestRef.current = requestId;
+
+      const buildRestaurantCacheKey = (params = {}) => {
+        const cacheParams = Object.entries(params)
+          .filter(([, value]) => value !== undefined && value !== null && value !== "")
+          .sort(([a], [b]) => a.localeCompare(b));
+        return `home:restaurants:${HOME_RESTAURANTS_CACHE_VERSION}:${JSON.stringify(cacheParams)}`;
+      };
+
+      // Build likely request params early so WebView cold-starts can render from
+      // the last successful cache before fresh zone/network resolution completes.
+      const optimisticParams = {};
+      if (filters.sortBy) optimisticParams.sortBy = filters.sortBy;
+      if (filters.selectedCuisine) optimisticParams.cuisine = filters.selectedCuisine;
+      if (filters.activeFilters?.has("rating-45-plus")) {
+        optimisticParams.minRating = 4.5;
+      } else if (filters.activeFilters?.has("rating-4-plus")) {
+        optimisticParams.minRating = 4.0;
+      } else if (filters.activeFilters?.has("rating-35-plus")) {
+        optimisticParams.minRating = 3.5;
+      }
+      if (filters.activeFilters?.has("delivery-under-30")) {
+        optimisticParams.maxDeliveryTime = 30;
+      } else if (filters.activeFilters?.has("delivery-under-45")) {
+        optimisticParams.maxDeliveryTime = 45;
+      }
+      if (filters.activeFilters?.has("distance-under-1km")) {
+        optimisticParams.maxDistance = 1.0;
+      } else if (filters.activeFilters?.has("distance-under-2km")) {
+        optimisticParams.maxDistance = 2.0;
+      }
+      if (filters.activeFilters?.has("price-under-200")) {
+        optimisticParams.maxPrice = 200;
+      } else if (filters.activeFilters?.has("price-under-500")) {
+        optimisticParams.maxPrice = 500;
+      }
+      if (filters.activeFilters?.has("has-offers")) optimisticParams.hasOffers = "true";
+      if (filters.activeFilters?.has("top-rated")) {
+        optimisticParams.topRated = "true";
+      } else if (filters.activeFilters?.has("trusted")) {
+        optimisticParams.trusted = "true";
+      }
+      optimisticParams.limit = 30;
+      optimisticParams.lite = "true";
+      if (effectiveHomeZoneId) {
+        optimisticParams.zoneId = effectiveHomeZoneId;
+        optimisticParams.onlyZone = "true";
+      }
+
+      const optimisticCacheKey = buildRestaurantCacheKey(optimisticParams);
+      const optimisticCachedRestaurants =
+        readHomeCache(
+          optimisticCacheKey,
+          HOME_RESTAURANTS_CACHE_TTL_MS,
+          HOME_PERSISTENT_RESTAURANTS_CACHE_TTL_MS,
+        ) || readLatestHomeRestaurantsCache();
+
+      if (optimisticCachedRestaurants && restaurantsData.length === 0) {
+        applyCachedHomeRestaurantPayload(optimisticCachedRestaurants, {
+          setRestaurantsData,
+          setLoadingRestaurants,
+        });
+      }
 
       // Prefer strict same-zone listing on Home.
       // If zone detection is unavailable, gracefully fall back to non-zone listing.
@@ -1585,11 +1784,12 @@ export default function Home() {
           }
         }
 
-        const cacheParams = Object.entries(params)
-          .filter(([, value]) => value !== undefined && value !== null && value !== "")
-          .sort(([a], [b]) => a.localeCompare(b));
-        const cacheKey = `home:restaurants:${HOME_RESTAURANTS_CACHE_VERSION}:${JSON.stringify(cacheParams)}`;
-        const cachedRestaurants = readHomeSessionCache(cacheKey, HOME_RESTAURANTS_CACHE_TTL_MS);
+        const cacheKey = buildRestaurantCacheKey(params);
+        const cachedRestaurants = readHomeCache(
+          cacheKey,
+          HOME_RESTAURANTS_CACHE_TTL_MS,
+          HOME_PERSISTENT_RESTAURANTS_CACHE_TTL_MS,
+        );
         if (Array.isArray(cachedRestaurants)) {
           if (restaurantsRequestRef.current !== requestId) return;
           setRestaurantsData(cachedRestaurants);
@@ -1854,7 +2054,11 @@ export default function Home() {
               return aDistance - bDistance;
             });
           }
-          writeHomeSessionCache(cacheKey, transformedRestaurants);
+          writeHomeCache(
+            cacheKey,
+            transformedRestaurants,
+            HOME_LATEST_RESTAURANTS_CACHE_KEY,
+          );
           setRestaurantsData(transformedRestaurants);
         } else {
           console.warn("Invalid API response structure:", response.data);
@@ -1879,6 +2083,7 @@ export default function Home() {
       location?.city,
       location?.latitude,
       location?.longitude,
+      restaurantsData.length,
       zoneLoading,
     ],
   );
