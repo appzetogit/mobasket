@@ -3759,42 +3759,6 @@ export default function RestaurantDetails() {
 
   const hasRenderableMenuSections = renderedSections.length > 0;
 
-  const visibleMenuCategories = useMemo(
-    () =>
-      renderedSections.map(({ section, originalIndex }) => {
-        let sectionTitle = "Unnamed Section";
-        if (section?.isPersonalizedRecommended) {
-          sectionTitle = "Recommended for you";
-        } else if (
-          section?.name &&
-          typeof section.name === "string" &&
-          section.name.trim()
-        ) {
-          sectionTitle = section.name.trim();
-        } else if (
-          section?.title &&
-          typeof section.title === "string" &&
-          section.title.trim()
-        ) {
-          sectionTitle = section.title.trim();
-        }
-
-        const itemCount = section?.items?.length || 0;
-        const subsectionCount =
-          section?.subsections?.reduce(
-            (sum, sub) => sum + (sub?.items?.length || 0),
-            0,
-          ) || 0;
-
-        return {
-          name: sectionTitle,
-          count: itemCount + subsectionCount,
-          sectionIndex: originalIndex,
-        };
-      }),
-    [renderedSections],
-  );
-
 
 
   // Highlight offers/texts for the blue offer line
@@ -4328,72 +4292,9 @@ export default function RestaurantDetails() {
               </div>
             </div>
 
-            {!showFilterSheet && !showMenuSheet && !showMenuOptionsSheet && (
-              <Button
-                className="shrink-0 rounded-full bg-gray-800 px-5 py-2 text-white shadow-lg shadow-black/15 hover:bg-gray-900"
-                size="sm"
-                onClick={() => setShowMenuSheet(true)}
-              >
-                <Utensils className="mr-2 h-4 w-4" />
-                Menu
-              </Button>
-            )}
-
           </div>
 
         </div>
-
-        {visibleMenuCategories.length > 1 && (
-
-          <div className="-mx-4 px-4 pt-3 overflow-x-auto scrollbar-hide">
-
-            <div className="flex items-center gap-2 w-max">
-
-              {visibleMenuCategories.map((category, index) => (
-
-                <Button
-
-                  key={`${category.sectionIndex}-${index}`}
-
-                  variant="outline"
-
-                  size="sm"
-
-                  className="whitespace-nowrap rounded-full border-gray-300 bg-white dark:bg-[#1a1a1a]"
-
-                  onClick={() => {
-
-                    const sectionId = `menu-section-${category.sectionIndex}`;
-
-                    const sectionElement = document.getElementById(sectionId);
-
-                    if (sectionElement) {
-
-                      sectionElement.scrollIntoView({
-
-                        behavior: "smooth",
-
-                        block: "start",
-
-                      });
-
-                    }
-
-                  }}
-
-                >
-
-                  {category.name}
-
-                </Button>
-
-              ))}
-
-            </div>
-
-          </div>
-
-        )}
 
       </div>
 
@@ -5905,6 +5806,25 @@ export default function RestaurantDetails() {
         </div>
 
       )}
+
+      {typeof window !== "undefined" &&
+        !showFilterSheet &&
+        !showMenuSheet &&
+        !showMenuOptionsSheet &&
+        hasRenderableMenuSections &&
+        createPortal(
+          <div className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] right-4 z-[9998] sm:bottom-6 sm:right-6">
+            <Button
+              className="rounded-full bg-gray-900 px-4 py-3 text-white shadow-[0_14px_30px_rgba(15,23,42,0.28)] hover:bg-black"
+              size="sm"
+              onClick={() => setShowMenuSheet(true)}
+            >
+              <Utensils className="mr-2 h-4 w-4" />
+              Menu
+            </Button>
+          </div>,
+          document.body,
+        )}
 
       {/* Menu Categories Bottom Sheet - Rendered via Portal */}
 
