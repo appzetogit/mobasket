@@ -63,6 +63,18 @@ function shouldSkipPartnerBackgroundSetup(pathname = "") {
   return isRestaurantTransientPath || isStoreTransientPath;
 }
 
+function shouldSkipPushSetup(pathname = "") {
+  if (!pathname) return false;
+  if (shouldSkipPartnerBackgroundSetup(pathname)) return true;
+
+  return (
+    /^\/(auth|login|signin|sign-in|signup|otp|forgot-password)(\/|$)/.test(pathname) ||
+    /^\/user\/auth\//.test(pathname) ||
+    /^\/delivery\/(sign-in|signin|signup|otp|welcome)(\/|$)/.test(pathname) ||
+    /^\/admin\/(login|forgot-password)(\/|$)/.test(pathname)
+  );
+}
+
 export default function App() {
   const location = useLocation();
 
@@ -133,7 +145,7 @@ export default function App() {
     const runSetup = () => {
       if (typeof document !== "undefined" && document.hidden) return;
       if (!hasAnySessionToken()) return;
-      if (shouldSkipPartnerBackgroundSetup(location.pathname)) return;
+      if (shouldSkipPushSetup(location.pathname)) return;
 
       setupWebPushForCurrentSession(location.pathname).catch((error) => {
         // eslint-disable-next-line no-console

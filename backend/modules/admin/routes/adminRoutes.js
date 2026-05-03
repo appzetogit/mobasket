@@ -280,9 +280,12 @@ console.log('📦 Loading adminRoutes.js - All routes will be registered');
 // All admin routes require admin authentication
 router.use(authenticateAdmin);
 
-// Debug middleware - log ALL requests to help debug routing
+const isAdminRouteDebugEnabled =
+  String(process.env.ENABLE_ADMIN_ROUTE_DEBUG || 'false').toLowerCase() === 'true';
+
+// Debug middleware - opt-in only so admin polling routes do not flood logs.
 router.use((req, res, next) => {
-  if (req.path.includes('refund') || req.path.includes('orders')) {
+  if (isAdminRouteDebugEnabled && (req.path.includes('refund') || req.path.includes('orders'))) {
     console.log('🔍 [DEBUG MIDDLEWARE] Request detected:', {
       method: req.method,
       url: req.url,

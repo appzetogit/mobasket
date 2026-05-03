@@ -69,6 +69,11 @@ const getRecipientIdForModule = (moduleName) => {
   ).trim();
 };
 
+const canSyncPushForModule = (moduleName) => {
+  if (!hasAuthTokenForModule(moduleName)) return false;
+  return Boolean(getRecipientIdForModule(moduleName));
+};
+
 const getTokenCacheKey = (moduleName) => {
   const recipientId = getRecipientIdForModule(moduleName);
   return recipientId
@@ -448,7 +453,7 @@ const disableBrowserPushForEmbeddedWebView = async (pathname = "") => {
 
   const moduleName = getModuleFromPathname(pathname);
   const updater = moduleToUpdater[moduleName];
-  if (updater && hasAuthTokenForModule(moduleName)) {
+  if (updater && canSyncPushForModule(moduleName)) {
     try {
       await updater("", "web", {
         ...(await buildPushClientMeta(pathname, "web", { source: "webview_cleanup" })),
@@ -495,7 +500,7 @@ export const setupWebPushForCurrentSession = async (pathname = "", options = {})
   const moduleName = getModuleFromPathname(pathname);
   const forceSync = options?.forceSync === true;
   const updater = moduleToUpdater[moduleName];
-  if (!updater || !hasAuthTokenForModule(moduleName)) return;
+  if (!updater || !canSyncPushForModule(moduleName)) return;
 
   if (!ensureFirebaseInitialized() || !firebaseApp) return;
   if (!(await isSupported())) return;
@@ -572,7 +577,7 @@ export const syncNativeMobilePushForCurrentSession = async (pathname = "", optio
   const updater = moduleToUpdater[moduleName];
   const forceSync = options?.forceSync === true;
 
-  if (!updater || !hasAuthTokenForModule(moduleName)) return;
+  if (!updater || !canSyncPushForModule(moduleName)) return;
 
   const mobilePushMeta = await getNativeMobilePushMetaForCurrentSession(pathname);
   const token = mobilePushMeta?.fcmTokenMobile || mobilePushMeta?.token || "";
