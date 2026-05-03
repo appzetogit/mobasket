@@ -208,6 +208,7 @@ export default function UserLayout() {
   const rafRef = useRef(null);
   const isUserAuthRoute =
     location.pathname === "/sign-in" ||
+    location.pathname.startsWith("/auth/") ||
     location.pathname.startsWith("/user/auth/");
 
   useEffect(() => {

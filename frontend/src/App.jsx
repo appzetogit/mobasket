@@ -78,6 +78,7 @@ function shouldSkipPushSetup(pathname = "") {
 export default function App() {
   const location = useLocation();
   const isAuthLikeRoute =
+    /^\/auth\//.test(location.pathname) ||
     /^\/user\/auth\//.test(location.pathname) ||
     /^\/delivery\/(sign-in|signin|signup|otp|welcome)(\/|$)/.test(location.pathname) ||
     /^\/restaurant\/(login|signup|signup-email|otp|forgot-password|welcome|auth\/)/.test(location.pathname) ||
