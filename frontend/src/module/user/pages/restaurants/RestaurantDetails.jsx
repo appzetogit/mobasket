@@ -5813,13 +5813,13 @@ export default function RestaurantDetails() {
         !showMenuOptionsSheet &&
         hasRenderableMenuSections &&
         createPortal(
-          <div className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+5.25rem)] right-4 z-[9998] sm:bottom-6 sm:right-6">
+          <div className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+3.45rem)] right-3 z-[9998] sm:bottom-5 sm:right-5">
             <Button
-              className="rounded-full bg-gray-900 px-4 py-3 text-white shadow-[0_14px_30px_rgba(15,23,42,0.28)] hover:bg-black"
+              className="rounded-full bg-gray-900 px-5 py-3.5 text-white shadow-[0_14px_30px_rgba(15,23,42,0.28)] hover:bg-black"
               size="sm"
               onClick={() => setShowMenuSheet(true)}
             >
-              <Utensils className="mr-2 h-4 w-4" />
+              <Utensils className="mr-2 h-4.5 w-4.5" />
               Menu
             </Button>
           </div>,
