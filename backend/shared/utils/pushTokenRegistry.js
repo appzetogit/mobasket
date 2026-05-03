@@ -136,6 +136,80 @@ export const upsertPushTokenOnEntity = (entity, payload = {}) => {
   return { changed: true, entry };
 };
 
+const buildFilterExprForPushTokenRemoval = ({
+  token = '',
+  platform = '',
+  deviceId = '',
+  removeAllForPlatform = false,
+} = {}) => {
+  const conditions = [];
+
+  if (token) {
+    conditions.push({ $ne: ['$$tokenEntry.token', token] });
+  }
+
+  if (platform && deviceId) {
+    conditions.push({
+      $or: [
+        { $ne: ['$$tokenEntry.platform', platform] },
+        { $ne: ['$$tokenEntry.deviceId', deviceId] },
+      ],
+    });
+  }
+
+  if (platform && !deviceId && !token && removeAllForPlatform === true) {
+    conditions.push({ $ne: ['$$tokenEntry.platform', platform] });
+  }
+
+  if (conditions.length === 0) {
+    return true;
+  }
+
+  if (conditions.length === 1) {
+    return conditions[0];
+  }
+
+  return { $and: conditions };
+};
+
+export const upsertPushTokenOnModel = async (Model, entityId, payload = {}) => {
+  const entry = buildPushTokenEntry(payload);
+  if (!Model || !entityId || !entry) return null;
+
+  const normalizedPlatform = entry.platform;
+  const normalizedDeviceId = entry.deviceId;
+  const pipeline = [
+    {
+      $set: {
+        pushTokens: {
+          $concatArrays: [
+            {
+              $filter: {
+                input: { $ifNull: ['$pushTokens', []] },
+                as: 'tokenEntry',
+                cond: buildFilterExprForPushTokenRemoval({
+                  token: entry.token,
+                  platform: normalizedPlatform,
+                  deviceId: normalizedDeviceId,
+                }),
+              },
+            },
+            [entry],
+          ],
+        },
+        ...(normalizedPlatform === 'web'
+          ? { fcmTokenWeb: entry.token }
+          : { fcmTokenMobile: entry.token }),
+      },
+    },
+  ];
+
+  return Model.findByIdAndUpdate(entityId, pipeline, {
+    new: true,
+    select: 'fcmTokenWeb fcmTokenMobile pushTokens',
+  });
+};
+
 export const removePushTokenFromEntity = (entity, options = {}) => {
   if (!entity || typeof entity !== 'object') {
     return { changed: false, removedCount: 0 };
@@ -169,6 +243,40 @@ export const removePushTokenFromEntity = (entity, options = {}) => {
   }
 
   return { changed: removedCount > 0, removedCount };
+};
+
+export const removePushTokenFromModel = async (Model, entityId, options = {}) => {
+  if (!Model || !entityId) return null;
+
+  const normalizedToken = normalizePushToken(options.token);
+  const normalizedPlatform = options.platform ? normalizePushPlatform(options.platform) : '';
+  const normalizedDeviceId = normalizePushDeviceId(options.deviceId);
+
+  const pipeline = [
+    {
+      $set: {
+        pushTokens: {
+          $filter: {
+            input: { $ifNull: ['$pushTokens', []] },
+            as: 'tokenEntry',
+            cond: buildFilterExprForPushTokenRemoval({
+              token: normalizedToken,
+              platform: normalizedPlatform,
+              deviceId: normalizedDeviceId,
+              removeAllForPlatform: options.removeAllForPlatform === true,
+            }),
+          },
+        },
+        ...(normalizedPlatform === 'web' ? { fcmTokenWeb: '' } : {}),
+        ...(normalizedPlatform === 'mobile' ? { fcmTokenMobile: '' } : {}),
+      },
+    },
+  ];
+
+  return Model.findByIdAndUpdate(entityId, pipeline, {
+    new: true,
+    select: 'fcmTokenWeb fcmTokenMobile pushTokens',
+  });
 };
 
 export const collectRecipientPushTargets = (recipients = []) => {

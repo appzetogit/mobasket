@@ -8,8 +8,8 @@ import { successResponse, errorResponse } from '../../../shared/utils/response.j
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import {
   maskPushToken,
-  removePushTokenFromEntity,
-  upsertPushTokenOnEntity,
+  removePushTokenFromModel,
+  upsertPushTokenOnModel,
 } from '../../../shared/utils/pushTokenRegistry.js';
 import winston from 'winston';
 
@@ -639,15 +639,12 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
   }
 
   if (shouldClear) {
-    removePushTokenFromEntity(req.user, {
+    const updatedUser = await removePushTokenFromModel(User, req.user._id, {
       token: normalizedToken,
       platform: normalizedPlatform,
       deviceId,
       removeAllForPlatform: normalizedPlatform === 'web' && isWebView === true,
     });
-    if (normalizedPlatform === 'web') req.user.fcmTokenWeb = '';
-    if (normalizedPlatform === 'mobile') req.user.fcmTokenMobile = '';
-    await req.user.save();
 
     logger.info('User FCM token cleared', {
       userId: req.user?._id?.toString?.() || '',
@@ -657,13 +654,13 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
     });
 
     return successResponse(res, 200, 'FCM token cleared successfully', {
-      fcmTokenWeb: req.user.fcmTokenWeb || '',
-      fcmTokenMobile: req.user.fcmTokenMobile || '',
-      pushTokens: req.user.pushTokens || [],
+      fcmTokenWeb: updatedUser?.fcmTokenWeb || '',
+      fcmTokenMobile: updatedUser?.fcmTokenMobile || '',
+      pushTokens: updatedUser?.pushTokens || [],
     });
   }
 
-  upsertPushTokenOnEntity(req.user, {
+  const updatedUser = await upsertPushTokenOnModel(User, req.user._id, {
     token: normalizedToken,
     platform: normalizedPlatform,
     deviceId,
@@ -673,7 +670,6 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
     source,
     isWebView,
   });
-  await req.user.save();
 
   logger.info('User FCM token updated successfully', {
     userId: req.user?._id?.toString?.() || '',
@@ -682,15 +678,15 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
     deviceType: String(deviceType || ''),
     appContext: String(appContext || ''),
     tokenPreview: maskPushToken(normalizedToken),
-    hasWebToken: Boolean(req.user.fcmTokenWeb),
-    hasMobileToken: Boolean(req.user.fcmTokenMobile),
-    pushTokenCount: Array.isArray(req.user.pushTokens) ? req.user.pushTokens.length : 0,
+    hasWebToken: Boolean(updatedUser?.fcmTokenWeb),
+    hasMobileToken: Boolean(updatedUser?.fcmTokenMobile),
+    pushTokenCount: Array.isArray(updatedUser?.pushTokens) ? updatedUser.pushTokens.length : 0,
   });
 
   return successResponse(res, 200, 'FCM token updated successfully', {
-    fcmTokenWeb: req.user.fcmTokenWeb || '',
-    fcmTokenMobile: req.user.fcmTokenMobile || '',
-    pushTokens: req.user.pushTokens || [],
+    fcmTokenWeb: updatedUser?.fcmTokenWeb || '',
+    fcmTokenMobile: updatedUser?.fcmTokenMobile || '',
+    pushTokens: updatedUser?.pushTokens || [],
   });
 });
 

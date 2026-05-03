@@ -9,8 +9,8 @@ import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
 import { isOpenFromOutletTimings } from '../utils/outletTimingStatus.js';
 import {
   maskPushToken,
-  removePushTokenFromEntity,
-  upsertPushTokenOnEntity,
+  removePushTokenFromModel,
+  upsertPushTokenOnModel,
 } from '../../../shared/utils/pushTokenRegistry.js';
 import winston from 'winston';
 
@@ -1139,15 +1139,12 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
   }
 
   if (shouldClear) {
-    removePushTokenFromEntity(req.restaurant, {
+    const updatedRestaurant = await removePushTokenFromModel(Restaurant, req.restaurant._id, {
       token: normalizedToken,
       platform: normalizedPlatform,
       deviceId,
       removeAllForPlatform: normalizedPlatform === 'web' && isWebView === true,
     });
-    if (normalizedPlatform === 'web') req.restaurant.fcmTokenWeb = '';
-    if (normalizedPlatform === 'mobile') req.restaurant.fcmTokenMobile = '';
-    await req.restaurant.save();
 
     logger.info('Restaurant FCM token cleared', {
       restaurantId: req.restaurant?._id?.toString?.() || '',
@@ -1157,13 +1154,13 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
     });
 
     return successResponse(res, 200, 'FCM token cleared successfully', {
-      fcmTokenWeb: req.restaurant.fcmTokenWeb || '',
-      fcmTokenMobile: req.restaurant.fcmTokenMobile || '',
-      pushTokens: req.restaurant.pushTokens || [],
+      fcmTokenWeb: updatedRestaurant?.fcmTokenWeb || '',
+      fcmTokenMobile: updatedRestaurant?.fcmTokenMobile || '',
+      pushTokens: updatedRestaurant?.pushTokens || [],
     });
   }
 
-  upsertPushTokenOnEntity(req.restaurant, {
+  const updatedRestaurant = await upsertPushTokenOnModel(Restaurant, req.restaurant._id, {
     token: normalizedToken,
     platform: normalizedPlatform,
     deviceId,
@@ -1173,7 +1170,6 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
     source,
     isWebView,
   });
-  await req.restaurant.save();
 
   logger.info('Restaurant FCM token updated successfully', {
     restaurantId: req.restaurant?._id?.toString?.() || '',
@@ -1182,15 +1178,15 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
     deviceType: String(deviceType || ''),
     appContext: String(appContext || ''),
     tokenPreview: maskPushToken(normalizedToken),
-    hasWebToken: Boolean(req.restaurant.fcmTokenWeb),
-    hasMobileToken: Boolean(req.restaurant.fcmTokenMobile),
-    pushTokenCount: Array.isArray(req.restaurant.pushTokens) ? req.restaurant.pushTokens.length : 0,
+    hasWebToken: Boolean(updatedRestaurant?.fcmTokenWeb),
+    hasMobileToken: Boolean(updatedRestaurant?.fcmTokenMobile),
+    pushTokenCount: Array.isArray(updatedRestaurant?.pushTokens) ? updatedRestaurant.pushTokens.length : 0,
   });
 
   return successResponse(res, 200, 'FCM token updated successfully', {
-    fcmTokenWeb: req.restaurant.fcmTokenWeb || '',
-    fcmTokenMobile: req.restaurant.fcmTokenMobile || '',
-    pushTokens: req.restaurant.pushTokens || [],
+    fcmTokenWeb: updatedRestaurant?.fcmTokenWeb || '',
+    fcmTokenMobile: updatedRestaurant?.fcmTokenMobile || '',
+    pushTokens: updatedRestaurant?.pushTokens || [],
   });
 });
 

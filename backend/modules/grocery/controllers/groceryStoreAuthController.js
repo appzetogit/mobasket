@@ -7,8 +7,8 @@ import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { normalizePhoneNumber } from '../../../shared/utils/phoneUtils.js';
 import {
   maskPushToken,
-  removePushTokenFromEntity,
-  upsertPushTokenOnEntity,
+  removePushTokenFromModel,
+  upsertPushTokenOnModel,
 } from '../../../shared/utils/pushTokenRegistry.js';
 import winston from 'winston';
 
@@ -699,15 +699,12 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
   }
 
   if (shouldClear) {
-    removePushTokenFromEntity(req.store, {
+    const updatedStore = await removePushTokenFromModel(GroceryStore, req.store._id, {
       token: normalizedToken,
       platform: normalizedPlatform,
       deviceId,
       removeAllForPlatform: normalizedPlatform === 'web' && isWebView === true,
     });
-    if (normalizedPlatform === 'web') req.store.fcmTokenWeb = '';
-    if (normalizedPlatform === 'mobile') req.store.fcmTokenMobile = '';
-    await req.store.save();
 
     logger.info('Grocery store FCM token cleared', {
       storeId: req.store?._id?.toString?.() || '',
@@ -717,13 +714,13 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
     });
 
     return successResponse(res, 200, 'FCM token cleared successfully', {
-      fcmTokenWeb: req.store.fcmTokenWeb || '',
-      fcmTokenMobile: req.store.fcmTokenMobile || '',
-      pushTokens: req.store.pushTokens || [],
+      fcmTokenWeb: updatedStore?.fcmTokenWeb || '',
+      fcmTokenMobile: updatedStore?.fcmTokenMobile || '',
+      pushTokens: updatedStore?.pushTokens || [],
     });
   }
 
-  upsertPushTokenOnEntity(req.store, {
+  const updatedStore = await upsertPushTokenOnModel(GroceryStore, req.store._id, {
     token: normalizedToken,
     platform: normalizedPlatform,
     deviceId,
@@ -733,7 +730,6 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
     source,
     isWebView,
   });
-  await req.store.save();
 
   logger.info('Grocery store FCM token updated successfully', {
     storeId: req.store?._id?.toString?.() || '',
@@ -742,15 +738,15 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
     deviceType: String(deviceType || ''),
     appContext: String(appContext || ''),
     tokenPreview: maskPushToken(normalizedToken),
-    hasWebToken: Boolean(req.store.fcmTokenWeb),
-    hasMobileToken: Boolean(req.store.fcmTokenMobile),
-    pushTokenCount: Array.isArray(req.store.pushTokens) ? req.store.pushTokens.length : 0,
+    hasWebToken: Boolean(updatedStore?.fcmTokenWeb),
+    hasMobileToken: Boolean(updatedStore?.fcmTokenMobile),
+    pushTokenCount: Array.isArray(updatedStore?.pushTokens) ? updatedStore.pushTokens.length : 0,
   });
 
   return successResponse(res, 200, 'FCM token updated successfully', {
-    fcmTokenWeb: req.store.fcmTokenWeb || '',
-    fcmTokenMobile: req.store.fcmTokenMobile || '',
-    pushTokens: req.store.pushTokens || [],
+    fcmTokenWeb: updatedStore?.fcmTokenWeb || '',
+    fcmTokenMobile: updatedStore?.fcmTokenMobile || '',
+    pushTokens: updatedStore?.pushTokens || [],
   });
 });
 

@@ -5,8 +5,8 @@ import { successResponse, errorResponse } from '../../../shared/utils/response.j
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { initializeFirebaseAdmin, admin } from '../../../shared/services/firebaseAdminService.js';
 import {
-  removePushTokenFromEntity,
-  upsertPushTokenOnEntity,
+  removePushTokenFromModel,
+  upsertPushTokenOnModel,
 } from '../../../shared/utils/pushTokenRegistry.js';
 import winston from 'winston';
 
@@ -695,15 +695,12 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
   }
 
   if (shouldClear) {
-    removePushTokenFromEntity(req.delivery, {
+    const updatedDelivery = await removePushTokenFromModel(Delivery, req.delivery._id, {
       token: normalizedToken,
       platform: normalizedPlatform,
       deviceId,
       removeAllForPlatform: normalizedPlatform === 'web' && isWebView === true,
     });
-    if (normalizedPlatform === 'web') req.delivery.fcmTokenWeb = '';
-    if (normalizedPlatform === 'mobile') req.delivery.fcmTokenMobile = '';
-    await req.delivery.save();
 
     logger.info('Delivery FCM token cleared', {
       deliveryMongoId: req.delivery?._id?.toString?.() || '',
@@ -714,9 +711,9 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
     });
 
     return successResponse(res, 200, 'FCM token cleared successfully', {
-      fcmTokenWeb: req.delivery.fcmTokenWeb || '',
-      fcmTokenMobile: req.delivery.fcmTokenMobile || '',
-      pushTokens: req.delivery.pushTokens || [],
+      fcmTokenWeb: updatedDelivery?.fcmTokenWeb || '',
+      fcmTokenMobile: updatedDelivery?.fcmTokenMobile || '',
+      pushTokens: updatedDelivery?.pushTokens || [],
     });
   }
 
@@ -742,8 +739,11 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
   });
 
   if (!validationResult.valid && validationResult.removable) {
-    req.delivery[field] = '';
-    await req.delivery.save();
+    await removePushTokenFromModel(Delivery, req.delivery._id, {
+      token: normalizedToken,
+      platform: normalizedPlatform,
+      deviceId,
+    });
 
     logger.warn('Rejected delivery FCM token due to Firebase validation failure', {
       deliveryMongoId: req.delivery?._id?.toString?.() || '',
@@ -762,7 +762,7 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
     );
   }
 
-  upsertPushTokenOnEntity(req.delivery, {
+  const updatedDelivery = await upsertPushTokenOnModel(Delivery, req.delivery._id, {
     token: normalizedToken,
     platform: normalizedPlatform,
     deviceId,
@@ -772,7 +772,6 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
     source,
     isWebView,
   });
-  await req.delivery.save();
 
   logger.info('Delivery FCM token updated successfully', {
     deliveryMongoId: req.delivery?._id?.toString?.() || '',
@@ -780,19 +779,19 @@ export const updateFcmToken = asyncHandler(async (req, res) => {
     phone: req.delivery?.phone || '',
     platform: normalizedPlatform,
     targetField: field,
-    storedTokenLength: String(req.delivery?.[field] || '').length,
-    hasWebToken: Boolean(req.delivery?.fcmTokenWeb),
-    hasMobileToken: Boolean(req.delivery?.fcmTokenMobile),
+    storedTokenLength: String(updatedDelivery?.[field] || '').length,
+    hasWebToken: Boolean(updatedDelivery?.fcmTokenWeb),
+    hasMobileToken: Boolean(updatedDelivery?.fcmTokenMobile),
     deviceId: String(deviceId || ''),
     deviceType: String(deviceType || ''),
     appContext: String(appContext || ''),
-    pushTokenCount: Array.isArray(req.delivery?.pushTokens) ? req.delivery.pushTokens.length : 0,
+    pushTokenCount: Array.isArray(updatedDelivery?.pushTokens) ? updatedDelivery.pushTokens.length : 0,
   });
 
   return successResponse(res, 200, 'FCM token updated successfully', {
-    fcmTokenWeb: req.delivery.fcmTokenWeb || '',
-    fcmTokenMobile: req.delivery.fcmTokenMobile || '',
-    pushTokens: req.delivery.pushTokens || [],
+    fcmTokenWeb: updatedDelivery?.fcmTokenWeb || '',
+    fcmTokenMobile: updatedDelivery?.fcmTokenMobile || '',
+    pushTokens: updatedDelivery?.pushTokens || [],
   });
 });
 
