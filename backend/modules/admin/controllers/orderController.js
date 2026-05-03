@@ -141,8 +141,8 @@ const filterSnapshotOrders = (orders, query, platform) => {
     filtered = filtered.filter((order) => new Date(order?.createdAt || order?.date || 0) <= endDate);
   }
 
-  const pageNumber = Number.parseInt(page, 10) || 1;
-  const pageSize = Number.parseInt(limit, 10) || 50;
+  const pageNumber = normalizeAdminOrdersPage(page);
+  const pageSize = normalizeAdminOrdersLimit(limit);
   const startIndex = (pageNumber - 1) * pageSize;
   const pagedOrders = filtered.slice(startIndex, startIndex + pageSize);
 
@@ -181,6 +181,23 @@ const buildPlatformPrimaryFilter = (platform) => {
   }
 
   return { restaurantPlatform: 'mofood' };
+};
+
+const ADMIN_ORDERS_DEFAULT_LIMIT = 25;
+const ADMIN_ORDERS_MAX_LIMIT = 50;
+
+const normalizeAdminOrdersPage = (value) => {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+};
+
+const normalizeAdminOrdersLimit = (value) => {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return ADMIN_ORDERS_DEFAULT_LIMIT;
+  }
+
+  return Math.min(parsed, ADMIN_ORDERS_MAX_LIMIT);
 };
 
 const ORDER_MODIFICATION_WINDOW_MS = 2 * 60 * 1000;
@@ -307,6 +324,8 @@ export const getOrders = asyncHandler(async (req, res) => {
       cancelledBy,
       platform
     } = req.query;
+    const normalizedPage = normalizeAdminOrdersPage(page);
+    const normalizedLimit = normalizeAdminOrdersLimit(limit);
     const now = new Date();
     const restaurantCancellationReasonRegex = /rejected by restaurant|restaurant rejected|restaurant cancelled|restaurant is too busy|item not available|outside delivery area|kitchen closing|technical issue|order not accepted within time limit/i;
     const addAndCondition = (condition) => {
@@ -552,7 +571,7 @@ export const getOrders = asyncHandler(async (req, res) => {
     }
 
     // Calculate pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const skip = (normalizedPage - 1) * normalizedLimit;
 
     const primaryPlatformQuery = normalizedPlatform
       ? { ...query, ...buildPlatformPrimaryFilter(normalizedPlatform) }
@@ -612,7 +631,7 @@ export const getOrders = asyncHandler(async (req, res) => {
         .sort(sortOrder)
         .hint(primaryQueryHint)
         .maxTimeMS(10000)
-        .limit(parseInt(limit))
+        .limit(normalizedLimit)
         .skip(skip)
         .toArray();
 
@@ -621,7 +640,7 @@ export const getOrders = asyncHandler(async (req, res) => {
         orders = await legacyOrdersCollection.find(effectiveQuery, { projection: projectionObject })
           .sort(sortOrder)
           .maxTimeMS(10000)
-          .limit(parseInt(limit))
+          .limit(normalizedLimit)
           .skip(skip)
           .toArray();
       }
@@ -635,7 +654,7 @@ export const getOrders = asyncHandler(async (req, res) => {
         orders = await legacyOrdersCollection.find(effectiveQuery, { projection: projectionObject })
           .sort(sortOrder)
           .maxTimeMS(10000)
-          .limit(parseInt(limit))
+          .limit(normalizedLimit)
           .skip(skip)
           .toArray();
       } catch (fallbackError) {
@@ -646,7 +665,7 @@ export const getOrders = asyncHandler(async (req, res) => {
             .sort(sortOrder)
             .hint({ createdAt: -1 })
             .maxTimeMS(5000)
-            .limit(parseInt(limit))
+            .limit(normalizedLimit)
             .skip(skip)
             .toArray();
         } catch (lastResortError) {
@@ -1020,10 +1039,10 @@ export const getOrders = asyncHandler(async (req, res) => {
     return successResponse(res, 200, 'Orders retrieved successfully', {
       orders: transformedOrders,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page: normalizedPage,
+        limit: normalizedLimit,
         total,
-        pages: Math.ceil(total / parseInt(limit))
+        pages: Math.ceil(total / normalizedLimit)
       }
     });
   } catch (error) {

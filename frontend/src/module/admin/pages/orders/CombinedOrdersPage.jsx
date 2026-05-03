@@ -19,7 +19,7 @@ const AUTO_REFRESH_MS = 10000
 const SIDEBAR_ALERT_KEY = "adminAllOrdersAttentionUntil"
 const ORDERS_ALERT_COUNT_KEY = "adminAllOrdersAttentionState"
 const ORDER_SOUND_MUTED_KEY = "adminAllOrdersSoundMuted"
-const PLATFORM_PAGE_SIZE = 250
+const PLATFORM_PAGE_SIZE = 50
 const MAX_PLATFORM_SYNC_PAGES = 40
 const ORDER_DELETE_ALLOWED_ADMIN_EMAIL = "emmanuel@mobasket.in"
 
