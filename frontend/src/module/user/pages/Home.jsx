@@ -609,6 +609,14 @@ function ExploreMoreSkeleton() {
   );
 }
 
+function SectionEmptyState({ title }) {
+  return (
+    <div className="w-full rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-center text-sm text-gray-500">
+      {title}
+    </div>
+  );
+}
+
 export default function Home() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -1254,6 +1262,8 @@ export default function Home() {
   const [showToast, setShowToast] = useState(false);
   const [showManageCollections, setShowManageCollections] = useState(false);
   const [selectedRestaurantSlug, setSelectedRestaurantSlug] = useState(null);
+  const heroBannerRequestRef = useRef(0);
+  const homeRecoveryAttemptsRef = useRef({ banners: 0, restaurants: 0 });
 
   // Memoize cartCount to prevent recalculation on every render - use cart directly
   const cartCount = useMemo(
@@ -1269,6 +1279,9 @@ export default function Home() {
     Boolean(selectedHomeZoneId) && selectedHomeZoneId !== "auto";
 
   const fetchHeroBanners = useCallback(async ({ showLoader = false } = {}) => {
+    const requestId = heroBannerRequestRef.current + 1;
+    heroBannerRequestRef.current = requestId;
+
     try {
       if (showLoader) {
         setLoadingBanners(true);
@@ -1279,20 +1292,26 @@ export default function Home() {
       }
 
       const response = await api.get("/hero-banners/public", { params });
+      if (heroBannerRequestRef.current !== requestId) return;
+
       if (response.data.success && response.data.data.banners) {
-        const banners = response.data.data.banners;
+        const banners = Array.isArray(response.data.data.banners)
+          ? response.data.data.banners
+          : [];
         setHeroBannersData(banners);
         setHeroBannerImages(banners.map((b) => b.imageUrl || b));
+        setCurrentBannerIndex((prev) => (banners.length > 0 ? prev % banners.length : 0));
         hasLoadedHeroBannersRef.current = true;
       }
     } catch (error) {
+      if (heroBannerRequestRef.current !== requestId) return;
       console.error("Error fetching hero banners:", error);
       if (showLoader || !hasLoadedHeroBannersRef.current) {
         setHeroBannerImages([]);
         setHeroBannersData([]);
       }
     } finally {
-      if (showLoader) {
+      if (showLoader && heroBannerRequestRef.current === requestId) {
         setLoadingBanners(false);
       }
     }
@@ -1359,13 +1378,14 @@ export default function Home() {
       }
 
       setLocationRefreshTick((prev) => prev + 1);
+      fetchHeroBanners({ showLoader: !hasLoadedHeroBannersRef.current });
     };
 
     window.addEventListener("userLocationChanged", handleUserLocationChanged);
     return () => {
       window.removeEventListener("userLocationChanged", handleUserLocationChanged);
     };
-  }, [refreshZone, selectedHomeZoneId]);
+  }, [fetchHeroBanners, refreshZone, selectedHomeZoneId]);
 
   useEffect(() => {
     try {
@@ -1751,7 +1771,12 @@ export default function Home() {
 
               return {
                 id: restaurant.restaurantId || restaurant._id,
-                name: restaurant.name,
+                name: String(
+                  restaurant.name ||
+                    restaurant.restaurantName ||
+                    restaurant.title ||
+                    "Restaurant",
+                ).trim(),
                 cuisine: cuisine,
                 cuisines: Array.isArray(restaurant.cuisines) ? restaurant.cuisines : [],
                 rating,
@@ -1778,7 +1803,13 @@ export default function Home() {
                     : "Special Dish"),
                 featuredPrice: restaurant.featuredPrice || 249, // Use from API or default
                 offer: restaurant.offer || "Flat ₹50 OFF above ₹199", // Use from API or default
-                slug: restaurant.slug,
+                slug:
+                  restaurant.slug ||
+                  String(restaurant.restaurantId || restaurant._id || restaurant.name || "")
+                    .trim()
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .replace(/^-+|-+$/g, ""),
                 restaurantId: restaurant.restaurantId,
                 zoneRank: Number(restaurant.zoneRank || 0),
                 location: restaurant.location, // Store location for distance recalculation
@@ -1895,6 +1926,49 @@ export default function Home() {
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [appliedFilters, fetchRestaurants]);
+
+  useEffect(() => {
+    if (loading || zoneLoading) return undefined;
+
+    const shouldRetryBanners =
+      !loadingBanners &&
+      heroBannerImages.length === 0 &&
+      homeRecoveryAttemptsRef.current.banners < 2;
+    const shouldRetryRestaurants =
+      !loadingRestaurants &&
+      restaurantsData.length === 0 &&
+      homeRecoveryAttemptsRef.current.restaurants < 2;
+
+    if (!shouldRetryBanners && !shouldRetryRestaurants) {
+      return undefined;
+    }
+
+    const retryTimer = window.setTimeout(() => {
+      if (shouldRetryBanners) {
+        homeRecoveryAttemptsRef.current.banners += 1;
+        fetchHeroBanners({ showLoader: true });
+      }
+
+      if (shouldRetryRestaurants) {
+        homeRecoveryAttemptsRef.current.restaurants += 1;
+        fetchRestaurants(appliedFilters);
+      }
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(retryTimer);
+    };
+  }, [
+    appliedFilters,
+    fetchHeroBanners,
+    fetchRestaurants,
+    heroBannerImages.length,
+    loading,
+    loadingBanners,
+    loadingRestaurants,
+    restaurantsData.length,
+    zoneLoading,
+  ]);
 
   // Recalculate distances when user location updates
   useEffect(() => {
@@ -2817,7 +2891,9 @@ export default function Home() {
               </AnimatePresence>
             </div>
           ) : (
-            <div className="w-full h-full bg-gray-200" />
+            <div className="flex h-full items-center justify-center px-4">
+              <SectionEmptyState title="Banners are loading. We'll retry automatically." />
+            </div>
           )}
         </div>
       </div>
@@ -3526,7 +3602,9 @@ export default function Home() {
               {displayedRestaurants.map((restaurant, index) => {
                 const restaurantSlug =
                   restaurant.slug ||
-                  restaurant.name.toLowerCase().replace(/\s+/g, "-");
+                  String(restaurant?.name || "restaurant")
+                    .toLowerCase()
+                    .replace(/\s+/g, "-");
                 const isRestaurantAvailable =
                   restaurant?.isActive !== false &&
                   restaurant?.isAcceptingOrders !== false;

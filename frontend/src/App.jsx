@@ -12,6 +12,7 @@ import {
   teardownWebPushListener,
 } from "@/lib/webPush";
 import { applyScopedAppTheme } from "@/lib/utils/themeScope";
+import { prefetchDeliveryHome } from "@/module/delivery/utils/prefetchDeliveryHome";
 
 const UserRouter = lazy(() => import("@/module/user/components/UserRouter"));
 const RestaurantAppRoutes = lazy(() => import("@/route-groups/RestaurantAppRoutes"));
@@ -215,6 +216,11 @@ export default function App() {
       currentUrl,
     );
     sessionStorage.setItem("storeBackStackInjected", "1");
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (location.pathname.startsWith("/delivery")) return;
+    prefetchDeliveryHome();
   }, [location.pathname]);
 
   return (

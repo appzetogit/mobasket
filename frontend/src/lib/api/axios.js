@@ -35,6 +35,24 @@ const HOT_REQUEST_POLICIES = [
   },
   {
     methods: ["get"],
+    match: (path) => path === "/delivery/wallet",
+    cacheTtlMs: 8000,
+    hiddenCacheTtlMs: 30000,
+  },
+  {
+    methods: ["get"],
+    match: (path) => path === "/delivery/profile",
+    cacheTtlMs: 15000,
+    hiddenCacheTtlMs: 60000,
+  },
+  {
+    methods: ["get"],
+    match: (path) => path === "/delivery/earnings/active-offers",
+    cacheTtlMs: 15000,
+    hiddenCacheTtlMs: 60000,
+  },
+  {
+    methods: ["get"],
     match: (path) => /^\/order\/[^/]+$/.test(path),
     cacheTtlMs: 1500,
     hiddenCacheTtlMs: 20000,
@@ -214,7 +232,15 @@ const shouldInvalidateCachedPath = (mutatedPath = "/", cachedPath = "/") => {
   }
 
   if (mutatedPath.startsWith("/delivery/orders")) {
-    return cachedPath === "/delivery/orders" || cachedPath.startsWith("/delivery/orders/");
+    return (
+      cachedPath === "/delivery/orders" ||
+      cachedPath.startsWith("/delivery/orders/") ||
+      cachedPath === "/delivery/wallet"
+    );
+  }
+
+  if (mutatedPath.startsWith("/delivery/wallet")) {
+    return cachedPath === "/delivery/wallet";
   }
 
   if (mutatedPath.startsWith("/restaurant/")) {
