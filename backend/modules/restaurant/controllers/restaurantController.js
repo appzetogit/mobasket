@@ -247,6 +247,10 @@ const sanitizeRestaurantListEntry = (restaurant = {}) => ({
 
 const under250Cache = new Map();
 const UNDER_250_CACHE_TTL_MS = 2 * 60 * 1000;
+const restaurantListCache = new Map();
+const RESTAURANT_LIST_CACHE_TTL_MS = 60 * 1000;
+const RESTAURANT_LIST_DEFAULT_LIMIT = 30;
+const RESTAURANT_LIST_MAX_LIMIT = 50;
 
 function getUnder250Cache(cacheKey) {
   const cached = under250Cache.get(cacheKey);
@@ -256,6 +260,39 @@ function getUnder250Cache(cacheKey) {
     return null;
   }
   return cached.payload;
+}
+
+function getRestaurantListCache(cacheKey) {
+  const cached = restaurantListCache.get(cacheKey);
+  if (!cached) return null;
+  if (Date.now() - cached.timestamp > RESTAURANT_LIST_CACHE_TTL_MS) {
+    restaurantListCache.delete(cacheKey);
+    return null;
+  }
+  return cached.payload;
+}
+
+function setRestaurantListCache(cacheKey, payload) {
+  restaurantListCache.set(cacheKey, {
+    payload,
+    timestamp: Date.now(),
+  });
+}
+
+function normalizeRestaurantListLimit(value) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return RESTAURANT_LIST_DEFAULT_LIMIT;
+  }
+  return Math.min(parsed, RESTAURANT_LIST_MAX_LIMIT);
+}
+
+function normalizeRestaurantListOffset(value) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return 0;
+  }
+  return parsed;
 }
 
 function setUnder250Cache(cacheKey, payload) {
@@ -444,11 +481,39 @@ export const getRestaurants = async (req, res) => {
       city,
       zoneId // User's zone ID (optional - used only for validation/metadata)
     } = req.query;
+    const normalizedLimit = normalizeRestaurantListLimit(limit);
+    const normalizedOffset = normalizeRestaurantListOffset(offset);
     const requestedPlatform = normalizePlatformFilter(platform);
     const liteResponse = String(req.query?.lite || '').toLowerCase() === 'true';
+    const restaurantListCacheKey = liteResponse
+      ? JSON.stringify({
+          limit: normalizedLimit,
+          offset: normalizedOffset,
+          sortBy: sortBy || '',
+          cuisine: cuisine || '',
+          minRating: minRating || '',
+          maxDeliveryTime: maxDeliveryTime || '',
+          maxDistance: maxDistance || '',
+          maxPrice: maxPrice || '',
+          hasOffers: hasOffers || '',
+          platform: requestedPlatform || '',
+          city: normalizeCityValue(city),
+          zoneId: String(zoneId || '').trim(),
+          onlyZone: String(req.query.onlyZone || '').trim(),
+          topRated: String(req.query.topRated || '').trim(),
+          trusted: String(req.query.trusted || '').trim(),
+        })
+      : '';
     const projection = liteResponse
       ? RESTAURANT_LIST_LITE_SELECT
       : '-owner -createdAt -updatedAt -password';
+
+    if (restaurantListCacheKey) {
+      const cachedPayload = getRestaurantListCache(restaurantListCacheKey);
+      if (cachedPayload) {
+        return successResponse(res, 200, 'Restaurants retrieved successfully', cachedPayload);
+      }
+    }
 
     // Optional: Zone lookup - if zoneId is provided, validate and enforce same-zone listing.
     let userZone = null;
@@ -638,15 +703,15 @@ export const getRestaurants = async (req, res) => {
       restaurants = await GroceryStore.find(groceryQuery)
         .select(projection)
         .sort(sortObj)
-        .limit(parseInt(limit))
-        .skip(parseInt(offset))
+        .limit(normalizedLimit)
+        .skip(normalizedOffset)
         .lean();
     } else {
       restaurants = await Restaurant.find(query)
         .select(projection)
         .sort(sortObj)
-        .limit(parseInt(limit))
-        .skip(parseInt(offset))
+        .limit(normalizedLimit)
+        .skip(normalizedOffset)
         .lean();
     }
 
@@ -677,7 +742,7 @@ export const getRestaurants = async (req, res) => {
 
       return true;
     });
-    if (!isMogroceryRequest && restaurants.length > 0) {
+    if (!liteResponse && !isMogroceryRequest && restaurants.length > 0) {
       const restaurantIds = restaurants
         .map((restaurant) => restaurant?._id)
         .filter(Boolean);
@@ -712,7 +777,7 @@ export const getRestaurants = async (req, res) => {
     }
 
     // Dynamic rating calculation for the restaurant list
-    if (restaurants.length > 0) {
+    if (!liteResponse && restaurants.length > 0) {
       try {
         const idStrings = restaurants.map((r) => String(r._id || r.restaurantId || ""));
         const idObjects = idStrings.filter((id) => mongoose.Types.ObjectId.isValid(id)).map((id) => new mongoose.Types.ObjectId(id));
@@ -794,7 +859,7 @@ export const getRestaurants = async (req, res) => {
     // Get total count (before filtering by string fields)
     const total = restaurants.length;
 
-    return successResponse(res, 200, 'Restaurants retrieved successfully', {
+    const payload = {
       restaurants,
       total,
       filters: {
@@ -806,7 +871,13 @@ export const getRestaurants = async (req, res) => {
         maxPrice,
         hasOffers
       }
-    });
+    };
+
+    if (restaurantListCacheKey) {
+      setRestaurantListCache(restaurantListCacheKey, payload);
+    }
+
+    return successResponse(res, 200, 'Restaurants retrieved successfully', payload);
   } catch (error) {
     console.error('Error fetching restaurants:', error);
     return errorResponse(res, 500, 'Failed to fetch restaurants');

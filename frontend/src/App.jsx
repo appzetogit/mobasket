@@ -77,6 +77,12 @@ function shouldSkipPushSetup(pathname = "") {
 
 export default function App() {
   const location = useLocation();
+  const isAuthLikeRoute =
+    /^\/user\/auth\//.test(location.pathname) ||
+    /^\/delivery\/(sign-in|signin|signup|otp|welcome)(\/|$)/.test(location.pathname) ||
+    /^\/restaurant\/(login|signup|signup-email|otp|forgot-password|welcome|auth\/)/.test(location.pathname) ||
+    /^\/store\/(login|signup|otp)(\/|$)/.test(location.pathname) ||
+    /^\/admin\/(login|forgot-password)(\/|$)/.test(location.pathname);
 
   useEffect(() => {
     const savedTheme =
@@ -87,6 +93,7 @@ export default function App() {
 
   useEffect(() => {
     if (typeof window === "undefined" || !("geolocation" in navigator)) return;
+    if (isAuthLikeRoute) return;
 
     const requestLocationPermission = () => {
       navigator.geolocation.getCurrentPosition(
@@ -120,7 +127,7 @@ export default function App() {
     };
 
     run();
-  }, []);
+  }, [isAuthLikeRoute]);
 
   useEffect(() => {
     const tokenKeys = new Set([

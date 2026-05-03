@@ -206,6 +206,9 @@ function LocationSelectorProvider({ children }) {
 export default function UserLayout() {
   const location = useLocation();
   const rafRef = useRef(null);
+  const isUserAuthRoute =
+    location.pathname === "/sign-in" ||
+    location.pathname.startsWith("/user/auth/");
 
   useEffect(() => {
     const lenis = new Lenis({
@@ -242,19 +245,29 @@ export default function UserLayout() {
     location.pathname === "/user/profile" ||
     location.pathname.startsWith("/user/profile");
 
+  const content = (
+    <>
+      {showBottomNav && <DesktopNavbar />}
+      {!isUserAuthRoute && <LocationPrompt />}
+      <Outlet />
+      {showBottomNav && <BottomNavigation />}
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-[#f5f5f5] dark:bg-[#0a0a0a] transition-colors duration-200">
       <CartProvider>
         <ProfileProvider>
           <OrdersProvider>
-            <SearchOverlayProvider>
-              <LocationSelectorProvider>
-                {showBottomNav && <DesktopNavbar />}
-                <LocationPrompt />
-                <Outlet />
-                {showBottomNav && <BottomNavigation />}
-              </LocationSelectorProvider>
-            </SearchOverlayProvider>
+            {isUserAuthRoute ? (
+              content
+            ) : (
+              <SearchOverlayProvider>
+                <LocationSelectorProvider>
+                  {content}
+                </LocationSelectorProvider>
+              </SearchOverlayProvider>
+            )}
           </OrdersProvider>
         </ProfileProvider>
       </CartProvider>

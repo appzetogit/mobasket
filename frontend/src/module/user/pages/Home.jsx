@@ -107,6 +107,7 @@ const EARLY_RESTAURANT_PREFETCH_COUNT = 4;
 const HOME_RESTAURANTS_CACHE_TTL_MS = 3 * 60 * 1000;
 const HOME_RESTAURANTS_CACHE_VERSION = "v3";
 const HOME_ZONE_SELECTION_STORAGE_KEY = "user.home.selectedZoneId.v1";
+const HOME_RESTAURANT_TRACE_ENABLED = true;
 
 const isUsableCityValue = (value) => {
   const normalized = normalizeCityName(value);
@@ -706,6 +707,8 @@ export default function Home() {
   const [renderAllRestaurants, setRenderAllRestaurants] = useState(false);
   const isHandlingSwitchOff = useRef(false);
   const restaurantsRequestRef = useRef(0);
+  const restaurantsFetchInFlightRef = useRef(false);
+  const restaurantsLastFetchKeyRef = useRef("");
   const homepageMenuPrefetchStartedRef = useRef(new Set());
   const backendAssetBaseUrl = API_BASE_URL.replace(/\/api\/?$/, "");
   const prefetchRestaurant = useCallback((restaurantOrSlug) => {
@@ -1481,9 +1484,10 @@ export default function Home() {
 
   // Fetch restaurants from API with filters
   const fetchRestaurants = useCallback(
-    async (filters = {}) => {
+    async (filters = {}, options = {}) => {
+      const trigger = String(options?.trigger || "unknown");
+      const force = options?.force === true;
       const requestId = restaurantsRequestRef.current + 1;
-      restaurantsRequestRef.current = requestId;
 
       // Prefer strict same-zone listing on Home.
       // If zone detection is unavailable, gracefully fall back to non-zone listing.
@@ -1491,12 +1495,13 @@ export default function Home() {
       // leaving the loading state stuck at true (the early return would skip the
       // finally block). This was causing intermittent empty pages in Flutter WebView.
       if (zoneLoading) {
+        if (HOME_RESTAURANT_TRACE_ENABLED) {
+          console.log("[Home] Skipping restaurant fetch while zone is loading", { trigger });
+        }
         return;
       }
 
       try {
-        setLoadingRestaurants(true);
-
         // Build query parameters from filters
         const params = {};
 
@@ -1567,7 +1572,7 @@ export default function Home() {
         }
         const useSavedAddressCityMode =
           !hasManualZoneSelection && locationSource === "saved";
-        const allowCrossModeFallbacks = !hasManualZoneSelection && !useSavedAddressCityMode;
+        const allowCrossModeFallbacks = !hasManualZoneSelection;
         let didQueryByZone = false;
         let normalizedUserCity = "";
         if (hasResolvedZone && !useSavedAddressCityMode) {
@@ -1589,9 +1594,40 @@ export default function Home() {
           .filter(([, value]) => value !== undefined && value !== null && value !== "")
           .sort(([a], [b]) => a.localeCompare(b));
         const cacheKey = `home:restaurants:${HOME_RESTAURANTS_CACHE_VERSION}:${JSON.stringify(cacheParams)}`;
+        if (!force && restaurantsFetchInFlightRef.current && restaurantsLastFetchKeyRef.current === cacheKey) {
+          if (HOME_RESTAURANT_TRACE_ENABLED) {
+            console.log("[Home] Skipping duplicate in-flight restaurant fetch", {
+              trigger,
+              cacheKey,
+            });
+          }
+          return;
+        }
+
+        restaurantsRequestRef.current = requestId;
+        restaurantsFetchInFlightRef.current = true;
+        restaurantsLastFetchKeyRef.current = cacheKey;
+        setLoadingRestaurants(true);
+        const fetchStartedAt = Date.now();
+
+        if (HOME_RESTAURANT_TRACE_ENABLED) {
+          console.log("[Home] Restaurant fetch started", {
+            trigger,
+            requestId,
+            params,
+          });
+        }
+
         const cachedRestaurants = readHomeSessionCache(cacheKey, HOME_RESTAURANTS_CACHE_TTL_MS);
         if (Array.isArray(cachedRestaurants)) {
           if (restaurantsRequestRef.current !== requestId) return;
+          if (HOME_RESTAURANT_TRACE_ENABLED) {
+            console.log("[Home] Restaurant cache hit", {
+              trigger,
+              requestId,
+              cachedCount: cachedRestaurants.length,
+            });
+          }
           setRestaurantsData(cachedRestaurants);
           setLoadingRestaurants(false);
         }
@@ -1627,12 +1663,27 @@ export default function Home() {
             delete fallbackParams.city;
           }
 
+          if (HOME_RESTAURANT_TRACE_ENABLED) {
+            console.log("[Home] Retrying restaurant fetch without zone filter", {
+              trigger,
+              requestId,
+              fallbackParams,
+            });
+          }
+
           response = await restaurantAPI.getRestaurants(fallbackParams);
           if (restaurantsRequestRef.current !== requestId) return;
           restaurantsArrayRaw = response?.data?.data?.restaurants || [];
         } else if (shouldRetryWithoutCity) {
           const fallbackParams = { ...params };
           delete fallbackParams.city;
+          if (HOME_RESTAURANT_TRACE_ENABLED) {
+            console.log("[Home] Retrying restaurant fetch without city filter", {
+              trigger,
+              requestId,
+              fallbackParams,
+            });
+          }
           response = await restaurantAPI.getRestaurants(fallbackParams);
           if (restaurantsRequestRef.current !== requestId) return;
           restaurantsArrayRaw = response?.data?.data?.restaurants || [];
@@ -1648,6 +1699,13 @@ export default function Home() {
             limit: params.limit,
             lite: params.lite,
           };
+          if (HOME_RESTAURANT_TRACE_ENABLED) {
+            console.log("[Home] Retrying restaurant fetch without location filters", {
+              trigger,
+              requestId,
+              fallbackParams,
+            });
+          }
           response = await restaurantAPI.getRestaurants(fallbackParams);
           if (restaurantsRequestRef.current !== requestId) return;
           restaurantsArrayRaw = response?.data?.data?.restaurants || [];
@@ -1670,6 +1728,13 @@ export default function Home() {
               console.warn(`No restaurants found for selected zone: ${effectiveHomeZoneId}`);
             } else {
               console.warn("No restaurants found in API response after all fallbacks");
+            }
+            if (HOME_RESTAURANT_TRACE_ENABLED) {
+              console.log("[Home] Restaurant fetch completed with empty result", {
+                trigger,
+                requestId,
+                durationMs: Date.now() - fetchStartedAt,
+              });
             }
             setRestaurantsData([]);
             setLoadingRestaurants(false);
@@ -1855,15 +1920,37 @@ export default function Home() {
             });
           }
           writeHomeSessionCache(cacheKey, transformedRestaurants);
+          if (HOME_RESTAURANT_TRACE_ENABLED) {
+            console.log("[Home] Restaurant fetch completed", {
+              trigger,
+              requestId,
+              durationMs: Date.now() - fetchStartedAt,
+              count: transformedRestaurants.length,
+            });
+          }
           setRestaurantsData(transformedRestaurants);
         } else {
           console.warn("Invalid API response structure:", response.data);
+          if (HOME_RESTAURANT_TRACE_ENABLED) {
+            console.log("[Home] Restaurant fetch got invalid response structure", {
+              trigger,
+              requestId,
+              durationMs: Date.now() - fetchStartedAt,
+            });
+          }
           setRestaurantsData([]);
         }
       } catch (error) {
         if (restaurantsRequestRef.current !== requestId) return;
         console.error("Error fetching restaurants:", error);
         console.error("Error details:", error.response?.data || error.message);
+        if (HOME_RESTAURANT_TRACE_ENABLED) {
+          console.log("[Home] Restaurant fetch failed", {
+            trigger,
+            requestId,
+            error: error?.response?.data || error?.message || String(error),
+          });
+        }
         // Don't set hardcoded data here - let the useMemo fallback handle it
         // This way, if API succeeds later, it will show the real data
         setRestaurantsData([]);
@@ -1871,6 +1958,7 @@ export default function Home() {
         if (restaurantsRequestRef.current === requestId) {
           setLoadingRestaurants(false);
         }
+        restaurantsFetchInFlightRef.current = false;
       }
     },
     [
@@ -1885,7 +1973,7 @@ export default function Home() {
 
   // Fetch restaurants when appliedFilters change
   useEffect(() => {
-    fetchRestaurants(appliedFilters);
+    fetchRestaurants(appliedFilters, { trigger: "filters-or-location-change" });
   }, [appliedFilters, fetchRestaurants, locationRefreshTick]);
 
   // Safety net: If the page has been loading restaurants for too long (e.g. zone
@@ -1901,7 +1989,7 @@ export default function Home() {
       // is still loading, but by this point zone should have resolved or timed out.
       if (loadingRestaurants && restaurantsData.length === 0) {
         console.warn("[Home] Safety net: restaurants still loading after 6s, forcing retry");
-        fetchRestaurants(appliedFilters);
+        fetchRestaurants(appliedFilters, { trigger: "safety-retry", force: true });
       }
     }, 6000);
 
@@ -1910,11 +1998,11 @@ export default function Home() {
 
   useEffect(() => {
     const refresh = () => {
-      fetchRestaurants(appliedFilters);
+      fetchRestaurants(appliedFilters, { trigger: "focus-or-interval-refresh" });
     };
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        refresh();
+        fetchRestaurants(appliedFilters, { trigger: "visibility-refresh" });
       }
     };
     const timer = window.setInterval(refresh, 60000);

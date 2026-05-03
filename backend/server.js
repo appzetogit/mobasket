@@ -1050,10 +1050,50 @@ startServer().catch((error) => {
 
 // Initialize scheduled tasks
 function initializeScheduledTasks() {
+  const scheduledTasksEnabled =
+    String(process.env.ENABLE_SCHEDULED_TASKS || 'true').toLowerCase() === 'true';
+  const allowAllPm2Instances =
+    String(process.env.ALLOW_ALL_PM2_INSTANCES_SCHEDULED_TASKS || 'false').toLowerCase() === 'true';
+  const pm2InstanceId = String(
+    process.env.NODE_APP_INSTANCE ??
+    process.env.pm_id ??
+    process.env.PM2_INSTANCE_ID ??
+    '0'
+  ).trim();
+  const isPrimaryPm2Instance = pm2InstanceId === '0';
+
+  if (!scheduledTasksEnabled) {
+    console.log('ℹ️ Scheduled tasks disabled via ENABLE_SCHEDULED_TASKS=false');
+    return;
+  }
+
+  if (!allowAllPm2Instances && !isPrimaryPm2Instance) {
+    console.log(`ℹ️ Skipping scheduled tasks on PM2 instance ${pm2InstanceId}; primary instance only`);
+    return;
+  }
+
+  const runWithoutOverlap = (label, task) => {
+    let inFlight = false;
+
+    return async () => {
+      if (inFlight) {
+        console.warn(`[${label}] Previous run still in progress, skipping this tick`);
+        return;
+      }
+
+      inFlight = true;
+      try {
+        await task();
+      } finally {
+        inFlight = false;
+      }
+    };
+  };
+
   // Import menu schedule service
   import('./modules/restaurant/services/menuScheduleService.js').then(({ processScheduledAvailability }) => {
     // Run every minute to check for due schedules
-    cron.schedule('* * * * *', async () => {
+    cron.schedule('* * * * *', runWithoutOverlap('Menu Schedule Cron', async () => {
       try {
         const result = await processScheduledAvailability();
         if (result.processed > 0) {
@@ -1062,7 +1102,7 @@ function initializeScheduledTasks() {
       } catch (error) {
         console.error('[Menu Schedule Cron] Error:', error);
       }
-    });
+    }));
 
     console.log('✅ Menu item availability scheduler initialized (runs every minute)');
   }).catch((error) => {
@@ -1072,7 +1112,7 @@ function initializeScheduledTasks() {
   // Import auto-ready service
   import('./modules/order/services/autoReadyService.js').then(({ processAutoReadyOrders }) => {
     // Run every 30 seconds to check for orders that should be marked as ready
-    cron.schedule('*/30 * * * * *', async () => {
+    cron.schedule('*/30 * * * * *', runWithoutOverlap('Auto Ready Cron', async () => {
       try {
         const result = await processAutoReadyOrders();
         if (result.processed > 0) {
@@ -1081,7 +1121,7 @@ function initializeScheduledTasks() {
       } catch (error) {
         console.error('[Auto Ready Cron] Error:', error);
       }
-    });
+    }));
 
     console.log('✅ Auto-ready order scheduler initialized (runs every 30 seconds)');
   }).catch((error) => {
@@ -1091,7 +1131,7 @@ function initializeScheduledTasks() {
   // Import auto-reject service
   import('./modules/order/services/autoRejectService.js').then(({ processAutoRejectOrders }) => {
     // Run every 30 seconds to check for orders that should be auto-rejected
-    cron.schedule('*/30 * * * * *', async () => {
+    cron.schedule('*/30 * * * * *', runWithoutOverlap('Auto Reject Cron', async () => {
       try {
         const result = await processAutoRejectOrders();
         if (result.processed > 0) {
@@ -1100,7 +1140,7 @@ function initializeScheduledTasks() {
       } catch (error) {
         console.error('[Auto Reject Cron] Error:', error);
       }
-    });
+    }));
 
     console.log('✅ Auto-reject order scheduler initialized (runs every 30 seconds)');
   }).catch((error) => {
@@ -1110,7 +1150,7 @@ function initializeScheduledTasks() {
   // Import scheduled order activation service
   import('./modules/order/services/scheduledOrderService.js').then(({ processScheduledOrders }) => {
     // Run every 30 seconds to activate orders near the exact scheduled time
-    cron.schedule('*/30 * * * * *', async () => {
+    cron.schedule('*/30 * * * * *', runWithoutOverlap('Scheduled Order Cron', async () => {
       try {
         const result = await processScheduledOrders();
         if (result.processed > 0 || result.skipped > 0) {
@@ -1119,7 +1159,7 @@ function initializeScheduledTasks() {
       } catch (error) {
         console.error('[Scheduled Order Cron] Error:', error);
       }
-    });
+    }));
 
     console.log('✅ Scheduled order activation scheduler initialized (runs every 30 seconds)');
   }).catch((error) => {
