@@ -70,6 +70,7 @@ const buildOrderItemsFingerprint = (items = []) =>
 const buildAddressFingerprint = (address = {}) => ({
   latitude: Number(address?.latitude || address?.location?.coordinates?.[1] || 0),
   longitude: Number(address?.longitude || address?.location?.coordinates?.[0] || 0),
+  completeAddress: safeString(address?.completeAddress).toLowerCase(),
   street: safeString(address?.street).toLowerCase(),
   city: safeString(address?.city).toLowerCase(),
   state: safeString(address?.state).toLowerCase(),
@@ -400,15 +401,29 @@ const normalizeOrderAddress = (address = {}) => {
     null;
 
   const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude);
+  const completeAddress =
+    (typeof address?.completeAddress === 'string' && address.completeAddress.trim()) ||
+    (typeof address?.formattedAddress === 'string' && address.formattedAddress.trim()) ||
+    [
+      address?.street,
+      address?.additionalDetails,
+      address?.city,
+      address?.state,
+      address?.zipCode
+    ]
+      .map((value) => (typeof value === 'string' ? value.trim() : ''))
+      .filter(Boolean)
+      .join(', ');
 
   return {
     label: normalizeAddressLabel(address.label),
+    completeAddress,
     street: address.street || '',
     additionalDetails: address.additionalDetails || '',
     city: address.city || '',
     state: address.state || '',
     zipCode: address.zipCode || '',
-    formattedAddress: address.formattedAddress || '',
+    formattedAddress: completeAddress || address.formattedAddress || '',
     location: {
       type: 'Point',
       coordinates: hasCoordinates ? [longitude, latitude] : [0, 0]

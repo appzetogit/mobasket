@@ -326,8 +326,9 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const { addresses = [], addAddress, updateAddress, setDefaultAddress, userProfile } = useProfile()
   const [showAddressForm, setShowAddressForm] = useState(false)
   const [mapPosition, setMapPosition] = useState([22.7196, 75.8577]) // Default Indore coordinates [lat, lng]
-  const [addressFormData, setAddressFormData] = useState({
-    street: "",
+  const [addressFormData, setAddressFormData] = useState({
+    completeAddress: "",
+    street: "",
     city: "",
     state: "",
     zipCode: "",
@@ -1355,6 +1356,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
             return {
               ...prev,
+              completeAddress: effectiveFormattedAddress || prev.completeAddress,
               street: resolvedLocationData.street || resolvedLocationData.area || prev.street,
               city: resolvedLocationData.city || prev.city,
               state: resolvedLocationData.state || prev.state,
@@ -1434,11 +1436,12 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
     // Initialize form with current location data
     if (location?.latitude && location?.longitude) {
       setMapPosition([location.latitude, location.longitude])
-      setAddressFormData(prev => ({
-        ...prev,
-        city: location.city || "",
-        state: location.state || "",
-        street: location.address || location.area || "",
+      setAddressFormData(prev => ({
+        ...prev,
+        completeAddress: location.formattedAddress || location.address || prev.completeAddress,
+        city: location.city || "",
+        state: location.state || "",
+        street: location.address || location.area || "",
         phone: userProfile?.phone || "",
       }))
     }
@@ -2378,9 +2381,10 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       }
       
       // Validate that trimmed fields are not empty
-      const trimmedStreet = addressFormData.street.trim()
-      const trimmedCity = addressFormData.city.trim()
-      const trimmedState = addressFormData.state.trim()
+        const trimmedStreet = addressFormData.street.trim()
+        const trimmedCity = addressFormData.city.trim()
+        const trimmedState = addressFormData.state.trim()
+        const trimmedCompleteAddress = String(addressFormData.completeAddress || "").trim()
       
       if (!trimmedStreet || !trimmedCity || !trimmedState) {
         toast.error("Street, City, and State cannot be empty")
@@ -2388,12 +2392,13 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         return
       }
       
-      const addressToSave = {
-        label: normalizedLabel,
-        street: trimmedStreet,
-        additionalDetails: (addressFormData.additionalDetails || "").trim(),
-        city: trimmedCity,
-        state: trimmedState,
+      const addressToSave = {
+        label: normalizedLabel,
+        completeAddress: trimmedCompleteAddress,
+        street: trimmedStreet,
+        additionalDetails: (addressFormData.additionalDetails || "").trim(),
+        city: trimmedCity,
+        state: trimmedState,
         zipCode: (addressFormData.zipCode || "").trim(),
         latitude: mapPosition[0], // latitude from mapPosition[0]
         longitude: mapPosition[1], // longitude from mapPosition[1]
@@ -2426,6 +2431,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
           existingAddressWithSameLabel?.id ||
           existingAddressWithSameLabel?._id,
         label: normalizedLabel,
+        completeAddress: trimmedCompleteAddress,
         street: trimmedStreet,
         city: trimmedCity,
         state: trimmedState,
@@ -2440,11 +2446,12 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       }
       
       // Reset form
-      setAddressFormData({
-        street: "",
-        city: "",
-        state: "",
-        zipCode: "",
+      setAddressFormData({
+        completeAddress: "",
+        street: "",
+        city: "",
+        state: "",
+        zipCode: "",
         additionalDetails: "",
         label: "Home",
         phone: "",
@@ -2480,11 +2487,12 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
   const handleCancelAddressForm = () => {
     setShowAddressForm(false)
-    setAddressFormData({
-      street: "",
-      city: "",
-      state: "",
-      zipCode: "",
+    setAddressFormData({
+      completeAddress: "",
+      street: "",
+      city: "",
+      state: "",
+      zipCode: "",
       additionalDetails: "",
       label: "Home",
       phone: "",
@@ -2757,9 +2765,22 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
 
             {/* Address Details */}
             <div>
-              <Label htmlFor="additionalDetails" className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
-                Address details*
-              </Label>
+              <Label htmlFor="completeAddress" className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
+                Complete address
+              </Label>
+
+              <Input
+                id="completeAddress"
+                name="completeAddress"
+                value={addressFormData.completeAddress}
+                onChange={handleAddressFormChange}
+                placeholder="Optional full address for admin and delivery"
+                className="mb-3"
+              />
+
+              <Label htmlFor="additionalDetails" className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2 block">
+                Address details*
+              </Label>
               <Input
                 id="additionalDetails"
                 name="additionalDetails"
@@ -2982,7 +3003,7 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
                               {address.label || address.additionalDetails || "Home"}
                             </p>
                             <p className="text-sm text-gray-500 dark:text-gray-400">
-                              {String(address?.formattedAddress || "").trim() || [
+                              {String(address?.completeAddress || address?.formattedAddress || "").trim() || [
                                 address.additionalDetails,
                                 address.street,
                                 address.city,

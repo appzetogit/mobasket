@@ -9,6 +9,7 @@ import { useParams, useNavigate, useSearchParams, useLocation as useRouterLocati
 import { restaurantAPI, orderAPI } from "@/lib/api";
 
 import { API_BASE_URL } from "@/lib/api/config";
+import { resolveLocalAssetUrl } from "@/lib/utils/localAssetResolver";
 
 import { toast } from "sonner";
 
@@ -90,6 +91,7 @@ import {
   awaitPrefetchedRestaurantForRoute,
   getPrefetchedRestaurantForRoute,
 } from "../../utils/restaurantPrefetch";
+import { foodImages } from "@/constants/images";
 
 import {
 
@@ -122,6 +124,120 @@ const shouldPreferRestaurantApi = (value = "") => {
 };
 
 const isMongoObjectId = (value = "") => /^[a-fA-F0-9]{24}$/.test(String(value || "").trim());
+const backendAssetBaseUrl = API_BASE_URL.replace(/\/api\/?$/, "");
+const FALLBACK_RESTAURANT_IMAGE =
+  "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop";
+
+const resolveRestaurantImageUrl = (value) => {
+  const src = String(value || "").trim();
+  if (!src || src.startsWith("data:")) return "";
+
+  if (src.startsWith("http://") || src.startsWith("https://")) {
+    return resolveLocalAssetUrl(src);
+  }
+
+  if (src.startsWith("//")) {
+    return `https:${src}`;
+  }
+
+  const normalizedPath = src.replace(/^(\.\/|\.\.\/)+/, "").replace(/^\/+/, "");
+  if (!normalizedPath) return "";
+
+  if (normalizedPath.startsWith("restored-assets/")) {
+    return `/${normalizedPath}`;
+  }
+
+  if (src.startsWith("/") || normalizedPath.startsWith("uploads/")) {
+    return `${backendAssetBaseUrl}/${normalizedPath}`;
+  }
+
+  return "";
+};
+
+const extractImageUrlFromValue = (value) => {
+  if (!value) return "";
+  if (typeof value === "string") {
+    return resolveRestaurantImageUrl(value);
+  }
+  if (typeof value !== "object") return "";
+
+  const candidates = [
+    value.url,
+    value.imageUrl,
+    value.image,
+    value.src,
+    value.secure_url,
+    value.publicUrl,
+    value.path,
+    value.profileImage?.url,
+    value.profileImage,
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string") {
+      const resolvedUrl = resolveRestaurantImageUrl(candidate);
+      if (resolvedUrl) return resolvedUrl;
+    }
+  }
+
+  return "";
+};
+
+const isStorefrontLikeImage = (value) => {
+  const src = String(value || "").toLowerCase();
+  if (!src) return false;
+  return /(cover|banner|store|restaurant|profile|logo|outlet|shop)/.test(src);
+};
+
+const fallbackImageBySeed = (seed) => {
+  const str = String(seed || "");
+  const hash = str.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  return foodImages[hash % foodImages.length] || FALLBACK_RESTAURANT_IMAGE;
+};
+
+const extractRestaurantImages = (restaurant = {}) => {
+  const pushIfValid = (list, value) => {
+    const url = extractImageUrlFromValue(value);
+    if (url) list.push(url);
+  };
+
+  const storefront = [];
+  const all = [];
+
+  (restaurant.coverImages || []).forEach((entry) => {
+    const url = extractImageUrlFromValue(entry);
+    if (!url) return;
+    all.push(url);
+    if (isStorefrontLikeImage(url)) storefront.push(url);
+  });
+
+  (restaurant.menuImages || []).forEach((entry) => {
+    const url = extractImageUrlFromValue(entry);
+    if (!url) return;
+    all.push(url);
+  });
+
+  (restaurant.onboarding?.step2?.menuImageUrls || []).forEach((entry) => {
+    const url = extractImageUrlFromValue(entry);
+    if (!url) return;
+    all.push(url);
+  });
+
+  pushIfValid(storefront, restaurant.profileImage?.url);
+  pushIfValid(storefront, restaurant.profileImage);
+  pushIfValid(storefront, restaurant.onboarding?.step2?.profileImageUrl?.url);
+  pushIfValid(storefront, restaurant.imageUrl);
+  pushIfValid(storefront, restaurant.image);
+  pushIfValid(storefront, restaurant.logo);
+  pushIfValid(storefront, restaurant.thumbnail);
+
+  storefront.forEach((url) => all.push(url));
+
+  return {
+    storefront: Array.from(new Set(storefront.filter(Boolean))),
+    all: Array.from(new Set(all.filter(Boolean))),
+  };
+};
 
 const resolveBooleanLike = (...values) => {
   for (const value of values) {
@@ -1076,6 +1192,19 @@ export default function RestaurantDetails() {
           // Check if this is a dining restaurant with nested restaurant data
 
           const actualRestaurant = apiRestaurant?.restaurant || apiRestaurant;
+          const actualRestaurantImages = extractRestaurantImages(actualRestaurant || {});
+          const apiRestaurantImages = extractRestaurantImages(apiRestaurant || {});
+          const resolvedRestaurantHeroImage =
+            actualRestaurantImages.storefront[0] ||
+            apiRestaurantImages.storefront[0] ||
+            actualRestaurantImages.all[0] ||
+            apiRestaurantImages.all[0] ||
+            fallbackImageBySeed(
+              actualRestaurant?.slug ||
+              apiRestaurant?.slug ||
+              actualRestaurant?.name ||
+              apiRestaurant?.name,
+            );
 
 
 
@@ -1587,41 +1716,7 @@ export default function RestaurantDetails() {
 
             locationObject: locationObj, // Store full location object for reference
 
-            image:
-
-              actualRestaurant?.profileImage?.url ||
-
-              apiRestaurant?.profileImage?.url ||
-
-              actualRestaurant?.profileImage ||
-
-              apiRestaurant?.profileImage ||
-
-              (Array.isArray(actualRestaurant?.menuImages) &&
-
-                actualRestaurant.menuImages.length > 0
-
-                ? actualRestaurant.menuImages[0]?.url ||
-
-                actualRestaurant.menuImages[0]
-
-                : null) ||
-
-              (Array.isArray(apiRestaurant?.menuImages) &&
-
-                apiRestaurant.menuImages.length > 0
-
-                ? apiRestaurant.menuImages[0]?.url ||
-
-                apiRestaurant.menuImages[0]
-
-                : null) ||
-
-              actualRestaurant?.image ||
-
-              apiRestaurant?.image ||
-
-              "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&h=600&fit=crop",
+            image: resolvedRestaurantHeroImage,
 
             priceRange: typeof apiRestaurant?.priceRange === "string"
               ? apiRestaurant.priceRange.replace(/\$/g, "₹")
@@ -1743,6 +1838,9 @@ export default function RestaurantDetails() {
 
               ? apiRestaurant.menuImages
 
+              : [],
+            coverImages: Array.isArray(apiRestaurant?.coverImages)
+              ? apiRestaurant.coverImages
               : [],
 
             // Menu sections for display (will be populated from menu API)
@@ -4009,7 +4107,7 @@ export default function RestaurantDetails() {
 
         <img
 
-          src={restaurant?.image}
+          src={restaurant?.image || fallbackImageBySeed(restaurant?.slug || restaurant?.name)}
 
           alt={restaurant?.name}
 

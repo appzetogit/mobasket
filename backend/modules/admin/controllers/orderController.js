@@ -13,7 +13,10 @@ import AuditLog from '../models/AuditLog.js';
 
 const normalizePlatform = (value) => (value === 'mogrocery' ? 'mogrocery' : 'mofood');
 const ORDER_SNAPSHOT_DIR = path.join(process.cwd(), 'cache');
-const ORDER_DELETE_ALLOWED_ADMIN_EMAIL = 'emmanuel@mobasket.in';
+const ORDER_DELETE_ALLOWED_ADMIN_EMAILS = new Set([
+  'emmanuel@mobasket.in',
+  'appzeto@gmail.com',
+]);
 
 const hasAcceptedRider = (order = null) => {
   const deliveryStateStatus = String(order?.deliveryState?.status || '').toLowerCase();
@@ -1060,7 +1063,7 @@ export const deleteOrderPermanently = asyncHandler(async (req, res) => {
 
   try {
     const requesterEmail = String(req.user?.email || '').trim().toLowerCase();
-    if (requesterEmail !== ORDER_DELETE_ALLOWED_ADMIN_EMAIL) {
+    if (!ORDER_DELETE_ALLOWED_ADMIN_EMAILS.has(requesterEmail)) {
       return errorResponse(res, 403, 'Only the authorized admin account can permanently delete orders');
     }
 

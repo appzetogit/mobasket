@@ -78,6 +78,7 @@ const userSchema = new mongoose.Schema({
       type: String,
       enum: ['Home', 'Office', 'Other']
     },
+    completeAddress: String,
     street: String,
     additionalDetails: String,
     city: String,

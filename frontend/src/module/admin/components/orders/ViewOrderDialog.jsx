@@ -105,6 +105,11 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order, isGrocery
   const formatAddress = (address) => {
     if (!address) return "N/A"
 
+    const completeAddress = String(
+      address.completeAddress || address.formattedAddress || ""
+    ).trim()
+    if (completeAddress) return completeAddress
+
     const parts = []
     if (address.label) parts.push(address.label)
     if (address.street) parts.push(address.street)

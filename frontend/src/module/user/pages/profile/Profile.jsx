@@ -67,6 +67,7 @@ export default function Profile() {
   const [loadingAddressSuggestions, setLoadingAddressSuggestions] = useState(false);
   const [addressForm, setAddressForm] = useState({
     label: "Home",
+    completeAddress: "",
     street: "",
     additionalDetails: "",
     city: "",
@@ -206,6 +207,7 @@ export default function Profile() {
     return "Other";
   };
   const formatAddressLine = (address) =>
+    String(address?.completeAddress || "").trim() ||
     [
       address?.street,
       address?.additionalDetails,
@@ -300,6 +302,7 @@ export default function Profile() {
   const resetAddressForm = () => {
     setAddressForm({
       label: "Home",
+      completeAddress: "",
       street: "",
       additionalDetails: "",
       city: "",
@@ -490,6 +493,7 @@ export default function Profile() {
   const handleSaveAddress = async () => {
     const payload = {
       label: normalizeAddressLabel(addressForm.label),
+      completeAddress: String(addressForm.completeAddress || "").trim(),
       street: String(addressForm.street || "").trim(),
       additionalDetails: String(addressForm.additionalDetails || "").trim(),
       city: String(addressForm.city || "").trim(),
@@ -1284,6 +1288,17 @@ export default function Profile() {
                 </div>
               ) : null}
             </div>
+            <input
+              className="w-full h-10 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111] px-3 text-sm text-gray-900 dark:text-white"
+              placeholder="Complete address (optional)"
+              value={addressForm.completeAddress}
+              onChange={(e) =>
+                setAddressForm((prev) => ({
+                  ...prev,
+                  completeAddress: e.target.value,
+                }))
+              }
+            />
             <input
               className="w-full h-10 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111] px-3 text-sm text-gray-900 dark:text-white"
               placeholder="Area / Landmark"

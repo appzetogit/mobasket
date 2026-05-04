@@ -38,6 +38,22 @@ const hasAddressDetails = (entity) =>
     ).trim()
   );
 
+const resolveCustomerAddress = (address = {}) =>
+  (
+    (typeof address?.completeAddress === 'string' && address.completeAddress.trim()) ||
+    (typeof address?.formattedAddress === 'string' && address.formattedAddress.trim()) ||
+    [
+      address?.street,
+      address?.additionalDetails,
+      address?.city,
+      address?.state,
+      address?.zipCode
+    ]
+      .map((value) => (typeof value === 'string' ? value.trim() : ''))
+      .filter(Boolean)
+      .join(', ')
+  ) || 'Customer address';
+
 const pickBestStoreDetails = (...candidates) =>
   candidates
     .filter(Boolean)
@@ -487,8 +503,10 @@ export async function notifyDeliveryBoyNewOrder(order, deliveryPartnerId) {
       customerLocation: {
         latitude: order.address.location.coordinates[1],
         longitude: order.address.location.coordinates[0],
-        address: order.address.formattedAddress || `${order.address.street}, ${order.address.city}` || 'Customer address'
+        address: resolveCustomerAddress(order.address),
+        completeAddress: resolveCustomerAddress(order.address)
       },
+      completeAddress: resolveCustomerAddress(order.address),
       items: order.items.map(item => ({
         name: item.name,
         quantity: item.quantity,
@@ -871,11 +889,16 @@ export async function notifyMultipleDeliveryBoys(order, deliveryPartnerIds, phas
       } : null,
       customerName: orderWithUser.userId?.name || 'Customer',
       customerPhone: orderWithUser.userId?.phone || '',
-      deliveryAddress: orderWithUser.address?.address || orderWithUser.address?.location?.address || orderWithUser.address?.formattedAddress,
+      deliveryAddress:
+        resolveCustomerAddress(orderWithUser.address) ||
+        orderWithUser.address?.address ||
+        orderWithUser.address?.location?.address,
+      completeAddress: resolveCustomerAddress(orderWithUser.address),
       customerLocation: orderWithUser.address?.location ? {
         latitude: orderWithUser.address.location.coordinates?.[1],
         longitude: orderWithUser.address.location.coordinates?.[0],
-        address: orderWithUser.address.formattedAddress || orderWithUser.address.address
+        address: resolveCustomerAddress(orderWithUser.address),
+        completeAddress: resolveCustomerAddress(orderWithUser.address)
       } : null,
       totalAmount: orderWithUser.pricing?.total || 0,
       deliveryFee: deliveryFeeFromOrder,

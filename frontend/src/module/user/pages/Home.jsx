@@ -1410,14 +1410,13 @@ export default function Home() {
       }
 
       setLocationRefreshTick((prev) => prev + 1);
-      fetchHeroBanners({ showLoader: !hasLoadedHeroBannersRef.current });
     };
 
     window.addEventListener("userLocationChanged", handleUserLocationChanged);
     return () => {
       window.removeEventListener("userLocationChanged", handleUserLocationChanged);
     };
-  }, [fetchHeroBanners, refreshZone, selectedHomeZoneId]);
+  }, [refreshZone, selectedHomeZoneId]);
 
   useEffect(() => {
     try {
@@ -1601,7 +1600,8 @@ export default function Home() {
         }
         const useSavedAddressCityMode =
           !hasManualZoneSelection && locationSource === "saved";
-        const allowCrossModeFallbacks = !hasManualZoneSelection;
+        const allowCrossModeFallbacks =
+          !hasManualZoneSelection && !useSavedAddressCityMode;
         let didQueryByZone = false;
         let normalizedUserCity = "";
         if (hasResolvedZone && !useSavedAddressCityMode) {

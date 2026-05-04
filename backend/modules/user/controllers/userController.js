@@ -339,7 +339,18 @@ export const getUserAddresses = asyncHandler(async (req, res) => {
  */
 export const addUserAddress = asyncHandler(async (req, res) => {
   try {
-    const { label, street, additionalDetails, city, state, zipCode, latitude, longitude, isDefault } = req.body;
+    const {
+      label,
+      completeAddress,
+      street,
+      additionalDetails,
+      city,
+      state,
+      zipCode,
+      latitude,
+      longitude,
+      isDefault
+    } = req.body;
 
     if (!street || !city || !state) {
       return errorResponse(res, 400, 'Street, city, and state are required');
@@ -354,6 +365,7 @@ export const addUserAddress = asyncHandler(async (req, res) => {
     // Prepare address object
     const newAddress = {
       label: label || 'Other',
+      completeAddress: completeAddress || '',
       street,
       additionalDetails: additionalDetails || '',
       city,
@@ -412,7 +424,18 @@ export const addUserAddress = asyncHandler(async (req, res) => {
 export const updateUserAddress = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
-    const { label, street, additionalDetails, city, state, zipCode, latitude, longitude, isDefault } = req.body;
+    const {
+      label,
+      completeAddress,
+      street,
+      additionalDetails,
+      city,
+      state,
+      zipCode,
+      latitude,
+      longitude,
+      isDefault
+    } = req.body;
 
     const user = await User.findById(req.user._id);
 
@@ -427,6 +450,7 @@ export const updateUserAddress = asyncHandler(async (req, res) => {
 
     // Update address fields
     if (label !== undefined) address.label = label;
+    if (completeAddress !== undefined) address.completeAddress = completeAddress;
     if (street !== undefined) address.street = street;
     if (additionalDetails !== undefined) address.additionalDetails = additionalDetails;
     if (city !== undefined) address.city = city;

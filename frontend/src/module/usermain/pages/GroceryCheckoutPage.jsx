@@ -615,6 +615,7 @@ export default function GroceryCheckoutPage() {
 
   const formattedDeliveryAddress = useMemo(() => {
     if (!normalizedSelectedAddress) return deliveryAddress;
+    if (normalizedSelectedAddress.completeAddress) return normalizedSelectedAddress.completeAddress;
     if (normalizedSelectedAddress.formattedAddress) return normalizedSelectedAddress.formattedAddress;
 
     const parts = [
@@ -629,6 +630,7 @@ export default function GroceryCheckoutPage() {
   }, [normalizedSelectedAddress]);
 
   const formatAddressLine = (address) =>
+    String(address?.completeAddress || address?.formattedAddress || "").trim() ||
     [
       address?.street,
       address?.additionalDetails,

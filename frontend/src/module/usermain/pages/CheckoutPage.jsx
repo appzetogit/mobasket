@@ -78,6 +78,7 @@ export default function CheckoutPage() {
   const [recipientDetails, setRecipientDetails] = useState({
     name: "",
     phone: "",
+    completeAddress: "",
     street: "",
     additionalDetails: "",
     city: "",
@@ -97,11 +98,13 @@ export default function CheckoutPage() {
   );
   const [newAddress, setNewAddress] = useState({
     label: "Home",
+    completeAddress: "",
     street: "",
     additionalDetails: "",
     city: "",
     state: "",
     zipCode: "",
+    formattedAddress: "",
     latitude: "",
     longitude: "",
     isDefault: false,
@@ -161,6 +164,7 @@ export default function CheckoutPage() {
   const hasHydratedEditableAddress = useCallback((address) => {
     if (!address || typeof address !== "object") return false;
     return Boolean(
+      String(address.completeAddress || "").trim() ||
       String(address.formattedAddress || "").trim() ||
       String(address.street || "").trim() ||
       String(address.address || "").trim(),
@@ -291,11 +295,13 @@ export default function CheckoutPage() {
   const resetNewAddressForm = () => {
     setNewAddress({
       label: "Home",
+      completeAddress: "",
       street: "",
       additionalDetails: "",
       city: "",
       state: "",
       zipCode: "",
+      formattedAddress: "",
       latitude: "",
       longitude: "",
       isDefault: false,
@@ -476,6 +482,7 @@ export default function CheckoutPage() {
           setNewAddress((prev) => ({
             ...prev,
             street: resolveStreetForForm(fallbackStreet, prev.street),
+            completeAddress: formatted || prev.completeAddress,
             formattedAddress: formatted || prev.formattedAddress,
             additionalDetails: parsed.additionalDetails || prev.additionalDetails,
             city: parsed.city || prev.city,
@@ -506,8 +513,14 @@ export default function CheckoutPage() {
     };
   }, []);
 
-  const formatAddressLine = (address) =>
-    [
+  const formatAddressLine = useCallback((address) => {
+    const completeAddress = String(address?.completeAddress || "").trim();
+    if (completeAddress) return completeAddress;
+
+    const formattedAddress = String(address?.formattedAddress || "").trim();
+    if (formattedAddress) return formattedAddress;
+
+    return [
       address?.street,
       address?.additionalDetails,
       address?.city,
@@ -516,12 +529,12 @@ export default function CheckoutPage() {
     ]
       .filter(Boolean)
       .join(", ");
+  }, []);
 
   const lockedEditAddressLine = useMemo(() => {
     if (!isOrderEditMode) return "";
     const editAddress = orderEditSession?.deliveryAddress || selectedAddress;
     return (
-      String(editAddress?.formattedAddress || "").trim() ||
       formatAddressLine(editAddress) ||
       "Using the address from your original order"
     );
@@ -568,6 +581,10 @@ export default function CheckoutPage() {
 
     return {
       label: "Recipient",
+      completeAddress:
+        String(recipientDetails?.completeAddress || "").trim() ||
+        String(recipientDetails?.formattedAddress || "").trim() ||
+        [street, city, state, zipCode].filter(Boolean).join(", "),
       street,
       additionalDetails: String(recipientDetails?.additionalDetails || "").trim(),
       city,
@@ -575,6 +592,7 @@ export default function CheckoutPage() {
       zipCode,
       formattedAddress:
         String(recipientDetails?.formattedAddress || "").trim() ||
+        String(recipientDetails?.completeAddress || "").trim() ||
         [street, city, state, zipCode].filter(Boolean).join(", "),
       latitude: hasCoords ? lat : undefined,
       longitude: hasCoords ? lng : undefined,
@@ -623,6 +641,7 @@ export default function CheckoutPage() {
       const firstPart = formattedAddress.split(",").map((part) => part.trim()).filter(Boolean)[0] || "";
 
       resolvedFromPin = {
+        completeAddress: formattedAddress,
         street: resolveStreetForForm(fallbackStreet, route, premise, firstPart),
         additionalDetails: resolveStreetForForm(sublocality, premise, route, ""),
         city: String(city || "").trim(),
@@ -636,6 +655,9 @@ export default function CheckoutPage() {
 
     const payload = {
       label: newAddress.label,
+      completeAddress: String(
+        resolvedFromPin?.completeAddress || newAddress.completeAddress || newAddress.formattedAddress || "",
+      ).trim(),
       street: String(resolvedFromPin?.street || newAddress.street || "").trim(),
       additionalDetails: String(
         resolvedFromPin?.additionalDetails || newAddress.additionalDetails || "",
@@ -1041,15 +1063,21 @@ export default function CheckoutPage() {
       total,
       deliveryAddress:
         orderingForSomeoneElse
-          ? recipientDetails?.formattedAddress ||
-          formatAddressLine(recipientDetails) ||
+          ? formatAddressLine(recipientDetails) ||
           "Add recipient address"
-          : selectedAddress?.formattedAddress ||
-          formatAddressLine(selectedAddress) ||
+          : formatAddressLine(selectedAddress) ||
           "Select delivery address",
       estimatedTime: "30-40 min",
     };
-  }, [calculatedPricing, feeSettings, foodItems, selectedAddress, orderingForSomeoneElse, recipientDetails]);
+  }, [
+    calculatedPricing,
+    feeSettings,
+    foodItems,
+    formatAddressLine,
+    selectedAddress,
+    orderingForSomeoneElse,
+    recipientDetails,
+  ]);
 
   const hasSufficientWalletBalance = walletBalance >= orderSummary.total;
   const minimumCodOrderValue = Math.max(0, Number(feeSettings.minimumCodOrderValue || 0));
@@ -1098,6 +1126,7 @@ export default function CheckoutPage() {
 
     const addressPart = address
       ? [
+        address.completeAddress || "",
         address.formattedAddress || "",
         address.street || "",
         address.city || "",
@@ -1425,6 +1454,10 @@ export default function CheckoutPage() {
 
         addressForOrder = {
           label: "Recipient",
+          completeAddress:
+            String(recipientDetails?.completeAddress || "").trim() ||
+            String(recipientDetails?.formattedAddress || "").trim() ||
+            [street, city, state, zipCode].filter(Boolean).join(", "),
           street,
           additionalDetails: String(recipientDetails?.additionalDetails || "").trim(),
           city,
@@ -1432,6 +1465,7 @@ export default function CheckoutPage() {
           zipCode,
           formattedAddress:
             String(recipientDetails?.formattedAddress || "").trim() ||
+            String(recipientDetails?.completeAddress || "").trim() ||
             [street, city, state, zipCode].filter(Boolean).join(", "),
           latitude: lat,
           longitude: lng,
