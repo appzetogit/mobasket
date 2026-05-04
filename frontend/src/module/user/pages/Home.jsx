@@ -794,6 +794,12 @@ export default function Home() {
     const normalizedPath = src.replace(/^(\.\/|\.\.\/)+/, "").replace(/^\/+/, "");
     if (!normalizedPath) return "";
 
+    // Restored assets live in the frontend public directory and must stay on the
+    // current app origin instead of being rewritten to the backend host.
+    if (normalizedPath.startsWith("restored-assets/")) {
+      return `/${normalizedPath}`;
+    }
+
     if (src.startsWith("/") || normalizedPath.startsWith("uploads/")) {
       return `${backendAssetBaseUrl}/${normalizedPath}`;
     }
@@ -900,6 +906,26 @@ export default function Home() {
       storefront: dedupe(storefront),
       all: dedupe(all),
     };
+  };
+
+  const extractRestaurantBrandImage = (restaurant = {}) => {
+    const brandCandidates = [
+      restaurant.profileImage?.url,
+      restaurant.profileImage,
+      restaurant.onboarding?.step2?.profileImageUrl?.url,
+      restaurant.imageUrl,
+      restaurant.image,
+      restaurant.logo,
+      restaurant.thumbnail,
+    ];
+
+    for (const candidate of brandCandidates) {
+      const url = extractImageUrl(candidate);
+      if (url) return url;
+    }
+
+    const extractedImages = extractRestaurantImages(restaurant);
+    return extractedImages.storefront[0] || extractedImages.all[0] || "";
   };
 
   // Swipe functionality for hero banner carousel
@@ -1831,8 +1857,10 @@ export default function Home() {
                     ? fallbackImages
                     : [];
 
-              // Keep single image for backward compatibility
-              const image = allImages[0] || "";
+              // Top-brand chips should prefer the restaurant avatar/profile image,
+              // not an arbitrary banner or menu photo.
+              const brandImage = extractRestaurantBrandImage(restaurant);
+              const image = brandImage || allImages[0] || "";
               const rating = extractRestaurantRating(restaurant);
 
               const totalRatings = Number(restaurant?.totalRatings || restaurant?.reviewCount || 0);
