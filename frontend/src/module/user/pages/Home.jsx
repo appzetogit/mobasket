@@ -69,6 +69,7 @@ import offerImage from "@/assets/offerimage.png";
 import api, { restaurantAPI, zoneAPI } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api/config";
 import OptimizedImage from "@/components/OptimizedImage";
+import { resolveLocalAssetUrl } from "@/lib/utils/localAssetResolver";
 import { prefetchRestaurantForRoute } from "../utils/restaurantPrefetch";
 // Explore More Icons
 import exploreOffers from "@/assets/explore more icons/offers.png";
@@ -783,7 +784,7 @@ export default function Home() {
     if (src.startsWith("data:")) return "";
 
     if (src.startsWith("http://") || src.startsWith("https://")) {
-      return src;
+      return resolveLocalAssetUrl(src);
     }
 
     if (src.startsWith("//")) {
@@ -1302,7 +1303,9 @@ export default function Home() {
           ? response.data.data.banners
           : [];
         setHeroBannersData(banners);
-        setHeroBannerImages(banners.map((b) => b.imageUrl || b));
+        setHeroBannerImages(
+          banners.map((banner) => resolveLocalAssetUrl(banner?.imageUrl || banner)),
+        );
         setCurrentBannerIndex((prev) => (banners.length > 0 ? prev % banners.length : 0));
         hasLoadedHeroBannersRef.current = true;
       }

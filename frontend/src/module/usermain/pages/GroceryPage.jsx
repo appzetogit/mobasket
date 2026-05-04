@@ -35,6 +35,7 @@ import { CategoryFoodsContent } from "./CategoryFoodsPage";
 import AddToCartAnimation from "../../user/components/AddToCartAnimation";
 import api, { restaurantAPI, userAPI, zoneAPI } from "@/lib/api";
 import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
+import { resolveLocalAssetUrl } from "@/lib/utils/localAssetResolver";
 
 // Icons
 import imgBag3D from "@/assets/icons/shopping-bag_18008822.png";
@@ -231,6 +232,20 @@ const setCacheEntry = (cache, cacheName, key, data) => {
     // Ignore storage quota/private mode failures and keep in-memory cache.
   }
 };
+
+const normalizeGroceryCategoryImageData = (categories = []) =>
+  (Array.isArray(categories) ? categories : []).map((category) => ({
+    ...category,
+    image: resolveLocalAssetUrl(category?.image),
+    imageUrl: resolveLocalAssetUrl(category?.imageUrl),
+    subcategories: (Array.isArray(category?.subcategories) ? category.subcategories : []).map(
+      (subcategory) => ({
+        ...subcategory,
+        image: resolveLocalAssetUrl(subcategory?.image),
+        imageUrl: resolveLocalAssetUrl(subcategory?.imageUrl),
+      }),
+    ),
+  }));
 
 const GroceryPage = () => {
   const FALLBACK_IMAGE = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==";
@@ -926,7 +941,9 @@ const GroceryPage = () => {
       const cacheKey = `banners::${String(effectiveZoneId || "all")}`;
       const cached = getFreshCacheEntry(groceryBannerCache, "banners", cacheKey, ZONE_GROCERY_CACHE_TTL_MS);
       if (cached) {
-        setBannerImages(Array.isArray(cached) ? cached : []);
+        setBannerImages(
+          (Array.isArray(cached) ? cached : []).map((value) => resolveLocalAssetUrl(value)),
+        );
         setCurrentBanner(0);
         setIsBannersLoading(false);
       } else {
@@ -946,7 +963,7 @@ const GroceryPage = () => {
           : [];
 
         const dynamicImages = banners
-          .map((item) => item?.imageUrl)
+          .map((item) => resolveLocalAssetUrl(item?.imageUrl))
           .filter((url) => typeof url === "string" && url.trim() !== "");
 
         if (requestId !== bannerRequestIdRef.current) return;
@@ -977,7 +994,7 @@ const GroceryPage = () => {
       const cacheKey = "homepage-categories";
       const cached = getFreshCacheEntry(groceryCategoryCache, "categories", cacheKey, STATIC_GROCERY_CACHE_TTL_MS);
       if (cached) {
-        setHomepageCategories(Array.isArray(cached) ? cached : []);
+        setHomepageCategories(normalizeGroceryCategoryImageData(cached));
         setIsCategoriesLoading(false);
       } else {
         setIsCategoriesLoading(true);
@@ -987,7 +1004,9 @@ const GroceryPage = () => {
         const response = await api.get("/grocery/categories", {
           params: { includeSubcategories: true },
         });
-        const categories = Array.isArray(response?.data?.data) ? response.data.data : [];
+        const categories = normalizeGroceryCategoryImageData(
+          Array.isArray(response?.data?.data) ? response.data.data : [],
+        );
         if (requestId !== categoryRequestIdRef.current) return;
         setCacheEntry(groceryCategoryCache, "categories", cacheKey, categories);
         setHomepageCategories(categories);
@@ -1689,9 +1708,9 @@ const GroceryPage = () => {
   }, [activeCategoryId, activeSubcategoryId, activeTab, storeFilteredProducts]);
 
   const extractImageUrl = (imageValue) => {
-    if (typeof imageValue === "string") return imageValue;
+    if (typeof imageValue === "string") return resolveLocalAssetUrl(imageValue);
     if (imageValue && typeof imageValue === "object") {
-      return (
+      return resolveLocalAssetUrl(
         imageValue.url ||
         imageValue.image ||
         imageValue.imageUrl ||
@@ -2149,7 +2168,7 @@ const GroceryPage = () => {
           candidateIds: getStoreIdCandidates(store),
           name: String(store?.name || "Store").trim() || "Store",
           count: 0,
-          image: store?.profileImage?.url || store?.logo || FALLBACK_IMAGE,
+          image: resolveLocalAssetUrl(store?.profileImage?.url || store?.logo || FALLBACK_IMAGE),
           address: store?.location?.area || store?.location?.city || "",
         };
       })

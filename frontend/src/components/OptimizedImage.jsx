@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
+import { resolveLocalAssetUrl } from '@/lib/utils/localAssetResolver'
 
 const IMAGE_CACHE_STORAGE_KEY = 'optimized-image-cache.v1'
 const MAX_CACHED_IMAGE_COUNT = 200
@@ -85,18 +86,19 @@ const OptimizedImage = ({
   onError,
   ...props
 }) => {
-  const [isLoaded, setIsLoaded] = useState(() => hasLoadedImageCached(src))
+  const resolvedSrc = resolveLocalAssetUrl(src)
+  const [isLoaded, setIsLoaded] = useState(() => hasLoadedImageCached(resolvedSrc))
   const [hasError, setHasError] = useState(false)
-  const [isInView, setIsInView] = useState(() => priority || hasLoadedImageCached(src))
+  const [isInView, setIsInView] = useState(() => priority || hasLoadedImageCached(resolvedSrc))
   const imgRef = useRef(null)
   const observerRef = useRef(null)
 
   useEffect(() => {
-    const cached = hasLoadedImageCached(src)
+    const cached = hasLoadedImageCached(resolvedSrc)
     setIsLoaded(cached)
     setHasError(false)
     setIsInView(priority || cached)
-  }, [src, priority])
+  }, [resolvedSrc, priority])
 
   const isCloudinaryUrl = (imageSrc) => {
     if (!imageSrc || typeof imageSrc !== 'string') return false
@@ -194,15 +196,15 @@ const OptimizedImage = ({
         observerRef.current.unobserve(imgRef.current)
       }
     }
-  }, [priority, isInView, src])
+  }, [priority, isInView, resolvedSrc])
 
   // Preload critical images
   useEffect(() => {
-    if (priority && src && !src.startsWith('data:') && !supportsOptimization(src)) {
+    if (priority && resolvedSrc && !resolvedSrc.startsWith('data:') && !supportsOptimization(resolvedSrc)) {
       const link = document.createElement('link')
       link.rel = 'preload'
       link.as = 'image'
-      link.href = src
+      link.href = resolvedSrc
       link.fetchPriority = 'high'
       document.head.appendChild(link)
 
@@ -210,10 +212,10 @@ const OptimizedImage = ({
         document.head.removeChild(link)
       }
     }
-  }, [priority, src])
+  }, [priority, resolvedSrc])
 
   const handleLoad = (e) => {
-    markImageAsCached(src)
+    markImageAsCached(resolvedSrc)
     setIsLoaded(true)
     if (onLoad) onLoad(e)
   }
@@ -227,7 +229,7 @@ const OptimizedImage = ({
   const defaultBlurDataURL = blurDataURL || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgZmlsbD0iI2U1ZTdlYiIvPjwvc3ZnPg=='
 
   // Don't render if src is empty or null
-  if (!src || src === '') {
+  if (!resolvedSrc || resolvedSrc === '') {
     return (
       <div className={`relative overflow-hidden ${className}`}>
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
@@ -237,7 +239,7 @@ const OptimizedImage = ({
     )
   }
 
-  const imageSrc = hasError ? 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect fill="%23e5e7eb" width="400" height="300"/%3E%3Ctext fill="%23999" font-family="sans-serif" font-size="14" x="50%25" y="50%25" text-anchor="middle"%3EImage not found%3C/text%3E%3C/svg%3E' : src
+  const imageSrc = hasError ? 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="300"%3E%3Crect fill="%23e5e7eb" width="400" height="300"/%3E%3Ctext fill="%23999" font-family="sans-serif" font-size="14" x="50%25" y="50%25" text-anchor="middle"%3EImage not found%3C/text%3E%3C/svg%3E' : resolvedSrc
 
   return (
     <div className={`relative overflow-hidden ${className}`} ref={imgRef}>
