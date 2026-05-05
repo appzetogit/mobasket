@@ -70,6 +70,7 @@ import api, { restaurantAPI, zoneAPI } from "@/lib/api";
 import { API_BASE_URL } from "@/lib/api/config";
 import OptimizedImage from "@/components/OptimizedImage";
 import { resolveLocalAssetUrl } from "@/lib/utils/localAssetResolver";
+import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
 import { prefetchRestaurantForRoute } from "../utils/restaurantPrefetch";
 // Explore More Icons
 import exploreOffers from "@/assets/explore more icons/offers.png";
@@ -109,6 +110,7 @@ const HOME_RESTAURANTS_CACHE_TTL_MS = 3 * 60 * 1000;
 const HOME_RESTAURANTS_CACHE_VERSION = "v3";
 const HOME_ZONE_SELECTION_STORAGE_KEY = "user.home.selectedZoneId.v1";
 const HOME_RESTAURANT_TRACE_ENABLED = true;
+const HOME_AVAILABILITY_REFRESH_TTL_MS = 60 * 1000;
 
 const isUsableCityValue = (value) => {
   const normalized = normalizeCityName(value);
@@ -349,6 +351,29 @@ const resolveBooleanLike = (...values) => {
   }
   return undefined;
 };
+
+const resolveIsAcceptingOrders = (restaurant = {}) => {
+  const explicit = resolveBooleanLike(
+    restaurant?.isAcceptingOrders,
+    restaurant?.acceptingOrders,
+    restaurant?.deliveryStatus,
+    restaurant?.isOnline,
+    restaurant?.status,
+  );
+  if (typeof explicit === "boolean") return explicit;
+  return restaurant?.isAcceptingOrders !== false;
+};
+
+const resolveRestaurantAvailability = (restaurant = {}) =>
+  evaluateStoreAvailability({
+    store: {
+      ...restaurant,
+      isActive: resolveBooleanLike(restaurant?.isActive, restaurant?.status) !== false,
+      isAcceptingOrders: resolveIsAcceptingOrders(restaurant),
+    },
+    outletTimings: restaurant?.outletTimings,
+    label: "Restaurant",
+  });
 
 const getInitialHomeZoneSelection = () => {
   if (typeof window === "undefined") return "auto";
@@ -710,6 +735,8 @@ export default function Home() {
   const restaurantsRequestRef = useRef(0);
   const restaurantsFetchInFlightRef = useRef(false);
   const restaurantsLastFetchKeyRef = useRef("");
+  const restaurantAvailabilityFetchRef = useRef(new Map());
+  const restaurantAvailabilityInFlightRef = useRef(new Set());
   const homepageMenuPrefetchStartedRef = useRef(new Set());
   const backendAssetBaseUrl = API_BASE_URL.replace(/\/api\/?$/, "");
   const prefetchRestaurant = useCallback((restaurantOrSlug) => {
@@ -1862,11 +1889,13 @@ export default function Home() {
               const brandImage = extractRestaurantBrandImage(restaurant);
               const image = brandImage || allImages[0] || "";
               const rating = extractRestaurantRating(restaurant);
+              const availability = resolveRestaurantAvailability(restaurant);
 
               const totalRatings = Number(restaurant?.totalRatings || restaurant?.reviewCount || 0);
 
               return {
                 id: restaurant.restaurantId || restaurant._id,
+                mongoId: String(restaurant?._id || "").trim(),
                 name: String(
                   restaurant.name ||
                     restaurant.restaurantName ||
@@ -1909,16 +1938,11 @@ export default function Home() {
                 restaurantId: restaurant.restaurantId,
                 zoneRank: Number(restaurant.zoneRank || 0),
                 location: restaurant.location, // Store location for distance recalculation
-                isActive:
-                  resolveBooleanLike(restaurant.isActive, restaurant.status) !== false,
-                isAcceptingOrders:
-                  resolveBooleanLike(
-                    restaurant.isAcceptingOrders,
-                    restaurant.acceptingOrders,
-                    restaurant.deliveryStatus,
-                    restaurant.isOnline,
-                    restaurant.status,
-                  ) !== false,
+                outletTimings: restaurant.outletTimings,
+                isActive: resolveBooleanLike(restaurant.isActive, restaurant.status) !== false,
+                isAcceptingOrders: resolveIsAcceptingOrders(restaurant),
+                isAvailable: availability.isAvailable,
+                availabilityReason: availability.reason || "",
                 searchableItems: collectSearchableItems(restaurant),
               };
             },
@@ -1927,8 +1951,8 @@ export default function Home() {
           // Sort restaurants by distance (nearby first) - only if user location is available
           if (userLat && userLng) {
             transformedRestaurants.sort((a, b) => {
-              const aAvailable = a.isActive && a.isAcceptingOrders;
-              const bAvailable = b.isActive && b.isAcceptingOrders;
+              const aAvailable = a.isAvailable !== false && a.isActive && a.isAcceptingOrders;
+              const bAvailable = b.isAvailable !== false && b.isActive && b.isAcceptingOrders;
 
               if (aAvailable !== bAvailable) {
                 return aAvailable ? -1 : 1;
@@ -2352,8 +2376,8 @@ export default function Home() {
     } else {
       // Default sorting: online restaurants first, then zone rank, then nearby first.
       filtered.sort((a, b) => {
-        const aAvailable = a.isActive && a.isAcceptingOrders;
-        const bAvailable = b.isActive && b.isAcceptingOrders;
+        const aAvailable = a.isAvailable !== false && a.isActive && a.isAcceptingOrders;
+        const bAvailable = b.isAvailable !== false && b.isActive && b.isAcceptingOrders;
 
         if (aAvailable !== bAvailable) {
           return aAvailable ? -1 : 1;
@@ -2633,6 +2657,115 @@ export default function Home() {
       }
     };
   }, [displayedRestaurants, loadingRestaurants, visibleTopBrands]);
+
+  useEffect(() => {
+    if (!Array.isArray(restaurantsData) || restaurantsData.length === 0) return undefined;
+
+    const now = Date.now();
+    const restaurantsToRefresh = restaurantsData.filter((restaurant) => {
+      const restaurantId = String(
+        restaurant?.mongoId ||
+          restaurant?._id ||
+          restaurant?.restaurantId ||
+          restaurant?.id ||
+          "",
+      ).trim();
+      if (!restaurantId) return false;
+      if (restaurantAvailabilityInFlightRef.current.has(restaurantId)) return false;
+
+      const lastFetchedAt = restaurantAvailabilityFetchRef.current.get(restaurantId) || 0;
+      return now - lastFetchedAt > HOME_AVAILABILITY_REFRESH_TTL_MS;
+    });
+
+    if (restaurantsToRefresh.length === 0) return undefined;
+
+    let cancelled = false;
+
+    const refreshAvailability = async () => {
+      const updates = await Promise.allSettled(
+        restaurantsToRefresh.map(async (restaurant) => {
+          const restaurantId = String(
+            restaurant?.mongoId ||
+              restaurant?._id ||
+              restaurant?.restaurantId ||
+              restaurant?.id ||
+              "",
+          ).trim();
+          restaurantAvailabilityInFlightRef.current.add(restaurantId);
+
+          try {
+            const response = await fetch(
+              `${API_BASE_URL}/restaurant/${restaurantId}/outlet-timings`,
+            );
+            const timingsJson = await response.json();
+            const outletTimings =
+              timingsJson?.data?.outletTimings?.timings || timingsJson?.outletTimings?.timings || [];
+            const availability = evaluateStoreAvailability({
+              store: restaurant,
+              outletTimings,
+              label: "Restaurant",
+            });
+
+            restaurantAvailabilityFetchRef.current.set(restaurantId, Date.now());
+
+            return {
+              id: String(restaurant?.id || restaurant?.restaurantId || restaurantId).trim(),
+              outletTimings,
+              isAvailable: availability.isAvailable,
+              availabilityReason: availability.reason || "",
+            };
+          } finally {
+            restaurantAvailabilityInFlightRef.current.delete(restaurantId);
+          }
+        }),
+      );
+
+      if (cancelled) return;
+
+      const availabilityById = new Map();
+      updates.forEach((result) => {
+        if (result.status !== "fulfilled" || !result.value?.id) return;
+        availabilityById.set(result.value.id, result.value);
+      });
+
+      if (availabilityById.size === 0) return;
+
+      setRestaurantsData((prev) => {
+        let didChange = false;
+        const next = prev.map((restaurant) => {
+          const key = String(
+            restaurant?.id ||
+              restaurant?.restaurantId ||
+              restaurant?._id ||
+              "",
+          ).trim();
+          const updatedAvailability = availabilityById.get(key);
+          if (!updatedAvailability) return restaurant;
+
+          const nextReason = updatedAvailability.availabilityReason || "";
+          const reasonChanged = (restaurant?.availabilityReason || "") !== nextReason;
+          const availabilityChanged = restaurant?.isAvailable !== updatedAvailability.isAvailable;
+          if (!reasonChanged && !availabilityChanged) return restaurant;
+
+          didChange = true;
+          return {
+            ...restaurant,
+            outletTimings: updatedAvailability.outletTimings,
+            isAvailable: updatedAvailability.isAvailable,
+            availabilityReason: nextReason,
+          };
+        });
+
+        return didChange ? next : prev;
+      });
+    };
+
+    refreshAvailability().catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
+  }, [restaurantsData]);
 
   // Featured foods removed - will be handled by restaurants data from API
   const filteredFeaturedFoods = useMemo(() => {
@@ -3725,8 +3858,12 @@ export default function Home() {
                     .toLowerCase()
                     .replace(/\s+/g, "-");
                 const isRestaurantAvailable =
+                  restaurant?.isAvailable !== false &&
                   restaurant?.isActive !== false &&
                   restaurant?.isAcceptingOrders !== false;
+                const restaurantAvailabilityReason =
+                  restaurant?.availabilityReason ||
+                  "Restaurant is offline and not accepting orders.";
                 // Direct favorite check - isFavorite is already memoized in context
                 const favorite = isFavorite(restaurantSlug);
 
@@ -3833,9 +3970,12 @@ export default function Home() {
                               </div>
                             )}
                             {!isRestaurantAvailable && (
-                              <div className="absolute top-2 left-2 bg-gray-800/80 backdrop-blur-md text-white text-[9px] px-2 py-0.5 rounded z-10 font-semibold uppercase tracking-wide">
-                                Offline
-                              </div>
+                              <>
+                                <div className="absolute inset-0 bg-white/20 backdrop-grayscale z-[1]" />
+                                <div className="absolute top-2 left-2 bg-gray-800/85 backdrop-blur-md text-white text-[9px] px-2 py-0.5 rounded z-10 font-semibold uppercase tracking-wide">
+                                  Offline
+                                </div>
+                              </>
                             )}
 
                             {/* Bookmark Icon */}
@@ -3900,6 +4040,13 @@ export default function Home() {
                                 </p>
                               </div>
                             </div>
+                            {!isRestaurantAvailable && (
+                              <div className="mt-3 rounded-xl border border-red-200 bg-red-50 px-3 py-2">
+                                <p className="text-[11px] font-semibold text-red-700">
+                                  {restaurantAvailabilityReason}
+                                </p>
+                              </div>
+                            )}
                           </CardContent>
                         </Card>
                       </Link>

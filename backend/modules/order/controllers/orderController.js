@@ -3812,12 +3812,6 @@ export const calculateOrder = async (req, res) => {
       })
     ]);
 
-    if (!availability.isAvailable) {
-      return res.status(403).json({
-        success: false,
-        message: availability.reason || 'Restaurant is currently unavailable'
-      });
-    }
     if (!singleSourceValidation.valid) {
       return res.status(400).json({
         success: false,
@@ -3841,7 +3835,11 @@ export const calculateOrder = async (req, res) => {
     res.json({
       success: true,
       data: {
-        pricing
+        pricing,
+        availability: {
+          isAvailable: Boolean(availability?.isAvailable),
+          reason: availability?.reason || null
+        }
       }
     });
   } catch (error) {

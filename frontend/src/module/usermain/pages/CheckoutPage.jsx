@@ -1675,43 +1675,95 @@ export default function CheckoutPage() {
   };
 
   const deliveryAddressSection = (
-    <div className="max-w-[1100px] mx-auto w-full px-4 mb-4">
-      <div className="bg-white rounded-2xl p-4 shadow-sm border border-yellow-100 dark:bg-[#151a23] dark:border-white/10">
-        <div className="flex items-start gap-3">
-          <div className="bg-yellow-500 rounded-xl p-2">
-            <MapPin className="w-5 h-5 text-white" />
-          </div>
-          <div className="flex-1">
-            <h3 className="text-sm font-bold text-gray-900 mb-1 dark:text-gray-100">Delivery Address</h3>
-            <p className="text-xs text-gray-600 dark:text-gray-400">{orderSummary.deliveryAddress}</p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => setOrderingForSomeoneElse(false)}
-                className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${!orderingForSomeoneElse
-                    ? "border-yellow-500 bg-yellow-50 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-200"
-                    : "border-gray-200 bg-white text-gray-700 dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-200"
-                  }`}
-              >
-                For Me
-              </button>
-              <button
-                type="button"
-                onClick={() => setOrderingForSomeoneElse(true)}
-                className={`rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ${orderingForSomeoneElse
-                    ? "border-yellow-500 bg-yellow-50 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-200"
-                    : "border-gray-200 bg-white text-gray-700 dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-200"
-                  }`}
-              >
-                Order For Someone Else
-              </button>
+    <div className="max-w-[1100px] mx-auto w-full px-4 mb-5">
+      <div className="overflow-hidden rounded-[28px] border border-red-100 bg-white shadow-[0_10px_30px_rgba(239,79,95,0.08)] dark:border-white/10 dark:bg-[#151a23]">
+        <div className="border-b border-red-50 bg-gradient-to-r from-[#fff7f7] via-white to-[#fff5ef] px-4 py-4 dark:border-white/10 dark:from-[#1b1116] dark:via-[#151a23] dark:to-[#1d1611] sm:px-5">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#EF4F5F] shadow-[0_10px_24px_rgba(239,79,95,0.22)]">
+              <MapPin className="h-5 w-5 text-white" />
             </div>
-            <div className="mt-3 space-y-2">
-              {orderingForSomeoneElse ? (
-                <div className="rounded-xl border border-yellow-200 p-2.5 space-y-2 bg-yellow-50/60 dark:border-yellow-500/30 dark:bg-yellow-500/10">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-base font-extrabold text-gray-900 dark:text-gray-100">
+                  Delivery Address
+                </h3>
+                <span className="inline-flex items-center gap-1 rounded-full bg-[#EF4F5F]/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[#EF4F5F] dark:bg-[#EF4F5F]/15">
+                  <Sparkles className="h-3 w-3" />
+                  Important
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Confirm the exact drop location before placing your order.
+              </p>
+              <div className="mt-3 rounded-2xl border border-white/70 bg-white/80 px-3.5 py-3 shadow-sm backdrop-blur dark:border-white/10 dark:bg-white/5">
+                <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#EF4F5F]">
+                  Delivering To
+                </p>
+                <p className="mt-1 text-sm font-semibold leading-5 text-gray-900 dark:text-gray-100">
+                  {orderSummary.deliveryAddress}
+                </p>
+              </div>
+              {!orderingForSomeoneElse && selectedAddress ? (
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <span className="inline-flex items-center rounded-full bg-white/90 px-3 py-1 text-[11px] font-bold text-gray-700 shadow-sm ring-1 ring-black/5 dark:bg-white/10 dark:text-gray-200 dark:ring-white/10">
+                    {selectedAddress.label || "Saved Address"}
+                  </span>
+                  {selectedAddress.isDefault ? (
+                    <span className="inline-flex items-center rounded-full bg-[#EF4F5F]/10 px-3 py-1 text-[11px] font-bold text-[#EF4F5F] dark:bg-[#EF4F5F]/15">
+                      Default address
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        <div className="px-4 py-4 sm:px-5">
+          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-[#f8f8f8] p-1.5 dark:bg-[#0f172a]">
+            <button
+              type="button"
+              onClick={() => setOrderingForSomeoneElse(false)}
+              className={`rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${!orderingForSomeoneElse
+                ? "bg-white text-[#EF4F5F] shadow-sm ring-1 ring-[#EF4F5F]/20 dark:bg-[#1b2433] dark:text-[#ff7c88]"
+                : "text-gray-600 hover:bg-white/70 dark:text-gray-300 dark:hover:bg-white/5"
+                }`}
+            >
+              For Me
+            </button>
+            <button
+              type="button"
+              onClick={() => setOrderingForSomeoneElse(true)}
+              className={`rounded-xl px-3 py-2.5 text-xs font-bold transition-all ${orderingForSomeoneElse
+                ? "bg-white text-[#EF4F5F] shadow-sm ring-1 ring-[#EF4F5F]/20 dark:bg-[#1b2433] dark:text-[#ff7c88]"
+                : "text-gray-600 hover:bg-white/70 dark:text-gray-300 dark:hover:bg-white/5"
+                }`}
+            >
+              Order For Someone Else
+            </button>
+          </div>
+
+          <div className="mt-4 space-y-3">
+            {orderingForSomeoneElse ? (
+              <div className="rounded-[24px] border border-[#ffd6db] bg-[#fff8f8] p-3.5 shadow-sm dark:border-[#EF4F5F]/20 dark:bg-[#21131a]">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
+                      Recipient Details
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      Add the receiver's contact and exact location.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-[#EF4F5F]/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.14em] text-[#EF4F5F]">
+                    Guest Drop
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
                   <div className="grid grid-cols-2 gap-2">
                     <div className="relative">
-                      <User className="absolute left-2 top-2 h-3.5 w-3.5 text-gray-400" />
+                      <User className="absolute left-3 top-3.5 h-3.5 w-3.5 text-gray-400" />
                       <input
                         type="text"
                         value={recipientDetails.name}
@@ -1719,11 +1771,11 @@ export default function CheckoutPage() {
                           setRecipientDetails((prev) => ({ ...prev, name: e.target.value }))
                         }
                         placeholder="Recipient name"
-                        className="h-8 w-full rounded-lg border border-gray-200 bg-white pl-7 pr-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                        className="h-10 w-full rounded-xl border border-gray-200 bg-white pl-9 pr-3 text-xs font-medium outline-none transition-colors focus:border-[#EF4F5F] dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
                       />
                     </div>
                     <div className="relative">
-                      <Phone className="absolute left-2 top-2 h-3.5 w-3.5 text-gray-400" />
+                      <Phone className="absolute left-3 top-3.5 h-3.5 w-3.5 text-gray-400" />
                       <input
                         type="text"
                         inputMode="numeric"
@@ -1736,18 +1788,19 @@ export default function CheckoutPage() {
                           }))
                         }
                         placeholder="Recipient phone"
-                        className="h-8 w-full rounded-lg border border-gray-200 bg-white pl-7 pr-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                        className="h-10 w-full rounded-xl border border-gray-200 bg-white pl-9 pr-3 text-xs font-medium outline-none transition-colors focus:border-[#EF4F5F] dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
                       />
                     </div>
                   </div>
+
                   <input
                     type="text"
                     value={recipientDetails.street}
                     onChange={(e) =>
                       setRecipientDetails((prev) => ({ ...prev, street: e.target.value }))
                     }
-                    placeholder="Full address (House/Flat, Street)"
-                    className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                    placeholder="House / Flat / Street address"
+                    className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium outline-none transition-colors focus:border-[#EF4F5F] dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
                   />
                   <input
                     type="text"
@@ -1756,8 +1809,9 @@ export default function CheckoutPage() {
                       setRecipientDetails((prev) => ({ ...prev, additionalDetails: e.target.value }))
                     }
                     placeholder="Landmark / Delivery note"
-                    className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                    className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium outline-none transition-colors focus:border-[#EF4F5F] dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
                   />
+
                   <div className="grid grid-cols-2 gap-2">
                     <input
                       type="text"
@@ -1766,7 +1820,7 @@ export default function CheckoutPage() {
                         setRecipientDetails((prev) => ({ ...prev, city: e.target.value }))
                       }
                       placeholder="City"
-                      className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                      className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium outline-none transition-colors focus:border-[#EF4F5F] dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
                     />
                     <input
                       type="text"
@@ -1775,9 +1829,10 @@ export default function CheckoutPage() {
                         setRecipientDetails((prev) => ({ ...prev, state: e.target.value }))
                       }
                       placeholder="State"
-                      className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                      className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium outline-none transition-colors focus:border-[#EF4F5F] dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
                     />
                   </div>
+
                   <input
                     type="text"
                     value={recipientDetails.zipCode}
@@ -1785,87 +1840,168 @@ export default function CheckoutPage() {
                       setRecipientDetails((prev) => ({ ...prev, zipCode: e.target.value }))
                     }
                     placeholder="Pincode"
-                    className="h-8 w-full rounded-lg border border-gray-200 bg-white px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                    className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium outline-none transition-colors focus:border-[#EF4F5F] dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
                   />
-                  <div className="rounded-lg border border-yellow-200 bg-white p-2 dark:border-yellow-500/30 dark:bg-[#0f172a]">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="text-[11px] font-medium text-gray-700 dark:text-gray-300">
-                        {hasRecipientCoordinates ? "Pin set for recipient address" : "Recipient pin not set"}
-                      </p>
+
+                  <div className="rounded-2xl border border-[#ffd6db] bg-white px-3.5 py-3 dark:border-[#EF4F5F]/20 dark:bg-[#0f172a]">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-xs font-bold text-gray-900 dark:text-gray-100">
+                          {hasRecipientCoordinates ? "Delivery pin added" : "Set exact delivery pin"}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-gray-500 dark:text-gray-400">
+                          Recipient address must be inside an active delivery zone.
+                        </p>
+                      </div>
                       <button
                         type="button"
                         onClick={() => setShowRecipientMap((prev) => !prev)}
-                        className="text-[11px] font-semibold text-yellow-700 hover:text-yellow-800 dark:text-yellow-300"
+                        className="rounded-full bg-[#EF4F5F]/10 px-3 py-1.5 text-[11px] font-bold text-[#EF4F5F] transition-colors hover:bg-[#EF4F5F]/15 dark:bg-[#EF4F5F]/15"
                       >
                         {showRecipientMap ? "Hide Map" : hasRecipientCoordinates ? "Update Pin" : "Set Pin"}
                       </button>
                     </div>
-                    <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
-                      Address must be inside an active delivery zone.
-                    </p>
                     {hasRecipientCoordinates ? (
-                      <p className="mt-1 text-[11px] text-yellow-700 dark:text-yellow-300">
+                      <p className="mt-2 text-[11px] font-semibold text-[#EF4F5F] dark:text-[#ff8b95]">
                         {Number(recipientDetails.latitude).toFixed(5)}, {Number(recipientDetails.longitude).toFixed(5)}
                       </p>
                     ) : null}
                   </div>
 
                   {showRecipientMap ? (
-                    <AddressLocationPicker
-                      value={recipientDetails}
-                      onChange={setRecipientDetails}
-                      fallbackLocation={liveLocation}
-                      title="Recipient exact delivery pin"
-                      description="Set exact pin. Address must be inside any active delivery zone."
-                    />
+                    <div className="overflow-hidden rounded-2xl border border-[#ffd6db] dark:border-[#EF4F5F]/20">
+                      <AddressLocationPicker
+                        value={recipientDetails}
+                        onChange={setRecipientDetails}
+                        fallbackLocation={liveLocation}
+                        title="Recipient exact delivery pin"
+                        description="Set exact pin. Address must be inside any active delivery zone."
+                      />
+                    </div>
                   ) : null}
                 </div>
-              ) : (
-                <>
+              </div>
+            ) : (
+              <>
+                <div className="rounded-[24px] border border-[#ffe1e5] bg-[#fff8f8] p-3.5 dark:border-[#EF4F5F]/20 dark:bg-[#1c1318]">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
+                        Choose where we should deliver
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">
+                        Pick a saved address or add a fresh one for this order.
+                      </p>
+                    </div>
+                    <div className="inline-flex items-center gap-2 self-start rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-[#EF4F5F] shadow-sm dark:bg-white/10">
+                      <MapPin className="h-3.5 w-3.5" />
+                      Address required
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5">
                   {Array.isArray(addresses) && addresses.length > 0 ? (
                     addresses.map((address) => {
                       const addressId = address.id || address._id;
                       const selectedId = selectedAddress?.id || selectedAddress?._id;
                       const isSelected =
                         selectedId && addressId && String(selectedId) === String(addressId);
+
                       return (
                         <button
                           key={String(addressId)}
                           type="button"
                           onClick={() => setSelectedAddress(address)}
-                          className={`w-full text-left rounded-xl border px-3 py-2 transition-colors ${isSelected
-                              ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-500/10"
-                              : "border-gray-200 bg-white hover:border-yellow-300 dark:border-white/10 dark:bg-[#0f172a] dark:hover:border-yellow-500/60"
+                          className={`w-full rounded-[22px] border px-4 py-3 text-left transition-all ${isSelected
+                            ? "border-[#EF4F5F]/35 bg-gradient-to-r from-[#fff6f7] to-[#fffdf8] shadow-[0_10px_24px_rgba(239,79,95,0.10)] ring-1 ring-[#EF4F5F]/10 dark:border-[#EF4F5F]/20 dark:bg-[#21131a]"
+                            : "border-gray-200 bg-white hover:border-[#EF4F5F]/20 hover:bg-[#fffafa] dark:border-white/10 dark:bg-[#0f172a] dark:hover:border-[#EF4F5F]/20 dark:hover:bg-white/[0.03]"
                             }`}
                         >
-                          <p className="text-xs font-semibold text-gray-900 dark:text-gray-100">
-                            {address.label || "Address"} {address.isDefault ? "(Default)" : ""}
-                          </p>
-                          <p className="text-xs text-gray-600 dark:text-gray-400">{formatAddressLine(address)}</p>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
+                                  {address.label || "Address"}
+                                </p>
+                                {address.isDefault ? (
+                                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-gray-600 dark:bg-white/10 dark:text-gray-300">
+                                    Default
+                                  </span>
+                                ) : null}
+                                {isSelected ? (
+                                  <span className="rounded-full bg-[#EF4F5F] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white">
+                                    Selected
+                                  </span>
+                                ) : null}
+                              </div>
+                              <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">
+                                {formatAddressLine(address)}
+                              </p>
+                            </div>
+                            <div
+                              className={`mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border ${isSelected
+                                ? "border-[#EF4F5F] bg-[#EF4F5F]"
+                                : "border-gray-300 bg-white dark:border-white/20 dark:bg-transparent"
+                                }`}
+                            >
+                              {isSelected ? <div className="h-2 w-2 rounded-full bg-white" /> : null}
+                            </div>
+                          </div>
                         </button>
                       );
                     })
-                  ) : null}
+                  ) : (
+                    <div className="rounded-[22px] border border-dashed border-gray-200 bg-[#fafafa] px-4 py-5 text-center dark:border-white/10 dark:bg-[#0f172a]">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        No saved addresses yet
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Add one now to make checkout faster next time.
+                      </p>
+                    </div>
+                  )}
+                </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setShowAddAddressForm((prev) => !prev)}
-                    className="text-xs font-semibold text-yellow-700 dark:text-yellow-300"
-                  >
-                    {showAddAddressForm ? "Close Add Address" : "+ Add New Address"}
-                  </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddAddressForm((prev) => !prev)}
+                  className="inline-flex items-center gap-2 rounded-full border border-[#EF4F5F]/15 bg-[#fff5f6] px-4 py-2 text-xs font-bold text-[#EF4F5F] transition-colors hover:bg-[#ffecef] dark:border-[#EF4F5F]/20 dark:bg-[#21131a]"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  {showAddAddressForm ? "Close Add Address" : "Add New Address"}
+                </button>
 
-                  {showAddAddressForm ? (
-                    <div className="rounded-xl border border-gray-200 p-3 space-y-2 bg-gray-50 dark:border-white/10 dark:bg-[#0f172a]">
+                {showAddAddressForm ? (
+                  <div className="rounded-[24px] border border-gray-200 bg-[#fcfcfc] p-3.5 shadow-sm dark:border-white/10 dark:bg-[#0f172a]">
+                    <div className="mb-3">
+                      <p className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
+                        Add Delivery Address
+                      </p>
+                      <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+                        Keep it precise so the rider reaches you faster.
+                      </p>
+                    </div>
+
+                    <div className="mb-3 rounded-2xl border border-dashed border-[#EF4F5F]/20 bg-[#fff7f8] px-3.5 py-3 dark:border-[#EF4F5F]/15 dark:bg-[#21131a]">
+                      <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#EF4F5F]">
+                        Quick Tip
+                      </p>
+                      <p className="mt-1 text-xs leading-5 text-gray-600 dark:text-gray-300">
+                        Add your house number, landmark, and exact pin so delivery feels effortless.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2.5">
                       <div className="grid grid-cols-3 gap-2">
                         {["Home", "Office", "Other"].map((label) => (
                           <button
                             key={label}
                             type="button"
                             onClick={() => setNewAddress((prev) => ({ ...prev, label }))}
-                            className={`h-8 rounded-lg text-xs font-semibold border ${newAddress.label === label
-                              ? "border-yellow-500 bg-yellow-100 text-yellow-700 dark:bg-yellow-500/10 dark:text-yellow-200"
-                              : "border-gray-200 bg-white text-gray-700 dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-200"
+                            className={`h-9 rounded-xl border text-xs font-bold transition-all ${newAddress.label === label
+                              ? "border-[#EF4F5F]/20 bg-[#fff1f3] text-[#EF4F5F] dark:border-[#EF4F5F]/20 dark:bg-[#21131a]"
+                              : "border-gray-200 bg-white text-gray-700 dark:border-white/10 dark:bg-[#111827] dark:text-gray-200"
                               }`}
                           >
                             {label}
@@ -1887,11 +2023,11 @@ export default function CheckoutPage() {
                           onBlur={() => {
                             setTimeout(() => setShowAddressSuggestions(false), 150);
                           }}
-                          placeholder="Street / House No."
-                          className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                          placeholder="House No. / Flat / Street"
+                          className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium outline-none transition-colors focus:border-[#EF4F5F] dark:border-white/10 dark:bg-[#111827] dark:text-gray-100 dark:placeholder:text-gray-500"
                         />
                         {showAddressSuggestions && (
-                          <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg dark:border-white/10 dark:bg-[#0f172a]">
+                          <div className="absolute z-30 mt-1 w-full overflow-hidden rounded-xl border border-gray-200 bg-white shadow-lg dark:border-white/10 dark:bg-[#111827]">
                             {loadingAddressSuggestions ? (
                               <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400">Loading suggestions...</p>
                             ) : addressSuggestions.length > 0 ? (
@@ -1901,7 +2037,7 @@ export default function CheckoutPage() {
                                   type="button"
                                   onMouseDown={(e) => e.preventDefault()}
                                   onClick={() => handleAddressSuggestionSelect(suggestion)}
-                                  className="block w-full border-b border-gray-100 px-3 py-2 text-left text-xs text-gray-700 hover:bg-yellow-50 last:border-b-0 dark:border-white/10 dark:text-gray-200 dark:hover:bg-yellow-500/10"
+                                  className="block w-full border-b border-gray-100 px-3 py-2.5 text-left text-xs text-gray-700 hover:bg-[#fff7f8] last:border-b-0 dark:border-white/10 dark:text-gray-200 dark:hover:bg-[#21131a]"
                                 >
                                   {suggestion.description}
                                 </button>
@@ -1916,48 +2052,53 @@ export default function CheckoutPage() {
                           </div>
                         )}
                       </div>
+
                       <input
                         type="text"
                         value={newAddress.additionalDetails}
                         onChange={(e) =>
                           setNewAddress((prev) => ({ ...prev, additionalDetails: e.target.value }))
                         }
-                        placeholder="Area / Landmark"
-                        className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                        placeholder="Area / Colony / Landmark"
+                        className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium outline-none transition-colors focus:border-[#EF4F5F] dark:border-white/10 dark:bg-[#111827] dark:text-gray-100 dark:placeholder:text-gray-500"
                       />
+
                       <div className="grid grid-cols-2 gap-2">
                         <input
                           type="text"
                           value={newAddress.city}
                           onChange={(e) => setNewAddress((prev) => ({ ...prev, city: e.target.value }))}
                           placeholder="City"
-                          className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                          className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium outline-none transition-colors focus:border-[#EF4F5F] dark:border-white/10 dark:bg-[#111827] dark:text-gray-100 dark:placeholder:text-gray-500"
                         />
                         <input
                           type="text"
                           value={newAddress.state}
                           onChange={(e) => setNewAddress((prev) => ({ ...prev, state: e.target.value }))}
                           placeholder="State"
-                          className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                          className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium outline-none transition-colors focus:border-[#EF4F5F] dark:border-white/10 dark:bg-[#111827] dark:text-gray-100 dark:placeholder:text-gray-500"
                         />
                       </div>
+
                       <input
                         type="text"
                         value={newAddress.zipCode}
                         onChange={(e) => setNewAddress((prev) => ({ ...prev, zipCode: e.target.value }))}
                         placeholder="Pincode"
-                        className="h-8 w-full rounded-lg border border-gray-200 px-2 text-xs dark:border-white/10 dark:bg-[#0f172a] dark:text-gray-100 dark:placeholder:text-gray-500"
+                        className="h-10 w-full rounded-xl border border-gray-200 bg-white px-3 text-xs font-medium outline-none transition-colors focus:border-[#EF4F5F] dark:border-white/10 dark:bg-[#111827] dark:text-gray-100 dark:placeholder:text-gray-500"
                       />
 
-                      <AddressLocationPicker
-                        value={newAddress}
-                        onChange={setNewAddress}
-                        fallbackLocation={liveLocation}
-                        title="Exact delivery location"
-                        description="For family or out-of-station orders, drag the pin to the exact drop point before saving."
-                      />
+                      <div className="overflow-hidden rounded-2xl border border-gray-200 dark:border-white/10">
+                        <AddressLocationPicker
+                          value={newAddress}
+                          onChange={setNewAddress}
+                          fallbackLocation={liveLocation}
+                          title="Exact delivery location"
+                          description="For family or out-of-station orders, drag the pin to the exact drop point before saving."
+                        />
+                      </div>
 
-                      <label className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                      <label className="flex items-center gap-2 text-xs font-medium text-gray-600 dark:text-gray-400">
                         <input
                           type="checkbox"
                           checked={newAddress.isDefault}
@@ -1970,17 +2111,17 @@ export default function CheckoutPage() {
 
                       <Button
                         type="button"
-                        className="w-full h-8 text-xs bg-yellow-500 hover:bg-yellow-600 text-white"
+                        className="h-10 w-full rounded-xl bg-[#EF4F5F] text-sm font-bold text-white hover:bg-[#e24354]"
                         onClick={handleSaveNewAddress}
                         disabled={isSavingAddress}
                       >
                         {isSavingAddress ? "Saving..." : "Save Address"}
                       </Button>
                     </div>
-                  ) : null}
-                </>
-              )}
-            </div>
+                  </div>
+                ) : null}
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -742,7 +742,7 @@ export const getRestaurants = async (req, res) => {
 
       return true;
     });
-    if (!liteResponse && !isMogroceryRequest && restaurants.length > 0) {
+    if (!isMogroceryRequest && restaurants.length > 0) {
       const restaurantIds = restaurants
         .map((restaurant) => restaurant?._id)
         .filter(Boolean);
