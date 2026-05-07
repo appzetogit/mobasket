@@ -184,7 +184,35 @@ export default function Cart() {
 
 
 
-  // Lock body scroll and scroll to top when any full-screen modal opens
+  const cartRestaurantIdentity = useMemo(() => {
+    if (cart.length === 0) return ""
+
+    const cartRestaurantId = String(cart[0]?.restaurantId || "").trim()
+    const cartRestaurantName = String(cart[0]?.restaurant || "").trim().toLowerCase()
+
+    return `${cartRestaurantId}::${cartRestaurantName}`
+  }, [cart])
+
+  const previousCartRestaurantIdentityRef = useRef(cartRestaurantIdentity)
+
+  useEffect(() => {
+    const previousIdentity = previousCartRestaurantIdentityRef.current
+    if (previousIdentity === cartRestaurantIdentity) return
+
+    previousCartRestaurantIdentityRef.current = cartRestaurantIdentity
+
+    // Clear stale restaurant-scoped state before refetching the new cart restaurant.
+    setRestaurantData(null)
+    setAddons([])
+    setAvailableCoupons([])
+    setAppliedCoupon(null)
+    setCouponCode("")
+    setPricing(null)
+    setLoadingRestaurant(false)
+    setLoadingAddons(false)
+  }, [cartRestaurantIdentity])
+
+  // Lock body scroll and scroll to top when any full-screen modal opens
   useEffect(() => {
     if (showPlacingOrder || showOrderSuccess) {
       // Lock body scroll
@@ -366,7 +394,7 @@ export default function Cart() {
     }
 
     fetchRestaurantData()
-  }, [cart.length, cart[0]?.restaurantId, cart[0]?.restaurant])
+  }, [cart.length, cart[0]?.restaurantId, cart[0]?.restaurant, restaurantData])
 
   // Fetch approved addons for the restaurant
   useEffect(() => {

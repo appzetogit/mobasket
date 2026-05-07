@@ -4,42 +4,28 @@ import { initializeCloudinary } from '../../../config/cloudinary.js';
 
 export const uploadSingleMedia = async (req, res) => {
   try {
-    // Initialize Cloudinary if not already initialized
     await initializeCloudinary();
 
     if (!req.file) {
       return errorResponse(res, 400, 'No file provided');
     }
 
-    // Validate file buffer
     if (!req.file.buffer || req.file.buffer.length === 0) {
       return errorResponse(res, 400, 'File buffer is empty or invalid');
     }
 
     const folder = req.body.folder || 'mobasket/uploads';
 
-    console.log('📤 Uploading file to Cloudinary:', {
-      fileName: req.file.originalname,
-      mimeType: req.file.mimetype,
-      size: req.file.size,
-      bufferSize: req.file.buffer.length,
-      folder
-    });
-
     const result = await uploadToCloudinary(req.file.buffer, {
       folder,
       resource_type: 'auto',
+      fileName: req.file.originalname,
+      mimeType: req.file.mimetype,
     });
 
     if (!result || !result.secure_url) {
-      throw new Error('Cloudinary upload failed: No secure_url in response');
+      throw new Error('Media upload failed: No secure_url in response');
     }
-
-    console.log('✅ File uploaded successfully:', {
-      url: result.secure_url,
-      publicId: result.public_id,
-      resourceType: result.resource_type
-    });
 
     return successResponse(res, 200, 'File uploaded successfully', {
       url: result.secure_url,
@@ -49,26 +35,12 @@ export const uploadSingleMedia = async (req, res) => {
       format: result.format
     });
   } catch (error) {
-    console.error('❌ Cloudinary upload error:', {
-      message: error.message,
-      stack: error.stack,
-      errorType: error.constructor.name,
-      hasFile: !!req.file,
-      fileName: req.file?.originalname,
-      fileSize: req.file?.size,
-      bufferSize: req.file?.buffer?.length
-    });
-    
-    // Provide more detailed error message
     const errorMessage = error.message || 'Failed to upload file';
-    const cloudinaryStatus = Number(error?.http_code || 0);
-    const statusCode = Number.isInteger(cloudinaryStatus) && cloudinaryStatus >= 400
-      ? cloudinaryStatus
+    const providerStatus = Number(error?.http_code || error?.response?.status || 0);
+    const statusCode = Number.isInteger(providerStatus) && providerStatus >= 400
+      ? providerStatus
       : 500;
+
     return errorResponse(res, statusCode, `File upload failed: ${errorMessage}`);
   }
 };
-
-
-
-

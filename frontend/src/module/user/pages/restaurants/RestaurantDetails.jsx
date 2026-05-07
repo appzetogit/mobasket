@@ -1148,33 +1148,25 @@ export default function RestaurantDetails() {
               throw directLookupError;
             }
 
-            if (zoneId) {
-              const searchParams = { limit: 40, zoneId };
-              const searchResponse = await restaurantAPI.getRestaurants(searchParams);
-              const restaurants =
-                searchResponse?.data?.data?.restaurants ||
-                searchResponse?.data?.data ||
-                [];
+            const searchParams = {
+              limit: 40,
+              ...(zoneId ? { zoneId } : {}),
+            };
+            const searchResponse = await restaurantAPI.getRestaurants(searchParams);
+            const restaurants =
+              searchResponse?.data?.data?.restaurants ||
+              searchResponse?.data?.data ||
+              [];
 
-              const restaurantName = slug
-                .replace(/-/g, " ")
-                .replace(/\b\w/g, (l) => l.toUpperCase());
+            const matchingRestaurant = findRestaurantByFlexibleSlug(restaurants, slug);
 
-              const matchingRestaurant = restaurants.find(
-                (r) =>
-                  r.slug === slug ||
-                  r.name?.toLowerCase().replace(/\s+/g, "-") === slug.toLowerCase() ||
-                  r.name?.toLowerCase() === restaurantName.toLowerCase(),
+            if (matchingRestaurant) {
+              const fullResponse = await restaurantAPI.getRestaurantById(
+                matchingRestaurant._id || matchingRestaurant.restaurantId || matchingRestaurant.id,
               );
-
-              if (matchingRestaurant) {
-                const fullResponse = await restaurantAPI.getRestaurantById(
-                  matchingRestaurant._id || matchingRestaurant.restaurantId,
-                );
-                if (fullResponse.data && fullResponse.data.success && fullResponse.data.data) {
-                  apiRestaurant = fullResponse.data.data;
-                  response = fullResponse;
-                }
+              if (fullResponse.data && fullResponse.data.success && fullResponse.data.data) {
+                apiRestaurant = fullResponse.data.data;
+                response = fullResponse;
               }
             }
           }
@@ -1895,21 +1887,21 @@ export default function RestaurantDetails() {
 
           if (!restaurantIdForMenu) {
             try {
-              if (!zoneId) {
-                setLoadingDeferredContent(false);
-                return;
-              }
-
-              const searchParams = { limit: 100, zoneId };
+              const searchParams = {
+                limit: 100,
+                ...(zoneId ? { zoneId } : {}),
+              };
               const searchResponse = await restaurantAPI.getRestaurants(searchParams);
               const restaurants =
                 searchResponse?.data?.data?.restaurants || searchResponse?.data?.data || [];
 
-              const matchingRestaurant = restaurants.find(
-                (r) =>
-                  r.name?.toLowerCase().trim() ===
-                  transformedRestaurant.name?.toLowerCase().trim(),
-              );
+              const matchingRestaurant =
+                findRestaurantByFlexibleSlug(restaurants, transformedRestaurant.slug) ||
+                restaurants.find(
+                  (r) =>
+                    r.name?.toLowerCase().trim() ===
+                    transformedRestaurant.name?.toLowerCase().trim(),
+                );
 
               if (matchingRestaurant) {
                 restaurantIdForMenu =

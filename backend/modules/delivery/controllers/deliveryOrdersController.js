@@ -2015,7 +2015,11 @@ export const confirmOrderId = asyncHandler(async (req, res) => {
           return errorResponse(res, 400, 'Bill image URL must be HTTP or HTTPS');
         }
         // Optional: Validate it's from Cloudinary (security check)
-        if (!url.hostname.includes('cloudinary.com') && !url.hostname.includes('res.cloudinary.com')) {
+        if (
+          !url.hostname.includes('cloudinary.com') &&
+          !url.hostname.includes('res.cloudinary.com') &&
+          !url.hostname.includes('imagekit.io')
+        ) {
           console.warn(`⚠️ Bill image URL is not from Cloudinary: ${url.hostname}`);
           // Don't reject, but log warning for monitoring
         }

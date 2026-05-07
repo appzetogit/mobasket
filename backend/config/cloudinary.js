@@ -1,5 +1,10 @@
 import { v2 as cloudinary } from 'cloudinary';
-import { getCloudinaryCredentials } from '../shared/utils/envService.js';
+import {
+  getCloudinaryCredentials,
+  getImageKitCredentials,
+  getMediaProvider,
+} from '../shared/utils/envService.js';
+import { initializeImageKit, reinitializeImageKit } from './imagekit.js';
 
 // Normalize env values (trim quotes if present)
 function cleanEnv(value) {
@@ -18,6 +23,26 @@ function cleanEnv(value) {
 let cloudinaryInitialized = false;
 
 async function initializeCloudinary() {
+  const preferredProvider = String(await getMediaProvider() || '').trim().toLowerCase();
+  const imageKitCredentials = await getImageKitCredentials();
+  const hasImageKitCredentials = Boolean(
+    String(imageKitCredentials.publicKey || '').trim() &&
+      String(imageKitCredentials.privateKey || '').trim() &&
+      String(imageKitCredentials.urlEndpoint || '').trim(),
+  );
+  const activeProvider =
+    preferredProvider === 'cloudinary'
+      ? 'cloudinary'
+      : preferredProvider === 'imagekit' || hasImageKitCredentials
+        ? 'imagekit'
+        : 'cloudinary';
+
+  if (activeProvider === 'imagekit') {
+    await initializeImageKit();
+    cloudinaryInitialized = true;
+    return cloudinary;
+  }
+
   if (cloudinaryInitialized) {
     return cloudinary;
   }
@@ -73,6 +98,7 @@ async function initializeCloudinary() {
 // Reinitialize function (call after updating env variables)
 export async function reinitializeCloudinary() {
   cloudinaryInitialized = false;
+  reinitializeImageKit();
   return await initializeCloudinary();
 }
 

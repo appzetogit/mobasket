@@ -188,13 +188,13 @@ export const saveEnvVariables = asyncHandler(async (req, res) => {
       // Don't fail the request if cache clear fails
     }
 
-    // Apply updated Cloudinary credentials at runtime after ENV save.
+    // Apply updated media-provider credentials at runtime after ENV save.
     try {
       await reinitializeCloudinary();
-      logger.info('Cloudinary runtime config refreshed after env save');
-    } catch (cloudinaryError) {
-      logger.warn(`Failed to refresh Cloudinary runtime config: ${cloudinaryError.message}`);
-      // ENV save succeeds even if Cloudinary refresh fails.
+      logger.info('Media runtime config refreshed after env save');
+    } catch (mediaError) {
+      logger.warn(`Failed to refresh media runtime config: ${mediaError.message}`);
+      // ENV save succeeds even if provider refresh fails.
     }
 
     // Apply updated Firebase admin/realtime credentials at runtime after ENV save.

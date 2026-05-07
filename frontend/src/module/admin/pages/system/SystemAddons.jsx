@@ -12,6 +12,14 @@ export default function SystemAddons() {
     // Razorpay
     RAZORPAY_API_KEY: "",
     RAZORPAY_SECRET_KEY: "",
+
+    // Media provider
+    MEDIA_PROVIDER: "imagekit",
+
+    // ImageKit
+    IMAGEKIT_PUBLIC_KEY: "",
+    IMAGEKIT_PRIVATE_KEY: "",
+    IMAGEKIT_URL_ENDPOINT: "",
     
     // Cloudinary
     CLOUDINARY_CLOUD_NAME: "",
@@ -188,19 +196,40 @@ export default function SystemAddons() {
             </div>
           </div>
 
-          {/* Cloudinary Section */}
+          {/* Media Section */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
             <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
               <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
                 <Key className="w-4 h-4 text-green-600" />
               </div>
-              Cloudinary Configuration
+              Media Configuration
             </h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="block text-sm font-semibold text-slate-700">Active Media Provider</label>
+                <select
+                  value={envData.MEDIA_PROVIDER || "imagekit"}
+                  onChange={(e) => handleInputChange("MEDIA_PROVIDER", e.target.value)}
+                  className="w-full px-3 py-2.5 border-2 border-slate-200 rounded-lg bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all text-sm"
+                >
+                  <option value="imagekit">ImageKit</option>
+                  <option value="cloudinary">Cloudinary</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+              <InputField label="ImageKit Public Key" fieldKey="IMAGEKIT_PUBLIC_KEY" />
+              <InputField label="ImageKit Private Key" fieldKey="IMAGEKIT_PRIVATE_KEY" type="password" />
+              <InputField label="ImageKit URL Endpoint" fieldKey="IMAGEKIT_URL_ENDPOINT" placeholder="https://ik.imagekit.io/your_path" />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
               <InputField label="Cloudinary Cloud Name" fieldKey="CLOUDINARY_CLOUD_NAME" />
               <InputField label="Cloudinary API Key" fieldKey="CLOUDINARY_API_KEY" />
               <InputField label="Cloudinary API Secret" fieldKey="CLOUDINARY_API_SECRET" type="password" />
             </div>
+            <p className="mt-3 text-sm text-slate-500">
+              New uploads will use the selected provider. Keep Cloudinary credentials during migration so old assets can still be referenced and deleted.
+            </p>
           </div>
 
           {/* Firebase Section */}

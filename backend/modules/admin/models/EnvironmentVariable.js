@@ -14,6 +14,11 @@ const environmentVariableSchema = new mongoose.Schema(
       default: '',
       trim: true
     },
+    MEDIA_PROVIDER: {
+      type: String,
+      default: 'imagekit',
+      trim: true
+    },
     
     // Cloudinary
     CLOUDINARY_CLOUD_NAME: {
@@ -27,6 +32,21 @@ const environmentVariableSchema = new mongoose.Schema(
       trim: true
     },
     CLOUDINARY_API_SECRET: {
+      type: String,
+      default: '',
+      trim: true
+    },
+    IMAGEKIT_PUBLIC_KEY: {
+      type: String,
+      default: '',
+      trim: true
+    },
+    IMAGEKIT_PRIVATE_KEY: {
+      type: String,
+      default: '',
+      trim: true
+    },
+    IMAGEKIT_URL_ENDPOINT: {
       type: String,
       default: '',
       trim: true
@@ -188,6 +208,8 @@ environmentVariableSchema.methods.toEnvObject = function() {
     'RAZORPAY_SECRET_KEY',
     'CLOUDINARY_API_KEY',
     'CLOUDINARY_API_SECRET',
+    'IMAGEKIT_PUBLIC_KEY',
+    'IMAGEKIT_PRIVATE_KEY',
     'FIREBASE_API_KEY',
     'FIREBASE_CLIENT_EMAIL',
     'FIREBASE_PRIVATE_KEY',
@@ -219,6 +241,8 @@ environmentVariableSchema.pre('save', function(next) {
     'RAZORPAY_SECRET_KEY',
     'CLOUDINARY_API_KEY',
     'CLOUDINARY_API_SECRET',
+    'IMAGEKIT_PUBLIC_KEY',
+    'IMAGEKIT_PRIVATE_KEY',
     'FIREBASE_API_KEY',
     'FIREBASE_CLIENT_EMAIL',
     'FIREBASE_PRIVATE_KEY',

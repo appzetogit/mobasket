@@ -120,6 +120,7 @@ export default function CheckoutPage() {
   const pricingPreviewCacheRef = useRef({ signature: null, pricing: null });
   const pricingPreviewInFlightSignatureRef = useRef(null);
   const recipientZoneCheckCacheRef = useRef({ key: null, inService: null });
+  const addonsRequestRef = useRef(0);
 
   const normalizeEditPaymentMethod = useCallback((value) => {
     const normalized = String(value || "").trim().toLowerCase();
@@ -703,19 +704,32 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     const fetchAddons = async () => {
+      const requestId = addonsRequestRef.current + 1;
+      addonsRequestRef.current = requestId;
+
       if (!restaurantId) {
         setAddons([]);
+        setLoadingAddons(false);
         return;
       }
+
+      // Clear previous restaurant suggestions immediately so stale add-ons
+      // do not remain visible while the new restaurant request is loading.
+      setAddons([]);
+
       try {
         setLoadingAddons(true);
         const response = await restaurantAPI.getAddonsByRestaurantId(String(restaurantId));
+        if (addonsRequestRef.current !== requestId) return;
         const list = response?.data?.data?.addons || response?.data?.addons || [];
         setAddons(Array.isArray(list) ? list : []);
       } catch {
+        if (addonsRequestRef.current !== requestId) return;
         setAddons([]);
       } finally {
-        setLoadingAddons(false);
+        if (addonsRequestRef.current === requestId) {
+          setLoadingAddons(false);
+        }
       }
     };
 

@@ -15,8 +15,7 @@ import GrocerySubcategory from '../../grocery/models/GrocerySubcategory.js';
 import GroceryProduct from '../../grocery/models/GroceryProduct.js';
 import Zone from '../../admin/models/Zone.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
-import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
-import { cloudinary } from '../../../config/cloudinary.js';
+import { deleteFromCloudinary, uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
 import mongoose from 'mongoose';
 
 const normalizePlatform = (value) => (value === 'mogrocery' ? 'mogrocery' : 'mofood');
@@ -298,7 +297,7 @@ export const deleteHeroBanner = async (req, res) => {
 
     // Delete from Cloudinary
     try {
-      await cloudinary.uploader.destroy(banner.cloudinaryPublicId);
+      await deleteFromCloudinary(banner.cloudinaryPublicId);
     } catch (cloudinaryError) {
       console.error('Error deleting from Cloudinary:', cloudinaryError);
       // Continue with database deletion even if Cloudinary deletion fails
@@ -877,7 +876,7 @@ export const deleteLandingCategory = async (req, res) => {
 
     // Delete from Cloudinary
     try {
-      await cloudinary.uploader.destroy(category.cloudinaryPublicId);
+      await deleteFromCloudinary(category.cloudinaryPublicId);
     } catch (cloudinaryError) {
       console.error('Error deleting from Cloudinary:', cloudinaryError);
     }
@@ -1045,7 +1044,7 @@ export const deleteLandingExploreMore = async (req, res) => {
 
     // Delete from Cloudinary
     try {
-      await cloudinary.uploader.destroy(item.cloudinaryPublicId);
+      await deleteFromCloudinary(item.cloudinaryPublicId);
     } catch (cloudinaryError) {
       console.error('Error deleting from Cloudinary:', cloudinaryError);
     }
@@ -1356,7 +1355,7 @@ export const deleteUnder250Banner = async (req, res) => {
 
     // Delete from Cloudinary
     try {
-      await cloudinary.uploader.destroy(banner.cloudinaryPublicId);
+      await deleteFromCloudinary(banner.cloudinaryPublicId);
     } catch (cloudinaryError) {
       console.error('Error deleting from Cloudinary:', cloudinaryError);
       // Continue with database deletion even if Cloudinary deletion fails
@@ -1614,7 +1613,7 @@ export const deleteDiningBanner = async (req, res) => {
 
     // Delete from Cloudinary
     try {
-      await cloudinary.uploader.destroy(banner.cloudinaryPublicId);
+      await deleteFromCloudinary(banner.cloudinaryPublicId);
     } catch (cloudinaryError) {
       console.error('Error deleting from Cloudinary:', cloudinaryError);
       // Continue with database deletion even if Cloudinary deletion fails

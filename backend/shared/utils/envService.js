@@ -220,6 +220,18 @@ export async function getCloudinaryCredentials() {
   };
 }
 
+export async function getImageKitCredentials() {
+  return {
+    publicKey: await getEnvVar('IMAGEKIT_PUBLIC_KEY'),
+    privateKey: await getEnvVar('IMAGEKIT_PRIVATE_KEY'),
+    urlEndpoint: await getEnvVar('IMAGEKIT_URL_ENDPOINT')
+  };
+}
+
+export async function getMediaProvider() {
+  return await getEnvVar('MEDIA_PROVIDER');
+}
+
 /**
  * Get Firebase credentials
  * @returns {Promise<Object>} Firebase credentials object

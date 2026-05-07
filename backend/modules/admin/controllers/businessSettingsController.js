@@ -1,7 +1,7 @@
 import BusinessSettings from '../models/BusinessSettings.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
-import { uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
+import { deleteFromCloudinary, uploadToCloudinary } from '../../../shared/utils/cloudinaryService.js';
 import { initializeCloudinary } from '../../../config/cloudinary.js';
 
 /**
@@ -137,8 +137,7 @@ export const updateBusinessSettings = asyncHandler(async (req, res) => {
         // Delete old logo from Cloudinary if exists
         if (settings.logo.publicId) {
           try {
-            const { cloudinary } = await import('../../../config/cloudinary.js');
-            await cloudinary.uploader.destroy(settings.logo.publicId);
+            await deleteFromCloudinary(settings.logo.publicId);
           } catch (deleteError) {
             console.warn('Failed to delete old logo:', deleteError);
           }
@@ -185,8 +184,7 @@ export const updateBusinessSettings = asyncHandler(async (req, res) => {
         // Delete old favicon from Cloudinary if exists
         if (settings.favicon.publicId) {
           try {
-            const { cloudinary } = await import('../../../config/cloudinary.js');
-            await cloudinary.uploader.destroy(settings.favicon.publicId);
+            await deleteFromCloudinary(settings.favicon.publicId);
           } catch (deleteError) {
             console.warn('Failed to delete old favicon:', deleteError);
           }
