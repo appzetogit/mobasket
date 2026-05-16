@@ -17,10 +17,8 @@ import { usePlatform } from "../../context/PlatformContext"
 const AUTO_REFRESH_MS = 10000
 const ORDER_ALERT_STORAGE_KEY = "adminAllOrdersAlertEvent"
 const ORDER_ALERT_CHANNEL_NAME = "admin-all-orders-alerts"
-const ORDER_DELETE_ALLOWED_ADMIN_EMAILS = new Set([
-  "emmanuel@mobasket.in",
-  "appzeto@gmail.com",
-])
+const canAdminDeleteOrders = (admin) =>
+  String(admin?.role || "").trim().toLowerCase() === "super_admin"
 
 // Status configuration with titles, colors, and icons
 const statusConfig = {
@@ -711,7 +709,7 @@ export default function OrdersPage({ statusKey = "all", platformOverride }) {
   }, [filteredOrders, activePlatform])
 
   const canDeleteOrders = useMemo(
-    () => ORDER_DELETE_ALLOWED_ADMIN_EMAILS.has(String(currentAdmin?.email || "").trim().toLowerCase()),
+    () => canAdminDeleteOrders(currentAdmin),
     [currentAdmin]
   )
 

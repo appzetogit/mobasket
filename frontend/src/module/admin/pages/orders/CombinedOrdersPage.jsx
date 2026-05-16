@@ -21,10 +21,8 @@ const ORDERS_ALERT_COUNT_KEY = "adminAllOrdersAttentionState"
 const ORDER_SOUND_MUTED_KEY = "adminAllOrdersSoundMuted"
 const PLATFORM_PAGE_SIZE = 50
 const MAX_PLATFORM_SYNC_PAGES = 40
-const ORDER_DELETE_ALLOWED_ADMIN_EMAILS = new Set([
-  "emmanuel@mobasket.in",
-  "appzeto@gmail.com",
-])
+const canAdminDeleteOrders = (admin) =>
+  String(admin?.role || "").trim().toLowerCase() === "super_admin"
 
 const currencyFormatter = new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -256,7 +254,7 @@ export default function CombinedOrdersPage() {
   )
 
   const canDeleteOrders = useMemo(
-    () => ORDER_DELETE_ALLOWED_ADMIN_EMAILS.has(String(currentAdmin?.email || "").trim().toLowerCase()),
+    () => canAdminDeleteOrders(currentAdmin),
     [currentAdmin]
   )
 

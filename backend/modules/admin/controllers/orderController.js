@@ -13,11 +13,6 @@ import AuditLog from '../models/AuditLog.js';
 
 const normalizePlatform = (value) => (value === 'mogrocery' ? 'mogrocery' : 'mofood');
 const ORDER_SNAPSHOT_DIR = path.join(process.cwd(), 'cache');
-const ORDER_DELETE_ALLOWED_ADMIN_EMAILS = new Set([
-  'emmanuel@mobasket.in',
-  'appzeto@gmail.com',
-]);
-
 const hasAcceptedRider = (order = null) => {
   const deliveryStateStatus = String(order?.deliveryState?.status || '').toLowerCase();
   const notificationPhase = String(order?.assignmentInfo?.notificationPhase || '').toLowerCase();
@@ -305,6 +300,9 @@ const canAdminAccessOrder = (admin = null, order = null) => {
   const orderZoneId = String(order?.assignmentInfo?.zoneId || '').trim();
   return Boolean(orderZoneId) && assignedZoneIds.includes(orderZoneId);
 };
+
+const canAdminDeleteOrders = (admin = null) =>
+  String(admin?.role || '').trim().toLowerCase() === 'super_admin';
 
 /**
  * Get all orders for admin
@@ -1062,9 +1060,8 @@ export const deleteOrderPermanently = asyncHandler(async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
-    const requesterEmail = String(req.user?.email || '').trim().toLowerCase();
-    if (!ORDER_DELETE_ALLOWED_ADMIN_EMAILS.has(requesterEmail)) {
-      return errorResponse(res, 403, 'Only the authorized admin account can permanently delete orders');
+    if (!canAdminDeleteOrders(req.user)) {
+      return errorResponse(res, 403, 'Only super admins can permanently delete orders');
     }
 
     const orderIdentifier = String(req.params.id || '').trim();
