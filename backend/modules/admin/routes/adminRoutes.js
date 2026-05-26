@@ -247,7 +247,8 @@ import {
   processRefund,
   getOngoingOrders,
   getTransactionReport,
-  getRestaurantReport
+  getRestaurantReport,
+  deliverOrderFromAdmin
 } from '../controllers/orderController.js';
 import { assignOrder } from '../../order/controllers/orderAssignmentController.js';
 import { validateOrderAssignmentPayload } from '../../order/middleware/codAssignmentValidation.js';
@@ -535,6 +536,7 @@ router.delete('/safety-emergency/:id', deleteSafetyEmergency);
 router.get('/orders', getOrders);
 router.patch('/orders/:id/accept', acceptOrderFromAdmin);
 router.patch('/orders/:id/reject-direct', rejectOrderFromAdmin);
+router.patch('/orders/:id/deliver', deliverOrderFromAdmin);
 router.post('/orders/:id/approve', approveOrderRequest);
 router.post('/orders/:id/reject', rejectOrderRequest);
 router.delete('/orders/:id', deleteOrderPermanently);

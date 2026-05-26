@@ -3369,3 +3369,223 @@ export const processRefund = asyncHandler(async (req, res) => {
     return errorResponse(res, 500, error.message || 'Failed to process refund');
   }
 });
+
+/**
+ * Mark order as delivered directly from admin
+ * PATCH /api/admin/orders/:id/deliver
+ */
+export const deliverOrderFromAdmin = asyncHandler(async (req, res) => {
+  try {
+    const { id } = req.params;
+    const adminId = req.user?._id || req.admin?._id;
+
+    const order = await resolveAdminOrderById(id);
+    if (!order) {
+      return errorResponse(res, 404, 'Order not found');
+    }
+    if (!canAdminAccessOrder(req.user, order)) {
+      return errorResponse(res, 403, 'Access denied for orders outside your assigned zones');
+    }
+
+    if (String(order.status || '').toLowerCase() === 'cancelled') {
+      return errorResponse(res, 409, 'Order has been cancelled. Cannot mark as delivered.');
+    }
+
+    const isAlreadyDelivered = order.status === 'delivered' || 
+                               order.deliveryState?.currentPhase === 'completed' ||
+                               order.deliveryState?.status === 'delivered';
+    
+    if (isAlreadyDelivered) {
+      return successResponse(res, 200, 'Order is already marked as delivered', {
+        orderId: order.orderId,
+        orderMongoId: order._id,
+        orderStatus: order.status
+      });
+    }
+
+    const orderMongoId = order._id;
+    const orderIdForLog = order.orderId || orderMongoId?.toString();
+
+    // Prepare update object
+    const updateData = {
+      status: 'delivered',
+      'tracking.delivered': {
+        status: true,
+        timestamp: new Date()
+      },
+      deliveredAt: new Date(),
+      'deliveryState.status': 'delivered',
+      'deliveryState.currentPhase': 'completed'
+    };
+    
+    // Update order to delivered
+    const updatedOrder = await Order.findByIdAndUpdate(
+      orderMongoId,
+      {
+        $set: updateData
+      },
+      { new: true, runValidators: true }
+    )
+      .populate('restaurantId', 'name location address phone ownerPhone')
+      .populate('userId', 'name phone')
+      .lean();
+
+    if (!updatedOrder) {
+      return errorResponse(res, 500, 'Failed to update order status');
+    }
+
+    console.log(`✅ Order ${orderIdForLog} marked as delivered by admin ${adminId}`);
+
+    // Mark COD payment as collected (admin Payment Status → Collected)
+    if (order.payment?.method === 'cash' || order.payment?.method === 'cod') {
+      try {
+        await Payment.updateOne(
+          { orderId: orderMongoId },
+          { $set: { status: 'completed', completedAt: new Date() } }
+        );
+        console.log(`✅ COD payment marked as collected for order ${orderIdForLog}`);
+      } catch (paymentUpdateError) {
+        console.warn('⚠️ Could not update COD payment status:', paymentUpdateError.message);
+      }
+    }
+
+    // Release escrow and distribute funds (this handles all wallet credits)
+    let escrowDistributed = false;
+    try {
+      const { releaseEscrow } = await import('../../order/services/escrowWalletService.js');
+      await releaseEscrow(orderMongoId);
+      escrowDistributed = true;
+      console.log(`✅ Escrow released and funds distributed for order ${orderIdForLog}`);
+    } catch (escrowError) {
+      console.error(`❌ Error releasing escrow for order ${orderIdForLog}:`, escrowError);
+    }
+
+    // Handle delivery partner earnings if a delivery partner was assigned
+    if (order.deliveryPartnerId) {
+      const deliveryId = order.deliveryPartnerId;
+      let deliveryDistance = 0;
+      
+      if (order.deliveryState?.routeToDelivery?.distance) {
+        deliveryDistance = order.deliveryState.routeToDelivery.distance;
+      } else if (order.assignmentInfo?.distance) {
+        deliveryDistance = order.assignmentInfo.distance;
+      } else if (order.restaurantId?.location?.coordinates && order.address?.location?.coordinates) {
+        const [restaurantLng, restaurantLat] = order.restaurantId.location.coordinates;
+        const [customerLng, customerLat] = order.address.location.coordinates;
+        
+        // Haversine formula
+        const R = 6371;
+        const dLat = (customerLat - restaurantLat) * Math.PI / 180;
+        const dLng = (customerLng - restaurantLng) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                  Math.cos(restaurantLat * Math.PI / 180) * Math.cos(customerLat * Math.PI / 180) *
+                  Math.sin(dLng/2) * Math.sin(dLng/2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        deliveryDistance = R * c;
+      }
+      
+      console.log(`📏 Delivery partner ${deliveryId} was assigned. Distance: ${deliveryDistance.toFixed(2)} km`);
+
+      let totalEarning = 0;
+      try {
+        const { calculateDriverEarning } = await import('../../order/services/deliveryEarningService.js');
+        const earningResult = await calculateDriverEarning(deliveryDistance, order?.platform || 'mofood');
+        totalEarning = Number(earningResult.totalEarning || 0);
+      } catch (commissionError) {
+        console.error('⚠️ Error calculating commission using rules:', commissionError.message);
+        totalEarning = order.pricing?.deliveryFee || 0;
+      }
+
+      try {
+        const DeliveryWallet = (await import('../../delivery/models/DeliveryWallet.js')).default;
+        const Delivery = (await import('../../delivery/models/Delivery.js')).default;
+
+        let wallet = await DeliveryWallet.findOrCreateByDeliveryId(deliveryId);
+        
+        const orderIdForTransaction = orderMongoId?.toString() || orderMongoId;
+        const existingTransaction = wallet.transactions?.find(
+          t => t.orderId && t.orderId.toString() === orderIdForTransaction && t.type === 'payment'
+        );
+
+        if (existingTransaction) {
+          console.warn(`⚠️ Earning already added for order ${orderIdForLog}, skipping wallet update`);
+        } else {
+          wallet.addTransaction({
+            amount: totalEarning,
+            type: 'payment',
+            status: 'Completed',
+            description: `Delivery earnings for Order #${orderIdForLog} (Distance: ${deliveryDistance.toFixed(2)} km) - Marked by Admin`,
+            orderId: orderMongoId,
+            paymentCollected: false
+          });
+
+          await wallet.save();
+
+          const codAmount = Number(order.pricing?.total) || 0;
+          const paymentMethod = (order.payment?.method || '').toString().toLowerCase();
+          const isCashOrder = paymentMethod === 'cash' || paymentMethod === 'cod';
+          if (isCashOrder && codAmount > 0) {
+            await DeliveryWallet.updateOne(
+              { deliveryId: deliveryId },
+              { $inc: { cashInHand: codAmount, codCashCollected: codAmount } }
+            );
+            await Delivery.updateOne(
+              { _id: deliveryId },
+              { $set: { 'availability.isActiveOrder': false } }
+            );
+          }
+        }
+      } catch (walletError) {
+        console.error(`❌ Error updating delivery partner wallet:`, walletError);
+      }
+    }
+
+    // Try tracking update socket emit
+    try {
+      const serverModule = await import('../../../server.js');
+      const getIO = serverModule.getIO;
+      const io = getIO ? getIO() : null;
+      if (io) {
+        const aliases = Array.from(new Set([
+          updatedOrder?._id?.toString?.(),
+          updatedOrder?._id,
+          updatedOrder?.orderId
+        ].filter(Boolean).map(String)));
+
+        aliases.forEach((alias) => {
+          io.to(`order:${alias}`).emit('order_status_update', {
+            orderId: updatedOrder?.orderId || alias,
+            title: 'Order Update',
+            message: 'Your order has been delivered successfully. Thank you!',
+            status: 'delivered',
+            phase: 'completed'
+          });
+        });
+      }
+    } catch (socketError) {
+      console.warn(`⚠️ Failed to emit socket tracking update: ${socketError.message}`);
+    }
+
+    // Sync active tracking in Firebase if active
+    try {
+      const { upsertActiveOrderTracking } = await import('../../../shared/services/firebaseRealtimeService.js');
+      if (upsertActiveOrderTracking) {
+        await upsertActiveOrderTracking(String(updatedOrder.orderId || order.orderId), {
+          status: 'delivered',
+          phase: 'completed'
+        });
+      }
+    } catch (firebaseErr) {
+      console.warn(`⚠️ Firebase sync failed after deliverOrderFromAdmin for ${order.orderId}: ${firebaseErr.message}`);
+    }
+
+    return successResponse(res, 200, 'Order marked as delivered successfully', {
+      orderId: updatedOrder.orderId,
+      orderMongoId: updatedOrder._id,
+      orderStatus: updatedOrder.status
+    });
+  } catch (error) {
+    console.error('Error delivering order from admin:', error);
+    return errorResponse(res, 500, error.message || 'Failed to mark order as delivered');
+  }
+});

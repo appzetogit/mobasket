@@ -126,6 +126,7 @@ export default function OrdersTable({
   onViewOrder,
   onPrintOrder,
   onRefund,
+  onDeliverOrder,
   onAdminStoreAccept,
   onAdminStoreReject,
   onAcceptOrder,
@@ -683,6 +684,23 @@ export default function OrdersTable({
                               </button>
                             )}
                           </>
+                        )}
+                      {typeof onDeliverOrder === "function" &&
+                        order.orderStatus !== "Delivered" &&
+                        order.orderStatus !== "Canceled" &&
+                        order.orderStatus !== "Cancelled by Restaurant" &&
+                        order.orderStatus !== "Cancelled by Store" &&
+                        order.orderStatus !== "Cancelled by User" &&
+                        order.status !== "cancelled" &&
+                        order.status !== "delivered" && (
+                          <button
+                            onClick={() => onDeliverOrder(order)}
+                            className="inline-flex items-center gap-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg px-2.5 py-1.5 text-xs font-semibold shadow-sm transition-colors"
+                            title="Mark as Delivered"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Deliver</span>
+                          </button>
                         )}
                       <button
                         onClick={() => onViewOrder(order)}

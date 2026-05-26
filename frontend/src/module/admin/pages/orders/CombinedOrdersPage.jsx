@@ -828,6 +828,26 @@ export default function CombinedOrdersPage() {
     }
   }
 
+  const handleDeliverOrder = async (order) => {
+    const orderIdToUse = order.id || order._id || order.orderId
+    if (!orderIdToUse) {
+      toast.error("Order ID not found")
+      return
+    }
+
+    const confirmMessage = `Mark order ${order.orderId || orderIdToUse} as delivered?\n\nThis will update the database, release escrow, and credit delivery partner wallet (if assigned).`
+    if (!window.confirm(confirmMessage)) return
+
+    try {
+      await adminAPI.deliverOrderFromAdmin(orderIdToUse)
+      toast.success(`Order ${order.orderId || orderIdToUse} marked as delivered successfully`)
+      await fetchOrders({ showLoader: false })
+    } catch (error) {
+      console.error("Error marking order as delivered:", error)
+      toast.error(error?.response?.data?.message || "Failed to mark order as delivered")
+    }
+  }
+
   const handleDeleteOrder = async (order) => {
     const orderIdToUse = order.id || order._id || order.orderId
     if (!orderIdToUse) {
@@ -1193,6 +1213,7 @@ export default function CombinedOrdersPage() {
         onRefund={handleRefund}
         onAdminStoreAccept={handleAdminAcceptStoreOrder}
         onAdminStoreReject={handleAdminRejectStoreOrder}
+        onDeliverOrder={handleDeliverOrder}
         enableDirectAcceptAction
         enableRiderActions
         onAssignRider={openAssignRiderDialog}
