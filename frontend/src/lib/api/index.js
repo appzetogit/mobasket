@@ -2204,6 +2204,10 @@ export const adminAPI = {
     return apiClient.patch(`/admin/orders/${id}/reject-direct`, { reason });
   },
 
+  deliverOrderFromAdmin: (id) => {
+    return apiClient.patch(`/admin/orders/${id}/deliver`);
+  },
+
   rejectOrderRequest: (id, reason) => {
     return apiClient.post(`/admin/orders/${id}/reject`, { reason });
   },

@@ -92,6 +92,8 @@ const getInitialFormData = () => ({
   stockQuantity: 1,
   inStock: true,
   variants: [],
+  availableFrom: "00:00",
+  availableTo: "23:59",
 })
 
 export default function Category({ scope = "food", defaultGroceryEntity = "categories" }) {
@@ -474,6 +476,8 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                 unit: item?.unit || "",
                 stockQuantity: item?.stockQuantity ?? 0,
                 inStock: item?.inStock !== false,
+                availableFrom: item?.availableFrom || "00:00",
+                availableTo: item?.availableTo || "23:59",
               }
             }
 
@@ -877,6 +881,8 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
         stockQuantity: category.stockQuantity ?? 0,
         inStock: category.inStock !== false,
         variants: normalizeProductVariantsForForm(category.variants),
+        availableFrom: category.availableFrom || "00:00",
+        availableTo: category.availableTo || "23:59",
       })
     } else {
       setFormData({
@@ -1281,6 +1287,8 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
           variants: normalizedVariants,
           isActive: Boolean(formData.status),
           images: hasCustomImageValue(resolvedImageValue) ? [resolvedImageValue] : [],
+          availableFrom: formData.availableFrom || "00:00",
+          availableTo: formData.availableTo || "23:59",
         }
         if (editingCategory) {
           if (normalizedStoreIds.length > 0) {
@@ -1538,7 +1546,14 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-medium text-slate-900">{category.name}</span>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-slate-900">{category.name}</span>
+                        {isGroceryScope && activeGroceryEntity === "products" && category.availableFrom && category.availableTo && (
+                          <span className="text-[11px] text-slate-500 font-normal mt-0.5 flex items-center gap-1">
+                            ⏰ {category.availableFrom} - {category.availableTo}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-sm font-medium text-slate-700">{category.type || 'N/A'}</span>
@@ -2406,6 +2421,37 @@ export default function Category({ scope = "food", defaultGroceryEntity = "categ
                           <label htmlFor="inStock" className="text-sm font-medium text-slate-700">
                             In Stock
                           </label>
+                        </div>
+                        <div className="border-t border-slate-100 pt-3">
+                          <label className="block text-sm font-semibold text-slate-700 mb-2">
+                            Availability Timing
+                          </label>
+                          <div className="grid grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                                Available From *
+                              </label>
+                              <input
+                                type="time"
+                                required
+                                value={formData.availableFrom || "00:00"}
+                                onChange={(e) => setFormData({ ...formData, availableFrom: e.target.value })}
+                                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 font-medium"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-slate-500 mb-1">
+                                Available To *
+                              </label>
+                              <input
+                                type="time"
+                                required
+                                value={formData.availableTo || "23:59"}
+                                onChange={(e) => setFormData({ ...formData, availableTo: e.target.value })}
+                                className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-700 font-medium"
+                              />
+                            </div>
+                          </div>
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-slate-700 mb-2">

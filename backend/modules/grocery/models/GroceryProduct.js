@@ -122,6 +122,14 @@ const groceryProductSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    availableFrom: {
+      type: String,
+      default: '00:00',
+    },
+    availableTo: {
+      type: String,
+      default: '23:59',
+    },
     storeId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'GroceryStore',

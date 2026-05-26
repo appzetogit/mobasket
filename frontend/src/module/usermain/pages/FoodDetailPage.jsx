@@ -110,6 +110,8 @@ const normalizeProduct = (item = {}, fallbackId = "") => {
     discount: item?.discount || (discountPercent > 0 ? `${discountPercent}% OFF` : ""),
     time: item?.time || "8 MINS",
     description: item?.description || "",
+    availableFrom: item?.availableFrom || "",
+    availableTo: item?.availableTo || "",
     image: item?.image || (Array.isArray(item?.images) ? item.images[0] : "") || imgStrawberry,
     categoryId: extractId(item?.categoryId) || extractId(item?.category) || "",
     subcategoryId:
@@ -199,6 +201,37 @@ export default function FoodDetailPage() {
   const selectedVariantInStock = selectedVariant ? resolveInStock(selectedVariant?.stockQuantity, selectedVariant?.inStock) : null;
   const productInStock = resolveInStock(product?.stockQuantity, product?.inStock);
   const isCurrentProductOutOfStock = selectedVariant ? !selectedVariantInStock : !productInStock;
+
+  const isAvailableNow = useMemo(() => {
+    const from = product?.availableFrom;
+    const to = product?.availableTo;
+    if (!from || !to) return true;
+    if (from === "00:00" && to === "23:59") return true;
+
+    try {
+      const now = new Date();
+      const currentHours = now.getHours();
+      const currentMinutes = now.getMinutes();
+      const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+
+      const [fromHours, fromMinutes] = from.split(":").map(Number);
+      const [toHours, toMinutes] = to.split(":").map(Number);
+      const fromTimeInMinutes = fromHours * 60 + fromMinutes;
+      const toTimeInMinutes = toHours * 60 + toMinutes;
+
+      if (fromTimeInMinutes <= toTimeInMinutes) {
+        return currentTimeInMinutes >= fromTimeInMinutes && currentTimeInMinutes <= toTimeInMinutes;
+      } else {
+        // Over-midnight hours
+        return currentTimeInMinutes >= fromTimeInMinutes || currentTimeInMinutes <= toTimeInMinutes;
+      }
+    } catch (e) {
+      console.error("Error calculating timing availability:", e);
+      return true;
+    }
+  }, [product?.availableFrom, product?.availableTo]);
+
+  const isProductTimeRestricted = !isAvailableNow;
 
   useEffect(() => {
     const onScroll = () => setShowStickyHeader(window.scrollY > 260);
@@ -483,7 +516,7 @@ export default function FoodDetailPage() {
           <div className="absolute top-0 left-0 right-0 h-24 bg-gradient-to-b from-white/70 to-transparent dark:from-[#0b0f16]/70 z-10 md:hidden" />
           <div className="absolute bottom-0 left-0 right-0 h-20 bg-gradient-to-t from-white via-white/90 to-transparent dark:from-[#0b0f16] dark:via-[#0b0f16]/80 z-10 md:hidden" />
 
-          {isAddedToCart ? (
+          {isAddedToCart && !isProductTimeRestricted ? (
             <div className="absolute bottom-4 right-4 z-20 h-10 px-2 rounded-xl bg-white dark:bg-[#0f172a] border border-emerald-300 dark:border-emerald-400/40 shadow-sm flex items-center gap-2 md:hidden">
               <button
                 type="button"
@@ -496,7 +529,7 @@ export default function FoodDetailPage() {
               <button
                 type="button"
                 onClick={handleIncreaseQuantity}
-                disabled={isCurrentProductOutOfStock}
+                disabled={isCurrentProductOutOfStock || isProductTimeRestricted}
                 className="w-7 h-7 rounded-full bg-emerald-600 text-white flex items-center justify-center"
               >
                 <Plus size={14} />
@@ -505,14 +538,14 @@ export default function FoodDetailPage() {
           ) : (
             <button
               onClick={(e) => handleAddToCart(null, e)}
-              disabled={isCurrentProductOutOfStock}
+              disabled={isCurrentProductOutOfStock || isProductTimeRestricted}
               className={`absolute bottom-4 right-4 text-xs font-black px-6 py-2 rounded-md shadow-sm transition-colors z-20 border md:hidden ${
-                isCurrentProductOutOfStock
+                isCurrentProductOutOfStock || isProductTimeRestricted
                   ? "bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600 text-slate-500 dark:text-slate-300 cursor-not-allowed"
                   : "bg-white dark:bg-[#0f172a] border-[#facd01] dark:border-amber-500/60 text-slate-900 dark:text-slate-100 hover:bg-[#facd01]"
               }`}
             >
-              {isCurrentProductOutOfStock ? "OUT OF STOCK" : "ADD"}
+              {isCurrentProductOutOfStock ? "OUT OF STOCK" : isProductTimeRestricted ? "UNAVAILABLE" : "ADD"}
             </button>
           )}
         </div>
@@ -533,6 +566,20 @@ export default function FoodDetailPage() {
               <p className="text-[12px] md:text-sm text-slate-600 dark:text-slate-300 mt-1.5 font-medium">
                 Sold by <span className="font-semibold text-slate-800 dark:text-slate-100">{product.storeName}</span>
               </p>
+            )}
+
+            {product.availableFrom && product.availableTo && (
+              <div className={`flex items-center gap-2 mt-2 border rounded-xl px-3 py-2 w-fit ${
+                isAvailableNow 
+                  ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/40 text-amber-800 dark:text-amber-300"
+                  : "bg-rose-50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/40 text-rose-800 dark:text-rose-300"
+              }`}>
+                <Clock className={`w-4 h-4 ${isAvailableNow ? "text-amber-600 dark:text-amber-400" : "text-rose-600 dark:text-rose-400"}`} />
+                <span className="text-xs font-bold flex items-center gap-1.5">
+                  {isAvailableNow ? "Available Timings:" : "Unavailable Now:"} {product.availableFrom} - {product.availableTo}
+                  {!isAvailableNow && <span className="text-[10px] bg-rose-200 dark:bg-rose-900/50 px-1.5 py-0.5 rounded font-black tracking-wider uppercase ml-1">Closed</span>}
+                </span>
+              </div>
             )}
 
             <p className="text-[13px] md:text-base font-bold text-[#2ca34a] dark:text-emerald-400 mt-1 md:mt-3">{displayedWeight}</p>
@@ -600,7 +647,7 @@ export default function FoodDetailPage() {
 
             {/* DESKTOP ADD BUTTON */}
             <div className="hidden md:flex mt-10 mb-4">
-              {isAddedToCart ? (
+              {isAddedToCart && !isProductTimeRestricted ? (
                 <div className="h-12 w-40 rounded-xl bg-emerald-600 text-white flex items-center justify-between px-3 shadow-md hover:shadow-lg transition-transform">
                   <button
                     type="button"
@@ -613,7 +660,7 @@ export default function FoodDetailPage() {
                   <button
                     type="button"
                     onClick={handleIncreaseQuantity}
-                    disabled={isCurrentProductOutOfStock}
+                    disabled={isCurrentProductOutOfStock || isProductTimeRestricted}
                     className="w-8 h-8 rounded-full bg-white text-emerald-700 flex items-center justify-center hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Plus size={16} strokeWidth={3} />
@@ -622,14 +669,14 @@ export default function FoodDetailPage() {
               ) : (
                 <button
                   onClick={(e) => handleAddToCart(null, e)}
-                  disabled={isCurrentProductOutOfStock}
+                  disabled={isCurrentProductOutOfStock || isProductTimeRestricted}
                   className={`h-12 w-40 rounded-xl font-[800] text-base shadow-md transition-colors ${
-                    isCurrentProductOutOfStock
+                    isCurrentProductOutOfStock || isProductTimeRestricted
                       ? "bg-slate-300 dark:bg-slate-700 text-slate-500 dark:text-slate-300 cursor-not-allowed"
                       : "bg-slate-800 text-white hover:bg-slate-700"
                   }`}
                 >
-                  {isCurrentProductOutOfStock ? "OUT OF STOCK" : "ADD TO CART"}
+                  {isCurrentProductOutOfStock ? "OUT OF STOCK" : isProductTimeRestricted ? "UNAVAILABLE NOW" : "ADD TO CART"}
                 </button>
               )}
             </div>

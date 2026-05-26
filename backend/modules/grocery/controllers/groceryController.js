@@ -616,7 +616,7 @@ export const getProducts = async (req, res) => {
     }
 
     const query = GroceryProduct.find(filter)
-      .select('category subcategories subcategory name slug images description mrp sellingPrice unit variants isActive inStock stockQuantity order storeId createdAt')
+      .select('category subcategories subcategory name slug images description mrp sellingPrice unit variants isActive inStock stockQuantity order storeId createdAt availableFrom availableTo')
       .populate('category', 'name slug section')
       .populate('subcategories', 'name slug')
       .populate('subcategory', 'name slug')
@@ -949,6 +949,8 @@ export const createProduct = async (req, res) => {
       inStock = true,
       stockQuantity = 0,
       order = 0,
+      availableFrom,
+      availableTo,
     } = req.body;
 
     const normalizedVariants = normalizeProductVariants(variants);
@@ -1029,6 +1031,8 @@ export const createProduct = async (req, res) => {
         storeId: targetStoreId,
         approvalStatus: 'approved',
         rejectionReason: '',
+        availableFrom: availableFrom || '00:00',
+        availableTo: availableTo || '23:59',
       };
     }));
 
