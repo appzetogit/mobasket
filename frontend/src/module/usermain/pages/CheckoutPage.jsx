@@ -172,6 +172,60 @@ export default function CheckoutPage() {
     );
   }, []);
 
+  const buildCurrentLocationAddress = useCallback((locationData) => {
+    if (!locationData || typeof locationData !== "object") return null;
+
+    const latitude = Number(
+      locationData.latitude ?? locationData.lat ?? locationData.location?.latitude,
+    );
+    const longitude = Number(
+      locationData.longitude ?? locationData.lng ?? locationData.location?.longitude,
+    );
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      return null;
+    }
+
+    const formattedAddress = String(
+      locationData.formattedAddress || locationData.address || "",
+    ).trim();
+    const blockedLabels = new Set([
+      "",
+      "select location",
+      "current location",
+    ]);
+    if (blockedLabels.has(formattedAddress.toLowerCase())) {
+      return null;
+    }
+
+    const street = String(locationData.street || "").trim();
+    const area = String(locationData.area || locationData.additionalDetails || "").trim();
+    const city = String(locationData.city || "").trim();
+    const state = String(locationData.state || "").trim();
+    const zipCode = String(
+      locationData.zipCode || locationData.postalCode || locationData.pincode || "",
+    ).trim();
+
+    return {
+      label: "Current Location",
+      completeAddress:
+        formattedAddress || [street, area, city, state, zipCode].filter(Boolean).join(", "),
+      street,
+      additionalDetails: area,
+      city,
+      state,
+      zipCode,
+      formattedAddress:
+        formattedAddress || [street, area, city, state, zipCode].filter(Boolean).join(", "),
+      latitude,
+      longitude,
+      location: {
+        type: "Point",
+        coordinates: [longitude, latitude],
+      },
+      isCurrentLocationTemporary: true,
+    };
+  }, []);
+
   const deliveryType =
     location.state?.deliveryType === "scheduled" ? "scheduled" : "now";
   const deliveryDate = location.state?.deliveryDate
@@ -292,6 +346,25 @@ export default function CheckoutPage() {
 
     setSelectedAddress(null);
   }, [addresses, getDefaultAddress, hasHydratedEditableAddress, selectedAddress]);
+
+  useEffect(() => {
+    if (orderingForSomeoneElse) return;
+    if (selectedAddress && hasHydratedEditableAddress(selectedAddress)) return;
+    if (Array.isArray(addresses) && addresses.length > 0) return;
+
+    const currentLocationAddress = buildCurrentLocationAddress(liveLocation);
+    if (currentLocationAddress) {
+      setSelectedAddress(currentLocationAddress);
+      setShowAddAddressForm(false);
+    }
+  }, [
+    addresses,
+    buildCurrentLocationAddress,
+    hasHydratedEditableAddress,
+    liveLocation,
+    orderingForSomeoneElse,
+    selectedAddress,
+  ]);
 
   const resetNewAddressForm = () => {
     setNewAddress({
@@ -1357,12 +1430,6 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!orderingForSomeoneElse && (!Array.isArray(addresses) || addresses.length === 0)) {
-      toast.error("Please add a saved address before ordering.");
-      setShowAddAddressForm(true);
-      return;
-    }
-
     if (!orderingForSomeoneElse && !selectedAddress) {
       toast.error("Please add/select a delivery address first.");
       return;
@@ -1915,6 +1982,34 @@ export default function CheckoutPage() {
                 </div>
 
                 <div className="space-y-2.5">
+                  {!Array.isArray(addresses) || addresses.length === 0 ? (
+                    selectedAddress && hasHydratedEditableAddress(selectedAddress) ? (
+                      <div className="rounded-[22px] border border-[#EF4F5F]/25 bg-gradient-to-r from-[#fff6f7] to-[#fffdf8] px-4 py-3 shadow-[0_10px_24px_rgba(239,79,95,0.10)] dark:border-[#EF4F5F]/20 dark:bg-[#21131a]">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
+                                {selectedAddress.label || "Current Location"}
+                              </p>
+                              <span className="rounded-full bg-[#EF4F5F] px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white">
+                                Selected
+                              </span>
+                              <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.14em] text-[#EF4F5F] dark:bg-white/10">
+                                Auto detected
+                              </span>
+                            </div>
+                            <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">
+                              {formatAddressLine(selectedAddress)}
+                            </p>
+                          </div>
+                          <div className="mt-0.5 flex h-5 w-5 items-center justify-center rounded-full border border-[#EF4F5F] bg-[#EF4F5F]">
+                            <div className="h-2 w-2 rounded-full bg-white" />
+                          </div>
+                        </div>
+                      </div>
+                    ) : null
+                  ) : null}
+
                   {Array.isArray(addresses) && addresses.length > 0 ? (
                     addresses.map((address) => {
                       const addressId = address.id || address._id;

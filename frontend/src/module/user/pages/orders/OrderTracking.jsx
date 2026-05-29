@@ -3976,6 +3976,11 @@ export default function OrderTracking() {
               <div className="flex-1">
 
                 <p className="font-medium text-gray-900 dark:text-gray-100">Order #{order?.id || order?.orderId || 'N/A'}</p>
+                {Array.isArray(order?.rejectedItems) && order.rejectedItems.length > 0 && (
+                  <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                    {order.rejectedItems.length} item{order.rejectedItems.length > 1 ? "s were" : " was"} removed as unavailable.
+                  </p>
+                )}
 
                 <div className="mt-2 space-y-1">
 
@@ -3996,6 +4001,18 @@ export default function OrderTracking() {
                   ))}
 
                 </div>
+
+                {Array.isArray(order?.rejectedItems) && order.rejectedItems.length > 0 && (
+                  <div className="mt-3 space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-red-500">Removed items</p>
+                    {order.rejectedItems.map((item, index) => (
+                      <div key={`rejected-${index}`} className="flex items-center justify-between gap-2 text-sm text-red-600 dark:text-red-300">
+                        <span>{item.quantity || 1} x {item.name}</span>
+                        <span>-₹{Number((item.price || 0) * (item.quantity || 1)).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
               </div>
 

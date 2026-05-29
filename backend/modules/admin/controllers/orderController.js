@@ -976,6 +976,7 @@ export const getOrders = asyncHandler(async (req, res) => {
         adminReviewedAt: order.adminApproval?.reviewedAt || null,
         deliveryType: deliveryType,
         items: order.items || [],
+        rejectedItems: order.rejectedItems || [],
         address: order.address || {},
         deliveryPartnerId: delivery?._id?.toString?.() || (order.deliveryPartnerId ? String(order.deliveryPartnerId) : null),
         deliveryPartnerName: delivery?.name || null,
@@ -1272,6 +1273,7 @@ export const getOrderById = asyncHandler(async (req, res) => {
         totalAmount: order.pricing?.total || 0,
         deliveryPartnerName: delivery?.name || null,
         deliveryPartnerPhone: delivery?.phone || null,
+        rejectedItems: order.rejectedItems || [],
         timedOutByRestaurant,
         acceptanceTimeoutAt
       }
@@ -1288,6 +1290,104 @@ const resolveAdminOrderById = async (id) => {
     if (byMongoId) return byMongoId;
   }
   return Order.findOne({ orderId: id });
+};
+
+const normalizeRejectedItemsPayload = (items = []) =>
+  (Array.isArray(items) ? items : [])
+    .map((item) => ({
+      itemRef: String(item?.itemRef || item?.itemId || item?._id || '').trim(),
+      reason: String(item?.reason || '').trim()
+    }))
+    .filter((item) => item.itemRef && item.reason);
+
+const calculateAdjustedOrderTotals = (order, items) => {
+  const subtotal = items.reduce(
+    (sum, item) => sum + (Number(item?.price || 0) * Number(item?.quantity || 0)),
+    0
+  );
+  const deliveryFee = Number(order?.pricing?.deliveryFee || 0);
+  const platformFee = Number(order?.pricing?.platformFee || 0);
+  const tax = Number(order?.pricing?.tax || 0);
+  const discount = Number(order?.pricing?.discount || 0);
+  const total = Math.max(0, subtotal + deliveryFee + platformFee + tax - discount);
+
+  return {
+    subtotal: Number(subtotal.toFixed(2)),
+    total: Number(total.toFixed(2))
+  };
+};
+
+const applyPartialItemRejectionToOrder = (order, rejectedItemsPayload, adminId = null) => {
+  const normalizedRejectedItems = normalizeRejectedItemsPayload(rejectedItemsPayload);
+  if (!normalizedRejectedItems.length) {
+    return {
+      applied: false,
+      rejectedItems: [],
+      pricingAdjustment: null
+    };
+  }
+
+  const currentItems = Array.isArray(order?.items) ? order.items : [];
+  const selectedItemMap = new Map(
+    normalizedRejectedItems.map((item) => [item.itemRef, item.reason])
+  );
+
+  const remainingItems = [];
+  const rejectedItems = [];
+
+  for (const item of currentItems) {
+    const itemObjectId = String(item?._id || '').trim();
+    const itemBusinessId = String(item?.itemId || '').trim();
+    const matchedReason = selectedItemMap.get(itemObjectId) || selectedItemMap.get(itemBusinessId);
+
+    if (!matchedReason) {
+      remainingItems.push(item);
+      continue;
+    }
+
+    rejectedItems.push({
+      itemId: item.itemId,
+      name: item.name,
+      price: Number(item.price || 0),
+      quantity: Number(item.quantity || 1),
+      image: item.image || '',
+      description: item.description || '',
+      isVeg: item.isVeg !== false,
+      rejectionReason: matchedReason,
+      rejectedAt: new Date(),
+      rejectedBySource: 'admin',
+      rejectedByAdmin: adminId || null
+    });
+  }
+
+  if (!rejectedItems.length) {
+    throw new Error('No matching order items were found for rejection');
+  }
+
+  if (!remainingItems.length) {
+    throw new Error('Cannot reject every item with partial acceptance. Please use full order rejection instead.');
+  }
+
+  const previousSubtotal = Number(order?.pricing?.subtotal || 0);
+  const previousTotal = Number(order?.pricing?.total || 0);
+  const nextTotals = calculateAdjustedOrderTotals(order, remainingItems);
+
+  order.items = remainingItems;
+  order.rejectedItems = [...(Array.isArray(order?.rejectedItems) ? order.rejectedItems : []), ...rejectedItems];
+  order.pricing.subtotal = nextTotals.subtotal;
+  order.pricing.total = nextTotals.total;
+
+  return {
+    applied: true,
+    rejectedItems,
+    pricingAdjustment: {
+      previousSubtotal,
+      nextSubtotal: nextTotals.subtotal,
+      previousTotal,
+      nextTotal: nextTotals.total,
+      reductionAmount: Number(Math.max(0, previousTotal - nextTotals.total).toFixed(2))
+    }
+  };
 };
 
 const resolveRestaurantForOrder = async (order) => {
@@ -1538,6 +1638,7 @@ export const acceptOrderFromAdmin = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
     const adminId = req.user?._id || req.admin?._id;
+    const rejectedItemsPayload = normalizeRejectedItemsPayload(req.body?.rejectedItems);
 
     const order = await resolveAdminOrderById(id);
     if (!order) {
@@ -1553,6 +1654,19 @@ export const acceptOrderFromAdmin = asyncHandler(async (req, res) => {
 
     if (order.status === 'delivered') {
       return errorResponse(res, 400, 'Cannot accept a delivered order');
+    }
+
+    if (rejectedItemsPayload.length > 0) {
+      if (!['pending', 'confirmed'].includes(String(order.status || '').toLowerCase())) {
+        return errorResponse(res, 400, 'Single-item rejection is only available before the order is accepted');
+      }
+
+      try {
+        applyPartialItemRejectionToOrder(order, rejectedItemsPayload, adminId || null);
+        await order.save();
+      } catch (partialRejectError) {
+        return errorResponse(res, 400, partialRejectError.message || 'Failed to reject selected items');
+      }
     }
 
     const storeDocument = await resolveStoreDocumentForOrder(order);
@@ -1571,6 +1685,7 @@ export const acceptOrderFromAdmin = asyncHandler(async (req, res) => {
     };
     req.body = {
       ...(req.body || {}),
+      rejectedItems: rejectedItemsPayload,
       skipDeliveryAssignment: true,
       deliveryNotificationStrategy: 'all_zone'
     };

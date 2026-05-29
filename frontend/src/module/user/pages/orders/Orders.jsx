@@ -294,6 +294,15 @@ export default function Orders() {
                 _id: item._id || item.id,
                 id: item.id || item._id
               })),
+              rejectedItems: (order.rejectedItems || []).map(item => ({
+                itemId: item.itemId || item._id || item.id,
+                name: item.name || 'Item',
+                quantity: item.quantity || 1,
+                price: item.price || 0,
+                rejectionReason: item.rejectionReason || '',
+                _id: item._id || item.id,
+                id: item.id || item._id
+              })),
               total: order.pricing?.total || order.total || 0,
               subtotal: order.pricing?.subtotal || 0,
               deliveryFee: order.pricing?.deliveryFee || 0,
@@ -789,6 +798,19 @@ Order again from this ${entityLabel} in the ${companyName} app.`
                       })
                     ) : (
                       <p className="text-sm text-gray-500 dark:text-gray-400">No items found</p>
+                    )}
+                    {order.rejectedItems && order.rejectedItems.length > 0 && (
+                      <div className="pt-2 border-t border-dashed border-gray-200 dark:border-white/10">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-red-500 mb-1">
+                          Removed items
+                        </p>
+                        {order.rejectedItems.map((item, idx) => (
+                          <div key={item._id || item.id || idx} className="flex items-center justify-between gap-2 text-xs text-red-600 dark:text-red-300">
+                            <span>{item.quantity || 1} x {item.name}</span>
+                            <span>-₹{Number((item.price || 0) * (item.quantity || 1)).toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
 

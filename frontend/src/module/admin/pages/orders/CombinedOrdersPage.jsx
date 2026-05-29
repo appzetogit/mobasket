@@ -156,6 +156,7 @@ export default function CombinedOrdersPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
   const [viewOrderLoading, setViewOrderLoading] = useState(false)
+  const [viewOrderActionLoading, setViewOrderActionLoading] = useState(false)
   const [highlightedOrderIds, setHighlightedOrderIds] = useState([])
   const [processingRefund, setProcessingRefund] = useState(null)
   const [refundModalOpen, setRefundModalOpen] = useState(false)
@@ -710,7 +711,7 @@ export default function CombinedOrdersPage() {
     }
   }
 
-  const handleAdminAcceptStoreOrder = async (order) => {
+  const handleAdminAcceptStoreOrder = async (order, options = {}) => {
     const orderIdToUse = order.id || order._id || order.orderId
     if (!orderIdToUse) {
       toast.error("Order ID not found")
@@ -718,7 +719,12 @@ export default function CombinedOrdersPage() {
     }
 
     try {
-      const response = await adminAPI.acceptStoreOrderFromAdmin(orderIdToUse)
+      const payload = {}
+      if (Array.isArray(options?.rejectedItems) && options.rejectedItems.length > 0) {
+        payload.rejectedItems = options.rejectedItems
+      }
+
+      const response = await adminAPI.acceptStoreOrderFromAdmin(orderIdToUse, payload)
       const nextHighlightedIds = highlightedOrderIds.filter((id) => String(id) !== String(orderIdToUse))
       setHighlightedOrderIds(nextHighlightedIds)
       highlightedOrderIdsRef.current = nextHighlightedIds
@@ -732,12 +738,27 @@ export default function CombinedOrdersPage() {
 
       const assignedRider = response?.data?.data?.rider
       const acceptedAlreadyAssigned = Boolean(response?.data?.data?.accepted)
+      if (options?.closeViewDialog) {
+        setIsViewOrderOpen(false)
+      }
       if (!assignedRider && !acceptedAlreadyAssigned) {
         await openAssignRiderDialog(order)
       }
     } catch (error) {
       console.error("Error accepting order from combined admin page:", error)
       toast.error(error?.response?.data?.message || "Failed to accept order")
+    }
+  }
+
+  const handleAcceptRemainingItems = async (order, rejectedItems) => {
+    setViewOrderActionLoading(true)
+    try {
+      await handleAdminAcceptStoreOrder(order, {
+        rejectedItems,
+        closeViewDialog: true,
+      })
+    } finally {
+      setViewOrderActionLoading(false)
     }
   }
 
@@ -1066,6 +1087,10 @@ export default function CombinedOrdersPage() {
         order={selectedOrder}
         isGrocery={selectedOrderIsGrocery}
         isLoading={viewOrderLoading}
+        isActionLoading={viewOrderActionLoading}
+        onAcceptOrder={(order) => handleAdminAcceptStoreOrder(order, { closeViewDialog: true })}
+        onRejectOrder={handleAdminRejectStoreOrder}
+        onAcceptWithRejectedItems={handleAcceptRemainingItems}
       />
       <RefundModal
         isOpen={refundModalOpen}

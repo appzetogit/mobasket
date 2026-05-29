@@ -191,6 +191,7 @@ export default function UserOrderDetails() {
   })()
 
   const items = Array.isArray(order.items) ? order.items : []
+  const rejectedItems = Array.isArray(order.rejectedItems) ? order.rejectedItems : []
   const pricing = order.pricing || {}
   const isDeliveredOrder = String(order.status || "").toLowerCase() === "delivered"
   const hasRatedRestaurant = getRestaurantRatingFromOrder(order) > 0
@@ -446,6 +447,11 @@ export default function UserOrderDetails() {
                   ? "Order was delivered"
                   : "Order status: " + (order.status || "Processing")}
               </h2>
+              {rejectedItems.length > 0 && (
+                <p className="text-xs text-amber-700 mt-1 dark:text-amber-300">
+                  {rejectedItems.length} item{rejectedItems.length > 1 ? "s were" : " was"} removed as unavailable and your bill was adjusted.
+                </p>
+              )}
             </div>
           </div>
 
@@ -516,6 +522,30 @@ export default function UserOrderDetails() {
                 </span>
               </div>
             ))}
+
+            {rejectedItems.length > 0 && (
+              <>
+                <div className="border-t border-dashed border-gray-200 my-3 dark:border-white/10" />
+                <div className="space-y-2">
+                  <p className="text-xs uppercase tracking-wide text-red-500 font-semibold">Removed items</p>
+                  {rejectedItems.map((item, idx) => (
+                    <div key={`rejected-${idx}`} className="flex justify-between items-start gap-3">
+                      <div>
+                        <span className="text-sm text-red-700 font-medium block dark:text-red-300">
+                          {item.quantity || 1} x {item.name}
+                        </span>
+                        <p className="text-xs text-red-500 dark:text-red-300/80">
+                          {item.rejectionReason || "Unavailable at the store"}
+                        </p>
+                      </div>
+                      <span className="text-sm text-red-700 font-medium dark:text-red-300">
+                        -₹{Number((item.price || 0) * (item.quantity || 1)).toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Bill Summary Card */}
@@ -548,6 +578,19 @@ export default function UserOrderDetails() {
                   </span>
                 </div>
               </div>
+              {rejectedItems.length > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500 dark:text-gray-400">Removed unavailable items</span>
+                  <span className="text-red-600 dark:text-red-300">
+                    -₹{Number(
+                      rejectedItems.reduce(
+                        (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 1),
+                        0
+                      )
+                    ).toFixed(2)}
+                  </span>
+                </div>
+              )}
               <div className="flex justify-between">
                 <span className="text-gray-500 dark:text-gray-400">GST (govt. taxes)</span>
                 <span className="text-gray-800 dark:text-gray-100">

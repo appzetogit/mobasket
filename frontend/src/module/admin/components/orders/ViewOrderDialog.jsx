@@ -1,4 +1,5 @@
-import { Eye, MapPin, Package, User, Phone, Mail, Calendar, Clock, Truck, CreditCard, X, Receipt, Edit3 } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
+import { CheckCircle2, Eye, MapPin, Package, User, Phone, Mail, Calendar, Clock, Truck, CreditCard, X, Receipt, Edit3 } from "lucide-react"
 import {
   Dialog,
   DialogContent,
@@ -71,7 +72,25 @@ const getPaymentStatusColor = (paymentStatus) => {
   return "text-slate-600"
 }
 
-export default function ViewOrderDialog({ isOpen, onOpenChange, order, isGrocery = false, isLoading = false }) {
+export default function ViewOrderDialog({
+  isOpen,
+  onOpenChange,
+  order,
+  isGrocery = false,
+  isLoading = false,
+  isActionLoading = false,
+  onAcceptOrder,
+  onRejectOrder,
+  onAcceptWithRejectedItems,
+}) {
+  const [selectedRejectedItems, setSelectedRejectedItems] = useState({})
+
+  useEffect(() => {
+    if (isOpen) {
+      setSelectedRejectedItems({})
+    }
+  }, [isOpen, order?.id, order?._id, order?.orderId])
+
   if (!order) return null
 
   const deliveryStateStatus = String(order?.deliveryState?.status || "").toLowerCase()
@@ -89,6 +108,13 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order, isGrocery
     assignedDeliveryPartnerId === lastRejectedById
   const showAcceptedRider = Boolean(order?.deliveryPartnerName) && hasAcceptedRider && !wasDisplayedRiderLastRejected
   const showAssignedRider = Boolean(order?.deliveryPartnerName) && !hasAcceptedRider && !wasDisplayedRiderLastRejected
+  const canManageItemsBeforeAccept =
+    typeof onAcceptWithRejectedItems === "function" &&
+    ["pending", "confirmed"].includes(String(order?.status || "").toLowerCase())
+  const selectedRejectedItemEntries = useMemo(
+    () => Object.entries(selectedRejectedItems),
+    [selectedRejectedItems]
+  )
 
   // Debug: Log order data to check billImageUrl
   if (order.billImageUrl) {
@@ -132,6 +158,32 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order, isGrocery
       return `${lat.toFixed(6)}, ${lng.toFixed(6)}`
     }
     return null
+  }
+
+  const getItemKey = (item, index) => String(item?._id || item?.itemId || index)
+
+  const handleToggleItemRejection = (item, index) => {
+    const itemKey = getItemKey(item, index)
+    if (selectedRejectedItems[itemKey]) {
+      setSelectedRejectedItems((prev) => {
+        const next = { ...prev }
+        delete next[itemKey]
+        return next
+      })
+      return
+    }
+
+    const reason = window.prompt(`Why is "${item?.name || "this item"}" unavailable?`)
+    if (!reason || !reason.trim()) return
+
+    setSelectedRejectedItems((prev) => ({
+      ...prev,
+      [itemKey]: {
+        itemRef: itemKey,
+        itemName: item?.name || "Unknown Item",
+        reason: reason.trim(),
+      },
+    }))
   }
 
   return (
@@ -421,6 +473,117 @@ export default function ViewOrderDialog({ isOpen, onOpenChange, order, isGrocery
                     View Full Size
                   </a>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {(typeof onAcceptOrder === "function" || typeof onRejectOrder === "function" || canManageItemsBeforeAccept) && (
+            <div className="border-t border-slate-200 pt-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {typeof onRejectOrder === "function" && (
+                  <button
+                    type="button"
+                    onClick={() => onRejectOrder(order)}
+                    disabled={isActionLoading}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <X className="h-4 w-4" />
+                    <span>Reject Order</span>
+                  </button>
+                )}
+                {typeof onAcceptOrder === "function" && (
+                  <button
+                    type="button"
+                    onClick={() => onAcceptOrder(order)}
+                    disabled={isActionLoading}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-green-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>Accept Full Order</span>
+                  </button>
+                )}
+              </div>
+              {canManageItemsBeforeAccept && (
+                <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-amber-900">Item Availability Actions</p>
+                      <p className="text-xs text-amber-800 mt-1">
+                        Reject only the unavailable items, then accept the remaining order.
+                      </p>
+                    </div>
+                    {selectedRejectedItemEntries.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => onAcceptWithRejectedItems(order, selectedRejectedItemEntries.map(([, value]) => value))}
+                        disabled={isActionLoading || selectedRejectedItemEntries.length >= order.items.length}
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span>
+                          {selectedRejectedItemEntries.length >= order.items.length
+                            ? "Use full reject instead"
+                            : "Accept Remaining Items"}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {order.items.map((item, index) => {
+                      const itemKey = getItemKey(item, index)
+                      const selectedItem = selectedRejectedItems[itemKey]
+                      return (
+                        <div key={`availability-${itemKey}`} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white/80 px-3 py-2">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">
+                              {item.quantity || 1}x {item.name || "Unknown Item"}
+                            </p>
+                            {selectedItem && (
+                              <p className="text-xs text-red-600 mt-1">{selectedItem.reason}</p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleToggleItemRejection(item, index)}
+                            disabled={isActionLoading}
+                            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                              selectedItem
+                                ? "bg-slate-200 text-slate-700 hover:bg-slate-300"
+                                : "bg-red-100 text-red-700 hover:bg-red-200"
+                            }`}
+                          >
+                            <span>{selectedItem ? "Undo Reject" : "Reject Item"}</span>
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {order.rejectedItems && Array.isArray(order.rejectedItems) && order.rejectedItems.length > 0 && (
+            <div className="border-t border-slate-200 pt-4">
+              <h3 className="text-sm font-semibold text-slate-700 mb-4">Rejected Items</h3>
+              <div className="space-y-3">
+                {order.rejectedItems.map((item, index) => (
+                  <div key={`rejected-${getItemKey(item, index)}`} className="rounded-lg border border-red-200 bg-red-50 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-red-900">
+                          {item.quantity || 1}x {item.name || "Unknown Item"}
+                        </p>
+                        <p className="text-xs text-red-700 mt-1">
+                          {item.rejectionReason || "Rejected as unavailable"}
+                        </p>
+                      </div>
+                      <p className="text-sm font-semibold text-red-900">
+                        â‚¹{((item.price || 0) * (item.quantity || 1)).toFixed(2)}
+                      </p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}

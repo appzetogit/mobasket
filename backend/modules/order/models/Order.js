@@ -31,6 +31,54 @@ const orderItemSchema = new mongoose.Schema({
   }
 }, { _id: true });
 
+const rejectedOrderItemSchema = new mongoose.Schema({
+  itemId: {
+    type: String,
+    required: true
+  },
+  name: {
+    type: String,
+    required: true
+  },
+  price: {
+    type: Number,
+    required: true
+  },
+  quantity: {
+    type: Number,
+    required: true,
+    min: 1
+  },
+  image: {
+    type: String
+  },
+  description: {
+    type: String
+  },
+  isVeg: {
+    type: Boolean,
+    default: true
+  },
+  rejectionReason: {
+    type: String,
+    default: ''
+  },
+  rejectedAt: {
+    type: Date,
+    default: Date.now
+  },
+  rejectedBySource: {
+    type: String,
+    enum: ['restaurant', 'admin'],
+    default: 'admin'
+  },
+  rejectedByAdmin: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Admin',
+    default: null
+  }
+}, { _id: true });
+
 const pendingCartEditSchema = new mongoose.Schema({
   items: {
     type: [orderItemSchema],
@@ -127,6 +175,10 @@ const orderSchema = new mongoose.Schema({
       },
       message: 'Order must have at least one item'
     }
+  },
+  rejectedItems: {
+    type: [rejectedOrderItemSchema],
+    default: []
   },
   address: {
     label: {
