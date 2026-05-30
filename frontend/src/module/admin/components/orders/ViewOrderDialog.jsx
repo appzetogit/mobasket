@@ -84,6 +84,10 @@ export default function ViewOrderDialog({
   onAcceptWithRejectedItems,
 }) {
   const [selectedRejectedItems, setSelectedRejectedItems] = useState({})
+  const selectedRejectedItemEntries = useMemo(
+    () => Object.entries(selectedRejectedItems),
+    [selectedRejectedItems]
+  )
 
   useEffect(() => {
     if (isOpen) {
@@ -111,10 +115,6 @@ export default function ViewOrderDialog({
   const canManageItemsBeforeAccept =
     typeof onAcceptWithRejectedItems === "function" &&
     ["pending", "confirmed"].includes(String(order?.status || "").toLowerCase())
-  const selectedRejectedItemEntries = useMemo(
-    () => Object.entries(selectedRejectedItems),
-    [selectedRejectedItems]
-  )
 
   // Debug: Log order data to check billImageUrl
   if (order.billImageUrl) {
