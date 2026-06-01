@@ -1296,9 +1296,10 @@ const normalizeRejectedItemsPayload = (items = []) =>
   (Array.isArray(items) ? items : [])
     .map((item) => ({
       itemRef: String(item?.itemRef || item?.itemId || item?._id || '').trim(),
-      reason: String(item?.reason || '').trim()
+      reason: String(item?.reason || '').trim(),
+      quantity: Number(item?.quantity || 0)
     }))
-    .filter((item) => item.itemRef && item.reason);
+    .filter((item) => item.itemRef && item.reason && Number.isFinite(item.quantity) && item.quantity > 0);
 
 const calculateAdjustedOrderTotals = (order, items) => {
   const subtotal = items.reduce(
@@ -1329,7 +1330,7 @@ const applyPartialItemRejectionToOrder = (order, rejectedItemsPayload, adminId =
 
   const currentItems = Array.isArray(order?.items) ? order.items : [];
   const selectedItemMap = new Map(
-    normalizedRejectedItems.map((item) => [item.itemRef, item.reason])
+    normalizedRejectedItems.map((item) => [item.itemRef, item])
   );
 
   const remainingItems = [];
@@ -1338,22 +1339,39 @@ const applyPartialItemRejectionToOrder = (order, rejectedItemsPayload, adminId =
   for (const item of currentItems) {
     const itemObjectId = String(item?._id || '').trim();
     const itemBusinessId = String(item?.itemId || '').trim();
-    const matchedReason = selectedItemMap.get(itemObjectId) || selectedItemMap.get(itemBusinessId);
+    const matchedSelection = selectedItemMap.get(itemObjectId) || selectedItemMap.get(itemBusinessId);
 
-    if (!matchedReason) {
+    if (!matchedSelection) {
       remainingItems.push(item);
       continue;
+    }
+
+    const currentQuantity = Math.max(1, Number(item?.quantity || 1));
+    const requestedRejectedQuantity = Math.max(0, Number(matchedSelection.quantity || 0));
+
+    if (requestedRejectedQuantity > currentQuantity) {
+      throw new Error(`Rejected quantity for "${item?.name || 'item'}" exceeds the ordered quantity`);
+    }
+
+    const remainingQuantity = currentQuantity - requestedRejectedQuantity;
+    const nextItem = item?.toObject ? item.toObject() : { ...item };
+
+    if (remainingQuantity > 0) {
+      remainingItems.push({
+        ...nextItem,
+        quantity: remainingQuantity
+      });
     }
 
     rejectedItems.push({
       itemId: item.itemId,
       name: item.name,
       price: Number(item.price || 0),
-      quantity: Number(item.quantity || 1),
+      quantity: requestedRejectedQuantity,
       image: item.image || '',
       description: item.description || '',
       isVeg: item.isVeg !== false,
-      rejectionReason: matchedReason,
+      rejectionReason: matchedSelection.reason,
       rejectedAt: new Date(),
       rejectedBySource: 'admin',
       rejectedByAdmin: adminId || null

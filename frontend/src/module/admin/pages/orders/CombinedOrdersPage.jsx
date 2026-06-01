@@ -750,6 +750,10 @@ export default function CombinedOrdersPage() {
     }
   }
 
+  const handleOpenAcceptOrderDialog = async (order) => {
+    await handleViewOrder(order)
+  }
+
   const handleAcceptRemainingItems = async (order, rejectedItems) => {
     setViewOrderActionLoading(true)
     try {
@@ -1082,6 +1086,7 @@ export default function CombinedOrdersPage() {
         resetColumns={resetColumns}
       />
       <ViewOrderDialog
+        key={`${selectedOrder?.id || selectedOrder?._id || selectedOrder?.orderId || "no-order"}-${isViewOrderOpen ? "open" : "closed"}`}
         isOpen={isViewOrderOpen}
         onOpenChange={setIsViewOrderOpen}
         order={selectedOrder}
@@ -1236,7 +1241,7 @@ export default function CombinedOrdersPage() {
         onViewOrder={handleViewOrder}
         onPrintOrder={handlePrintOrder}
         onRefund={handleRefund}
-        onAdminStoreAccept={handleAdminAcceptStoreOrder}
+        onAdminStoreAccept={handleOpenAcceptOrderDialog}
         onAdminStoreReject={handleAdminRejectStoreOrder}
         onDeliverOrder={handleDeliverOrder}
         enableDirectAcceptAction
