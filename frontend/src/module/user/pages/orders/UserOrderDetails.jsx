@@ -192,6 +192,10 @@ export default function UserOrderDetails() {
 
   const items = Array.isArray(order.items) ? order.items : []
   const rejectedItems = Array.isArray(order.rejectedItems) ? order.rejectedItems : []
+  const rejectedItemUnits = rejectedItems.reduce(
+    (sum, item) => sum + Math.max(0, Number(item?.quantity || 0)),
+    0
+  )
   const pricing = order.pricing || {}
   const isDeliveredOrder = String(order.status || "").toLowerCase() === "delivered"
   const hasRatedRestaurant = getRestaurantRatingFromOrder(order) > 0
@@ -449,7 +453,7 @@ export default function UserOrderDetails() {
               </h2>
               {rejectedItems.length > 0 && (
                 <p className="text-xs text-amber-700 mt-1 dark:text-amber-300">
-                  {rejectedItems.length} item{rejectedItems.length > 1 ? "s were" : " was"} removed as unavailable and your bill was adjusted.
+                  {rejectedItemUnits} item unit{rejectedItemUnits > 1 ? "s were" : " was"} removed as unavailable and your bill was adjusted.
                 </p>
               )}
             </div>

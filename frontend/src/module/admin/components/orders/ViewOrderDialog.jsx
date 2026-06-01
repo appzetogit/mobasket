@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useMemo, useState } from "react"
 import { CheckCircle2, Eye, MapPin, Package, User, Phone, Mail, Calendar, Clock, Truck, CreditCard, X, Receipt, Edit3 } from "lucide-react"
 import {
   Dialog,
@@ -7,6 +7,27 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog"
+
+const getItemKey = (item, index) => String(item?._id || item?.itemId || index)
+
+const buildInitialAvailableItems = (order) => {
+  if (!Array.isArray(order?.items)) return {}
+
+  return order.items.reduce((acc, item, index) => {
+    const itemKey = getItemKey(item, index)
+    const totalQuantity = Math.max(1, Number(item?.quantity || 1))
+    acc[itemKey] = {
+      itemRef: itemKey,
+      itemName: item?.name || "Unknown Item",
+      reason: "Item unavailable",
+      availableQuantity: totalQuantity,
+      maxQuantity: totalQuantity,
+      price: Number(item?.price || 0),
+      checked: true,
+    }
+    return acc
+  }, {})
+}
 
 const getGroceryStatusLabel = (orderStatus) => {
   const map = {
@@ -83,17 +104,67 @@ export default function ViewOrderDialog({
   onRejectOrder,
   onAcceptWithRejectedItems,
 }) {
-  const [selectedRejectedItems, setSelectedRejectedItems] = useState({})
-  const selectedRejectedItemEntries = useMemo(
-    () => Object.entries(selectedRejectedItems),
-    [selectedRejectedItems]
-  )
+  const [selectedAvailableItems, setSelectedAvailableItems] = useState(() => buildInitialAvailableItems(order))
+  const unavailableItemsPayload = useMemo(() => {
+    if (!Array.isArray(order?.items)) return []
 
-  useEffect(() => {
-    if (isOpen) {
-      setSelectedRejectedItems({})
-    }
-  }, [isOpen, order?.id, order?._id, order?.orderId])
+    return order.items.reduce((acc, item, index) => {
+      const itemKey = getItemKey(item, index)
+      const selection = selectedAvailableItems[itemKey]
+      const orderedQuantity = Math.max(1, Number(item?.quantity || 1))
+      const availableQuantity = selection?.checked
+        ? Math.min(orderedQuantity, Math.max(0, Number(selection?.availableQuantity || 0)))
+        : 0
+      const rejectedQuantity = Math.max(0, orderedQuantity - availableQuantity)
+
+      if (rejectedQuantity > 0) {
+        acc.push({
+          itemRef: itemKey,
+          itemName: item?.name || "Unknown Item",
+          reason: String(selection?.reason || "").trim() || "Item unavailable",
+          quantity: rejectedQuantity,
+          maxQuantity: orderedQuantity,
+          price: Number(item?.price || 0),
+        })
+      }
+
+      return acc
+    }, [])
+  }, [order, selectedAvailableItems])
+  const rejectedItemsPreviewAmount = useMemo(
+    () =>
+      unavailableItemsPayload.reduce(
+        (sum, item) => sum + (Number(item?.quantity || 0) * Number(item?.price || 0)),
+        0
+      ),
+    [unavailableItemsPayload]
+  )
+  const totalRemainingItemUnits = useMemo(() => {
+    if (!Array.isArray(order?.items)) return 0
+
+    return order.items.reduce((sum, item, index) => {
+      const itemKey = getItemKey(item, index)
+      const selection = selectedAvailableItems[itemKey]
+      if (!selection?.checked) return sum
+
+      return sum + Math.min(
+        Math.max(1, Number(item?.quantity || 1)),
+        Math.max(0, Number(selection?.availableQuantity || 0))
+      )
+    }, 0)
+  }, [order, selectedAvailableItems])
+  const adjustedSubtotalPreview = Math.max(
+    0,
+    Number(order?.pricing?.subtotal || 0) - rejectedItemsPreviewAmount
+  )
+  const adjustedTotalPreview = Math.max(
+    0,
+    adjustedSubtotalPreview +
+      Number(order?.pricing?.deliveryFee || 0) +
+      Number(order?.pricing?.platformFee || 0) +
+      Number(order?.pricing?.tax || 0) -
+      Number(order?.pricing?.discount || 0)
+  )
 
   if (!order) return null
 
@@ -160,30 +231,62 @@ export default function ViewOrderDialog({
     return null
   }
 
-  const getItemKey = (item, index) => String(item?._id || item?.itemId || index)
-
-  const handleToggleItemRejection = (item, index) => {
+  const handleToggleItemAvailability = (item, index) => {
     const itemKey = getItemKey(item, index)
-    if (selectedRejectedItems[itemKey]) {
-      setSelectedRejectedItems((prev) => {
-        const next = { ...prev }
-        delete next[itemKey]
-        return next
-      })
-      return
-    }
+    const totalQuantity = Math.max(1, Number(item?.quantity || 1))
 
-    const reason = window.prompt(`Why is "${item?.name || "this item"}" unavailable?`)
-    if (!reason || !reason.trim()) return
-
-    setSelectedRejectedItems((prev) => ({
+    setSelectedAvailableItems((prev) => ({
       ...prev,
       [itemKey]: {
+        ...(prev[itemKey] || {}),
         itemRef: itemKey,
         itemName: item?.name || "Unknown Item",
-        reason: reason.trim(),
+        reason: prev[itemKey]?.reason || "Item unavailable",
+        availableQuantity: prev[itemKey]?.checked ? 0 : totalQuantity,
+        maxQuantity: totalQuantity,
+        price: Number(item?.price || 0),
+        checked: !prev[itemKey]?.checked,
       },
     }))
+  }
+
+  const handleUnavailableReasonChange = (item, index, nextReason) => {
+    const itemKey = getItemKey(item, index)
+
+    setSelectedAvailableItems((prev) => {
+      if (!prev[itemKey]) return prev
+
+      return {
+        ...prev,
+        [itemKey]: {
+          ...prev[itemKey],
+          reason: nextReason,
+        },
+      }
+    })
+  }
+
+  const handleAvailableQuantityChange = (item, index, nextValue) => {
+    const itemKey = getItemKey(item, index)
+    const maxQuantity = Math.max(1, Number(item?.quantity || 1))
+    const parsedValue = Number.parseInt(nextValue, 10)
+    const sanitizedQuantity = Number.isFinite(parsedValue)
+      ? Math.min(maxQuantity, Math.max(0, parsedValue))
+      : 0
+
+    setSelectedAvailableItems((prev) => {
+      if (!prev[itemKey]) return prev
+
+      return {
+        ...prev,
+        [itemKey]: {
+          ...prev[itemKey],
+          availableQuantity: sanitizedQuantity,
+          maxQuantity,
+          checked: sanitizedQuantity > 0,
+        },
+      }
+    })
   }
 
   return (
@@ -509,51 +612,116 @@ export default function ViewOrderDialog({
                     <div>
                       <p className="text-sm font-semibold text-amber-900">Item Availability Actions</p>
                       <p className="text-xs text-amber-800 mt-1">
-                        Reject only the unavailable items, then accept the remaining order.
+                        Keep checked items as available. Anything unchecked becomes unavailable automatically.
                       </p>
                     </div>
-                    {selectedRejectedItemEntries.length > 0 && (
+                    {unavailableItemsPayload.length > 0 && (
                       <button
                         type="button"
-                        onClick={() => onAcceptWithRejectedItems(order, selectedRejectedItemEntries.map(([, value]) => value))}
-                        disabled={isActionLoading || selectedRejectedItemEntries.length >= order.items.length}
+                        onClick={() =>
+                          onAcceptWithRejectedItems(
+                            order,
+                            unavailableItemsPayload.map((value) => ({
+                              ...value,
+                              reason: String(value?.reason || "").trim() || "Item unavailable",
+                            }))
+                          )
+                        }
+                        disabled={isActionLoading || totalRemainingItemUnits <= 0}
                         className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <CheckCircle2 className="h-4 w-4" />
                         <span>
-                          {selectedRejectedItemEntries.length >= order.items.length
+                          {totalRemainingItemUnits <= 0
                             ? "Use full reject instead"
                             : "Accept Remaining Items"}
                         </span>
                       </button>
                     )}
                   </div>
+                  {unavailableItemsPayload.length > 0 && (
+                    <div className="mt-3 rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs text-slate-700">
+                      <div className="flex items-center justify-between gap-3">
+                        <span>Current subtotal</span>
+                        <span className="font-semibold">₹{Number(order?.pricing?.subtotal || 0).toFixed(2)}</span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-3 text-red-600">
+                        <span>Unavailable items removed</span>
+                        <span className="font-semibold">-₹{rejectedItemsPreviewAmount.toFixed(2)}</span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-3">
+                        <span>Updated subtotal</span>
+                        <span className="font-semibold">₹{adjustedSubtotalPreview.toFixed(2)}</span>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-3 text-emerald-700">
+                        <span>Updated total</span>
+                        <span className="font-semibold">₹{adjustedTotalPreview.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )}
                   <div className="mt-3 space-y-2">
                     {order.items.map((item, index) => {
                       const itemKey = getItemKey(item, index)
-                      const selectedItem = selectedRejectedItems[itemKey]
+                      const selectedItem = selectedAvailableItems[itemKey]
                       return (
-                        <div key={`availability-${itemKey}`} className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-white/80 px-3 py-2">
-                          <div>
-                            <p className="text-sm font-semibold text-slate-900">
-                              {item.quantity || 1}x {item.name || "Unknown Item"}
-                            </p>
-                            {selectedItem && (
-                              <p className="text-xs text-red-600 mt-1">{selectedItem.reason}</p>
-                            )}
+                        <div key={`availability-${itemKey}`} className="rounded-lg bg-white/80 px-3 py-3">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <label className="flex items-start gap-3">
+                              <input
+                                type="checkbox"
+                                checked={Boolean(selectedItem?.checked)}
+                                onChange={() => handleToggleItemAvailability(item, index)}
+                                disabled={isActionLoading}
+                                className="mt-1 h-4 w-4 rounded border-slate-300 text-amber-600"
+                              />
+                              <div>
+                                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                  {selectedItem?.checked ? "Available" : "Will be unavailable"}
+                                </p>
+                                <p className="text-sm font-semibold text-slate-900">
+                                  {item.quantity || 1}x {item.name || "Unknown Item"}
+                                </p>
+                              </div>
+                            </label>
+                            <div className="text-right">
+                              <p className="text-sm font-semibold text-slate-900">
+                                ₹{(Number(item.price || 0) * Number(item.quantity || 1)).toFixed(2)}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                ₹{Number(item.price || 0).toFixed(2)} each
+                              </p>
+                            </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleToggleItemRejection(item, index)}
-                            disabled={isActionLoading}
-                            className={`inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                              selectedItem
-                                ? "bg-slate-200 text-slate-700 hover:bg-slate-300"
-                                : "bg-red-100 text-red-700 hover:bg-red-200"
-                            }`}
-                          >
-                            <span>{selectedItem ? "Undo Reject" : "Reject Item"}</span>
-                          </button>
+                          {Number(item.quantity || 1) > 1 || !selectedItem?.checked ? (
+                            <div className="mt-3 grid gap-3 md:grid-cols-[auto_auto_1fr]">
+                              <label className="flex items-center gap-2 text-[11px] font-medium text-slate-600">
+                                <span>Available qty</span>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={Math.max(1, Number(item.quantity || 1))}
+                                  value={selectedItem?.checked ? selectedItem.availableQuantity : 0}
+                                  onChange={(event) => handleAvailableQuantityChange(item, index, event.target.value)}
+                                  disabled={isActionLoading}
+                                  className="w-16 rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-900"
+                                />
+                              </label>
+                              <div className="text-[11px] font-medium text-slate-600">
+                                Customer gets {selectedItem?.checked ? Number(selectedItem.availableQuantity || 0) : 0} of {item.quantity || 1}
+                              </div>
+                              <label className="flex flex-col gap-1 text-[11px] font-medium text-slate-600">
+                                <span>Reason shown to customer</span>
+                                <input
+                                  type="text"
+                                  value={selectedItem?.reason || "Item unavailable"}
+                                  onChange={(event) => handleUnavailableReasonChange(item, index, event.target.value)}
+                                  disabled={isActionLoading}
+                                  placeholder="Item unavailable"
+                                  className="rounded-md border border-slate-300 px-2 py-1.5 text-xs text-slate-900"
+                                />
+                              </label>
+                            </div>
+                          ) : null}
                         </div>
                       )
                     })}

@@ -3978,7 +3978,7 @@ export default function OrderTracking() {
                 <p className="font-medium text-gray-900 dark:text-gray-100">Order #{order?.id || order?.orderId || 'N/A'}</p>
                 {Array.isArray(order?.rejectedItems) && order.rejectedItems.length > 0 && (
                   <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                    {order.rejectedItems.length} item{order.rejectedItems.length > 1 ? "s were" : " was"} removed as unavailable.
+                    {order.rejectedItems.reduce((sum, item) => sum + Math.max(0, Number(item?.quantity || 0)), 0)} item unit{order.rejectedItems.reduce((sum, item) => sum + Math.max(0, Number(item?.quantity || 0)), 0) > 1 ? "s were" : " was"} removed as unavailable.
                   </p>
                 )}
 
