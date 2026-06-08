@@ -1,6 +1,8 @@
 import Offer from '../models/Offer.js';
 import Restaurant from '../models/Restaurant.js';
 import GroceryStore from '../../grocery/models/GroceryStore.js';
+import Order from '../../order/models/Order.js';
+import User from '../../auth/models/User.js';
 import mongoose from 'mongoose';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
@@ -39,6 +41,36 @@ const resolveOfferRestaurantObjectId = async (restaurantIdentifier) => {
 
   const mirroredRestaurant = await Restaurant.findOne({ $or: mirrorRestaurantConditions }).select('_id').lean();
   return mirroredRestaurant?._id || groceryStore._id || null;
+};
+
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+const getIstDateBoundary = (value, boundary = 'start') => {
+  if (!value) return null;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  const day = date.getUTCDate();
+
+  const utcTime = boundary === 'end'
+    ? Date.UTC(year, month, day + 1, 0, 0, 0, 0) - IST_OFFSET_MS - 1
+    : Date.UTC(year, month, day, 0, 0, 0, 0) - IST_OFFSET_MS;
+
+  return new Date(utcTime);
+};
+
+const isOfferCurrentlyValid = (offer, now = new Date()) => {
+  if (!offer || offer.status === 'expired') return false;
+
+  const startDate = getIstDateBoundary(offer.startDate, 'start');
+  const endDate = getIstDateBoundary(offer.endDate, 'end');
+  const startValid = !startDate || startDate <= now;
+  const endValid = !endDate || endDate >= now;
+
+  return startValid && endValid;
 };
 
 // Create/Activate offer
@@ -396,6 +428,108 @@ export const getCouponsByItemIdPublic = asyncHandler(async (req, res) => {
   console.log(`[COUPONS-PUBLIC] Returning ${coupons.length} coupons for itemId ${itemId}`);
 
   return successResponse(res, 200, 'Coupons retrieved successfully', {
+    coupons,
+    total: coupons.length,
+  });
+});
+
+// Get checkout coupons created from admin coupons page (PUBLIC - for user checkout)
+export const getCheckoutCouponsPublic = asyncHandler(async (req, res) => {
+  const { restaurantId } = req.params;
+  const userId = req.user?._id || req.user?.id || null;
+
+  if (!restaurantId) {
+    return errorResponse(res, 400, 'Restaurant ID is required');
+  }
+
+  const restaurantObjectId = await resolveOfferRestaurantObjectId(restaurantId);
+  if (!restaurantObjectId) {
+    return successResponse(res, 200, 'No checkout coupons found', {
+      coupons: [],
+      total: 0,
+    });
+  }
+
+  const now = new Date();
+  let hasDeliveredOrders = false;
+  let hasSharedApp = false;
+
+  if (userId) {
+    const normalizedUserId = String(userId);
+    const userObjectId = mongoose.Types.ObjectId.isValid(normalizedUserId)
+      ? new mongoose.Types.ObjectId(normalizedUserId)
+      : null;
+
+    const [deliveredOrderCount, user] = await Promise.all([
+      Order.countDocuments({
+        status: 'delivered',
+        $or: [
+          { userId: normalizedUserId },
+          ...(userObjectId ? [{ userId: userObjectId }] : []),
+        ],
+      }),
+      User.findOne({
+        $or: [
+          { _id: normalizedUserId },
+          ...(userObjectId ? [{ _id: userObjectId }] : []),
+        ],
+      })
+        .select('hasSharedApp')
+        .lean(),
+    ]);
+
+    hasDeliveredOrders = deliveredOrderCount > 0;
+    hasSharedApp = Boolean(user?.hasSharedApp);
+  }
+
+  const offers = await Offer.find({
+    restaurant: restaurantObjectId,
+    status: 'active',
+    $or: [{ showAtCheckout: true }, { showAtCheckout: { $exists: false } }],
+    'items.itemId': '__ALL_ITEMS__',
+  })
+    .select('items discountType customerGroup minOrderValue maxLimit startDate endDate status showAtCheckout createdAt')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const couponMap = new Map();
+
+  offers.forEach((offer) => {
+    if (!isOfferCurrentlyValid(offer, now)) return;
+
+    (offer.items || []).forEach((item) => {
+      if (item?.itemId !== '__ALL_ITEMS__') return;
+
+      const customerGroup = String(offer.customerGroup || 'all').toLowerCase();
+      const isEligibleCustomerGroup =
+        customerGroup === 'all' ||
+        (customerGroup === 'new' && Boolean(userId) && !hasDeliveredOrders) ||
+        (customerGroup === 'shared' && Boolean(userId) && hasSharedApp);
+
+      if (!isEligibleCustomerGroup) return;
+
+      const code = String(item?.couponCode || '').trim().toUpperCase();
+      if (!code || couponMap.has(code)) return;
+
+      couponMap.set(code, {
+        couponCode: code,
+        discountPercentage: Number(item?.discountPercentage || 0),
+        originalPrice: Number(item?.originalPrice || 0),
+        discountedPrice: Number(item?.discountedPrice || 0),
+        showAtCheckout: offer.showAtCheckout !== false,
+        customerGroup,
+        minOrderValue: Number(offer.minOrderValue || 0),
+        maxLimit: offer.maxLimit == null ? null : Number(offer.maxLimit || 0),
+        discountType: offer.discountType,
+        startDate: offer.startDate,
+        endDate: offer.endDate,
+      });
+    });
+  });
+
+  const coupons = Array.from(couponMap.values());
+
+  return successResponse(res, 200, 'Checkout coupons retrieved successfully', {
     coupons,
     total: coupons.length,
   });

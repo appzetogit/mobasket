@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { ChevronDown, ShoppingCart, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLocation as useLocationHook } from "../hooks/useLocation";
@@ -35,38 +35,86 @@ export default function DesktopNavbar() {
     loadLogo();
   }, []);
 
-  const isGenericArea = (value) => {
-    const text = String(value || "").trim().toLowerCase();
-    if (!text) return true;
-    return ["home", "office", "work", "other"].includes(text) || text.includes("district");
-  };
-  const compactLocationLabel = (value) => {
-    const raw = String(value || "").replace(/,\s*india\s*$/i, "").trim();
-    if (!raw) return "";
-    const parts = raw.split(",").map((part) => part.trim()).filter(Boolean);
-    if (!parts.length) return raw;
-    if (/[A-Z0-9]{4,}\+[A-Z0-9]{2,}/i.test(parts[0])) parts.shift();
-    if (!parts.length) return raw;
-    const compact = parts.slice(0, 2).join(", ");
-    return compact || parts[0] || raw;
-  };
-  // Show area if available and meaningful, otherwise show city
-  // Priority: area > city > "Select"
-  const areaName =
-    userLocation?.area && userLocation?.area.trim()
-      && !isGenericArea(userLocation.area)
-      ? userLocation.area.trim()
-      : null;
-  const cityName = userLocation?.city || null;
-  const stateName = userLocation?.state || null;
-  // Main location name: Show area if available, otherwise show city, otherwise "Select"
-  const mainLocationName = areaName ? compactLocationLabel(areaName) : cityName || "Select";
-  // Secondary location: Show only city when area is available (as per design image)
-  const secondaryLocation = areaName
-    ? cityName || "" // Show only city when area is available
-    : cityName && stateName
-      ? `${cityName}, ${stateName}`
-      : cityName || stateName || "";
+  const locationDisplay = useMemo(() => {
+    const normalizeText = (value) => String(value || "").replace(/,\s*india\s*$/i, "").trim();
+    const isCoordinates = (value) => /^-?\d+\.\d+,\s*-?\d+\.\d+$/.test(normalizeText(value));
+    const isGeneric = (value, city, state) => {
+      const text = normalizeText(value).toLowerCase();
+      if (!text) return true;
+      if (["select location", "current location", "home", "office", "work", "other", "india"].includes(text)) return true;
+      if (text.includes("district") || text.includes("division") || text.includes("zone")) return true;
+      if (city && text === normalizeText(city).toLowerCase()) return true;
+      if (state && text === normalizeText(state).toLowerCase()) return true;
+      return false;
+    };
+    const extractMain = (loc) => {
+      if (!loc || typeof loc !== "object") return "Select";
+      const city = normalizeText(loc?.city);
+      const state = normalizeText(loc?.state);
+      const directCandidates = [
+        loc?.address,
+        loc?.mainTitle,
+        loc?.street,
+        loc?.additionalDetails,
+        loc?.area,
+      ];
+      for (const candidate of directCandidates) {
+        const text = normalizeText(candidate);
+        if (!text || isCoordinates(text) || isGeneric(text, city, state)) continue;
+        return text;
+      }
+      const formatted = normalizeText(loc?.formattedAddress);
+      if (formatted && !isCoordinates(formatted) && formatted !== "Select location") {
+        const parts = formatted.split(",").map((part) => normalizeText(part)).filter(Boolean);
+        const main = parts.slice(0, 2).join(", ");
+        if (main) return main;
+      }
+      return city || "Select";
+    };
+
+    let storedLocation = null;
+    let source = "";
+    try {
+      source = normalizeText(localStorage.getItem("userLocationSource")).toLowerCase();
+      const rawStoredLocation = localStorage.getItem("userLocation");
+      storedLocation = rawStoredLocation ? JSON.parse(rawStoredLocation) : null;
+    } catch {
+      storedLocation = null;
+    }
+
+    const preferredLocation =
+      source === "saved" || source === "current"
+        ? storedLocation || userLocation || {}
+        : userLocation || storedLocation || {};
+
+    const fallbackFromFormatted = (() => {
+      const formatted = normalizeText(preferredLocation?.formattedAddress);
+      if (!formatted || isCoordinates(formatted)) return { city: "", state: "" };
+      const parts = formatted.split(",").map((part) => normalizeText(part)).filter(Boolean);
+      const postalIndex = parts.findIndex((part) => /^\d{6}$/.test(part));
+      if (postalIndex >= 2) {
+        return {
+          city: parts[postalIndex - 2] || "",
+          state: parts[postalIndex - 1] || "",
+        };
+      }
+      return {
+        city: parts.length >= 2 ? parts[parts.length - 2] : "",
+        state: parts.length >= 1 ? parts[parts.length - 1] : "",
+      };
+    })();
+
+    const city = normalizeText(preferredLocation?.city) || fallbackFromFormatted.city;
+    const state = normalizeText(preferredLocation?.state) || fallbackFromFormatted.state;
+
+    return {
+      main: extractMain(preferredLocation),
+      sub: [city, state].filter(Boolean).join(", "),
+    };
+  }, [userLocation]);
+
+  const mainLocationName = locationDisplay.main || "Select";
+  const secondaryLocation = locationDisplay.sub;
 
   const handleLocationClick = () => {
     // Open location selector overlay

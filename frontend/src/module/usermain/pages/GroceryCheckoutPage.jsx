@@ -104,6 +104,7 @@ export default function GroceryCheckoutPage() {
   const autocompleteServiceRef = useRef(null);
   const placesServiceRef = useRef(null);
   const suggestionsDebounceRef = useRef(null);
+  const couponsRequestRef = useRef(0);
 
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
   const [postOrderRedirecting, setPostOrderRedirecting] = useState(false);
@@ -112,6 +113,7 @@ export default function GroceryCheckoutPage() {
   const [walletLoading, setWalletLoading] = useState(false);
   const [availableCoupons, setAvailableCoupons] = useState([]);
   const [loadingCoupons, setLoadingCoupons] = useState(false);
+  const [hasDeliveredOrders, setHasDeliveredOrders] = useState(false);
   const [couponCodeInput, setCouponCodeInput] = useState("");
   const [appliedCouponCode, setAppliedCouponCode] = useState("");
   const [couponApplying, setCouponApplying] = useState(false);
@@ -231,6 +233,10 @@ export default function GroceryCheckoutPage() {
   // Filter grocery items
   const groceryItems = cart.filter((item) => isGroceryItem(item));
   const hasSharedApp = Boolean(userProfile?.hasSharedApp || userProfile?.appSharedAt);
+  const cartSubtotal = groceryItems.reduce(
+    (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 1),
+    0,
+  );
   const groceryItemsKey = useMemo(
     () =>
       groceryItems
@@ -241,6 +247,46 @@ export default function GroceryCheckoutPage() {
         .join("|"),
     [groceryItems],
   );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCouponEligibilityContext = async () => {
+      const authToken =
+        localStorage.getItem("user_accessToken") || localStorage.getItem("accessToken");
+      if (!authToken) {
+        if (isMounted) setHasDeliveredOrders(false);
+        return;
+      }
+
+      try {
+        const response = await orderAPI.getOrders({
+          page: 1,
+          limit: 1,
+          status: "delivered",
+        });
+
+        const deliveredOrders =
+          response?.data?.data?.orders ||
+          response?.data?.orders ||
+          [];
+
+        if (isMounted) {
+          setHasDeliveredOrders(Array.isArray(deliveredOrders) && deliveredOrders.length > 0);
+        }
+      } catch {
+        if (isMounted) {
+          setHasDeliveredOrders(false);
+        }
+      }
+    };
+
+    loadCouponEligibilityContext();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (groceryItems.length > 0) return;
@@ -1019,6 +1065,9 @@ export default function GroceryCheckoutPage() {
 
   useEffect(() => {
     const fetchAvailableCoupons = async () => {
+      const requestId = couponsRequestRef.current + 1;
+      couponsRequestRef.current = requestId;
+
       if (!resolvedRestaurant?.restaurantId || groceryItems.length === 0) {
         setAvailableCoupons([]);
         return;
@@ -1026,62 +1075,50 @@ export default function GroceryCheckoutPage() {
 
       try {
         setLoadingCoupons(true);
-        const uniqueItemIds = Array.from(
-          new Set(
-            groceryItems
-              .map((item) => {
-                const candidates = [
-                  item?._id,
-                  item?.itemId,
-                  item?.productId,
-                  item?.id,
-                ]
-                  .map((value) => String(value || "").trim())
-                  .filter(Boolean);
-                return candidates.find((id) => /^[a-f\d]{24}$/i.test(id)) || "";
-              })
-              .filter(Boolean),
-          ),
-        );
-        const couponLookupItemIds = Array.from(new Set([...uniqueItemIds, "__ALL_ITEMS__"]));
+        setAvailableCoupons([]);
+        const response = await restaurantAPI
+          .getCheckoutCouponsPublic(String(resolvedRestaurant.restaurantId))
+          .catch(() => null);
 
-        const responses = await Promise.all(
-          couponLookupItemIds.map((itemId) =>
-            restaurantAPI
-              .getCouponsByItemIdPublic(String(resolvedRestaurant.restaurantId), itemId)
-              .catch(() => null),
-          ),
-        );
+        if (couponsRequestRef.current !== requestId) return;
 
         const couponMap = new Map();
-        responses.forEach((response) => {
-          const coupons = response?.data?.data?.coupons || [];
-          coupons.forEach((coupon) => {
-            if (coupon?.showAtCheckout === false) return;
-            const customerGroup = String(coupon?.customerGroup || "all").toLowerCase();
-            const isEligibleCustomerGroup =
-              customerGroup === "all" || (customerGroup === "shared" && hasSharedApp);
-            if (!isEligibleCustomerGroup) return;
-            const code = String(coupon?.couponCode || "").trim().toUpperCase();
-            if (!code || couponMap.has(code)) return;
-            couponMap.set(code, {
-              code,
-              discountPercentage: Number(coupon?.discountPercentage || 0),
-            });
+        const coupons = response?.data?.data?.coupons || [];
+        coupons.forEach((coupon) => {
+          if (coupon?.showAtCheckout === false) return;
+          const customerGroup = String(coupon?.customerGroup || "all").toLowerCase();
+          const minOrderValue = Number(coupon?.minOrderValue || 0);
+          const isEligibleCustomerGroup =
+            customerGroup === "all" ||
+            (customerGroup === "shared" && hasSharedApp) ||
+            (customerGroup === "new" && !hasDeliveredOrders);
+          const isEligibleMinOrder = minOrderValue <= cartSubtotal;
+          if (!isEligibleCustomerGroup) return;
+          if (!isEligibleMinOrder) return;
+          const code = String(coupon?.couponCode || "").trim().toUpperCase();
+          if (!code || couponMap.has(code)) return;
+          couponMap.set(code, {
+            code,
+            discountPercentage: Number(coupon?.discountPercentage || 0),
+            minOrderValue,
+            customerGroup,
           });
         });
 
         setAvailableCoupons(Array.from(couponMap.values()));
       } catch (error) {
+        if (couponsRequestRef.current !== requestId) return;
         console.error("Failed to fetch grocery coupons:", error);
         setAvailableCoupons([]);
       } finally {
-        setLoadingCoupons(false);
+        if (couponsRequestRef.current === requestId) {
+          setLoadingCoupons(false);
+        }
       }
     };
 
     fetchAvailableCoupons();
-  }, [groceryItemsKey, hasSharedApp, resolvedRestaurant?.restaurantId]);
+  }, [cartSubtotal, groceryItemsKey, hasDeliveredOrders, hasSharedApp, resolvedRestaurant?.restaurantId]);
 
   useEffect(() => {
     if (availableCoupons.length <= 4 && showAllCoupons) {

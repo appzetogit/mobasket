@@ -195,6 +195,28 @@ export default function HomePage() {
   };
 
   const resolveSavedAddress = () => {
+    const selectedAddressId = String(localStorage.getItem("userSelectedAddressId") || "").trim();
+    const locationSource = String(localStorage.getItem("userLocationSource") || "").trim().toLowerCase();
+    const candidateAddresses = [
+      ...(Array.isArray(addresses) ? addresses : []),
+      ...(Array.isArray(persistedAddresses) ? persistedAddresses : []),
+    ];
+    const uniqueAddresses = Array.from(
+      new Map(
+        candidateAddresses.map((address) => [
+          String(address?._id || address?.id || address?.label || Math.random()),
+          address,
+        ]),
+      ).values(),
+    );
+
+    if (locationSource === "saved" && selectedAddressId && uniqueAddresses.length > 0) {
+      const explicitlySelectedAddress = uniqueAddresses.find(
+        (address) => String(address?._id || address?.id || "").trim() === selectedAddressId,
+      );
+      if (explicitlySelectedAddress) return explicitlySelectedAddress;
+    }
+
     const defaultAddress = getDefaultAddress?.();
     const defaultAddressId = String(defaultAddress?._id || defaultAddress?.id || "").trim();
 
@@ -370,7 +392,9 @@ export default function HomePage() {
         nextLocation.longitude = coords.longitude;
       }
 
+      localStorage.setItem("userLocationSource", "saved");
       localStorage.setItem("userLocation", JSON.stringify(nextLocation));
+      window.dispatchEvent(new CustomEvent("userLocationChanged", { detail: nextLocation }));
     } catch {
       // Ignore localStorage sync issues.
     }

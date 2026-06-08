@@ -558,6 +558,12 @@ export const restaurantAPI = {
         .replace(':itemId', itemId)
     );
   },
+  getCheckoutCouponsPublic: (restaurantId) => {
+    return apiClient.get(
+      API_ENDPOINTS.RESTAURANT.CHECKOUT_COUPONS_PUBLIC
+        .replace(':restaurantId', restaurantId)
+    );
+  },
   // Get public offers (for user offers page)
   getPublicOffers: () => {
     return apiClient.get(API_ENDPOINTS.RESTAURANT.OFFERS_PUBLIC);

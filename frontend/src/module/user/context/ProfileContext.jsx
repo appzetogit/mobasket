@@ -312,11 +312,15 @@ export function ProfileProvider({ children }) {
   }, [])
 
   const setDefaultAddress = useCallback((id) => {
+    const normalizedTargetId = String(id || "").trim()
     setAddresses((prev) =>
-      prev.map((addr) => ({
-        ...addr,
-        isDefault: addr.id === id,
-      }))
+      prev.map((addr) => {
+        const addressId = String(addr?.id || addr?._id || "").trim()
+        return {
+          ...addr,
+          isDefault: Boolean(normalizedTargetId) && addressId === normalizedTargetId,
+        }
+      })
     )
   }, [])
 

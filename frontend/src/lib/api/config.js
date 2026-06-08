@@ -171,6 +171,7 @@ export const API_ENDPOINTS = {
     OFFER_STATUS: '/restaurant/offers/:id/status',
     COUPONS_BY_ITEM_ID: '/restaurant/offers/item/:itemId/coupons',
     COUPONS_BY_ITEM_ID_PUBLIC: '/restaurant/:restaurantId/offers/item/:itemId/coupons',
+    CHECKOUT_COUPONS_PUBLIC: '/restaurant/:restaurantId/offers/checkout-coupons',
     ORDERS: '/restaurant/orders',
     ORDER_BY_ID: '/restaurant/orders/:id',
     ORDER_ACCEPT: '/restaurant/orders/:id/accept',

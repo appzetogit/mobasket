@@ -10,6 +10,36 @@ import GroceryProduct from '../../grocery/models/GroceryProduct.js';
 import User from '../../auth/models/User.js';
 import mongoose from 'mongoose';
 
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+const getIstDateBoundary = (value, boundary = 'start') => {
+  if (!value) return null;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const year = date.getUTCFullYear();
+  const month = date.getUTCMonth();
+  const day = date.getUTCDate();
+
+  const utcTime = boundary === 'end'
+    ? Date.UTC(year, month, day + 1, 0, 0, 0, 0) - IST_OFFSET_MS - 1
+    : Date.UTC(year, month, day, 0, 0, 0, 0) - IST_OFFSET_MS;
+
+  return new Date(utcTime);
+};
+
+const isOfferCurrentlyValidInIst = (offer, now = new Date()) => {
+  if (!offer || offer.status === 'expired') return false;
+
+  const startDate = getIstDateBoundary(offer.startDate, 'start');
+  const endDate = getIstDateBoundary(offer.endDate, 'end');
+  const startValid = !startDate || startDate <= now;
+  const endValid = !endDate || endDate >= now;
+
+  return startValid && endValid;
+};
+
 /** Ray-casting: is (lat, lng) inside polygon coordinates [{ latitude, longitude }, ...] */
 const isPointInPolygon = (lat, lng, coordinates) => {
   if (!Array.isArray(coordinates) || coordinates.length < 3) return false;
@@ -677,19 +707,10 @@ export const calculateOrderPricing = async ({
             restaurant: offerRestaurantObjectId,
             status: 'active',
             'items.couponCode': couponCode,
-            startDate: { $lte: now },
-            $and: [
-              { $or: [{ showAtCheckout: true }, { showAtCheckout: { $exists: false } }] },
-              {
-                $or: [
-                  { endDate: { $gte: now } },
-                  { endDate: null }
-                ]
-              }
-            ]
+            $or: [{ showAtCheckout: true }, { showAtCheckout: { $exists: false } }],
           }).lean();
 
-          if (offer) {
+          if (offer && isOfferCurrentlyValidInIst(offer, now)) {
             // Find the specific item coupon
             const couponItem = offer.items.find(item => item.couponCode === couponCode);
             

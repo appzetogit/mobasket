@@ -52,6 +52,7 @@ export default function CheckoutPage() {
   const [loadingAddons, setLoadingAddons] = useState(false);
   const [availableCoupons, setAvailableCoupons] = useState([]);
   const [loadingCoupons, setLoadingCoupons] = useState(false);
+  const [hasDeliveredOrders, setHasDeliveredOrders] = useState(false);
   const [couponCodeInput, setCouponCodeInput] = useState("");
   const [appliedCouponCode, setAppliedCouponCode] = useState("");
   const [couponApplying, setCouponApplying] = useState(false);
@@ -117,6 +118,7 @@ export default function CheckoutPage() {
   const placesServiceRef = useRef(null);
   const suggestionsDebounceRef = useRef(null);
   const pricingPreviewSignatureRef = useRef(null);
+  const couponsRequestRef = useRef(0);
   const pricingPreviewCacheRef = useRef({ signature: null, pricing: null });
   const pricingPreviewInFlightSignatureRef = useRef(null);
   const recipientZoneCheckCacheRef = useRef({ key: null, inService: null });
@@ -253,6 +255,50 @@ export default function CheckoutPage() {
   const hasLiveOrderEditSession =
     editSecondsLeft > 0 && Boolean(orderEditSession?.orderRouteId);
   const hasSharedApp = Boolean(userProfile?.hasSharedApp || userProfile?.appSharedAt);
+  const cartSubtotal = foodItems.reduce(
+    (sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 1),
+    0,
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadCouponEligibilityContext = async () => {
+      const authToken =
+        localStorage.getItem("user_accessToken") || localStorage.getItem("accessToken");
+      if (!authToken) {
+        if (isMounted) setHasDeliveredOrders(false);
+        return;
+      }
+
+      try {
+        const response = await orderAPI.getOrders({
+          page: 1,
+          limit: 1,
+          status: "delivered",
+        });
+
+        const deliveredOrders =
+          response?.data?.data?.orders ||
+          response?.data?.orders ||
+          [];
+
+        if (isMounted) {
+          setHasDeliveredOrders(Array.isArray(deliveredOrders) && deliveredOrders.length > 0);
+        }
+      } catch {
+        if (isMounted) {
+          setHasDeliveredOrders(false);
+        }
+      }
+    };
+
+    loadCouponEligibilityContext();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (foodItems.length > 0) return;
@@ -811,6 +857,9 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     const fetchAvailableCoupons = async () => {
+      const requestId = couponsRequestRef.current + 1;
+      couponsRequestRef.current = requestId;
+
       if (!restaurantId || foodItems.length === 0) {
         setAvailableCoupons([]);
         return;
@@ -818,48 +867,50 @@ export default function CheckoutPage() {
 
       try {
         setLoadingCoupons(true);
-        const uniqueItemIds = Array.from(
-          new Set(
-            foodItems
-              .map((item) => String(item.id || item._id || item.itemId || "").trim())
-              .filter(Boolean),
-          ),
-        );
+        setAvailableCoupons([]);
+        const response = await restaurantAPI
+          .getCheckoutCouponsPublic(String(restaurantId))
+          .catch(() => null);
 
-        const responses = await Promise.all(
-          uniqueItemIds.map((itemId) =>
-            restaurantAPI.getCouponsByItemIdPublic(String(restaurantId), itemId).catch(() => null),
-          ),
-        );
+        if (couponsRequestRef.current !== requestId) return;
 
         const couponMap = new Map();
-        responses.forEach((response) => {
-          const coupons = response?.data?.data?.coupons || [];
-          coupons.forEach((coupon) => {
-            const customerGroup = String(coupon?.customerGroup || "all").toLowerCase();
-            const isEligibleCustomerGroup =
-              customerGroup === "all" || (customerGroup === "shared" && hasSharedApp);
-            if (!isEligibleCustomerGroup) return;
-            const code = String(coupon?.couponCode || "").trim().toUpperCase();
-            if (!code || couponMap.has(code)) return;
-            couponMap.set(code, {
-              code,
-              discountPercentage: Number(coupon?.discountPercentage || 0),
-            });
+        const coupons = response?.data?.data?.coupons || [];
+        coupons.forEach((coupon) => {
+          if (coupon?.showAtCheckout === false) return;
+          const customerGroup = String(coupon?.customerGroup || "all").toLowerCase();
+          const minOrderValue = Number(coupon?.minOrderValue || 0);
+          const isEligibleCustomerGroup =
+            customerGroup === "all" ||
+            (customerGroup === "shared" && hasSharedApp) ||
+            (customerGroup === "new" && !hasDeliveredOrders);
+          const isEligibleMinOrder = minOrderValue <= cartSubtotal;
+          if (!isEligibleCustomerGroup) return;
+          if (!isEligibleMinOrder) return;
+          const code = String(coupon?.couponCode || "").trim().toUpperCase();
+          if (!code || couponMap.has(code)) return;
+          couponMap.set(code, {
+            code,
+            discountPercentage: Number(coupon?.discountPercentage || 0),
+            minOrderValue,
+            customerGroup,
           });
         });
 
         setAvailableCoupons(Array.from(couponMap.values()));
       } catch (error) {
+        if (couponsRequestRef.current !== requestId) return;
         console.error("Failed to fetch available coupons:", error);
         setAvailableCoupons([]);
       } finally {
-        setLoadingCoupons(false);
+        if (couponsRequestRef.current === requestId) {
+          setLoadingCoupons(false);
+        }
       }
     };
 
     fetchAvailableCoupons();
-  }, [foodItems, hasSharedApp, restaurantId]);
+  }, [cartSubtotal, foodItems, hasDeliveredOrders, hasSharedApp, restaurantId]);
 
   useEffect(() => {
     if (availableCoupons.length <= 4 && showAllCoupons) {

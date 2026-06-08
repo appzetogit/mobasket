@@ -58,7 +58,7 @@ export default function Coupons({ platformOverride }) {
     try {
       setLoading(true)
       setError(null)
-      const response = await adminAPI.getAllOffers({ platform: activePlatform })
+      const response = await adminAPI.getAllOffers({ platform: activePlatform, limit: 1000 })
       if (response?.data?.success) {
         setOffers(response.data.data.offers || [])
       } else {

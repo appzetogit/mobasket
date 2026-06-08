@@ -1,6 +1,7 @@
 // Restaurant module
 import express from 'express';
 import { authenticate } from './middleware/restaurantAuth.js';
+import { optionalAuthenticate } from '../auth/middleware/auth.js';
 import { uploadMiddleware } from '../../shared/utils/cloudinaryService.js';
 import restaurantAuthRoutes from './routes/restaurantAuthRoutes.js';
 import { getOnboarding, upsertOnboarding, createRestaurantFromOnboardingManual } from './controllers/restaurantOnboardingController.js';
@@ -12,7 +13,7 @@ import { getMenu, updateMenu, getMenuByRestaurantId, addSection, addItemToSectio
 import { scheduleItemAvailability, cancelScheduledAvailability, getItemSchedule } from './controllers/menuScheduleController.js';
 import { getInventory, updateInventory, getInventoryByRestaurantId } from './controllers/inventoryController.js';
 import { addStaff, getStaff, getStaffById, updateStaff, deleteStaff } from './controllers/staffManagementController.js';
-import { createOffer, getOffers, getOfferById, updateOfferStatus, deleteOffer, getCouponsByItemId, getCouponsByItemIdPublic, getPublicOffers } from './controllers/offerController.js';
+import { createOffer, getOffers, getOfferById, updateOfferStatus, deleteOffer, getCouponsByItemId, getCouponsByItemIdPublic, getCheckoutCouponsPublic, getPublicOffers } from './controllers/offerController.js';
 import { getNotifications, deleteNotification, clearNotifications } from './controllers/restaurantNotificationController.js';
 import categoryRoutes from './routes/categoryRoutes.js';
 import restaurantOrderRoutes from './routes/restaurantOrderRoutes.js';
@@ -110,6 +111,7 @@ router.get('/under-250/item-images', getUnder250ItemImages);
 router.get('/under-250', getRestaurantsWithDishesUnder250);
 // Menu and inventory routes must come before /:id to avoid route conflicts
 router.get('/:restaurantId/offers/item/:itemId/coupons', getCouponsByItemIdPublic);
+router.get('/:restaurantId/offers/checkout-coupons', optionalAuthenticate, getCheckoutCouponsPublic);
 router.get('/:restaurantId/outlet-timings', getOutletTimingsByRestaurantId);
 router.get('/:id/menu', getMenuByRestaurantId);
 router.get('/:id/addons', getAddonsByRestaurantId);
