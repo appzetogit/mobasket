@@ -369,6 +369,10 @@ export default function AllOrdersPage() {
       customer: customerName,
       items,
       totalPrice: order.pricing?.total || 0,
+      deliveryFee: order.pricing?.deliveryFee || 0,
+      commission: order.pricing?.commission || 0,
+      payout: order.pricing?.payout || 0,
+      discount: order.pricing?.discount || 0,
       reason,
       acceptanceLabel,
       tags: tags.length > 0 ? tags : undefined,
@@ -392,7 +396,6 @@ export default function AllOrdersPage() {
         
         // Fetch all orders (we'll filter by date range on frontend)
         const response = await ordersAPI.getOrders(params)
-        
         if (response.data?.success && response.data.data?.orders) {
           // Transform orders
           const transformedOrders = response.data.data.orders.map(transformOrder)
@@ -797,6 +800,22 @@ export default function AllOrdersPage() {
               {order.items.length > 1 && (
                 <p className="text-sm text-gray-500">+{order.items.length - 1} more items</p>
               )}
+            </div>
+
+            {/* Financial Summary */}
+            <div className="mt-3 pt-3 border-t border-dashed border-gray-200 grid grid-cols-3 gap-2 text-center text-xs">
+              <div>
+                <p className="text-gray-500 font-medium">Delivery Charges</p>
+                <p className="font-bold text-gray-900 mt-0.5">₹{order.deliveryFee}</p>
+              </div>
+              <div>
+                <p className="text-gray-500 font-medium">Commission</p>
+                <p className="font-bold text-gray-900 mt-0.5">₹{order.commission}</p>
+              </div>
+              <div>
+                <p className="text-[#ff8100] font-bold">Net Revenue</p>
+                <p className="font-extrabold text-[#ff8100] mt-0.5">₹{order.payout}</p>
+              </div>
             </div>
 
             {/* Reason/Status Message */}

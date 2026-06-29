@@ -196,6 +196,10 @@ export default function OrderDetails() {
             billing: {
               itemSubtotal: order.pricing?.subtotal || 0,
               taxes: order.pricing?.tax || 0,
+              discount: order.pricing?.discount || 0,
+              deliveryFee: order.pricing?.deliveryFee || 0,
+              commission: order.pricing?.commission || 0,
+              payout: order.pricing?.payout || 0,
               total: order.pricing?.total || 0,
               paymentStatus: formatPaymentStatusLabel(order.payment?.method || order.paymentMethod, order.payment?.status),
               paymentMode: formatPaymentModeLabel(order.payment?.method || order.paymentMethod)
@@ -433,6 +437,26 @@ export default function OrderDetails() {
     doc.text("Taxes:", 15, yPosition)
     doc.text(`₹${orderData.billing.taxes}`, pageWidth - 15, yPosition, { align: "right" })
     yPosition += 6
+
+    if (orderData.billing.discount > 0) {
+      doc.text("Discount:", 15, yPosition)
+      doc.text(`-₹${orderData.billing.discount}`, pageWidth - 15, yPosition, { align: "right" })
+      yPosition += 6
+    }
+
+    doc.text("Delivery Charges:", 15, yPosition)
+    doc.text(`₹${orderData.billing.deliveryFee}`, pageWidth - 15, yPosition, { align: "right" })
+    yPosition += 6
+
+    doc.text("Commission:", 15, yPosition)
+    doc.text(`₹${orderData.billing.commission}`, pageWidth - 15, yPosition, { align: "right" })
+    yPosition += 6
+
+    doc.setFont("helvetica", "bold")
+    doc.text("Net Revenue:", 15, yPosition)
+    doc.text(`₹${orderData.billing.payout}`, pageWidth - 15, yPosition, { align: "right" })
+    yPosition += 6
+    doc.setFont("helvetica", "normal")
 
     // Dashed line for total
     doc.setLineDash([2, 2])
@@ -760,7 +784,25 @@ export default function OrderDetails() {
               <span className="text-sm text-gray-600">Taxes</span>
               <span className="text-sm text-gray-900">₹{orderData.billing.taxes}</span>
             </div>
-            <div className="my-3"></div>
+            {orderData.billing.discount > 0 && (
+              <div className="flex items-center justify-between mb-3 text-green-600">
+                <span className="text-sm">Discount</span>
+                <span className="text-sm">-₹{orderData.billing.discount}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm text-gray-600">Delivery charges</span>
+              <span className="text-sm text-gray-900">₹{orderData.billing.deliveryFee}</span>
+            </div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm text-gray-600">Commission</span>
+              <span className="text-sm text-gray-900">₹{orderData.billing.commission}</span>
+            </div>
+            <div className="flex items-center justify-between mb-3 border-t border-dashed border-gray-200 pt-3">
+              <span className="text-sm font-semibold text-[#ff8100]">Net Revenue</span>
+              <span className="text-sm font-bold text-[#ff8100]">₹{orderData.billing.payout}</span>
+            </div>
+            <div className="my-3 border-t border-gray-100"></div>
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm text-gray-600">Payment mode</span>
               <span className="text-sm text-gray-900">{orderData.billing.paymentMode || "N/A"}</span>

@@ -2,6 +2,7 @@ import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import Order from '../../order/models/Order.js';
 import Payment from '../../payment/models/Payment.js';
+import RestaurantCommission from '../../admin/models/RestaurantCommission.js';
 import mongoose from 'mongoose';
 
 const parseBooleanQuery = (value, defaultValue = true) => {
@@ -157,10 +158,50 @@ export const getGroceryStoreOrders = asyncHandler(async (req, res) => {
       const codPayments = await Payment.find({ orderId: { $in: orderIds }, method: 'cash' }).select('orderId').lean();
       codPayments.forEach(p => codOrderIds.add(p.orderId?.toString()));
     } catch (e) { /* ignore */ }
+
+    // Fetch RestaurantCommission configuration for this grocery store
+    let commissionConfig = null;
+    try {
+      commissionConfig = await RestaurantCommission.findOne({
+        $or: [
+          { restaurant: store._id },
+          { restaurantId: { $in: storeIdVariations } }
+        ],
+        status: true
+      });
+    } catch (e) {
+      console.warn('⚠️ Could not fetch commission config for grocery store orders list:', e.message);
+    }
+
     const ordersWithPaymentMethod = normalizedOrders.map(o => {
       let paymentMethod = o.payment?.method ?? 'razorpay';
       if (paymentMethod !== 'cash' && codOrderIds.has(o._id?.toString())) paymentMethod = 'cash';
-      return { ...o, paymentMethod };
+      
+      // Calculate commission and payout
+      const subtotal = o.pricing?.subtotal || 0;
+      const discount = o.pricing?.discount || 0;
+      const foodPrice = Math.max(0, subtotal - discount);
+      
+      let commission = 0;
+      if (commissionConfig) {
+        const calculation = commissionConfig.calculateCommission(foodPrice);
+        commission = calculation.commission;
+      } else {
+        // Fallback default 10%
+        commission = Math.round(((foodPrice * 10) / 100) * 100) / 100;
+      }
+      
+      const payout = Math.max(0, foodPrice - commission);
+
+      return {
+        ...o,
+        paymentMethod,
+        pricing: {
+          ...(o.pricing || {}),
+          commission,
+          payout
+        }
+      };
     });
 
     return successResponse(res, 200, 'Orders retrieved successfully', {
@@ -186,6 +227,7 @@ export const getGroceryStoreOrderById = asyncHandler(async (req, res) => {
   try {
     const store = req.store;
     const { id } = req.params;
+    const orderPlatformQuery = { restaurantPlatform: 'mogrocery' };
 
     const storeIdVariations = Array.from(new Set([
       store._id?.toString(),
@@ -220,6 +262,41 @@ export const getGroceryStoreOrderById = asyncHandler(async (req, res) => {
       return errorResponse(res, 404, 'Order not found');
     }
 
+    // Fetch RestaurantCommission configuration for this grocery store
+    let commissionConfig = null;
+    try {
+      commissionConfig = await RestaurantCommission.findOne({
+        $or: [
+          { restaurant: store._id },
+          { restaurantId: { $in: storeIdVariations } }
+        ],
+        status: true
+      });
+    } catch (e) {
+      console.warn('⚠️ Could not fetch commission config for single grocery store order:', e.message);
+    }
+
+    const subtotal = order.pricing?.subtotal || 0;
+    const discount = order.pricing?.discount || 0;
+    const foodPrice = Math.max(0, subtotal - discount);
+    
+    let commission = 0;
+    if (commissionConfig) {
+      const calculation = commissionConfig.calculateCommission(foodPrice);
+      commission = calculation.commission;
+    } else {
+      // Fallback default 10%
+      commission = Math.round(((foodPrice * 10) / 100) * 100) / 100;
+    }
+    
+    const payout = Math.max(0, foodPrice - commission);
+
+    order.pricing = {
+      ...(order.pricing || {}),
+      commission,
+      payout
+    };
+
     return successResponse(res, 200, 'Order retrieved successfully', { order });
   } catch (error) {
     console.error('Error fetching grocery store order:', error);
@@ -227,17 +304,11 @@ export const getGroceryStoreOrderById = asyncHandler(async (req, res) => {
   }
 });
 
-/**
- * Accept order for grocery store
- * PATCH /api/grocery/store/orders/:id/accept
- * Adapts restaurant acceptOrder to work with req.store
- */
 export const acceptOrder = asyncHandler(async (req, res) => {
   req.restaurant = req.store;
   const { acceptOrder: restaurantAcceptOrder } = await import('../../restaurant/controllers/restaurantOrderController.js');
   return restaurantAcceptOrder(req, res);
 });
-
 /**
  * Reject order for grocery store
  * PATCH /api/grocery/store/orders/:id/reject

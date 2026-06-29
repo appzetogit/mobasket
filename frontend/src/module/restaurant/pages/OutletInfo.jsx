@@ -38,6 +38,12 @@ export default function OutletInfo() {
   // State management
   const [restaurantData, setRestaurantData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [financeStats, setFinanceStats] = useState({
+    totalOrders: 0,
+    totalNetRevenue: 0,
+    totalCommission: 0,
+    totalDeliveryCharges: 0
+  })
   const [restaurantName, setRestaurantName] = useState("")
   const [cuisineTags, setCuisineTags] = useState("")
   const [address, setAddress] = useState("")
@@ -180,6 +186,46 @@ export default function OutletInfo() {
       window.removeEventListener("addressUpdated", handleAddressUpdate)
     }
   }, [isGroceryStoreRoute])
+
+  // Fetch orders to calculate financial statistics
+  useEffect(() => {
+    const fetchFinanceStats = async () => {
+      try {
+        const params = { page: 1, limit: 1000 }
+        const ordersAPI = isGroceryStoreRoute ? groceryStoreAPI : restaurantAPI
+        const response = await ordersAPI.getOrders(params)
+        
+        if (response.data?.success && response.data.data?.orders) {
+          const orders = response.data.data.orders
+          // Filter for DELIVERED orders
+          const deliveredOrders = orders.filter(o => o.status?.toLowerCase() === 'delivered')
+          
+          let totalNetRevenue = 0
+          let totalCommission = 0
+          let totalDeliveryCharges = 0
+          
+          deliveredOrders.forEach(order => {
+            totalNetRevenue += order.pricing?.payout || 0
+            totalCommission += order.pricing?.commission || 0
+            totalDeliveryCharges += order.pricing?.deliveryFee || 0
+          })
+          
+          setFinanceStats({
+            totalOrders: deliveredOrders.length,
+            totalNetRevenue: Math.round(totalNetRevenue * 100) / 100,
+            totalCommission: Math.round(totalCommission * 100) / 100,
+            totalDeliveryCharges: Math.round(totalDeliveryCharges * 100) / 100,
+          })
+        }
+      } catch (error) {
+        console.error("Error fetching financial stats:", error)
+      }
+    }
+    
+    if (restaurantData) {
+      fetchFinanceStats()
+    }
+  }, [isGroceryStoreRoute, restaurantData])
 
   // Lenis smooth scrolling
   useEffect(() => {
@@ -841,6 +887,34 @@ export default function OutletInfo() {
                 </div>
               </div>
             </motion.div>
+
+            {/* Earning & Charges Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.12 }}
+              className="bg-green-50 rounded-lg p-4 border border-green-200 shadow-sm"
+            >
+              <h3 className="font-bold text-green-800 text-sm mb-3">Earning & Charges (Delivered Orders)</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-gray-500 font-normal mb-0.5">Total Orders</p>
+                  <p className="text-sm font-bold text-gray-900">{financeStats.totalOrders}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-normal mb-0.5">Net Revenue</p>
+                  <p className="text-sm font-extrabold text-[#ff8100]">₹{financeStats.totalNetRevenue}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-normal mb-0.5">Commission Deducted</p>
+                  <p className="text-sm font-bold text-gray-900">₹{financeStats.totalCommission}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-normal mb-0.5">Delivery Charges</p>
+                  <p className="text-sm font-bold text-gray-900">₹{financeStats.totalDeliveryCharges}</p>
+                </div>
+              </div>
+            </motion.div>
           </>
         ) : (
           <>
@@ -916,6 +990,34 @@ export default function OutletInfo() {
                 >
                   Edit
                 </button>
+              </div>
+            </motion.div>
+
+            {/* Earning & Charges Card */}
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, delay: 0.12 }}
+              className="bg-green-50 rounded-lg p-4 border border-green-200 shadow-sm"
+            >
+              <h3 className="font-bold text-green-800 text-sm mb-3">Earning & Charges (Delivered Orders)</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-xs text-gray-500 font-normal mb-0.5">Total Orders</p>
+                  <p className="text-sm font-bold text-gray-900">{financeStats.totalOrders}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-normal mb-0.5">Net Revenue</p>
+                  <p className="text-sm font-extrabold text-[#ff8100]">₹{financeStats.totalNetRevenue}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-normal mb-0.5">Commission Deducted</p>
+                  <p className="text-sm font-bold text-gray-900">₹{financeStats.totalCommission}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-gray-500 font-normal mb-0.5">Delivery Charges</p>
+                  <p className="text-sm font-bold text-gray-900">₹{financeStats.totalDeliveryCharges}</p>
+                </div>
               </div>
             </motion.div>
           </>

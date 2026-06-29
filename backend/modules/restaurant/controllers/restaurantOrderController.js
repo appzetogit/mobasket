@@ -1,6 +1,7 @@
 import Order from '../../order/models/Order.js';
 import Payment from '../../payment/models/Payment.js';
 import Restaurant from '../models/Restaurant.js';
+import RestaurantCommission from '../../admin/models/RestaurantCommission.js';
 import GroceryStore from '../../grocery/models/GroceryStore.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
@@ -246,10 +247,50 @@ export const getRestaurantOrders = asyncHandler(async (req, res) => {
       const codPayments = await Payment.find({ orderId: { $in: orderIds }, method: 'cash' }).select('orderId').lean();
       codPayments.forEach(p => codOrderIds.add(p.orderId?.toString()));
     } catch (e) { /* ignore */ }
+
+    // Fetch RestaurantCommission configuration for this restaurant
+    let commissionConfig = null;
+    try {
+      commissionConfig = await RestaurantCommission.findOne({
+        $or: [
+          { restaurant: restaurant._id },
+          { restaurantId: { $in: restaurantIdVariations } }
+        ],
+        status: true
+      });
+    } catch (e) {
+      console.warn('⚠️ Could not fetch commission config for orders list:', e.message);
+    }
+
     const ordersWithPaymentMethod = normalizedOrders.map(o => {
       let paymentMethod = o.payment?.method ?? 'razorpay';
       if (paymentMethod !== 'cash' && codOrderIds.has(o._id?.toString())) paymentMethod = 'cash';
-      return { ...o, paymentMethod };
+      
+      // Calculate commission and payout
+      const subtotal = o.pricing?.subtotal || 0;
+      const discount = o.pricing?.discount || 0;
+      const foodPrice = Math.max(0, subtotal - discount);
+      
+      let commission = 0;
+      if (commissionConfig) {
+        const calculation = commissionConfig.calculateCommission(foodPrice);
+        commission = calculation.commission;
+      } else {
+        // Fallback default 10%
+        commission = Math.round(((foodPrice * 10) / 100) * 100) / 100;
+      }
+      
+      const payout = Math.max(0, foodPrice - commission);
+
+      return {
+        ...o,
+        paymentMethod,
+        pricing: {
+          ...(o.pricing || {}),
+          commission,
+          payout
+        }
+      };
     });
 
     // Log detailed order info for debugging
@@ -343,6 +384,44 @@ export const getRestaurantOrderById = asyncHandler(async (req, res) => {
     if (!order) {
       return errorResponse(res, 404, 'Order not found');
     }
+
+    const restaurantId = restaurant._id?.toString() || restaurant.restaurantId || restaurant.id;
+
+    // Fetch RestaurantCommission configuration for this restaurant
+    let commissionConfig = null;
+    try {
+      commissionConfig = await RestaurantCommission.findOne({
+        $or: [
+          { restaurant: restaurant._id },
+          { restaurantId: { $in: restaurantIdVariations } }
+        ],
+        status: true
+      });
+    } catch (e) {
+      console.warn('⚠️ Could not fetch commission config for single order:', e.message);
+    }
+
+    const subtotal = order.pricing?.subtotal || 0;
+    const discount = order.pricing?.discount || 0;
+    const foodPrice = Math.max(0, subtotal - discount);
+    
+    let commission = 0;
+    if (commissionConfig) {
+      const calculation = commissionConfig.calculateCommission(foodPrice);
+      commission = calculation.commission;
+    } else {
+      // Fallback default 10%
+      commission = Math.round(((foodPrice * 10) / 100) * 100) / 100;
+    }
+    
+    const payout = Math.max(0, foodPrice - commission);
+
+    order.pricing = {
+      ...(order.pricing || {}),
+      commission,
+      payout
+    };
+
     const orderStoreIdentifier = String(order?.restaurantId || restaurantId || '').trim() || restaurantId;
     return successResponse(res, 200, 'Order retrieved successfully', {
       order
