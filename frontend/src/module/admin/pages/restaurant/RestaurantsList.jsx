@@ -138,6 +138,8 @@ export default function RestaurantsList() {
   const entityLabel = isGrocery ? "Store" : "Restaurant"
   const entityLabelPlural = isGrocery ? "Stores" : "Restaurants"
   const [searchQuery, setSearchQuery] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
   const [restaurants, setRestaurants] = useState([])
   const [zones, setZones] = useState([])
   const [loading, setLoading] = useState(true)
@@ -546,6 +548,20 @@ export default function RestaurantsList() {
 
     return result
   }, [restaurants, searchQuery, filters, zones])
+
+  // Reset page when search or filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, filters])
+
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredRestaurants.length / pageSize) || 1
+  }, [filteredRestaurants.length, pageSize])
+
+  const paginatedRestaurants = useMemo(() => {
+    const startIndex = (currentPage - 1) * pageSize
+    return filteredRestaurants.slice(startIndex, startIndex + pageSize)
+  }, [filteredRestaurants, currentPage, pageSize])
 
   const parseAddressComponents = (components = []) => {
     const byType = (type) => components.find((c) => c.types?.includes(type))
@@ -1648,13 +1664,13 @@ export default function RestaurantsList() {
                       </td>
                     </tr>
                   ) : (
-                    filteredRestaurants.map((restaurant, index) => (
+                    paginatedRestaurants.map((restaurant, index) => (
                       <tr
                         key={restaurant.id}
                         className="hover:bg-slate-50 transition-colors"
                       >
                         <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm font-medium text-slate-700">{index + 1}</span>
+                          <span className="text-sm font-medium text-slate-700">{(currentPage - 1) * pageSize + index + 1}</span>
                         </td>
                         <td className="px-6 py-4 align-top">
                           <div className="flex items-center gap-3">
@@ -1830,6 +1846,92 @@ export default function RestaurantsList() {
             )}
           </div>
         </div>
+          {/* Pagination */}
+          {filteredRestaurants.length > 0 && (
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-t border-slate-200 bg-white px-4 py-4 sm:px-6 mt-4 rounded-lg shadow-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-slate-500">Show</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value))
+                    setCurrentPage(1)
+                  }}
+                  className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-sm font-medium text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 cursor-pointer"
+                >
+                  <option value={10}>10</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <span className="text-sm text-slate-500">per page</span>
+              </div>
+              
+              <div className="flex flex-1 justify-between sm:hidden">
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="relative inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Previous
+                </button>
+                <button
+                  onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="relative ml-3 inline-flex items-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+              
+              <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between sm:ml-4">
+                <div>
+                  <p className="text-sm text-slate-700">
+                    Showing <span className="font-medium">{(currentPage - 1) * pageSize + 1}</span> to{" "}
+                    <span className="font-medium">
+                      {Math.min(currentPage * pageSize, filteredRestaurants.length)}
+                    </span>{" "}
+                    of <span className="font-medium">{filteredRestaurants.length}</span>{" "}
+                    {entityLabelPlural.toLowerCase()}
+                  </p>
+                </div>
+                {totalPages > 1 && (
+                  <div>
+                    <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
+                      <button
+                        onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        className="relative inline-flex items-center rounded-l-md px-3 py-2 text-slate-500 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Previous
+                      </button>
+                      {/* Page Numbers */}
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                        <button
+                          key={page}
+                          onClick={() => setCurrentPage(page)}
+                          className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold focus:z-20 ${
+                            currentPage === page
+                              ? "z-10 bg-blue-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                              : "text-slate-900 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:outline-offset-0"
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        className="relative inline-flex items-center rounded-r-md px-3 py-2 text-slate-500 ring-1 ring-inset ring-slate-300 hover:bg-slate-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Next
+                      </button>
+                    </nav>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
       </div>
 
