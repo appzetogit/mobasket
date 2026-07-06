@@ -260,7 +260,7 @@ function NewOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTick = 0 
                   New
                 </span>
               </div>
-              <p className="text-xs text-gray-600 mt-2 line-clamp-1">{order.itemsSummary}</p>
+              <p className="text-xs text-gray-600 mt-2">{order.itemsSummary}</p>
               <div className="mt-2 flex items-center justify-between">
                 <p className="text-[11px] text-gray-500">{order.type}</p>
                 <p className="text-xs font-medium text-black">Rs {order.amount.toFixed(2)}</p>
@@ -454,7 +454,7 @@ function CompletedOrders({ onSelectOrder, orderAPI, searchQuery = "", refreshTic
                     </div>
 
                     <div className="mt-2">
-                      <p className="text-xs text-gray-600 line-clamp-1">
+                      <p className="text-xs text-gray-600">
                         {order.itemsSummary}
                       </p>
                     </div>
@@ -677,11 +677,11 @@ function CancelledOrders({ onSelectOrder, orderAPI, isGroceryStore = false, sear
                     </div>
 
                     <div className="mt-2">
-                      <p className="text-xs text-gray-600 line-clamp-1">
+                      <p className="text-xs text-gray-600">
                         {order.itemsSummary}
                       </p>
                       {order.cancellationReason && (
-                        <p className="text-[10px] text-red-600 mt-1 line-clamp-1">
+                        <p className="text-[10px] text-red-600 mt-1">
                           Reason: {order.cancellationReason}
                         </p>
                       )}
@@ -3127,7 +3127,7 @@ function OrderCard({
 
           {/* Middle row */}
           <div className="mt-2">
-            <p className="text-xs text-gray-600 line-clamp-1">
+            <p className="text-xs text-gray-600">
               {itemsSummary}
             </p>
           </div>
