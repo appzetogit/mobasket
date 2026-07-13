@@ -347,8 +347,40 @@ export default function RestaurantsList() {
         
         let response
         try {
-          // Try admin API first
-          response = await adminAPI.getRestaurants()
+          // Load every backend page so the admin list can paginate locally
+          const firstResponse = await adminAPI.getRestaurants({ page: 1, limit: 100 })
+          const firstPayload = firstResponse?.data?.data || {}
+          const firstRestaurants = firstPayload.restaurants || firstPayload || []
+          const pagination = firstPayload.pagination || {}
+          const totalPages = Number(pagination.pages) || 1
+
+          if (totalPages > 1) {
+            const remainingResponses = await Promise.all(
+              Array.from({ length: totalPages - 1 }, (_, index) =>
+                adminAPI.getRestaurants({ page: index + 2, limit: 100 }),
+              ),
+            )
+
+            const allRestaurants = [
+              ...firstRestaurants,
+              ...remainingResponses.flatMap(
+                (pageResponse) => pageResponse?.data?.data?.restaurants || [],
+              ),
+            ]
+
+            response = {
+              ...firstResponse,
+              data: {
+                ...firstResponse.data,
+                data: {
+                  ...firstPayload,
+                  restaurants: allRestaurants,
+                },
+              },
+            }
+          } else {
+            response = firstResponse
+          }
         } catch {
           // Fallback to regular restaurant API if admin endpoint doesn't exist
           console.log("Admin restaurants endpoint not available, using fallback")
