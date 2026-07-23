@@ -1022,7 +1022,7 @@ export default function OrdersMain() {
   }, [canAccessLiveOrders, refreshFilterCounts, ordersRefreshTick])
 
   // Restaurant notifications hook for real-time orders
-  const { newOrder, clearNewOrder, isConnected } = useRestaurantNotifications({
+  const { newOrder, clearNewOrder } = useRestaurantNotifications({
     enableSound: false,
     enabled: canAccessLiveOrders,
   })
@@ -1381,9 +1381,12 @@ export default function OrdersMain() {
     showNewOrderPopupRef.current = showNewOrderPopup
   }, [showNewOrderPopup])
 
-  // Check for confirmed orders that haven't been shown in popup yet (fallback if Socket.IO fails)
+  // Check for confirmed orders that haven't been shown in popup yet.
+  // Keep this polling active even when the socket reports "connected" because
+  // a connected namespace does not guarantee the restaurant/store room join
+  // succeeded or that the new_order event reached this dashboard.
   useEffect(() => {
-    if (!canAccessLiveOrders || isConnected) return undefined
+    if (!canAccessLiveOrders) return undefined
 
     // Check every 5 seconds for new confirmed orders (fallback mechanism)
     const interval = setInterval(checkConfirmedOrdersAndShowPopup, 5000)
@@ -1392,7 +1395,7 @@ export default function OrdersMain() {
     checkConfirmedOrdersAndShowPopup()
 
     return () => clearInterval(interval)
-  }, [canAccessLiveOrders, isConnected, checkConfirmedOrdersAndShowPopup])
+  }, [canAccessLiveOrders, checkConfirmedOrdersAndShowPopup])
 
   // Play audio when popup opens
   useEffect(() => {

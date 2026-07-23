@@ -177,6 +177,7 @@ class SMSIndiaHubService {
       
       // Check if template ID is provided (for DLT registered templates)
       const templateId = process.env.SMSINDIAHUB_TEMPLATE_ID?.trim();
+      const entityId = process.env.SMSINDIAHUB_ENTITY_ID?.trim();
       
       // Check if promotional SMS is enabled (temporary workaround for template issues)
       // ⚠️ WARNING: Promotional SMS is not recommended for OTP - use only for testing
@@ -192,9 +193,21 @@ class SMSIndiaHubService {
       // Use fixed template text that matches DLT registration, regardless of purpose
       // Based on working template: "Welcome to the DriveOn powered by SMSINDIAHUB. Your OTP for registration is {otp}"
       let message;
+      const companyName = await this.getCompanyName();
       if (customTemplate) {
-        // Use custom template with OTP replacement only (don't change purpose text for DLT)
-        message = customTemplate.replace('{otp}', otp);
+        // Support both legacy `{otp}` placeholders and SMSIndiaHub-style `##var##` placeholders.
+        if (customTemplate.includes('##var##')) {
+          let replacementIndex = 0;
+          message = customTemplate.replace(/##var##/g, () => {
+            replacementIndex += 1;
+            return replacementIndex === 1 ? companyName : otp;
+          });
+        } else {
+          // Use custom template with OTP replacement only (don't change purpose text for DLT)
+          message = customTemplate
+            .replace('{companyName}', companyName)
+            .replace('{otp}', otp);
+        }
       } else if (usePromotional) {
         // For promotional SMS, we can use dynamic purpose text
         let purposeText = 'registration';
@@ -203,17 +216,14 @@ class SMSIndiaHubService {
         } else if (purpose === 'reset_password') {
           purposeText = 'password reset';
         }
-        const companyName = await this.getCompanyName();
         message = `Welcome to the ${companyName} powered by SMSINDIAHUB. Your OTP for ${purposeText} is ${otp}`;
       } else {
         // For transactional SMS, use fixed template text that matches DLT registration
         // IMPORTANT: This must match the registered DLT template exactly
-        const companyName = await this.getCompanyName();
         message = `Welcome to the ${companyName} powered by SMSINDIAHUB. Your OTP for registration is ${otp}`;
       }
-      
-      // Build the API URL with query parameters (same format as RentYatra)
-      const params = new URLSearchParams({
+
+      const params = {
         APIKey: apiKey,
         msisdn: normalizedPhone,
         sid: senderId,
@@ -221,14 +231,14 @@ class SMSIndiaHubService {
         fl: "0", // Flash message flag (0 = normal SMS)
         dc: "0", // Delivery confirmation (0 = no confirmation)
         gwid: gatewayId, // Gateway ID (2 = transactional, same as RentYatra)
-      });
-      
-      // Add template ID if provided (required for some DLT templates)
-      if (templateId) {
-        params.append('templateid', templateId);
-      }
+      };
 
-      const apiUrl = `${this.baseUrl}?${params.toString()}`;
+      if (templateId) {
+        params.templateid = templateId;
+      }
+      if (entityId) {
+        params.entityid = entityId;
+      }
 
       const requestConfig = {
         headers: {
@@ -242,7 +252,15 @@ class SMSIndiaHubService {
       // Make GET request to SMSIndia Hub API
       let response;
       try {
-        response = await axios.get(apiUrl, requestConfig);
+        response = await axios.get(this.baseUrl, {
+          ...requestConfig,
+          params,
+          paramsSerializer: (rawParams) => (
+            Object.keys(rawParams)
+              .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(rawParams[key])}`)
+              .join('&')
+          ),
+        });
       } catch (firstError) {
         const shouldRetry =
           firstError?.code === "ECONNABORTED" ||
@@ -250,8 +268,14 @@ class SMSIndiaHubService {
           firstError?.code === "ETIMEDOUT";
         if (!shouldRetry) throw firstError;
         // One fast retry for transient network jitter.
-        response = await axios.get(apiUrl, {
+        response = await axios.get(this.baseUrl, {
           ...requestConfig,
+          params,
+          paramsSerializer: (rawParams) => (
+            Object.keys(rawParams)
+              .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(rawParams[key])}`)
+              .join('&')
+          ),
           timeout: Math.min(this.requestTimeoutMs, 5000),
         });
       }
