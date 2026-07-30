@@ -15,10 +15,16 @@ export async function processAutoRejectOrders() {
     const ACCEPT_TIME_LIMIT_MS = ACCEPT_TIME_LIMIT_SECONDS * 1000;
 
     // Find all orders with status 'pending' or 'confirmed' that haven't been accepted yet
-    // These are orders waiting for restaurant to accept
+    // These are orders waiting for restaurant to accept.
+    // Exclude online orders still awaiting payment — the accept timer must not run
+    // while the customer is still on the Razorpay checkout page. Such orders only
+    // become eligible once payment is completed and the order is confirmed.
     const validPendingOrders = await Order.find({
       status: { $in: ['pending', 'confirmed'] },
-      'adminApproval.status': { $ne: 'approved' }
+      'adminApproval.status': { $ne: 'approved' },
+      $nor: [
+        { 'payment.method': { $in: ['razorpay', 'upi', 'card'] }, 'payment.status': { $ne: 'completed' } }
+      ]
     }).lean();
 
     if (validPendingOrders.length === 0) {
@@ -30,8 +36,13 @@ export async function processAutoRejectOrders() {
     const rejectedOrders = [];
 
     for (const order of validPendingOrders) {
-      const orderCreatedAt = new Date(order.createdAt);
-      const elapsedMs = now - orderCreatedAt;
+      // Anchor the accept window to when the order actually became live for the
+      // restaurant (payment confirmed), not when the pending row was inserted.
+      // Falls back to createdAt for COD orders that are confirmed on creation.
+      const acceptClockStart = new Date(
+        order?.tracking?.confirmed?.timestamp || order.createdAt
+      );
+      const elapsedMs = now - acceptClockStart;
 
       // Check if accept time has expired
       if (elapsedMs >= ACCEPT_TIME_LIMIT_MS) {
