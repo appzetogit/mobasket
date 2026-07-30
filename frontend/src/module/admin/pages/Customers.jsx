@@ -112,25 +112,32 @@ export default function Customers() {
     const fetchCustomers = async () => {
       try {
         setLoading(true)
-        const params = {
-          limit: 1000, // Get all customers
-          offset: 0,
+        const baseParams = {
           ...(searchQuery && { search: searchQuery }),
           ...(filters.status && { status: filters.status }),
           ...(filters.joiningDate && { joiningDate: filters.joiningDate }),
           ...(filters.sortBy && { sortBy: filters.sortBy }),
         }
 
-        const response = await adminAPI.getUsers(params)
-        const data = response?.data?.data || response?.data
-        
-        if (data?.users) {
-          setCustomers(data.users)
-          setTotalCustomers(data.total || data.users.length)
-        } else {
-          setCustomers([])
-          setTotalCustomers(0)
-        }
+        // Page through every customer — the server caps each response, so keep
+        // fetching batches until we've pulled `total` rows (all client-side
+        // search/sort/pagination below relies on having the full set in memory).
+        const BATCH = 1000
+        let offset = 0
+        let total = 0
+        const allUsers = []
+        do {
+          const response = await adminAPI.getUsers({ ...baseParams, limit: BATCH, offset })
+          const data = response?.data?.data || response?.data
+          const batch = data?.users || []
+          allUsers.push(...batch)
+          total = data?.total || allUsers.length
+          offset += BATCH
+          if (batch.length < BATCH) break // last page reached
+        } while (allUsers.length < total)
+
+        setCustomers(allUsers)
+        setTotalCustomers(total || allUsers.length)
       } catch (error) {
         console.error('Error fetching customers:', error)
         toast.error('Failed to load customers')
