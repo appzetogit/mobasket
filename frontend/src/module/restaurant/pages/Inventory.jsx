@@ -1603,7 +1603,9 @@ export default function Inventory() {
           onClick={() => navigate(isGroceryStore ? "/store/products/all" : "/restaurant/hub-menu")}
           className="bg-blue-200/20 rounded-lg p-4 mt-4 mb-4 flex items-center justify-between"
         >
-          <span className="text-sm font-light text-gray-900">Want to edit your menu?</span>
+          <span className="text-sm font-light text-gray-900">
+            {isGroceryStore ? "Want to manage your products?" : "Want to edit your menu?"}
+          </span>
           <button className="bg-blue-200/30 hover:bg-blue-300 text-black  px-4 py-2 rounded-full text-sm font-light transition-colors">
             Edit now
           </button>

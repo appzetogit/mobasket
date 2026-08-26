@@ -28,6 +28,8 @@ import {
   CheckCircle,
   Calendar,
   MapPin,
+  Package,
+  Grid3x3,
 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { DateRangeCalendar } from "@/components/ui/date-range-calendar"
@@ -692,6 +694,11 @@ export default function ExploreMore() {
   }, [])
 
   // Section data
+  const catalogueItems = isGroceryStore ? [
+    { id: 1, label: "All products", icon: Package, route: "/store/products/all" },
+    { id: 2, label: "Categories", icon: Grid3x3, route: "/store/categories" },
+  ] : []
+
   const manageOutletItems = isGroceryStore ? [
     { id: 1, label: "Store info", icon: Info, route: "/store/outlet-info" },
     // { id: 2, label: "Switch outlet", icon: Building2, route: "/store/switch-outlet" },
@@ -734,6 +741,7 @@ export default function ExploreMore() {
 
   // All sections with their items
   const allSections = [
+    ...(isGroceryStore ? [{ title: "Catalogue", items: catalogueItems, key: "catalogue" }] : []),
     { title: "Manage outlet", items: manageOutletItems, key: "manage-outlet" },
     { title: "Settings", items: settingsItems, key: "settings" },
     { title: "Orders", items: ordersItems, key: "orders" },
