@@ -3971,20 +3971,23 @@ export const getRestaurantAnalytics = asyncHandler(async (req, res) => {
       : new mongoose.Types.ObjectId(restaurant._id);
 
     // Get all settlements for this restaurant
-    const allSettlements = await OrderSettlement.find({
-      restaurantId: restaurantIdForSettlement
-    }).lean();
+    // Lifetime totals have no date bound, so loading the documents grows with
+    // the restaurant's entire order history. Sum them in the database instead.
+    const [lifetimeTotals] = await OrderSettlement.aggregate([
+      { $match: { restaurantId: restaurantIdForSettlement } },
+      {
+        $group: {
+          _id: null,
+          totalCommission: { $sum: { $ifNull: ['$restaurantEarning.commission', 0] } },
+          totalRestaurantEarning: { $sum: { $ifNull: ['$restaurantEarning.netEarning', 0] } },
+          totalFoodPrice: { $sum: { $ifNull: ['$restaurantEarning.foodPrice', 0] } },
+        },
+      },
+    ]);
 
-    // Calculate totals from settlements
-    let totalCommission = 0;
-    let totalRestaurantEarning = 0;
-    let totalFoodPrice = 0;
-
-    allSettlements.forEach(s => {
-      totalCommission += s.restaurantEarning?.commission || 0;
-      totalRestaurantEarning += s.restaurantEarning?.netEarning || 0;
-      totalFoodPrice += s.restaurantEarning?.foodPrice || 0;
-    });
+    let totalCommission = lifetimeTotals?.totalCommission || 0;
+    let totalRestaurantEarning = lifetimeTotals?.totalRestaurantEarning || 0;
+    let totalFoodPrice = lifetimeTotals?.totalFoodPrice || 0;
 
     totalCommission = Math.round(totalCommission * 100) / 100;
     totalRestaurantEarning = Math.round(totalRestaurantEarning * 100) / 100;
