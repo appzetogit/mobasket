@@ -48,6 +48,23 @@ const TAG_LENGTH = 16;
 const TAG_POSITION = SALT_LENGTH + IV_LENGTH;
 const ENCRYPTED_POSITION = TAG_POSITION + TAG_LENGTH;
 
+// Each decrypt() runs scryptSync, which costs ~40ms and blocks the event loop.
+// Callers re-read the same stored values on nearly every request, so memoise on
+// the ciphertext: a changed value re-encrypts to a new string and misses the
+// cache, meaning entries can never go stale.
+const decryptCache = new Map();
+const DECRYPT_CACHE_MAX = 500;
+
+function rememberDecrypted(key, value) {
+  // Cheap FIFO eviction keeps the map bounded without tracking access order.
+  if (decryptCache.size >= DECRYPT_CACHE_MAX) {
+    const oldest = decryptCache.keys().next().value;
+    decryptCache.delete(oldest);
+  }
+  decryptCache.set(key, value);
+  return value;
+}
+
 /**
  * Encrypt sensitive data
  * @param {string} text - Text to encrypt
@@ -115,6 +132,11 @@ export function decrypt(encryptedText) {
     return '';
   }
 
+  const cached = decryptCache.get(encryptedText);
+  if (cached !== undefined) {
+    return cached;
+  }
+
   try {
     // Extract components
     const salt = Buffer.from(encryptedText.slice(0, SALT_LENGTH * 2), 'hex');
@@ -130,8 +152,8 @@ export function decrypt(encryptedText) {
     
     let decrypted = decipher.update(encrypted, 'hex', 'utf8');
     decrypted += decipher.final('utf8');
-    
-    return decrypted;
+
+    return rememberDecrypted(encryptedText, decrypted);
   } catch (error) {
     console.error('Decryption error:', error);
     // If decryption fails, return empty string (might be unencrypted legacy data)
