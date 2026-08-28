@@ -6,12 +6,17 @@ import {
   uploadBufferToImageKit,
 } from '../../config/imagekit.js';
 import {
+  deleteLocalFile,
+  uploadBufferToLocal,
+} from '../../config/localStorage.js';
+import {
   getCloudinaryCredentials,
   getImageKitCredentials,
   getMediaProvider,
 } from './envService.js';
 
 const IMAGEKIT_PUBLIC_ID_PREFIX = 'imagekit:';
+const LOCAL_PUBLIC_ID_PREFIX = 'local:';
 
 const cleanValue = (value) => String(value || '').trim();
 
@@ -36,18 +41,22 @@ const hasImageKitCredentials = async () => {
 export const normalizeMediaProvider = async () => {
   const preferredProvider = cleanValue(await getMediaProvider()).toLowerCase();
 
+  if (preferredProvider === 'local') return 'local';
   if (preferredProvider === 'imagekit') return 'imagekit';
   if (preferredProvider === 'cloudinary') return 'cloudinary';
 
   if (await hasImageKitCredentials()) return 'imagekit';
   if (await hasCloudinaryCredentials()) return 'cloudinary';
 
-  return 'imagekit';
+  // Nothing configured: local disk always works, so never fail closed on a
+  // remote provider whose credentials are missing.
+  return 'local';
 };
 
 export const initializeActiveMediaProvider = async () => {
   const provider = await normalizeMediaProvider();
 
+  // Local storage needs no credentials or warm-up.
   if (provider === 'imagekit') {
     await initializeImageKit();
   }
@@ -64,6 +73,11 @@ export const toProviderPublicId = (provider, rawId) => {
   const normalizedProvider = cleanValue(provider).toLowerCase();
   const normalizedId = cleanValue(rawId);
   if (!normalizedId) return '';
+  if (normalizedProvider === 'local') {
+    return normalizedId.startsWith(LOCAL_PUBLIC_ID_PREFIX)
+      ? normalizedId
+      : `${LOCAL_PUBLIC_ID_PREFIX}${normalizedId}`;
+  }
   if (normalizedProvider === 'imagekit') {
     return normalizedId.startsWith(IMAGEKIT_PUBLIC_ID_PREFIX)
       ? normalizedId
@@ -76,6 +90,12 @@ export const parseProviderPublicId = (publicId) => {
   const normalizedPublicId = cleanValue(publicId);
   if (!normalizedPublicId) {
     return { provider: '', assetId: '' };
+  }
+  if (normalizedPublicId.startsWith(LOCAL_PUBLIC_ID_PREFIX)) {
+    return {
+      provider: 'local',
+      assetId: normalizedPublicId.slice(LOCAL_PUBLIC_ID_PREFIX.length),
+    };
   }
   if (normalizedPublicId.startsWith(IMAGEKIT_PUBLIC_ID_PREFIX)) {
     return {
@@ -91,6 +111,20 @@ export const parseProviderPublicId = (publicId) => {
 
 export const uploadMediaBuffer = async (buffer, options = {}) => {
   const provider = await normalizeMediaProvider();
+
+  if (provider === 'local') {
+    const result = await uploadBufferToLocal(buffer, options);
+    return {
+      provider: 'local',
+      public_id: toProviderPublicId('local', result.fileId),
+      secure_url: cleanValue(result?.url),
+      url: cleanValue(result?.url),
+      bytes: Number(result?.size || 0),
+      format: cleanValue(result?.fileType || ''),
+      resource_type: options.resource_type || 'auto',
+      original_response: result,
+    };
+  }
 
   if (provider === 'imagekit') {
     const result = await uploadBufferToImageKit(buffer, options);
@@ -114,6 +148,10 @@ export const deleteMediaAsset = async (publicId) => {
   const { provider, assetId } = parseProviderPublicId(publicId);
   if (!provider || !assetId) {
     return { result: 'not_found' };
+  }
+
+  if (provider === 'local') {
+    return deleteLocalFile(assetId);
   }
 
   if (provider === 'imagekit') {
