@@ -234,6 +234,54 @@ environmentVariableSchema.methods.toEnvObject = function() {
   return obj;
 };
 
+// Fields the unauthenticated /api/env/public route is allowed to expose.
+// Of these only FIREBASE_API_KEY and VITE_GOOGLE_MAPS_API_KEY are stored
+// encrypted; the rest are public Firebase identifiers held in plain text.
+const PUBLIC_ENV_FIELDS = [
+  'VITE_GOOGLE_MAPS_API_KEY',
+  'FIREBASE_API_KEY',
+  'FIREBASE_AUTH_DOMAIN',
+  'FIREBASE_STORAGE_BUCKET',
+  'FIREBASE_MESSAGING_SENDER_ID',
+  'FIREBASE_APP_ID',
+  'MEASUREMENT_ID',
+  'FIREBASE_PROJECT_ID',
+  'FIREBASE_DATABASE_URL',
+  'FIREBASE_VAPID_KEY',
+];
+
+/**
+ * Public-safe projection. toEnvObject() decrypts all 14 secrets - including
+ * payment and SMTP credentials - which has no place behind an unauthenticated
+ * route, and costs a scrypt pass per field. This touches only what the route
+ * returns, so the remaining secrets are never materialised in memory.
+ */
+environmentVariableSchema.methods.toPublicEnvObject = function() {
+  const source = this.toObject();
+  const result = {};
+
+  for (const field of PUBLIC_ENV_FIELDS) {
+    const value = source[field];
+    if (!value) {
+      result[field] = '';
+      continue;
+    }
+
+    if (isEncrypted(value)) {
+      try {
+        result[field] = decrypt(value);
+      } catch (error) {
+        console.error(`Error decrypting ${field}:`, error);
+        result[field] = '';
+      }
+    } else {
+      result[field] = value;
+    }
+  }
+
+  return result;
+};
+
 // Pre-save hook to encrypt sensitive fields
 environmentVariableSchema.pre('save', function(next) {
   const sensitiveFields = [

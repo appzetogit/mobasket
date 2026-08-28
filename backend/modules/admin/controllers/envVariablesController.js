@@ -47,8 +47,9 @@ export const getPublicEnvVariables = asyncHandler(async (req, res) => {
   try {
     const envVars = await EnvironmentVariable.getOrCreate();
     
-    // Get decrypted Google Maps API key (toEnvObject already decrypts)
-    const envData = envVars.toEnvObject();
+    // Public-safe projection: decrypts only the fields returned below, so
+    // payment/SMTP/ImageKit secrets are never decrypted on this open route.
+    const envData = envVars.toPublicEnvObject();
     
     // Return only public variables that frontend may need at runtime.
     // NO FALLBACK - Only use database value.
