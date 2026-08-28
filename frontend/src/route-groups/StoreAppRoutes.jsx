@@ -1,46 +1,56 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route } from "react-router-dom";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AuthRedirect from "@/components/AuthRedirect";
-import GroceryStoreOnboarding from "@/module/grocery-store/pages/Onboarding";
-import GroceryStoreLogin from "@/module/grocery-store/pages/auth/Login";
-import GroceryStoreSignup from "@/module/grocery-store/pages/auth/Signup";
-import GroceryStoreOTP from "@/module/grocery-store/pages/auth/OTP";
-import GroceryStoreProductDetailsPage from "@/module/grocery-store/pages/ProductDetailsPage";
-import GroceryStoreProductsListPage from "@/module/grocery-store/pages/ProductsListPage";
-import GroceryStoreCategoriesPage from "@/module/grocery-store/pages/CategoriesPage";
-import AllOrdersPage from "@/module/restaurant/pages/AllOrdersPage";
-import WalletPage from "@/module/restaurant/pages/WalletPage";
-import RestaurantNotifications from "@/module/restaurant/pages/Notifications";
-import OrderDetails from "@/module/restaurant/pages/OrderDetails";
-import OrdersMain from "@/module/restaurant/pages/OrdersMain";
-import CouponListPage from "@/module/restaurant/pages/CouponListPage";
-import AddCouponPage from "@/module/restaurant/pages/AddCouponPage";
-import EditCouponPage from "@/module/restaurant/pages/EditCouponPage";
-import SettingsPage from "@/module/restaurant/pages/SettingsPage";
-import PrivacyPolicyPage from "@/module/restaurant/pages/PrivacyPolicyPage";
-import TermsAndConditionsPage from "@/module/restaurant/pages/TermsAndConditionsPage";
-import ConversationListPage from "@/module/restaurant/pages/ConversationListPage";
-import ChatDetailPage from "@/module/restaurant/pages/ChatDetailPage";
-import RestaurantStatus from "@/module/restaurant/pages/RestaurantStatus";
-import ExploreMore from "@/module/restaurant/pages/ExploreMore";
-import DeliverySettings from "@/module/restaurant/pages/DeliverySettings";
-import SwitchOutlet from "@/module/restaurant/pages/SwitchOutlet";
-import OutletTimings from "@/module/restaurant/pages/OutletTimings";
-import DaySlots from "@/module/restaurant/pages/DaySlots";
-import OutletInfo from "@/module/restaurant/pages/OutletInfo";
-import ContactDetails from "@/module/restaurant/pages/ContactDetails";
-import EditOwner from "@/module/restaurant/pages/EditOwner";
-import InviteUser from "@/module/restaurant/pages/InviteUser";
-import Inventory from "@/module/restaurant/pages/Inventory";
-import Feedback from "@/module/restaurant/pages/Feedback";
-import ShareFeedback from "@/module/restaurant/pages/ShareFeedback";
-import HelpCentre from "@/module/restaurant/pages/HelpCentre";
-import ZoneSetup from "@/module/restaurant/pages/ZoneSetup";
-import RestaurantPendingApproval from "@/module/restaurant/pages/PendingApproval";
-import ContentPolicyPublic from "@/module/user/pages/legal/ContentPolicyPublic";
+const GroceryStoreOnboarding = lazy(() => import("@/module/grocery-store/pages/Onboarding"));
+const GroceryStoreLogin = lazy(() => import("@/module/grocery-store/pages/auth/Login"));
+const GroceryStoreSignup = lazy(() => import("@/module/grocery-store/pages/auth/Signup"));
+const GroceryStoreOTP = lazy(() => import("@/module/grocery-store/pages/auth/OTP"));
+const GroceryStoreProductDetailsPage = lazy(() => import("@/module/grocery-store/pages/ProductDetailsPage"));
+const GroceryStoreProductsListPage = lazy(() => import("@/module/grocery-store/pages/ProductsListPage"));
+const GroceryStoreCategoriesPage = lazy(() => import("@/module/grocery-store/pages/CategoriesPage"));
+const AllOrdersPage = lazy(() => import("@/module/restaurant/pages/AllOrdersPage"));
+const WalletPage = lazy(() => import("@/module/restaurant/pages/WalletPage"));
+const RestaurantNotifications = lazy(() => import("@/module/restaurant/pages/Notifications"));
+const OrderDetails = lazy(() => import("@/module/restaurant/pages/OrderDetails"));
+const OrdersMain = lazy(() => import("@/module/restaurant/pages/OrdersMain"));
+const CouponListPage = lazy(() => import("@/module/restaurant/pages/CouponListPage"));
+const AddCouponPage = lazy(() => import("@/module/restaurant/pages/AddCouponPage"));
+const EditCouponPage = lazy(() => import("@/module/restaurant/pages/EditCouponPage"));
+const SettingsPage = lazy(() => import("@/module/restaurant/pages/SettingsPage"));
+const PrivacyPolicyPage = lazy(() => import("@/module/restaurant/pages/PrivacyPolicyPage"));
+const TermsAndConditionsPage = lazy(() => import("@/module/restaurant/pages/TermsAndConditionsPage"));
+const ConversationListPage = lazy(() => import("@/module/restaurant/pages/ConversationListPage"));
+const ChatDetailPage = lazy(() => import("@/module/restaurant/pages/ChatDetailPage"));
+const RestaurantStatus = lazy(() => import("@/module/restaurant/pages/RestaurantStatus"));
+const ExploreMore = lazy(() => import("@/module/restaurant/pages/ExploreMore"));
+const DeliverySettings = lazy(() => import("@/module/restaurant/pages/DeliverySettings"));
+const SwitchOutlet = lazy(() => import("@/module/restaurant/pages/SwitchOutlet"));
+const OutletTimings = lazy(() => import("@/module/restaurant/pages/OutletTimings"));
+const DaySlots = lazy(() => import("@/module/restaurant/pages/DaySlots"));
+const OutletInfo = lazy(() => import("@/module/restaurant/pages/OutletInfo"));
+const ContactDetails = lazy(() => import("@/module/restaurant/pages/ContactDetails"));
+const EditOwner = lazy(() => import("@/module/restaurant/pages/EditOwner"));
+const InviteUser = lazy(() => import("@/module/restaurant/pages/InviteUser"));
+const Inventory = lazy(() => import("@/module/restaurant/pages/Inventory"));
+const Feedback = lazy(() => import("@/module/restaurant/pages/Feedback"));
+const ShareFeedback = lazy(() => import("@/module/restaurant/pages/ShareFeedback"));
+const HelpCentre = lazy(() => import("@/module/restaurant/pages/HelpCentre"));
+const ZoneSetup = lazy(() => import("@/module/restaurant/pages/ZoneSetup"));
+const RestaurantPendingApproval = lazy(() => import("@/module/restaurant/pages/PendingApproval"));
+const ContentPolicyPublic = lazy(() => import("@/module/user/pages/legal/ContentPolicyPublic"));
+
+function RouteChunkLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+    </div>
+  );
+}
 
 export default function StoreAppRoutes() {
   return (
+    <Suspense fallback={<RouteChunkLoader />}>
     <Routes>
       <Route path="login" element={<AuthRedirect module="grocery-store"><GroceryStoreLogin /></AuthRedirect>} />
       <Route path="signup" element={<AuthRedirect module="grocery-store"><GroceryStoreSignup /></AuthRedirect>} />
@@ -85,5 +95,6 @@ export default function StoreAppRoutes() {
       <Route path="coupon/new" element={<ProtectedRoute module="grocery-store" loginPath="/store/login"><AddCouponPage /></ProtectedRoute>} />
       <Route path="coupon/:id/edit" element={<ProtectedRoute module="grocery-store" loginPath="/store/login"><EditCouponPage /></ProtectedRoute>} />
     </Routes>
+    </Suspense>
   );
 }

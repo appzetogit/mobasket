@@ -1,49 +1,59 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom"
 import DeliveryLayout from "./DeliveryLayout"
 import ProtectedRoute from "./ProtectedRoute"
 
 // Main pages (with layout)
-import DeliveryHome from "../pages/DeliveryHome"
-import Notifications from "../pages/Notifications"
-import MyOrders from "../pages/MyOrders"
-import PocketPage from "../pages/PocketPage"
-import GigBooking from "../pages/GigBooking"
-import PickupDirectionsPage from "../pages/PickupDirectionsPage"
-import ProfilePage from "../pages/ProfilePage"
-import ProfileDetails from "../pages/ProfileDetails"
-import AcceptedOrderDetails from "../pages/AcceptedOrderDetails"
-import MyAccount from "../pages/MyAccount"
-import TransactionHistory from "../pages/TransactionHistory"
-import EditProfile from "../pages/EditProfile"
-import Settings from "../pages/Settings"
-import Conversation from "../pages/Conversation"
-import TermsAndConditions from "../pages/TermsAndConditions"
-import PrivacyPolicy from "../pages/PrivacyPolicy"
-import Payout from "../pages/Payout"
-import DeductionStatement from "../pages/DeductionStatement"
-import TipsStatement from "../pages/TipsStatement"
-import PocketStatement from "../pages/PocketStatement"
-import FuelPayment from "../pages/FuelPayment"
-import LimitSettlement from "../pages/LimitSettlement"
-import OffersPage from "../pages/OffersPage"
-import UpdatesPage from "../pages/UpdatesPage"
-import SupportTickets from "../pages/SupportTickets"
-import CreateSupportTicket from "../pages/CreateSupportTicket"
-import ViewSupportTicket from "../pages/ViewSupportTicket"
-import ShowIdCard from "../pages/ShowIdCard"
-import ChangeLanguage from "../pages/ChangeLanguage"
-import SelectDropLocation from "../pages/SelectDropLocation"
+const DeliveryHome = lazy(() => import("../pages/DeliveryHome"));
+const Notifications = lazy(() => import("../pages/Notifications"));
+const MyOrders = lazy(() => import("../pages/MyOrders"));
+const PocketPage = lazy(() => import("../pages/PocketPage"));
+const GigBooking = lazy(() => import("../pages/GigBooking"));
+const PickupDirectionsPage = lazy(() => import("../pages/PickupDirectionsPage"));
+const ProfilePage = lazy(() => import("../pages/ProfilePage"));
+const ProfileDetails = lazy(() => import("../pages/ProfileDetails"));
+const AcceptedOrderDetails = lazy(() => import("../pages/AcceptedOrderDetails"));
+const MyAccount = lazy(() => import("../pages/MyAccount"));
+const TransactionHistory = lazy(() => import("../pages/TransactionHistory"));
+const EditProfile = lazy(() => import("../pages/EditProfile"));
+const Settings = lazy(() => import("../pages/Settings"));
+const Conversation = lazy(() => import("../pages/Conversation"));
+const TermsAndConditions = lazy(() => import("../pages/TermsAndConditions"));
+const PrivacyPolicy = lazy(() => import("../pages/PrivacyPolicy"));
+const Payout = lazy(() => import("../pages/Payout"));
+const DeductionStatement = lazy(() => import("../pages/DeductionStatement"));
+const TipsStatement = lazy(() => import("../pages/TipsStatement"));
+const PocketStatement = lazy(() => import("../pages/PocketStatement"));
+const FuelPayment = lazy(() => import("../pages/FuelPayment"));
+const LimitSettlement = lazy(() => import("../pages/LimitSettlement"));
+const OffersPage = lazy(() => import("../pages/OffersPage"));
+const UpdatesPage = lazy(() => import("../pages/UpdatesPage"));
+const SupportTickets = lazy(() => import("../pages/SupportTickets"));
+const CreateSupportTicket = lazy(() => import("../pages/CreateSupportTicket"));
+const ViewSupportTicket = lazy(() => import("../pages/ViewSupportTicket"));
+const ShowIdCard = lazy(() => import("../pages/ShowIdCard"));
+const ChangeLanguage = lazy(() => import("../pages/ChangeLanguage"));
+const SelectDropLocation = lazy(() => import("../pages/SelectDropLocation"));
 // import ReferAndEarn from "../pages/ReferAndEarn"
-import YourReferrals from "../pages/YourReferrals"
-import Earnings from "../pages/Earnings"
-import TripHistory from "../pages/TripHistory"
-import TimeOnOrders from "../pages/TimeOnOrders"
-import PocketBalancePage from "../pages/PocketBalance"
-import CustomerTipsBalancePage from "../pages/CustomerTips"
-import PocketDetails from "../pages/PocketDetails"
+const YourReferrals = lazy(() => import("../pages/YourReferrals"));
+const Earnings = lazy(() => import("../pages/Earnings"));
+const TripHistory = lazy(() => import("../pages/TripHistory"));
+const TimeOnOrders = lazy(() => import("../pages/TimeOnOrders"));
+const PocketBalancePage = lazy(() => import("../pages/PocketBalance"));
+const CustomerTipsBalancePage = lazy(() => import("../pages/CustomerTips"));
+const PocketDetails = lazy(() => import("../pages/PocketDetails"));
+
+function RouteChunkLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+    </div>
+  );
+}
 
 export default function DeliveryRouter() {
   return (
+    <Suspense fallback={<RouteChunkLoader />}>
     <Routes>
       {/* Protected routes - require authentication */}
       <Route
@@ -438,6 +448,7 @@ export default function DeliveryRouter() {
         path="/help/language"
       />
     </Routes>
+    </Suspense>
   )
 }
 

@@ -1,139 +1,149 @@
+import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 import ProtectedRoute from "./ProtectedRoute";
 import AdminLayout from "./AdminLayout";
 import PlatformAwareRoute from "./PlatformAwareRoute";
-import AdminHome from "../pages/AdminHome";
-import PointOfSale from "../pages/PointOfSale";
-import AdminProfile from "../pages/AdminProfile";
-import AdminSettings from "../pages/AdminSettings";
-import ManageAdmin from "../pages/ManageAdmin";
-import NewRefundRequests from "../pages/refunds/NewRefundRequests";
-import FoodApproval from "../pages/restaurant/FoodApproval";
-import GroceryApproval from "../pages/grocery/GroceryApproval";
-import GroceryProductApproval from "../pages/grocery/GroceryProductApproval";
-import OrdersPage from "../pages/orders/OrdersPage";
-import CombinedOrdersPage from "../pages/orders/CombinedOrdersPage";
-import OrderDetectDelivery from "../pages/OrderDetectDelivery";
-import Category from "../pages/categories/Category";
-import FeeSettings from "../pages/fee-settings/FeeSettings";
+const AdminHome = lazy(() => import("../pages/AdminHome"));
+const PointOfSale = lazy(() => import("../pages/PointOfSale"));
+const AdminProfile = lazy(() => import("../pages/AdminProfile"));
+const AdminSettings = lazy(() => import("../pages/AdminSettings"));
+const ManageAdmin = lazy(() => import("../pages/ManageAdmin"));
+const NewRefundRequests = lazy(() => import("../pages/refunds/NewRefundRequests"));
+const FoodApproval = lazy(() => import("../pages/restaurant/FoodApproval"));
+const GroceryApproval = lazy(() => import("../pages/grocery/GroceryApproval"));
+const GroceryProductApproval = lazy(() => import("../pages/grocery/GroceryProductApproval"));
+const OrdersPage = lazy(() => import("../pages/orders/OrdersPage"));
+const CombinedOrdersPage = lazy(() => import("../pages/orders/CombinedOrdersPage"));
+const OrderDetectDelivery = lazy(() => import("../pages/OrderDetectDelivery"));
+const Category = lazy(() => import("../pages/categories/Category"));
+const FeeSettings = lazy(() => import("../pages/fee-settings/FeeSettings"));
 // Restaurant Management
-import ZoneSetup from "../pages/restaurant/ZoneSetup";
-import AddZone from "../pages/restaurant/AddZone";
-import ViewZone from "../pages/restaurant/ViewZone";
-import AllZonesMap from "../pages/restaurant/AllZonesMap";
-import DeliveryBoyViewMap from "../pages/restaurant/DeliveryBoyViewMap";
-import RestaurantsList from "../pages/restaurant/RestaurantsList";
-import AddRestaurant from "../pages/restaurant/AddRestaurant";
-import JoiningRequest from "../pages/restaurant/JoiningRequest";
-import GroceryStoreJoiningRequest from "../pages/grocery/GroceryStoreJoiningRequest";
-import RestaurantCommission from "../pages/restaurant/RestaurantCommission";
-import RestaurantComplaints from "../pages/restaurant/RestaurantComplaints";
-import RestaurantsBulkImport from "../pages/restaurant/RestaurantsBulkImport";
-import RestaurantsBulkExport from "../pages/restaurant/RestaurantsBulkExport";
+const ZoneSetup = lazy(() => import("../pages/restaurant/ZoneSetup"));
+const AddZone = lazy(() => import("../pages/restaurant/AddZone"));
+const ViewZone = lazy(() => import("../pages/restaurant/ViewZone"));
+const AllZonesMap = lazy(() => import("../pages/restaurant/AllZonesMap"));
+const DeliveryBoyViewMap = lazy(() => import("../pages/restaurant/DeliveryBoyViewMap"));
+const RestaurantsList = lazy(() => import("../pages/restaurant/RestaurantsList"));
+const AddRestaurant = lazy(() => import("../pages/restaurant/AddRestaurant"));
+const JoiningRequest = lazy(() => import("../pages/restaurant/JoiningRequest"));
+const GroceryStoreJoiningRequest = lazy(() => import("../pages/grocery/GroceryStoreJoiningRequest"));
+const RestaurantCommission = lazy(() => import("../pages/restaurant/RestaurantCommission"));
+const RestaurantComplaints = lazy(() => import("../pages/restaurant/RestaurantComplaints"));
+const RestaurantsBulkImport = lazy(() => import("../pages/restaurant/RestaurantsBulkImport"));
+const RestaurantsBulkExport = lazy(() => import("../pages/restaurant/RestaurantsBulkExport"));
 // Food Management
-import FoodsList from "../pages/foods/FoodsList";
-import FoodMenuManager from "../pages/foods/FoodMenuManager";
-import AddonsList from "../pages/addons/AddonsList";
+const FoodsList = lazy(() => import("../pages/foods/FoodsList"));
+const FoodMenuManager = lazy(() => import("../pages/foods/FoodMenuManager"));
+const AddonsList = lazy(() => import("../pages/addons/AddonsList"));
 // Grocery Management
-import GroceryProductsList from "../pages/grocery/GroceryProductsList";
-import GroceryAddonsList from "../pages/grocery/GroceryAddonsList";
-import GroceryStoresList from "../pages/grocery/GroceryStoresList";
-import AddGroceryStore from "../pages/grocery/AddGroceryStore";
-import GroceryCategories from "../pages/grocery/GroceryCategories";
-import GrocerySubcategories from "../pages/grocery/GrocerySubcategories";
-import GroceryCatalogProducts from "../pages/grocery/GroceryCatalogProducts";
-import GroceryPlans from "../pages/grocery/GroceryPlans";
-import GroceryStockManagement from "../pages/grocery/GroceryStockManagement";
+const GroceryProductsList = lazy(() => import("../pages/grocery/GroceryProductsList"));
+const GroceryAddonsList = lazy(() => import("../pages/grocery/GroceryAddonsList"));
+const GroceryStoresList = lazy(() => import("../pages/grocery/GroceryStoresList"));
+const AddGroceryStore = lazy(() => import("../pages/grocery/AddGroceryStore"));
+const GroceryCategories = lazy(() => import("../pages/grocery/GroceryCategories"));
+const GrocerySubcategories = lazy(() => import("../pages/grocery/GrocerySubcategories"));
+const GroceryCatalogProducts = lazy(() => import("../pages/grocery/GroceryCatalogProducts"));
+const GroceryPlans = lazy(() => import("../pages/grocery/GroceryPlans"));
+const GroceryStockManagement = lazy(() => import("../pages/grocery/GroceryStockManagement"));
 // Promotions Management
-import BasicCampaign from "../pages/campaigns/BasicCampaign";
-import FoodCampaign from "../pages/campaigns/FoodCampaign";
-import Coupons from "../pages/Coupons";
-import Cashback from "../pages/Cashback";
-import Banners from "../pages/Banners";
-import PromotionalBanner from "../pages/PromotionalBanner";
-import NewAdvertisement from "../pages/advertisement/NewAdvertisement";
-import AdRequests from "../pages/advertisement/AdRequests";
-import AdsList from "../pages/advertisement/AdsList";
-import PushNotification from "../pages/PushNotification";
+const BasicCampaign = lazy(() => import("../pages/campaigns/BasicCampaign"));
+const FoodCampaign = lazy(() => import("../pages/campaigns/FoodCampaign"));
+const Coupons = lazy(() => import("../pages/Coupons"));
+const Cashback = lazy(() => import("../pages/Cashback"));
+const Banners = lazy(() => import("../pages/Banners"));
+const PromotionalBanner = lazy(() => import("../pages/PromotionalBanner"));
+const NewAdvertisement = lazy(() => import("../pages/advertisement/NewAdvertisement"));
+const AdRequests = lazy(() => import("../pages/advertisement/AdRequests"));
+const AdsList = lazy(() => import("../pages/advertisement/AdsList"));
+const PushNotification = lazy(() => import("../pages/PushNotification"));
 // Help & Support
-import ContactMessages from "../pages/ContactMessages";
-import SafetyEmergencyReports from "../pages/SafetyEmergencyReports";
+const ContactMessages = lazy(() => import("../pages/ContactMessages"));
+const SafetyEmergencyReports = lazy(() => import("../pages/SafetyEmergencyReports"));
 // Customer Management
-import Customers from "../pages/Customers";
-import AddFund from "../pages/wallet/AddFund";
-import Bonus from "../pages/wallet/Bonus";
-import LoyaltyPointReport from "../pages/loyalty-point/Report";
-import SubscribedMailList from "../pages/SubscribedMailList";
+const Customers = lazy(() => import("../pages/Customers"));
+const AddFund = lazy(() => import("../pages/wallet/AddFund"));
+const Bonus = lazy(() => import("../pages/wallet/Bonus"));
+const LoyaltyPointReport = lazy(() => import("../pages/loyalty-point/Report"));
+const SubscribedMailList = lazy(() => import("../pages/SubscribedMailList"));
 // Deliveryman Management
-import DeliveryBoyCommission from "../pages/DeliveryBoyCommission";
-import DeliveryCashLimit from "../pages/DeliveryCashLimit";
-import CashLimitSettlement from "../pages/CashLimitSettlement";
-import DeliveryWithdrawal from "../pages/DeliveryWithdrawal";
-import DeliveryBoyWallet from "../pages/DeliveryBoyWallet";
-import DeliveryEmergencyHelp from "../pages/DeliveryEmergencyHelp";
-import DeliverySupportTickets from "../pages/DeliverySupportTickets";
-import JoinRequest from "../pages/delivery-partners/JoinRequest";
-import AddDeliveryman from "../pages/delivery-partners/AddDeliveryman";
-import DeliverymanList from "../pages/delivery-partners/DeliverymanList";
-import DeliverymanReviews from "../pages/delivery-partners/DeliverymanReviews";
-import DeliverymanBonus from "../pages/delivery-partners/DeliverymanBonus";
-import EarningAddon from "../pages/delivery-partners/EarningAddon";
-import EarningAddonHistory from "../pages/delivery-partners/EarningAddonHistory";
-import DeliveryEarnings from "../pages/delivery-partners/DeliveryEarnings";
+const DeliveryBoyCommission = lazy(() => import("../pages/DeliveryBoyCommission"));
+const DeliveryCashLimit = lazy(() => import("../pages/DeliveryCashLimit"));
+const CashLimitSettlement = lazy(() => import("../pages/CashLimitSettlement"));
+const DeliveryWithdrawal = lazy(() => import("../pages/DeliveryWithdrawal"));
+const DeliveryBoyWallet = lazy(() => import("../pages/DeliveryBoyWallet"));
+const DeliveryEmergencyHelp = lazy(() => import("../pages/DeliveryEmergencyHelp"));
+const DeliverySupportTickets = lazy(() => import("../pages/DeliverySupportTickets"));
+const JoinRequest = lazy(() => import("../pages/delivery-partners/JoinRequest"));
+const AddDeliveryman = lazy(() => import("../pages/delivery-partners/AddDeliveryman"));
+const DeliverymanList = lazy(() => import("../pages/delivery-partners/DeliverymanList"));
+const DeliverymanReviews = lazy(() => import("../pages/delivery-partners/DeliverymanReviews"));
+const DeliverymanBonus = lazy(() => import("../pages/delivery-partners/DeliverymanBonus"));
+const EarningAddon = lazy(() => import("../pages/delivery-partners/EarningAddon"));
+const EarningAddonHistory = lazy(() => import("../pages/delivery-partners/EarningAddonHistory"));
+const DeliveryEarnings = lazy(() => import("../pages/delivery-partners/DeliveryEarnings"));
 // Disbursement Management
-import RestaurantDisbursement from "../pages/RestaurantDisbursement";
-import DeliverymanDisbursement from "../pages/DeliverymanDisbursement";
+const RestaurantDisbursement = lazy(() => import("../pages/RestaurantDisbursement"));
+const DeliverymanDisbursement = lazy(() => import("../pages/DeliverymanDisbursement"));
 // Report Management
-import TransactionReport from "../pages/reports/TransactionReport";
-import ExpenseReport from "../pages/reports/ExpenseReport";
-import DisbursementReportRestaurants from "../pages/reports/DisbursementReportRestaurants";
-import DisbursementReportDeliverymen from "../pages/reports/DisbursementReportDeliverymen";
-import RegularOrderReport from "../pages/reports/RegularOrderReport";
-import CampaignOrderReport from "../pages/reports/CampaignOrderReport";
-import RestaurantReport from "../pages/reports/RestaurantReport";
-import FeedbackExperienceReport from "../pages/reports/FeedbackExperienceReport";
-import TaxReport from "../pages/reports/TaxReport";
-import RestaurantVATReport from "../pages/reports/RestaurantVATReport";
+const TransactionReport = lazy(() => import("../pages/reports/TransactionReport"));
+const ExpenseReport = lazy(() => import("../pages/reports/ExpenseReport"));
+const DisbursementReportRestaurants = lazy(() => import("../pages/reports/DisbursementReportRestaurants"));
+const DisbursementReportDeliverymen = lazy(() => import("../pages/reports/DisbursementReportDeliverymen"));
+const RegularOrderReport = lazy(() => import("../pages/reports/RegularOrderReport"));
+const CampaignOrderReport = lazy(() => import("../pages/reports/CampaignOrderReport"));
+const RestaurantReport = lazy(() => import("../pages/reports/RestaurantReport"));
+const FeedbackExperienceReport = lazy(() => import("../pages/reports/FeedbackExperienceReport"));
+const TaxReport = lazy(() => import("../pages/reports/TaxReport"));
+const RestaurantVATReport = lazy(() => import("../pages/reports/RestaurantVATReport"));
 // Transaction Management
-import RestaurantWithdraws from "../pages/transactions/RestaurantWithdraws";
-import WithdrawMethod from "../pages/transactions/WithdrawMethod";
+const RestaurantWithdraws = lazy(() => import("../pages/transactions/RestaurantWithdraws"));
+const WithdrawMethod = lazy(() => import("../pages/transactions/WithdrawMethod"));
 // Employee Management
-import EmployeeRole from "../pages/employees/EmployeeRole";
-import AddEmployee from "../pages/employees/AddEmployee";
-import EmployeeList from "../pages/employees/EmployeeList";
+const EmployeeRole = lazy(() => import("../pages/employees/EmployeeRole"));
+const AddEmployee = lazy(() => import("../pages/employees/AddEmployee"));
+const EmployeeList = lazy(() => import("../pages/employees/EmployeeList"));
 // Business Settings
-import BusinessSetup from "../pages/settings/BusinessSetup";
-import EmailTemplate from "../pages/settings/EmailTemplate";
-import ThemeSettings from "../pages/settings/ThemeSettings";
-import Gallery from "../pages/settings/Gallery";
-import LoginSetup from "../pages/settings/LoginSetup";
-import TermsAndCondition from "../pages/settings/TermsAndCondition";
-import PrivacyPolicy from "../pages/settings/PrivacyPolicy";
-import AboutUs from "../pages/settings/AboutUs";
-import RefundPolicy from "../pages/settings/RefundPolicy";
-import ShippingPolicy from "../pages/settings/ShippingPolicy";
-import CancellationPolicy from "../pages/settings/CancellationPolicy";
-import ReactRegistration from "../pages/settings/ReactRegistration";
+const BusinessSetup = lazy(() => import("../pages/settings/BusinessSetup"));
+const EmailTemplate = lazy(() => import("../pages/settings/EmailTemplate"));
+const ThemeSettings = lazy(() => import("../pages/settings/ThemeSettings"));
+const Gallery = lazy(() => import("../pages/settings/Gallery"));
+const LoginSetup = lazy(() => import("../pages/settings/LoginSetup"));
+const TermsAndCondition = lazy(() => import("../pages/settings/TermsAndCondition"));
+const PrivacyPolicy = lazy(() => import("../pages/settings/PrivacyPolicy"));
+const AboutUs = lazy(() => import("../pages/settings/AboutUs"));
+const RefundPolicy = lazy(() => import("../pages/settings/RefundPolicy"));
+const ShippingPolicy = lazy(() => import("../pages/settings/ShippingPolicy"));
+const CancellationPolicy = lazy(() => import("../pages/settings/CancellationPolicy"));
+const ReactRegistration = lazy(() => import("../pages/settings/ReactRegistration"));
 // System Settings
-import ThirdParty from "../pages/system/ThirdParty";
-import FirebaseNotification from "../pages/system/FirebaseNotification";
-import OfflinePaymentSetup from "../pages/system/OfflinePaymentSetup";
-import JoinUsPageSetup from "../pages/system/JoinUsPageSetup";
-import AnalyticsScript from "../pages/system/AnalyticsScript";
-import AISetup from "../pages/system/AISetup";
-import AppWebSettings from "../pages/system/AppWebSettings";
-import NotificationChannels from "../pages/system/NotificationChannels";
-import LandingPageSettings from "../pages/system/LandingPageSettings";
-import PageMetaData from "../pages/system/PageMetaData";
-import ReactSite from "../pages/system/ReactSite";
-import CleanDatabase from "../pages/system/CleanDatabase";
-import AddonActivation from "../pages/system/AddonActivation";
+const ThirdParty = lazy(() => import("../pages/system/ThirdParty"));
+const FirebaseNotification = lazy(() => import("../pages/system/FirebaseNotification"));
+const OfflinePaymentSetup = lazy(() => import("../pages/system/OfflinePaymentSetup"));
+const JoinUsPageSetup = lazy(() => import("../pages/system/JoinUsPageSetup"));
+const AnalyticsScript = lazy(() => import("../pages/system/AnalyticsScript"));
+const AISetup = lazy(() => import("../pages/system/AISetup"));
+const AppWebSettings = lazy(() => import("../pages/system/AppWebSettings"));
+const NotificationChannels = lazy(() => import("../pages/system/NotificationChannels"));
+const LandingPageSettings = lazy(() => import("../pages/system/LandingPageSettings"));
+const PageMetaData = lazy(() => import("../pages/system/PageMetaData"));
+const ReactSite = lazy(() => import("../pages/system/ReactSite"));
+const CleanDatabase = lazy(() => import("../pages/system/CleanDatabase"));
+const AddonActivation = lazy(() => import("../pages/system/AddonActivation"));
 // ENV Setup (formerly System Addons)
-import SystemAddons from "../pages/system/SystemAddons";
-import LandingPageManagement from "../pages/system/LandingPageManagement";
+const SystemAddons = lazy(() => import("../pages/system/SystemAddons"));
+const LandingPageManagement = lazy(() => import("../pages/system/LandingPageManagement"));
+
+function AdminRouteLoader() {
+  return (
+    <div className="flex items-center justify-center min-h-[60vh]">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-600" />
+    </div>
+  );
+}
 
 export default function AdminRouter() {
   return (
+    <Suspense fallback={<AdminRouteLoader />}>
     <Routes>
       {/* Protected Routes - With Layout */}
       <Route
@@ -367,6 +377,7 @@ export default function AdminRouter() {
 
       {/* Redirect /admin to /admin/ */}
       <Route path="" element={<Navigate to="/admin/login" replace />} />
-    </Routes >
+    </Routes>
+    </Suspense>
   );
 }
