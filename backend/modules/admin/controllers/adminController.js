@@ -4322,89 +4322,105 @@ export const getCustomerWalletReport = asyncHandler(async (req, res) => {
       }
     }
 
-    // Get all wallets with transactions
-    const wallets = await UserWallet.find({
-      ...dateFilter,
-      'transactions.0': { $exists: true } // Only wallets with transactions
-    })
-      .populate('userId', 'name email phone')
-      .lean();
-
-    // Flatten transactions with user info
-    let allTransactions = [];
-    wallets.forEach(wallet => {
-      if (!wallet.userId) return;
-
-      // Sort transactions by date (oldest first for balance calculation)
-      const sortedTransactions = [...wallet.transactions].sort((a, b) =>
-        new Date(a.createdAt) - new Date(b.createdAt)
-      );
-
-      let runningBalance = 0;
-
-      sortedTransactions.forEach((transaction) => {
-        // Update running balance if transaction is completed (before date filter)
-        let balance = runningBalance;
-        if (transaction.status === 'Completed') {
-          if (transaction.type === 'addition' || transaction.type === 'refund') {
-            runningBalance += transaction.amount;
-            balance = runningBalance;
-          } else if (transaction.type === 'deduction') {
-            runningBalance -= transaction.amount;
-            balance = runningBalance;
+    // The displayed balance is a running total over each wallet's whole history,
+    // so it has to be computed before the date filter narrows the rows.
+    // $setWindowFields does that in the database. Previously every wallet document
+    // was loaded with its user populated and walked in nested JS loops, which grew
+    // with total customers and blocked the event loop for the duration.
+    const walletRows = await UserWallet.aggregate([
+      { $match: { 'transactions.0': { $exists: true } } },
+      { $unwind: '$transactions' },
+      {
+        $addFields: {
+          _delta: {
+            $cond: [
+              { $eq: ['$transactions.status', 'Completed'] },
+              {
+                $switch: {
+                  branches: [
+                    {
+                      case: { $in: ['$transactions.type', ['addition', 'refund']] },
+                      then: { $ifNull: ['$transactions.amount', 0] }
+                    },
+                    {
+                      case: { $eq: ['$transactions.type', 'deduction'] },
+                      then: { $multiply: [{ $ifNull: ['$transactions.amount', 0] }, -1] }
+                    }
+                  ],
+                  default: 0
+                }
+              },
+              0
+            ]
           }
         }
-
-        // Apply date filter if provided
-        if (fromDate || toDate) {
-          const transDate = new Date(transaction.createdAt);
-          if (fromDate && transDate < new Date(fromDate)) return;
-          if (toDate) {
-            const toDateObj = new Date(toDate);
-            toDateObj.setHours(23, 59, 59, 999);
-            if (transDate > toDateObj) return;
+      },
+      {
+        $setWindowFields: {
+          partitionBy: '$_id',
+          sortBy: { 'transactions.createdAt': 1 },
+          output: {
+            _balance: { $sum: '$_delta', window: { documents: ['unbounded', 'current'] } }
           }
         }
-
-        // Map transaction type to frontend format
-        let transactionType = 'CashBack';
-        if (transaction.type === 'addition') {
-          if (transaction.description?.includes('Admin') || transaction.description?.includes('admin')) {
-            transactionType = 'Add Fund By Admin';
-          } else {
-            transactionType = 'Add Fund';
-          }
-        } else if (transaction.type === 'deduction') {
-          transactionType = 'Order Payment';
-        } else if (transaction.type === 'refund') {
-          transactionType = 'Refund';
+      },
+      // Applied after the window so excluded rows still contribute to the balance.
+      ...(Object.keys(dateFilter).length > 0 ? [{ $match: dateFilter }] : []),
+      {
+        $lookup: {
+          from: User.collection.name,
+          localField: 'userId',
+          foreignField: '_id',
+          as: '_user'
         }
+      },
+      // Inner join: wallets with no user record were skipped by the old loop too.
+      { $unwind: '$_user' }
+    ]);
 
-        // Get reference
-        let reference = 'N/A';
-        if (transaction.orderId) {
-          reference = transaction.orderId.toString();
-        } else if (transaction.paymentGateway) {
-          reference = transaction.paymentGateway;
-        } else if (transaction.description) {
-          reference = transaction.description;
+    let allTransactions = walletRows.map((row) => {
+      const transaction = row.transactions;
+      const user = row._user;
+      const balance = row._balance;
+
+      // Map transaction type to frontend format
+      let transactionType = 'CashBack';
+      if (transaction.type === 'addition') {
+        if (transaction.description?.includes('Admin') || transaction.description?.includes('admin')) {
+          transactionType = 'Add Fund By Admin';
+        } else {
+          transactionType = 'Add Fund';
         }
+      } else if (transaction.type === 'deduction') {
+        transactionType = 'Order Payment';
+      } else if (transaction.type === 'refund') {
+        transactionType = 'Refund';
+      }
 
-        allTransactions.push({
-          _id: transaction._id,
-          transactionId: transaction._id.toString(),
-          customer: wallet.userId.name || 'Unknown',
-          customerId: wallet.userId._id.toString(),
-          credit: transaction.type === 'addition' || transaction.type === 'refund' ? transaction.amount : 0,
-          debit: transaction.type === 'deduction' ? transaction.amount : 0,
-          balance: balance,
-          transactionType: transactionType,
-          reference: reference,
-          createdAt: transaction.createdAt,
-          status: transaction.status,
-          type: transaction.type
-        });
-      });
+      // Get reference
+      let reference = 'N/A';
+      if (transaction.orderId) {
+        reference = transaction.orderId.toString();
+      } else if (transaction.paymentGateway) {
+        reference = transaction.paymentGateway;
+      } else if (transaction.description) {
+        reference = transaction.description;
+      }
+
+      return {
+        _id: transaction._id,
+        transactionId: transaction._id.toString(),
+        customer: user.name || 'Unknown',
+        customerId: user._id.toString(),
+        credit: transaction.type === 'addition' || transaction.type === 'refund' ? transaction.amount : 0,
+        debit: transaction.type === 'deduction' ? transaction.amount : 0,
+        balance: balance,
+        transactionType: transactionType,
+        reference: reference,
+        createdAt: transaction.createdAt,
+        status: transaction.status,
+        type: transaction.type
+      };
     });
 
     // Filter by transaction type (Credit/Debit)
