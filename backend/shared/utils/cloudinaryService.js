@@ -65,11 +65,16 @@ export const uploadMiddleware = multer({
 
 export async function uploadToCloudinary(buffer, options = {}) {
   const provider = await normalizeMediaProvider();
-  await initializeCloudinary();
 
-  if (provider === 'imagekit') {
+  // Anything that is not Cloudinary is handled by the provider layer. Testing
+  // for 'imagekit' instead meant 'local' fell through to the Cloudinary branch
+  // and failed with "Must supply api_key".
+  if (provider !== 'cloudinary') {
     return uploadMediaBuffer(buffer, options);
   }
+
+  // Only pay for Cloudinary's config lookup when Cloudinary is actually used.
+  await initializeCloudinary();
 
   return new Promise((resolve, reject) => {
     try {
