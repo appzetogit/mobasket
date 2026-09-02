@@ -556,20 +556,57 @@ const flattenMenuItemsForSectionManagement = (menuDoc) => {
 };
 
 // ==================== MOFOOD PRODUCT SECTIONS ====================
+/**
+ * Validate an optional scheduling window for a section item.
+ * Either side may be omitted, meaning unbounded in that direction.
+ */
+const parseOfferWindow = (startsAt, endsAt) => {
+  const parse = (value) => {
+    if (value === undefined || value === null || value === '') return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+  };
+
+  const start = parse(startsAt);
+  const end = parse(endsAt);
+
+  if (start === undefined) return { error: 'startsAt is not a valid date' };
+  if (end === undefined) return { error: 'endsAt is not a valid date' };
+  if (start && end && end <= start) {
+    return { error: 'endsAt must be after startsAt' };
+  }
+
+  return { startsAt: start, endsAt: end };
+};
+
+/** Items are live when now falls inside their window; null bounds are open ended. */
+const buildActiveWindowFilter = (now = new Date()) => ({
+  $and: [
+    { $or: [{ startsAt: null }, { startsAt: { $lte: now } }] },
+    { $or: [{ endsAt: null }, { endsAt: { $gte: now } }] },
+  ],
+});
+
 export const getMofoodProductSections = async (req, res) => {
   try {
     const platform = getPlatformFromRequest(req);
+    // buildPlatformFilter uses $or for mofood and the window filter uses $or too,
+    // so they are combined under $and rather than spread into one object where
+    // the second $or would replace the first.
     const items = await MofoodProductSectionItem.find({
-      ...buildPlatformFilter(platform),
       isActive: true,
+      $and: [buildPlatformFilter(platform), buildActiveWindowFilter()],
     })
       .populate('restaurantId', 'name slug profileImage estimatedDeliveryTime')
+      .populate('storeId', 'name slug profileImage estimatedDeliveryTime')
       .sort({ sectionOrder: 1, sectionName: 1, order: 1, createdAt: -1 })
       .lean();
 
     const rawSectionMap = new Map();
     items.forEach((entry) => {
-      if (!entry.restaurantId) return;
+      // Grocery entries reference a store rather than a restaurant.
+      const owner = entry.restaurantId || entry.storeId;
+      if (!owner) return;
       const sectionName = String(entry.sectionName || '').trim();
       if (!sectionName) return;
       const sectionOrder = Number(entry.sectionOrder || 0);
@@ -585,9 +622,15 @@ export const getMofoodProductSections = async (req, res) => {
         _id: entry._id,
         order: Number(entry.order || 0),
         isActive: !!entry.isActive,
-        restaurant: entry.restaurantId,
+        // Kept as `restaurant` so existing clients continue to work; for grocery
+        // this carries the store.
+        restaurant: owner,
+        store: entry.storeId || null,
+        startsAt: entry.startsAt || null,
+        endsAt: entry.endsAt || null,
         product: {
           menuItemId: String(entry.menuItemId || ''),
+          productId: entry.productId || null,
           name: String(entry.menuItemName || ''),
           image: String(entry.menuItemImage || ''),
           price: Number(entry.menuItemPrice || 0),
@@ -637,43 +680,97 @@ export const getAllMofoodProductSections = async (req, res) => {
 export const createMofoodProductSectionItem = async (req, res) => {
   try {
     const platform = getPlatformFromRequest(req);
-    const { sectionName, sectionOrder, restaurantId, menuItemId } = req.body;
+    const { sectionName, sectionOrder, restaurantId, menuItemId, productId, startsAt, endsAt } = req.body;
 
-    if (!sectionName || !restaurantId || !menuItemId) {
-      return errorResponse(res, 400, 'sectionName, restaurantId and menuItemId are required');
+    if (!sectionName) {
+      return errorResponse(res, 400, 'sectionName is required');
+    }
+    const trimmedSection = String(sectionName).trim();
+
+    const offerWindow = parseOfferWindow(startsAt, endsAt);
+    if (offerWindow.error) {
+      return errorResponse(res, 400, offerWindow.error);
     }
 
-    if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
-      return errorResponse(res, 400, 'Invalid restaurantId');
+    // Grocery products live in their own collection under a GroceryStore, so the
+    // two platforms resolve their item details separately.
+    let details;
+    let identity;
+
+    if (platform === 'mogrocery') {
+      if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
+        return errorResponse(res, 400, 'A valid productId is required for grocery sections');
+      }
+
+      const product = await GroceryProduct.findById(productId)
+        .select('name images mrp sellingPrice storeId')
+        .lean();
+      if (!product) {
+        return errorResponse(res, 404, 'Grocery product not found');
+      }
+
+      identity = { productId: product._id, storeId: product.storeId || null };
+      details = {
+        menuItemId: '',
+        menuItemName: String(product.name || '').trim(),
+        menuItemImage: Array.isArray(product.images) ? String(product.images[0] || '').trim() : '',
+        menuItemPrice: Number(product.sellingPrice || 0),
+        menuItemOriginalPrice: Number(product.mrp || product.sellingPrice || 0),
+      };
+    } else {
+      if (!restaurantId || !menuItemId) {
+        return errorResponse(res, 400, 'restaurantId and menuItemId are required');
+      }
+      if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+        return errorResponse(res, 400, 'Invalid restaurantId');
+      }
+
+      const restaurantExists = await Restaurant.findById(restaurantId).select('_id').lean();
+      if (!restaurantExists) {
+        return errorResponse(res, 404, 'Restaurant not found');
+      }
+
+      const menuDoc = await Menu.findOne({ restaurant: restaurantId, isActive: true }).select('sections').lean();
+      if (!menuDoc) {
+        return errorResponse(res, 404, 'Restaurant menu not found');
+      }
+
+      const menuItems = flattenMenuItemsForSectionManagement(menuDoc);
+      const matchedMenuItem =
+        menuItems.find((item) => String(item?.id || '').trim() === String(menuItemId).trim()) || null;
+      if (!matchedMenuItem) {
+        return errorResponse(res, 404, 'Selected menu item not found');
+      }
+
+      identity = { restaurantId, productId: null };
+      details = {
+        menuItemId: String(menuItemId).trim(),
+        menuItemName: String(matchedMenuItem?.name || '').trim(),
+        menuItemImage:
+          String(matchedMenuItem?.image || '').trim() ||
+          (Array.isArray(matchedMenuItem?.images) ? String(matchedMenuItem.images[0] || '').trim() : ''),
+        menuItemPrice: Number(matchedMenuItem?.price || 0),
+        menuItemOriginalPrice: Number(matchedMenuItem?.originalPrice || matchedMenuItem?.price || 0),
+      };
     }
 
-    const restaurantExists = await Restaurant.findById(restaurantId).select('_id').lean();
-    if (!restaurantExists) {
-      return errorResponse(res, 404, 'Restaurant not found');
-    }
-
-    const menuDoc = await Menu.findOne({ restaurant: restaurantId, isActive: true }).select('sections').lean();
-    if (!menuDoc) {
-      return errorResponse(res, 404, 'Restaurant menu not found');
-    }
-
-    const menuItems = flattenMenuItemsForSectionManagement(menuDoc);
-    const matchedMenuItem =
-      menuItems.find((item) => String(item?.id || '').trim() === String(menuItemId).trim()) || null;
-    if (!matchedMenuItem) {
-      return errorResponse(res, 404, 'Selected menu item not found');
-    }
-
+    // Scoped to the section, so a product can sit in Hot Deals and Today's Offer
+    // at once. Previously any second section was rejected outright.
     const duplicate = await MofoodProductSectionItem.findOne({
       ...buildPlatformFilter(platform),
-      restaurantId,
-      menuItemId: String(menuItemId).trim(),
+      sectionName: trimmedSection,
+      ...(platform === 'mogrocery'
+        ? { productId: identity.productId }
+        : { restaurantId: identity.restaurantId, menuItemId: details.menuItemId }),
     }).lean();
     if (duplicate) {
-      return errorResponse(res, 400, 'Menu item is already added in sections');
+      return errorResponse(res, 400, 'This item is already in that section');
     }
 
-    const last = await MofoodProductSectionItem.findOne(buildPlatformFilter(platform))
+    const last = await MofoodProductSectionItem.findOne({
+      ...buildPlatformFilter(platform),
+      sectionName: trimmedSection,
+    })
       .sort({ order: -1 })
       .select('order')
       .lean();
@@ -681,18 +778,15 @@ export const createMofoodProductSectionItem = async (req, res) => {
 
     const created = await MofoodProductSectionItem.create({
       platform,
-      sectionName: String(sectionName).trim(),
+      sectionName: trimmedSection,
       sectionOrder: Number.isFinite(Number(sectionOrder)) ? Number(sectionOrder) : 0,
-      restaurantId,
-      menuItemId: String(menuItemId).trim(),
-      menuItemName: String(matchedMenuItem?.name || '').trim(),
-      menuItemImage:
-        String(matchedMenuItem?.image || '').trim() ||
-        (Array.isArray(matchedMenuItem?.images) ? String(matchedMenuItem.images[0] || '').trim() : ''),
-      menuItemPrice: Number(matchedMenuItem?.price || 0),
-      menuItemOriginalPrice: Number(matchedMenuItem?.originalPrice || matchedMenuItem?.price || 0),
+      ...identity,
+      ...details,
       order,
       isActive: true,
+      startsAt: offerWindow.startsAt,
+      endsAt: offerWindow.endsAt,
+      addedByRole: req.restaurant ? 'vendor' : 'admin',
     });
 
     const populated = await MofoodProductSectionItem.findById(created._id)
