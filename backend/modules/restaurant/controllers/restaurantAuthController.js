@@ -1083,9 +1083,13 @@ export const getCurrentRestaurant = asyncHandler(async (req, res) => {
   })
     .select('timings')
     .lean();
-  const isAcceptingOrders =
-    req.restaurant.isAcceptingOrders !== false &&
-    isOpenFromOutletTimings(outletTimings?.timings || []);
+  // Report the vendor's own toggle and the schedule separately. ANDing them
+  // forced the panel Offline outside outlet hours, and because the navbar syncs
+  // its state from this value, it overwrote the vendor's manual toggle on every
+  // refresh. Customer-facing order gating is unaffected and still consults the
+  // outlet timings on its own.
+  const isAcceptingOrders = req.restaurant.isAcceptingOrders !== false;
+  const isWithinOutletSlot = isOpenFromOutletTimings(outletTimings?.timings || []);
   // Restaurant is attached by authenticate middleware
   return successResponse(res, 200, 'Restaurant retrieved successfully', {
     restaurant: {
@@ -1112,6 +1116,7 @@ export const getCurrentRestaurant = asyncHandler(async (req, res) => {
       menuImages: req.restaurant.menuImages,
       slug: req.restaurant.slug,
       isAcceptingOrders,
+      isWithinOutletSlot,
       // Include verification status
       rejectionReason: String(req.restaurant.rejectionReason || '').trim() || null,
       approvedAt: req.restaurant.approvedAt || null,
