@@ -270,6 +270,10 @@ import {
   createPushNotification,
 } from '../controllers/pushNotificationController.js';
 import zoneRoutes from './zoneRoutes.js';
+import {
+  getRestaurantWeeklyPayouts,
+  setWeeklyPayoutStatus,
+} from '../controllers/weeklyPayoutController.js';
 import { authenticateAdmin, authorizeAdmin } from '../middleware/adminAuth.js';
 import { uploadMiddleware } from '../../../shared/utils/cloudinaryService.js';
 
@@ -343,6 +347,9 @@ router.get('/restaurants', getRestaurants);
 router.get('/restaurants/requests', getRestaurantJoinRequests);
 router.get('/restaurant-analytics/:restaurantId', getRestaurantAnalytics);
 router.get('/restaurants/:id/finance', getRestaurantFinanceForAdmin);
+// Specific paths stay above /restaurants/:id, matching the convention above.
+router.get('/restaurants/:restaurantId/weekly-payouts', getRestaurantWeeklyPayouts);
+router.patch('/restaurants/:restaurantId/weekly-payouts', setWeeklyPayoutStatus);
 router.get('/restaurants/:id', getRestaurantById);
 router.post('/restaurants', createRestaurant);
 router.put('/restaurants/:id', updateRestaurant);

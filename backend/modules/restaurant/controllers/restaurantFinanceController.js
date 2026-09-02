@@ -5,6 +5,7 @@ import RestaurantWallet from '../models/RestaurantWallet.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 import mongoose from 'mongoose';
+import { computeWeeklyPayouts } from '../utils/weeklyPayout.js';
 
 const buildRestaurantIdVariations = (restaurant) => {
   const variations = new Set();
@@ -653,5 +654,57 @@ export const getRestaurantFinance = asyncHandler(async (req, res) => {
   } catch (error) {
     console.error('Error fetching restaurant finance:', error);
     return errorResponse(res, 500, 'Failed to fetch finance data');
+  }
+});
+
+/**
+ * Weekly payment report for the signed-in vendor
+ * GET /api/restaurant/finance/weekly?weeks=8
+ *
+ * Shows the amount payable for each week and whether admin has marked it Paid,
+ * Pending or Due. Scoped to req.restaurant, so a vendor only ever sees their own
+ * figures.
+ */
+export const getWeeklyPayments = asyncHandler(async (req, res) => {
+  try {
+    const restaurant = req.restaurant;
+    const weeks = Math.max(1, Math.min(52, parseInt(req.query.weeks, 10) || 8));
+
+    const orderPlatformQuery =
+      restaurant?.platform === 'mogrocery'
+        ? { restaurantPlatform: 'mogrocery' }
+        : {
+            $or: [
+              { restaurantPlatform: 'mofood' },
+              { restaurantPlatform: { $exists: false } },
+              { restaurantPlatform: null }
+            ]
+          };
+
+    const cycles = await computeWeeklyPayouts(restaurant, {
+      weeks,
+      platformQuery: orderPlatformQuery,
+    });
+
+    const totals = cycles.reduce(
+      (acc, cycle) => {
+        if (cycle.status === 'Paid') acc.paid += cycle.amount;
+        else if (cycle.status === 'Due') acc.due += cycle.amount;
+        else acc.pending += cycle.amount;
+        return acc;
+      },
+      { paid: 0, pending: 0, due: 0 },
+    );
+
+    const round = (value) => Math.round(value * 100) / 100;
+
+    return successResponse(res, 200, 'Weekly payments retrieved successfully', {
+      commissionConfigured: cycles[0]?.commissionConfigured ?? false,
+      totals: { paid: round(totals.paid), pending: round(totals.pending), due: round(totals.due) },
+      weeks: cycles,
+    });
+  } catch (error) {
+    console.error('Error fetching weekly payments:', error);
+    return errorResponse(res, 500, 'Failed to fetch weekly payments');
   }
 });
