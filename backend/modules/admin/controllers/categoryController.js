@@ -1,5 +1,6 @@
 import AdminCategoryManagement from '../models/AdminCategoryManagement.js';
 import RestaurantCategory from '../../restaurant/models/RestaurantCategory.js';
+import Menu from '../../restaurant/models/Menu.js';
 import Zone from '../models/Zone.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
@@ -62,61 +63,150 @@ const resolveRestaurantZone = (restaurant = {}, zones = []) => {
  * Get All Categories (Public - for user frontend)
  * GET /api/categories/public
  */
+const buildPublicCategoryList = async () => {
+  // Active admin-managed categories
+  const adminCategories = await AdminCategoryManagement.find({ status: true })
+    .select('name image _id type')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  // Active restaurant-created categories (mofood only)
+  const restaurantCategoriesRaw = await RestaurantCategory.find({ isActive: true })
+    .select('name icon _id restaurant')
+    .populate({
+      path: 'restaurant',
+      select: 'platform',
+      match: { platform: 'mofood' }
+    })
+    .lean();
+
+  const restaurantCategories = restaurantCategoriesRaw
+    .filter((category) => Boolean(category.restaurant))
+    .map((category) => ({
+      _id: category._id,
+      name: category.name,
+      image: category.icon || '',
+      type: null
+    }));
+
+  // Merge and de-duplicate by normalized category name
+  const merged = [...adminCategories, ...restaurantCategories];
+  const seenNames = new Set();
+  const formattedCategories = [];
+
+  for (const category of merged) {
+    const normalizedName = String(category?.name || '').trim();
+    if (!normalizedName) continue;
+
+    const dedupeKey = normalizedName.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (seenNames.has(dedupeKey)) continue;
+    seenNames.add(dedupeKey);
+
+    const slug = normalizedName.toLowerCase().replace(/\s+/g, '-');
+    formattedCategories.push({
+      id: category._id.toString(),
+      name: normalizedName,
+      image: category.image || DEFAULT_IMAGE_FALLBACK_40,
+      type: category.type || null,
+      slug
+    });
+  }
+
+  return formattedCategories;
+};
+
 export const getPublicCategories = asyncHandler(async (req, res) => {
   try {
-    // Active admin-managed categories
-    const adminCategories = await AdminCategoryManagement.find({ status: true })
-      .select('name image _id type')
-      .sort({ createdAt: -1 })
-      .lean();
-
-    // Active restaurant-created categories (mofood only)
-    const restaurantCategoriesRaw = await RestaurantCategory.find({ isActive: true })
-      .select('name icon _id restaurant')
-      .populate({
-        path: 'restaurant',
-        select: 'platform',
-        match: { platform: 'mofood' }
-      })
-      .lean();
-
-    const restaurantCategories = restaurantCategoriesRaw
-      .filter((category) => Boolean(category.restaurant))
-      .map((category) => ({
-        _id: category._id,
-        name: category.name,
-        image: category.icon || '',
-        type: null
-      }));
-
-    // Merge and de-duplicate by normalized category name
-    const merged = [...adminCategories, ...restaurantCategories];
-    const seenNames = new Set();
-    const formattedCategories = [];
-
-    for (const category of merged) {
-      const normalizedName = String(category?.name || '').trim();
-      if (!normalizedName) continue;
-
-      const dedupeKey = normalizedName.toLowerCase().replace(/\s+/g, ' ').trim();
-      if (seenNames.has(dedupeKey)) continue;
-      seenNames.add(dedupeKey);
-
-      const slug = normalizedName.toLowerCase().replace(/\s+/g, '-');
-      formattedCategories.push({
-        id: category._id.toString(),
-        name: normalizedName,
-        image: category.image || DEFAULT_IMAGE_FALLBACK_40,
-        type: category.type || null,
-        slug
-      });
-    }
+    const formattedCategories = await buildPublicCategoryList();
 
     return successResponse(res, 200, 'Categories retrieved successfully', {
       categories: formattedCategories
     });
   } catch (error) {
     logger.error(`Error fetching public categories: ${error.message}`);
+    return errorResponse(res, 500, 'Failed to fetch categories');
+  }
+});
+
+/**
+ * Get Public Categories With Sample Products (No Auth Required)
+ * GET /api/categories/public/with-products?limit=6
+ *
+ * Lets the food listing show a few items under each category so customers do
+ * not have to open a category just to see what is in it. "View more" then
+ * links through to the full category.
+ */
+export const getPublicCategoriesWithProducts = asyncHandler(async (req, res) => {
+  try {
+    const limit = Math.max(1, Math.min(20, parseInt(req.query.limit, 10) || 6));
+    const categories = await buildPublicCategoryList();
+
+    // Menu items live in sections.items and sections.subsections.items, so both
+    // are concatenated before grouping. Slicing inside the pipeline keeps the
+    // payload bounded no matter how large a category grows.
+    const grouped = await Menu.aggregate([
+      { $match: { isActive: true } },
+      { $unwind: '$sections' },
+      {
+        $addFields: {
+          _items: {
+            $concatArrays: [
+              { $ifNull: ['$sections.items', []] },
+              {
+                $reduce: {
+                  input: { $ifNull: ['$sections.subsections', []] },
+                  initialValue: [],
+                  in: { $concatArrays: ['$$value', { $ifNull: ['$$this.items', []] }] },
+                },
+              },
+            ],
+          },
+        },
+      },
+      { $unwind: '$_items' },
+      { $match: { '_items.isAvailable': { $ne: false } } },
+      {
+        $group: {
+          _id: { $ifNull: ['$_items.category', ''] },
+          products: {
+            $push: {
+              id: '$_items._id',
+              name: '$_items.name',
+              image: '$_items.image',
+              price: '$_items.price',
+              restaurantId: '$restaurant',
+            },
+          },
+        },
+      },
+      { $project: { products: { $slice: ['$products', limit] } } },
+    ]);
+
+    // Normalise exactly as buildPublicCategoryList does, so "Pizza" and
+    // "pizza " collapse onto the same category.
+    const normalise = (value) => String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    const productsByCategory = new Map();
+    for (const row of grouped) {
+      const key = normalise(row._id);
+      if (!key) continue;
+      const existing = productsByCategory.get(key) || [];
+      productsByCategory.set(key, existing.concat(row.products || []));
+    }
+
+    const withProducts = categories.map((category) => {
+      const products = productsByCategory.get(normalise(category.name)) || [];
+      return {
+        ...category,
+        products: products.slice(0, limit),
+        hasMore: products.length > limit,
+      };
+    });
+
+    return successResponse(res, 200, 'Categories retrieved successfully', {
+      categories: withProducts,
+    });
+  } catch (error) {
+    logger.error(`Error fetching categories with products: ${error.message}`);
     return errorResponse(res, 500, 'Failed to fetch categories');
   }
 });
