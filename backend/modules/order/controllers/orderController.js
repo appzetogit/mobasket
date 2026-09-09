@@ -29,6 +29,7 @@ import { reduceGroceryStockForOrder, restoreGroceryStockForOrder } from '../serv
 import { isOpenFromOutletTimings } from '../../restaurant/utils/outletTimingStatus.js';
 import { isAddonOrderable } from '../../restaurant/utils/addonVisibility.js';
 import { repriceItems } from '../utils/itemPricing.js';
+import { findContainingZone } from '../../admin/utils/zoneResolution.js';
 import {
   getDefaultPendingCartEdit,
   sanitizePendingCartEdit,
@@ -433,36 +434,8 @@ const normalizeOrderAddress = (address = {}) => {
   };
 };
 
-const isPointInsideZone = (zone, latitude, longitude) => {
-  const coordinates = Array.isArray(zone?.coordinates) ? zone.coordinates : [];
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || coordinates.length < 3) {
-    return false;
-  }
-
-  // Ray casting algorithm
-  let inside = false;
-  for (let i = 0, j = coordinates.length - 1; i < coordinates.length; j = i++) {
-    const coordI = coordinates[i];
-    const coordJ = coordinates[j];
-    const xi = typeof coordI === 'object' ? (coordI.latitude || coordI.lat) : null;
-    const yi = typeof coordI === 'object' ? (coordI.longitude || coordI.lng) : null;
-    const xj = typeof coordJ === 'object' ? (coordJ.latitude || coordJ.lat) : null;
-    const yj = typeof coordJ === 'object' ? (coordJ.longitude || coordJ.lng) : null;
-
-    if (xi === null || yi === null || xj === null || yj === null) continue;
-
-    const intersect = ((yi > longitude) !== (yj > longitude)) &&
-      (latitude < ((xj - xi) * (longitude - yi)) / (yj - yi) + xi);
-    if (intersect) inside = !inside;
-  }
-
-  return inside;
-};
-
-const findContainingZone = (zones, latitude, longitude) => {
-  if (!Array.isArray(zones)) return null;
-  return zones.find((zone) => isPointInsideZone(zone, latitude, longitude)) || null;
-};
+// Shared with the public serviceability lookup so a delivery address that
+// passes the pre-checkout check resolves to the same zone at checkout.
 
 const resolveEntityZoneFromActiveZones = (entity, activeZones = []) => {
   const explicitZoneId = String(
