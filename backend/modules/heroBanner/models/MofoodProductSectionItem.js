@@ -33,6 +33,14 @@ const mofoodProductSectionItemSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    // Scopes an entry to one delivery zone, so a section such as Top 10 Best
+    // Food can differ per zone. Null means the entry shows in every zone.
+    zoneId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Zone',
+      default: null,
+      index: true,
+    },
     // Food items are addressed by their id within the restaurant's menu.
     // Grocery entries carry productId instead, so this is validated per
     // platform in the controller rather than being required outright.
@@ -102,8 +110,10 @@ mofoodProductSectionItemSchema.index({ platform: 1, sectionOrder: 1, sectionName
 // sectionName is part of the key so one product can appear in several sections -
 // Hot Deals and Today's Offer, for example. Without it a product could only ever
 // belong to a single section.
+// zoneId is part of the key so the same item can be pinned to one section for
+// several zones without colliding.
 mofoodProductSectionItemSchema.index(
-  { platform: 1, sectionName: 1, restaurantId: 1, storeId: 1, menuItemId: 1, productId: 1 },
+  { platform: 1, sectionName: 1, zoneId: 1, restaurantId: 1, storeId: 1, menuItemId: 1, productId: 1 },
   { unique: true },
 );
 

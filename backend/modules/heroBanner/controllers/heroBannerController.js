@@ -587,6 +587,19 @@ const buildActiveWindowFilter = (now = new Date()) => ({
   ],
 });
 
+/**
+ * Zone scoping for section reads. A customer in a zone sees entries pinned to
+ * that zone plus any pinned to every zone. With no zone supplied only the
+ * zone-agnostic entries are returned, so a zone-specific Top 10 never leaks to
+ * customers outside it.
+ */
+const buildZoneFilter = (zoneId) => {
+  if (!zoneId || !mongoose.Types.ObjectId.isValid(zoneId)) {
+    return { zoneId: null };
+  }
+  return { $or: [{ zoneId: null }, { zoneId: new mongoose.Types.ObjectId(zoneId) }] };
+};
+
 export const getMofoodProductSections = async (req, res) => {
   try {
     const platform = getPlatformFromRequest(req);
@@ -595,7 +608,11 @@ export const getMofoodProductSections = async (req, res) => {
     // the second $or would replace the first.
     const items = await MofoodProductSectionItem.find({
       isActive: true,
-      $and: [buildPlatformFilter(platform), buildActiveWindowFilter()],
+      $and: [
+        buildPlatformFilter(platform),
+        buildActiveWindowFilter(),
+        buildZoneFilter(req.query?.zoneId),
+      ],
     })
       .populate('restaurantId', 'name slug profileImage estimatedDeliveryTime')
       .populate('storeId', 'name slug profileImage estimatedDeliveryTime')
@@ -684,12 +701,52 @@ export const getAllMofoodProductSections = async (req, res) => {
 export const createMofoodProductSectionItem = async (req, res) => {
   try {
     const platform = getPlatformFromRequest(req);
-    const { sectionName, sectionOrder, restaurantId, menuItemId, productId, startsAt, endsAt } = req.body;
+    const {
+      sectionName,
+      sectionOrder,
+      restaurantId,
+      menuItemId,
+      productId,
+      startsAt,
+      endsAt,
+      zoneId,
+      maxItems,
+    } = req.body;
 
     if (!sectionName) {
       return errorResponse(res, 400, 'sectionName is required');
     }
     const trimmedSection = String(sectionName).trim();
+
+    // Null zone means the entry shows everywhere; a zone must exist if given.
+    let resolvedZoneId = null;
+    if (zoneId) {
+      if (!mongoose.Types.ObjectId.isValid(zoneId)) {
+        return errorResponse(res, 400, 'Invalid zoneId');
+      }
+      const zoneExists = await Zone.findById(zoneId).select('_id').lean();
+      if (!zoneExists) {
+        return errorResponse(res, 404, 'Zone not found');
+      }
+      resolvedZoneId = zoneExists._id;
+    }
+
+    // Sections such as Top 10 Best Food cap how many items a zone may pin.
+    const cap = Number(maxItems);
+    if (Number.isFinite(cap) && cap > 0) {
+      const existingCount = await MofoodProductSectionItem.countDocuments({
+        ...buildPlatformFilter(platform),
+        sectionName: trimmedSection,
+        zoneId: resolvedZoneId,
+      });
+      if (existingCount >= cap) {
+        return errorResponse(
+          res,
+          400,
+          `This section already holds its maximum of ${cap} items for the selected zone`,
+        );
+      }
+    }
 
     const offerWindow = parseOfferWindow(startsAt, endsAt);
     if (offerWindow.error) {
@@ -763,6 +820,7 @@ export const createMofoodProductSectionItem = async (req, res) => {
     const duplicate = await MofoodProductSectionItem.findOne({
       ...buildPlatformFilter(platform),
       sectionName: trimmedSection,
+      zoneId: resolvedZoneId,
       ...(platform === 'mogrocery'
         ? { productId: identity.productId }
         : { restaurantId: identity.restaurantId, menuItemId: details.menuItemId }),
@@ -774,6 +832,7 @@ export const createMofoodProductSectionItem = async (req, res) => {
     const last = await MofoodProductSectionItem.findOne({
       ...buildPlatformFilter(platform),
       sectionName: trimmedSection,
+      zoneId: resolvedZoneId,
     })
       .sort({ order: -1 })
       .select('order')
@@ -784,6 +843,7 @@ export const createMofoodProductSectionItem = async (req, res) => {
       platform,
       sectionName: trimmedSection,
       sectionOrder: Number.isFinite(Number(sectionOrder)) ? Number(sectionOrder) : 0,
+      zoneId: resolvedZoneId,
       ...identity,
       ...details,
       order,
