@@ -604,9 +604,13 @@ export const getMofoodProductSections = async (req, res) => {
 
     const rawSectionMap = new Map();
     items.forEach((entry) => {
-      // Grocery entries reference a store rather than a restaurant.
-      const owner = entry.restaurantId || entry.storeId;
-      if (!owner) return;
+      // A food entry is meaningless without its restaurant, since the item is
+      // addressed inside that restaurant's menu. A grocery entry is identified
+      // by the product itself and the store is optional metadata: 16% of
+      // grocery products carry no storeId, and requiring one would silently
+      // drop them from every section.
+      const owner = entry.restaurantId || entry.storeId || null;
+      if (!entry.productId && !entry.restaurantId) return;
       const sectionName = String(entry.sectionName || '').trim();
       if (!sectionName) return;
       const sectionOrder = Number(entry.sectionOrder || 0);
