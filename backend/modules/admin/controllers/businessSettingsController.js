@@ -22,6 +22,15 @@ export const getBusinessSettingsPublic = asyncHandler(async (req, res) => {
         privacyPolicyUrl: '',
         contentPolicyUrl: ''
       },
+      // Needed by the Contact Us page. These are the details a business
+      // publishes anyway, so they are safe on an unauthenticated route.
+      contact: {
+        email: settings?.email || '',
+        phone: settings?.phone || { countryCode: '+91', number: '' },
+        whatsapp: settings?.whatsapp || { countryCode: '+91', number: '' },
+        address: settings?.address || '',
+        state: settings?.state || '',
+      },
     });
   } catch (error) {
     console.error('Error fetching public business settings:', error);
@@ -34,6 +43,15 @@ export const getBusinessSettingsPublic = asyncHandler(async (req, res) => {
         termsOfServiceUrl: '',
         privacyPolicyUrl: '',
         contentPolicyUrl: ''
+      },
+      // Same shape as the success path, so the Contact Us page can render
+      // without special-casing a failed settings read.
+      contact: {
+        email: '',
+        phone: { countryCode: '+91', number: '' },
+        whatsapp: { countryCode: '+91', number: '' },
+        address: '',
+        state: '',
       },
     });
   }

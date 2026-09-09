@@ -33,6 +33,21 @@ const businessSettingsSchema = new mongoose.Schema(
       trim: true,
       default: ''
     },
+    // Optional WhatsApp support line shown on the Contact Us page. Separate from
+    // `phone` because support is often a different number to the office line.
+    whatsapp: {
+      countryCode: {
+        type: String,
+        required: false,
+        default: '+91'
+      },
+      number: {
+        type: String,
+        required: false,
+        trim: true,
+        default: ''
+      }
+    },
     state: {
       type: String,
       trim: true,

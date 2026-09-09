@@ -42,6 +42,7 @@ import feeSettingsPublicRoutes from './modules/admin/routes/feeSettingsPublicRou
 import envPublicRoutes from './modules/admin/routes/envPublicRoutes.js';
 import aboutPublicRoutes from './modules/admin/routes/aboutPublicRoutes.js';
 import businessSettingsPublicRoutes from './modules/admin/routes/businessSettingsPublicRoutes.js';
+import contactPublicRoutes from './modules/admin/routes/contactPublicRoutes.js';
 import termsPublicRoutes from './modules/admin/routes/termsPublicRoutes.js';
 import privacyPublicRoutes from './modules/admin/routes/privacyPublicRoutes.js';
 import refundPublicRoutes from './modules/admin/routes/refundPublicRoutes.js';
@@ -650,6 +651,20 @@ if (process.env.NODE_ENV === 'production') {
 
   app.use('/api/admin/env-variables', adminEnvLimiter);
 
+  // Public contact form: unauthenticated and writes to the database, so it is
+  // capped per network to keep it from being used as a spam channel.
+  const contactLimiter = rateLimit({
+    windowMs: parseInt(process.env.CONTACT_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
+    max: parseInt(process.env.CONTACT_RATE_LIMIT_MAX_REQUESTS) || 5,
+    message: 'Too many messages sent from this network. Please try again later.',
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: rateLimitKeyGenerator,
+    validate: false
+  });
+
+  app.use('/api/contact', contactLimiter);
+
   const uploadIpLimiter = rateLimit({
     windowMs: parseInt(process.env.UPLOAD_IP_RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
     max: parseInt(process.env.UPLOAD_IP_RATE_LIMIT_MAX_REQUESTS) || 240,
@@ -727,6 +742,7 @@ app.use('/api', feeSettingsPublicRoutes);
 app.use('/api/env', envPublicRoutes);
 app.use('/api', aboutPublicRoutes);
 app.use('/api', businessSettingsPublicRoutes);
+app.use('/api', contactPublicRoutes);
 app.use('/api', termsPublicRoutes);
 app.use('/api', privacyPublicRoutes);
 app.use('/api', refundPublicRoutes);
