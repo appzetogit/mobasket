@@ -7,6 +7,13 @@ import restaurantAuthRoutes from './routes/restaurantAuthRoutes.js';
 import { getOnboarding, upsertOnboarding, createRestaurantFromOnboardingManual } from './controllers/restaurantOnboardingController.js';
 import { getRestaurants, getRestaurantById, getRestaurantByOwner, updateRestaurantProfile, uploadProfileImage, uploadMenuImage, deleteRestaurantAccount, updateDeliveryStatus, getRestaurantsWithDishesUnder250, getUnder250ItemImages } from './controllers/restaurantController.js';
 import { getRestaurantFinance, getWeeklyPayments } from './controllers/restaurantFinanceController.js';
+import {
+  listBestItems,
+  pinBestItem,
+  unpinBestItem,
+  reorderBestItems,
+  getPublicBestItems,
+} from './controllers/bestItemsController.js';
 import { getWallet, getWalletTransactions, getWalletStats } from './controllers/restaurantWalletController.js';
 import { createWithdrawalRequest, getRestaurantWithdrawalRequests } from './controllers/withdrawalController.js';
 import { getMenu, updateMenu, getMenuByRestaurantId, addSection, addItemToSection, addSubsectionToSection, addItemToSubsection, addAddon, getAddons, getAddonsByRestaurantId, updateAddon, deleteAddon } from './controllers/menuController.js';
@@ -91,6 +98,16 @@ router.use('/complaints', complaintRoutes);
 // Must come BEFORE /:id route to avoid route conflicts (/:id would match /finance)
 router.get('/finance', authenticate, getRestaurantFinance);
 router.get('/finance/weekly', authenticate, getWeeklyPayments);
+
+// Best items - vendor manages their own restaurant's pinned items.
+// These must stay above /:id, which would otherwise match "best-items" as an id.
+router.get('/best-items', authenticate, listBestItems);
+router.post('/best-items', authenticate, pinBestItem);
+router.patch('/best-items/reorder', authenticate, reorderBestItems);
+router.delete('/best-items/:id', authenticate, unpinBestItem);
+
+// Public: powers the "Best of this restaurant" block on a restaurant profile.
+router.get('/:restaurantId/best-items', getPublicBestItems);
 
 // Wallet routes (authenticated - for restaurant module)
 // Must come BEFORE /:id route to avoid route conflicts (/:id would match /wallet)

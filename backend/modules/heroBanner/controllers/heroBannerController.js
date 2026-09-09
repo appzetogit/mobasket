@@ -684,13 +684,56 @@ export const getMofoodProductSections = async (req, res) => {
 export const getAllMofoodProductSections = async (req, res) => {
   try {
     const platform = getPlatformFromRequest(req);
-    const items = await MofoodProductSectionItem.find(buildPlatformFilter(platform))
+    const { sectionName, restaurantId, zoneId } = req.query || {};
+
+    // Optional narrowing so the admin panel can manage one section, one
+    // restaurant or one zone at a time rather than the whole list.
+    const filter = { ...buildPlatformFilter(platform) };
+    if (sectionName) filter.sectionName = String(sectionName).trim();
+    if (restaurantId && mongoose.Types.ObjectId.isValid(restaurantId)) {
+      filter.restaurantId = new mongoose.Types.ObjectId(restaurantId);
+    }
+    if (zoneId === 'null') {
+      filter.zoneId = null;
+    } else if (zoneId && mongoose.Types.ObjectId.isValid(zoneId)) {
+      filter.zoneId = new mongoose.Types.ObjectId(zoneId);
+    }
+
+    const items = await MofoodProductSectionItem.find(filter)
       .populate('restaurantId', 'name slug profileImage estimatedDeliveryTime')
+      .populate('storeId', 'name slug profileImage')
+      .populate('zoneId', 'name zoneName')
       .sort({ sectionOrder: 1, sectionName: 1, order: 1, createdAt: -1 })
       .lean();
 
+    // Grocery entries carry productId rather than restaurantId. Filtering on
+    // restaurantId alone hid every grocery item from the admin panel, so admins
+    // could not manage the sections they had just created.
+    const visible = items.filter((item) => item.restaurantId || item.productId);
+
+    // Grouped by section so the panel can render manageable blocks directly.
+    const sections = [];
+    const byKey = new Map();
+    for (const item of visible) {
+      const name = String(item.sectionName || '').trim() || 'Unnamed';
+      const zoneKey = item.zoneId?._id ? String(item.zoneId._id) : 'all';
+      const key = `${name}::${zoneKey}`;
+      if (!byKey.has(key)) {
+        const entry = {
+          sectionName: name,
+          sectionOrder: Number(item.sectionOrder || 0),
+          zone: item.zoneId || null,
+          items: [],
+        };
+        byKey.set(key, entry);
+        sections.push(entry);
+      }
+      byKey.get(key).items.push(item);
+    }
+
     return successResponse(res, 200, 'Mofood product sections retrieved successfully', {
-      items: items.filter((item) => item.restaurantId),
+      items: visible,
+      sections,
     });
   } catch (error) {
     console.error('Error fetching all mofood product sections:', error);
