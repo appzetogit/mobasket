@@ -27,6 +27,7 @@ import GroceryPlanOffer from '../../grocery/models/GroceryPlanOffer.js';
 import FeeSettings from '../../admin/models/FeeSettings.js';
 import { reduceGroceryStockForOrder, restoreGroceryStockForOrder } from '../services/groceryStockService.js';
 import { isOpenFromOutletTimings } from '../../restaurant/utils/outletTimingStatus.js';
+import { isAddonOrderable } from '../../restaurant/utils/addonVisibility.js';
 import {
   getDefaultPendingCartEdit,
   sanitizePendingCartEdit,
@@ -670,11 +671,11 @@ const buildMenuItemsMap = (menu) => {
     const itemId = String(rawId || '').trim();
     if (!itemId) return;
 
-    const isAvailable = addon?.isAvailable !== false;
-    // For add-ons, allow all records that are marked available,
-    // regardless of approvalStatus. This keeps add-on ordering
-    // aligned with what the public add-ons API returns.
-    if (!isAvailable) return;
+    // Same rule as the public add-ons endpoint, which is what this was always
+    // meant to mirror: available and approved. It previously ignored
+    // approvalStatus, so an add-on still pending review, or one an admin had
+    // rejected, could be ordered and charged.
+    if (!isAddonOrderable(addon)) return;
 
     map.set(itemId, {
       itemId,

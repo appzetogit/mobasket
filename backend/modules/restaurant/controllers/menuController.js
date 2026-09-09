@@ -3,6 +3,7 @@ import Restaurant from '../models/Restaurant.js';
 import GroceryStore from '../../grocery/models/GroceryStore.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
+import { filterPublicAddons } from '../utils/addonVisibility.js';
 import mongoose from 'mongoose';
 
 const normalizeImageUrl = (value) => {
@@ -953,7 +954,6 @@ export const getAddons = asyncHandler(async (req, res) => {
 export const getAddonsByRestaurantId = async (req, res) => {
   try {
     const { id } = req.params;
-    const includeUnapproved = String(req.query?.includeUnapproved || '').toLowerCase() === 'true';
 
     console.log(`[ADDONS] Request received for ID: ${id}`);
     console.log(`[ADDONS] ID type: ${typeof id}, length: ${id?.length}`);
@@ -999,18 +999,16 @@ export const getAddonsByRestaurantId = async (req, res) => {
     console.log(`[ADDONS] Menu isActive: ${menu.isActive}`);
     console.log(`[ADDONS] Total addons in menu: ${(menu.addons || []).length}`);
 
+    // This route is unauthenticated, so the caller does not get to opt out of
+    // the approval filter. Honouring includeUnapproved here let any customer
+    // list add-ons that were still pending or had been rejected, which made the
+    // admin approval step meaningless. Vendors use GET /menu/addons, which is
+    // authenticated, to see their unapproved ones.
     const allAddons = menu.addons || [];
-    const filteredAddons = includeUnapproved
-      ? allAddons
-      : allAddons.filter((addon) => {
-        if (!addon || typeof addon !== 'object') return false;
-        const isAvailable = addon.isAvailable !== false;
-        const isApproved = addon.approvalStatus === 'approved' || !addon.approvalStatus;
-        return isAvailable && isApproved;
-      });
+    const filteredAddons = filterPublicAddons(allAddons, { categoryId: req.query?.categoryId });
 
     // Log all addons for debugging
-    console.log(`[ADDONS] Returning addons: ${filteredAddons.length} (includeUnapproved=${includeUnapproved})`);
+    console.log(`[ADDONS] Returning addons: ${filteredAddons.length} of ${allAddons.length}`);
     if (filteredAddons.length > 0) {
       console.log(`[ADDONS] Addon details:`, filteredAddons.map(a => ({
         id: a.id,
