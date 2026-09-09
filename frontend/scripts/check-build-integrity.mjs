@@ -32,8 +32,10 @@ const SIGNATURES = [
   { pattern: /\bblockNumber\b/, label: 'blockchain RPC reference' },
 ];
 
-// A normal config is well under this; the payload pushed vite.config.js to ~32KB.
-const MAX_BYTES = 8 * 1024;
+// The real config is ~800 bytes. Injections have run 32KB, 35KB and then 8.4KB,
+// shrinking each time and nearly clearing an 8KB limit, so this leaves working
+// room without leaving room for a payload.
+const MAX_BYTES = 3 * 1024;
 
 const problems = [];
 
