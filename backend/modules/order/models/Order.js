@@ -14,6 +14,14 @@ const orderItemSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  // The size or portion the customer chose, when the item offers options.
+  // `price` above is already the variant's price; this records which one it was,
+  // so an order shows whether Half or Full was ordered.
+  variant: {
+    id: { type: String, default: '' },
+    name: { type: String, default: '' },
+    price: { type: Number, default: 0 }
+  },
   quantity: {
     type: Number,
     required: true,

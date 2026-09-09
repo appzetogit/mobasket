@@ -28,6 +28,7 @@ import FeeSettings from '../../admin/models/FeeSettings.js';
 import { reduceGroceryStockForOrder, restoreGroceryStockForOrder } from '../services/groceryStockService.js';
 import { isOpenFromOutletTimings } from '../../restaurant/utils/outletTimingStatus.js';
 import { isAddonOrderable } from '../../restaurant/utils/addonVisibility.js';
+import { repriceItems } from '../utils/itemPricing.js';
 import {
   getDefaultPendingCartEdit,
   sanitizePendingCartEdit,
@@ -634,7 +635,9 @@ const buildMenuItemsMap = (menu) => {
         price: getMenuItemFinalPrice(item),
         image: item?.image || (Array.isArray(item?.images) ? item.images[0] : '') || '',
         description: item?.description || '',
-        isVeg: item?.foodType === 'Veg'
+        isVeg: item?.foodType === 'Veg',
+        // Needed so a selected variant can be priced from the menu.
+        variations: Array.isArray(item?.variations) ? item.variations : []
       });
     });
 
@@ -655,7 +658,8 @@ const buildMenuItemsMap = (menu) => {
           price: getMenuItemFinalPrice(item),
           image: item?.image || (Array.isArray(item?.images) ? item.images[0] : '') || '',
           description: item?.description || '',
-          isVeg: item?.foodType === 'Veg'
+          isVeg: item?.foodType === 'Veg',
+          variations: Array.isArray(item?.variations) ? item.variations : []
         });
       });
     });
@@ -699,16 +703,35 @@ const buildGroceryItemsMap = (products = []) => {
     const itemId = String(product?._id || '').trim();
     if (!itemId) return;
 
+    // GroceryProduct stores sellingPrice and mrp; it has no `price` field, so
+    // reading product.price gave every grocery item a price of 0. That was
+    // harmless while the map was only used to check ids existed, but it is not
+    // once the map becomes the source of truth for pricing.
+    const sellingPrice = Number(product?.sellingPrice);
+    const mrp = Number(product?.mrp);
+    const basePrice = Number.isFinite(sellingPrice) && sellingPrice > 0
+      ? sellingPrice
+      : (Number.isFinite(mrp) ? mrp : 0);
+
     map.set(itemId, {
       itemId,
       name: product?.name || 'Item',
-      price: Number(product?.price || 0),
+      price: basePrice,
       image:
         product?.image ||
         (Array.isArray(product?.images) ? product.images[0] : '') ||
         '',
       description: product?.description || '',
-      isVeg: false
+      isVeg: false,
+      // Normalised to the same {id, name, price} shape the food variations use,
+      // so one pricing path serves both platforms.
+      variations: (Array.isArray(product?.variants) ? product.variants : []).map((variant) => ({
+        id: String(variant?._id || variant?.id || '').trim(),
+        name: String(variant?.name || '').trim(),
+        price: Number.isFinite(Number(variant?.sellingPrice))
+          ? Number(variant.sellingPrice)
+          : Number(variant?.mrp || 0)
+      }))
     });
   });
   return map;
@@ -901,7 +924,10 @@ const validateSingleSourceOrderItems = async ({
     };
   }
 
-  return { valid: true };
+  // The map is returned so the caller can price the order from the menu.
+  // Validating that ids exist while pricing from the request left the two
+  // unrelated, which is how a request could name a real item at any price.
+  return { valid: true, menuItemsMap };
 };
 
 const buildEditedItemsForOrder = ({ order, incomingItems, menuItemsMap }) => {
@@ -1624,11 +1650,34 @@ export const createOrder = async (req, res) => {
       });
     }
 
+    // Price every line from the menu rather than from the request. Validation
+    // above only proves the item ids exist, so without this a request could name
+    // a real item at any price it liked. This also resolves the price of a
+    // selected size or portion, which is where variant pricing comes from.
+    const repriced = repriceItems(items, singleSourceValidation.menuItemsMap);
+    if (repriced.unknownItemIds.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Some cart items are unavailable. Please refresh your cart and try again.'
+      });
+    }
+    if (repriced.unknownVariants.length > 0) {
+      // Charging the base price for an option the menu does not offer would bill
+      // the customer for something other than what they chose.
+      return res.status(400).json({
+        success: false,
+        message: `The selected option is no longer available for: ${repriced.unknownVariants.join(', ')}`
+      });
+    }
+    // `items` is a const binding from the request body, so the authoritative
+    // lines get their own name and everything downstream uses it.
+    const pricedItems = repriced.items;
+
     // Always trust server-side pricing so plan benefits (free delivery/discount) are guaranteed.
     const couponCode = req.body?.couponCode || incomingPricing?.couponCode || incomingPricing?.appliedCoupon?.code || null;
     const pricingPlatform = requestedPlatform === 'mogrocery' ? 'mogrocery' : restaurantPlatform;
     const pricing = await calculateOrderPricing({
-      items,
+      items: pricedItems,
       restaurantId: assignedRestaurantId,
       deliveryAddress: normalizedAddress,
       couponCode,
@@ -1656,7 +1705,7 @@ export const createOrder = async (req, res) => {
 
     const pendingOnlineOrderFingerprint = normalizedPaymentMethod === 'razorpay'
       ? buildPendingOnlineOrderFingerprint({
-          items,
+          items: pricedItems,
           address: normalizedAddress,
           restaurantId: assignedRestaurantId,
           platform: pricingPlatform,
@@ -1797,7 +1846,7 @@ export const createOrder = async (req, res) => {
       restaurantId: assignedRestaurantId,
       restaurantName: assignedRestaurantName,
       restaurantPlatform: pricingPlatform === 'mogrocery' ? 'mogrocery' : 'mofood',
-      items,
+      items: pricedItems,
       address: normalizedAddress,
       pricing: {
         ...pricing,
