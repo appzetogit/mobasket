@@ -34,6 +34,7 @@ const Favorites = lazy(() => import("../pages/profile/Favorites"));
 const Coupons = lazy(() => import("../pages/profile/Coupons"));
 const RedeemGoldCoupon = lazy(() => import("../pages/profile/RedeemGoldCoupon"));
 const About = lazy(() => import("../pages/profile/About"));
+const ContactUs = lazy(() => import("../pages/profile/ContactUs"));
 const Terms = lazy(() => import("../pages/profile/Terms"));
 const Privacy = lazy(() => import("../pages/profile/Privacy"));
 const Refund = lazy(() => import("../pages/profile/Refund"));
@@ -335,6 +336,12 @@ export default function UserRouter() {
             </ProtectedRoute>
           }
         />
+        {/* Deliberately not behind ProtectedRoute, unlike the pages around it.
+            Someone who cannot sign in is precisely who needs to reach support,
+            and gating this would lock them out of reporting that. The endpoint
+            is public and rate limited, and still records the account when the
+            sender happens to be signed in. */}
+        <Route path="/profile/contact-us" element={<ContactUs />} />
         <Route
           path="/profile/terms"
           element={
