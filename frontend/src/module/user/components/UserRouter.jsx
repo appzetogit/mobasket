@@ -62,6 +62,7 @@ const CategoryFoodsPage = lazy(() => import("@/module/usermain/pages/CategoryFoo
 const WishlistPage = lazy(() => import("@/module/usermain/pages/WishlistPage"));
 const FoodDetailPage = lazy(() => import("@/module/usermain/pages/FoodDetailPage"));
 const WelcomeSelectionPage = lazy(() => import("@/module/user/pages/WelcomeSelectionPage"));
+const LandingPage = lazy(() => import("@/module/user/pages/LandingPage"));
 const loadRestaurantDetails = () => import("../pages/restaurants/RestaurantDetails");
 const RestaurantDetails = lazy(() => loadRestaurantDetails());
 
@@ -119,6 +120,8 @@ export default function UserRouter() {
         <Route path="/sign-in" element={<SignIn />} />
         <Route path="/" element={<WelcomeSelectionPage />} />
         <Route path="/welcome" element={<WelcomeSelectionPage />} />
+        {/* Company website. Kept off "/" so the app's Food/Grocery entry point is unchanged. */}
+        <Route path="/company" element={<LandingPage />} />
         <Route
           path="/home"
           element={
