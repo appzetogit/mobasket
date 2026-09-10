@@ -269,6 +269,11 @@ export const zoneAPI = {
 
 // Export restaurant API helper functions
 export const restaurantAPI = {
+  // Weekly payment report: what the vendor is owed per week and whether admin
+  // has marked it Paid, Pending or Due.
+  getWeeklyPayments: (weeks = 8) =>
+    apiClient.get(API_ENDPOINTS.RESTAURANT.FINANCE_WEEKLY, { params: { weeks } }),
+
   // Restaurant Authentication
   sendOTP: (phone = null, purpose = 'login', email = null) => {
     const payload = { purpose };

@@ -729,8 +729,10 @@ export default function ExploreMore() {
 
   const accountingItems = isGroceryStore ? [
     { id: 1, label: "Payout", icon: IndianRupee, route: "/store/wallet" },
+    { id: 2, label: "Weekly payments", icon: Receipt, route: "/store/weekly-payments" },
   ] : [
     { id: 1, label: "Payout", icon: IndianRupee, route: "/restaurant/hub-finance" },
+    { id: 4, label: "Weekly payments", icon: Receipt, route: "/restaurant/weekly-payments" },
     { id: 2, label: "Invoices", icon: Receipt, route: "/restaurant/hub-finance?tab=invoices" },
     { id: 3, label: "Commission details", icon: FileCheck, route: "/restaurant/commission-details" },
   ]

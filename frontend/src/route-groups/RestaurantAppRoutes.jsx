@@ -7,6 +7,7 @@ const AllOrdersPage = lazy(() => import("@/module/restaurant/pages/AllOrdersPage
 const RestaurantDetailsPage = lazy(() => import("@/module/restaurant/pages/RestaurantDetailsPage"));
 const EditRestaurantPage = lazy(() => import("@/module/restaurant/pages/EditRestaurantPage"));
 const WalletPage = lazy(() => import("@/module/restaurant/pages/WalletPage"));
+const WeeklyPayments = lazy(() => import("@/module/restaurant/pages/WeeklyPayments"));
 const RestaurantNotifications = lazy(() => import("@/module/restaurant/pages/Notifications"));
 const OrderDetails = lazy(() => import("@/module/restaurant/pages/OrderDetails"));
 const OrdersMain = lazy(() => import("@/module/restaurant/pages/OrdersMain"));
@@ -119,6 +120,7 @@ export default function RestaurantAppRoutes() {
       <Route path="food/:id/edit" element={<ProtectedRoute requiredRole="restaurant" loginPath="/restaurant/login"><Navigate to="/restaurant/hub-menu" replace /></ProtectedRoute>} />
       <Route path="food/new" element={<ProtectedRoute requiredRole="restaurant" loginPath="/restaurant/login"><Navigate to="/restaurant/hub-menu/item/new" replace /></ProtectedRoute>} />
       <Route path="wallet" element={<ProtectedRoute requiredRole="restaurant" loginPath="/restaurant/login"><WalletPage /></ProtectedRoute>} />
+      <Route path="weekly-payments" element={<ProtectedRoute requiredRole="restaurant" loginPath="/restaurant/login"><WeeklyPayments /></ProtectedRoute>} />
       <Route path="advertisements" element={<ProtectedRoute requiredRole="restaurant" loginPath="/restaurant/login"><AdvertisementsPage /></ProtectedRoute>} />
       <Route path="advertisements/new" element={<ProtectedRoute requiredRole="restaurant" loginPath="/restaurant/login"><NewAdvertisementPage /></ProtectedRoute>} />
       <Route path="advertisements/:id" element={<ProtectedRoute requiredRole="restaurant" loginPath="/restaurant/login"><AdDetailsPage /></ProtectedRoute>} />

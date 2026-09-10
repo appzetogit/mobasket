@@ -11,6 +11,7 @@ const GroceryStoreProductsListPage = lazy(() => import("@/module/grocery-store/p
 const GroceryStoreCategoriesPage = lazy(() => import("@/module/grocery-store/pages/CategoriesPage"));
 const AllOrdersPage = lazy(() => import("@/module/restaurant/pages/AllOrdersPage"));
 const WalletPage = lazy(() => import("@/module/restaurant/pages/WalletPage"));
+const WeeklyPayments = lazy(() => import("@/module/restaurant/pages/WeeklyPayments"));
 const RestaurantNotifications = lazy(() => import("@/module/restaurant/pages/Notifications"));
 const OrderDetails = lazy(() => import("@/module/restaurant/pages/OrderDetails"));
 const OrdersMain = lazy(() => import("@/module/restaurant/pages/OrdersMain"));
@@ -71,6 +72,7 @@ export default function StoreAppRoutes() {
       <Route path="help-centre" element={<ProtectedRoute module="grocery-store" loginPath="/store/login"><HelpCentre /></ProtectedRoute>} />
       <Route path="explore" element={<ProtectedRoute module="grocery-store" loginPath="/store/login"><ExploreMore /></ProtectedRoute>} />
       <Route path="wallet" element={<ProtectedRoute module="grocery-store" loginPath="/store/login"><WalletPage /></ProtectedRoute>} />
+      <Route path="weekly-payments" element={<ProtectedRoute module="grocery-store" loginPath="/store/login"><WeeklyPayments /></ProtectedRoute>} />
       <Route path="settings" element={<ProtectedRoute module="grocery-store" loginPath="/store/login"><SettingsPage /></ProtectedRoute>} />
       <Route path="switch-outlet" element={<ProtectedRoute module="grocery-store" loginPath="/store/login"><SwitchOutlet /></ProtectedRoute>} />
       <Route path="manage-outlets" element={<ProtectedRoute module="grocery-store" loginPath="/store/login"><SwitchOutlet /></ProtectedRoute>} />

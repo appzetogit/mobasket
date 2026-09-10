@@ -182,6 +182,7 @@ export const API_ENDPOINTS = {
     NOTIFICATIONS: '/restaurant/notifications',
     NOTIFICATION_BY_ID: '/restaurant/notifications/:id',
     FINANCE: '/restaurant/finance',
+    FINANCE_WEEKLY: '/restaurant/finance/weekly',
     WALLET: '/restaurant/wallet',
     WALLET_TRANSACTIONS: '/restaurant/wallet/transactions',
     WALLET_STATS: '/restaurant/wallet/stats',
