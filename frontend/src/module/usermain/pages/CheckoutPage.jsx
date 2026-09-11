@@ -20,6 +20,8 @@ import { toast } from "sonner";
 import { useCart } from "../../user/context/CartContext";
 import { useProfile } from "../../user/context/ProfileContext";
 import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
+import { buildCurrentLocationAddress } from "../../user/utils/currentLocationAddress";
+import DeliveryLocationChoice from "../../user/components/DeliveryLocationChoice";
 import { useZone } from "../../user/hooks/useZone";
 import api, { adminAPI, locationAPI, orderAPI, restaurantAPI, userAPI, zoneAPI } from "@/lib/api";
 import { initRazorpayPayment } from "@/lib/utils/razorpay";
@@ -42,7 +44,7 @@ export default function CheckoutPage() {
   const location = useLocation();
   const { cart, clearCart, isGroceryItem, addToCart, updateQuantity, getCartItem } = useCart();
   const { getDefaultAddress, userProfile, addresses, addAddress } = useProfile();
-  const { location: liveLocation } = useUserLocation();
+  const { location: liveLocation, requestLocation } = useUserLocation();
   const { zoneId } = useZone(liveLocation, "mofood");
 
   const [paymentMethod, setPaymentMethod] = useState("card");
@@ -75,6 +77,12 @@ export default function CheckoutPage() {
   const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
   const [selectedAddress, setSelectedAddress] = useState(() => getDefaultAddress() || null);
   const [orderingForSomeoneElse, setOrderingForSomeoneElse] = useState(false);
+  // How the customer sets the delivery location: "detect", "manual" or
+  // "saved". Null until they choose, which shows Saved to customers with saved
+  // addresses and Detect to everyone else (requirement 6).
+  const [locationMode, setLocationMode] = useState(null);
+  const [detectingLocation, setDetectingLocation] = useState(false);
+  const [detectError, setDetectError] = useState("");
   const [showRecipientMap, setShowRecipientMap] = useState(false);
   const [recipientDetails, setRecipientDetails] = useState({
     name: "",
@@ -172,60 +180,6 @@ export default function CheckoutPage() {
       String(address.street || "").trim() ||
       String(address.address || "").trim(),
     );
-  }, []);
-
-  const buildCurrentLocationAddress = useCallback((locationData) => {
-    if (!locationData || typeof locationData !== "object") return null;
-
-    const latitude = Number(
-      locationData.latitude ?? locationData.lat ?? locationData.location?.latitude,
-    );
-    const longitude = Number(
-      locationData.longitude ?? locationData.lng ?? locationData.location?.longitude,
-    );
-    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-      return null;
-    }
-
-    const formattedAddress = String(
-      locationData.formattedAddress || locationData.address || "",
-    ).trim();
-    const blockedLabels = new Set([
-      "",
-      "select location",
-      "current location",
-    ]);
-    if (blockedLabels.has(formattedAddress.toLowerCase())) {
-      return null;
-    }
-
-    const street = String(locationData.street || "").trim();
-    const area = String(locationData.area || locationData.additionalDetails || "").trim();
-    const city = String(locationData.city || "").trim();
-    const state = String(locationData.state || "").trim();
-    const zipCode = String(
-      locationData.zipCode || locationData.postalCode || locationData.pincode || "",
-    ).trim();
-
-    return {
-      label: "Current Location",
-      completeAddress:
-        formattedAddress || [street, area, city, state, zipCode].filter(Boolean).join(", "),
-      street,
-      additionalDetails: area,
-      city,
-      state,
-      zipCode,
-      formattedAddress:
-        formattedAddress || [street, area, city, state, zipCode].filter(Boolean).join(", "),
-      latitude,
-      longitude,
-      location: {
-        type: "Point",
-        coordinates: [longitude, latitude],
-      },
-      isCurrentLocationTemporary: true,
-    };
   }, []);
 
   const deliveryType =
@@ -395,6 +349,8 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (orderingForSomeoneElse) return;
+    // Someone typing an address by hand keeps their form open.
+    if (locationMode === "manual") return;
     if (selectedAddress && hasHydratedEditableAddress(selectedAddress)) return;
     if (Array.isArray(addresses) && addresses.length > 0) return;
 
@@ -405,12 +361,48 @@ export default function CheckoutPage() {
     }
   }, [
     addresses,
-    buildCurrentLocationAddress,
     hasHydratedEditableAddress,
     liveLocation,
+    locationMode,
     orderingForSomeoneElse,
     selectedAddress,
   ]);
+
+  const hasSavedAddresses = Array.isArray(addresses) && addresses.length > 0;
+  const activeLocationMode = locationMode || (hasSavedAddresses ? "saved" : "detect");
+
+  const chooseLocationMode = async (mode) => {
+    setLocationMode(mode);
+    setDetectError("");
+
+    if (mode === "manual") {
+      setShowAddAddressForm(true);
+      return;
+    }
+    setShowAddAddressForm(false);
+
+    if (mode === "saved") {
+      const saved = getDefaultAddress() || (hasSavedAddresses ? addresses[0] : null);
+      if (saved) setSelectedAddress(saved);
+      return;
+    }
+
+    // Detect takes a fresh reading from the device rather than a cached one.
+    setDetectingLocation(true);
+    try {
+      const fresh = await requestLocation(true, true);
+      const detected = buildCurrentLocationAddress(fresh) || buildCurrentLocationAddress(liveLocation);
+      if (detected) {
+        setSelectedAddress(detected);
+      } else {
+        setDetectError("We couldn't work out your address. Try again, or add it manually.");
+      }
+    } catch {
+      setDetectError("We couldn't detect your location. Allow location access, or add it manually.");
+    } finally {
+      setDetectingLocation(false);
+    }
+  };
 
   const resetNewAddressForm = () => {
     setNewAddress({
@@ -811,6 +803,7 @@ export default function CheckoutPage() {
         setSelectedAddress(created);
       }
       setShowAddAddressForm(false);
+      setLocationMode("saved");
       resetNewAddressForm();
       toast.success("Address added successfully.");
     } catch (error) {
@@ -2025,26 +2018,25 @@ export default function CheckoutPage() {
               </div>
             ) : (
               <>
-                <div className="rounded-[24px] border border-[#ffe1e5] bg-[#fff8f8] p-3.5 dark:border-[#EF4F5F]/20 dark:bg-[#1c1318]">
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <p className="text-sm font-extrabold text-gray-900 dark:text-gray-100">
-                        Choose where we should deliver
-                      </p>
-                      <p className="mt-1 text-xs leading-5 text-gray-500 dark:text-gray-400">
-                        Pick a saved address or add a fresh one for this order.
-                      </p>
-                    </div>
-                    <div className="inline-flex items-center gap-2 self-start rounded-full bg-white px-3 py-1.5 text-[11px] font-bold text-[#EF4F5F] shadow-sm dark:bg-white/10">
-                      <MapPin className="h-3.5 w-3.5" />
-                      Address required
-                    </div>
-                  </div>
-                </div>
+                <DeliveryLocationChoice
+                  mode={activeLocationMode}
+                  onChange={chooseLocationMode}
+                  detecting={detectingLocation}
+                  savedCount={hasSavedAddresses ? addresses.length : 0}
+                  tone="food"
+                />
+                {detectError ? (
+                  <p
+                    role="alert"
+                    className="rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-300"
+                  >
+                    {detectError}
+                  </p>
+                ) : null}
 
                 <div className="space-y-2.5">
-                  {!Array.isArray(addresses) || addresses.length === 0 ? (
-                    selectedAddress && hasHydratedEditableAddress(selectedAddress) ? (
+                  {activeLocationMode === "detect" ? (
+                    selectedAddress?.isCurrentLocationTemporary && hasHydratedEditableAddress(selectedAddress) ? (
                       <div className="rounded-[22px] border border-[#EF4F5F]/25 bg-gradient-to-r from-[#fff6f7] to-[#fffdf8] px-4 py-3 shadow-[0_10px_24px_rgba(239,79,95,0.10)] dark:border-[#EF4F5F]/20 dark:bg-[#21131a]">
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0 flex-1">
@@ -2068,10 +2060,21 @@ export default function CheckoutPage() {
                           </div>
                         </div>
                       </div>
-                    ) : null
+                    ) : (
+                      <div className="rounded-[22px] border border-dashed border-gray-200 bg-[#fafafa] px-4 py-5 text-center dark:border-white/10 dark:bg-[#0f172a]">
+                        <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                          {detectingLocation ? "Detecting your location…" : "Your location isn't set yet"}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                          {detectingLocation
+                            ? "This takes a few seconds."
+                            : "Tap Detect current location, or add it manually."}
+                        </p>
+                      </div>
+                    )
                   ) : null}
 
-                  {Array.isArray(addresses) && addresses.length > 0 ? (
+                  {activeLocationMode === "saved" && hasSavedAddresses ? (
                     addresses.map((address) => {
                       const addressId = address.id || address._id;
                       const selectedId = selectedAddress?.id || selectedAddress?._id;
@@ -2121,26 +2124,17 @@ export default function CheckoutPage() {
                         </button>
                       );
                     })
-                  ) : (
+                  ) : activeLocationMode === "saved" ? (
                     <div className="rounded-[22px] border border-dashed border-gray-200 bg-[#fafafa] px-4 py-5 text-center dark:border-white/10 dark:bg-[#0f172a]">
                       <p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                         No saved addresses yet
                       </p>
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        Add one now to make checkout faster next time.
+                        Use Add location manually to save one.
                       </p>
                     </div>
-                  )}
+                  ) : null}
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => setShowAddAddressForm((prev) => !prev)}
-                  className="inline-flex items-center gap-2 rounded-full border border-[#EF4F5F]/15 bg-[#fff5f6] px-4 py-2 text-xs font-bold text-[#EF4F5F] transition-colors hover:bg-[#ffecef] dark:border-[#EF4F5F]/20 dark:bg-[#21131a]"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  {showAddAddressForm ? "Close Add Address" : "Add New Address"}
-                </button>
 
                 {showAddAddressForm ? (
                   <div className="rounded-[24px] border border-gray-200 bg-[#fcfcfc] p-3.5 shadow-sm dark:border-white/10 dark:bg-[#0f172a]">

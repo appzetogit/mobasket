@@ -28,6 +28,9 @@ import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
 import { Loader } from "@googlemaps/js-api-loader";
 import { getGoogleMapsApiKey } from "@/lib/utils/googleMapsApiKey";
 import AddressLocationPicker from "@/components/AddressLocationPicker";
+import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
+import { buildCurrentLocationAddress } from "../../user/utils/currentLocationAddress";
+import DeliveryLocationChoice from "../../user/components/DeliveryLocationChoice";
 import { useRef } from "react";
 
 const GROCERY_ITEM_FALLBACK_IMAGE =
@@ -567,6 +570,7 @@ export default function GroceryCheckoutPage() {
         setSelectedAddress(created);
       }
       setShowAddAddressForm(false);
+      setLocationMode("saved");
       resetNewAddressForm();
       toast.success("Address added successfully.");
     } catch (error) {
@@ -581,6 +585,14 @@ export default function GroceryCheckoutPage() {
     "Select delivery address";
 
   const [selectedAddress, setSelectedAddress] = useState(null);
+  const { location: liveLocation, requestLocation } = useUserLocation();
+  // "detect", "manual" or "saved"; null until the customer chooses, which
+  // shows Saved to customers with saved addresses and Detect to everyone else
+  // (requirement 6).
+  const [locationMode, setLocationMode] = useState(null);
+  const [detectingLocation, setDetectingLocation] = useState(false);
+  const [detectError, setDetectError] = useState("");
+  const autoDetectFailedAtRef = useRef("");
 
   useEffect(() => {
     const defaultAddress = getDefaultAddress();
@@ -603,6 +615,8 @@ export default function GroceryCheckoutPage() {
       return;
     }
 
+    // Keep a detected current location; there is nothing saved to replace it.
+    if (selectedAddress?.isCurrentLocationTemporary) return;
     setSelectedAddress(null);
   }, [addresses, getDefaultAddress]);
 
@@ -647,17 +661,77 @@ export default function GroceryCheckoutPage() {
         if (!zoneValidation.ok) {
           setSelectedAddressZoneMessage(zoneValidation.message);
           toast.error(zoneValidation.message);
-          return;
+          return false;
         }
         setSelectedAddressZoneMessage("");
         setSelectedAddress(address);
+        return true;
       } catch (error) {
         console.error("Failed to validate selected grocery address zone:", error);
         toast.error("Unable to verify whether this address is in the store zone.");
+        return false;
       }
     },
     [validateAddressInStoreZone],
   );
+
+  const hasSavedAddresses = Array.isArray(addresses) && addresses.length > 0;
+  const activeLocationMode = locationMode || (hasSavedAddresses ? "saved" : "detect");
+
+  // A detected location goes through the same store-zone check as any address.
+  const applyDetectedLocation = useCallback(
+    async (locationData) => {
+      const detected = buildCurrentLocationAddress(locationData);
+      if (!detected) return false;
+      return handleSelectAddress(detected);
+    },
+    [handleSelectAddress],
+  );
+
+  const chooseLocationMode = async (mode) => {
+    setLocationMode(mode);
+    setDetectError("");
+
+    if (mode === "manual") {
+      setShowAddAddressForm(true);
+      return;
+    }
+    setShowAddAddressForm(false);
+
+    if (mode === "saved") {
+      const saved = getDefaultAddress() || (hasSavedAddresses ? addresses[0] : null);
+      if (saved) await handleSelectAddress(saved);
+      return;
+    }
+
+    // Detect takes a fresh reading from the device rather than a cached one.
+    setDetectingLocation(true);
+    try {
+      const fresh = await requestLocation(true, true);
+      const applied = (await applyDetectedLocation(fresh)) || (await applyDetectedLocation(liveLocation));
+      if (!applied && !buildCurrentLocationAddress(fresh) && !buildCurrentLocationAddress(liveLocation)) {
+        setDetectError("We couldn't work out your address. Try again, or add it manually.");
+      }
+    } catch {
+      setDetectError("We couldn't detect your location. Allow location access, or add it manually.");
+    } finally {
+      setDetectingLocation(false);
+    }
+  };
+
+  // New customers start on Detect with the location the app already has, as in
+  // food checkout. A location that failed the store-zone check is not retried
+  // on every location update, which would repeat the same error.
+  useEffect(() => {
+    if (hasSavedAddresses || selectedAddress || locationMode === "manual") return;
+    const detected = buildCurrentLocationAddress(liveLocation);
+    if (!detected) return;
+    const key = `${detected.latitude.toFixed(4)},${detected.longitude.toFixed(4)}`;
+    if (autoDetectFailedAtRef.current === key) return;
+    applyDetectedLocation(liveLocation).then((ok) => {
+      if (!ok) autoDetectFailedAtRef.current = key;
+    });
+  }, [applyDetectedLocation, hasSavedAddresses, liveLocation, locationMode, selectedAddress]);
 
   const formattedDeliveryAddress = useMemo(() => {
     if (!normalizedSelectedAddress) return deliveryAddress;
@@ -1607,8 +1681,43 @@ export default function GroceryCheckoutPage() {
               <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">{formattedDeliveryAddress}</p>
 
               <div className="mt-3 space-y-2 mt-4 pt-3 border-t border-gray-100 dark:border-gray-800">
-                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Saved Addresses</p>
-                {Array.isArray(addresses) && addresses.length > 0 ? (
+                <DeliveryLocationChoice
+                  mode={activeLocationMode}
+                  onChange={chooseLocationMode}
+                  detecting={detectingLocation}
+                  savedCount={hasSavedAddresses ? addresses.length : 0}
+                  tone="grocery"
+                />
+                {detectError ? (
+                  <p
+                    role="alert"
+                    className="rounded-lg bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 dark:bg-red-950/30 dark:text-red-300"
+                  >
+                    {detectError}
+                  </p>
+                ) : null}
+
+                {activeLocationMode === "detect" ? (
+                  selectedAddress?.isCurrentLocationTemporary ? (
+                    <p className="text-xs font-semibold text-[#ff8100]">Using your current location</p>
+                  ) : (
+                    <p className="rounded-lg border border-dashed border-gray-200 px-3 py-3 text-center text-xs text-gray-600 dark:border-gray-700 dark:text-gray-400">
+                      {detectingLocation
+                        ? "Detecting your location…"
+                        : "Tap Detect current location, or add it manually."}
+                    </p>
+                  )
+                ) : null}
+
+                {activeLocationMode === "saved" ? (
+                  <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Saved Addresses</p>
+                ) : null}
+                {activeLocationMode === "saved" && !hasSavedAddresses ? (
+                  <p className="rounded-lg border border-dashed border-gray-200 px-3 py-3 text-center text-xs text-gray-600 dark:border-gray-700 dark:text-gray-400">
+                    No saved addresses yet. Use Add location manually to save one.
+                  </p>
+                ) : null}
+                {activeLocationMode === "saved" && hasSavedAddresses ? (
                   addresses.map((address) => {
                     const addressId = address.id || address._id;
                     const selectedId = selectedAddress?.id || selectedAddress?._id;
@@ -1638,13 +1747,6 @@ export default function GroceryCheckoutPage() {
                   </div>
                 ) : null}
 
-                <button
-                  type="button"
-                  onClick={() => setShowAddAddressForm((prev) => !prev)}
-                  className="text-xs font-semibold text-[#ff8100] mt-2 block w-full text-left"
-                >
-                  {showAddAddressForm ? "Close Add Address" : "+ Add New Address"}
-                </button>
 
                 {showAddAddressForm ? (
                   <div className="rounded-xl border border-gray-200 p-3 space-y-2 bg-gray-50 dark:bg-[#1a1a1a] dark:border-gray-700">
