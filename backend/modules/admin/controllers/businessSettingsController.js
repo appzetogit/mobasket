@@ -85,6 +85,8 @@ export const updateBusinessSettings = asyncHandler(async (req, res) => {
       address,
       state,
       pincode,
+      whatsappCountryCode,
+      whatsappNumber,
       termsOfServiceUrl,
       privacyPolicyUrl,
       contentPolicyUrl,
@@ -114,6 +116,19 @@ export const updateBusinessSettings = asyncHandler(async (req, res) => {
     if (address !== undefined) settings.address = address;
     if (state !== undefined) settings.state = state;
     if (pincode !== undefined) settings.pincode = pincode;
+    // WhatsApp support line for the Contact Us page. Optional: an empty number
+    // hides it there.
+    if (whatsappCountryCode !== undefined || whatsappNumber !== undefined) {
+      if (!settings.whatsapp) {
+        settings.whatsapp = { countryCode: '+91', number: '' };
+      }
+      if (whatsappCountryCode !== undefined) {
+        settings.whatsapp.countryCode = String(whatsappCountryCode).trim() || '+91';
+      }
+      if (whatsappNumber !== undefined) {
+        settings.whatsapp.number = String(whatsappNumber).replace(/\D/g, '').slice(0, 15);
+      }
+    }
     if (!settings.policyLinks) {
       settings.policyLinks = {
         termsOfServiceUrl: '',

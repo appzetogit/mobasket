@@ -22,6 +22,8 @@ export default function BusinessSetup() {
     address: "",
     state: "",
     pincode: "",
+    whatsappCountryCode: "+91",
+    whatsappNumber: "",
     termsOfServiceUrl: "",
     privacyPolicyUrl: "",
     contentPolicyUrl: "",
@@ -47,6 +49,8 @@ export default function BusinessSetup() {
           address: settings.address || "",
           state: settings.state || "",
           pincode: settings.pincode || "",
+          whatsappCountryCode: settings.whatsapp?.countryCode || "+91",
+          whatsappNumber: settings.whatsapp?.number || "",
           termsOfServiceUrl: settings.policyLinks?.termsOfServiceUrl || "",
           privacyPolicyUrl: settings.policyLinks?.privacyPolicyUrl || "",
           contentPolicyUrl: settings.policyLinks?.contentPolicyUrl || "",
@@ -111,6 +115,10 @@ export default function BusinessSetup() {
         toast.error("Pincode must be 4 to 10 digits");
         return;
       }
+      if (formData.whatsappNumber.trim() && !PHONE_REGEX.test(formData.whatsappNumber.trim())) {
+        toast.error("WhatsApp number must be 7 to 15 digits");
+        return;
+      }
 
       setSaving(true);
 
@@ -123,6 +131,8 @@ export default function BusinessSetup() {
         address: formData.address.trim(),
         state: formData.state.trim(),
         pincode: formData.pincode.trim(),
+        whatsappCountryCode: /\d/.test(formData.whatsappCountryCode) ? formData.whatsappCountryCode.trim() : "+91",
+        whatsappNumber: formData.whatsappNumber.trim(),
         termsOfServiceUrl: formData.termsOfServiceUrl.trim(),
         privacyPolicyUrl: formData.privacyPolicyUrl.trim(),
         contentPolicyUrl: formData.contentPolicyUrl.trim(),
@@ -519,6 +529,31 @@ export default function BusinessSetup() {
                   onChange={(e) => handleInputChange("pincode", e.target.value.replace(/\D/g, "").slice(0, 10))}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+                  WhatsApp support number
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    aria-label="WhatsApp country code"
+                    value={formData.whatsappCountryCode}
+                    onChange={(e) => handleInputChange("whatsappCountryCode", `+${e.target.value.replace(/\D/g, "").slice(0, 4)}`)}
+                    className="w-20 px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Leave empty to hide WhatsApp"
+                    value={formData.whatsappNumber}
+                    onChange={(e) => handleInputChange("whatsappNumber", e.target.value.replace(/\D/g, "").slice(0, 15))}
+                    className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Shown on the app&apos;s Contact Us page, along with the email, phone and address above.
+                </p>
               </div>
 
               <div className="md:col-span-2">
