@@ -616,6 +616,96 @@ export default function RestaurantDetails() {
 
   }, [restaurant?.id, restaurant?.restaurantId, restaurant?._id]);
 
+  // "Best of this restaurant" (requirements 3 and 9). The public endpoint gives
+  // the pinned item ids in the vendor's order; the items themselves come from the
+  // menu already loaded, so pinned cards behave exactly like the rest of the menu,
+  // including add-to-cart, variants and add-ons.
+  const [bestItemIds, setBestItemIds] = useState(null);
+  const bestItemsRestaurantKey = String(
+    restaurant?._id || restaurant?.id || restaurant?.restaurantId || slug || "",
+  ).trim();
+
+  useEffect(() => {
+    if (!bestItemsRestaurantKey) return;
+    let cancelled = false;
+    restaurantAPI
+      .getPublicBestItems(bestItemsRestaurantKey)
+      .then((res) => {
+        const items = Array.isArray(res?.data?.data?.items) ? res.data.data.items : [];
+        if (!cancelled) {
+          setBestItemIds(items.map((entry) => String(entry?.menuItemId || "")).filter(Boolean));
+        }
+      })
+      // Optional block: a failed lookup just means no pinned section.
+      .catch(() => {
+        if (!cancelled) setBestItemIds([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [bestItemsRestaurantKey]);
+
+  // menuSections is rebuilt from a freshly fetched menu by a refresh and by the
+  // "Recommended for you" injection, and both drop this section. Re-apply it when
+  // that happens, first in the list as the requirement asks, and only write state
+  // when it is missing, misplaced or out of date, so this cannot loop.
+  useEffect(() => {
+    if (!Array.isArray(bestItemIds)) return;
+    const sections = Array.isArray(restaurant?.menuSections) ? restaurant.menuSections : null;
+    if (!sections) return;
+
+    const itemsById = new Map();
+    for (const section of sections) {
+      if (section?.isBestOfRestaurant || section?.isPersonalizedRecommended) continue;
+      const all = [
+        ...(Array.isArray(section?.items) ? section.items : []),
+        ...(Array.isArray(section?.subsections)
+          ? section.subsections.flatMap((sub) => (Array.isArray(sub?.items) ? sub.items : []))
+          : []),
+      ];
+      for (const item of all) {
+        const key = String(item?.id ?? item?._id ?? "");
+        if (key && !itemsById.has(key)) itemsById.set(key, item);
+      }
+    }
+
+    // Pins for items since removed from the menu are skipped rather than shown.
+    const pinnedItems = bestItemIds.map((id) => itemsById.get(id)).filter(Boolean);
+    const idsOf = (items) => items.map((item) => String(item?.id ?? item?._id ?? "")).join("|");
+
+    const leading = sections[0]?.isBestOfRestaurant ? sections[0] : null;
+    const hasStray = sections.some((section, index) => index > 0 && section?.isBestOfRestaurant);
+
+    if (pinnedItems.length === 0) {
+      if (leading || hasStray) {
+        setRestaurant((prev) =>
+          prev && Array.isArray(prev.menuSections)
+            ? { ...prev, menuSections: prev.menuSections.filter((section) => !section?.isBestOfRestaurant) }
+            : prev,
+        );
+      }
+      return;
+    }
+
+    if (leading && !hasStray && idsOf(leading.items || []) === idsOf(pinnedItems)) return;
+
+    setRestaurant((prev) => {
+      if (!prev || !Array.isArray(prev.menuSections)) return prev;
+      return {
+        ...prev,
+        menuSections: [
+          {
+            name: "Best of this restaurant",
+            isBestOfRestaurant: true,
+            items: pinnedItems,
+            subsections: [],
+          },
+          ...prev.menuSections.filter((section) => !section?.isBestOfRestaurant),
+        ],
+      };
+    });
+  }, [bestItemIds, restaurant?.menuSections]);
+
   const _hydrateRestaurantDeferredData = useCallback(
     async (
       restaurantIdForMenu,
