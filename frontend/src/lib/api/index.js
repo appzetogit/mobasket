@@ -2146,6 +2146,27 @@ export const adminAPI = {
     return apiClient.get(API_ENDPOINTS.ADMIN.CASH_LIMIT_SETTLEMENT, { params });
   },
 
+  // Contact Us enquiries sent from the app (requirement 14)
+  getContactEnquiries: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.ADMIN.CONTACT_ENQUIRIES, { params });
+  },
+  updateContactEnquiry: (id, data) => {
+    return apiClient.patch(API_ENDPOINTS.ADMIN.CONTACT_ENQUIRY_BY_ID.replace(':id', id), data);
+  },
+  deleteContactEnquiry: (id) => {
+    return apiClient.delete(API_ENDPOINTS.ADMIN.CONTACT_ENQUIRY_BY_ID.replace(':id', id));
+  },
+
+  // Weekly payment report (requirement 2)
+  getRestaurantWeeklyPayouts: (restaurantId, weeks = 8) => {
+    return apiClient.get(API_ENDPOINTS.ADMIN.RESTAURANT_WEEKLY_PAYOUTS.replace(':id', restaurantId), {
+      params: { weeks },
+    });
+  },
+  setRestaurantWeeklyPayoutStatus: (restaurantId, data) => {
+    return apiClient.patch(API_ENDPOINTS.ADMIN.RESTAURANT_WEEKLY_PAYOUTS.replace(':id', restaurantId), data);
+  },
+
   getDeliveryWithdrawalRequests: (params = {}) => {
     return apiClient.get(API_ENDPOINTS.ADMIN.DELIVERY_WITHDRAWAL_REQUESTS, { params });
   },

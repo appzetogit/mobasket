@@ -31,6 +31,8 @@ const RestaurantCommission = lazy(() => import("../pages/restaurant/RestaurantCo
 const RestaurantComplaints = lazy(() => import("../pages/restaurant/RestaurantComplaints"));
 const RestaurantsBulkImport = lazy(() => import("../pages/restaurant/RestaurantsBulkImport"));
 const RestaurantsBulkExport = lazy(() => import("../pages/restaurant/RestaurantsBulkExport"));
+const WeeklyPayouts = lazy(() => import("../pages/transactions/WeeklyPayouts"));
+const ContactEnquiries = lazy(() => import("../pages/ContactEnquiries"));
 // Food Management
 const FoodsList = lazy(() => import("../pages/foods/FoodsList"));
 const FoodMenuManager = lazy(() => import("../pages/foods/FoodMenuManager"));
@@ -261,6 +263,7 @@ export default function AdminRouter() {
 
         {/* HELP & SUPPORT */}
         <Route path="contact-messages" element={<ContactMessages />} />
+        <Route path="contact-enquiries" element={<ContactEnquiries />} />
         <Route path="safety-emergency-reports" element={<SafetyEmergencyReports />} />
 
         {/* CUSTOMER MANAGEMENT */}
@@ -316,6 +319,7 @@ export default function AdminRouter() {
 
         {/* TRANSACTION MANAGEMENT */}
         <Route path="restaurant-withdraws" element={<RestaurantWithdraws />} />
+        <Route path="weekly-payouts" element={<WeeklyPayouts />} />
         <Route
           path="grocery-store-withdraws"
           element={<RestaurantWithdraws platformOverride="mogrocery" entityLabelOverride="Store" />}

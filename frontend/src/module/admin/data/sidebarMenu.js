@@ -182,6 +182,12 @@ export const sidebarMenuData = [
     items: [
       {
         type: "link",
+        label: "Contact Us Messages",
+        path: "/admin/contact-enquiries",
+        icon: "MessageSquare",
+      },
+      {
+        type: "link",
         label: "User Feedback",
         path: "/admin/contact-messages",
         icon: "Mail",
@@ -237,6 +243,12 @@ export const sidebarMenuData = [
         label: "Restaurant Withdraws",
         path: "/admin/restaurant-withdraws",
         icon: "CreditCard",
+      },
+      {
+        type: "link",
+        label: "Weekly Payouts",
+        path: "/admin/weekly-payouts",
+        icon: "Calendar",
       },
     ],
   },
@@ -494,6 +506,12 @@ export const mogroceryMenuData = [
     type: "section",
     label: "HELP & SUPPORT",
     items: [
+      {
+        type: "link",
+        label: "Contact Us Messages",
+        path: "/admin/contact-enquiries",
+        icon: "MessageSquare",
+      },
       {
         type: "link",
         label: "User Feedback",
