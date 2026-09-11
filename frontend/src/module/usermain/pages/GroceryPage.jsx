@@ -29,6 +29,7 @@ import { toast } from "sonner";
 import { useCart } from "../../user/context/CartContext";
 import { useLocation as useUserLocation } from "../../user/hooks/useLocation";
 import { useZone } from "../../user/hooks/useZone";
+import ProductSectionRows from "../../user/components/ProductSectionRows";
 import { useLocationSelector } from "../../user/components/UserLayout";
 import { useProfile } from "../../user/context/ProfileContext";
 import { CategoryFoodsContent } from "./CategoryFoodsPage";
@@ -3246,6 +3247,15 @@ const GroceryPage = () => {
               </motion.button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Admin-curated sections (Hot Deals, Special Offers, Best Deals,
+          Trending Products, Today's Offer) for the customer's zone
+          (requirements 4 and 7). Renders nothing until an admin adds items. */}
+      {!shouldShowShimmer && !shouldShowUnavailableMap && !hasActiveSearch && activeCategoryId === "all" && (
+        <div className="px-4 relative z-10 md:max-w-6xl md:mx-auto">
+          <ProductSectionRows platform="mogrocery" zoneId={effectiveZoneId} pick="all" />
         </div>
       )}
 
