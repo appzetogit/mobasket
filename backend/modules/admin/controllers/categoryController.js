@@ -1,6 +1,7 @@
 import AdminCategoryManagement from '../models/AdminCategoryManagement.js';
 import RestaurantCategory from '../../restaurant/models/RestaurantCategory.js';
 import Menu from '../../restaurant/models/Menu.js';
+import Restaurant from '../../restaurant/models/Restaurant.js';
 import Zone from '../models/Zone.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import { asyncHandler } from '../../../shared/middleware/asyncHandler.js';
@@ -170,7 +171,7 @@ export const getPublicCategoriesWithProducts = asyncHandler(async (req, res) => 
           _id: { $ifNull: ['$_items.category', ''] },
           products: {
             $push: {
-              id: '$_items._id',
+              id: { $ifNull: ['$_items.id', '$_items._id'] },
               name: '$_items.name',
               image: '$_items.image',
               price: '$_items.price',
@@ -193,8 +194,28 @@ export const getPublicCategoriesWithProducts = asyncHandler(async (req, res) => 
       productsByCategory.set(key, existing.concat(row.products || []));
     }
 
+    // One lookup for every restaurant referenced, so a card can link to the
+    // restaurant page the item actually lives on.
+    const restaurantIds = new Set();
+    for (const list of productsByCategory.values()) {
+      for (const product of list) {
+        if (product?.restaurantId) restaurantIds.add(String(product.restaurantId));
+      }
+    }
+    const restaurants = restaurantIds.size
+      ? await Restaurant.find({ _id: { $in: [...restaurantIds] } }).select('_id slug name').lean()
+      : [];
+    const restaurantById = new Map(restaurants.map((r) => [String(r._id), r]));
+
     const withProducts = categories.map((category) => {
-      const products = productsByCategory.get(normalise(category.name)) || [];
+      const products = (productsByCategory.get(normalise(category.name)) || []).map((product) => {
+        const restaurant = restaurantById.get(String(product.restaurantId));
+        return {
+          ...product,
+          restaurantSlug: restaurant?.slug || '',
+          restaurantName: restaurant?.name || '',
+        };
+      });
       return {
         ...category,
         products: products.slice(0, limit),
