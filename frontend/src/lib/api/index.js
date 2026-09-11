@@ -274,6 +274,14 @@ export const restaurantAPI = {
   getWeeklyPayments: (weeks = 8) =>
     apiClient.get(API_ENDPOINTS.RESTAURANT.FINANCE_WEEKLY, { params: { weeks } }),
 
+  // "Best of this restaurant" pins. The vendor endpoints are scoped to the
+  // signed-in restaurant server side; the public one serves the profile page.
+  getBestItems: () => apiClient.get(API_ENDPOINTS.RESTAURANT.BEST_ITEMS),
+  pinBestItem: (menuItemId) => apiClient.post(API_ENDPOINTS.RESTAURANT.BEST_ITEMS, { menuItemId }),
+  unpinBestItem: (id) => apiClient.delete(`${API_ENDPOINTS.RESTAURANT.BEST_ITEMS}/${id}`),
+  reorderBestItems: (ids) => apiClient.patch(`${API_ENDPOINTS.RESTAURANT.BEST_ITEMS}/reorder`, { ids }),
+  getPublicBestItems: (restaurantId) => apiClient.get(`/restaurant/${restaurantId}/best-items`),
+
   // Restaurant Authentication
   sendOTP: (phone = null, purpose = 'login', email = null) => {
     const payload = { purpose };

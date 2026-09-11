@@ -705,6 +705,7 @@ export default function ExploreMore() {
   ] : [
     { id: 1, label: "Outlet info", icon: Info, route: "/restaurant/outlet-info" },
     { id: 2, label: "Outlet timings", icon: Clock, route: "/restaurant/outlet-timings" },
+    { id: 3, label: "Best items", icon: Star, route: "/restaurant/best-items" },
     // { id: 3, label: "Switch outlet", icon: Building2, route: "/restaurant/switch-outlet" },
   ]
 
