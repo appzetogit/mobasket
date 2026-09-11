@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Menu from '../models/Menu.js';
+import Restaurant from '../models/Restaurant.js';
 import MofoodProductSectionItem from '../../heroBanner/models/MofoodProductSectionItem.js';
 import { successResponse, errorResponse } from '../../../shared/utils/response.js';
 import asyncHandler from '../../../shared/middleware/asyncHandler.js';
@@ -188,14 +189,27 @@ export const reorderBestItems = asyncHandler(async (req, res) => {
  */
 export const getPublicBestItems = asyncHandler(async (req, res) => {
   try {
-    const { restaurantId } = req.params;
-    if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
-      return errorResponse(res, 400, 'Invalid restaurant id');
+    // Pages hold a restaurant as its Mongo id, its human-readable restaurantId
+    // or its slug depending on how it was reached, so resolve any of them to
+    // the _id the pins are stored against rather than making callers guess.
+    const key = String(req.params.restaurantId || '').trim();
+    if (!key) {
+      return errorResponse(res, 400, 'Restaurant id is required');
+    }
+    const restaurant = await Restaurant.findOne(
+      mongoose.Types.ObjectId.isValid(key)
+        ? { _id: key }
+        : { $or: [{ restaurantId: key }, { slug: key.toLowerCase() }] },
+    )
+      .select('_id')
+      .lean();
+    if (!restaurant) {
+      return successResponse(res, 200, 'Best items retrieved successfully', { items: [] });
     }
 
     const now = new Date();
     const items = await MofoodProductSectionItem.find({
-      restaurantId,
+      restaurantId: restaurant._id,
       sectionName: BEST_ITEMS_SECTION,
       isActive: true,
       $and: [
