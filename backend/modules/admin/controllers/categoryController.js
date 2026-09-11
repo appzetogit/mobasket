@@ -140,6 +140,12 @@ export const getPublicCategories = asyncHandler(async (req, res) => {
 export const getPublicCategoriesWithProducts = asyncHandler(async (req, res) => {
   try {
     const limit = Math.max(1, Math.min(20, parseInt(req.query.limit, 10) || 6));
+    // Items from inactive, deleted or out-of-zone restaurants are dropped after
+    // grouping, so each category draws from a larger pool first and is trimmed
+    // to `limit` afterwards. Otherwise a category could come back short while
+    // eligible dishes existed.
+    const poolSize = Math.min(limit * 4, 80);
+    const zoneId = /^[a-f0-9]{24}$/i.test(String(req.query.zoneId || '')) ? String(req.query.zoneId) : null;
     const categories = await buildPublicCategoryList();
 
     // Menu items live in sections.items and sections.subsections.items, so both
@@ -180,7 +186,7 @@ export const getPublicCategoriesWithProducts = asyncHandler(async (req, res) => 
           },
         },
       },
-      { $project: { products: { $slice: ['$products', limit] } } },
+      { $project: { products: { $slice: ['$products', poolSize] } } },
     ]);
 
     // Normalise exactly as buildPublicCategoryList does, so "Pizza" and
@@ -202,20 +208,41 @@ export const getPublicCategoriesWithProducts = asyncHandler(async (req, res) => 
         if (product?.restaurantId) restaurantIds.add(String(product.restaurantId));
       }
     }
+    // Same eligibility as the home page's own restaurant listing: active,
+    // food rather than grocery, and in the customer's zone when one is given.
+    // Menus whose restaurant no longer exists are excluded by the lookup itself.
     const restaurants = restaurantIds.size
-      ? await Restaurant.find({ _id: { $in: [...restaurantIds] } }).select('_id slug name').lean()
+      ? await Restaurant.find({
+          _id: { $in: [...restaurantIds] },
+          isActive: true,
+          platform: { $ne: 'mogrocery' },
+        }).select('_id restaurantId slug name location').lean()
       : [];
-    const restaurantById = new Map(restaurants.map((r) => [String(r._id), r]));
+
+    let eligible = restaurants;
+    if (zoneId) {
+      const zones = await Zone.find({
+        isActive: true,
+        $or: [{ platform: 'mofood' }, { platform: { $exists: false } }],
+      }).lean();
+      eligible = restaurants.filter((restaurant) => {
+        const zone = resolveRestaurantZone(restaurant, zones);
+        return zone && String(zone._id) === zoneId;
+      });
+    }
+    const restaurantById = new Map(eligible.map((r) => [String(r._id), r]));
 
     const withProducts = categories.map((category) => {
-      const products = (productsByCategory.get(normalise(category.name)) || []).map((product) => {
-        const restaurant = restaurantById.get(String(product.restaurantId));
-        return {
-          ...product,
-          restaurantSlug: restaurant?.slug || '',
-          restaurantName: restaurant?.name || '',
-        };
-      });
+      const products = (productsByCategory.get(normalise(category.name)) || [])
+        .filter((product) => restaurantById.has(String(product.restaurantId)))
+        .map((product) => {
+          const restaurant = restaurantById.get(String(product.restaurantId));
+          return {
+            ...product,
+            restaurantSlug: restaurant?.slug || '',
+            restaurantName: restaurant?.name || '',
+          };
+        });
       return {
         ...category,
         products: products.slice(0, limit),
