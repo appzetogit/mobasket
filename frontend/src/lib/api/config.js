@@ -385,6 +385,8 @@ export const API_ENDPOINTS = {
     RESTAURANT_WEEKLY_PAYOUTS: '/admin/restaurants/:id/weekly-payouts',
     PRODUCT_SECTION_ITEMS: '/hero-banners/mofood-product-sections',
     PRODUCT_SECTION_ITEM_BY_ID: '/hero-banners/mofood-product-sections/:id',
+    RESTAURANT_ADDONS: '/admin/restaurants/:id/addons',
+    RESTAURANT_ADDON_BY_ID: '/admin/restaurants/:id/addons/:addonId',
     ANALYTICS: '/admin/analytics',
     DASHBOARD_STATS: '/admin/dashboard/stats',
     PUSH_NOTIFICATIONS: '/admin/push-notifications',

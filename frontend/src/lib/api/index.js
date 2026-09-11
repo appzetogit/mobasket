@@ -2190,6 +2190,20 @@ export const adminAPI = {
     return apiClient.patch(`${API_ENDPOINTS.ADMIN.PRODUCT_SECTION_ITEM_BY_ID.replace(':id', id)}/status`, {});
   },
 
+  // A restaurant's add-ons, every approval status included (requirement 10)
+  getRestaurantAddonsForAdmin: (restaurantId) => {
+    return apiClient.get(API_ENDPOINTS.ADMIN.RESTAURANT_ADDONS.replace(':id', restaurantId));
+  },
+  createRestaurantAddon: (restaurantId, data) => {
+    return apiClient.post(API_ENDPOINTS.ADMIN.RESTAURANT_ADDONS.replace(':id', restaurantId), data);
+  },
+  updateRestaurantAddon: (restaurantId, addonId, data) => {
+    return apiClient.put(
+      API_ENDPOINTS.ADMIN.RESTAURANT_ADDON_BY_ID.replace(':id', restaurantId).replace(':addonId', addonId),
+      data,
+    );
+  },
+
   getDeliveryWithdrawalRequests: (params = {}) => {
     return apiClient.get(API_ENDPOINTS.ADMIN.DELIVERY_WITHDRAWAL_REQUESTS, { params });
   },

@@ -273,15 +273,22 @@ export function CartProvider({ children }) {
     // side by side instead of merging into whichever was added first. itemId
     // stays the menu item's own id, which is what the order needs. Items
     // without sizes are keyed exactly as before.
+    // Add-ons are part of the line too: a burger with Extra Cheese and a plain
+    // burger are two different lines.
     const foodBaseItemId = String(item?.itemId || item?.id || item?._id || "").trim();
     const foodVariantKey =
       itemPlatform === "mofood" ? normalizeVariantKey(item?.variant?.id || item?.variant?.name || "") : "";
+    const foodAddonKey =
+      itemPlatform === "mofood" && Array.isArray(item?.addons) && item.addons.length > 0
+        ? `a-${item.addons.map((addon) => String(addon?.id || "")).filter(Boolean).sort().join("+")}`
+        : "";
+    const foodLineSuffix = [foodVariantKey, foodAddonKey].filter(Boolean).join("::");
 
     const normalizedItemId =
       itemPlatform === "mogrocery"
         ? getGroceryCartItemId({ ...item, productId: normalizedGroceryProductId })
-        : foodVariantKey && foodBaseItemId
-          ? `${foodBaseItemId}::${foodVariantKey}`
+        : foodLineSuffix && foodBaseItemId
+          ? `${foodBaseItemId}::${foodLineSuffix}`
           : foodBaseItemId;
 
     if (!normalizedItemId) {

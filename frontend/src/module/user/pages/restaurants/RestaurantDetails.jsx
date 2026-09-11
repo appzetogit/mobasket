@@ -83,7 +83,7 @@ import { useCart } from "../../context/CartContext";
 import { useProfile } from "../../context/ProfileContext";
 
 import AddToCartAnimation from "../../components/AddToCartAnimation";
-import VariantPickerSheet from "../../components/VariantPickerSheet";
+import ItemOptionsSheet from "../../components/ItemOptionsSheet";
 import { usableVariations } from "../../utils/variations";
 
 import { getCompanyNameAsync } from "@/lib/utils/businessSettings";
@@ -422,8 +422,8 @@ export default function RestaurantDetails() {
   const [highlightIndex, setHighlightIndex] = useState(0);
 
   const [quantities, setQuantities] = useState({});
-  // Item waiting for the customer to pick a size, when it has more than one.
-  const [variantPickerItem, setVariantPickerItem] = useState(null);
+  // Dish waiting for the customer to pick its size and/or add-ons.
+  const [optionsItem, setOptionsItem] = useState(null);
 
   const [showManageCollections, setShowManageCollections] = useState(false);
 
@@ -648,6 +648,56 @@ export default function RestaurantDetails() {
       cancelled = true;
     };
   }, [bestItemsRestaurantKey]);
+
+  // Add-ons the restaurant has linked to particular menu categories, offered
+  // when a dish from one of them is added (requirement 10). Add-ons for every
+  // dish stay in the cart's "Complete your meal" strip instead.
+  const [scopedAddons, setScopedAddons] = useState([]);
+  const addonsRestaurantId = String(restaurant?._id || "").trim();
+
+  useEffect(() => {
+    if (!addonsRestaurantId) return undefined;
+    let cancelled = false;
+    restaurantAPI
+      .getAddonsByRestaurantId(addonsRestaurantId)
+      .then((res) => {
+        const list = res?.data?.data?.addons || res?.data?.addons || [];
+        if (cancelled) return;
+        setScopedAddons(
+          (Array.isArray(list) ? list : []).filter(
+            (addon) => addon?.id && Array.isArray(addon.applicableCategoryIds) && addon.applicableCategoryIds.length > 0,
+          ),
+        );
+      })
+      // Optional: without add-ons, dishes are simply added as they are.
+      .catch(() => {
+        if (!cancelled) setScopedAddons([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [addonsRestaurantId]);
+
+  // Which menu category (section) each dish belongs to, from the real menu
+  // sections only; the injected Recommended and Best-of sections reuse dishes.
+  const sectionIdByItemId = useMemo(() => {
+    const map = new Map();
+    for (const section of Array.isArray(restaurant?.menuSections) ? restaurant.menuSections : []) {
+      if (!section?.id || section.isPersonalizedRecommended || section.isBestOfRestaurant) continue;
+      for (const dish of section.items || []) map.set(String(dish?.id || dish?._id || ""), String(section.id));
+      for (const sub of section.subsections || []) {
+        for (const dish of sub?.items || []) map.set(String(dish?.id || dish?._id || ""), String(section.id));
+      }
+    }
+    return map;
+  }, [restaurant?.menuSections]);
+
+  const scopedAddonsFor = (dish) => {
+    if (!dish || scopedAddons.length === 0) return [];
+    const sectionId = sectionIdByItemId.get(String(dish.id || dish._id || ""));
+    if (!sectionId) return [];
+    return scopedAddons.filter((addon) => addon.applicableCategoryIds.map(String).includes(sectionId));
+  };
 
   // menuSections is rebuilt from a freshly fetched menu by a refresh and by the
   // "Recommended for you" injection, and both drop this section. Re-apply it when
@@ -2642,11 +2692,11 @@ export default function RestaurantDetails() {
 
   // Helper function to update item quantity in both local state and cart
 
-  // Adds one of the size the customer picked. Each size is its own cart line
-  // carrying the chosen option, so checkout can send it and the server prices
-  // it from the menu.
-  const addSizedItemToCart = (item, variant) => {
-    setVariantPickerItem(null);
+  // Adds one of the dish as the customer configured it. Each combination of
+  // size and add-ons is its own cart line carrying those choices, so checkout
+  // can send them and the server prices them from the menu.
+  const addConfiguredItemToCart = (item, { variant = null, addons = [] } = {}) => {
+    setOptionsItem(null);
 
     const baseItemId = String(item?.id || item?._id || "");
     const validRestaurantId = restaurant?._id || restaurant?.restaurantId || restaurant?.id;
@@ -2655,24 +2705,29 @@ export default function RestaurantDetails() {
       return;
     }
 
-    const sizeName = String(variant?.name || "").trim();
-    const sizePrice = Number(variant?.price || 0);
+    const sizeName = variant ? String(variant.name || "").trim() : "";
+    const basePrice = variant ? Number(variant.price || 0) : Number(item?.price || 0);
+    const linePrice = basePrice + addons.reduce((sum, addon) => sum + Number(addon.price || 0), 0);
+    const lineName = `${item.name}${sizeName ? ` (${sizeName})` : ""}${
+      addons.length > 0 ? ` + ${addons.map((addon) => addon.name).join(", ")}` : ""
+    }`;
 
     try {
       addToCart({
         id: baseItemId,
         itemId: baseItemId,
-        name: `${item.name} (${sizeName})`,
-        price: sizePrice,
+        name: lineName,
+        price: linePrice,
         image: item.image,
         restaurant: restaurant.name,
         restaurantId: validRestaurantId,
         platform: "mofood",
         restaurantPlatform: "mofood",
         description: item.description,
-        originalPrice: sizePrice,
+        originalPrice: linePrice,
         isVeg: getItemDietType(item) === "veg",
-        variant: { id: String(variant?.id || ""), name: sizeName, price: sizePrice },
+        ...(variant ? { variant: { id: String(variant.id || ""), name: sizeName, price: basePrice } } : {}),
+        ...(addons.length > 0 ? { addons } : {}),
       });
     } catch (error) {
       const normalizedError = String(error?.message || "").toLowerCase();
@@ -2720,13 +2775,14 @@ export default function RestaurantDetails() {
 
 
 
-    // Items with sizes (Half / Full) go in through the size picker, so the
-    // customer always chooses one before it reaches the cart.
-    if (usableVariations(item).length > 0) {
+    // Dishes with sizes (Half / Full) or with add-ons linked to their category
+    // go in through the options sheet, so the customer chooses before the dish
+    // reaches the cart.
+    if (usableVariations(item).length > 0 || scopedAddonsFor(item).length > 0) {
       const baseItemId = String(item.id || item._id || "");
       const currentTotal = quantities[baseItemId] || 0;
       if (newQuantity > currentTotal) {
-        setVariantPickerItem(item);
+        setOptionsItem(item);
         return;
       }
       // Removing: take one off the size added most recently.
@@ -8678,10 +8734,11 @@ export default function RestaurantDetails() {
 
       )}
 
-      <VariantPickerSheet
-        item={variantPickerItem}
-        onClose={() => setVariantPickerItem(null)}
-        onConfirm={(variant) => addSizedItemToCart(variantPickerItem, variant)}
+      <ItemOptionsSheet
+        item={optionsItem}
+        addons={scopedAddonsFor(optionsItem)}
+        onClose={() => setOptionsItem(null)}
+        onConfirm={(choice) => addConfiguredItemToCart(optionsItem, choice)}
       />
 
     </AnimatedPage>

@@ -1,353 +1,478 @@
-import { useState, useMemo, useEffect } from "react"
-import { Search, Trash2, Loader2 } from "lucide-react"
-import { adminAPI, restaurantAPI } from "@/lib/api"
-import { buildImageFallback } from "@/lib/utils/imageFallback"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { Check, Loader2, Pencil, Plus, Search, Store, Trash2, X } from "lucide-react"
 import { toast } from "sonner"
+import { adminAPI } from "@/lib/api"
+
+/*
+ * Add-ons, admin side (requirement 10).
+ *
+ * Pick a restaurant, then create, edit, approve or remove its add-ons and say
+ * which dishes they go with. An add-on linked to menu categories (e.g. Extra
+ * Cheese -> Burgers) is offered when a customer adds a dish from one of them;
+ * one that applies to every dish appears in the cart's "Complete your meal"
+ * strip. Vendors can add their own add-ons too; theirs wait here for approval.
+ */
+
+const STATUS_STYLES = {
+  approved: "bg-green-50 text-green-700 border-green-200",
+  pending: "bg-amber-50 text-amber-700 border-amber-200",
+  rejected: "bg-red-50 text-red-700 border-red-200",
+}
+
+const STATUS_LABELS = { approved: "Approved", pending: "Pending approval", rejected: "Rejected" }
+
+const money = (value) =>
+  `₹${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
+const EMPTY_FORM = { name: "", price: "", description: "", scope: "all", categoryIds: [] }
 
 export default function AddonsList() {
+  const [restaurants, setRestaurants] = useState([])
+  const [listLoading, setListLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
+  const [appliedSearch, setAppliedSearch] = useState("")
+  const [selected, setSelected] = useState(null)
+
   const [addons, setAddons] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [deleting, setDeleting] = useState(false)
+  const [categories, setCategories] = useState([])
+  const [hasMenu, setHasMenu] = useState(true)
+  const [loading, setLoading] = useState(false)
+  const [busyId, setBusyId] = useState(null)
 
-  // Fetch all addons from all restaurants
+  const [editingId, setEditingId] = useState(null) // "new" or an add-on id
+  const [form, setForm] = useState(EMPTY_FORM)
+  const [saving, setSaving] = useState(false)
+  const requestRef = useRef(0)
+
   useEffect(() => {
-    const fetchAllAddons = async () => {
-      try {
-        setLoading(true)
-        
-        // First, fetch all restaurants
-        const restaurantsResponse = await adminAPI.getRestaurants({ limit: 1000 })
-        const restaurants = restaurantsResponse?.data?.data?.restaurants || 
-                          restaurantsResponse?.data?.restaurants || 
-                          []
-        
-        if (restaurants.length === 0) {
-          setAddons([])
-          setLoading(false)
-          return
-        }
+    const t = setTimeout(() => setAppliedSearch(searchQuery.trim()), 400)
+    return () => clearTimeout(t)
+  }, [searchQuery])
 
-        // Fetch addons for each restaurant
-        const allAddons = []
-        
-        for (const restaurant of restaurants) {
-          try {
-            const restaurantId = restaurant._id || restaurant.id
-            const addonsResponse = await restaurantAPI.getAddonsByRestaurantId(restaurantId, {
-              includeUnapproved: "true",
-            })
-            const restaurantAddons = addonsResponse?.data?.data?.addons || 
-                                    addonsResponse?.data?.addons || 
-                                    []
-            
-            // Map addons with restaurant information
-            restaurantAddons.forEach((addon) => {
-              // CRITICAL: Use the exact addon.id from the menu - this is the actual ID stored in database
-              // Format: "addon-1772450132864-i0luchkog"
-              const menuAddonId = addon.id // This MUST be the exact ID from menu
-              
-              if (!menuAddonId) {
-                console.warn(`Addon missing ID:`, addon)
-                return // Skip addons without proper ID
-              }
-              
-              // Use menuAddonId as the primary ID for React key and lookup
-              allAddons.push({
-                id: menuAddonId, // Use exact menu ID as primary identifier
-                menuAddonId: menuAddonId, // Store separately for clarity
-                _id: addon._id,
-                name: addon.name || "Unnamed Addon",
-                image: addon.image || addon.images?.[0] || buildImageFallback(40, "ADD"),
-                price: addon.price || 0,
-                description: addon.description || "",
-                isAvailable: addon.isAvailable !== false,
-                approvalStatus: addon.approvalStatus || 'pending',
-                restaurantId: restaurantId,
-                restaurantName: restaurant.name || "Unknown Restaurant",
-                originalAddon: addon // Keep original addon data
-              })
-            })
-          } catch (error) {
-            // Silently skip restaurants that don't have addons or have errors
-            console.warn(`Failed to fetch addons for restaurant ${restaurant._id || restaurant.id}:`, error.message)
-          }
-        }
-        
-        setAddons(allAddons)
-      } catch (error) {
-        console.error("Error fetching addons:", error)
-        toast.error("Failed to load addons from restaurants")
-        setAddons([])
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchAllAddons()
-  }, [])
-
-  // Format ID to ADDON format (e.g., ADDON606927)
-  const formatAddonId = (id) => {
-    if (!id) return "ADDON000000"
-    
-    const idString = String(id)
-    // Extract last 6 digits from the ID
-    // Handle formats like "addon-1768285606927-r7kwd45t8" or "1768285606927-r7kwd45t8"
-    const parts = idString.split(/[-.]/)
-    let lastDigits = ""
-    
-    // Get the last part and extract digits
-    if (parts.length > 0) {
-      const lastPart = parts[parts.length - 1]
-      // Extract only digits from the last part
-      const digits = lastPart.match(/\d+/g)
-      if (digits && digits.length > 0) {
-        // Get last 6 digits from all digits found
-        const allDigits = digits.join("")
-        lastDigits = allDigits.slice(-6).padStart(6, "0")
-      } else {
-        // If no digits in last part, look for digits in all parts
-        const allParts = parts.join("")
-        const allDigits = allParts.match(/\d+/g)
-        if (allDigits && allDigits.length > 0) {
-          const combinedDigits = allDigits.join("")
-          lastDigits = combinedDigits.slice(-6).padStart(6, "0")
-        }
-      }
-    }
-    
-    // If no digits found, use a hash of the ID
-    if (!lastDigits) {
-      const hash = idString.split("").reduce((acc, char) => {
-        return ((acc << 5) - acc) + char.charCodeAt(0) | 0
-      }, 0)
-      lastDigits = Math.abs(hash).toString().slice(-6).padStart(6, "0")
-    }
-    
-    return `ADDON${lastDigits}`
-  }
-
-  const filteredAddons = useMemo(() => {
-    let result = [...addons]
-    
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim()
-      result = result.filter(addon =>
-        addon.name.toLowerCase().includes(query) ||
-        addon.id.toString().includes(query) ||
-        addon.restaurantName?.toLowerCase().includes(query)
-      )
-    }
-
-    return result
-  }, [addons, searchQuery])
-
-  const handleDelete = async (id) => {
-    const addon = addons.find(a => a.id === id)
-    if (!addon) {
-      toast.error("Addon not found")
-      return
-    }
-
-    if (!window.confirm(`Are you sure you want to delete "${addon.name}"? This action cannot be undone.`)) {
-      return
-    }
-
-    try {
-      setDeleting(true)
-      
-      // Use admin API to delete the addon
-      // CRITICAL: Use the exact menu addon ID - this MUST match what's stored in the database
-      // The ID format in menu is like "addon-1772450132864-i0luchkog"
-      // Since we now use menuAddonId as the primary id, we can use addon.id directly
-      const addonId = addon.menuAddonId || addon.id
-      const restaurantId = addon.restaurantId
-      
-      if (!restaurantId) {
-        throw new Error("Missing restaurant ID")
-      }
-      
-      if (!addonId) {
-        console.error("Addon data:", addon)
-        throw new Error(`Missing addon ID. Addon: ${addon.name}, MenuAddonId: ${addon.menuAddonId}, ID: ${addon.id}`)
-      }
-      
-      console.log("Deleting addon:", { 
-        restaurantId, 
-        addonId, 
-        addonName: addon.name,
-        menuAddonId: addon.menuAddonId,
-        addonIdUsed: addon.id,
-        originalAddonId: addon.originalAddon?.id
+  useEffect(() => {
+    let cancelled = false
+    setListLoading(true)
+    adminAPI
+      .getRestaurants({ page: 1, limit: 50, search: appliedSearch || undefined })
+      .then((res) => {
+        if (!cancelled) setRestaurants(res?.data?.data?.restaurants || [])
       })
-      
-      // Call DELETE API endpoint - this should be DELETE /api/admin/restaurants/:restaurantId/addons/:addonId
-      const response = await adminAPI.deleteRestaurantAddon(restaurantId, addonId)
-      
-      console.log("Delete response:", response)
-      
-      if (!response || !response.data || !response.data.success) {
-        throw new Error(response?.data?.message || "Failed to delete addon")
-      }
+      .catch(() => {
+        if (!cancelled) setRestaurants([])
+      })
+      .finally(() => {
+        if (!cancelled) setListLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [appliedSearch])
 
-      // Remove from local state
-      setAddons(addons.filter(a => a.id !== id))
-      toast.success("Addon deleted successfully")
-    } catch (error) {
-      console.error("Error deleting addon:", error)
-      const errorMessage = error?.response?.data?.message || error?.message || "Failed to delete addon"
-      toast.error(errorMessage)
+  const loadAddons = async () => {
+    if (!selected?._id) return
+    const requestId = ++requestRef.current
+    setLoading(true)
+    try {
+      const res = await adminAPI.getRestaurantAddonsForAdmin(selected._id)
+      if (requestId !== requestRef.current) return
+      const data = res?.data?.data || {}
+      setAddons(Array.isArray(data.addons) ? data.addons : [])
+      setCategories(Array.isArray(data.categories) ? data.categories : [])
+      setHasMenu(data.hasMenu !== false)
+    } catch (err) {
+      if (requestId !== requestRef.current) return
+      setAddons([])
+      setCategories([])
+      toast.error(err?.response?.data?.message || "Could not load this restaurant's add-ons")
     } finally {
-      setDeleting(false)
+      if (requestId === requestRef.current) setLoading(false)
     }
   }
+
+  useEffect(() => {
+    loadAddons()
+  }, [selected?._id])
+
+  const categoryName = useMemo(() => new Map(categories.map((c) => [String(c.id), c.name])), [categories])
+
+  const scopeLabel = (addon) => {
+    const ids = Array.isArray(addon?.applicableCategoryIds) ? addon.applicableCategoryIds : []
+    if (ids.length === 0) return "All dishes (shown in the cart)"
+    return ids.map((id) => categoryName.get(String(id)) || "Removed category").join(", ")
+  }
+
+  const pickRestaurant = (restaurant) => {
+    setSelected({ _id: restaurant._id, name: restaurant.name })
+    setEditingId(null)
+    setForm(EMPTY_FORM)
+  }
+
+  const startNew = () => {
+    setEditingId("new")
+    setForm(EMPTY_FORM)
+  }
+
+  const startEdit = (addon) => {
+    const ids = Array.isArray(addon.applicableCategoryIds) ? addon.applicableCategoryIds.map(String) : []
+    setEditingId(addon.id)
+    setForm({
+      name: addon.name || "",
+      price: String(addon.price ?? ""),
+      description: addon.description || "",
+      scope: ids.length > 0 ? "some" : "all",
+      categoryIds: ids,
+    })
+  }
+
+  const toggleCategory = (id) =>
+    setForm((f) => ({
+      ...f,
+      categoryIds: f.categoryIds.includes(id) ? f.categoryIds.filter((c) => c !== id) : [...f.categoryIds, id],
+    }))
+
+  const save = async () => {
+    const name = form.name.trim()
+    const price = Number(form.price)
+    if (!name) return toast.error("Give the add-on a name")
+    if (form.price === "" || !Number.isFinite(price) || price < 0) return toast.error("Enter a price of 0 or more")
+    if (form.scope === "some" && form.categoryIds.length === 0) {
+      return toast.error("Pick at least one category, or choose All dishes")
+    }
+    const payload = {
+      name,
+      price,
+      description: form.description.trim(),
+      applicableCategoryIds: form.scope === "some" ? form.categoryIds : [],
+    }
+    setSaving(true)
+    try {
+      if (editingId === "new") {
+        await adminAPI.createRestaurantAddon(selected._id, payload)
+        toast.success(`${name} added`)
+      } else {
+        await adminAPI.updateRestaurantAddon(selected._id, editingId, payload)
+        toast.success(`${name} updated`)
+      }
+      setEditingId(null)
+      setForm(EMPTY_FORM)
+      await loadAddons()
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Could not save the add-on")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const patch = async (addon, data, successText) => {
+    setBusyId(addon.id)
+    try {
+      const res = await adminAPI.updateRestaurantAddon(selected._id, addon.id, data)
+      const saved = res?.data?.data?.addon
+      setAddons((list) => list.map((a) => (a.id === addon.id ? { ...a, ...(saved || data) } : a)))
+      toast.success(successText)
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Could not update the add-on")
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const remove = async (addon) => {
+    if (!window.confirm(`Delete ${addon.name}? Customers will no longer be able to order it.`)) return
+    setBusyId(addon.id)
+    try {
+      await adminAPI.deleteRestaurantAddon(selected._id, addon.id)
+      setAddons((list) => list.filter((a) => a.id !== addon.id))
+      toast.success(`${addon.name} deleted`)
+    } catch (err) {
+      toast.error(err?.response?.data?.message || "Could not delete the add-on")
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const inputClass =
+    "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-400"
+
+  const pendingCount = addons.filter((a) => a.approvalStatus === "pending").length
 
   return (
     <div className="p-4 lg:p-6 bg-slate-50 min-h-screen">
-      {/* Header Section */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center">
-            <div className="grid grid-cols-2 gap-0.5">
-              <div className="w-2 h-2 bg-white rounded-sm"></div>
-              <div className="w-2 h-2 bg-white rounded-sm"></div>
-              <div className="w-2 h-2 bg-white rounded-sm"></div>
-              <div className="w-2 h-2 bg-white rounded-sm"></div>
-            </div>
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900">Addon</h1>
+      <div className="max-w-7xl mx-auto">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
+          <h1 className="text-2xl font-bold text-slate-900">Add-ons</h1>
+          <p className="text-sm text-slate-600 mt-1">
+            Extras customers can add to a dish, like Extra Cheese on a burger. Link an add-on to menu categories to
+            offer it when those dishes are added; add-ons for all dishes appear in the cart.
+          </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <h2 className="text-lg font-semibold text-slate-900">Addon List</h2>
-            <span className="px-3 py-1 rounded-full text-sm font-semibold bg-slate-100 text-slate-700">
-              {filteredAddons.length}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="relative flex-1 sm:flex-initial min-w-[200px]">
+        <div className="grid gap-6 lg:grid-cols-[300px_minmax(0,1fr)]">
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 h-fit">
+            <div className="relative mb-3">
               <input
                 type="text"
-                placeholder="Ex : Addons"
+                placeholder="Search restaurants"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-2.5 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
+                className={`${inputClass} pl-9`}
               />
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             </div>
+            {listLoading ? (
+              <div className="py-10 text-center">
+                <Loader2 className="w-6 h-6 animate-spin text-emerald-600 mx-auto" />
+              </div>
+            ) : restaurants.length === 0 ? (
+              <p className="py-10 text-center text-sm text-slate-500">No restaurants match that search.</p>
+            ) : (
+              <ul className="max-h-[60vh] overflow-y-auto -mx-1">
+                {restaurants.map((r) => (
+                  <li key={r._id}>
+                    <button
+                      type="button"
+                      onClick={() => pickRestaurant(r)}
+                      className={`w-full rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors ${
+                        selected?._id === r._id ? "bg-slate-900 text-white" : "hover:bg-slate-100 text-slate-800"
+                      }`}
+                    >
+                      <span className="block truncate">{r.name}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
-        </div>
-      </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-slate-50 border-b border-slate-200">
-              <tr>
-                <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                  SL
-                </th>
-                <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                  Image
-                </th>
-                <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                  Name
-                </th>
-                <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                  Price
-                </th>
-                <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-700 uppercase tracking-wider">
-                  Action
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-slate-100">
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-20 text-center">
-                    <div className="flex flex-col items-center justify-center">
-                      <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-2" />
-                      <p className="text-sm text-slate-500">Loading addons from restaurants...</p>
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 min-w-0">
+            {!selected ? (
+              <div className="py-20 flex flex-col items-center justify-center text-center">
+                <Store className="w-14 h-14 text-slate-300 mb-4" />
+                <p className="text-lg font-semibold text-slate-700">Pick a restaurant</p>
+                <p className="text-sm text-slate-500">Its add-ons will show here.</p>
+              </div>
+            ) : (
+              <>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <h2 className="truncate text-xl font-bold text-slate-900">{selected.name}</h2>
+                    <p className="text-xs text-slate-500">
+                      {addons.length} add-on{addons.length === 1 ? "" : "s"}
+                      {pendingCount > 0 ? ` · ${pendingCount} waiting for approval` : ""}
+                    </p>
+                  </div>
+                  {hasMenu && editingId !== "new" && (
+                    <button
+                      type="button"
+                      onClick={startNew}
+                      className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                    >
+                      <Plus className="w-4 h-4" /> New add-on
+                    </button>
+                  )}
+                </div>
+
+                {!hasMenu && (
+                  <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                    This restaurant has no menu yet, so it can&apos;t have add-ons.
+                  </p>
+                )}
+
+                {editingId && (
+                  <div className="mb-5 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-sm font-bold text-slate-900">{editingId === "new" ? "New add-on" : "Edit add-on"}</p>
+                    <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px]">
+                      <input
+                        aria-label="Name"
+                        placeholder="Name, e.g. Extra Cheese"
+                        value={form.name}
+                        onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                        className={inputClass}
+                      />
+                      <input
+                        aria-label="Price in rupees"
+                        type="number"
+                        min={0}
+                        step="0.5"
+                        placeholder="Price (₹)"
+                        value={form.price}
+                        onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                        className={inputClass}
+                      />
                     </div>
-                  </td>
-                </tr>
-              ) : filteredAddons.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-6 py-20 text-center">
-                    <div className="flex flex-col items-center justify-center">
-                      <p className="text-lg font-semibold text-slate-700 mb-1">No Data Found</p>
-                      <p className="text-sm text-slate-500">No addons match your search</p>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredAddons.map((addon, index) => (
-                  <tr
-                    key={addon.id}
-                    className="hover:bg-slate-50 transition-colors"
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-medium text-slate-700">{index + 1}</span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 flex items-center justify-center">
-                        <img
-                          src={addon.image}
-                          alt={addon.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.target.src = buildImageFallback(40, "ADD")
-                          }}
-                        />
+                    <input
+                      aria-label="Description"
+                      placeholder="Description (optional)"
+                      value={form.description}
+                      onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                      className={inputClass}
+                    />
+
+                    <fieldset>
+                      <legend className="mb-1.5 text-xs font-semibold text-slate-700">Goes with</legend>
+                      <div className="flex flex-wrap gap-4 text-sm">
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name="addon-scope"
+                            checked={form.scope === "all"}
+                            onChange={() => setForm((f) => ({ ...f, scope: "all" }))}
+                          />
+                          All dishes (offered in the cart)
+                        </label>
+                        <label className="flex items-center gap-2">
+                          <input
+                            type="radio"
+                            name="addon-scope"
+                            checked={form.scope === "some"}
+                            onChange={() => setForm((f) => ({ ...f, scope: "some" }))}
+                          />
+                          Dishes in chosen categories (offered when the dish is added)
+                        </label>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex flex-col">
-                        <span className="text-sm font-medium text-slate-900">{addon.name}</span>
-                        <span className="text-xs text-slate-500">ID #{formatAddonId(addon.id)}</span>
-                        {addon.restaurantName && (
-                          <span className="text-xs text-slate-400 mt-0.5">
-                            {addon.restaurantName}
-                          </span>
-                        )}
-                        {addon.description && (
-                          <span className="text-xs text-slate-500 mt-0.5">
-                            {addon.description}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="text-sm font-medium text-slate-900">
-                        ₹{addon.price.toFixed(2)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-center">
+                      {form.scope === "some" && (
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {categories.length === 0 ? (
+                            <p className="text-xs text-slate-500">This menu has no categories yet.</p>
+                          ) : (
+                            categories.map((c) => {
+                              const on = form.categoryIds.includes(String(c.id))
+                              return (
+                                <button
+                                  key={c.id}
+                                  type="button"
+                                  aria-pressed={on}
+                                  onClick={() => toggleCategory(String(c.id))}
+                                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                                    on ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700"
+                                  }`}
+                                >
+                                  {c.name}
+                                </button>
+                              )
+                            })
+                          )}
+                        </div>
+                      )}
+                    </fieldset>
+
+                    <div className="flex justify-end gap-2">
                       <button
-                        onClick={() => handleDelete(addon.id)}
-                        disabled={deleting}
-                        className="p-1.5 rounded text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Delete"
+                        type="button"
+                        onClick={() => {
+                          setEditingId(null)
+                          setForm(EMPTY_FORM)
+                        }}
+                        className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"
                       >
-                        {deleting ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-4 h-4" />
-                        )}
+                        Cancel
                       </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                      <button
+                        type="button"
+                        onClick={save}
+                        disabled={saving}
+                        className="flex items-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
+                      >
+                        {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                        {editingId === "new" ? "Add" : "Save"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {loading ? (
+                  <div className="py-16 text-center">
+                    <Loader2 className="w-7 h-7 animate-spin text-emerald-600 mx-auto" />
+                  </div>
+                ) : addons.length === 0 ? (
+                  <p className="py-16 text-center text-sm text-slate-500">No add-ons yet.</p>
+                ) : (
+                  <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+                    {addons.map((addon) => {
+                      const status = addon.approvalStatus || "pending"
+                      const busy = busyId === addon.id
+                      const available = addon.isAvailable !== false
+                      return (
+                        <li key={addon.id} className="flex flex-wrap items-center gap-3 px-4 py-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-semibold text-slate-900">{addon.name}</span>
+                              <span className="text-sm text-slate-700">{money(addon.price)}</span>
+                              <span
+                                className={`rounded-full border px-2 py-0.5 text-[11px] font-bold ${
+                                  STATUS_STYLES[status] || STATUS_STYLES.pending
+                                }`}
+                              >
+                                {STATUS_LABELS[status] || status}
+                              </span>
+                              {!available && (
+                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-600">
+                                  Unavailable
+                                </span>
+                              )}
+                            </div>
+                            <p className="mt-0.5 truncate text-xs text-slate-500">Goes with: {scopeLabel(addon)}</p>
+                          </div>
+                          <div className="flex shrink-0 items-center gap-1">
+                            {status === "pending" && (
+                              <>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => patch(addon, { approvalStatus: "approved" }, `${addon.name} approved`)}
+                                  className="flex items-center gap-1 rounded-lg border border-green-300 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50 disabled:opacity-50"
+                                >
+                                  <Check className="w-3.5 h-3.5" /> Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={busy}
+                                  onClick={() => patch(addon, { approvalStatus: "rejected" }, `${addon.name} rejected`)}
+                                  className="flex items-center gap-1 rounded-lg border border-red-300 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+                                >
+                                  <X className="w-3.5 h-3.5" /> Reject
+                                </button>
+                              </>
+                            )}
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() =>
+                                patch(addon, { isAvailable: !available }, available ? `${addon.name} hidden` : `${addon.name} available`)
+                              }
+                              className="rounded-lg border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+                            >
+                              {available ? "Mark unavailable" : "Mark available"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => startEdit(addon)}
+                              aria-label={`Edit ${addon.name}`}
+                              className="rounded-lg p-1.5 text-slate-600 hover:bg-slate-100 disabled:opacity-50"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              onClick={() => remove(addon)}
+                              aria-label={`Delete ${addon.name}`}
+                              className="rounded-lg p-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                            >
+                              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                            </button>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </div>
     </div>
   )
 }
-

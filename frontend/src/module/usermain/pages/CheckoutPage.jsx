@@ -1244,6 +1244,10 @@ export default function CheckoutPage() {
               : { name: String(item.variant.name) },
           }
         : {}),
+      // Add-ons chosen for this dish; the server prices them from the menu.
+      ...(Array.isArray(item.addons) && item.addons.length > 0
+        ? { addons: item.addons.map((addon) => ({ id: String(addon.id) })) }
+        : {}),
     }));
 
   const buildCartSignature = (items) =>
