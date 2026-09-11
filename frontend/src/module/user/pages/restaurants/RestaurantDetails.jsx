@@ -490,6 +490,17 @@ export default function RestaurantDetails() {
   const [availabilityRefreshKey, setAvailabilityRefreshKey] = useState(0);
 
   const fetchedRestaurantRef = useRef(false); // Track if restaurant has been fetched for current slug
+  // The restaurant the page is showing, and whether it is still mounted. A
+  // restaurant fetch goes stale only when one of these changes; see the fetch
+  // effect below.
+  const activeRestaurantSlugRef = useRef(null);
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const [orderEditSession, setOrderEditSession] = useState(() => getOrderEditSession());
 
@@ -1068,7 +1079,20 @@ export default function RestaurantDetails() {
   // Fetch restaurant data from API
 
   useEffect(() => {
-    const cancelledRef = { current: false };
+    // Stale only once the page has moved to another restaurant or unmounted.
+    // This used to be a flag the cleanup set on every re-run. Storing the
+    // fetched restaurant changes restaurant?.slug, a dependency, so the effect
+    // re-ran and cancelled its own menu request mid-flight; the re-run then
+    // skipped fetching because the restaurant was already loaded, and the menu
+    // that arrived was dropped. Customers saw "No items available" until the
+    // 10s background refresh, or indefinitely in a background tab.
+    const requestedSlug = slug;
+    activeRestaurantSlugRef.current = slug;
+    const cancelledRef = {
+      get current() {
+        return !isMountedRef.current || activeRestaurantSlugRef.current !== requestedSlug;
+      },
+    };
 
     const fetchRestaurant = async () => {
 
@@ -2042,10 +2066,6 @@ export default function RestaurantDetails() {
 
 
     fetchRestaurant();
-
-    return () => {
-      cancelledRef.current = true;
-    };
 
   }, [slug, zoneId, loadingZone, restaurant?.slug, _hydrateRestaurantDeferredData]);
 
