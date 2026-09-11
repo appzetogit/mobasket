@@ -77,6 +77,7 @@ import exploreOffers from "@/assets/explore more icons/offers.png";
 import exploreGourmet from "@/assets/explore more icons/gourmet.png";
 import exploreTop10 from "@/assets/explore more icons/top 10.png";
 import exploreCollection from "@/assets/explore more icons/collection.png";
+import FoodCategorySections from "../components/FoodCategorySections";
 
 // Banner images for hero carousel - will be fetched from API
 const HERO_BANNER_SYNC_STORAGE_KEY = "hero_banners_updated_at";
@@ -3346,6 +3347,10 @@ export default function Home() {
             )}
           </div>
         </motion.section>
+
+        {/* A few dishes under each food category (requirement 12). Self-contained:
+            fetches its own data and renders nothing if that fails. */}
+        <FoodCategorySections zoneId={effectiveHomeZoneId} />
 
         {/* Top Brands / Best Restaurants - Horizontal Scroll */}
         <motion.section
