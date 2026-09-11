@@ -64,6 +64,54 @@ export const hasUnknownVariantSelection = (variations, selection) => {
 };
 
 /**
+ * The add-ons a customer picked for one line (e.g. Extra Cheese on a burger).
+ *
+ * Accepted only when the id is an add-on on this restaurant's menu that can be
+ * ordered (the map holds only those) and that applies to the item's menu
+ * category; an empty category list means it applies to every dish. Anything
+ * else is reported so the order fails, rather than silently dropping or
+ * mispricing something the customer chose.
+ */
+export const resolveLineAddons = (selection, menuItem, menuItemsMap) => {
+  const wanted = Array.from(
+    new Set(
+      (Array.isArray(selection) ? selection : [])
+        .map((entry) => String((entry && typeof entry === 'object' ? entry.id : entry) ?? '').trim())
+        .filter(Boolean),
+    ),
+  );
+
+  const addons = [];
+  const unknown = [];
+  for (const id of wanted) {
+    const addon = menuItemsMap.get(id);
+    if (!addon || addon.isAddon !== true) {
+      unknown.push(id);
+      continue;
+    }
+    const scope = Array.isArray(addon.applicableCategoryIds)
+      ? addon.applicableCategoryIds.filter(Boolean).map(String)
+      : [];
+    if (scope.length > 0 && !scope.includes(String(menuItem?.sectionId || ''))) {
+      unknown.push(id);
+      continue;
+    }
+    addons.push({ id, name: String(addon.name || '').trim(), price: Number(addon.price || 0) });
+  }
+  return { addons, unknown };
+};
+
+/**
+ * The name an order line is stored under. Size and add-ons are part of it so
+ * every screen that shows an order (kitchen, rider, customer, invoices) shows
+ * what to make without having to know about variants or add-ons.
+ */
+const buildLineName = (name, variant, addons) =>
+  `${name}${variant?.name ? ` (${variant.name})` : ''}${
+    addons.length > 0 ? ` + ${addons.map((addon) => addon.name).join(', ')}` : ''
+  }`;
+
+/**
  * Rebuild order lines using menu prices, ignoring whatever the request claimed.
  *
  * `menuItemsMap` maps itemId to the menu's own record, including its variations.
@@ -74,6 +122,7 @@ export const repriceItems = (items, menuItemsMap) => {
   const priced = [];
   const unknownItemIds = [];
   const unknownVariants = [];
+  const unknownAddons = [];
 
   for (const item of Array.isArray(items) ? items : []) {
     const itemId = String(item?.itemId ?? '').trim();
@@ -90,25 +139,34 @@ export const repriceItems = (items, menuItemsMap) => {
       continue;
     }
 
+    const { addons, unknown } = resolveLineAddons(item?.addons, menuItem, menuItemsMap);
+    if (unknown.length > 0) {
+      unknownAddons.push(`${menuItem.name || itemId}`);
+      continue;
+    }
+
     const { price, variant } = resolveLinePrice({
       menuPrice: menuItem.price,
       variations: menuItem.variations,
       selection,
     });
+    const addonTotal = addons.reduce((sum, addon) => sum + addon.price, 0);
 
     const quantity = Math.max(1, Math.floor(Number(item?.quantity) || 1));
 
     priced.push({
       itemId: menuItem.itemId,
-      name: menuItem.name,
-      price,
+      name: buildLineName(menuItem.name, variant, addons),
+      // One unit of the line: the chosen size (or the item) plus its add-ons.
+      price: price + addonTotal,
       quantity,
       image: menuItem.image || '',
       description: menuItem.description || '',
       isVeg: menuItem.isVeg !== false,
       ...(variant ? { variant } : {}),
+      ...(addons.length > 0 ? { addons } : {}),
     });
   }
 
-  return { items: priced, unknownItemIds, unknownVariants };
+  return { items: priced, unknownItemIds, unknownVariants, unknownAddons };
 };

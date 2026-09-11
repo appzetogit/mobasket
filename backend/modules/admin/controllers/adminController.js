@@ -3225,6 +3225,183 @@ export const deleteRestaurantAddon = asyncHandler(async (req, res) => {
   }
 });
 
+// ---------------------------------------------------------------------------
+// Add-on management for admin (requirement 10)
+// ---------------------------------------------------------------------------
+
+const loadMenuModel = async () => (await import('../../restaurant/models/Menu.js')).default;
+
+/** A restaurant's menu categories (sections), which add-ons are linked to. */
+const menuCategoriesOf = (menu) =>
+  (Array.isArray(menu?.sections) ? menu.sections : [])
+    .map((section) => ({ id: String(section?.id || ''), name: String(section?.name || '') }))
+    .filter((section) => section.id);
+
+/** Keeps only ids of categories that exist on this menu, once each. */
+const cleanAddonCategoryIds = (ids, menu) => {
+  const known = new Set(menuCategoriesOf(menu).map((category) => category.id));
+  return Array.from(
+    new Set((Array.isArray(ids) ? ids : []).map((id) => String(id)).filter((id) => known.has(id))),
+  );
+};
+
+/**
+ * Every add-on of one restaurant, whatever its approval status, plus the menu
+ * categories an add-on can be linked to. The public add-ons route only returns
+ * approved ones, so the admin panel needs this to see what is awaiting review.
+ * GET /api/admin/restaurants/:restaurantId/addons
+ */
+export const getRestaurantAddonsForAdmin = asyncHandler(async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+      return errorResponse(res, 400, 'Invalid restaurant ID');
+    }
+
+    const Menu = await loadMenuModel();
+    const menu = await Menu.findOne({ restaurant: restaurantId })
+      .select('addons sections.id sections.name')
+      .lean();
+
+    return successResponse(res, 200, 'Add-ons retrieved successfully', {
+      addons: Array.isArray(menu?.addons) ? menu.addons : [],
+      categories: menuCategoriesOf(menu),
+      hasMenu: Boolean(menu),
+    });
+  } catch (error) {
+    logger.error(`Error fetching restaurant add-ons: ${error.message}`, { error: error.stack });
+    return errorResponse(res, 500, 'Failed to fetch add-ons');
+  }
+});
+
+/**
+ * Create an add-on for a restaurant. Admin-made add-ons are approved at once.
+ * POST /api/admin/restaurants/:restaurantId/addons
+ * Body: { name, price, description?, image?, isAvailable?, applicableCategoryIds? }
+ */
+export const createRestaurantAddonByAdmin = asyncHandler(async (req, res) => {
+  try {
+    const { restaurantId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+      return errorResponse(res, 400, 'Invalid restaurant ID');
+    }
+
+    const name = String(req.body?.name || '').trim();
+    const price = Number(req.body?.price);
+    if (!name) {
+      return errorResponse(res, 400, 'Add-on name is required');
+    }
+    if (!Number.isFinite(price) || price < 0) {
+      return errorResponse(res, 400, 'Price must be zero or more');
+    }
+
+    const Menu = await loadMenuModel();
+    const menu = await Menu.findOne({ restaurant: restaurantId });
+    if (!menu) {
+      return errorResponse(res, 404, 'This restaurant has no menu yet');
+    }
+
+    const now = new Date();
+    const addon = {
+      id: `addon-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+      name,
+      description: String(req.body?.description || '').trim(),
+      price,
+      image: String(req.body?.image || '').trim(),
+      images: [],
+      isAvailable: req.body?.isAvailable !== false,
+      // Empty means every dish; otherwise only dishes in these categories.
+      applicableCategoryIds: cleanAddonCategoryIds(req.body?.applicableCategoryIds, menu),
+      approvalStatus: 'approved',
+      requestedAt: now,
+      approvedAt: now,
+      approvedBy: req.user?._id || null,
+    };
+
+    menu.addons.push(addon);
+    menu.markModified('addons');
+    await menu.save();
+
+    logger.info(`Restaurant add-on created by admin: ${addon.id}`, { restaurantId, name });
+    return successResponse(res, 201, 'Add-on created', { addon });
+  } catch (error) {
+    logger.error(`Error creating restaurant add-on: ${error.message}`, { error: error.stack });
+    return errorResponse(res, 500, 'Failed to create add-on');
+  }
+});
+
+/**
+ * Edit, approve or reject a restaurant's add-on. Only the fields sent change.
+ * PUT /api/admin/restaurants/:restaurantId/addons/:addonId
+ * Body: any of { name, price, description, image, isAvailable,
+ *                applicableCategoryIds, approvalStatus, rejectionReason }
+ */
+export const updateRestaurantAddonByAdmin = asyncHandler(async (req, res) => {
+  try {
+    const { restaurantId, addonId } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(restaurantId)) {
+      return errorResponse(res, 400, 'Invalid restaurant ID');
+    }
+
+    const Menu = await loadMenuModel();
+    const menu = await Menu.findOne({ restaurant: restaurantId });
+    if (!menu) {
+      return errorResponse(res, 404, 'Menu not found');
+    }
+
+    const addon = menu.addons.find((entry) => String(entry.id || '') === String(addonId || ''));
+    if (!addon) {
+      return errorResponse(res, 404, 'Add-on not found');
+    }
+
+    const body = req.body || {};
+    if (body.name !== undefined) {
+      const name = String(body.name).trim();
+      if (!name) {
+        return errorResponse(res, 400, 'Add-on name is required');
+      }
+      addon.name = name;
+    }
+    if (body.price !== undefined) {
+      const price = Number(body.price);
+      if (!Number.isFinite(price) || price < 0) {
+        return errorResponse(res, 400, 'Price must be zero or more');
+      }
+      addon.price = price;
+    }
+    if (body.description !== undefined) addon.description = String(body.description).trim();
+    if (body.image !== undefined) addon.image = String(body.image).trim();
+    if (typeof body.isAvailable === 'boolean') addon.isAvailable = body.isAvailable;
+    if (body.applicableCategoryIds !== undefined) {
+      addon.applicableCategoryIds = cleanAddonCategoryIds(body.applicableCategoryIds, menu);
+    }
+    if (body.approvalStatus !== undefined) {
+      if (!['approved', 'rejected', 'pending'].includes(body.approvalStatus)) {
+        return errorResponse(res, 400, 'approvalStatus must be approved, rejected or pending');
+      }
+      addon.approvalStatus = body.approvalStatus;
+      if (body.approvalStatus === 'approved') {
+        addon.approvedAt = new Date();
+        addon.approvedBy = req.user?._id || null;
+        addon.rejectionReason = '';
+      } else if (body.approvalStatus === 'rejected') {
+        addon.rejectedAt = new Date();
+        addon.rejectionReason = String(body.rejectionReason || '').trim();
+      }
+    }
+
+    menu.markModified('addons');
+    await menu.save();
+
+    return successResponse(res, 200, 'Add-on updated', {
+      addon: typeof addon.toObject === 'function' ? addon.toObject() : addon,
+    });
+  } catch (error) {
+    logger.error(`Error updating restaurant add-on: ${error.message}`, { error: error.stack });
+    return errorResponse(res, 500, 'Failed to update add-on');
+  }
+});
+
 /**
  * Get All Offers with Restaurant and Dish Details
  * GET /api/admin/offers

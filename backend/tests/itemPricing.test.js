@@ -170,3 +170,75 @@ describe('repriceItems for grocery sizes', () => {
     expect(items[0].variant).toBeUndefined();
   });
 });
+
+describe('repriceItems with add-ons', () => {
+  // Shaped like the order controller's map: dishes know their menu category
+  // (section), add-ons are flagged and carry the categories they apply to.
+  const addonMap = () =>
+    new Map([
+      ['burger', {
+        itemId: 'burger', name: 'Chicken Burger', price: 150, sectionId: 'sec-burgers',
+        variations: [{ id: 'v-double', name: 'Double', price: 220 }],
+      }],
+      ['coke', { itemId: 'coke', name: 'Coke', price: 40, sectionId: 'sec-drinks', variations: [] }],
+      ['cheese', { itemId: 'cheese', name: 'Extra Cheese', price: 30, isAddon: true, applicableCategoryIds: ['sec-burgers'] }],
+      ['patty', { itemId: 'patty', name: 'Extra Patty', price: 60, isAddon: true, applicableCategoryIds: ['sec-burgers'] }],
+      ['ice', { itemId: 'ice', name: 'Extra Ice', price: 5, isAddon: true, applicableCategoryIds: ['sec-drinks'] }],
+      ['raita', { itemId: 'raita', name: 'Raita', price: 99, isAddon: true, applicableCategoryIds: [] }],
+    ]);
+
+  it('adds the add-on prices to the line and names them on it', () => {
+    const { items } = repriceItems(
+      [{ itemId: 'burger', price: 1, quantity: 2, addons: [{ id: 'cheese' }, { id: 'patty' }] }],
+      addonMap(),
+    );
+    expect(items[0].price).toBe(240);
+    expect(items[0].quantity).toBe(2);
+    expect(items[0].name).toBe('Chicken Burger + Extra Cheese, Extra Patty');
+    expect(items[0].addons).toEqual([
+      { id: 'cheese', name: 'Extra Cheese', price: 30 },
+      { id: 'patty', name: 'Extra Patty', price: 60 },
+    ]);
+  });
+
+  it('combines a size with add-ons', () => {
+    const { items } = repriceItems(
+      [{ itemId: 'burger', price: 1, quantity: 1, variant: { id: 'v-double' }, addons: ['cheese'] }],
+      addonMap(),
+    );
+    expect(items[0].price).toBe(250);
+    expect(items[0].name).toBe('Chicken Burger (Double) + Extra Cheese');
+  });
+
+  it('accepts an add-on that applies to every dish', () => {
+    const { items } = repriceItems([{ itemId: 'coke', quantity: 1, addons: ['raita'] }], addonMap());
+    expect(items[0].price).toBe(139);
+  });
+
+  it('rejects an add-on meant for a different category', () => {
+    const res = repriceItems([{ itemId: 'coke', quantity: 1, addons: ['cheese'] }], addonMap());
+    expect(res.items).toHaveLength(0);
+    expect(res.unknownAddons).toEqual(['Coke']);
+  });
+
+  it('rejects an id that is a dish rather than an add-on, or not on the menu', () => {
+    expect(repriceItems([{ itemId: 'burger', quantity: 1, addons: ['coke'] }], addonMap()).unknownAddons).toEqual([
+      'Chicken Burger',
+    ]);
+    expect(repriceItems([{ itemId: 'burger', quantity: 1, addons: ['gold-leaf'] }], addonMap()).unknownAddons).toEqual([
+      'Chicken Burger',
+    ]);
+  });
+
+  it('counts an add-on once even if the request repeats it', () => {
+    const { items } = repriceItems([{ itemId: 'burger', quantity: 1, addons: ['cheese', 'cheese'] }], addonMap());
+    expect(items[0].price).toBe(180);
+  });
+
+  it('leaves lines without add-ons unchanged', () => {
+    const { items } = repriceItems([{ itemId: 'burger', quantity: 1 }], addonMap());
+    expect(items[0].name).toBe('Chicken Burger');
+    expect(items[0].price).toBe(150);
+    expect(items[0].addons).toBeUndefined();
+  });
+});

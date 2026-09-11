@@ -32,7 +32,10 @@ import {
   updateOffer,
   getRestaurantAnalytics,
   getCustomerWalletReport,
-  deleteRestaurantAddon
+  deleteRestaurantAddon,
+  getRestaurantAddonsForAdmin,
+  createRestaurantAddonByAdmin,
+  updateRestaurantAddonByAdmin
 } from '../controllers/adminController.js';
 import {
   getBusinessSettings,
@@ -369,6 +372,9 @@ router.post('/restaurants/:id/reverify', reverifyRestaurant);
 router.put('/restaurants/:id/status', updateRestaurantStatus);
 router.delete('/restaurants/:id', deleteRestaurant);
 router.delete('/restaurants/:restaurantId/addons/:addonId', deleteRestaurantAddon);
+router.get('/restaurants/:restaurantId/addons', getRestaurantAddonsForAdmin);
+router.post('/restaurants/:restaurantId/addons', createRestaurantAddonByAdmin);
+router.put('/restaurants/:restaurantId/addons/:addonId', updateRestaurantAddonByAdmin);
 
 // Grocery Store Management
 router.get('/grocery-stores/requests', getGroceryStoreJoinRequests);

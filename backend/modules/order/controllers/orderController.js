@@ -610,7 +610,9 @@ const buildMenuItemsMap = (menu) => {
         description: item?.description || '',
         isVeg: item?.foodType === 'Veg',
         // Needed so a selected variant can be priced from the menu.
-        variations: Array.isArray(item?.variations) ? item.variations : []
+        variations: Array.isArray(item?.variations) ? item.variations : [],
+        // The dish's menu category, which decides the add-ons it can take.
+        sectionId: String(section?.id || '')
       });
     });
 
@@ -632,7 +634,8 @@ const buildMenuItemsMap = (menu) => {
           image: item?.image || (Array.isArray(item?.images) ? item.images[0] : '') || '',
           description: item?.description || '',
           isVeg: item?.foodType === 'Veg',
-          variations: Array.isArray(item?.variations) ? item.variations : []
+          variations: Array.isArray(item?.variations) ? item.variations : [],
+          sectionId: String(section?.id || '')
         });
       });
     });
@@ -663,7 +666,11 @@ const buildMenuItemsMap = (menu) => {
         (Array.isArray(addon?.images) ? addon.images[0] : '') ||
         '',
       description: addon?.description || '',
-      isVeg: addon?.foodType === 'Veg'
+      isVeg: addon?.foodType === 'Veg',
+      // Lets a dish's chosen add-ons be told apart from dishes and checked
+      // against the categories the add-on is linked to.
+      isAddon: true,
+      applicableCategoryIds: Array.isArray(addon?.applicableCategoryIds) ? addon.applicableCategoryIds : []
     });
   });
 
@@ -1640,6 +1647,14 @@ export const createOrder = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: `The selected option is no longer available for: ${repriced.unknownVariants.join(', ')}`
+      });
+    }
+    if (repriced.unknownAddons.length > 0) {
+      // Same reasoning: an add-on that was withdrawn, or does not go with the
+      // dish, must not be silently dropped or charged.
+      return res.status(400).json({
+        success: false,
+        message: `A selected add-on is no longer available for: ${repriced.unknownAddons.join(', ')}. Please update your cart.`
       });
     }
     // `items` is a const binding from the request body, so the authoritative

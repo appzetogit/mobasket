@@ -22,6 +22,21 @@ const orderItemSchema = new mongoose.Schema({
     name: { type: String, default: '' },
     price: { type: Number, default: 0 }
   },
+  // Add-ons the customer chose for this dish, e.g. Extra Cheese. `price` above
+  // already includes them; this records which ones, and at what price.
+  addons: {
+    type: [
+      new mongoose.Schema(
+        {
+          id: { type: String, default: '' },
+          name: { type: String, default: '' },
+          price: { type: Number, default: 0 }
+        },
+        { _id: false }
+      )
+    ],
+    default: []
+  },
   quantity: {
     type: Number,
     required: true,
