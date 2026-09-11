@@ -888,6 +888,13 @@ export default function GroceryCheckoutPage() {
         image: item.image || "",
         description: item.description || "",
         isVeg: item.isVeg !== false,
+        // The size the customer picked (e.g. 1 KG). The server prices each line
+        // from the product, matching the size by name since grocery sizes have
+        // no ids. Without this the order was charged the product's base price
+        // while the cart and the price preview showed the size's price.
+        ...(item?.selectedVariant?.name || item?.variantName
+          ? { variant: { name: String(item?.selectedVariant?.name || item?.variantName).trim() } }
+          : {}),
       });
 
       return acc;

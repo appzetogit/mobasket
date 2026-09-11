@@ -118,3 +118,55 @@ describe('repriceItems', () => {
     expect(repriceItems(null, menuMap()).items).toEqual([]);
   });
 });
+
+describe('repriceItems for grocery sizes', () => {
+  // Grocery variants are stored without ids (_id: false), so the order
+  // controller maps them to variations with an empty id and the size is
+  // matched by name, which is what grocery checkout sends.
+  const groceryMap = () =>
+    new Map([
+      [
+        'surf-excel',
+        {
+          itemId: 'surf-excel',
+          name: 'Surf Excel',
+          price: 60,
+          variations: [
+            { id: '', name: '0.5 KG', price: 60 },
+            { id: '', name: '1 KG', price: 115 },
+            { id: '', name: '5 KG', price: 540 },
+          ],
+          isVeg: false,
+        },
+      ],
+    ]);
+
+  it('charges the size the customer picked, not the base price', () => {
+    const { items } = repriceItems(
+      [{ itemId: 'surf-excel', price: 115, quantity: 1, variant: { name: '1 KG' } }],
+      groceryMap(),
+    );
+    expect(items[0].price).toBe(115);
+    expect(items[0].variant).toEqual({ id: '', name: '1 KG', price: 115 });
+  });
+
+  it('prices two sizes of the same product as separate lines', () => {
+    const { items } = repriceItems(
+      [
+        { itemId: 'surf-excel', price: 60, quantity: 2, variant: { name: '0.5 KG' } },
+        { itemId: 'surf-excel', price: 540, quantity: 1, variant: { name: '5 KG' } },
+      ],
+      groceryMap(),
+    );
+    expect(items.map((i) => [i.variant.name, i.price, i.quantity])).toEqual([
+      ['0.5 KG', 60, 2],
+      ['5 KG', 540, 1],
+    ]);
+  });
+
+  it('falls back to the base price only when no size was sent', () => {
+    const { items } = repriceItems([{ itemId: 'surf-excel', price: 540, quantity: 1 }], groceryMap());
+    expect(items[0].price).toBe(60);
+    expect(items[0].variant).toBeUndefined();
+  });
+});
