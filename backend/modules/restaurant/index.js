@@ -14,6 +14,13 @@ import {
   reorderBestItems,
   getPublicBestItems,
 } from './controllers/bestItemsController.js';
+import {
+  listTodaysOffer,
+  addTodaysOffer,
+  updateTodaysOffer,
+  removeTodaysOffer,
+  reorderTodaysOffer,
+} from './controllers/todaysOfferController.js';
 import { getWallet, getWalletTransactions, getWalletStats } from './controllers/restaurantWalletController.js';
 import { createWithdrawalRequest, getRestaurantWithdrawalRequests } from './controllers/withdrawalController.js';
 import { getMenu, updateMenu, getMenuByRestaurantId, addSection, addItemToSection, addSubsectionToSection, addItemToSubsection, addAddon, getAddons, getAddonsByRestaurantId, updateAddon, deleteAddon } from './controllers/menuController.js';
@@ -105,6 +112,14 @@ router.get('/best-items', authenticate, listBestItems);
 router.post('/best-items', authenticate, pinBestItem);
 router.patch('/best-items/reorder', authenticate, reorderBestItems);
 router.delete('/best-items/:id', authenticate, unpinBestItem);
+
+// Today's Offer - vendor adds its own dishes. Also above /:id, and /reorder
+// above /:id within this group.
+router.get('/todays-offer', authenticate, listTodaysOffer);
+router.post('/todays-offer', authenticate, addTodaysOffer);
+router.patch('/todays-offer/reorder', authenticate, reorderTodaysOffer);
+router.patch('/todays-offer/:id', authenticate, updateTodaysOffer);
+router.delete('/todays-offer/:id', authenticate, removeTodaysOffer);
 
 // Public: powers the "Best of this restaurant" block on a restaurant profile.
 router.get('/:restaurantId/best-items', getPublicBestItems);

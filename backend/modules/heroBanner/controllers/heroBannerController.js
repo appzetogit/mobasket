@@ -560,7 +560,7 @@ const flattenMenuItemsForSectionManagement = (menuDoc) => {
  * Validate an optional scheduling window for a section item.
  * Either side may be omitted, meaning unbounded in that direction.
  */
-const parseOfferWindow = (startsAt, endsAt) => {
+export const parseOfferWindow = (startsAt, endsAt) => {
   const parse = (value) => {
     if (value === undefined || value === null || value === '') return null;
     const parsed = new Date(value);

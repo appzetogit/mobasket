@@ -15,7 +15,7 @@ import asyncHandler from '../../../shared/middleware/asyncHandler.js';
 export const BEST_ITEMS_SECTION = 'Best of this Restaurant';
 
 /** Menu items live in sections.items and sections.subsections.items. */
-const flattenMenuItems = (menuDoc) => {
+export const flattenMenuItems = (menuDoc) => {
   const out = [];
   for (const section of menuDoc?.sections || []) {
     for (const item of section?.items || []) out.push(item);
@@ -26,7 +26,7 @@ const flattenMenuItems = (menuDoc) => {
   return out;
 };
 
-const matchesId = (item, wanted) => {
+export const matchesId = (item, wanted) => {
   const target = String(wanted).trim();
   return String(item?._id || '') === target || String(item?.id || '') === target;
 };

@@ -41,7 +41,8 @@ const isPointInZone = (lat, lng, zoneCoordinates = []) => {
   return inside;
 };
 
-const resolveRestaurantZone = (restaurant = {}, zones = []) => {
+// Exported for Today's Offer, which pins a vendor's entries to its zone.
+export const resolveRestaurantZone = (restaurant = {}, zones = []) => {
   const restaurantIdCandidates = new Set([
     String(restaurant?._id || '').trim(),
     String(restaurant?.restaurantId || '').trim(),
