@@ -184,6 +184,7 @@ export const API_ENDPOINTS = {
     FINANCE: '/restaurant/finance',
     FINANCE_WEEKLY: '/restaurant/finance/weekly',
     BEST_ITEMS: '/restaurant/best-items',
+    TODAYS_OFFER: '/restaurant/todays-offer',
     WALLET: '/restaurant/wallet',
     WALLET_TRANSACTIONS: '/restaurant/wallet/transactions',
     WALLET_STATS: '/restaurant/wallet/stats',

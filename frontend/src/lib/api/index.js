@@ -281,6 +281,12 @@ export const restaurantAPI = {
   unpinBestItem: (id) => apiClient.delete(`${API_ENDPOINTS.RESTAURANT.BEST_ITEMS}/${id}`),
   reorderBestItems: (ids) => apiClient.patch(`${API_ENDPOINTS.RESTAURANT.BEST_ITEMS}/reorder`, { ids }),
   getPublicBestItems: (restaurantId) => apiClient.get(`/restaurant/${restaurantId}/best-items`),
+  // Today's Offer items the restaurant adds itself (requirement 7)
+  getTodaysOffer: () => apiClient.get(API_ENDPOINTS.RESTAURANT.TODAYS_OFFER),
+  addTodaysOffer: (data) => apiClient.post(API_ENDPOINTS.RESTAURANT.TODAYS_OFFER, data),
+  updateTodaysOffer: (id, data) => apiClient.patch(`${API_ENDPOINTS.RESTAURANT.TODAYS_OFFER}/${id}`, data),
+  removeTodaysOffer: (id) => apiClient.delete(`${API_ENDPOINTS.RESTAURANT.TODAYS_OFFER}/${id}`),
+  reorderTodaysOffer: (ids) => apiClient.patch(`${API_ENDPOINTS.RESTAURANT.TODAYS_OFFER}/reorder`, { ids }),
 
   // Restaurant Authentication
   sendOTP: (phone = null, purpose = 'login', email = null) => {

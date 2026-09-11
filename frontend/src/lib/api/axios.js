@@ -73,6 +73,7 @@ const HOT_REQUEST_POLICIES = [
       !path.startsWith("/restaurant/delivery-status") &&
       !path.startsWith("/restaurant/finance") &&
       !path.startsWith("/restaurant/best-items") &&
+      !path.startsWith("/restaurant/todays-offer") &&
       !path.startsWith("/restaurant/wallet") &&
       !path.startsWith("/restaurant/analytics") &&
       !path.startsWith("/restaurant/complaints") &&
@@ -870,6 +871,7 @@ apiClient.interceptors.request.use(
         !requestUrl.includes("/restaurant/delivery-status") &&
         !requestUrl.includes("/restaurant/finance") &&
         !requestUrl.includes("/restaurant/best-items") &&
+        !requestUrl.includes("/restaurant/todays-offer") &&
         !requestUrl.includes("/restaurant/wallet") &&
         !requestUrl.includes("/restaurant/analytics") &&
         !requestUrl.includes("/restaurant/complaints") &&
