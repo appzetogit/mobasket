@@ -83,6 +83,8 @@ import { useCart } from "../../context/CartContext";
 import { useProfile } from "../../context/ProfileContext";
 
 import AddToCartAnimation from "../../components/AddToCartAnimation";
+import VariantPickerSheet from "../../components/VariantPickerSheet";
+import { usableVariations } from "../../utils/variations";
 
 import { getCompanyNameAsync } from "@/lib/utils/businessSettings";
 
@@ -420,6 +422,8 @@ export default function RestaurantDetails() {
   const [highlightIndex, setHighlightIndex] = useState(0);
 
   const [quantities, setQuantities] = useState({});
+  // Item waiting for the customer to pick a size, when it has more than one.
+  const [variantPickerItem, setVariantPickerItem] = useState(null);
 
   const [showManageCollections, setShowManageCollections] = useState(false);
 
@@ -2528,7 +2532,11 @@ export default function RestaurantDetails() {
 
       if (item.restaurant === restaurant.name) {
 
-        cartQuantities[item.id] = item.quantity || 0;
+        // Keyed by the menu item, so every size of an item (one cart line
+        // each) adds up to the count shown on its card. For items without
+        // sizes itemId and id are the same, so nothing changes for them.
+        const key = String(item.itemId || item.id);
+        cartQuantities[key] = (cartQuantities[key] || 0) + (item.quantity || 0);
 
       }
 
@@ -2634,6 +2642,48 @@ export default function RestaurantDetails() {
 
   // Helper function to update item quantity in both local state and cart
 
+  // Adds one of the size the customer picked. Each size is its own cart line
+  // carrying the chosen option, so checkout can send it and the server prices
+  // it from the menu.
+  const addSizedItemToCart = (item, variant) => {
+    setVariantPickerItem(null);
+
+    const baseItemId = String(item?.id || item?._id || "");
+    const validRestaurantId = restaurant?._id || restaurant?.restaurantId || restaurant?.id;
+    if (!baseItemId || !restaurant?.name || !validRestaurantId) {
+      toast.error("Restaurant information is missing. Please refresh the page.");
+      return;
+    }
+
+    const sizeName = String(variant?.name || "").trim();
+    const sizePrice = Number(variant?.price || 0);
+
+    try {
+      addToCart({
+        id: baseItemId,
+        itemId: baseItemId,
+        name: `${item.name} (${sizeName})`,
+        price: sizePrice,
+        image: item.image,
+        restaurant: restaurant.name,
+        restaurantId: validRestaurantId,
+        platform: "mofood",
+        restaurantPlatform: "mofood",
+        description: item.description,
+        originalPrice: sizePrice,
+        isVeg: getItemDietType(item) === "veg",
+        variant: { id: String(variant?.id || ""), name: sizeName, price: sizePrice },
+      });
+    } catch (error) {
+      const normalizedError = String(error?.message || "").toLowerCase();
+      toast.error(
+        normalizedError.includes("cannot mix")
+          ? "Your cart has grocery items. Clear cart to add MoFood items."
+          : error?.message || "Cannot add item from different restaurant. Please clear cart first.",
+      );
+    }
+  };
+
   const updateItemQuantity = (item, newQuantity, event = null) => {
     if (item?.isAvailable === false) {
       toast.error("This item is out of stock.");
@@ -2666,6 +2716,26 @@ export default function RestaurantDetails() {
 
       return;
 
+    }
+
+
+
+    // Items with sizes (Half / Full) go in through the size picker, so the
+    // customer always chooses one before it reaches the cart.
+    if (usableVariations(item).length > 0) {
+      const baseItemId = String(item.id || item._id || "");
+      const currentTotal = quantities[baseItemId] || 0;
+      if (newQuantity > currentTotal) {
+        setVariantPickerItem(item);
+        return;
+      }
+      // Removing: take one off the size added most recently.
+      const sizeLines = cart.filter((line) => String(line.itemId || line.id) === baseItemId);
+      const lastLine = sizeLines[sizeLines.length - 1];
+      if (lastLine) {
+        updateQuantity(lastLine.id, (lastLine.quantity || 0) - 1);
+      }
+      return;
     }
 
 
@@ -8607,6 +8677,12 @@ export default function RestaurantDetails() {
         />
 
       )}
+
+      <VariantPickerSheet
+        item={variantPickerItem}
+        onClose={() => setVariantPickerItem(null)}
+        onConfirm={(variant) => addSizedItemToCart(variantPickerItem, variant)}
+      />
 
     </AnimatedPage>
 

@@ -1241,6 +1241,16 @@ export default function CheckoutPage() {
       image: item.image || item.imageUrl || "",
       description: item.description || "",
       isVeg: item.isVeg !== false,
+      // The size picked on the restaurant page (e.g. Half or Full). The server
+      // prices the line from the menu's own option; by id when there is one,
+      // otherwise by name.
+      ...(item.variant && (item.variant.id || item.variant.name)
+        ? {
+            variant: item.variant.id
+              ? { id: String(item.variant.id) }
+              : { name: String(item.variant.name) },
+          }
+        : {}),
     }));
 
   const buildCartSignature = (items) =>

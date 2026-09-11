@@ -269,10 +269,20 @@ export function CartProvider({ children }) {
       }
     }
 
+    // A food item with sizes gets one cart line per size, so Half and Full sit
+    // side by side instead of merging into whichever was added first. itemId
+    // stays the menu item's own id, which is what the order needs. Items
+    // without sizes are keyed exactly as before.
+    const foodBaseItemId = String(item?.itemId || item?.id || item?._id || "").trim();
+    const foodVariantKey =
+      itemPlatform === "mofood" ? normalizeVariantKey(item?.variant?.id || item?.variant?.name || "") : "";
+
     const normalizedItemId =
       itemPlatform === "mogrocery"
         ? getGroceryCartItemId({ ...item, productId: normalizedGroceryProductId })
-        : String(item?.itemId || item?.id || item?._id || "").trim();
+        : foodVariantKey && foodBaseItemId
+          ? `${foodBaseItemId}::${foodVariantKey}`
+          : foodBaseItemId;
 
     if (!normalizedItemId) {
       console.error("Cannot add item: missing item id", item);
@@ -338,7 +348,7 @@ export function CartProvider({ children }) {
         ...(itemPlatform === "mogrocery"
           ? { id: normalizedItemId, cartItemId: normalizedItemId, productId: normalizedGroceryProductId }
           : {}),
-        ...(itemPlatform === "mofood" ? { id: normalizedItemId, itemId: normalizedItemId } : {}),
+        ...(itemPlatform === "mofood" ? { id: normalizedItemId, itemId: foodBaseItemId || normalizedItemId } : {}),
         platform: itemPlatform,
         restaurantPlatform: itemPlatform,
         quantity: 1,
