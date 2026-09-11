@@ -2167,6 +2167,29 @@ export const adminAPI = {
     return apiClient.patch(API_ENDPOINTS.ADMIN.RESTAURANT_WEEKLY_PAYOUTS.replace(':id', restaurantId), data);
   },
 
+  // Curated product sections: Top 10 Best Food, Today's Offer, grocery deals
+  // and Best of this Restaurant (requirements 3, 4, 7, 8 and 9)
+  getProductSectionItems: (params = {}) => {
+    return apiClient.get(API_ENDPOINTS.ADMIN.PRODUCT_SECTION_ITEMS, {
+      params: { ...params, platform: params.platform || getAdminPlatform() },
+    });
+  },
+  addProductSectionItem: (data = {}) => {
+    return apiClient.post(API_ENDPOINTS.ADMIN.PRODUCT_SECTION_ITEMS, {
+      ...data,
+      platform: data.platform || getAdminPlatform(),
+    });
+  },
+  removeProductSectionItem: (id) => {
+    return apiClient.delete(API_ENDPOINTS.ADMIN.PRODUCT_SECTION_ITEM_BY_ID.replace(':id', id));
+  },
+  setProductSectionItemOrder: (id, order) => {
+    return apiClient.patch(`${API_ENDPOINTS.ADMIN.PRODUCT_SECTION_ITEM_BY_ID.replace(':id', id)}/order`, { order });
+  },
+  toggleProductSectionItem: (id) => {
+    return apiClient.patch(`${API_ENDPOINTS.ADMIN.PRODUCT_SECTION_ITEM_BY_ID.replace(':id', id)}/status`, {});
+  },
+
   getDeliveryWithdrawalRequests: (params = {}) => {
     return apiClient.get(API_ENDPOINTS.ADMIN.DELIVERY_WITHDRAWAL_REQUESTS, { params });
   },

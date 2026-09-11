@@ -33,6 +33,7 @@ const RestaurantsBulkImport = lazy(() => import("../pages/restaurant/Restaurants
 const RestaurantsBulkExport = lazy(() => import("../pages/restaurant/RestaurantsBulkExport"));
 const WeeklyPayouts = lazy(() => import("../pages/transactions/WeeklyPayouts"));
 const ContactEnquiries = lazy(() => import("../pages/ContactEnquiries"));
+const ProductSections = lazy(() => import("../pages/system/ProductSections"));
 // Food Management
 const FoodsList = lazy(() => import("../pages/foods/FoodsList"));
 const FoodMenuManager = lazy(() => import("../pages/foods/FoodMenuManager"));
@@ -377,6 +378,7 @@ export default function AdminRouter() {
           element={<LandingPageManagement forcedPlatform="mogrocery" initialTab="best-sellers" />}
         />
         <Route path="grocery-hero-banner-management" element={<LandingPageManagement forcedPlatform="mogrocery" />} />
+        <Route path="product-sections" element={<ProductSections />} />
       </Route>
 
       {/* Redirect /admin to /admin/ */}

@@ -262,6 +262,12 @@ export const sidebarMenuData = [
         path: "/admin/hero-banner-management",
         icon: "Image",
       },
+      {
+        type: "link",
+        label: "Product Sections",
+        path: "/admin/product-sections",
+        icon: "Megaphone",
+      },
     ],
   },
   {
@@ -586,6 +592,12 @@ export const mogroceryMenuData = [
         type: "link",
         label: "Best Sellers",
         path: "/admin/product-sections-management",
+        icon: "Megaphone",
+      },
+      {
+        type: "link",
+        label: "Product Sections",
+        path: "/admin/product-sections",
         icon: "Megaphone",
       },
     ],

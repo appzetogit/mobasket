@@ -383,6 +383,8 @@ export const API_ENDPOINTS = {
     CONTACT_ENQUIRIES: '/admin/contact-messages',
     CONTACT_ENQUIRY_BY_ID: '/admin/contact-messages/:id',
     RESTAURANT_WEEKLY_PAYOUTS: '/admin/restaurants/:id/weekly-payouts',
+    PRODUCT_SECTION_ITEMS: '/hero-banners/mofood-product-sections',
+    PRODUCT_SECTION_ITEM_BY_ID: '/hero-banners/mofood-product-sections/:id',
     ANALYTICS: '/admin/analytics',
     DASHBOARD_STATS: '/admin/dashboard/stats',
     PUSH_NOTIFICATIONS: '/admin/push-notifications',
