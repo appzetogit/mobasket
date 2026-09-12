@@ -234,6 +234,7 @@ export const API_ENDPOINTS = {
     WALLET_STATS: '/grocery/store/wallet/stats',
     WITHDRAWAL_REQUEST: '/grocery/store/withdrawal/request',
     WITHDRAWAL_REQUESTS: '/grocery/store/withdrawal/requests',
+    TODAYS_OFFER: '/grocery/store/todays-offer',
     PRODUCTS: '/grocery/store/products',
     PRODUCT_BY_ID: '/grocery/store/products/:id',
     PRODUCT_UPDATE_STOCK: '/grocery/store/products/:id/stock',

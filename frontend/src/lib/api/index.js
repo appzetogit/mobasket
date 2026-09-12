@@ -738,6 +738,15 @@ export const restaurantAPI = {
 
 // Export grocery store API helper functions
 export const groceryStoreAPI = {
+  // Today's Offer the store manages itself (requirement 7)
+  getTodaysOffer: () => apiClient.get(API_ENDPOINTS.GROCERY_STORE.TODAYS_OFFER),
+  addTodaysOffer: (data) => apiClient.post(API_ENDPOINTS.GROCERY_STORE.TODAYS_OFFER, data),
+  updateTodaysOffer: (id, data) =>
+    apiClient.patch(`${API_ENDPOINTS.GROCERY_STORE.TODAYS_OFFER}/${id}`, data),
+  removeTodaysOffer: (id) => apiClient.delete(`${API_ENDPOINTS.GROCERY_STORE.TODAYS_OFFER}/${id}`),
+  reorderTodaysOffer: (ids) =>
+    apiClient.patch(`${API_ENDPOINTS.GROCERY_STORE.TODAYS_OFFER}/reorder`, { ids }),
+
   // Grocery Store Authentication
   sendOTP: (phone = null, purpose = 'login', email = null) => {
     const payload = { purpose };

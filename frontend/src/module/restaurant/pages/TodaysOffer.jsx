@@ -1,17 +1,18 @@
 import { useEffect, useMemo, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useLocation, useNavigate } from "react-router-dom"
 import { ArrowDown, ArrowLeft, ArrowUp, Clock, Loader2, Plus, Search, Tag, UtensilsCrossed, X } from "lucide-react"
 import { toast } from "sonner"
 import { Card, CardContent } from "@/components/ui/card"
-import { restaurantAPI } from "@/lib/api"
+import { groceryStoreAPI, restaurantAPI } from "@/lib/api"
 
 /*
  * Today's Offer (requirement 7), vendor side.
  *
- * The restaurant puts its own dishes into the Today's Offer section on the
- * MoFood home page, optionally between a start and end time. Entries live in
- * the same records the admin panel manages, and are shown to customers in the
- * restaurant's delivery zone while the offer is live.
+ * A restaurant puts its own dishes into the Today's Offer section on the
+ * MoFood home page, and a grocery store its own products into the MoGrocery
+ * one, optionally between a start and end time. Entries live in the same
+ * records the admin panel manages, and are shown to customers in the vendor's
+ * delivery zone while the offer is live.
  */
 
 const MAX_ITEMS = 10
@@ -54,6 +55,17 @@ const flattenMenu = (sections = []) => {
   return out.filter((item) => String(item?.id || "").trim())
 }
 
+const flattenProducts = (products = []) =>
+  (Array.isArray(products) ? products : [])
+    .filter((product) => product?._id)
+    .map((product) => ({
+      id: String(product._id),
+      name: product.name,
+      price: product.sellingPrice ?? product.mrp ?? 0,
+      image: Array.isArray(product.images) ? product.images[0] : product.image,
+      sectionName: product.unit || "",
+    }))
+
 function Thumb({ src }) {
   return (
     <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-gray-100">
@@ -93,6 +105,26 @@ function WindowInputs({ startsAt, endsAt, onChange }) {
 
 export default function TodaysOffer() {
   const navigate = useNavigate()
+  const location = useLocation()
+  // The same screen serves both vendor apps; a store offers products from its
+  // catalogue, a restaurant dishes from its menu.
+  const isStore = location.pathname.startsWith("/store")
+  const itemWord = isStore ? "product" : "dish"
+  const offerApi = isStore
+    ? {
+        list: () => groceryStoreAPI.getTodaysOffer(),
+        add: (data) => groceryStoreAPI.addTodaysOffer(data),
+        update: (id, data) => groceryStoreAPI.updateTodaysOffer(id, data),
+        remove: (id) => groceryStoreAPI.removeTodaysOffer(id),
+        reorder: (ids) => groceryStoreAPI.reorderTodaysOffer(ids),
+      }
+    : {
+        list: () => restaurantAPI.getTodaysOffer(),
+        add: (data) => restaurantAPI.addTodaysOffer(data),
+        update: (id, data) => restaurantAPI.updateTodaysOffer(id, data),
+        remove: (id) => restaurantAPI.removeTodaysOffer(id),
+        reorder: (ids) => restaurantAPI.reorderTodaysOffer(ids),
+      }
   const [menuItems, setMenuItems] = useState([])
   const [offers, setOffers] = useState([])
   const [loading, setLoading] = useState(true)
@@ -109,8 +141,15 @@ export default function TodaysOffer() {
     setLoading(true)
     setError("")
     try {
-      const [menuRes, offerRes] = await Promise.all([restaurantAPI.getMenu(), restaurantAPI.getTodaysOffer()])
-      setMenuItems(flattenMenu(menuRes?.data?.data?.menu?.sections))
+      const [catalogueRes, offerRes] = await Promise.all([
+        isStore ? groceryStoreAPI.getProducts({ activeOnly: "false" }) : restaurantAPI.getMenu(),
+        offerApi.list(),
+      ])
+      setMenuItems(
+        isStore
+          ? flattenProducts(catalogueRes?.data?.data?.products)
+          : flattenMenu(catalogueRes?.data?.data?.menu?.sections),
+      )
       setOffers(Array.isArray(offerRes?.data?.data?.items) ? offerRes.data.data.items : [])
     } catch (err) {
       setError(err?.response?.data?.message || "Could not load Today's Offer.")
@@ -123,7 +162,7 @@ export default function TodaysOffer() {
     load()
   }, [])
 
-  const offeredIds = useMemo(() => new Set(offers.map((o) => String(o.menuItemId))), [offers])
+  const offeredIds = useMemo(() => new Set(offers.map((o) => String(o.productId || o.menuItemId))), [offers])
 
   const candidates = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -142,8 +181,8 @@ export default function TodaysOffer() {
     }
     setBusy("add")
     try {
-      const res = await restaurantAPI.addTodaysOffer({
-        menuItemId: picked.id,
+      const res = await offerApi.add({
+        ...(isStore ? { productId: picked.id } : { menuItemId: picked.id }),
         startsAt: toIso(newWindow.startsAt),
         endsAt: toIso(newWindow.endsAt),
       })
@@ -153,7 +192,7 @@ export default function TodaysOffer() {
       setPicked(null)
       setNewWindow({ startsAt: "", endsAt: "" })
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Could not add that dish")
+      toast.error(err?.response?.data?.message || `Could not add that ${itemWord}`)
     } finally {
       setBusy(null)
     }
@@ -166,7 +205,7 @@ export default function TodaysOffer() {
     }
     setBusy(entry._id)
     try {
-      const res = await restaurantAPI.updateTodaysOffer(entry._id, {
+      const res = await offerApi.update(entry._id, {
         startsAt: toIso(editWindow.startsAt),
         endsAt: toIso(editWindow.endsAt),
       })
@@ -185,10 +224,10 @@ export default function TodaysOffer() {
     if (busy) return
     setBusy(entry._id)
     try {
-      await restaurantAPI.removeTodaysOffer(entry._id)
+      await offerApi.remove(entry._id)
       setOffers((list) => list.filter((o) => o._id !== entry._id))
     } catch (err) {
-      toast.error(err?.response?.data?.message || "Could not remove that dish")
+      toast.error(err?.response?.data?.message || `Could not remove that ${itemWord}`)
     } finally {
       setBusy(null)
     }
@@ -204,7 +243,7 @@ export default function TodaysOffer() {
     setOffers(next)
     setBusy(next[target]._id)
     try {
-      await restaurantAPI.reorderTodaysOffer(next.map((o) => o._id))
+      await offerApi.reorder(next.map((o) => o._id))
     } catch (err) {
       setOffers(previous)
       toast.error(err?.response?.data?.message || "Could not save the new order")
@@ -217,7 +256,7 @@ export default function TodaysOffer() {
     <div className="min-h-screen bg-gray-50 pb-24">
       <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-gray-100 bg-white px-4 py-3">
         <button
-          onClick={() => navigate("/restaurant/explore")}
+          onClick={() => navigate(isStore ? "/store/explore" : "/restaurant/explore")}
           aria-label="Back"
           className="rounded-full p-1.5 transition hover:bg-gray-100"
         >
@@ -228,8 +267,9 @@ export default function TodaysOffer() {
 
       <div className="mx-auto w-full max-w-2xl px-4 py-4">
         <p className="mb-4 text-xs leading-relaxed text-gray-500">
-          Dishes you add appear in the Today&apos;s Offer section of the MoFood home page for customers in your
-          delivery area, between the times you set. Up to {MAX_ITEMS} dishes.
+          What you add appears in the Today&apos;s Offer section of the{" "}
+          {isStore ? "MoGrocery" : "MoFood"} home page for customers in your delivery area, between the times you
+          set. Up to {MAX_ITEMS} {itemWord}s.
         </p>
 
         {loading ? (
@@ -251,7 +291,9 @@ export default function TodaysOffer() {
             {offers.length === 0 ? (
               <div className="mb-6 flex flex-col items-center gap-2 rounded-xl border border-dashed border-gray-200 bg-white py-8 text-center">
                 <Tag className="h-8 w-8 text-gray-300" />
-                <p className="text-sm text-gray-500">Nothing on offer yet. Pick dishes from your menu below.</p>
+                <p className="text-sm text-gray-500">
+                  Nothing on offer yet. Pick {itemWord}s from your {isStore ? "catalogue" : "menu"} below.
+                </p>
               </div>
             ) : (
               <div className="mb-6 space-y-2">
@@ -334,10 +376,10 @@ export default function TodaysOffer() {
               </div>
             )}
 
-            <h2 className="mb-2 text-sm font-bold text-gray-900">Add a dish</h2>
+            <h2 className="mb-2 text-sm font-bold text-gray-900">Add a {itemWord}</h2>
             {full ? (
               <p className="rounded-xl border border-dashed border-gray-200 bg-white py-6 text-center text-sm text-gray-500">
-                You have {MAX_ITEMS} dishes on offer. Remove one to add another.
+                You have {MAX_ITEMS} {itemWord}s on offer. Remove one to add another.
               </p>
             ) : picked ? (
               <Card className="border-[#ff8100]/40">
@@ -350,7 +392,7 @@ export default function TodaysOffer() {
                     </div>
                     <button
                       onClick={() => setPicked(null)}
-                      aria-label="Pick a different dish"
+                      aria-label={`Pick a different ${itemWord}`}
                       className="rounded-lg p-1.5 text-gray-500 hover:bg-gray-100"
                     >
                       <X className="h-4 w-4" />
@@ -375,13 +417,15 @@ export default function TodaysOffer() {
                   <input
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
-                    placeholder="Search your menu"
+                    placeholder={isStore ? "Search your products" : "Search your menu"}
                     className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-[#ff8100] focus:ring-2 focus:ring-[#ff8100]/20"
                   />
                 </div>
                 {candidates.length === 0 ? (
                   <p className="py-6 text-center text-sm text-gray-500">
-                    {menuItems.length === 0 ? "Your menu has no dishes yet." : "No matching dishes left to add."}
+                    {menuItems.length === 0
+                      ? `Your ${isStore ? "catalogue has no products" : "menu has no dishes"} yet.`
+                      : `No matching ${itemWord}s left to add.`}
                   </p>
                 ) : (
                   <div className="space-y-2">

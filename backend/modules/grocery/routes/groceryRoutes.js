@@ -42,6 +42,13 @@ import { getOnboarding, updateOnboarding } from '../controllers/groceryStoreOnbo
 import { authenticate } from '../middleware/groceryStoreAuth.js';
 import { getStoreWeeklyPayments } from '../controllers/groceryStoreFinanceController.js';
 import {
+  listStoreTodaysOffer,
+  addStoreTodaysOffer,
+  updateStoreTodaysOffer,
+  removeStoreTodaysOffer,
+  reorderStoreTodaysOffer,
+} from '../controllers/groceryStoreOfferController.js';
+import {
   getStoreNotifications,
   deleteStoreNotification,
   clearStoreNotifications,
@@ -117,6 +124,14 @@ router.use('/store/auth', groceryStoreAuthRoutes);
 // Weekly payment report for the signed-in store (requirement 2). Declared
 // before the router mounts below so it is not shadowed by their paths.
 router.get('/store/finance/weekly', authenticate, getStoreWeeklyPayments);
+
+// Today's Offer for the signed-in store (requirement 7). /reorder is declared
+// before /:id so it is not read as an id.
+router.get('/store/todays-offer', authenticate, listStoreTodaysOffer);
+router.post('/store/todays-offer', authenticate, addStoreTodaysOffer);
+router.patch('/store/todays-offer/reorder', authenticate, reorderStoreTodaysOffer);
+router.patch('/store/todays-offer/:id', authenticate, updateStoreTodaysOffer);
+router.delete('/store/todays-offer/:id', authenticate, removeStoreTodaysOffer);
 // Fallback direct binding for OTP send in case nested auth router registration is stale.
 router.post('/store/auth/send-otp', sendGroceryStoreOTP);
 // Fallback direct binding for OTP verify in case nested auth router registration is stale.
