@@ -289,7 +289,18 @@ export default function Restaurants() {
         )}
 
         {!loading && visibleCount < restaurants.length && (
-          <div ref={loadMoreRef} aria-hidden="true" className="h-8 w-full" />
+          <div className="flex flex-col items-center gap-3 pt-4">
+            <div ref={loadMoreRef} aria-hidden="true" className="h-8 w-full" />
+            {/* Scrolling loads the next batch on its own; this button does the
+                same for keyboard users and anywhere the observer cannot run. */}
+            <button
+              type="button"
+              onClick={() => setVisibleCount((count) => Math.min(count + PAGE_SIZE, restaurants.length))}
+              className="rounded-full border border-gray-200 bg-white px-5 py-2 text-sm font-semibold text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-transparent dark:text-gray-200"
+            >
+              Show more restaurants
+            </button>
+          </div>
         )}
       </div>
       <Footer />
