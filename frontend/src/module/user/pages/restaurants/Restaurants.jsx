@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Star, Bookmark, Loader2 } from "lucide-react";
 import AnimatedPage from "../../components/AnimatedPage";
 import Footer from "../../components/Footer";
@@ -14,6 +14,8 @@ import { useLocation } from "../../hooks/useLocation";
 import { useZone } from "../../hooks/useZone";
 import { evaluateStoreAvailability } from "@/lib/utils/storeAvailability";
 
+const PAGE_SIZE = 12;
+
 export default function Restaurants() {
   const { addFavorite, removeFavorite, isFavorite } = useProfile();
   const { location, loading: locationLoading } = useLocation();
@@ -21,6 +23,27 @@ export default function Restaurants() {
   const [restaurants, setRestaurants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // Restaurants come in as the customer scrolls rather than all at once
+  // (requirement 9), so the first screen renders a handful of cards.
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const loadMoreRef = useRef(null);
+
+  useEffect(() => {
+    const sentinel = loadMoreRef.current;
+    if (!sentinel || visibleCount >= restaurants.length) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setVisibleCount((count) => Math.min(count + PAGE_SIZE, restaurants.length));
+        }
+      },
+      // Fetch the next batch a little before the sentinel is on screen.
+      { rootMargin: "400px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [restaurants.length, visibleCount]);
 
   useEffect(() => {
     // Wait for location and zone detection to complete before fetching
@@ -118,6 +141,7 @@ export default function Restaurants() {
           });
 
         setRestaurants(transformed);
+        setVisibleCount(PAGE_SIZE);
       } catch (err) {
         setError(err?.response?.data?.message || "Failed to load restaurants");
         setRestaurants([]);
@@ -171,7 +195,7 @@ export default function Restaurants() {
 
         {!loading && restaurants.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4 lg:gap-5 xl:gap-6 pt-2 sm:pt-3 lg:pt-4">
-            {restaurants.map((restaurant, index) => {
+            {restaurants.slice(0, visibleCount).map((restaurant, index) => {
               const restaurantSlug = restaurant.slug;
               const favorite = isFavorite(restaurantSlug);
 
@@ -262,6 +286,10 @@ export default function Restaurants() {
               );
             })}
           </div>
+        )}
+
+        {!loading && visibleCount < restaurants.length && (
+          <div ref={loadMoreRef} aria-hidden="true" className="h-8 w-full" />
         )}
       </div>
       <Footer />
