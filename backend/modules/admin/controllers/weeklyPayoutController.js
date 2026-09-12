@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import Restaurant from '../../restaurant/models/Restaurant.js';
+import GroceryStore from '../../grocery/models/GroceryStore.js';
 import RestaurantWeeklyPayout from '../../restaurant/models/RestaurantWeeklyPayout.js';
 import { computeWeeklyPayouts } from '../../restaurant/utils/weeklyPayout.js';
 import { getWeekEnd, getWeekStart } from '../../restaurant/utils/commission.js';
@@ -18,6 +19,18 @@ const platformQueryFor = (restaurant) =>
       };
 
 /**
+ * The payee behind an id: a restaurant, or a grocery store, which lives in its
+ * own collection but is paid on the same weekly cycle.
+ */
+const findPayee = async (id) => {
+  const fields = '_id restaurantId name platform';
+  const restaurant = await Restaurant.findById(id).select(fields).lean();
+  if (restaurant) return restaurant;
+  const store = await GroceryStore.findById(id).select(fields).lean();
+  return store ? { ...store, platform: store.platform || 'mogrocery' } : null;
+};
+
+/**
  * Weekly payouts for one restaurant (admin view)
  * GET /api/admin/restaurants/:restaurantId/weekly-payouts?weeks=8
  */
@@ -28,11 +41,9 @@ export const getRestaurantWeeklyPayouts = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, 'Invalid restaurant id');
     }
 
-    const restaurant = await Restaurant.findById(restaurantId)
-      .select('_id restaurantId name platform')
-      .lean();
+    const restaurant = await findPayee(restaurantId);
     if (!restaurant) {
-      return errorResponse(res, 404, 'Restaurant not found');
+      return errorResponse(res, 404, 'Restaurant or store not found');
     }
 
     const weeks = Math.max(1, Math.min(52, parseInt(req.query.weeks, 10) || 8));
@@ -77,11 +88,9 @@ export const setWeeklyPayoutStatus = asyncHandler(async (req, res) => {
       return errorResponse(res, 400, 'A valid weekStart date is required');
     }
 
-    const restaurant = await Restaurant.findById(restaurantId)
-      .select('_id restaurantId name platform')
-      .lean();
+    const restaurant = await findPayee(restaurantId);
     if (!restaurant) {
-      return errorResponse(res, 404, 'Restaurant not found');
+      return errorResponse(res, 404, 'Restaurant or store not found');
     }
 
     // Normalise to the Monday of that week so the same period cannot be stored

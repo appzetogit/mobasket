@@ -40,6 +40,7 @@ import groceryStoreProductRoutes from './groceryStoreProductRoutes.js';
 import groceryStoreCategoryRequestRoutes from './groceryStoreCategoryRequestRoutes.js';
 import { getOnboarding, updateOnboarding } from '../controllers/groceryStoreOnboardingController.js';
 import { authenticate } from '../middleware/groceryStoreAuth.js';
+import { getStoreWeeklyPayments } from '../controllers/groceryStoreFinanceController.js';
 import {
   getStoreNotifications,
   deleteStoreNotification,
@@ -112,6 +113,10 @@ router.get('/plan-subscriptions', authenticateAdmin, getPlanSubscriptions);
 
 // Grocery Store Auth Routes
 router.use('/store/auth', groceryStoreAuthRoutes);
+
+// Weekly payment report for the signed-in store (requirement 2). Declared
+// before the router mounts below so it is not shadowed by their paths.
+router.get('/store/finance/weekly', authenticate, getStoreWeeklyPayments);
 // Fallback direct binding for OTP send in case nested auth router registration is stale.
 router.post('/store/auth/send-otp', sendGroceryStoreOTP);
 // Fallback direct binding for OTP verify in case nested auth router registration is stale.

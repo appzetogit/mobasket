@@ -43,7 +43,9 @@ export default function WeeklyPayments() {
     setLoading(true)
     setError("")
     try {
-      const res = await restaurantAPI.getWeeklyPayments(8)
+      const res = isStore
+        ? await restaurantAPI.getStoreWeeklyPayments(8)
+        : await restaurantAPI.getWeeklyPayments(8)
       setData(res?.data?.data || null)
     } catch (err) {
       setError(err?.response?.data?.message || "Could not load your payment report.")

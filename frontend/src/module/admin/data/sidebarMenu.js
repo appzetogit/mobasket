@@ -409,7 +409,8 @@ export const mogroceryMenuData = [
           { label: "Stores List", path: "/admin/grocery-stores" },
           { label: "Store Commission", path: "/admin/grocery-stores/commission" },
           { label: "New Joining Request", path: "/admin/grocery-stores/joining-request" },
-          { label: "Store Withdraws", path: "/admin/grocery-store-withdraws" }
+          { label: "Store Withdraws", path: "/admin/grocery-store-withdraws" },
+          { label: "Weekly Payouts", path: "/admin/weekly-payouts" }
           // { label: "Store Complaints", path: "/admin/grocery-stores/complaints" },
         ],
       },

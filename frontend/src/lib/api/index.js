@@ -282,6 +282,9 @@ export const restaurantAPI = {
   reorderBestItems: (ids) => apiClient.patch(`${API_ENDPOINTS.RESTAURANT.BEST_ITEMS}/reorder`, { ids }),
   getPublicBestItems: (restaurantId) => apiClient.get(`/restaurant/${restaurantId}/best-items`),
   // Today's Offer items the restaurant adds itself (requirement 7)
+  // Grocery stores sign in through their own module, so their weekly report
+  // has its own route.
+  getStoreWeeklyPayments: (weeks = 8) => apiClient.get('/grocery/store/finance/weekly', { params: { weeks } }),
   getTodaysOffer: () => apiClient.get(API_ENDPOINTS.RESTAURANT.TODAYS_OFFER),
   addTodaysOffer: (data) => apiClient.post(API_ENDPOINTS.RESTAURANT.TODAYS_OFFER, data),
   updateTodaysOffer: (id, data) => apiClient.patch(`${API_ENDPOINTS.RESTAURANT.TODAYS_OFFER}/${id}`, data),

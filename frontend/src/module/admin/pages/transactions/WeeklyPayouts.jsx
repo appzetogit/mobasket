@@ -2,14 +2,15 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { Search, CalendarDays, Loader2, Store, AlertTriangle, RefreshCw } from "lucide-react"
 import { adminAPI } from "@/lib/api"
 import { toast } from "sonner"
+import { usePlatform } from "../../context/PlatformContext"
 
 /*
  * Weekly payouts (requirement 2), admin side.
  *
- * For each restaurant: what it receives per week (food sales minus commission
- * on orders delivered that week) and whether MoBasket has paid it. Admin sets
- * Paid, Pending or Due; the restaurant sees the same amount and status in its
- * own Weekly Payments screen. Amounts come from the server, which is the same
+ * For each restaurant, or grocery store in MoGrocery mode: what it receives
+ * per week (sales minus commission on orders delivered that week) and whether
+ * MoBasket has paid it. Admin sets Paid, Pending or Due; the vendor sees the
+ * same amount and status in its own Weekly Payments screen. Amounts come from the server, which is the same
  * calculation the vendor screen uses, so the two views cannot disagree.
  */
 
@@ -39,6 +40,11 @@ const weekLabel = (startIso, endIso) => {
 }
 
 export default function WeeklyPayouts() {
+  // Grocery stores are paid on the same weekly cycle and are listed here
+  // when the panel is in MoGrocery mode.
+  const { platform } = usePlatform()
+  const isGrocery = platform === "mogrocery"
+  const payeeLabel = isGrocery ? "store" : "restaurant"
   const [restaurants, setRestaurants] = useState([])
   const [listLoading, setListLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -61,15 +67,17 @@ export default function WeeklyPayouts() {
   useEffect(() => {
     let cancelled = false
     setListLoading(true)
-    adminAPI
-      .getRestaurants({ page: 1, limit: 50, search: appliedSearch || undefined })
+    const params = { page: 1, limit: 50, search: appliedSearch || undefined }
+    const request = isGrocery ? adminAPI.getGroceryStores(params) : adminAPI.getRestaurants(params)
+    request
       .then((res) => {
-        if (!cancelled) setRestaurants(res?.data?.data?.restaurants || [])
+        const data = res?.data?.data || {}
+        if (!cancelled) setRestaurants(data.stores || data.restaurants || [])
       })
       .catch((err) => {
         if (cancelled) return
         setRestaurants([])
-        toast.error(err?.response?.data?.message || "Could not load restaurants")
+        toast.error(err?.response?.data?.message || `Could not load ${payeeLabel}s`)
       })
       .finally(() => {
         if (!cancelled) setListLoading(false)
@@ -77,11 +85,11 @@ export default function WeeklyPayouts() {
     return () => {
       cancelled = true
     }
-  }, [appliedSearch])
+  }, [appliedSearch, isGrocery, payeeLabel])
 
   const loadReport = async () => {
     if (!selected?._id) return
-    // Switching restaurants quickly must not let an older response win.
+    // Switching quickly must not let an older response win.
     const requestId = ++requestRef.current
     setReportLoading(true)
     setReportError("")
@@ -93,7 +101,7 @@ export default function WeeklyPayouts() {
     } catch (err) {
       if (requestId !== requestRef.current) return
       setReport(null)
-      setReportError(err?.response?.data?.message || "Could not load this restaurant's payouts.")
+      setReportError(err?.response?.data?.message || `Could not load this ${payeeLabel}'s payouts.`)
     } finally {
       if (requestId === requestRef.current) setReportLoading(false)
     }
@@ -164,18 +172,18 @@ export default function WeeklyPayouts() {
             <h1 className="text-2xl font-bold text-slate-900">Weekly payouts</h1>
           </div>
           <p className="text-sm text-slate-600 mt-1">
-            What each restaurant receives per week, and whether it has been paid. Restaurants see the same
-            amount and status in their app.
+            What each {payeeLabel} receives per week, and whether it has been paid. They see the same amount
+            and status in their own app.
           </p>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-          {/* Restaurant picker */}
+          {/* Restaurant or store picker */}
           <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-4 h-fit">
             <div className="relative mb-3">
               <input
                 type="text"
-                placeholder="Search restaurants"
+                placeholder={`Search ${payeeLabel}s`}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 pr-4 py-2.5 w-full text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
@@ -188,7 +196,7 @@ export default function WeeklyPayouts() {
                 <Loader2 className="w-6 h-6 animate-spin text-emerald-600 mx-auto" />
               </div>
             ) : restaurants.length === 0 ? (
-              <p className="py-10 text-center text-sm text-slate-500">No restaurants match that search.</p>
+              <p className="py-10 text-center text-sm text-slate-500">No {payeeLabel}s match that search.</p>
             ) : (
               <>
                 <ul className="max-h-[60vh] overflow-y-auto -mx-1">
@@ -225,7 +233,7 @@ export default function WeeklyPayouts() {
             {!selected ? (
               <div className="py-20 flex flex-col items-center justify-center text-center">
                 <Store className="w-14 h-14 text-slate-300 mb-4" />
-                <p className="text-lg font-semibold text-slate-700">Pick a restaurant</p>
+                <p className="text-lg font-semibold text-slate-700">Pick a {payeeLabel}</p>
                 <p className="text-sm text-slate-500">Its weekly payouts will show here.</p>
               </div>
             ) : (
@@ -274,8 +282,8 @@ export default function WeeklyPayouts() {
                   <div className="mb-5 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
                     <AlertTriangle className="mt-0.5 w-4 h-4 shrink-0" />
                     <p>
-                      Commission isn&apos;t set up for this restaurant, so payable amounts show as zero. Set it under
-                      Restaurant Commission first.
+                      Commission isn&apos;t set up for this {payeeLabel}, so payable amounts show as zero. Set it under
+                      Commission first.
                     </p>
                   </div>
                 )}
